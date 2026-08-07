@@ -51,7 +51,7 @@ export async function POST(req) {
     if (images.some(x => typeof x !== 'string' || x.length > 3_000_000)) return NextResponse.json({ ok: false, error: '圖片資料過大，請重新選擇或裁切圖片' }, { status: 413 });
 
     const prompt = buildVisionPrompt(schedule, Boolean(text));
-    content = [{ type: 'text', text: prompt }];
+    const content = [{ type: 'text', text: prompt }];
     if (text) content.push({ type: 'text', text: `盤口文字：\n${text}` });
     for (const url of images) content.push({ type: 'image_url', image_url: { url } });
     const parsed = await generateAndParse(key, content, prompt);
