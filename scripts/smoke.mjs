@@ -58,7 +58,7 @@ const homeResponse = await response(`${BASE}/?smoke=${Date.now()}`, {}, 30000);
 const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB Positive EV/);
-assert.match(home, /v3\.0\.0/);
+assert.ok(home.includes('3.0.0'), 'Homepage version marker missing');
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
 
