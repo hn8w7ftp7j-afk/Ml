@@ -1,0 +1,23 @@
+name: Production smoke test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify deployed website and APIs
+        env:
+          SMOKE_URL: https://mlb-positive-ev.vercel.app
+        run: node scripts/smoke.mjs
