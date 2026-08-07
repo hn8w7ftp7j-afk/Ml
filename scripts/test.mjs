@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {calculateProfit,outcomeFractionForScore,parseTaiwanLine,priceCLV,resultLabel,validateMarketPair,normalizeVisionGame} from '../lib/markets.js';
+import {analyzeMarkets,estimateRuns} from '../lib/analysis.js';
+
+const away='Oakland Athletics',home='Boston Red Sox';
+assert.equal(parseTaiwanLine('大8+50').isOver,true);
+assert.equal(outcomeFractionForScore('大8+50',4,4,away,home),-.5);
+assert.equal(outcomeFractionForScore('小8+50',4,4,away,home),.5);
+assert.equal(outcomeFractionForScore(`${home}讓1-20`,3,4,away,home),.2);
+assert.equal(outcomeFractionForScore(`${away}受讓1-20`,3,4,away,home),-.2);
+assert.equal(outcomeFractionForScore(`${away}受讓0.5/1`,3,4,away,home),-.5);
+assert.equal(resultLabel(.65),'贏65%');
+const profit=calculateProfit({stake:10000,water:.95,fraction:.5,rebateRate:.015});
+assert.equal(profit.rebate,75);assert.equal(profit.profit,4825);
+assert.ok(priceCLV(.95,.90)>0);
+assert.deepEqual(validateMarketPair('全場大小',[{pick:'大8+50',water:.94},{pick:'小8+50',water:.94}]),[]);
+assert.ok(validateMarketPair('全場大小',[{pick:'大8+50',water:.94},{pick:'小9+50',water:.94}]).length);
+const vg=normalizeVisionGame({away,home,fullRunline:{favoriteSide:'home',line:'1+50',favoriteWater:.95,underdogWater:.95},fullTotal:{line:'8+50',overWater:.94,underWater:.94},first5Runline:{favoriteSide:'home',line:'0-70',favoriteWater:.95,underdogWater:.95},first5Total:{line:'4+50',overWater:.93,underWater:.93}},null,.95);
+assert.equal(vg.markets.length,4);assert.equal(vg.markets.flatMap(x=>x.directions).length,8);
+const context={game:{away,home,awayProbable:'A',homeProbable:'B'},away:{seasonHitting:{available:true,runsPerGame:4.5,ops:.73},recentHitting:{available:true,gamesPlayed:10,runsPerGame:4.8,ops:.75},seasonPitching:{available:true,era:4.1,whip:1.28},recentPitching:{available:true,inningsPitched:20,era:4,whip:1.25},starter:{available:true,season:{era:4,whip:1.25,kMinusBB:.15},recent:{inningsPitched:12,era:3.8,whip:1.2,kMinusBB:.16}},vsLeft:{available:false},vsRight:{available:false},lineup:{official:false},rest:{days:1,travelKm:0},bullpen:{fatigueIndex:.2}},home:{seasonHitting:{available:true,runsPerGame:4.6,ops:.74},recentHitting:{available:true,gamesPlayed:10,runsPerGame:4.7,ops:.74},seasonPitching:{available:true,era:4,whip:1.27},recentPitching:{available:true,inningsPitched:20,era:3.9,whip:1.24},starter:{available:true,season:{era:3.9,whip:1.22,kMinusBB:.16},recent:{inningsPitched:12,era:3.7,whip:1.18,kMinusBB:.17}},vsLeft:{available:false},vsRight:{available:false},lineup:{official:false},rest:{days:1,travelKm:0},bullpen:{fatigueIndex:.2}},weather:{available:true,temperature:24,windSpeed:8},park:{runFactor:1,roof:'open'}};
+const runs=estimateRuns(context,false);assert.ok(runs.away>0&&runs.home>0);
+const markets=vg.markets.flatMap(m=>m.directions.map(d=>({market:m.market,...d})));
+const analysis=analyzeMarkets({context,markets,settings:{rebateRate:.015,candidateThreshold:7.2,strongestThreshold:8.5}});
+assert.equal(analysis.results.length,8);assert.ok(analysis.results.every(x=>Number.isFinite(x.score)&&Number.isFinite(x.ev)));
+console.log('All MLB Positive EV unit tests passed');
