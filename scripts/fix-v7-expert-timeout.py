@@ -11,30 +11,15 @@ def replace_once(text, old, new, label):
 path = Path('lib/expert.js')
 text = path.read_text()
 text = text.replace("export const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2';", "export const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.1';")
-text = replace_once(text, '        max_tokens: 3200,', '        max_tokens: 2200,', 'expert token budget')
+text = replace_once(text, '      max_tokens: 3200,', '      max_tokens: 2200,', 'expert token budget')
 text = replace_once(
     text,
-    "      if (useJsonFormat) body.response_format = { type: 'json_object' };",
-    "      if (useJsonFormat) body.response_format = { type: 'json_object' };\n      if (String(model).startsWith('openai/')) body.reasoning_effort = 'low';",
+    "    if (useJsonFormat) body.response_format = { type: 'json_object' };",
+    "    if (useJsonFormat) body.response_format = { type: 'json_object' };\n    if (String(model).startsWith('openai/')) body.reasoning_effort = 'low';",
     'OpenAI low reasoning',
 )
 text = text.replace("export async function buildExpertAssessment({ context, markets, mode = 'auto', timeoutMs = 16000 }) {", "export async function buildExpertAssessment({ context, markets, mode = 'auto', timeoutMs = 24000 }) {")
-old_loop = '''  for (let index = 0; index < models.length; index += 1) {
-    const model = models[index];
-    const remaining = deadline - Date.now();
-    if (remaining < 1800) break;
-    try {
-      const parsed = await gatewayAssessment(key, model, prompt, remaining);
-      const result = sanitizeExpertAssessment(parsed, context, model);
-      cache.set(keyValue, { value: result, expires: Date.now() + 300000 });
-      return result;
-    } catch (error) {
-      failures.push(`${model}：${String(error?.message || error)}`);
-    }
-  }'''
-# Support both the original for-of loop and the indexed v2 loop.
-if old_loop not in text:
-    old_loop = '''  for (const model of models) {
+old_loop = '''  for (const model of models) {
     const remaining = deadline - Date.now();
     if (remaining < 1800) break;
     try {
