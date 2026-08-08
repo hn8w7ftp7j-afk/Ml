@@ -10,8 +10,6 @@ def replace_once(text, old, new, label):
 path = Path('app/page.js')
 text = path.read_text()
 text = text.replace("const VERSION = '7.1.0';", "const VERSION = '7.2.0';")
-
-# Replace the bulky batch ranking with a compact completion strip. Candidate list moves after games.
 old_batch = '''      {latestBatchRows.length > 0 && <div className="card">
         <h2>本次上傳：全部盤口評分總覽</h2>
         <p className="note">已自動完成 {latestBatchLocks.length} 場；下方先依評分由高到低一次列出所有實際開盤方向，再顯示各場完整分析。</p>
@@ -29,8 +27,6 @@ new_batch = '''      {latestBatchRows.length > 0 && <div className="batchStrip">
         <div><span>下注候選</span><b>{latestBatchRows.filter(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible).length}</b></div>
       </div>}'''
 text = replace_once(text, old_batch, new_batch, 'compact batch strip')
-
-# Replace detailed context/audit above markets with a compact starter line and collapsible details.
 old_analysis_body = '''            <Context context={data.context} analysis={data.analysis}/><AlignmentAudit audit={data.analysis.alignmentAudit}/>
             {data.analysis.portfolio?.length > 0 && <div className="market"><h3>同場主選／次選與總曝險</h3><div className="portfolio">{data.analysis.portfolio.map((row, index) => <div className="portfolioRow" key={`${row.market}-${row.pick}`}><b>{index + 1}</b><span>{row.role}｜{row.market}｜{translateTeamText(row.pick)}</span><strong>{row.score.toFixed(1)}</strong><span>{row.recommendedUnit} Unit{index > 0 ? `｜與主選相關 ${pct(row.correlationToPrimary)}` : ''}</span></div>)}</div></div>}
             {MARKET_ORDER.map(market => {
@@ -40,39 +36,26 @@ old_analysis_body = '''            <Context context={data.context} analysis={dat
 new_analysis_body = '''            <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
-              return <div className="classicMarket" key={market}>
-                <h3>{market}</h3>
-                {!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} onBet={() => addBet(lock.game, result, data.analysis)}/>)}
-              </div>;
+              return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
             })}
             <details className="analysisDetails"><summary>查看完整分析細節</summary><Context context={data.context} analysis={data.analysis}/><AlignmentAudit audit={data.analysis.alignmentAudit}/>{data.analysis.portfolio?.length > 0 && <div className="market"><h3>同場主選／次選與總曝險</h3><div className="portfolio">{data.analysis.portfolio.map((row, index) => <div className="portfolioRow" key={`${row.market}-${row.pick}`}><b>{index + 1}</b><span>{row.role}｜{row.market}｜{translateTeamText(row.pick)}</span><strong>{row.score.toFixed(1)}</strong><span>{row.recommendedUnit} Unit{index > 0 ? `｜與主選相關 ${pct(row.correlationToPrimary)}` : ''}</span></div>)}</div></div>}</details>'''
 text = replace_once(text, old_analysis_body, new_analysis_body, 'classic game results')
-
-# Insert candidate section after all game cards, before analysis section closes.
 marker = '''      })}
     </section>}
 
     {tab === 'bets' &&'''
 candidate = '''      })}
-      {latestBatchRows.some(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible) && <div className="card candidateList">
-        <h2>今日下注候選</h2>
-        <p className="note">只列本次上傳中達 {store.settings.candidateThreshold.toFixed(1)} 分以上且可進下注池的方向。</p>
-        {latestBatchRows.filter(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible).map(({ lock, result }, index) => <div className={`candidateRow ${Number(result.score) >= store.settings.strongestThreshold ? 'strongestRow' : ''}`} key={`${lock.id}-${result.market}-${result.pick}-${index}`}>
-          <b>{Number(result.score).toFixed(1)}</b><span>{matchup(lock.game)}｜{result.market}｜{translateTeamText(result.pick)}｜{Number(result.water).toFixed(3)}</span><strong>{Number(result.score) >= store.settings.strongestThreshold ? '最強主推' : '下注候選'}</strong>
-        </div>)}
-      </div>}
+      {latestBatchRows.some(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible) && <div className="card candidateList"><h2>今日下注候選</h2><p className="note">只列本次上傳中達 {store.settings.candidateThreshold.toFixed(1)} 分以上且可進下注池的方向。</p>{latestBatchRows.filter(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible).map(({ lock, result }, index) => <div className={`candidateRow ${Number(result.score) >= store.settings.strongestThreshold ? 'strongestRow' : ''}`} key={`${lock.id}-${result.market}-${result.pick}-${index}`}><b>{Number(result.score).toFixed(1)}</b><span>{matchup(lock.game)}｜{result.market}｜{translateTeamText(result.pick)}｜{Number(result.water).toFixed(3)}</span><strong>{Number(result.score) >= store.settings.strongestThreshold ? '最強主推' : '下注候選'}</strong></div>)}</div>}
       {batchReport?.issues?.length > 0 && <details className="card analysisDetails"><summary>本次辨識需核對 {batchReport.issues.length} 項</summary><div className="warnings">{batchReport.issues.slice(0, 12).map(item => <div key={item}>• {item}</div>)}</div></details>}
     </section>}
 
     {tab === 'bets' &&'''
 text = replace_once(text, marker, candidate, 'candidate list')
-
-# Insert compact result component before old ResultCard, retaining old component for other future uses.
-component_marker = 'function ResultCard({ result, analysis, game, settings, onBet }) {'
-classic_component = r'''function ClassicResultRow({ result, onBet }) {
+component_marker = 'function ResultCard({ result, analysis, settings, onBet }) {'
+classic_component = r'''function ClassicResultRow({ result, settings, onBet }) {
   const score = Number.isFinite(Number(result.score)) ? Number(result.score) : null;
-  const strongest = score != null && score >= 8.5 && result.betEligible;
-  const candidate = score != null && score >= 7.2 && result.betEligible;
+  const strongest = score != null && score >= settings.strongestThreshold && result.betEligible;
+  const candidate = score != null && score >= settings.candidateThreshold && result.betEligible;
   const icon = strongest ? '🟡' : candidate ? '🟢' : '⚪';
   const unit = result.portfolioUnit || result.unitSuggestion || 0;
   return <div className={`classicResult ${strongest ? 'classicStrongest' : candidate ? 'classicCandidate' : ''}`}>
@@ -86,7 +69,6 @@ classic_component = r'''function ClassicResultRow({ result, onBet }) {
 text = replace_once(text, component_marker, classic_component + component_marker, 'classic result component')
 path.write_text(text)
 
-# CSS
 path = Path('app/globals.css')
 css = path.read_text()
 css += r'''
@@ -97,21 +79,8 @@ css += r'''
 '''
 path.write_text(css)
 
-# versions
-path = Path('app/api/health/route.js')
-text = path.read_text().replace("version: '7.1.0'", "version: '7.2.0'")
-path.write_text(text)
-path = Path('package.json')
-text = path.read_text().replace('"version": "7.1.0"', '"version": "7.2.0"')
-path.write_text(text)
+path = Path('app/api/health/route.js'); text = path.read_text().replace("version: '7.1.0'", "version: '7.2.0'"); path.write_text(text)
+path = Path('package.json'); text = path.read_text().replace('"version": "7.1.0"', '"version": "7.2.0"'); path.write_text(text)
 Path('DEPLOYMENT_VERSION').write_text('7.2.0-classic-compact-results\n')
-path = Path('README.md')
-text = path.read_text().replace('# MLB 長期正期望值分析｜第 7.1.0 版', '# MLB 長期正期望值分析｜第 7.2.0 版', 1)
-text += '''
-
-### 7.2.0 經典分析結果顯示
-
-保留 7.1 的一次上傳全部自動分析流程，但結果頁回到原本每日 GPT 分析的閱讀方式：先顯示簡短完成摘要，再逐場依全場讓分、全場大小、上半讓分、上半大小列出「評分｜方向＋盤口｜水位」。第一層只補充穩健 EV 與 Unit；完整 GPT、情境、資料來源與風險改為點擊展開。最後另列本次 7.2 分以上的下注候選，不再把全部方向的大型排行榜塞在頁首。
-'''
-path.write_text(text)
+path = Path('README.md'); text = path.read_text().replace('# MLB 長期正期望值分析｜第 7.1.0 版', '# MLB 長期正期望值分析｜第 7.2.0 版', 1); text += '''\n\n### 7.2.0 經典分析結果顯示\n\n保留 7.1 的一次上傳全部自動分析流程，但結果頁回到原本每日 GPT 分析的閱讀方式：先顯示簡短完成摘要，再逐場依全場讓分、全場大小、上半讓分、上半大小列出「評分｜方向＋盤口｜水位」。第一層只補充穩健 EV 與 Unit；完整 GPT、情境、資料來源與風險改為點擊展開。最後另列本次 7.2 分以上的下注候選。\n'''; path.write_text(text)
 print('classic results v7.2 applied')
