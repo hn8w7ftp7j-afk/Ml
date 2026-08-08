@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '7.0.4';
+const VERSION = '7.0.5';
 const MODEL_VERSION = 'GPT研究整合聯合情境模型-2026-08-v7.0.2';
 const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v7.0.2';
 const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.2';
-const VISION_VERSION = 'MLB-VISION-2026-08-v7.0.4';
+const VISION_VERSION = 'MLB-VISION-2026-08-v7.0.5';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function response(url, options = {}, timeout = 90000) {
@@ -88,7 +88,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*7\.0\.4\s*版/);
+assert.match(renderedHome, /第\s*7\.0\.5\s*版/);
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
 assert.ok(homeResponse.headers.get('content-security-policy'));
@@ -106,7 +106,8 @@ assert.ok(/[\u4e00-\u9fff]/.test(game.away));
 assert.ok(/[\u4e00-\u9fff]/.test(game.home));
 
 const originHeaders = { 'Content-Type': 'application/json', Origin: BASE, 'Sec-Fetch-Site': 'same-origin' };
-const visionFixture = readFileSync(new URL('./fixtures/vision-table.b64', import.meta.url), 'utf8').trim();
+const visionFixture = readFileSync(new URL('./fixtures/vision-table.b64', import.meta.url), 'utf8').replace(/\s+/g, '');
+assert.match(visionFixture, /^[A-Za-z0-9+/]+={0,2}$/);
 const visionSchedule = [{
   gamePk: 990001,
   away: '克里夫蘭守護者',
