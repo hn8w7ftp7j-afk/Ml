@@ -1,0 +1,405 @@
+name: Apply market calibration v6.1
+
+on:
+  push:
+    branches:
+      - fix/market-calibration-v6-1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-market-calibration-v6-1
+  cancel-in-progress: false
+
+jobs:
+  patch-test-build:
+    if: ${{ !contains(github.event.head_commit.message || '', '[market calibration applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply v6.1 market-calibration patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              return text.replace(old, new, 1)
+
+          path = Path('lib/analysis.js')
+          text = path.read_text()
+          text = replace_once(
+              text,
+              "  calculateProfit,\n  hasActualWater,",
+              "  calculateProfit,\n  breakEvenProbability,\n  hasActualWater,",
+              'analysis import',
+          )
+          text = text.replace("export const MODEL_VERSION = 'GPT完整聯合情境模型-2026-08-v6';", "export const MODEL_VERSION = 'GPT市場校準聯合情境模型-2026-08-v6.1';")
+          text = text.replace("export const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v6';", "export const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v6.1';")
+
+          start = text.index('function devigAnchor(')
+          end = text.index('function normalizedTeam', start)
+          helpers = r'''function marketAnchorInfo(rows, row, rebateRate) {
+            const actual = rows.filter(item => hasActualWater(item.water) && !item.waterEstimated);
+            if (actual.length === 2) {
+              const implied = actual.map(item => breakEvenProbability(item.water, rebateRate));
+              const total = implied[0] + implied[1];
+              const index = actual.indexOf(row);
+              if (total > 0 && index >= 0) {
+                return {
+                  probability: implied[index] / total,
+                  source: '雙邊實際水位去水',
+                  paired: true,
+                };
+              }
+            }
+            if (hasActualWater(row?.water) && !row?.waterEstimated) {
+              return {
+                probability: clamp(breakEvenProbability(row.water, rebateRate), 0.40, 0.60),
+                source: '單邊實際價格基準',
+                paired: false,
+              };
+            }
+            if (hasActualWater(row?.water)) {
+              return { probability: 0.5, source: '暫估水位中性基準', paired: false };
+            }
+            return { probability: null, source: '無市場價格基準', paired: false };
+          }
+
+          function calibrationParameters({ profile, rawProbability, marketAnchorProbability, exactLineProbability, marketName, paired, waterEstimated }) {
+            if (marketAnchorProbability == null || !Number.isFinite(Number(rawProbability))) {
+              return { weight: 1, maximumEdge: 1, rawProbabilityGap: 0, logitGap: 0 };
+            }
+            const qualityScale = clamp((profile.quality - 0.50) / 0.46, 0, 1);
+            const rawProbabilityGap = Math.abs(rawProbability - marketAnchorProbability);
+            const logitGap = Math.abs(logit(rawProbability) - logit(marketAnchorProbability));
+            const disagreementPenalty = 1 / (1 + 0.90 * Math.pow(logitGap, 1.35));
+            const holePenalty = 1 - Math.min(0.28, exactLineProbability * (marketName.includes('讓分') ? 0.80 : 0.55));
+            let weight = (0.17 + 0.18 * qualityScale) * disagreementPenalty * holePenalty;
+            if (!paired) weight *= 0.78;
+            if (marketName.includes('上半')) weight *= 0.90;
+            if (waterEstimated) weight *= 0.60;
+            weight = clamp(weight, 0.08, 0.35);
+
+            let maximumEdge = 0.032 + 0.018 * qualityScale;
+            if (!paired) maximumEdge *= 0.82;
+            if (marketName.includes('上半')) maximumEdge *= 0.90;
+            if (exactLineProbability > 0.20) maximumEdge *= 0.90;
+            maximumEdge = clamp(maximumEdge, 0.025, 0.050);
+            return { weight, maximumEdge, rawProbabilityGap, logitGap };
+          }
+
+          function marketCalibratedProbability(rawProbability, marketAnchorProbability, weight, maximumEdge) {
+            const raw = clamp(safe(rawProbability, 0.5), 0.001, 0.999);
+            if (marketAnchorProbability == null) return raw;
+            const anchor = clamp(safe(marketAnchorProbability, 0.5), 0.001, 0.999);
+            const blended = logistic(logit(anchor) + weight * (logit(raw) - logit(anchor)));
+            return clamp(anchor + clamp(blended - anchor, -maximumEdge, maximumEdge), 0.02, 0.98);
+          }
+
+          function resolvedExposure(summary) {
+            return clamp(safe(summary?.equivalentWin, 0) + safe(summary?.equivalentLoss, 0), 0, 1);
+          }
+
+          function calibratedEVFromSummary(summary, probability, water, rebateRate) {
+            const exposure = resolvedExposure(summary);
+            const p = clamp(safe(probability, 0.5), 0, 1);
+            return exposure * (p * (water + rebateRate) - (1 - p) * (1 - rebateRate));
+          }
+
+          function fairWaterFromProbability(probability, rebateRate) {
+            const p = clamp(safe(probability, 0.5), 0.001, 0.999);
+            return clamp(((1 - rebateRate) * (1 - p) / p) - rebateRate, 0.5, 1.5);
+          }
+
+          '''
+          text = text[:start] + helpers + text[end:]
+          text = replace_once(
+              text,
+              "      const marketAnchorProbability = devigAnchor(rows, row);",
+              "      const anchorInfo = marketAnchorInfo(rows, row, rebateRate);\n      const marketAnchorProbability = anchorInfo.probability;",
+              'market anchor call',
+          )
+
+          start_marker = "      const weightedSummary = summarizeDistribution({ cells: combinedDistribution, pick: row.pick, water, context, rebateRate });"
+          end_marker = "      const sensitivity = scenarioSensitivity(scenarioEVs, scenarios);"
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          replacement = r'''      const rawWeightedSummary = summarizeDistribution({ cells: combinedDistribution, pick: row.pick, water, context, rebateRate });
+              const calibration = calibrationParameters({
+                profile,
+                rawProbability: rawWeightedSummary.modelProbability,
+                marketAnchorProbability,
+                exactLineProbability: rawWeightedSummary.exactLineProbability,
+                marketName,
+                paired: anchorInfo.paired,
+                waterEstimated,
+              });
+              const scenarioEvaluations = scenarios.map(scenario => {
+                const rawSummary = summarizeDistribution({
+                  cells: distributionForMarket(scenario.joint, marketName),
+                  pick: row.pick,
+                  water,
+                  context,
+                  rebateRate,
+                });
+                const calibratedProbability = marketCalibratedProbability(
+                  rawSummary.modelProbability,
+                  marketAnchorProbability,
+                  calibration.weight,
+                  calibration.maximumEdge,
+                );
+                return {
+                  id: scenario.id,
+                  weight: scenario.weight,
+                  value: calibratedEVFromSummary(rawSummary, calibratedProbability, water, rebateRate),
+                  rawValue: rawSummary.ev,
+                  rawProbability: rawSummary.modelProbability,
+                  calibratedProbability,
+                  exposure: resolvedExposure(rawSummary),
+                };
+              });
+              const scenarioEVs = scenarioEvaluations.map(scenario => ({ id: scenario.id, weight: scenario.weight, value: scenario.value }));
+              const weightedEV = scenarioEvaluations.reduce((sum, scenario) => sum + scenario.weight * scenario.value, 0);
+              const rawEV = scenarioEvaluations.reduce((sum, scenario) => sum + scenario.weight * scenario.rawValue, 0);
+              const robust = robustFromScenarioEVs(scenarioEVs, robustSets);
+              const quantileEV = weightedQuantile(scenarioEVs, 0.20);
+              const conservativeEV = Math.min(quantileEV, robust.robustEV);
+              const evFlipProbability = scenarioEVs.filter(scenario => scenario.value <= 0).reduce((sum, scenario) => sum + scenario.weight, 0);
+              const calibratedEquivalentWin = scenarioEvaluations.reduce((sum, scenario) => sum + scenario.weight * scenario.exposure * scenario.calibratedProbability, 0);
+              const calibratedEquivalentLoss = scenarioEvaluations.reduce((sum, scenario) => sum + scenario.weight * scenario.exposure * (1 - scenario.calibratedProbability), 0);
+              const calibratedResolved = calibratedEquivalentWin + calibratedEquivalentLoss;
+              const modelProbability = calibratedResolved > 1e-12
+                ? calibratedEquivalentWin / calibratedResolved
+                : marketAnchorProbability ?? rawWeightedSummary.modelProbability;
+              const fairWater = fairWaterFromProbability(modelProbability, rebateRate);
+'''
+          text = text[:start] + replacement + text[end:]
+
+          text = replace_once(
+              text,
+              "      const integrity = resultIntegrity({ summary: weightedSummary, rows, marketAnchorProbability, scenarioEVs });",
+              "      const integrity = resultIntegrity({ summary: rawWeightedSummary, rows, marketAnchorProbability, scenarioEVs });",
+              'integrity summary',
+          )
+          text = replace_once(
+              text,
+              "      const stability = clamp(1 - evFlipProbability - Math.min(0.35, sensitivity.primaryRange * 1.8), 0, 1);",
+              "      const stability = clamp(1 - evFlipProbability - Math.min(0.35, sensitivity.primaryRange * 1.8) - Math.min(0.30, calibration.rawProbabilityGap * 1.4), 0, 1);",
+              'stability calibration',
+          )
+          text = replace_once(
+              text,
+              "        ? clamp(logit(weightedSummary.modelProbability) / 3.5, -1, 1)\n        : clamp((logit(weightedSummary.modelProbability) - logit(marketAnchorProbability)) / 1.25, -1, 1);",
+              "        ? clamp(logit(modelProbability) / 3.5, -1, 1)\n        : clamp((logit(modelProbability) - logit(marketAnchorProbability)) / 1.25, -1, 1);",
+              'edge strength calibration',
+          )
+
+          old_score = r'''      const score = scoreFromCompositeEV(conservativeEV, {
+                weightedEV,
+                robustEV: robust.robustEV,
+                flipProbability: evFlipProbability,
+                quality: profile.quality,
+                edgeStrength,
+                stability,
+                integrityWarning: integrity.warning,
+                waterEstimated,
+              });
+              const eligibleByEV = weightedEV > 0 && robust.robustEV > 0;
+              const betEligible = !waterEstimated && !integrity.warning && eligibleByEV && score >= candidateThreshold;
+              const units = unitSuggestion({ score, robustEV: robust.robustEV, flipProbability: evFlipProbability, quality: profile.quality, eligible: betEligible });
+              const movement = movementComparison({ previous, row, distribution: combinedDistribution, context, rebateRate, weightedEV });
+              const risks = buildRisks({ profile, flipProbability: evFlipProbability, robustEV: robust.robustEV, marketName, row });
+'''
+          new_score = r'''      let score = scoreFromCompositeEV(conservativeEV, {
+                weightedEV,
+                robustEV: robust.robustEV,
+                flipProbability: evFlipProbability,
+                quality: profile.quality,
+                edgeStrength,
+                stability,
+                integrityWarning: integrity.warning,
+                waterEstimated,
+              });
+              if (calibration.rawProbabilityGap > 0.18) score = Math.min(score, 7.4);
+              else if (calibration.rawProbabilityGap > 0.12) score = Math.min(score, 7.9);
+              const eligibleByEV = weightedEV > 0 && robust.robustEV > 0;
+              const betEligible = !waterEstimated && !integrity.warning && eligibleByEV && score >= candidateThreshold;
+              let units = unitSuggestion({ score, robustEV: robust.robustEV, flipProbability: evFlipProbability, quality: profile.quality, eligible: betEligible });
+              if (calibration.rawProbabilityGap > 0.12) units = Math.min(units, 0.5);
+              const movement = movementComparison({ previous, row, distribution: combinedDistribution, context, rebateRate, weightedEV, modelProbability });
+              const risks = buildRisks({
+                profile,
+                flipProbability: evFlipProbability,
+                robustEV: robust.robustEV,
+                marketName,
+                row,
+                rawProbabilityGap: calibration.rawProbabilityGap,
+                calibrationWeight: calibration.weight,
+              });
+'''
+          text = replace_once(text, old_score, new_score, 'score and risk block')
+
+          text = replace_once(
+              text,
+              "function buildRisks({ profile, flipProbability, robustEV, marketName, row }) {",
+              "function buildRisks({ profile, flipProbability, robustEV, marketName, row, rawProbabilityGap = 0, calibrationWeight = 1 }) {",
+              'risk signature',
+          )
+          text = replace_once(
+              text,
+              "  if (profile.statuses.umpire !== '已確認') risks.push('主審採中性分布');\n  if (flipProbability > 0.20)",
+              "  if (profile.statuses.umpire !== '已確認') risks.push('主審採中性分布');\n  if (rawProbabilityGap > 0.08) risks.push(`原始模型與市場差距 ${(rawProbabilityGap * 100).toFixed(1)}%，正式 EV 已按 ${(calibrationWeight * 100).toFixed(0)}% 模型權重收斂`);\n  if (flipProbability > 0.20)",
+              'risk calibration line',
+          )
+
+          text = replace_once(
+              text,
+              "function movementComparison({ previous, row, distribution, context, rebateRate, weightedEV }) {",
+              "function movementComparison({ previous, row, distribution, context, rebateRate, weightedEV, modelProbability }) {",
+              'movement signature',
+          )
+          text = replace_once(
+              text,
+              "  const previousSummary = summarizeDistribution({ cells: distribution, pick: previous.pick, water: previousWater, context, rebateRate });\n  const deltaEV = weightedEV - previousSummary.ev;",
+              "  const previousSummary = summarizeDistribution({ cells: distribution, pick: previous.pick, water: previousWater, context, rebateRate });\n  const sameLine = String(previous.pick || '') === String(row.pick || '');\n  const previousComparableEV = sameLine && Number.isFinite(Number(modelProbability))\n    ? calibratedEVFromSummary(previousSummary, Number(modelProbability), previousWater, rebateRate)\n    : previousSummary.ev;\n  const deltaEV = weightedEV - previousComparableEV;",
+              'movement previous EV',
+          )
+          text = replace_once(text, "    previousWeightedEV: previousSummary.ev,", "    previousWeightedEV: previousComparableEV,", 'movement output')
+
+          replacements = {
+              "        modelProbability: weightedSummary.modelProbability,": "        modelProbability,",
+              "        rawModelProbability: weightedSummary.modelProbability,": "        rawModelProbability: rawWeightedSummary.modelProbability,",
+              "        fairWater: weightedSummary.fairWater,": "        fairWater,\n        rawFairWater: rawWeightedSummary.fairWater,",
+              "        fullWinProbability: weightedSummary.fullWin,": "        fullWinProbability: rawWeightedSummary.fullWin,",
+              "        partialWinProbability: weightedSummary.partialWin,": "        partialWinProbability: rawWeightedSummary.partialWin,",
+              "        pushProbability: weightedSummary.push,": "        pushProbability: rawWeightedSummary.push,",
+              "        partialLossProbability: weightedSummary.partialLoss,": "        partialLossProbability: rawWeightedSummary.partialLoss,",
+              "        fullLossProbability: weightedSummary.fullLoss,": "        fullLossProbability: rawWeightedSummary.fullLoss,",
+              "        exactLineProbability: weightedSummary.exactLineProbability,": "        exactLineProbability: rawWeightedSummary.exactLineProbability,",
+              "        distributionCoverage: weightedSummary.coverage,": "        distributionCoverage: rawWeightedSummary.coverage,",
+              "        rawEV: weightedEV,": "        rawEV,",
+          }
+          for old, new in replacements.items():
+              text = replace_once(text, old, new, f'result field {old}')
+
+          text = replace_once(
+              text,
+              "        marketAnchorProbability,\n        fairWater,",
+              "        marketAnchorProbability,\n        marketAnchorSource: anchorInfo.source,\n        marketCalibrationWeight: calibration.weight,\n        maximumCalibratedProbabilityEdge: calibration.maximumEdge,\n        rawMarketProbabilityGap: calibration.rawProbabilityGap,\n        calibratedMarketProbabilityGap: marketAnchorProbability == null ? null : Math.abs(modelProbability - marketAnchorProbability),\n        marketCalibrationApplied: marketAnchorProbability != null,\n        outcomeProbabilitiesSource: '原始聯合比分分布',\n        fairWater,",
+              'result calibration metadata',
+          )
+          path.write_text(text)
+
+          path = Path('app/page.js')
+          text = path.read_text()
+          text = text.replace("const VERSION = '6.0.0';", "const VERSION = '6.1.0';")
+          text = text.replace("const STORAGE = 'mlb-positive-ev-v6';", "const STORAGE = 'mlb-positive-ev-v6-1';")
+          text = text.replace("const LEGACY_KEYS = ['mlb-positive-ev-v5',", "const LEGACY_KEYS = ['mlb-positive-ev-v6', 'mlb-positive-ev-v5',")
+          text = text.replace('mlb-positive-ev-v6-${Date.now()}.json', 'mlb-positive-ev-v6-1-${Date.now()}.json')
+          text = text.replace('mlb-bets-v6-${Date.now()}.csv', 'mlb-bets-v6-1-${Date.now()}.csv')
+          text = text.replace("alert('第 6 版備份已還原');", "alert('第 6.1 版備份已還原');")
+          text = replace_once(
+              text,
+              "        <small>加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜EV 翻負 {pct(result.evFlipProbability)}</small>\n        <small>模型過盤率 {pct(result.modelProbability)}｜市場去水基準 {pct(result.marketAnchorProbability)}｜合理水位 {result.fairWater?.toFixed?.(3) || '—'}｜卡洞 {pct(result.exactLineProbability)}</small>\n        <small>全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜最不利集合 {result.worstVariant || '—'}</small>",
+              "        <small>正式加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜原始未校準 EV {pct(result.rawEV)}｜EV 翻負 {pct(result.evFlipProbability)}</small>\n        <small>市場校準過盤率 {pct(result.modelProbability)}｜原始模型率 {pct(result.rawModelProbability)}｜市場基準 {pct(result.marketAnchorProbability)}｜模型權重 {pct(result.marketCalibrationWeight)}</small>\n        <small>合理水位 {result.fairWater?.toFixed?.(3) || '—'}｜原始合理水位 {result.rawFairWater?.toFixed?.(3) || '—'}｜卡洞 {pct(result.exactLineProbability)}｜基準來源 {result.marketAnchorSource || '—'}</small>\n        <small>原始比分分布：全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜最不利集合 {result.worstVariant || '—'}</small>",
+              'frontend result calibration display',
+          )
+          path.write_text(text)
+
+          path = Path('app/api/health/route.js')
+          text = path.read_text().replace("version: '6.0.0'", "version: '6.1.0'")
+          path.write_text(text)
+
+          path = Path('package.json')
+          text = path.read_text().replace('"version": "6.0.0"', '"version": "6.1.0"')
+          path.write_text(text)
+
+          Path('DEPLOYMENT_VERSION').write_text('6.1.0-market-calibrated-engine\n')
+
+          path = Path('lib/mlb.js')
+          text = path.read_text().replace('MLB-Positive-EV/6.0', 'MLB-Positive-EV/6.1')
+          path.write_text(text)
+
+          path = Path('scripts/test.mjs')
+          text = path.read_text()
+          insertion = r'''
+          for (const result of analysis.results.filter(row => row.marketAnchorProbability != null)) {
+            assert.ok(result.marketCalibrationWeight >= 0.08 && result.marketCalibrationWeight <= 0.35);
+            assert.ok(result.maximumCalibratedProbabilityEdge >= 0.025 && result.maximumCalibratedProbabilityEdge <= 0.05);
+            assert.ok(Math.abs(result.modelProbability - result.marketAnchorProbability) <= Math.abs(result.rawModelProbability - result.marketAnchorProbability) + 1e-10);
+            assert.ok(result.calibratedMarketProbabilityGap <= result.maximumCalibratedProbabilityEdge + 1e-10);
+            assert.ok(Number.isFinite(result.rawEV));
+          }
+
+          const disagreementContext = structuredClone(context);
+          Object.assign(disagreementContext.home.seasonHitting, { runsPerGame: 6.20, ops: 0.900, iso: 0.245 });
+          Object.assign(disagreementContext.home.recentHitting, { runsPerGame: 6.50, ops: 0.930, iso: 0.260 });
+          Object.assign(disagreementContext.home.lineup, { offensiveIndex: 1.14 });
+          Object.assign(disagreementContext.away.seasonHitting, { runsPerGame: 3.20, ops: 0.620, iso: 0.105 });
+          Object.assign(disagreementContext.away.recentHitting, { runsPerGame: 3.00, ops: 0.600, iso: 0.095 });
+          Object.assign(disagreementContext.away.lineup, { offensiveIndex: 0.86 });
+          Object.assign(disagreementContext.away.starter.season, { era: 6.20, fip: 6.00, whip: 1.62, kMinusBB: 0.07, hrPer9: 1.80 });
+          Object.assign(disagreementContext.home.starter.season, { era: 2.45, fip: 2.70, whip: 1.02, kMinusBB: 0.22, hrPer9: 0.72 });
+          const disagreement = analyzeMarkets({
+            context: disagreementContext,
+            markets: markets.filter(row => row.market === '全場讓分'),
+            settings,
+          });
+          const disagreementUnderdog = disagreement.results.find(row => row.pick === `${home}受讓1+10`);
+          assert.ok(disagreementUnderdog.rawMarketProbabilityGap > 0.12, 'regression case must create a large raw model/market disagreement');
+          assert.ok(disagreementUnderdog.calibratedMarketProbabilityGap <= 0.05 + 1e-10);
+          assert.ok(disagreementUnderdog.weightedEV < disagreementUnderdog.rawEV);
+          assert.ok(disagreementUnderdog.weightedEV < 0.12, 'market-calibrated EV must not remain at an implausible 20–30% level');
+          if (disagreementUnderdog.rawMarketProbabilityGap > 0.18) assert.ok(disagreementUnderdog.score <= 7.4);
+          assert.ok(disagreementUnderdog.unitSuggestion <= 0.5);
+          '''
+          marker = "const repeat = analyzeMarkets({ context, markets, previousMarkets, settings });"
+          if marker not in text:
+              raise SystemExit('test insertion marker missing')
+          text = text.replace(marker, insertion + "\n" + marker, 1)
+          path.write_text(text)
+
+          path = Path('scripts/smoke.mjs')
+          text = path.read_text()
+          text = text.replace("const VERSION = '6.0.0';", "const VERSION = '6.1.0';")
+          text = text.replace("const MODEL_VERSION = 'GPT完整聯合情境模型-2026-08-v6';", "const MODEL_VERSION = 'GPT市場校準聯合情境模型-2026-08-v6.1';")
+          text = text.replace("const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v6';", "const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v6.1';")
+          text = text.replace("/第\\s*6\\.0\\.0\\s*版/", "/第\\s*6\\.1\\.0\\s*版/")
+          marker = "assert.ok(analysis.results.every(row => row.movement?.available));"
+          addition = "\nassert.ok(analysis.results.every(row => Number.isFinite(row.rawEV)));\nassert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.08 && row.marketCalibrationWeight <= 0.35));\nassert.ok(analysis.results.every(row => row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10));"
+          if marker not in text:
+              raise SystemExit('smoke insertion marker missing')
+          text = text.replace(marker, marker + addition, 1)
+          path.write_text(text)
+
+          path = Path('README.md')
+          text = path.read_text()
+          text = text.replace('第 6.0.0 版', '第 6.1.0 版')
+          text = text.replace('GPT完整聯合情境模型-2026-08-v6', 'GPT市場校準聯合情境模型-2026-08-v6.1')
+          text += '''\n\n## 6.1 市場校準修正\n\n正式 EV 不再直接採用資料模型的原始過盤率。系統會以實際雙邊水位去水後的市場基準為先驗，依資料品質、模型與市場分歧、卡洞機率及市場類型決定保守模型權重，再重算加權、穩健與保守 EV。原始模型率與原始未校準 EV 仍保留供稽核，但不直接決定正式評分。原始模型與市場差距超過 12% 時限制最高評分與 Unit，超過 18% 時最高 7.4，避免未經長期驗證的 20%～30% 級假性 EV。\n'''
+          path.write_text(text)
+          PY
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run unit, security and production build checks
+        run: npm run build
+      - name: Commit verified v6.1 fix
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add DEPLOYMENT_VERSION README.md package.json app/page.js app/api/health/route.js lib/analysis.js lib/mlb.js scripts/test.mjs scripts/smoke.mjs
+          git rm .github/workflows/apply-market-calibration-v6-1.yml
+          git commit -m 'Calibrate model EV to real market prices v6.1 [market calibration applied]'
+          git push origin HEAD:fix/market-calibration-v6-1
