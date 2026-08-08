@@ -1,0 +1,52 @@
+name: Assemble complete GPT MLB v6
+
+on:
+  push:
+    branches:
+      - fix/complete-v6-production
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: assemble-complete-gpt-mlb-v6
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: ${{ !contains(github.event.head_commit.message || '', '[v6 assembled]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reconstruct and verify source bundle
+        run: |
+          set -euo pipefail
+          cat .v6bundle/part* > /tmp/v6-source.b64
+          base64 -d /tmp/v6-source.b64 > /tmp/v6-source.tar.gz
+          echo '7f7126f8fa7064917f6805648e8c04db2fe69e4e5e938d9bc39becd3e5e30444  /tmp/v6-source.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/v6-source.tar.gz -C .
+      - name: Install, test and build
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          npm run build
+      - name: Commit verified v6 engine
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add DEPLOYMENT_VERSION README.md package.json \
+            app/layout.js app/page.js app/globals.css \
+            app/api/analyze/route.js app/api/health/route.js app/api/vision/route.js \
+            lib/analysis.js lib/markets.js lib/mlb.js lib/vision.js \
+            scripts/smoke.mjs scripts/test.mjs
+          git rm -r .v6bundle .github/workflows/assemble-v6-complete.yml
+          git commit -m 'Assemble complete GPT MLB engine v6 [v6 assembled]'
+          git push origin HEAD:fix/complete-v6-production
