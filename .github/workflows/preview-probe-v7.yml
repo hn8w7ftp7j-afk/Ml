@@ -1,0 +1,20 @@
+name: Preview probe v7
+
+on:
+  push:
+    branches:
+      - feature/gpt-alignment-v7
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe preview health
+        run: |
+          set -o pipefail
+          curl -sS -i --max-time 30 'https://mlb-p6jsdv23t-5gtbpqpbkx-2201s-projects.vercel.app/api/health?t=probe'
