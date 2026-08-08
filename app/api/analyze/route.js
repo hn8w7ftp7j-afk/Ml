@@ -10,11 +10,23 @@ export const dynamic = 'force-dynamic';
 
 function sanitizeGame(game) {
   const safe = {
-    gamePk: positiveInteger(game?.gamePk), gameDate: cleanText(game?.gameDate, 40), status: cleanText(game?.status, 60),
-    away: cleanText(game?.away, 80), home: cleanText(game?.home, 80), venue: cleanText(game?.venue, 100),
-    awayTeamId: positiveInteger(game?.awayTeamId), homeTeamId: positiveInteger(game?.homeTeamId), venueId: positiveInteger(game?.venueId),
-    awayProbableId: positiveInteger(game?.awayProbableId), homeProbableId: positiveInteger(game?.homeProbableId),
-    awayProbable: cleanText(game?.awayProbable, 80), homeProbable: cleanText(game?.homeProbable, 80),
+    gamePk: positiveInteger(game?.gamePk),
+    gameDate: cleanText(game?.gameDate, 40),
+    status: cleanText(game?.status, 60),
+    statusEnglish: cleanText(game?.statusEnglish, 60),
+    away: cleanText(game?.away, 80),
+    home: cleanText(game?.home, 80),
+    awayEnglish: cleanText(game?.awayEnglish, 80),
+    homeEnglish: cleanText(game?.homeEnglish, 80),
+    venue: cleanText(game?.venue, 100),
+    venueEnglish: cleanText(game?.venueEnglish, 100),
+    awayTeamId: positiveInteger(game?.awayTeamId),
+    homeTeamId: positiveInteger(game?.homeTeamId),
+    venueId: positiveInteger(game?.venueId),
+    awayProbableId: positiveInteger(game?.awayProbableId),
+    homeProbableId: positiveInteger(game?.homeProbableId),
+    awayProbable: cleanText(game?.awayProbable, 80),
+    homeProbable: cleanText(game?.homeProbable, 80),
   };
   return safe.gamePk && safe.awayTeamId && safe.homeTeamId && safe.away && safe.home ? safe : null;
 }
