@@ -24,10 +24,35 @@ export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 const GATEWAY = 'https://ai-gateway.vercel.sh/v1/chat/completions';
-const DATA_URL = /^data:image\/(?:jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const IMAGE_DATA_URL = /^data:image\/(jpeg|jpg|png|webp);base64,([\s\S]+)$/i;
 const TOKEN_SOURCE = '(\\d+(?:\\.\\d+)?(?:\/\\d+(?:\\.\\d+)?)?(?:平|[+-]\\d{1,3})?)';
 const WATER_RE = /(?:^|[^\d])(0?\.\d{2,3}|1\.\d{2,3})(?!\d)/g;
 const unique = values => [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))];
+
+function canonicalImageDataURL(value) {
+  if (typeof value !== 'string') return '';
+  const match = value.match(IMAGE_DATA_URL);
+  if (!match) return '';
+
+  let encoded = String(match[2] || '').replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  if (!encoded || encoded.length < 32 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) return '';
+  const remainder = encoded.length % 4;
+  if (remainder === 1) return '';
+  if (remainder) encoded += '='.repeat(4 - remainder);
+
+  let bytes;
+  try { bytes = Buffer.from(encoded, 'base64'); }
+  catch { return ''; }
+  if (!bytes.length || bytes.length > 2_400_000) return '';
+
+  let mime = '';
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) mime = 'png';
+  else if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) mime = 'jpeg';
+  else if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') mime = 'webp';
+  if (!mime) return '';
+
+  return `data:image/${mime};base64,${bytes.toString('base64')}`;
+}
 
 function waters(line) {
   return [...String(line || '').matchAll(WATER_RE)]
@@ -240,11 +265,12 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'vision-v7-0-4', limit: 28, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'vision-v7-0-5', limit: 28, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 4_500_000);
-    const images = Array.isArray(body.images) ? body.images.slice(0, 2) : [];
+    const rawImages = Array.isArray(body.images) ? body.images.slice(0, 2) : [];
+    const images = rawImages.map(canonicalImageDataURL);
     const text = cleanText(body.text, 40000);
     const schedule = (Array.isArray(body.schedule) ? body.schedule : []).slice(0, 25).map(game => ({
       gamePk: positiveInteger(game?.gamePk),
@@ -270,8 +296,8 @@ export async function POST(request) {
       homeProbable: cleanText(game?.homeProbable, 80),
     })).filter(game => game.gamePk && game.away && game.home);
 
-    if (!images.length && !text) return NextResponse.json({ ok: false, error: '沒有收到圖片或盤口文字' }, { status: 400 });
-    if (images.some(value => typeof value !== 'string' || value.length > 3_200_000 || !DATA_URL.test(value))) {
+    if (!rawImages.length && !text) return NextResponse.json({ ok: false, error: '沒有收到圖片或盤口文字' }, { status: 400 });
+    if (rawImages.length !== images.filter(Boolean).length || images.some(value => value.length > 3_200_000)) {
       return NextResponse.json({ ok: false, error: '圖片格式或大小不符合要求，請重新選擇或裁切圖片' }, { status: 413 });
     }
 
