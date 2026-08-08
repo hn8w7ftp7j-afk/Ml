@@ -147,6 +147,18 @@ context.expertAssessment = sanitizeExpertAssessment({
 }, context, 'unit-test-model');
 assert.equal(context.expertAssessment.used, true);
 
+const auditGuard = sanitizeExpertAssessment({
+  audit: {
+    confirmed: ['invented confirmed fact'],
+    estimated: ['invented estimated fact'],
+    unknown: ['official roof not confirmed'],
+  },
+}, context, 'audit-guard-model');
+assert.equal(auditGuard.assessment.audit.confirmed.includes('invented confirmed fact'), false);
+assert.equal(auditGuard.assessment.audit.estimated.includes('invented estimated fact'), false);
+assert.ok(auditGuard.assessment.audit.unknown.some(value => value.includes('GPT 待確認：official roof not confirmed')));
+
+
 const fullRuns = estimateRuns(context, false);
 const first5Runs = estimateRuns(context, true);
 assert.ok(fullRuns.away > first5Runs.away && fullRuns.home > first5Runs.home);
