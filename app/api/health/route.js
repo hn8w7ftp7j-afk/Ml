@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    version: '7.0.3',
+    version: '7.0.4',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     expertVersion: EXPERT_VERSION,
