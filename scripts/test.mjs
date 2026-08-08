@@ -63,6 +63,19 @@ assert.equal(vision.markets[1].directions[0].waterEstimated, false);
 assert.equal(vision.markets[1].directions[1].water, null);
 assert.equal(vision.markets[2].directions[0].pick, '');
 
+const nullLikeVision = normalizeVisionGame({
+  away,
+  home,
+  first5Total: { line: 'null', overWater: null, underWater: null, confidence: 0 },
+  first5Runline: { favoriteSide: 'away', line: 'undefined', favoriteWater: null, underdogWater: null, confidence: 0 },
+}, { gamePk: 2, away, home }, { 上半大小: 0.93, 上半讓分: 0.94 });
+assert.equal(nullLikeVision.markets[2].directions[0].pick, '');
+assert.equal(nullLikeVision.markets[2].directions[0].water, null);
+assert.equal(nullLikeVision.markets[3].directions[0].pick, '');
+assert.equal(nullLikeVision.markets[3].directions[1].pick, '');
+assert.deepEqual(validateMarketPair('上半大小', nullLikeVision.markets[3].directions), []);
+
+
 const compactVision = expandVisionPayload(cleanVisionJSON(JSON.stringify({
   g: [{
     id: 99,
