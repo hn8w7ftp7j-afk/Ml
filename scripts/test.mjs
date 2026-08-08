@@ -12,6 +12,7 @@ import {
 import { analyzeMarkets, estimateRuns, MODEL_VERSION, RULES_VERSION } from '../lib/analysis.js';
 import { fallbackExpertAssessment, sanitizeExpertAssessment } from '../lib/expert.js';
 import { VISION_VERSION, buildVisionPrompt, cleanVisionJSON, expandVisionPayload } from '../lib/vision.js';
+import { BATCH_VERSION, buildAutoAnalysisPlan } from '../lib/batch.js';
 
 const away = '紐約洋基';
 const home = '亞特蘭大勇士';
@@ -96,6 +97,40 @@ assert.equal(compactVision.games[0].fullTotal.line, '8+50');
 assert.equal(compactVision.games[0].first5Runline.line, '');
 assert.ok(buildVisionPrompt([{ gamePk: 99, away, home }]).includes('"g"'));
 assert.match(VISION_VERSION, /v7\.0\.5$/);
+
+const autoPlan = buildAutoAnalysisPlan({
+  games: [{
+    id: 'recognized-1',
+    away,
+    home,
+    matchedGame: { gamePk: 44, away, home },
+    markets: [
+      { market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1+50`, water: 0.95 }] },
+      { market: '全場大小', directions: [{ pick: '大8+50', water: 0.94 }, { pick: '小9+50', water: 0.94 }] },
+      { market: '上半讓分', directions: [{ pick: '', water: null }, { pick: '', water: null }] },
+      { market: '上半大小', directions: [{ pick: '', water: null }, { pick: '', water: null }] },
+    ],
+  }, {
+    id: 'recognized-2',
+    away: '未配對客隊',
+    home: '未配對主隊',
+    matchedGame: null,
+    markets: [],
+  }],
+  settings: { fallbackWater: { 全場讓分: 0.95, 全場大小: 0.94, 上半讓分: 0.94, 上半大小: 0.93 } },
+  version: 'test-version',
+  batchId: 'batch-test',
+  idFactory: () => 'lock-test',
+  now: () => '2026-08-09T00:00:00.000Z',
+});
+assert.equal(BATCH_VERSION, 'MLB-AUTO-ANALYZE-ALL-2026-08-v1');
+assert.equal(autoPlan.locks.length, 1);
+assert.equal(autoPlan.locks[0].batchId, 'batch-test');
+assert.equal(autoPlan.locks[0].markets.length, 2);
+assert.ok(autoPlan.locks[0].markets.every(row => row.market === '全場讓分'));
+assert.ok(autoPlan.issues.some(value => value.includes('全場大小')));
+assert.ok(autoPlan.issues.some(value => value.includes('尚未配對')));
+
 
 assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) >= 3.5);
 assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) <= 6.6);
