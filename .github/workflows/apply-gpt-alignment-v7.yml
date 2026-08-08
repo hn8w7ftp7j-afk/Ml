@@ -39,6 +39,21 @@ jobs:
           PY
       - name: Apply GPT alignment v7 patch
         run: python scripts/apply-gpt-alignment-v7.py
+      - name: Preserve conservative divergence controls
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/analysis.js')
+          text = path.read_text()
+          old_score = "      if (calibration.divergenceRisk > 0.18) score = Math.min(score, 7.4);\n      else if (calibration.divergenceRisk > 0.12) score = Math.min(score, 7.9);"
+          new_score = "      if (calibration.rawProbabilityGap > 0.18 || calibration.divergenceRisk > 0.18) score = Math.min(score, 7.4);\n      else if (calibration.rawProbabilityGap > 0.12 || calibration.divergenceRisk > 0.12) score = Math.min(score, 7.9);"
+          old_unit = "      if (calibration.divergenceRisk > 0.12) units = Math.min(units, 0.5);"
+          new_unit = "      if (calibration.rawProbabilityGap > 0.12 || calibration.divergenceRisk > 0.12) units = Math.min(units, 0.5);"
+          if old_score not in text or old_unit not in text:
+              raise SystemExit('divergence control target missing')
+          text = text.replace(old_score, new_score, 1).replace(old_unit, new_unit, 1)
+          path.write_text(text)
+          PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund --package-lock=false
       - name: Run unit, security and production build checks
