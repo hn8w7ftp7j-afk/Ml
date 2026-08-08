@@ -26,6 +26,18 @@ jobs:
           node-version: 24
       - name: Apply canonical image data URL repair
         run: python scripts/apply-vision-v7-0-5.py
+      - name: Update vision unit version assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/test.mjs')
+          text = path.read_text()
+          old = 'assert.match(VISION_VERSION, /v7\\.0\\.4$/);'
+          new = 'assert.match(VISION_VERSION, /v7\\.0\\.5$/);'
+          if old not in text:
+              raise SystemExit('vision version assertion marker missing')
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund --package-lock=false
       - name: Run unit, security and production build checks
@@ -35,7 +47,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add DEPLOYMENT_VERSION README.md package.json app/page.js app/api/health/route.js app/api/vision/route.js lib/vision.js scripts/smoke.mjs
+          git add DEPLOYMENT_VERSION README.md package.json app/page.js app/api/health/route.js app/api/vision/route.js lib/vision.js scripts/smoke.mjs scripts/test.mjs
           git rm .github/workflows/apply-vision-v7-0-5.yml scripts/apply-vision-v7-0-5.py
           git commit -m 'Canonicalize screenshot data URLs v7.0.5 [vision base64 fixed]'
           git push origin HEAD:fix/vision-base64-canonicalization-v7-0-5
