@@ -14,7 +14,7 @@ import {
 } from '../lib/markets.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '7.0.3';
+const VERSION = '7.0.4';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -47,9 +47,7 @@ async function readDataURL(file) {
   });
 }
 
-function canvasDataURL(canvas, quality = 0.9) {
-  const webp = canvas.toDataURL('image/webp', quality);
-  if (webp.startsWith('data:image/webp')) return webp;
+function canvasDataURL(canvas, quality = 0.92) {
   return canvas.toDataURL('image/jpeg', quality);
 }
 

@@ -82,7 +82,7 @@ assert.equal(compactVision.games[0].fullRunline.underdogWater, null);
 assert.equal(compactVision.games[0].fullTotal.line, '8+50');
 assert.equal(compactVision.games[0].first5Runline.line, '');
 assert.ok(buildVisionPrompt([{ gamePk: 99, away, home }]).includes('"g"'));
-assert.match(VISION_VERSION, /v7\.0\.3$/);
+assert.match(VISION_VERSION, /v7\.0\.4$/);
 
 assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) >= 3.5);
 assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) <= 6.6);

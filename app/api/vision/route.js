@@ -108,13 +108,15 @@ function localTextParse(text, schedule) {
 function modelCandidates() {
   return unique([
     process.env.AI_VISION_MODEL,
+    'openai/gpt-4o-mini',
+    'openai/gpt-4.1-mini',
     'openai/gpt-5-nano',
     process.env.AI_MODEL,
     'google/gemini-2.5-flash',
   ]);
 }
 
-async function gateway(key, model, content, { jsonFormat = true, timeoutMs = 14000, maxTokens = 2800 } = {}) {
+async function gateway(key, model, content, { jsonFormat = false, timeoutMs = 14000, maxTokens = 2400 } = {}) {
   const body = {
     model,
     messages: [{ role: 'user', content }],
@@ -122,7 +124,7 @@ async function gateway(key, model, content, { jsonFormat = true, timeoutMs = 140
     max_tokens: maxTokens,
   };
   if (jsonFormat) body.response_format = { type: 'json_object' };
-  if (String(model).startsWith('openai/')) body.reasoning_effort = 'minimal';
+  if (/gpt-5/i.test(String(model))) body.reasoning_effort = 'minimal';
 
   let response;
   try {
@@ -145,10 +147,14 @@ async function gateway(key, model, content, { jsonFormat = true, timeoutMs = 140
 
   const raw = await response.text();
   if (!response.ok) {
-    console.error('AI Gateway vision error', model, response.status, raw.slice(0, 240));
-    const error = new Error(`${model} 暫時無法使用`);
+    let providerMessage = '';
+    try { providerMessage = JSON.parse(raw)?.error?.message || ''; }
+    catch { providerMessage = raw; }
+    providerMessage = String(providerMessage || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+    console.error('AI Gateway vision error', model, response.status, providerMessage);
+    const error = new Error(`${model}（${response.status}）${providerMessage ? `：${providerMessage}` : ' 暫時無法使用'}`);
     error.status = response.status;
-    if (response.status === 400 && /response[_ -]?format|json[_ -]?object|unsupported|invalid/i.test(raw)) error.code = 'response_format';
+    if (response.status === 400 && /response[_ -]?format|json[_ -]?object|unsupported|invalid/i.test(`${providerMessage} ${raw}`)) error.code = 'response_format';
     else if (response.status === 429) error.code = 'rate_limited';
     else if (response.status === 401 || response.status === 403) error.code = 'auth';
     throw error;
@@ -156,35 +162,33 @@ async function gateway(key, model, content, { jsonFormat = true, timeoutMs = 140
 
   let payload;
   try { payload = JSON.parse(raw); }
-  catch { throw new Error(`${model} 回傳格式錯誤`); }
-  return payload?.choices?.[0]?.message?.content || '';
+  catch { throw new Error(`${model} 回傳外層格式錯誤`); }
+  const output = payload?.choices?.[0]?.message?.content;
+  if (typeof output !== 'string' || !output.trim()) throw new Error(`${model} 未回傳可解析文字`);
+  return output;
 }
 
 async function parseModelOutput(key, model, content, prompt, attemptMs) {
   const deadline = Date.now() + attemptMs;
-  let output;
-  try {
-    output = await gateway(key, model, content, { jsonFormat: true, timeoutMs: attemptMs, maxTokens: 2800 });
-  } catch (error) {
-    if (error?.code !== 'response_format') throw error;
-    const remaining = deadline - Date.now();
-    if (remaining < 1800) throw error;
-    output = await gateway(key, model, content, { jsonFormat: false, timeoutMs: remaining, maxTokens: 2800 });
-  }
+  const output = await gateway(key, model, content, {
+    jsonFormat: false,
+    timeoutMs: attemptMs,
+    maxTokens: 2400,
+  });
 
   try {
     return expandVisionPayload(cleanVisionJSON(output));
   } catch (parseError) {
     const remaining = deadline - Date.now();
-    if (remaining < 2200) throw parseError;
+    if (remaining < 2200) throw new Error(`${model} JSON 解析失敗：${String(parseError?.message || parseError)}`);
     const repairContent = [{
       type: 'text',
-      text: `${prompt}\n以下是上一個模型輸出的損壞 JSON。只修復成規定的短鍵 JSON，不得重新辨識或新增資料：\n${String(output).slice(0, 60000)}`,
+      text: `${prompt}\n以下是視覺模型已讀出的內容，只修復成規定的短鍵 JSON；不得重新辨識、不得新增數字：\n${String(output).slice(0, 60000)}`,
     }];
     const repaired = await gateway(key, 'openai/gpt-5-nano', repairContent, {
       jsonFormat: true,
       timeoutMs: Math.min(remaining, 5000),
-      maxTokens: 2200,
+      maxTokens: 2000,
     });
     return expandVisionPayload(cleanVisionJSON(repaired));
   }
@@ -200,25 +204,26 @@ async function generateAndParse(key, content, prompt) {
     const model = models[index];
     const remaining = deadline - Date.now();
     if (remaining < 2500) break;
-    const reserve = index < models.length - 1 ? Math.min(16000, Math.max(6500, remaining * 0.36)) : 0;
-    const attemptMs = Math.max(2500, Math.min(index === 0 ? 18000 : 15000, remaining - reserve));
+    const reserve = index < models.length - 1 ? Math.min(15000, Math.max(6000, remaining * 0.34)) : 0;
+    const preferred = index === 0 ? 17000 : index === 1 ? 14000 : 10000;
+    const attemptMs = Math.max(2500, Math.min(preferred, remaining - reserve));
     try {
       const parsed = await parseModelOutput(key, model, content, prompt, attemptMs);
       if (Array.isArray(parsed?.games) && parsed.games.length) return { parsed, model, failures };
       empty = { parsed, model, failures };
-      failures.push(`${model}：未辨識到完整場次`);
+      failures.push(`${model}：回傳成功但沒有可確認場次`);
     } catch (error) {
-      failures.push(`${model}：${String(error?.message || error)}`);
+      failures.push(`${model}：${String(error?.message || error)}`.slice(0, 320));
     }
   }
 
   if (empty) return empty;
   const timedOut = failures.some(value => /逾時|timeout/i.test(value));
   const error = new Error(timedOut
-    ? '圖片內容較密，系統已自動切換辨識模型但仍逾時；請重新上傳，系統會自動分段處理'
-    : '圖片辨識服務暫時無法完成，請稍後重試或改貼盤口文字');
+    ? '圖片辨識模型逾時；系統已自動切換其他模型仍未完成'
+    : '圖片辨識服務未能完成');
   error.code = timedOut ? 'timeout' : 'vision_failed';
-  error.details = failures;
+  error.details = failures.slice(0, 8);
   throw error;
 }
 
@@ -235,7 +240,7 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'vision-v7-0-3', limit: 28, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'vision-v7-0-4', limit: 28, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 4_500_000);
@@ -281,7 +286,7 @@ export async function POST(request) {
       const prompt = buildVisionPrompt(schedule, Boolean(text));
       const content = [{ type: 'text', text: prompt }];
       if (text) content.push({ type: 'text', text: `盤口文字：\n${text}` });
-      for (const url of images) content.push({ type: 'image_url', image_url: { url, detail: 'high' } });
+      for (const url of images) content.push({ type: 'image_url', image_url: { url } });
       const result = await generateAndParse(key, content, prompt);
       parsed = result.parsed;
       model = result.model;
@@ -305,7 +310,11 @@ export async function POST(request) {
     const message = timedOut
       ? '圖片內容較密，系統已自動切換辨識模型但仍逾時；請重新上傳，系統會自動分段處理'
       : String(error?.message || error);
-    return NextResponse.json({ ok: false, error: message }, {
+    const details = (Array.isArray(error?.details) ? error.details : [])
+      .map(value => String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 320))
+      .filter(Boolean)
+      .slice(0, 8);
+    return NextResponse.json({ ok: false, error: message, details }, {
       status: Number(error?.status) || (timedOut ? 504 : 500),
       headers: { 'Cache-Control': 'no-store' },
     });
