@@ -1,0 +1,33 @@
+name: Apply GPT parity v8
+on:
+  push:
+    branches: [fix/gpt-parity-scoring-v8]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - run: python scripts/apply-gpt-parity-v8.py
+      - name: Sync tests and smoke versions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/smoke.mjs'); s=p.read_text().replace("const VERSION = '7.3.0';","const VERSION = '8.0.0';").replace("const MODEL_VERSION = 'GPT研究整合聯合情境模型-2026-08-v7.0.2';","const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.0.0';").replace("const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v7.0.2';","const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.0.0';").replace('/第\\s*7\\.3\\.0\\s*版/','/第\\s*8\\.0\\.0\\s*版/'); p.write_text(s)
+          PY
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - run: npm run build
+      - name: Commit verified rebuild
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add DEPLOYMENT_VERSION README.md package.json app/page.js app/api/health/route.js lib/analysis.js lib/markets.js scripts/smoke.mjs
+          git rm .github/workflows/apply-gpt-parity-v8.yml scripts/apply-gpt-parity-v8.py
+          git commit -m 'Make market price an EV input not probability truth v8.0.0 [GPT parity core]'
+          git push origin HEAD:fix/gpt-parity-scoring-v8
