@@ -1,0 +1,41 @@
+name: Run market calibration v6.1
+
+on:
+  push:
+    branches:
+      - fix/market-calibration-v6-1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: run-market-calibration-v6-1
+  cancel-in-progress: false
+
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply market calibration patch
+        run: python scripts/apply-market-calibration-v6-1.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run unit, security and build checks
+        run: npm run build
+      - name: Commit verified v6.1 fix
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add DEPLOYMENT_VERSION README.md package.json app/page.js app/api/health/route.js lib/analysis.js lib/mlb.js scripts/test.mjs scripts/smoke.mjs
+          git rm .github/workflows/apply-market-calibration-v6-1.yml .github/workflows/run-market-calibration-v6-1.yml scripts/apply-market-calibration-v6-1.py
+          git commit -m 'Calibrate model EV to real market prices v6.1 [market calibration applied]'
+          git push origin HEAD:fix/market-calibration-v6-1
