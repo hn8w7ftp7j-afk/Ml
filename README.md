@@ -1,18 +1,27 @@
-# MLB Positive EV v3
+# MLB Positive EV v3.1
 
 私人使用的 MLB 台灣信用盤分析系統。
 
-## 已完成流程
+## 核心流程
 
-- 今日 MLB 賽程與 probable pitchers
-- iPhone 多圖上傳、逐張壓縮、AI Vision 辨識
-- 盤口文字備援與手動建檔
-- 四市場八方向驗證與盤口鎖定
-- 球季／近況、先發、打線、捕手、傷停、左右投對位、球場、天氣、旅行休息資料層
+- MLB 官方賽程與 probable pitchers
+- iPhone 多圖上傳、壓縮、AI Vision 辨識與手動校正
+- 實際開盤市場才鎖定與分析；未開盤市場可留白
+- 全場讓分／全場大小／上半讓分／上半大小，各市場獨立
 - 台灣信用盤部分輸贏、每萬退水、EV／穩健 EV／加權 EV／評分
-- 下注紀錄、自動終場、ROI、CLV、評分／市場／球隊統計
-- JSON 備份、還原、CSV 匯出
+- 下注紀錄、終場結算、ROI、CLV、JSON 備份與 CSV 匯出
 
-## 安全
+## 安全設定
 
-`AI_GATEWAY_API_KEY` 只放在 Vercel Environment Variables。網站目前未加帳號登入牆；正式私人化應再接驗證。
+Vercel Environment Variables：
+
+- `AI_GATEWAY_API_KEY`：必要
+- `AI_MODEL`：選填，預設 `google/gemini-2.5-flash`
+- `APP_PASSWORD`：設定後啟用私人登入牆
+- `SESSION_SECRET`：建議設定至少 32 個隨機字元，用於 30 天登入 Cookie 簽章
+
+網站不會把金鑰送到瀏覽器。API 有同源檢查、輸入大小限制、格式驗證與基礎頻率限制。正式環境仍建議把 GitHub Repository 改為 Private，並在 Vercel Firewall 對 `/api/vision`、`/api/analyze` 再加平台級 Rate Limit。
+
+## 測試
+
+`npm test` 會執行盤口解析、部分結算、退水、EV、支配性、未開盤市場、認證、同源、大小限制與頻率限制測試。每次推送 main 後，GitHub Actions 會等待 Vercel Production 更新並測試首頁、Security Headers、賽程、AI 文字解析、完整 8 方向、只有 1 個市場的 2 方向分析，以及賽果 API。

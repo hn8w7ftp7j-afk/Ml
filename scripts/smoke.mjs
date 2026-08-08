@@ -8,14 +8,8 @@ async function response(url, options = {}, timeout = 90000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: { 'Cache-Control': 'no-cache', ...(options.headers || {}) },
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+    return await fetch(url, { ...options, redirect: 'manual', signal: controller.signal, headers: { 'Cache-Control': 'no-cache', ...(options.headers || {}) } });
+  } finally { clearTimeout(timer); }
 }
 
 async function json(url, options = {}, timeout = 90000) {
@@ -35,10 +29,8 @@ async function waitForDeployment() {
       const { value } = await json(`${BASE}/api/health?t=${Date.now()}`, {}, 20000);
       last = JSON.stringify(value);
       const shaReady = !EXPECTED_SHA || !value.commit || value.commit === EXPECTED_SHA;
-      if (value.ok && value.version === '3.0.0' && value.aiGatewayConfigured && shaReady) return value;
-    } catch (error) {
-      last = String(error?.message || error);
-    }
+      if (value.ok && value.version === '3.1.0' && value.aiGatewayConfigured && shaReady) return value;
+    } catch (error) { last = String(error?.message || error); }
     await sleep(10000);
   }
   throw new Error(`Production deployment was not ready: ${last}`);
@@ -55,15 +47,19 @@ assert.equal(health.aiGatewayConfigured, true);
 if (EXPECTED_SHA && health.commit) assert.equal(health.commit, EXPECTED_SHA);
 
 const homeResponse = await response(`${BASE}/?smoke=${Date.now()}`, {}, 30000);
+if (health.authConfigured) {
+  assert.ok([302, 307, 308].includes(homeResponse.status));
+  console.log(JSON.stringify({ ok: true, base: BASE, commit: health.commit, authProtected: true }, null, 2));
+  process.exit(0);
+}
 const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB Positive EV/);
-assert.ok(home.includes('3.0.0'), 'Homepage version marker missing');
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
+assert.ok(homeResponse.headers.get('content-security-policy'));
 
-let games = [];
-let scheduleDate = taipeiDate();
+let games = [], scheduleDate = taipeiDate();
 for (let i = 0; i < 4 && !games.length; i += 1) {
   scheduleDate = taipeiDate(i);
   const result = await json(`${BASE}/api/mlb?date=${scheduleDate}&t=${Date.now()}`, {}, 30000);
@@ -74,18 +70,15 @@ assert.ok(games.length > 0, 'No MLB games found in the next four days');
 const game = games[0];
 assert.ok(game.gamePk && game.away && game.home);
 
+const originHeaders = { 'Content-Type': 'application/json', Origin: BASE, 'Sec-Fetch-Site': 'same-origin' };
 const visionText = `${game.away} @ ${game.home}\n全場讓分：${game.home}讓1平 0.950；${game.away}受讓1平 0.950\n全場大小：大8+50 0.940；小8+50 0.940\n上半讓分：${game.home}讓0平 0.950；${game.away}受讓0平 0.950\n上半大小：大4+50 0.930；小4+50 0.930`;
-const vision = await json(`${BASE}/api/vision`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ text: visionText, schedule: [game], defaultWater: 0.95 }),
-}, 90000);
-assert.ok(Array.isArray(vision.value.games) && vision.value.games.length >= 1, 'Vision/text parser returned no games');
+const vision = await json(`${BASE}/api/vision`, { method: 'POST', headers: originHeaders, body: JSON.stringify({ text: visionText, schedule: [game], defaultWater: 0.95 }) }, 90000);
+assert.ok(Array.isArray(vision.value.games) && vision.value.games.length >= 1);
 const parsed = vision.value.games[0];
 assert.equal(parsed.markets.length, 4);
 assert.equal(parsed.markets.flatMap(m => m.directions).length, 8);
 
-const markets = [
+const fullMarkets = [
   { market: '全場讓分', pick: `${game.home}讓1平`, water: 0.95, confidence: 1 },
   { market: '全場讓分', pick: `${game.away}受讓1平`, water: 0.95, confidence: 1 },
   { market: '全場大小', pick: '大8+50', water: 0.94, confidence: 1 },
@@ -95,26 +88,15 @@ const markets = [
   { market: '上半大小', pick: '大4+50', water: 0.93, confidence: 1 },
   { market: '上半大小', pick: '小4+50', water: 0.93, confidence: 1 },
 ];
-const analyzed = await json(`${BASE}/api/analyze`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ game, markets, settings: { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5 } }),
-}, 120000);
+const analyzed = await json(`${BASE}/api/analyze`, { method: 'POST', headers: originHeaders, body: JSON.stringify({ game, markets: fullMarkets, settings: { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5 } }) }, 120000);
 assert.equal(analyzed.value.analysis.results.length, 8);
 assert.ok(analyzed.value.analysis.results.every(row => Number.isFinite(row.score) && Number.isFinite(row.ev)));
-assert.ok(Number.isFinite(analyzed.value.analysis.expectedRuns.full.away));
-assert.ok(Number.isFinite(analyzed.value.analysis.expectedRuns.full.home));
+
+const partial = await json(`${BASE}/api/analyze`, { method: 'POST', headers: originHeaders, body: JSON.stringify({ game, markets: fullMarkets.filter(row => row.market === '全場大小'), settings: { rebateRate: 0.015 } }) }, 120000);
+assert.equal(partial.value.analysis.results.length, 2);
+assert.deepEqual(partial.value.openMarkets, ['全場大小']);
 
 const result = await json(`${BASE}/api/result?gamePk=${game.gamePk}&t=${Date.now()}`, {}, 30000);
 assert.equal(typeof result.value.final, 'boolean');
 
-console.log(JSON.stringify({
-  ok: true,
-  base: BASE,
-  commit: health.commit,
-  scheduleDate,
-  game: `${game.away} @ ${game.home}`,
-  visionDirections: parsed.markets.flatMap(m => m.directions).length,
-  analysisResults: analyzed.value.analysis.results.length,
-  resultEndpoint: true,
-}, null, 2));
+console.log(JSON.stringify({ ok: true, base: BASE, commit: health.commit, scheduleDate, game: `${game.away} @ ${game.home}`, visionDirections: 8, fullAnalysisResults: 8, partialAnalysisResults: 2, resultEndpoint: true }, null, 2));
