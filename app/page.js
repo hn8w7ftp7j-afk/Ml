@@ -12,9 +12,10 @@ import {
   resultLabel,
   validateMarketPair,
 } from '../lib/markets.js';
+import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '7.0.6';
+const VERSION = '7.1.0';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -31,7 +32,7 @@ const DEFAULT_SETTINGS = {
     上半大小: 0.93,
   },
 };
-const EMPTY = { locks: [], analysisHistory: {}, bets: [], settings: DEFAULT_SETTINGS };
+const EMPTY = { locks: [], analysisHistory: {}, bets: [], settings: DEFAULT_SETTINGS, lastBatchId: null };
 const money = value => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const pct = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
 const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
@@ -126,10 +127,6 @@ function download(name, text, type = 'application/json') {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
-function blankDirection() {
-  return { pick: '', water: null, waterEstimated: false, waterMissing: false, confidence: 0 };
-}
-
 function blankGame(game) {
   return {
     id: uid(),
@@ -140,57 +137,6 @@ function blankGame(game) {
     confidence: 0,
     markets: MARKET_ORDER.map(market => ({ market, directions: [blankDirection(), blankDirection()] })),
   };
-}
-
-function withFallbackWater(game, settings) {
-  return {
-    ...game,
-    markets: MARKET_ORDER.map(market => {
-      const source = game.markets?.find(item => item.market === market) || { market, directions: [] };
-      const directions = [0, 1].map(index => ({ ...blankDirection(), ...(source.directions?.[index] || {}) }));
-      const opened = marketIsOpen(directions);
-      if (!opened) return { market, directions };
-      const actualCount = directions.filter(direction => hasActualWater(direction.water) && !direction.waterEstimated).length;
-      const bothMissing = directions.every(direction => !hasActualWater(direction.water));
-      if (bothMissing) {
-        const fallback = Number(settings.fallbackWater?.[market] || 0.95);
-        return {
-          market,
-          directions: directions.map(direction => ({ ...direction, water: fallback, waterEstimated: true, waterMissing: false })),
-        };
-      }
-      if (actualCount === 1) {
-        return {
-          market,
-          directions: directions.map(direction => hasActualWater(direction.water)
-            ? { ...direction, water: Number(direction.water), waterEstimated: Boolean(direction.waterEstimated), waterMissing: false }
-            : { ...direction, water: null, waterEstimated: false, waterMissing: true }),
-        };
-      }
-      return {
-        market,
-        directions: directions.map(direction => ({
-          ...direction,
-          water: hasActualWater(direction.water) ? Number(direction.water) : null,
-          waterMissing: !hasActualWater(direction.water),
-        })),
-      };
-    }),
-  };
-}
-
-function flattenMarkets(game) {
-  return MARKET_ORDER.flatMap(market => {
-    const row = game.markets?.find(item => item.market === market);
-    if (!marketIsOpen(row?.directions || [])) return [];
-    return (row?.directions || []).slice(0, 2).filter(direction => String(direction?.pick || '').trim()).map(direction => ({
-      market,
-      pick: String(direction.pick || ''),
-      water: hasActualWater(direction.water) ? Number(direction.water) : null,
-      waterEstimated: Boolean(direction.waterEstimated),
-      confidence: Number(direction.confidence || 0),
-    }));
-  });
 }
 
 function mergeVision(rows) {
@@ -223,6 +169,19 @@ function mergeVision(rows) {
     });
   }
   return [...map.values()];
+}
+
+async function runPool(items, concurrency, worker) {
+  const rows = Array.isArray(items) ? items : [];
+  let cursor = 0;
+  const runners = Array.from({ length: Math.max(1, Math.min(concurrency, rows.length || 1)) }, async () => {
+    while (cursor < rows.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(rows[index], index);
+    }
+  });
+  await Promise.all(runners);
 }
 
 function latestVersion(history, lockId) {
@@ -274,6 +233,7 @@ export default function Home() {
   const [images, setImages] = useState([]);
   const [visionStatus, setVisionStatus] = useState('');
   const [visionBusy, setVisionBusy] = useState(false);
+  const [batchReport, setBatchReport] = useState(null);
   const [manualText, setManualText] = useState('');
   const [manualGamePk, setManualGamePk] = useState('');
   const [parsed, setParsed] = useState([]);
@@ -303,68 +263,95 @@ export default function Home() {
     }
   }
 
+  async function scheduleForRecognition() {
+  if (games.length) return games;
+  setVisionStatus('正在先載入當日 MLB 官方賽程…');
+  const data = await requestJSON(`/api/mlb?date=${date}`);
+  const schedule = data.games || [];
+  setGames(schedule);
+  if (!schedule.length) throw new Error('當日沒有可配對的 MLB 官方賽事');
+  return schedule;
+}
+
   async function chooseImages(files) {
     const list = [...(files || [])].slice(0, 8);
-    setVisionStatus('正在保留文字清晰度並分段圖片…');
-    const rows = [];
-    for (let index = 0; index < list.length; index += 1) {
-      const file = list[index];
-      const prepared = await prepareImage(file);
-      rows.push({
-        id: uid(),
-        name: file.name,
-        preview: URL.createObjectURL(file),
-        data: prepared.data,
-        parts: prepared.parts,
-        width: prepared.width,
-        height: prepared.height,
-        size: file.size,
-      });
-      setVisionStatus(`正在處理第 ${index + 1} 張，共 ${list.length} 張；此圖分為 ${prepared.parts.length} 區塊`);
+    if (!list.length || visionBusy) return;
+    setVisionBusy(true);
+    setBatchReport(null);
+    setVisionStatus('正在保留文字清晰度並分段全部圖片…');
+    try {
+      const rows = [];
+      for (let index = 0; index < list.length; index += 1) {
+        const file = list[index];
+        const prepared = await prepareImage(file);
+        rows.push({
+          id: uid(),
+          name: file.name,
+          preview: URL.createObjectURL(file),
+          data: prepared.data,
+          parts: prepared.parts,
+          width: prepared.width,
+          height: prepared.height,
+          size: file.size,
+        });
+        setVisionStatus(`正在處理第 ${index + 1} 張，共 ${list.length} 張；此圖分為 ${prepared.parts.length} 區塊`);
+      }
+      setImages(rows);
+      const regions = rows.reduce((sum, row) => sum + Math.max(1, row.parts?.length || 0), 0);
+      setVisionStatus(`已準備 ${rows.length} 張圖片、${regions} 個區塊；現在自動辨識全部盤口`);
+      const schedule = await scheduleForRecognition();
+      await recognizeAndAnalyze(rows, schedule);
+    } catch (error) {
+      setVisionStatus(`自動處理失敗：${error.message}`);
+    } finally {
+      setVisionBusy(false);
     }
-    setImages(rows);
-    const regions = rows.reduce((sum, row) => sum + Math.max(1, row.parts?.length || 0), 0);
-    setVisionStatus(`已準備 ${rows.length} 張圖片，共 ${regions} 個清晰辨識區塊`);
+  }
+
+  async function recognizeAndAnalyze(sourceImages, schedule) {
+    const all = [];
+    const failures = [];
+    const models = new Set();
+    const tasks = sourceImages.flatMap((image, imageIndex) => {
+      const parts = Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data];
+      return parts.map((data, partIndex) => ({ image, imageIndex, partIndex, partCount: parts.length, data }));
+    });
+
+    for (let index = 0; index < tasks.length; index += 1) {
+      const task = tasks[index];
+      setVisionStatus(`自動辨識全部圖片：圖片 ${task.imageIndex + 1}/${sourceImages.length}，區塊 ${task.partIndex + 1}/${task.partCount}`);
+      try {
+        const data = await requestJSON('/api/vision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images: [task.data], schedule, defaultWater: store.settings.fallbackWater }),
+        });
+        if (data.model) models.add(data.model);
+        all.push(...(data.games || []));
+      } catch (error) {
+        failures.push(`圖片 ${task.imageIndex + 1} 區塊 ${task.partIndex + 1}：${error.message}`);
+      }
+    }
+
+    const merged = mergeVision(all);
+    if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或裁切更小範圍');
+    setParsed(merged);
+    setSelected(0);
+    const modelText = models.size ? `｜${[...models].join('、')}` : '';
+    const partialText = failures.length ? `｜${failures.length} 個區塊需注意` : '';
+    setVisionStatus(`辨識完成 ${merged.length} 場${modelText}${partialText}；開始自動分析所有有效盤口`);
+    await autoAnalyzeAll(merged, failures);
   }
 
   async function recognize() {
     if (!images.length || visionBusy) return;
     setVisionBusy(true);
-    const all = [];
-    const failures = [];
-    const models = new Set();
-    const tasks = images.flatMap((image, imageIndex) => {
-      const parts = Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data];
-      return parts.map((data, partIndex) => ({ image, imageIndex, partIndex, partCount: parts.length, data }));
-    });
-
+    setBatchReport(null);
     try {
-      for (let index = 0; index < tasks.length; index += 1) {
-        const task = tasks[index];
-        setVisionStatus(`人工智慧辨識中：圖片 ${task.imageIndex + 1}/${images.length}，區塊 ${task.partIndex + 1}/${task.partCount}`);
-        try {
-          const data = await requestJSON('/api/vision', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ images: [task.data], schedule: games, defaultWater: store.settings.fallbackWater }),
-          });
-          if (data.model) models.add(data.model);
-          all.push(...(data.games || []));
-        } catch (error) {
-          failures.push(`圖片 ${task.imageIndex + 1} 區塊 ${task.partIndex + 1}：${error.message}`);
-        }
-      }
-
-      const merged = mergeVision(all);
-      if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或裁切更小範圍');
-      setParsed(merged);
-      setSelected(0);
-      const modelText = models.size ? `｜${[...models].join('、')}` : '';
-      const partialText = failures.length ? `｜另有 ${failures.length} 個區塊失敗，請在確認頁核對` : '';
-      setVisionStatus(`辨識完成：共 ${merged.length} 場${modelText}${partialText}`);
-      setTab('confirm');
+      const schedule = await scheduleForRecognition();
+      await recognizeAndAnalyze(images, schedule);
     } catch (error) {
-      setVisionStatus(`辨識失敗：${error.message}`);
+      setVisionStatus(`重新處理失敗：${error.message}`);
     } finally {
       setVisionBusy(false);
     }
@@ -373,24 +360,112 @@ export default function Home() {
   async function parseText() {
     if (!manualText.trim() || visionBusy) return;
     setVisionBusy(true);
-    setVisionStatus('正在解析盤口文字…');
+    setBatchReport(null);
+    setVisionStatus('正在解析全部盤口文字…');
     try {
+      const schedule = await scheduleForRecognition();
       const data = await requestJSON('/api/vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: manualText, schedule: games, defaultWater: store.settings.fallbackWater }),
+        body: JSON.stringify({ text: manualText, schedule, defaultWater: store.settings.fallbackWater }),
       });
       const rows = mergeVision(data.games || []);
       if (!rows.length) throw new Error('沒有解析到場次');
       setParsed(rows);
       setSelected(0);
-      setVisionStatus(`解析完成：共 ${rows.length} 場`);
-      setTab('confirm');
+      setVisionStatus(`解析完成 ${rows.length} 場；開始自動分析所有有效盤口`);
+      await autoAnalyzeAll(rows, []);
     } catch (error) {
-      setVisionStatus(`解析失敗：${error.message}`);
+      setVisionStatus(`解析或分析失敗：${error.message}`);
     } finally {
       setVisionBusy(false);
     }
+  }
+
+  async function autoAnalyzeAll(rows, recognitionFailures = []) {
+    const existingLocks = [...store.locks];
+    const plan = buildAutoAnalysisPlan({
+      games: rows,
+      settings: store.settings,
+      version: VERSION,
+      batchId: uid(),
+      idFactory: uid,
+    });
+    setParsed(plan.preparedGames);
+
+    if (!plan.locks.length) {
+      const report = {
+        batchId: plan.batchId,
+        recognized: plan.recognizedGameCount,
+        analyzed: 0,
+        failed: 0,
+        skipped: plan.recognizedGameCount,
+        directions: 0,
+        issues: [...plan.issues, ...recognitionFailures],
+      };
+      setBatchReport(report);
+      setVisionStatus('辨識已完成，但沒有可直接分析的有效盤口；請到盤口確認頁修正');
+      setTab('confirm');
+      return;
+    }
+
+    setStore(value => ({
+      ...value,
+      lastBatchId: plan.batchId,
+      locks: [...plan.locks, ...value.locks].slice(0, 300),
+    }));
+    setBusyLocks(value => ({ ...value, ...Object.fromEntries(plan.locks.map(lock => [lock.id, true])) }));
+
+    let finished = 0;
+    let completed = 0;
+    const analysisFailures = [];
+    await runPool(plan.locks, 2, async lock => {
+      const previous = existingLocks
+        .filter(item => String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
+        .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))[0];
+      try {
+        const data = await requestJSON('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            game: lock.game,
+            markets: lock.markets,
+            previousMarkets: previous?.markets || [],
+            settings: store.settings,
+          }),
+        }, 180000);
+        const analysisVersion = { id: uid(), createdAt: new Date().toISOString(), ...data };
+        setStore(value => ({
+          ...value,
+          analysisHistory: {
+            ...value.analysisHistory,
+            [lock.id]: [analysisVersion, ...(value.analysisHistory[lock.id] || [])].slice(0, 30),
+          },
+        }));
+        completed += 1;
+      } catch (error) {
+        analysisFailures.push(`${matchup(lock.game)}：${error.message}`);
+      } finally {
+        finished += 1;
+        setBusyLocks(value => ({ ...value, [lock.id]: false }));
+        setVisionStatus(`自動分析全部盤口：已完成 ${finished}/${plan.locks.length} 場`);
+      }
+    });
+
+    const issues = [...plan.issues, ...recognitionFailures, ...analysisFailures];
+    const report = {
+      batchId: plan.batchId,
+      recognized: plan.recognizedGameCount,
+      analyzed: completed,
+      failed: analysisFailures.length,
+      skipped: Math.max(0, plan.recognizedGameCount - plan.locks.length),
+      directions: plan.directionCount,
+      markets: plan.marketCount,
+      issues,
+    };
+    setBatchReport(report);
+    setVisionStatus(`全部完成：辨識 ${report.recognized} 場，自動分析 ${report.analyzed} 場、${report.markets} 個市場、${report.directions} 個方向${issues.length ? `；${issues.length} 項需核對` : ''}`);
+    setTab(completed > 0 ? 'analysis' : 'confirm');
   }
 
   function addManual() {
@@ -583,6 +658,11 @@ export default function Home() {
   }), [games, store]);
 
   const allLatestResults = useMemo(() => store.locks.flatMap(lock => latestVersion(store.analysisHistory, lock.id)?.analysis?.results || []), [store]);
+  const latestBatchLocks = useMemo(() => store.lastBatchId ? store.locks.filter(lock => lock.batchId === store.lastBatchId) : [], [store]);
+  const latestBatchRows = useMemo(() => latestBatchLocks.flatMap(lock => {
+    const data = latestVersion(store.analysisHistory, lock.id);
+    return (data?.analysis?.results || []).map(result => ({ lock, data, result }));
+  }).sort((left, right) => (right.result.score ?? -1) - (left.result.score ?? -1)), [latestBatchLocks, store.analysisHistory]);
   const performance = useMemo(() => {
     const settled = store.bets.filter(bet => bet.fraction != null);
     const profit = settled.reduce((sum, bet) => sum + Number(bet.profit || 0), 0);
@@ -660,7 +740,7 @@ export default function Home() {
       <div>
         <div className="eyebrow">私人分析系統</div>
         <h1>⚾ MLB 長期正期望值分析</h1>
-        <p>實際開盤 → MLB 資料 → GPT 研究判讀 → 聯合比分分布 → 台灣信用盤 EV</p>
+        <p>上傳全部圖片 → 自動辨識全部盤口 → 自動分析全部場次 → 一次顯示所有評分</p>
       </div>
       <div className="headerRight">
         <span className={`health ${health?.ok && health?.aiGatewayConfigured ? 'ok' : 'warn'}`}>
@@ -703,11 +783,12 @@ export default function Home() {
 
     {tab === 'upload' && <section>
       <div className="card">
-        <h2>一、上傳信用盤截圖</h2>
-        <label className="drop">點這裡從手機相簿選擇<input type="file" accept="image/*" multiple onChange={event => chooseImages(event.target.files)}/><span>最多 8 張；只擷取實際開出的市場</span></label>
-        <div className="previews">{images.map(image => <div className="preview" key={image.id}><img src={image.preview} alt="盤口截圖"/><button onClick={() => setImages(value => value.filter(item => item.id !== image.id))}>移除</button><small>{image.name}</small></div>)}</div>
-        <div className="status">{visionStatus || '尚未選擇圖片'}</div>
-        <button className="primary full" disabled={visionBusy || !images.length} onClick={recognize}>{visionBusy ? '人工智慧辨識中，請勿重複點擊' : '開始辨識盤口'}</button>
+        <h2>一、上傳後自動分析全部盤口</h2>
+        <label className="drop">點這裡一次選擇所有盤口圖片<input type="file" accept="image/*" multiple disabled={visionBusy} onChange={event => { chooseImages(event.target.files); event.target.value = ''; }}/><span>最多 8 張；選完後自動辨識、建立全部快照並分析所有實際開盤市場，不必逐場按分析</span></label>
+        <div className="previews">{images.map(image => <div className="preview" key={image.id}><img src={image.preview} alt="盤口截圖"/><button disabled={visionBusy} onClick={() => setImages(value => value.filter(item => item.id !== image.id))}>移除</button><small>{image.name}</small></div>)}</div>
+        <div className="status">{visionStatus || '尚未選擇圖片；選圖後會直接跑到全部評分'}</div>
+        {batchReport && <div className={batchReport.issues?.length ? 'warnings' : 'success'}>本次辨識 {batchReport.recognized} 場｜成功分析 {batchReport.analyzed} 場｜{batchReport.markets || 0} 個市場｜{batchReport.directions || 0} 個方向{batchReport.issues?.length ? `｜${batchReport.issues.length} 項需核對` : '｜全部完成'}</div>}
+        <button className="secondary full" disabled={visionBusy || !images.length} onClick={recognize}>{visionBusy ? '正在自動辨識並分析全部盤口…' : '重新辨識並分析目前全部圖片'}</button>
       </div>
       <div className="card">
         <h2>二、盤口文字備援</h2>
@@ -722,7 +803,7 @@ export default function Home() {
 
     {tab === 'confirm' && <section>
       <div className="card">
-        <h2>盤口確認與不可覆寫快照</h2>
+        <h2>盤口確認與不可覆寫快照</h2><p className="note">一般上傳不需要逐場操作；只有未配對或辨識異常的市場才需要在這裡修正。</p>
         {!parsed.length ? <Empty text="尚無辨識結果，請先到上傳頁"/> : <>
           <div className="chips">{parsed.map((game, index) => <button key={game.id} className={index === selected ? 'chip activeChip' : 'chip'} onClick={() => setSelected(index)}>{matchup(game)}</button>)}</div>
           <label>配對 MLB 官方賽事<select value={current?.matchedGame?.gamePk || ''} onChange={event => setMatch(event.target.value)}><option value="">請選擇</option>{games.map(game => <option key={game.gamePk} value={game.gamePk}>{matchup(game)}</option>)}</select></label>
@@ -753,6 +834,17 @@ export default function Home() {
     </section>}
 
     {tab === 'analysis' && <section>
+      {latestBatchRows.length > 0 && <div className="card">
+        <h2>本次上傳：全部盤口評分總覽</h2>
+        <p className="note">已自動完成 {latestBatchLocks.length} 場；下方先依評分由高到低一次列出所有實際開盤方向，再顯示各場完整分析。</p>
+        <div className="portfolio">{latestBatchRows.map(({ lock, result }, index) => <div className="portfolioRow" key={`${lock.id}-${result.market}-${result.pick}-${index}`}>
+          <b>{result.score == null ? '—' : result.score.toFixed(1)}</b>
+          <span>{matchup(lock.game)}｜{result.market}｜{translateTeamText(result.pick)}</span>
+          <strong>{result.tag}</strong>
+          <span>{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>
+        </div>)}</div>
+        {batchReport?.issues?.length > 0 && <div className="warnings"><b>需核對項目</b>{batchReport.issues.slice(0, 12).map(item => <div key={item}>• {item}</div>)}</div>}
+      </div>}
       {!store.locks.length ? <div className="card"><Empty text="尚無盤口快照"/></div> : store.locks.map(lock => {
         const versions = store.analysisHistory[lock.id] || [];
         const data = versions[0];
