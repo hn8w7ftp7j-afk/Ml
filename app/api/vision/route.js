@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import { normalizeVisionGame } from '../../../lib/markets.js';
 import { buildVisionPrompt, cleanVisionJSON, matchScheduleGame, normalizeTeamName } from '../../../lib/vision.js';
-import { checkRateLimit, cleanText, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin, positiveInteger } from '../../../lib/security.js';
+import {
+  checkRateLimit,
+  cleanText,
+  originErrorResponse,
+  positiveInteger,
+  rateLimitResponse,
+  readJsonBody,
+  requireApiAuth,
+  validateSameOrigin,
+} from '../../../lib/security.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -13,11 +22,14 @@ const TOKEN_SOURCE = '(\\d+(?:\\.\\d+)?(?:\/\\d+(?:\\.\\d+)?)?(?:平|[+-]\\d{1,3
 const WATER_RE = /(?:^|[^\d])(0?\.\d{2,3}|1\.\d{2,3})(?!\d)/g;
 
 function waters(line) {
-  return [...String(line || '').matchAll(WATER_RE)].map(match => Number(match[1])).filter(value => Number.isFinite(value) && value >= 0.5 && value <= 1.5);
+  return [...String(line || '').matchAll(WATER_RE)]
+    .map(match => Number(match[1]))
+    .filter(value => Number.isFinite(value) && value >= 0.5 && value <= 1.5);
 }
 
 function containsTeam(line, team) {
-  const left = normalizeTeamName(line), right = normalizeTeamName(team);
+  const left = normalizeTeamName(line);
+  const right = normalizeTeamName(team);
   return Boolean(left && right && (left.includes(right) || (right.length >= 2 && right.includes(left))));
 }
 
@@ -43,14 +55,20 @@ function parseRunlineLine(line, game) {
   else if (aliases(game, 'away').some(name => new RegExp(`${escaped(name)}\\s*讓`, 'i').test(line))) favoriteSide = 'away';
   else if (aliases(game, 'home').some(name => new RegExp(`${escaped(name)}\\s*讓`, 'i').test(line))) favoriteSide = 'home';
   const values = waters(line);
-  return { favoriteSide, line: token, favoriteWater: values[0] ?? null, underdogWater: values[1] ?? values[0] ?? null, confidence: favoriteSide ? 1 : 0.55 };
+  return {
+    favoriteSide,
+    line: token,
+    favoriteWater: values[0] ?? null,
+    underdogWater: values[1] ?? null,
+    confidence: favoriteSide ? 1 : 0.55,
+  };
 }
 
 function parseTotalLine(line) {
   const token = String(line || '').match(new RegExp(`(?:大|小)${TOKEN_SOURCE}`, 'i'))?.[1] || '';
   if (!token) return { line: '', overWater: null, underWater: null, confidence: 0 };
   const values = waters(line);
-  return { line: token, overWater: values[0] ?? null, underWater: values[1] ?? values[0] ?? null, confidence: 1 };
+  return { line: token, overWater: values[0] ?? null, underWater: values[1] ?? null, confidence: 1 };
 }
 
 function localTextParse(text, schedule) {
@@ -62,6 +80,7 @@ function localTextParse(text, schedule) {
     if (game) headers.push({ index, game });
   }
   if (!headers.length && schedule.length === 1) headers.push({ index: 0, game: schedule[0] });
+
   const games = [];
   for (let headerIndex = 0; headerIndex < headers.length; headerIndex += 1) {
     const { index, game } = headers[headerIndex];
@@ -91,9 +110,13 @@ async function gateway(key, content, useJsonFormat = true, timeoutMs = 45000) {
     });
   } catch (error) {
     if (/Timeout|Abort/i.test(String(error?.name || error?.message || error))) {
-      const timeout = new Error('人工智慧辨識逾時，請重試'); timeout.code = 'timeout'; throw timeout;
+      const timeout = new Error('人工智慧辨識逾時，請重試');
+      timeout.code = 'timeout';
+      throw timeout;
     }
-    const network = new Error('人工智慧服務連線失敗，請稍後重試'); network.code = 'network'; throw network;
+    const network = new Error('人工智慧服務連線失敗，請稍後重試');
+    network.code = 'network';
+    throw network;
   }
   const raw = await response.text();
   if (!response.ok) {
@@ -125,29 +148,55 @@ async function generateAndParse(key, content, prompt) {
   }
 }
 
+function sanitizeDefaultWater(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, Number(item)]));
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0.5, Math.min(1.5, number)) : null;
+}
+
 export async function POST(request) {
   try {
-    const auth = await requireApiAuth(request); if (auth) return auth;
+    const auth = await requireApiAuth(request);
+    if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
     const rate = checkRateLimit(request, { id: 'vision', limit: 12, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
+
     const body = await readJsonBody(request, 3_900_000);
     const images = Array.isArray(body.images) ? body.images.slice(0, 2) : [];
     const text = cleanText(body.text, 40000);
     const schedule = (Array.isArray(body.schedule) ? body.schedule : []).slice(0, 25).map(game => ({
       gamePk: positiveInteger(game?.gamePk),
-      away: cleanText(game?.away, 80), home: cleanText(game?.home, 80),
-      awayEnglish: cleanText(game?.awayEnglish, 80), homeEnglish: cleanText(game?.homeEnglish, 80),
-      gameDate: cleanText(game?.gameDate, 40), status: cleanText(game?.status, 60), venue: cleanText(game?.venue, 100),
-      awayTeamId: positiveInteger(game?.awayTeamId), homeTeamId: positiveInteger(game?.homeTeamId),
-      awayProbableId: positiveInteger(game?.awayProbableId), homeProbableId: positiveInteger(game?.homeProbableId), venueId: positiveInteger(game?.venueId),
-      awayProbable: cleanText(game?.awayProbable, 80), homeProbable: cleanText(game?.homeProbable, 80),
+      away: cleanText(game?.away, 80),
+      home: cleanText(game?.home, 80),
+      awayEnglish: cleanText(game?.awayEnglish, 80),
+      homeEnglish: cleanText(game?.homeEnglish, 80),
+      gameDate: cleanText(game?.gameDate, 40),
+      officialDate: cleanText(game?.officialDate, 20),
+      status: cleanText(game?.status, 60),
+      statusCode: cleanText(game?.statusCode, 10),
+      doubleHeader: cleanText(game?.doubleHeader, 10),
+      gameNumber: positiveInteger(game?.gameNumber) || 1,
+      scheduledInnings: positiveInteger(game?.scheduledInnings) || 9,
+      venue: cleanText(game?.venue, 100),
+      venueEnglish: cleanText(game?.venueEnglish, 100),
+      awayTeamId: positiveInteger(game?.awayTeamId),
+      homeTeamId: positiveInteger(game?.homeTeamId),
+      awayProbableId: positiveInteger(game?.awayProbableId),
+      homeProbableId: positiveInteger(game?.homeProbableId),
+      venueId: positiveInteger(game?.venueId),
+      awayProbable: cleanText(game?.awayProbable, 80),
+      homeProbable: cleanText(game?.homeProbable, 80),
     })).filter(game => game.gamePk && game.away && game.home);
+
     if (!images.length && !text) return NextResponse.json({ ok: false, error: '沒有收到圖片或盤口文字' }, { status: 400 });
     if (images.some(value => typeof value !== 'string' || value.length > 2_800_000 || !DATA_URL.test(value))) {
       return NextResponse.json({ ok: false, error: '圖片格式或大小不符合要求，請重新選擇或裁切圖片' }, { status: 413 });
     }
-    const defaultWater = Math.max(0.5, Math.min(1.5, Number(body.defaultWater) || 0.95));
+
+    const defaultWater = sanitizeDefaultWater(body.defaultWater);
     let parsed = !images.length && text ? localTextParse(text, schedule) : null;
     let model = parsed ? '本地信用盤解析器' : MODEL;
     if (!parsed) {
@@ -159,6 +208,7 @@ export async function POST(request) {
       for (const url of images) content.push({ type: 'image_url', image_url: { url } });
       parsed = await generateAndParse(key, content, prompt);
     }
+
     const rows = (Array.isArray(parsed?.games) ? parsed.games : []).slice(0, 30).map(raw => {
       const matched = matchScheduleGame(raw, schedule);
       return { ...normalizeVisionGame(raw, matched, defaultWater), matchedGame: matched || null };
@@ -167,6 +217,9 @@ export async function POST(request) {
   } catch (error) {
     const timedOut = error?.code === 'timeout' || /Timeout|AbortError/i.test(String(error?.name || '')) || /timeout|逾時/i.test(String(error?.message || ''));
     const message = timedOut ? '人工智慧辨識逾時，請重試' : String(error?.message || error);
-    return NextResponse.json({ ok: false, error: message }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ok: false, error: message }, {
+      status: Number(error?.status) || 500,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 }
