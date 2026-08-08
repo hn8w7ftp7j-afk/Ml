@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { normalizeVisionGame } from '../../../lib/markets.js';
-import { buildVisionPrompt, cleanVisionJSON, matchScheduleGame, normalizeTeamName } from '../../../lib/vision.js';
+import {
+  VISION_VERSION,
+  buildVisionPrompt,
+  cleanVisionJSON,
+  expandVisionPayload,
+  matchScheduleGame,
+  normalizeTeamName,
+} from '../../../lib/vision.js';
 import {
   checkRateLimit,
   cleanText,
@@ -16,10 +23,11 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const MODEL = process.env.AI_MODEL || 'google/gemini-2.5-flash';
+const GATEWAY = 'https://ai-gateway.vercel.sh/v1/chat/completions';
 const DATA_URL = /^data:image\/(?:jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 const TOKEN_SOURCE = '(\\d+(?:\\.\\d+)?(?:\/\\d+(?:\\.\\d+)?)?(?:平|[+-]\\d{1,3})?)';
 const WATER_RE = /(?:^|[^\d])(0?\.\d{2,3}|1\.\d{2,3})(?!\d)/g;
+const unique = values => [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))];
 
 function waters(line) {
   return [...String(line || '').matchAll(WATER_RE)]
@@ -97,55 +105,121 @@ function localTextParse(text, schedule) {
   return games.length ? { games } : null;
 }
 
-async function gateway(key, content, useJsonFormat = true, timeoutMs = 45000) {
-  const body = { model: MODEL, messages: [{ role: 'user', content }], temperature: 0, max_tokens: 6500 };
-  if (useJsonFormat) body.response_format = { type: 'json_object' };
+function modelCandidates() {
+  return unique([
+    process.env.AI_VISION_MODEL,
+    'openai/gpt-5-nano',
+    process.env.AI_MODEL,
+    'google/gemini-2.5-flash',
+  ]);
+}
+
+async function gateway(key, model, content, { jsonFormat = true, timeoutMs = 14000, maxTokens = 2800 } = {}) {
+  const body = {
+    model,
+    messages: [{ role: 'user', content }],
+    temperature: 0,
+    max_tokens: maxTokens,
+  };
+  if (jsonFormat) body.response_format = { type: 'json_object' };
+  if (String(model).startsWith('openai/')) body.reasoning_effort = 'minimal';
+
   let response;
   try {
-    response = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
+    response = await fetch(GATEWAY, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(Math.max(1500, timeoutMs)),
     });
   } catch (error) {
     if (/Timeout|Abort/i.test(String(error?.name || error?.message || error))) {
-      const timeout = new Error('人工智慧辨識逾時，請重試');
+      const timeout = new Error(`${model} 辨識逾時`);
       timeout.code = 'timeout';
       throw timeout;
     }
-    const network = new Error('人工智慧服務連線失敗，請稍後重試');
+    const network = new Error(`${model} 連線失敗`);
     network.code = 'network';
     throw network;
   }
+
   const raw = await response.text();
   if (!response.ok) {
-    console.error('AI Gateway error', response.status, raw.slice(0, 240));
-    const error = new Error('人工智慧服務暫時無法使用');
+    console.error('AI Gateway vision error', model, response.status, raw.slice(0, 240));
+    const error = new Error(`${model} 暫時無法使用`);
     error.status = response.status;
     if (response.status === 400 && /response[_ -]?format|json[_ -]?object|unsupported|invalid/i.test(raw)) error.code = 'response_format';
-    else if (response.status === 429) { error.code = 'rate_limited'; error.message = '人工智慧服務目前請求過多，請稍後重試'; }
-    else if (response.status === 401 || response.status === 403) { error.code = 'auth'; error.message = '人工智慧服務授權失敗，請檢查金鑰'; }
+    else if (response.status === 429) error.code = 'rate_limited';
+    else if (response.status === 401 || response.status === 403) error.code = 'auth';
     throw error;
   }
-  const payload = JSON.parse(raw);
+
+  let payload;
+  try { payload = JSON.parse(raw); }
+  catch { throw new Error(`${model} 回傳格式錯誤`); }
   return payload?.choices?.[0]?.message?.content || '';
 }
 
-async function generateAndParse(key, content, prompt) {
+async function parseModelOutput(key, model, content, prompt, attemptMs) {
+  const deadline = Date.now() + attemptMs;
   let output;
   try {
-    output = await gateway(key, content, true, 45000);
+    output = await gateway(key, model, content, { jsonFormat: true, timeoutMs: attemptMs, maxTokens: 2800 });
   } catch (error) {
     if (error?.code !== 'response_format') throw error;
-    output = await gateway(key, content, false, 45000);
+    const remaining = deadline - Date.now();
+    if (remaining < 1800) throw error;
+    output = await gateway(key, model, content, { jsonFormat: false, timeoutMs: remaining, maxTokens: 2800 });
   }
+
   try {
-    return cleanVisionJSON(output);
-  } catch {
-    const retry = [{ type: 'text', text: `${prompt}\n上一個回答格式損壞。這次只回完整合法 JSON，且不要省略最後括號。` }, ...content.slice(1)];
-    return cleanVisionJSON(await gateway(key, retry, false, 12000));
+    return expandVisionPayload(cleanVisionJSON(output));
+  } catch (parseError) {
+    const remaining = deadline - Date.now();
+    if (remaining < 2200) throw parseError;
+    const repairContent = [{
+      type: 'text',
+      text: `${prompt}\n以下是上一個模型輸出的損壞 JSON。只修復成規定的短鍵 JSON，不得重新辨識或新增資料：\n${String(output).slice(0, 60000)}`,
+    }];
+    const repaired = await gateway(key, 'openai/gpt-5-nano', repairContent, {
+      jsonFormat: true,
+      timeoutMs: Math.min(remaining, 5000),
+      maxTokens: 2200,
+    });
+    return expandVisionPayload(cleanVisionJSON(repaired));
   }
+}
+
+async function generateAndParse(key, content, prompt) {
+  const models = modelCandidates();
+  const deadline = Date.now() + 50000;
+  const failures = [];
+  let empty = null;
+
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    const remaining = deadline - Date.now();
+    if (remaining < 2500) break;
+    const reserve = index < models.length - 1 ? Math.min(16000, Math.max(6500, remaining * 0.36)) : 0;
+    const attemptMs = Math.max(2500, Math.min(index === 0 ? 18000 : 15000, remaining - reserve));
+    try {
+      const parsed = await parseModelOutput(key, model, content, prompt, attemptMs);
+      if (Array.isArray(parsed?.games) && parsed.games.length) return { parsed, model, failures };
+      empty = { parsed, model, failures };
+      failures.push(`${model}：未辨識到完整場次`);
+    } catch (error) {
+      failures.push(`${model}：${String(error?.message || error)}`);
+    }
+  }
+
+  if (empty) return empty;
+  const timedOut = failures.some(value => /逾時|timeout/i.test(value));
+  const error = new Error(timedOut
+    ? '圖片內容較密，系統已自動切換辨識模型但仍逾時；請重新上傳，系統會自動分段處理'
+    : '圖片辨識服務暫時無法完成，請稍後重試或改貼盤口文字');
+  error.code = timedOut ? 'timeout' : 'vision_failed';
+  error.details = failures;
+  throw error;
 }
 
 function sanitizeDefaultWater(value) {
@@ -161,10 +235,10 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'vision', limit: 12, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'vision-v7-0-3', limit: 28, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
-    const body = await readJsonBody(request, 3_900_000);
+    const body = await readJsonBody(request, 4_500_000);
     const images = Array.isArray(body.images) ? body.images.slice(0, 2) : [];
     const text = cleanText(body.text, 40000);
     const schedule = (Array.isArray(body.schedule) ? body.schedule : []).slice(0, 25).map(game => ({
@@ -192,33 +266,47 @@ export async function POST(request) {
     })).filter(game => game.gamePk && game.away && game.home);
 
     if (!images.length && !text) return NextResponse.json({ ok: false, error: '沒有收到圖片或盤口文字' }, { status: 400 });
-    if (images.some(value => typeof value !== 'string' || value.length > 2_800_000 || !DATA_URL.test(value))) {
+    if (images.some(value => typeof value !== 'string' || value.length > 3_200_000 || !DATA_URL.test(value))) {
       return NextResponse.json({ ok: false, error: '圖片格式或大小不符合要求，請重新選擇或裁切圖片' }, { status: 413 });
     }
 
     const defaultWater = sanitizeDefaultWater(body.defaultWater);
     let parsed = !images.length && text ? localTextParse(text, schedule) : null;
-    let model = parsed ? '本地信用盤解析器' : MODEL;
+    let model = parsed ? '本地信用盤解析器' : '';
+    let warnings = [];
+
     if (!parsed) {
       const key = process.env.AI_GATEWAY_API_KEY;
       if (!key) return NextResponse.json({ ok: false, error: '人工智慧金鑰未設定' }, { status: 503 });
       const prompt = buildVisionPrompt(schedule, Boolean(text));
       const content = [{ type: 'text', text: prompt }];
       if (text) content.push({ type: 'text', text: `盤口文字：\n${text}` });
-      for (const url of images) content.push({ type: 'image_url', image_url: { url } });
-      parsed = await generateAndParse(key, content, prompt);
+      for (const url of images) content.push({ type: 'image_url', image_url: { url, detail: 'high' } });
+      const result = await generateAndParse(key, content, prompt);
+      parsed = result.parsed;
+      model = result.model;
+      warnings = result.failures || [];
     }
 
     const rows = (Array.isArray(parsed?.games) ? parsed.games : []).slice(0, 30).map(raw => {
       const matched = matchScheduleGame(raw, schedule);
       return { ...normalizeVisionGame(raw, matched, defaultWater), matchedGame: matched || null };
     });
-    return NextResponse.json({ ok: true, model, games: rows }, { headers: { 'Cache-Control': 'no-store' } });
+
+    return NextResponse.json({
+      ok: true,
+      model,
+      visionVersion: VISION_VERSION,
+      games: rows,
+      warnings,
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const timedOut = error?.code === 'timeout' || /Timeout|AbortError/i.test(String(error?.name || '')) || /timeout|逾時/i.test(String(error?.message || ''));
-    const message = timedOut ? '人工智慧辨識逾時，請重試' : String(error?.message || error);
+    const message = timedOut
+      ? '圖片內容較密，系統已自動切換辨識模型但仍逾時；請重新上傳，系統會自動分段處理'
+      : String(error?.message || error);
     return NextResponse.json({ ok: false, error: message }, {
-      status: Number(error?.status) || 500,
+      status: Number(error?.status) || (timedOut ? 504 : 500),
       headers: { 'Cache-Control': 'no-store' },
     });
   }
