@@ -29,6 +29,15 @@ const TOKEN_SOURCE = '(\\d+(?:\\.\\d+)?(?:\/\\d+(?:\\.\\d+)?)?(?:平|[+-]\\d{1,3
 const WATER_RE = /(?:^|[^\d])(0?\.\d{2,3}|1\.\d{2,3})(?!\d)/g;
 const unique = values => [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))];
 
+function normalizeImageDataURL(value) {
+  const source = String(value || '').trim();
+  const comma = source.indexOf(',');
+  if (comma < 0) return source;
+  const header = source.slice(0, comma + 1);
+  const payload = source.slice(comma + 1).replace(/\s+/g, '');
+  return `${header}${payload}`;
+}
+
 function waters(line) {
   return [...String(line || '').matchAll(WATER_RE)]
     .map(match => Number(match[1]))
@@ -240,11 +249,11 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'vision-v7-0-4', limit: 28, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'vision-v7-0-5', limit: 28, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 4_500_000);
-    const images = Array.isArray(body.images) ? body.images.slice(0, 2) : [];
+    const images = (Array.isArray(body.images) ? body.images.slice(0, 2) : []).map(normalizeImageDataURL);
     const text = cleanText(body.text, 40000);
     const schedule = (Array.isArray(body.schedule) ? body.schedule : []).slice(0, 25).map(game => ({
       gamePk: positiveInteger(game?.gamePk),
