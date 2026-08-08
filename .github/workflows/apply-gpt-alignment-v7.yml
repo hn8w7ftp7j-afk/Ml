@@ -1,0 +1,45 @@
+name: Apply GPT alignment v7
+
+on:
+  push:
+    branches:
+      - feature/gpt-alignment-v7
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-gpt-alignment-v7
+  cancel-in-progress: false
+
+jobs:
+  patch-test-build:
+    if: ${{ !contains(github.event.head_commit.message || '', '[gpt alignment applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply GPT alignment v7 patch
+        run: python scripts/apply-gpt-alignment-v7.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run unit, security and production build checks
+        run: npm run build
+      - name: Commit verified GPT alignment v7
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add DEPLOYMENT_VERSION README.md package.json \
+            app/page.js app/globals.css app/api/analyze/route.js app/api/health/route.js \
+            lib/analysis.js lib/markets.js lib/mlb.js lib/expert.js \
+            scripts/test.mjs scripts/smoke.mjs
+          git rm .github/workflows/apply-gpt-alignment-v7.yml scripts/apply-gpt-alignment-v7.py
+          git commit -m 'Integrate GPT research layer and alignment audit v7 [gpt alignment applied]'
+          git push origin HEAD:feature/gpt-alignment-v7
