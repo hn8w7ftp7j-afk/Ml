@@ -14,15 +14,16 @@ import {
 } from '../lib/markets.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '6.1.0';
-const STORAGE = 'mlb-positive-ev-v6-1';
-const LEGACY_KEYS = ['mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
+const VERSION = '7.0.0';
+const STORAGE = 'mlb-positive-ev-v7';
+const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
   candidateThreshold: 7.2,
   strongestThreshold: 8.5,
   simulationsPerScenario: 1800,
+  expertMode: 'auto',
   fallbackWater: {
     全場讓分: 0.95,
     全場大小: 0.94,
@@ -539,7 +540,7 @@ export default function Home() {
   }, [store.bets]);
 
   function exportJSON() {
-    download(`mlb-positive-ev-v6-1-${Date.now()}.json`, JSON.stringify(store, null, 2));
+    download(`mlb-positive-ev-v7-${Date.now()}.json`, JSON.stringify(store, null, 2));
   }
 
   function exportCSV() {
@@ -548,7 +549,7 @@ export default function Home() {
       bet.createdAt, bet.analysisSnapshotId, bet.modelVersion, translateTeamText(bet.game), bet.market, translateTeamText(bet.pick), bet.water, bet.score,
       bet.weightedEV, bet.robustEV, bet.conservativeEV, bet.evFlipProbability, bet.unit, bet.result, bet.profit, bet.rebate, bet.clv,
     ]);
-    download(`mlb-bets-v6-1-${Date.now()}.csv`, [head, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'), 'text/csv');
+    download(`mlb-bets-v7-${Date.now()}.csv`, [head, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'), 'text/csv');
   }
 
   async function importJSON(file) {
@@ -566,7 +567,7 @@ export default function Home() {
           fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(data.settings?.fallbackWater || {}) },
         },
       });
-      alert('第 6.1 版備份已還原');
+      alert('第 7 版備份已還原');
     } catch {
       alert('備份檔格式錯誤');
     }
@@ -595,7 +596,7 @@ export default function Home() {
       <div>
         <div className="eyebrow">私人分析系統</div>
         <h1>⚾ MLB 長期正期望值分析</h1>
-        <p>實際開盤市場 → 聯合情境 → 台灣信用盤結算 → 穩健 EV → 綜合投注品質</p>
+        <p>實際開盤 → MLB 資料 → GPT 研究判讀 → 聯合比分分布 → 台灣信用盤 EV</p>
       </div>
       <div className="headerRight">
         <span className={`health ${health?.ok && health?.aiGatewayConfigured ? 'ok' : 'warn'}`}>
@@ -693,8 +694,8 @@ export default function Home() {
         const data = versions[0];
         return <div className="card analysisCard" key={lock.id}>
           <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '以最新資料重算新版本'}</button></div>
-          {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料並執行聯合情境…' : '此快照尚未分析'}/> : <>
-            <Context context={data.context} analysis={data.analysis}/>
+          {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、執行 GPT 研究判讀與聯合情境…' : '此快照尚未分析'}/> : <>
+            <Context context={data.context} analysis={data.analysis}/><AlignmentAudit audit={data.analysis.alignmentAudit}/>
             {data.analysis.portfolio?.length > 0 && <div className="market"><h3>同場主選／次選與總曝險</h3><div className="portfolio">{data.analysis.portfolio.map((row, index) => <div className="portfolioRow" key={`${row.market}-${row.pick}`}><b>{index + 1}</b><span>{row.role}｜{row.market}｜{translateTeamText(row.pick)}</span><strong>{row.score.toFixed(1)}</strong><span>{row.recommendedUnit} Unit{index > 0 ? `｜與主選相關 ${pct(row.correlationToPrimary)}` : ''}</span></div>)}</div></div>}
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
@@ -726,8 +727,9 @@ export default function Home() {
         <Setting label="下注候選門檻" value={store.settings.candidateThreshold} step=".1" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, candidateThreshold: Number(value) } }))}/>
         <Setting label="最強主推門檻" value={store.settings.strongestThreshold} step=".1" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, strongestThreshold: Number(value) } }))}/>
         <Setting label="每情境模擬次數" value={store.settings.simulationsPerScenario} step="100" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, simulationsPerScenario: Number(value) } }))}/>
+        <label>GPT 研究判讀層<select value={store.settings.expertMode || 'auto'} onChange={event => setStore(row => ({ ...row, settings: { ...row.settings, expertMode: event.target.value } }))}><option value="auto">自動整合；失敗時統計備援</option><option value="off">純統計模式</option><option value="required">GPT 未完成就不評分</option></select></label>
         {MARKET_ORDER.map(market => <Setting key={market} label={`${market} 暫估水位`} value={store.settings.fallbackWater[market]} step=".001" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, fallbackWater: { ...row.settings.fallbackWater, [market]: Number(value) } } }))}/>) }
-      </div><p className="note">未知打線、捕手、主審、牛棚與屋頂不固定扣分；系統會擴大 27 組聯合情境與翻轉風險。暫估水位只供觀察，不會進正式下注池。</p></div>
+      </div><p className="note">未知打線、捕手、主審、牛棚與屋頂不固定扣分；GPT 研究層只提供殘差交互作用與情境權重，不能直接改分。暫估水位只供觀察，不會進正式下注池。</p></div>
       <div className="card"><h2>備份與資料</h2><div className="toolbar wrap"><button className="secondary" onClick={exportJSON}>匯出 JSON 備份</button><button className="secondary" onClick={exportCSV}>匯出 CSV 明細</button><label className="fileButton">匯入 JSON 備份<input type="file" accept="application/json" onChange={event => event.target.files?.[0] && importJSON(event.target.files[0])}/></label><button className="danger" onClick={() => { if (confirm('確定清除全部快照、分析與下注資料？')) setStore({ ...EMPTY, settings: store.settings }); }}>清除資料</button></div><p className="note">資料保存在這台裝置的瀏覽器內。盤口快照與分析版本不互相覆寫，請定期匯出備份。</p></div>
     </section>}
   </main>;
@@ -741,10 +743,10 @@ function ResultCard({ result, analysis, settings, onBet }) {
     <div className="resultMain">
       <div className="resultLine"><span className="score">{score == null ? '—' : score.toFixed(1)}</span>｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? '（暫估）' : ''}<span className="tag">{result.tag}</span></div>
       {score != null && <>
-        <small>正式加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜原始未校準 EV {pct(result.rawEV)}｜EV 翻負 {pct(result.evFlipProbability)}</small>
-        <small>市場校準過盤率 {pct(result.modelProbability)}｜原始模型率 {pct(result.rawModelProbability)}｜市場基準 {pct(result.marketAnchorProbability)}｜模型權重 {pct(result.marketCalibrationWeight)}</small>
-        <small>合理水位 {result.fairWater?.toFixed?.(3) || '—'}｜原始合理水位 {result.rawFairWater?.toFixed?.(3) || '—'}｜卡洞 {pct(result.exactLineProbability)}｜基準來源 {result.marketAnchorSource || '—'}</small>
-        <small>原始比分分布：全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜最不利集合 {result.worstVariant || '—'}</small>
+        <small>正式加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜統計原始 EV {pct(result.rawEV)}｜情境翻負 {pct(result.evFlipProbability)}</small>
+        <small>正式過盤率 {pct(result.modelProbability)}｜統計原始率 {pct(result.rawModelProbability)}｜市場先驗 {pct(result.marketAnchorProbability)}｜資料模型權重 {pct(result.marketCalibrationWeight)}</small>
+        <small>模型誤差門檻 {pct(result.modelErrorFloor)}｜獨立資料強度 {pct(result.independentEvidenceStrength)}｜分歧風險 {pct(result.divergenceRisk)}｜合理水位 {result.fairWater?.toFixed?.(3) || '—'}</small>
+        <small>原始比分分布：全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜卡洞 {pct(result.exactLineProbability)}｜最不利集合 {result.worstVariant || '—'}</small>
         <small>主要敏感因素：{result.scenarioSensitivity?.primary || '—'}（EV 範圍 {pct(result.scenarioSensitivity?.primaryRange)}）｜建議 {result.portfolioUnit || result.unitSuggestion || 0} Unit</small>
         {result.movement?.available ? <small>盤勢：{result.movement.verdict || result.movement.reason}{result.movement.deltaEV != null ? `｜價值變化 ${pct(result.movement.deltaEV)}` : ''}{result.movement.crossedKeyNumbers?.length ? `｜跨過關鍵數字 ${result.movement.crossedKeyNumbers.join('、')}` : ''}</small> : <small>盤勢：{result.movement?.reason || '無舊盤可比較'}</small>}
         {result.integrityMessage && <div className="errors">{result.integrityMessage}</div>}
@@ -771,10 +773,27 @@ function Context({ context, analysis }) {
       <Info t="旅行／休息" v={`客隊休 ${away.rest?.days ?? '—'} 天／${away.rest?.travelKm || 0} km｜主隊休 ${home.rest?.days ?? '—'} 天／${home.rest?.travelKm || 0} km`}/>
       <Info t="主審／資料品質" v={`${umpireName}｜${pct(analysis.dataQuality)}`}/>
       <Info t="聯合情境" v={`${analysis.scenarioSummary.count} 組 × ${analysis.scenarioSummary.simulationsPerScenario} 次｜${analysis.scenarioSummary.robustVariantCount} 組穩健壓力`}/>
+      <Info t="GPT 研究判讀" v={`${analysis.alignmentAudit?.expertLayer?.used ? '已整合' : '統計備援'}｜${analysis.alignmentAudit?.expertLayer?.model || analysis.alignmentAudit?.expertLayer?.reason || '—'}`}/>
     </div>
     {analysis.featureProvenance?.length > 0 && <div className="sourceRows">{analysis.featureProvenance.map(row => <div className="sourceRow" key={row.feature}><b>{row.feature}</b><span>{row.status}</span><span>{row.source}</span></div>)}</div>}
     {analysis.warnings?.length > 0 && <div className="warnings">{analysis.warnings.join('；')}</div>}
   </>;
+}
+
+function AlignmentAudit({ audit }) {
+  if (!audit) return null;
+  const unknown = [...(audit.unknown || []), ...(audit.unmodeled || [])].slice(0, 8);
+  return <div className="alignmentAudit">
+    <div className="alignmentHead"><b>GPT 指令對齊與未知資料檢查</b><span className="pill">{audit.expertLayer?.used ? 'GPT 已整合' : '統計備援'}</span></div>
+    {audit.expertLayer?.summary && <small>{audit.expertLayer.summary}</small>}
+    <div className="auditGrid">
+      <div><span>已確認</span><b>{audit.confirmed?.length || 0}</b></div>
+      <div><span>預估</span><b>{audit.estimated?.length || 0}</b></div>
+      <div><span>未知</span><b>{audit.unknown?.length || 0}</b></div>
+      <div><span>尚未建模</span><b>{audit.unmodeled?.length || 0}</b></div>
+    </div>
+    {unknown.length > 0 && <ul className="riskList">{unknown.map(item => <li key={item}>{item}</li>)}</ul>}
+  </div>;
 }
 
 function Metric({ t, v }) { return <div className="metric"><span>{t}</span><b>{v}</b></div>; }

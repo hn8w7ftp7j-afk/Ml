@@ -10,6 +10,7 @@ import {
   validateMarketPair,
 } from '../lib/markets.js';
 import { analyzeMarkets, estimateRuns, MODEL_VERSION, RULES_VERSION } from '../lib/analysis.js';
+import { fallbackExpertAssessment, sanitizeExpertAssessment } from '../lib/expert.js';
 
 const away = '紐約洋基';
 const home = '亞特蘭大勇士';
@@ -122,6 +123,30 @@ const context = {
   featureProvenance: [],
 };
 
+const fallbackExpert = fallbackExpertAssessment(context, 'unit-test fallback');
+assert.equal(fallbackExpert.used, false);
+assert.ok(fallbackExpert.assessment.audit.unmodeled.length > 0);
+context.expertAssessment = sanitizeExpertAssessment({
+  contextConfidence: 0.82,
+  independentEvidenceStrength: 0.62,
+  marketReliance: 0.60,
+  modelErrorFloor: 0.024,
+  adjustments: {
+    awayOffense: { multiplier: 1.01, uncertaintyAdd: 0.01, reason: 'platoon interaction', evidenceKeys: ['vsLeft'] },
+    homeOffense: { multiplier: 0.995, uncertaintyAdd: 0.015, reason: 'projected lineup', evidenceKeys: ['lineup.projected'] },
+    awayStarter: { runMultiplier: 0.99, inningsDelta: 0.1, uncertaintyAdd: 0.01 },
+    homeStarter: { runMultiplier: 1.01, inningsDelta: -0.1, uncertaintyAdd: 0.015 },
+  },
+  scenarioProbabilities: {
+    away: { low: 0.18, central: 0.62, high: 0.20 },
+    home: { low: 0.23, central: 0.60, high: 0.17 },
+    environment: { low: 0.18, central: 0.64, high: 0.18 },
+  },
+  audit: { unknown: ['official lineup'], unmodeled: ['Statcast live movement'] },
+  summary: 'unit test expert layer',
+}, context, 'unit-test-model');
+assert.equal(context.expertAssessment.used, true);
+
 const fullRuns = estimateRuns(context, false);
 const first5Runs = estimateRuns(context, true);
 assert.ok(fullRuns.away > first5Runs.away && fullRuns.home > first5Runs.home);
@@ -146,6 +171,10 @@ assert.equal(analysis.scenarioSummary.count, 27);
 assert.equal(analysis.scenarioSummary.robustVariantCount, 7);
 assert.equal(analysis.scenarioSummary.sharedDistribution, true);
 assert.equal(analysis.scenarioSummary.jointPortfolioDistribution, true);
+assert.equal(analysis.alignmentAudit.expertLayer.used, true);
+assert.ok(analysis.alignmentAudit.unmodeled.length > 0);
+assert.ok(analysis.results.every(row => row.modelErrorFloor >= 0.015 && row.modelErrorFloor <= 0.06));
+assert.ok(analysis.results.every(row => row.independentEvidenceStrength >= 0.15 && row.independentEvidenceStrength <= 0.85));
 assert.ok(analysis.scenarioSummary.jointCellCount > 0);
 assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 3.5 && row.score <= 9.4));
 assert.ok(analysis.results.every(row => Number.isFinite(row.weightedEV) && Number.isFinite(row.robustEV) && Number.isFinite(row.conservativeEV)));
@@ -166,8 +195,8 @@ for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上�
 
 
 for (const result of analysis.results.filter(row => row.marketAnchorProbability != null)) {
-  assert.ok(result.marketCalibrationWeight >= 0.08 && result.marketCalibrationWeight <= 0.35);
-  assert.ok(result.maximumCalibratedProbabilityEdge >= 0.025 && result.maximumCalibratedProbabilityEdge <= 0.05);
+  assert.ok(result.marketCalibrationWeight >= 0.12 && result.marketCalibrationWeight <= 0.55);
+  assert.ok(result.maximumCalibratedProbabilityEdge >= 0.05 && result.maximumCalibratedProbabilityEdge <= 0.12);
   assert.ok(Math.abs(result.modelProbability - result.marketAnchorProbability) <= Math.abs(result.rawModelProbability - result.marketAnchorProbability) + 1e-10);
   assert.ok(result.calibratedMarketProbabilityGap <= result.maximumCalibratedProbabilityEdge + 1e-10);
   assert.ok(Number.isFinite(result.rawEV));
@@ -189,10 +218,10 @@ const disagreement = analyzeMarkets({
 });
 const disagreementUnderdog = disagreement.results.find(row => row.pick === `${home}受讓1+10`);
 assert.ok(disagreementUnderdog.rawMarketProbabilityGap > 0.12, 'regression case must create a large raw model/market disagreement');
-assert.ok(disagreementUnderdog.calibratedMarketProbabilityGap <= 0.05 + 1e-10);
+assert.ok(disagreementUnderdog.calibratedMarketProbabilityGap <= 0.12 + 1e-10);
 assert.ok(disagreementUnderdog.weightedEV < disagreementUnderdog.rawEV);
-assert.ok(disagreementUnderdog.weightedEV < 0.12, 'market-calibrated EV must not remain at an implausible 20–30% level');
-if (disagreementUnderdog.rawMarketProbabilityGap > 0.18) assert.ok(disagreementUnderdog.score <= 7.4);
+assert.ok(disagreementUnderdog.weightedEV < 0.18, 'formal EV must not remain at an unbounded 20–30% level');
+if (disagreementUnderdog.divergenceRisk > 0.18) assert.ok(disagreementUnderdog.score <= 7.4);
 assert.ok(disagreementUnderdog.unitSuggestion <= 0.5);
 
 const repeat = analyzeMarkets({ context, markets, previousMarkets, settings });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { buildGameContext } from '../../../lib/mlb.js';
 import { analyzeMarkets } from '../../../lib/analysis.js';
+import { applyExpertAssessment, buildExpertAssessment } from '../../../lib/expert.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import {
   checkRateLimit,
@@ -66,7 +67,7 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'analyze-v6', limit: 35, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'analyze-v7', limit: 35, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 262144);
@@ -97,18 +98,27 @@ export async function POST(request) {
       candidateThreshold: Math.max(1, Math.min(9.4, Number(body.settings?.candidateThreshold) || 7.2)),
       strongestThreshold: Math.max(1, Math.min(9.4, Number(body.settings?.strongestThreshold) || 8.5)),
       simulationsPerScenario: Math.max(500, Math.min(4000, Math.round(Number(body.settings?.simulationsPerScenario) || 1800))),
+      expertMode: ['auto', 'off', 'required'].includes(body.settings?.expertMode) ? body.settings.expertMode : 'auto',
     };
 
     const context = await Promise.race([
       buildGameContext(game),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('MLB 資料取得逾時，請稍後重試')), 50000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('MLB 資料取得逾時，請稍後重試')), 38000)),
     ]);
-    const analysis = analyzeMarkets({ context, markets: activeMarkets, previousMarkets, settings });
+    const expertAssessment = await buildExpertAssessment({
+      context,
+      markets: activeMarkets,
+      mode: settings.expertMode,
+      timeoutMs: 12000,
+    });
+    const enrichedContext = applyExpertAssessment(context, expertAssessment);
+    const analysis = analyzeMarkets({ context: enrichedContext, markets: activeMarkets, previousMarkets, settings });
 
     return NextResponse.json({
       ok: true,
       game,
-      context,
+      context: enrichedContext,
+      expertAssessment,
       analysis,
       openMarkets: [...new Set(activeMarkets.map(row => row.market))],
     }, { headers: { 'Cache-Control': 'no-store' } });
