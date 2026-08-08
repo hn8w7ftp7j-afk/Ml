@@ -76,6 +76,17 @@ assert.equal(nullLikeVision.markets[3].directions[0].pick, '');
 assert.equal(nullLikeVision.markets[3].directions[1].pick, '');
 assert.deepEqual(validateMarketPair('上半大小', nullLikeVision.markets[3].directions), []);
 
+assert.ok(validateMarketPair('全場讓分', [
+  { pick: '匹茲堡海盜讓9-10', water: 0.95 },
+  { pick: '紐約大都會受讓9-10', water: 0.95 },
+]).some(error => error.includes('疑似辨識錯欄')));
+assert.ok(validateMarketPair('上半讓分', [
+  { pick: '匹茲堡海盜讓9-10', water: 0.95 },
+  { pick: '紐約大都會受讓9-10', water: 0.95 },
+]).some(error => error.includes('疑似辨識錯欄')));
+assert.equal(normalizeVisionGame({ away: '紐約大都會', home: '匹茲堡海盜', fullRunline: { favoriteSide:'home', line:'9-10', favoriteWater:0.95, underdogWater:null } }, { gamePk:9, away:'紐約大都會', home:'匹茲堡海盜' }).markets[0].directions[0].pick, '');
+
+
 
 const compactVision = expandVisionPayload(cleanVisionJSON(JSON.stringify({
   g: [{
