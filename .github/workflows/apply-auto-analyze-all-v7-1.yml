@@ -54,6 +54,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add DEPLOYMENT_VERSION README.md package.json app/page.js app/api/health/route.js lib/batch.js scripts/test.mjs scripts/smoke.mjs
-          git rm .github/workflows/apply-auto-analyze-all-v7-1.yml scripts/apply-auto-analyze-all-v7-1.py
+          git rm .github/workflows/apply-auto-analyze-all-v7-1.yml
+          git rm -f scripts/apply-auto-analyze-all-v7-1.py
           git commit -m 'Auto-analyze all uploaded images and markets v7.1.0 [batch auto analysis applied]'
           git push origin HEAD:feature/auto-analyze-all-v7-1
