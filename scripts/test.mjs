@@ -11,6 +11,7 @@ import {
 } from '../lib/markets.js';
 import { analyzeMarkets, estimateRuns, MODEL_VERSION, RULES_VERSION } from '../lib/analysis.js';
 import { fallbackExpertAssessment, sanitizeExpertAssessment } from '../lib/expert.js';
+import { VISION_VERSION, buildVisionPrompt, cleanVisionJSON, expandVisionPayload } from '../lib/vision.js';
 
 const away = '紐約洋基';
 const home = '亞特蘭大勇士';
@@ -61,6 +62,27 @@ assert.equal(vision.markets[0].directions[1].waterEstimated, true);
 assert.equal(vision.markets[1].directions[0].waterEstimated, false);
 assert.equal(vision.markets[1].directions[1].water, null);
 assert.equal(vision.markets[2].directions[0].pick, '');
+
+const compactVision = expandVisionPayload(cleanVisionJSON(JSON.stringify({
+  g: [{
+    id: 99,
+    a: away,
+    h: home,
+    c: 0.91,
+    fr: ['away', '1+50', 0.95, null, 0.88],
+    ft: ['8+50', 0.94, 0.94, 0.92],
+    r5: null,
+    t5: ['4+20', 0.93, null, 0.7],
+  }],
+})));
+assert.equal(compactVision.games.length, 1);
+assert.equal(compactVision.games[0].gamePk, 99);
+assert.equal(compactVision.games[0].fullRunline.favoriteSide, 'away');
+assert.equal(compactVision.games[0].fullRunline.underdogWater, null);
+assert.equal(compactVision.games[0].fullTotal.line, '8+50');
+assert.equal(compactVision.games[0].first5Runline.line, '');
+assert.ok(buildVisionPrompt([{ gamePk: 99, away, home }]).includes('"g"'));
+assert.match(VISION_VERSION, /v7\.0\.3$/);
 
 assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) >= 3.5);
 assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) <= 6.6);

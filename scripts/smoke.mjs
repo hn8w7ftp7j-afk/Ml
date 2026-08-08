@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '7.0.2';
+const VERSION = '7.0.3';
 const MODEL_VERSION = 'GPT研究整合聯合情境模型-2026-08-v7.0.2';
 const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v7.0.2';
 const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.2';
+const VISION_VERSION = 'MLB-VISION-2026-08-v7.0.3';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function response(url, options = {}, timeout = 90000) {
@@ -46,6 +48,7 @@ async function waitForDeployment() {
         && value.modelVersion === MODEL_VERSION
         && value.rulesVersion === RULES_VERSION
         && value.expertVersion === EXPERT_VERSION
+        && value.visionVersion === VISION_VERSION
         && value.aiGatewayConfigured
         && shaReady
       ) return value;
@@ -68,6 +71,7 @@ assert.equal(health.version, VERSION);
 assert.equal(health.modelVersion, MODEL_VERSION);
 assert.equal(health.rulesVersion, RULES_VERSION);
 assert.equal(health.expertVersion, EXPERT_VERSION);
+assert.equal(health.visionVersion, VISION_VERSION);
 assert.equal(health.aiGatewayConfigured, true);
 if (EXPECTED_SHA && health.commit) assert.equal(health.commit, EXPECTED_SHA);
 
@@ -81,7 +85,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*7\.0\.2\s*版/);
+assert.match(renderedHome, /第\s*7\.0\.3\s*版/);
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
 assert.ok(homeResponse.headers.get('content-security-policy'));
@@ -99,6 +103,32 @@ assert.ok(/[\u4e00-\u9fff]/.test(game.away));
 assert.ok(/[\u4e00-\u9fff]/.test(game.home));
 
 const originHeaders = { 'Content-Type': 'application/json', Origin: BASE, 'Sec-Fetch-Site': 'same-origin' };
+const visionFixture = readFileSync(new URL('./fixtures/vision-table.b64', import.meta.url), 'utf8').trim();
+const visionSchedule = [{
+  gamePk: 990001,
+  away: '克里夫蘭守護者',
+  home: '芝加哥白襪',
+  awayEnglish: 'Cleveland Guardians',
+  homeEnglish: 'Chicago White Sox',
+  gameNumber: 1,
+  scheduledInnings: 9,
+}];
+const visionCapture = await json(`${BASE}/api/vision`, {
+  method: 'POST',
+  headers: originHeaders,
+  body: JSON.stringify({
+    images: [`data:image/png;base64,${visionFixture}`],
+    schedule: visionSchedule,
+    defaultWater: { 全場讓分: 0.95, 全場大小: 0.94, 上半讓分: 0.94, 上半大小: 0.93 },
+  }),
+}, 150000);
+assert.equal(visionCapture.value.visionVersion, VISION_VERSION);
+assert.ok(visionCapture.value.model && visionCapture.value.model !== '本地信用盤解析器');
+const visionGame = visionCapture.value.games.find(row => Number(row.gamePk) === 990001);
+assert.ok(visionGame, '遠端圖片辨識未配對測試賽事');
+const visionPicks = (visionGame.markets || []).flatMap(row => row.directions || []).map(row => row.pick).filter(Boolean);
+assert.ok(visionPicks.length >= 4, '遠端圖片辨識未取得足夠盤口');
+assert.ok(visionPicks.some(pick => pick.includes('8+50') || pick.includes('1+15')), '遠端圖片辨識未讀到核心盤口數字');
 const fullMarkets = [
   { market: '全場讓分', pick: `${game.home}讓1+50`, water: 0.95, confidence: 1 },
   { market: '全場讓分', pick: `${game.away}受讓1+50`, water: 0.95, confidence: 1 },
@@ -220,5 +250,7 @@ console.log(JSON.stringify({
   maximumScore: Math.max(...analysis.results.map(row => row.score)),
   expertLayerUsed: expertAnalyzed.value.expertAssessment.used,
   expertModel: expertAnalyzed.value.expertAssessment.model,
+  visionModel: visionCapture.value.model,
+  visionPicks: visionPicks.length,
   resultEndpoint: true,
 }, null, 2));

@@ -14,7 +14,7 @@ import {
 } from '../lib/markets.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '7.0.2';
+const VERSION = '7.0.3';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -47,20 +47,59 @@ async function readDataURL(file) {
   });
 }
 
-async function compressImage(file) {
+function canvasDataURL(canvas, quality = 0.9) {
+  const webp = canvas.toDataURL('image/webp', quality);
+  if (webp.startsWith('data:image/webp')) return webp;
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+function renderImageCrop(image, sx, sy, sw, sh, { minimumWidth = 1500, maximumDimension = 2400 } = {}) {
+  const sourceMaximum = Math.max(sw, sh);
+  const desiredScale = Math.max(1, minimumWidth / Math.max(1, sw));
+  const scale = Math.max(0.35, Math.min(2, maximumDimension / Math.max(1, sourceMaximum), desiredScale));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(sw * scale));
+  canvas.height = Math.max(1, Math.round(sh * scale));
+  const context = canvas.getContext('2d', { alpha: false });
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  let data = canvasDataURL(canvas, 0.9);
+  if (data.length > 3_000_000) data = canvas.toDataURL('image/jpeg', 0.76);
+  return data;
+}
+
+async function prepareImage(file) {
   const source = await readDataURL(file);
   return new Promise(resolve => {
     const image = new Image();
     image.onload = () => {
-      const maximum = 1500;
-      const scale = Math.min(1, maximum / Math.max(image.width, image.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.78));
+      const full = renderImageCrop(image, 0, 0, image.width, image.height, { minimumWidth: 1600, maximumDimension: 2400 });
+      const denseBoard = image.width >= 850 && image.height >= 500;
+      if (!denseBoard) {
+        resolve({ data: full, parts: [full], width: image.width, height: image.height });
+        return;
+      }
+
+      const segmentCount = image.height / Math.max(1, image.width) > 1.35 ? 3 : 2;
+      const cropHeight = Math.min(image.height, Math.ceil((image.height / segmentCount) * 1.36));
+      const travel = Math.max(0, image.height - cropHeight);
+      const positions = segmentCount === 1
+        ? [0]
+        : Array.from({ length: segmentCount }, (_, index) => Math.round(travel * index / (segmentCount - 1)));
+      const parts = [...new Set(positions)].map(position => renderImageCrop(
+        image,
+        0,
+        position,
+        image.width,
+        cropHeight,
+        { minimumWidth: 1800, maximumDimension: 2300 },
+      ));
+      resolve({ data: full, parts: parts.length ? parts : [full], width: image.width, height: image.height });
     };
-    image.onerror = () => resolve(source);
+    image.onerror = () => resolve({ data: source, parts: [source], width: 0, height: 0 });
     image.src = source;
   });
 }
@@ -268,36 +307,63 @@ export default function Home() {
 
   async function chooseImages(files) {
     const list = [...(files || [])].slice(0, 8);
-    setVisionStatus('正在壓縮圖片…');
+    setVisionStatus('正在保留文字清晰度並分段圖片…');
     const rows = [];
     for (let index = 0; index < list.length; index += 1) {
       const file = list[index];
-      rows.push({ id: uid(), name: file.name, preview: URL.createObjectURL(file), data: await compressImage(file), size: file.size });
-      setVisionStatus(`正在處理第 ${index + 1} 張，共 ${list.length} 張`);
+      const prepared = await prepareImage(file);
+      rows.push({
+        id: uid(),
+        name: file.name,
+        preview: URL.createObjectURL(file),
+        data: prepared.data,
+        parts: prepared.parts,
+        width: prepared.width,
+        height: prepared.height,
+        size: file.size,
+      });
+      setVisionStatus(`正在處理第 ${index + 1} 張，共 ${list.length} 張；此圖分為 ${prepared.parts.length} 區塊`);
     }
     setImages(rows);
-    setVisionStatus(`已準備 ${rows.length} 張圖片`);
+    const regions = rows.reduce((sum, row) => sum + Math.max(1, row.parts?.length || 0), 0);
+    setVisionStatus(`已準備 ${rows.length} 張圖片，共 ${regions} 個清晰辨識區塊`);
   }
 
   async function recognize() {
     if (!images.length || visionBusy) return;
     setVisionBusy(true);
     const all = [];
+    const failures = [];
+    const models = new Set();
+    const tasks = images.flatMap((image, imageIndex) => {
+      const parts = Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data];
+      return parts.map((data, partIndex) => ({ image, imageIndex, partIndex, partCount: parts.length, data }));
+    });
+
     try {
-      for (let index = 0; index < images.length; index += 1) {
-        setVisionStatus(`人工智慧辨識中：第 ${index + 1} 張，共 ${images.length} 張`);
-        const data = await requestJSON('/api/vision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: [images[index].data], schedule: games, defaultWater: store.settings.fallbackWater }),
-        });
-        all.push(...(data.games || []));
+      for (let index = 0; index < tasks.length; index += 1) {
+        const task = tasks[index];
+        setVisionStatus(`人工智慧辨識中：圖片 ${task.imageIndex + 1}/${images.length}，區塊 ${task.partIndex + 1}/${task.partCount}`);
+        try {
+          const data = await requestJSON('/api/vision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: [task.data], schedule: games, defaultWater: store.settings.fallbackWater }),
+          });
+          if (data.model) models.add(data.model);
+          all.push(...(data.games || []));
+        } catch (error) {
+          failures.push(`圖片 ${task.imageIndex + 1} 區塊 ${task.partIndex + 1}：${error.message}`);
+        }
       }
+
       const merged = mergeVision(all);
-      if (!merged.length) throw new Error('沒有辨識到任何場次');
+      if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或裁切更小範圍');
       setParsed(merged);
       setSelected(0);
-      setVisionStatus(`辨識完成：共 ${merged.length} 場`);
+      const modelText = models.size ? `｜${[...models].join('、')}` : '';
+      const partialText = failures.length ? `｜另有 ${failures.length} 個區塊失敗，請在確認頁核對` : '';
+      setVisionStatus(`辨識完成：共 ${merged.length} 場${modelText}${partialText}`);
       setTab('confirm');
     } catch (error) {
       setVisionStatus(`辨識失敗：${error.message}`);
