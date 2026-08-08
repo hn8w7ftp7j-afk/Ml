@@ -1,0 +1,44 @@
+name: Apply vision v7.0.4 repair
+
+on:
+  push:
+    branches:
+      - fix/vision-gateway-v7-0-4
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-vision-v7-0-4
+  cancel-in-progress: false
+
+jobs:
+  patch-test-build:
+    if: ${{ !contains(github.event.head_commit.message || '', '[vision v7.0.4 applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply vision v7.0.4 patch
+        run: python scripts/apply-vision-v7-0-4.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run unit, security and production build checks
+        run: npm run build
+      - name: Commit verified vision compatibility repair
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .env.example DEPLOYMENT_VERSION README.md package.json \
+            app/page.js app/api/health/route.js app/api/vision/route.js \
+            lib/vision.js scripts/test.mjs scripts/smoke.mjs
+          git rm .github/workflows/apply-vision-v7-0-4.yml scripts/apply-vision-v7-0-4.py
+          git commit -m 'Use compatible vision models and JPEG payloads v7.0.4 [vision v7.0.4 applied]'
+          git push origin HEAD:fix/vision-gateway-v7-0-4
