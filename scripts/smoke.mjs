@@ -5,7 +5,7 @@ const EXPECTED_SHA = process.env.GITHUB_SHA || '';
 const VERSION = '7.0.0';
 const MODEL_VERSION = 'GPT研究整合聯合情境模型-2026-08-v7';
 const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v7';
-const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v1';
+const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function response(url, options = {}, timeout = 90000) {
@@ -186,6 +186,22 @@ const estimated = await json(`${BASE}/api/analyze`, {
 }, 180000);
 assert.ok(estimated.value.analysis.results.every(row => row.score <= 6.6 && row.betEligible === false));
 
+const expertSettings = { ...settings, expertMode: 'required' };
+const expertAnalyzed = await json(`${BASE}/api/analyze`, {
+  method: 'POST',
+  headers: originHeaders,
+  body: JSON.stringify({
+    game,
+    markets: fullMarkets.filter(row => row.market === '全場大小'),
+    settings: expertSettings,
+  }),
+}, 180000);
+assert.equal(expertAnalyzed.value.expertAssessment.used, true);
+assert.equal(expertAnalyzed.value.expertAssessment.status, 'complete');
+assert.ok(expertAnalyzed.value.expertAssessment.model);
+assert.equal(expertAnalyzed.value.analysis.alignmentAudit.expertLayer.used, true);
+assert.equal(expertAnalyzed.value.analysis.results.length, 2);
+
 const result = await json(`${BASE}/api/result?gamePk=${game.gamePk}&t=${Date.now()}`, {}, 30000);
 assert.equal(typeof result.value.final, 'boolean');
 
@@ -202,5 +218,7 @@ console.log(JSON.stringify({
   scenarioCount: analysis.scenarioSummary.count,
   robustVariantCount: analysis.scenarioSummary.robustVariantCount,
   maximumScore: Math.max(...analysis.results.map(row => row.score)),
+  expertLayerUsed: expertAnalyzed.value.expertAssessment.used,
+  expertModel: expertAnalyzed.value.expertAssessment.model,
   resultEndpoint: true,
 }, null, 2));

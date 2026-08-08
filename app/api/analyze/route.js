@@ -109,7 +109,7 @@ export async function POST(request) {
       context,
       markets: activeMarkets,
       mode: settings.expertMode,
-      timeoutMs: 12000,
+      timeoutMs: 16000,
     });
     const enrichedContext = applyExpertAssessment(context, expertAssessment);
     const analysis = analyzeMarkets({ context: enrichedContext, markets: activeMarkets, previousMarkets, settings });
