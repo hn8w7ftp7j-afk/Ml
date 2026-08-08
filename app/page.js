@@ -15,7 +15,7 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '7.2.1';
+const VERSION = '7.3.0';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -82,21 +82,24 @@ async function prepareImage(file) {
         return;
       }
 
-      const segmentCount = image.height / Math.max(1, image.width) > 1.35 ? 3 : 2;
-      const cropHeight = Math.min(image.height, Math.ceil((image.height / segmentCount) * 1.36));
+      const ratio = image.height / Math.max(1, image.width);
+      const segmentCount = ratio > 1.7 ? 5 : ratio > 1.15 ? 4 : 3;
+      const cropHeight = Math.min(image.height, Math.ceil((image.height / segmentCount) * 1.62));
       const travel = Math.max(0, image.height - cropHeight);
       const positions = segmentCount === 1
         ? [0]
         : Array.from({ length: segmentCount }, (_, index) => Math.round(travel * index / (segmentCount - 1)));
-      const parts = [...new Set(positions)].map(position => renderImageCrop(
+      const crops = [...new Set(positions)].map(position => renderImageCrop(
         image,
         0,
         position,
         image.width,
         cropHeight,
-        { minimumWidth: 1800, maximumDimension: 2300 },
+        { minimumWidth: 1900, maximumDimension: 2400 },
       ));
-      resolve({ data: full, parts: parts.length ? parts : [full], width: image.width, height: image.height });
+      // Full-image pass discovers every matchup; overlapping crops recover small market text.
+      const parts = [full, ...crops];
+      resolve({ data: full, parts, width: image.width, height: image.height });
     };
     image.onerror = () => resolve({ data: source, parts: [source], width: 0, height: 0 });
     image.src = source;
@@ -333,13 +336,38 @@ export default function Home() {
       }
     }
 
-    const merged = mergeVision(all);
+    let merged = mergeVision(all);
     if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或裁切更小範圍');
+
+    // Completeness pass: a board screenshot must not silently finish after returning only part of the visible slate.
+    const matchedIds = new Set(merged.map(row => String(row.gamePk || '')).filter(Boolean));
+    const scheduledIds = new Set((schedule || []).map(row => String(row.gamePk || '')).filter(Boolean));
+    const coverage = scheduledIds.size ? matchedIds.size / scheduledIds.size : 1;
+    if (sourceImages.length && merged.length < 7 && coverage < 0.70) {
+      setVisionStatus(`目前只辨識 ${merged.length} 場，正在執行整張圖完整性補掃…`);
+      for (let imageIndex = 0; imageIndex < sourceImages.length; imageIndex += 1) {
+        try {
+          const data = await requestJSON('/api/vision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: [sourceImages[imageIndex].data], schedule, defaultWater: store.settings.fallbackWater, completenessPass: true }),
+          });
+          if (data.model) models.add(data.model);
+          all.push(...(data.games || []));
+        } catch (error) {
+          failures.push(`圖片 ${imageIndex + 1} 完整性補掃：${error.message}`);
+        }
+      }
+      merged = mergeVision(all);
+    }
     setParsed(merged);
     setSelected(0);
     const modelText = models.size ? `｜${[...models].join('、')}` : '';
     const partialText = failures.length ? `｜${failures.length} 個區塊需注意` : '';
-    setVisionStatus(`辨識完成 ${merged.length} 場${modelText}${partialText}；開始自動分析所有有效盤口`);
+    const finalMatched = new Set(merged.map(row => String(row.gamePk || '')).filter(Boolean)).size;
+    const scheduleCount = (schedule || []).length;
+    const completenessText = scheduleCount ? `｜官方賽程覆蓋 ${finalMatched}/${scheduleCount}` : '';
+    setVisionStatus(`辨識完成 ${merged.length} 場${completenessText}${modelText}${partialText}；開始自動分析所有有效盤口`);
     await autoAnalyzeAll(merged, failures);
   }
 

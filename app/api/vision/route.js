@@ -265,13 +265,14 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'vision-v7-0-5', limit: 28, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'vision-v7-3', limit: 28, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 4_500_000);
     const rawImages = Array.isArray(body.images) ? body.images.slice(0, 2) : [];
     const images = rawImages.map(canonicalImageDataURL);
     const text = cleanText(body.text, 40000);
+    const completenessPass = body.completenessPass === true;
     const schedule = (Array.isArray(body.schedule) ? body.schedule : []).slice(0, 25).map(game => ({
       gamePk: positiveInteger(game?.gamePk),
       away: cleanText(game?.away, 80),
@@ -309,7 +310,7 @@ export async function POST(request) {
     if (!parsed) {
       const key = process.env.AI_GATEWAY_API_KEY;
       if (!key) return NextResponse.json({ ok: false, error: '人工智慧金鑰未設定' }, { status: 503 });
-      const prompt = buildVisionPrompt(schedule, Boolean(text));
+      const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? '\n這是完整性補掃：優先確認整張圖所有可見對戰都已列出；市場看不清可 null，但任何可配對賽事都不可漏。' : '');
       const content = [{ type: 'text', text: prompt }];
       if (text) content.push({ type: 'text', text: `盤口文字：\n${text}` });
       for (const url of images) content.push({ type: 'image_url', image_url: { url } });
