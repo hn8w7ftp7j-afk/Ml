@@ -25,4 +25,5 @@ jobs:
       - name: Verify preview including required live GPT research layer
         env:
           SMOKE_URL: https://mlb-p6jsdv23t-5gtbpqpbkx-2201s-projects.vercel.app
+          GITHUB_SHA: ''
         run: node scripts/smoke.mjs
