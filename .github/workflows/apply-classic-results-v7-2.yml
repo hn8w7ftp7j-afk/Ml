@@ -1,0 +1,40 @@
+name: Apply classic results v7.2
+on:
+  push:
+    branches: [feature/classic-results-v7-2]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Apply classic compact results
+        run: python scripts/apply-classic-results-v7-2.py
+      - name: Update smoke contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/smoke.mjs'); t=p.read_text()
+          t=t.replace("const VERSION = '7.1.0';", "const VERSION = '7.2.0';")
+          t=t.replace('/第\\s*7\\.1\\.0\\s*版/', '/第\\s*7\\.2\\.0\\s*版/')
+          t=t.replace("assert.match(renderedHome, /本次上傳：全部盤口評分總覽/);", "assert.match(renderedHome, /本次分析完成/);\nassert.match(renderedHome, /今日下注候選/);\nassert.match(renderedHome, /查看完整分析細節/);")
+          p.write_text(t)
+          PY
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run unit security and build checks
+        run: npm run build
+      - name: Commit verified redesign
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add DEPLOYMENT_VERSION README.md package.json app/page.js app/globals.css app/api/health/route.js scripts/smoke.mjs
+          git rm .github/workflows/apply-classic-results-v7-2.yml scripts/apply-classic-results-v7-2.py
+          git commit -m 'Restore classic compact analysis display v7.2.0 [classic results applied]'
+          git push origin HEAD:feature/classic-results-v7-2
