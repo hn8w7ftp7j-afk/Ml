@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '6.1.0';
-const MODEL_VERSION = 'GPT市場校準聯合情境模型-2026-08-v6.1';
-const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v6.1';
+const VERSION = '7.0.0';
+const MODEL_VERSION = 'GPT研究整合聯合情境模型-2026-08-v7';
+const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v7';
+const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function response(url, options = {}, timeout = 90000) {
@@ -44,6 +45,7 @@ async function waitForDeployment() {
         && value.version === VERSION
         && value.modelVersion === MODEL_VERSION
         && value.rulesVersion === RULES_VERSION
+        && value.expertVersion === EXPERT_VERSION
         && value.aiGatewayConfigured
         && shaReady
       ) return value;
@@ -65,6 +67,7 @@ assert.equal(health.ok, true);
 assert.equal(health.version, VERSION);
 assert.equal(health.modelVersion, MODEL_VERSION);
 assert.equal(health.rulesVersion, RULES_VERSION);
+assert.equal(health.expertVersion, EXPERT_VERSION);
 assert.equal(health.aiGatewayConfigured, true);
 if (EXPECTED_SHA && health.commit) assert.equal(health.commit, EXPECTED_SHA);
 
@@ -78,7 +81,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*6\.1\.0\s*版/);
+assert.match(renderedHome, /第\s*7\.0\.0\s*版/);
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
 assert.ok(homeResponse.headers.get('content-security-policy'));
@@ -107,7 +110,7 @@ const fullMarkets = [
   { market: '上半大小', pick: '小4+50', water: 0.93, confidence: 1 },
 ];
 const previousMarkets = fullMarkets.map(row => ({ ...row, water: Math.max(0.5, row.water - 0.02) }));
-const settings = { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, simulationsPerScenario: 500 };
+const settings = { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, simulationsPerScenario: 500, expertMode: 'off' };
 
 const analyzed = await json(`${BASE}/api/analyze`, {
   method: 'POST',
@@ -130,8 +133,11 @@ assert.ok(analysis.results.every(row => row.evFlipProbability >= 0 && row.evFlip
 assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
 assert.ok(analysis.results.every(row => row.movement?.available));
 assert.ok(analysis.results.every(row => Number.isFinite(row.rawEV)));
-assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.08 && row.marketCalibrationWeight <= 0.35));
+assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.12 && row.marketCalibrationWeight <= 0.55));
 assert.ok(analysis.results.every(row => row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10));
+assert.equal(analysis.alignmentAudit.expertLayer.used, false);
+assert.ok(analysis.alignmentAudit.unmodeled.length > 0);
+assert.ok(analysis.results.every(row => Number.isFinite(row.modelErrorFloor)));
 assert.ok(analysis.portfolio.reduce((sum, row) => sum + row.recommendedUnit, 0) <= 2.0001);
 
 for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上半大小']) {
@@ -180,6 +186,22 @@ const estimated = await json(`${BASE}/api/analyze`, {
 }, 180000);
 assert.ok(estimated.value.analysis.results.every(row => row.score <= 6.6 && row.betEligible === false));
 
+const expertSettings = { ...settings, expertMode: 'required' };
+const expertAnalyzed = await json(`${BASE}/api/analyze`, {
+  method: 'POST',
+  headers: originHeaders,
+  body: JSON.stringify({
+    game,
+    markets: fullMarkets.filter(row => row.market === '全場大小'),
+    settings: expertSettings,
+  }),
+}, 180000);
+assert.equal(expertAnalyzed.value.expertAssessment.used, true);
+assert.equal(expertAnalyzed.value.expertAssessment.status, 'complete');
+assert.ok(expertAnalyzed.value.expertAssessment.model);
+assert.equal(expertAnalyzed.value.analysis.alignmentAudit.expertLayer.used, true);
+assert.equal(expertAnalyzed.value.analysis.results.length, 2);
+
 const result = await json(`${BASE}/api/result?gamePk=${game.gamePk}&t=${Date.now()}`, {}, 30000);
 assert.equal(typeof result.value.final, 'boolean');
 
@@ -196,5 +218,7 @@ console.log(JSON.stringify({
   scenarioCount: analysis.scenarioSummary.count,
   robustVariantCount: analysis.scenarioSummary.robustVariantCount,
   maximumScore: Math.max(...analysis.results.map(row => row.score)),
+  expertLayerUsed: expertAnalyzed.value.expertAssessment.used,
+  expertModel: expertAnalyzed.value.expertAssessment.model,
   resultEndpoint: true,
 }, null, 2));
