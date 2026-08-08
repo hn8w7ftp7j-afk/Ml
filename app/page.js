@@ -12,7 +12,7 @@ import {
   resultLabel,
   validateMarketPair,
 } from '../lib/markets.js';
-import { BATCH_VERSION, blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
+import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
 const VERSION = '7.1.0';
