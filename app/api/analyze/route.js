@@ -67,7 +67,7 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'analyze-v7-0-1', limit: 35, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'analyze-v7-0-2', limit: 35, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 262144);
@@ -103,13 +103,13 @@ export async function POST(request) {
 
     const context = await Promise.race([
       buildGameContext(game),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('MLB 資料取得逾時，請稍後重試')), 32000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('MLB 資料取得逾時，請稍後重試')), 30000)),
     ]);
     const expertAssessment = await buildExpertAssessment({
       context,
       markets: activeMarkets,
       mode: settings.expertMode,
-      timeoutMs: 24000,
+      timeoutMs: 22000,
     });
     const enrichedContext = applyExpertAssessment(context, expertAssessment);
     const analysis = analyzeMarkets({ context: enrichedContext, markets: activeMarkets, previousMarkets, settings });

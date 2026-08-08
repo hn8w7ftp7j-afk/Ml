@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '7.0.1';
-const MODEL_VERSION = 'GPT研究整合聯合情境模型-2026-08-v7.0.1';
-const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v7.0.1';
-const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.1';
+const VERSION = '7.0.2';
+const MODEL_VERSION = 'GPT研究整合聯合情境模型-2026-08-v7.0.2';
+const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v7.0.2';
+const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.2';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function response(url, options = {}, timeout = 90000) {
@@ -81,7 +81,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*7\.0\.1\s*版/);
+assert.match(renderedHome, /第\s*7\.0\.2\s*版/);
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
 assert.ok(homeResponse.headers.get('content-security-policy'));
