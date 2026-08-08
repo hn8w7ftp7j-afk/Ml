@@ -1,12 +1,27 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
+
+const STORAGE_KEY = 'mlb-positive-ev-v3';
+const MODEL_VERSION = 'calibrated-2026-08';
 
 export default function UiAuditFixes() {
+  useLayoutEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved && saved.modelCalibrationVersion !== MODEL_VERSION) {
+        saved.analyses = {};
+        saved.modelCalibrationVersion = MODEL_VERSION;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        sessionStorage.setItem('mlb-model-migrated', '1');
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     const setText = (node, text) => { if (node && node.textContent !== text) node.textContent = text; };
     const apply = () => {
-      document.querySelectorAll('.badge').forEach(node => { if (node.textContent?.startsWith('v')) setText(node, 'v3.1.0'); });
-      setText(document.querySelector('.header p'), '截圖辨識 → 盤口鎖定 → MLB 資料 → 實際開盤市場 EV → 下注績效');
+      document.querySelectorAll('.badge').forEach(node => { if (node.textContent?.startsWith('v')) setText(node, 'v3.1.1'); });
+      setText(document.querySelector('.header p'), '截圖辨識 → 盤口鎖定 → MLB 資料 → 校準後實際開盤 EV → 下注績效');
       const success = document.querySelector('.success');
       if (success) {
         const markets = [...document.querySelectorAll('.market')];
