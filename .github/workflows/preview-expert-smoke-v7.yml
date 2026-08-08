@@ -1,0 +1,28 @@
+name: Preview expert smoke v7
+
+on:
+  push:
+    branches:
+      - feature/gpt-alignment-v7
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-expert-smoke-v7
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify preview including required live GPT research layer
+        env:
+          SMOKE_URL: https://mlb-p6jsdv23t-5gtbpqpbkx-2201s-projects.vercel.app
+        run: node scripts/smoke.mjs
