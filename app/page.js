@@ -15,7 +15,7 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '7.1.0';
+const VERSION = '7.2.0';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -834,16 +834,10 @@ export default function Home() {
     </section>}
 
     {tab === 'analysis' && <section>
-      {latestBatchRows.length > 0 && <div className="card">
-        <h2>本次上傳：全部盤口評分總覽</h2>
-        <p className="note">已自動完成 {latestBatchLocks.length} 場；下方先依評分由高到低一次列出所有實際開盤方向，再顯示各場完整分析。</p>
-        <div className="portfolio">{latestBatchRows.map(({ lock, result }, index) => <div className="portfolioRow" key={`${lock.id}-${result.market}-${result.pick}-${index}`}>
-          <b>{result.score == null ? '—' : result.score.toFixed(1)}</b>
-          <span>{matchup(lock.game)}｜{result.market}｜{translateTeamText(result.pick)}</span>
-          <strong>{result.tag}</strong>
-          <span>{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>
-        </div>)}</div>
-        {batchReport?.issues?.length > 0 && <div className="warnings"><b>需核對項目</b>{batchReport.issues.slice(0, 12).map(item => <div key={item}>• {item}</div>)}</div>}
+      {latestBatchRows.length > 0 && <div className="batchStrip">
+        <div><span>本次分析完成</span><b>{latestBatchLocks.length} 場</b></div>
+        <div><span>最高評分</span><b>{Math.max(...latestBatchRows.map(row => Number(row.result.score) || 0)).toFixed(1)}</b></div>
+        <div><span>下注候選</span><b>{latestBatchRows.filter(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible).length}</b></div>
       </div>}
       {!store.locks.length ? <div className="card"><Empty text="尚無盤口快照"/></div> : store.locks.map(lock => {
         const versions = store.analysisHistory[lock.id] || [];
@@ -851,15 +845,17 @@ export default function Home() {
         return <div className="card analysisCard" key={lock.id}>
           <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '以最新資料重算新版本'}</button></div>
           {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、執行 GPT 研究判讀與聯合情境…' : '此快照尚未分析'}/> : <>
-            <Context context={data.context} analysis={data.analysis}/><AlignmentAudit audit={data.analysis.alignmentAudit}/>
-            {data.analysis.portfolio?.length > 0 && <div className="market"><h3>同場主選／次選與總曝險</h3><div className="portfolio">{data.analysis.portfolio.map((row, index) => <div className="portfolioRow" key={`${row.market}-${row.pick}`}><b>{index + 1}</b><span>{row.role}｜{row.market}｜{translateTeamText(row.pick)}</span><strong>{row.score.toFixed(1)}</strong><span>{row.recommendedUnit} Unit{index > 0 ? `｜與主選相關 ${pct(row.correlationToPrimary)}` : ''}</span></div>)}</div></div>}
+            <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
-              return <div className="market results" key={market}><h3>{market}</h3>{!rows.length ? <Empty text="未開盤"/> : rows.map((result, index) => <ResultCard key={`${result.pick}-${index}`} result={result} analysis={data.analysis} game={lock.game} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
+              return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
             })}
+            <details className="analysisDetails"><summary>查看完整分析細節</summary><Context context={data.context} analysis={data.analysis}/><AlignmentAudit audit={data.analysis.alignmentAudit}/>{data.analysis.portfolio?.length > 0 && <div className="market"><h3>同場主選／次選與總曝險</h3><div className="portfolio">{data.analysis.portfolio.map((row, index) => <div className="portfolioRow" key={`${row.market}-${row.pick}`}><b>{index + 1}</b><span>{row.role}｜{row.market}｜{translateTeamText(row.pick)}</span><strong>{row.score.toFixed(1)}</strong><span>{row.recommendedUnit} Unit{index > 0 ? `｜與主選相關 ${pct(row.correlationToPrimary)}` : ''}</span></div>)}</div></div>}</details>
           </>}
         </div>;
       })}
+      {latestBatchRows.some(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible) && <div className="card candidateList"><h2>今日下注候選</h2><p className="note">只列本次上傳中達 {store.settings.candidateThreshold.toFixed(1)} 分以上且可進下注池的方向。</p>{latestBatchRows.filter(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible).map(({ lock, result }, index) => <div className={`candidateRow ${Number(result.score) >= store.settings.strongestThreshold ? 'strongestRow' : ''}`} key={`${lock.id}-${result.market}-${result.pick}-${index}`}><b>{Number(result.score).toFixed(1)}</b><span>{matchup(lock.game)}｜{result.market}｜{translateTeamText(result.pick)}｜{Number(result.water).toFixed(3)}</span><strong>{Number(result.score) >= store.settings.strongestThreshold ? '最強主推' : '下注候選'}</strong></div>)}</div>}
+      {batchReport?.issues?.length > 0 && <details className="card analysisDetails"><summary>本次辨識需核對 {batchReport.issues.length} 項</summary><div className="warnings">{batchReport.issues.slice(0, 12).map(item => <div key={item}>• {item}</div>)}</div></details>}
     </section>}
 
     {tab === 'bets' && <section><div className="card"><h2>下注紀錄</h2>{!store.bets.length ? <Empty text="尚無下注紀錄"/> : <div className="betList">{store.bets.map(bet => <div className="betCard" key={bet.id}>
@@ -889,6 +885,19 @@ export default function Home() {
       <div className="card"><h2>備份與資料</h2><div className="toolbar wrap"><button className="secondary" onClick={exportJSON}>匯出 JSON 備份</button><button className="secondary" onClick={exportCSV}>匯出 CSV 明細</button><label className="fileButton">匯入 JSON 備份<input type="file" accept="application/json" onChange={event => event.target.files?.[0] && importJSON(event.target.files[0])}/></label><button className="danger" onClick={() => { if (confirm('確定清除全部快照、分析與下注資料？')) setStore({ ...EMPTY, settings: store.settings }); }}>清除資料</button></div><p className="note">資料保存在這台裝置的瀏覽器內。盤口快照與分析版本不互相覆寫，請定期匯出備份。</p></div>
     </section>}
   </main>;
+}
+
+function ClassicResultRow({ result, settings, onBet }) {
+  const score = Number.isFinite(Number(result.score)) ? Number(result.score) : null;
+  const strongest = score != null && score >= settings.strongestThreshold && result.betEligible;
+  const candidate = score != null && score >= settings.candidateThreshold && result.betEligible;
+  const icon = strongest ? '🟡' : candidate ? '🟢' : '⚪';
+  const unit = result.portfolioUnit || result.unitSuggestion || 0;
+  return <div className={`classicResult ${strongest ? 'classicStrongest' : candidate ? 'classicCandidate' : ''}`}>
+    <div className="classicPrimary"><span className="classicIcon">{icon}</span><b className="classicScore">{score == null ? '—' : score.toFixed(1)}</b><span className="classicPick">｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>{strongest && <span className="classicTag">最強主推</span>}{candidate && !strongest && <span className="classicTag">下注候選</span>}</div>
+    {score != null && <div className="classicMeta">穩健 EV {pct(result.robustEV)}｜建議 {unit} Unit</div>}
+    {result.betEligible && <button className="classicBet" onClick={onBet}>記錄下注</button>}
+  </div>;
 }
 
 function ResultCard({ result, analysis, settings, onBet }) {
