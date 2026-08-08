@@ -14,9 +14,9 @@ import {
 } from '../lib/markets.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '6.0.0';
-const STORAGE = 'mlb-positive-ev-v6';
-const LEGACY_KEYS = ['mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
+const VERSION = '6.1.0';
+const STORAGE = 'mlb-positive-ev-v6-1';
+const LEGACY_KEYS = ['mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
@@ -539,7 +539,7 @@ export default function Home() {
   }, [store.bets]);
 
   function exportJSON() {
-    download(`mlb-positive-ev-v6-${Date.now()}.json`, JSON.stringify(store, null, 2));
+    download(`mlb-positive-ev-v6-1-${Date.now()}.json`, JSON.stringify(store, null, 2));
   }
 
   function exportCSV() {
@@ -548,7 +548,7 @@ export default function Home() {
       bet.createdAt, bet.analysisSnapshotId, bet.modelVersion, translateTeamText(bet.game), bet.market, translateTeamText(bet.pick), bet.water, bet.score,
       bet.weightedEV, bet.robustEV, bet.conservativeEV, bet.evFlipProbability, bet.unit, bet.result, bet.profit, bet.rebate, bet.clv,
     ]);
-    download(`mlb-bets-v6-${Date.now()}.csv`, [head, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'), 'text/csv');
+    download(`mlb-bets-v6-1-${Date.now()}.csv`, [head, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'), 'text/csv');
   }
 
   async function importJSON(file) {
@@ -566,7 +566,7 @@ export default function Home() {
           fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(data.settings?.fallbackWater || {}) },
         },
       });
-      alert('第 6 版備份已還原');
+      alert('第 6.1 版備份已還原');
     } catch {
       alert('備份檔格式錯誤');
     }
@@ -741,9 +741,10 @@ function ResultCard({ result, analysis, settings, onBet }) {
     <div className="resultMain">
       <div className="resultLine"><span className="score">{score == null ? '—' : score.toFixed(1)}</span>｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? '（暫估）' : ''}<span className="tag">{result.tag}</span></div>
       {score != null && <>
-        <small>加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜EV 翻負 {pct(result.evFlipProbability)}</small>
-        <small>模型過盤率 {pct(result.modelProbability)}｜市場去水基準 {pct(result.marketAnchorProbability)}｜合理水位 {result.fairWater?.toFixed?.(3) || '—'}｜卡洞 {pct(result.exactLineProbability)}</small>
-        <small>全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜最不利集合 {result.worstVariant || '—'}</small>
+        <small>正式加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜原始未校準 EV {pct(result.rawEV)}｜EV 翻負 {pct(result.evFlipProbability)}</small>
+        <small>市場校準過盤率 {pct(result.modelProbability)}｜原始模型率 {pct(result.rawModelProbability)}｜市場基準 {pct(result.marketAnchorProbability)}｜模型權重 {pct(result.marketCalibrationWeight)}</small>
+        <small>合理水位 {result.fairWater?.toFixed?.(3) || '—'}｜原始合理水位 {result.rawFairWater?.toFixed?.(3) || '—'}｜卡洞 {pct(result.exactLineProbability)}｜基準來源 {result.marketAnchorSource || '—'}</small>
+        <small>原始比分分布：全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜最不利集合 {result.worstVariant || '—'}</small>
         <small>主要敏感因素：{result.scenarioSensitivity?.primary || '—'}（EV 範圍 {pct(result.scenarioSensitivity?.primaryRange)}）｜建議 {result.portfolioUnit || result.unitSuggestion || 0} Unit</small>
         {result.movement?.available ? <small>盤勢：{result.movement.verdict || result.movement.reason}{result.movement.deltaEV != null ? `｜價值變化 ${pct(result.movement.deltaEV)}` : ''}{result.movement.crossedKeyNumbers?.length ? `｜跨過關鍵數字 ${result.movement.crossedKeyNumbers.join('、')}` : ''}</small> : <small>盤勢：{result.movement?.reason || '無舊盤可比較'}</small>}
         {result.integrityMessage && <div className="errors">{result.integrityMessage}</div>}

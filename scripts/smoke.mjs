@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '6.0.0';
-const MODEL_VERSION = 'GPT完整聯合情境模型-2026-08-v6';
-const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v6';
+const VERSION = '6.1.0';
+const MODEL_VERSION = 'GPT市場校準聯合情境模型-2026-08-v6.1';
+const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v6.1';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function response(url, options = {}, timeout = 90000) {
@@ -78,7 +78,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*6\.0\.0\s*版/);
+assert.match(renderedHome, /第\s*6\.1\.0\s*版/);
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
 assert.ok(homeResponse.headers.get('content-security-policy'));
@@ -129,6 +129,9 @@ assert.ok(analysis.results.every(row => row.conservativeEV <= row.robustEV + 1e-
 assert.ok(analysis.results.every(row => row.evFlipProbability >= 0 && row.evFlipProbability <= 1));
 assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
 assert.ok(analysis.results.every(row => row.movement?.available));
+assert.ok(analysis.results.every(row => Number.isFinite(row.rawEV)));
+assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.08 && row.marketCalibrationWeight <= 0.35));
+assert.ok(analysis.results.every(row => row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10));
 assert.ok(analysis.portfolio.reduce((sum, row) => sum + row.recommendedUnit, 0) <= 2.0001);
 
 for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上半大小']) {
