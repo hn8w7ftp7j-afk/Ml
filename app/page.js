@@ -263,6 +263,16 @@ export default function Home() {
     }
   }
 
+  async function scheduleForRecognition() {
+  if (games.length) return games;
+  setVisionStatus('正在先載入當日 MLB 官方賽程…');
+  const data = await requestJSON(`/api/mlb?date=${date}`);
+  const schedule = data.games || [];
+  setGames(schedule);
+  if (!schedule.length) throw new Error('當日沒有可配對的 MLB 官方賽事');
+  return schedule;
+}
+
   async function chooseImages(files) {
     const list = [...(files || [])].slice(0, 8);
     if (!list.length || visionBusy) return;
@@ -289,7 +299,8 @@ export default function Home() {
       setImages(rows);
       const regions = rows.reduce((sum, row) => sum + Math.max(1, row.parts?.length || 0), 0);
       setVisionStatus(`已準備 ${rows.length} 張圖片、${regions} 個區塊；現在自動辨識全部盤口`);
-      await recognizeAndAnalyze(rows);
+      const schedule = await scheduleForRecognition();
+      await recognizeAndAnalyze(rows, schedule);
     } catch (error) {
       setVisionStatus(`自動處理失敗：${error.message}`);
     } finally {
@@ -297,7 +308,7 @@ export default function Home() {
     }
   }
 
-  async function recognizeAndAnalyze(sourceImages) {
+  async function recognizeAndAnalyze(sourceImages, schedule) {
     const all = [];
     const failures = [];
     const models = new Set();
@@ -313,7 +324,7 @@ export default function Home() {
         const data = await requestJSON('/api/vision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: [task.data], schedule: games, defaultWater: store.settings.fallbackWater }),
+          body: JSON.stringify({ images: [task.data], schedule, defaultWater: store.settings.fallbackWater }),
         });
         if (data.model) models.add(data.model);
         all.push(...(data.games || []));
@@ -337,7 +348,8 @@ export default function Home() {
     setVisionBusy(true);
     setBatchReport(null);
     try {
-      await recognizeAndAnalyze(images);
+      const schedule = await scheduleForRecognition();
+      await recognizeAndAnalyze(images, schedule);
     } catch (error) {
       setVisionStatus(`重新處理失敗：${error.message}`);
     } finally {
@@ -351,10 +363,11 @@ export default function Home() {
     setBatchReport(null);
     setVisionStatus('正在解析全部盤口文字…');
     try {
+      const schedule = await scheduleForRecognition();
       const data = await requestJSON('/api/vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: manualText, schedule: games, defaultWater: store.settings.fallbackWater }),
+        body: JSON.stringify({ text: manualText, schedule, defaultWater: store.settings.fallbackWater }),
       });
       const rows = mergeVision(data.games || []);
       if (!rows.length) throw new Error('沒有解析到場次');
