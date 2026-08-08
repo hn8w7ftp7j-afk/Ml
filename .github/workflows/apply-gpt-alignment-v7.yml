@@ -67,6 +67,7 @@ jobs:
             app/page.js app/globals.css app/api/analyze/route.js app/api/health/route.js \
             lib/analysis.js lib/markets.js lib/mlb.js lib/expert.js \
             scripts/test.mjs scripts/smoke.mjs
-          git rm .github/workflows/apply-gpt-alignment-v7.yml scripts/apply-gpt-alignment-v7.py
+          git rm .github/workflows/apply-gpt-alignment-v7.yml
+          git rm -f scripts/apply-gpt-alignment-v7.py
           git commit -m 'Integrate GPT research layer and alignment audit v7 [gpt alignment applied]'
           git push origin HEAD:feature/gpt-alignment-v7
