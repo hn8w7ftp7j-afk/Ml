@@ -29,7 +29,7 @@ async function waitForDeployment() {
       const { value } = await json(`${BASE}/api/health?t=${Date.now()}`, {}, 20000);
       last = JSON.stringify(value);
       const shaReady = !EXPECTED_SHA || !value.commit || value.commit === EXPECTED_SHA;
-      if (value.ok && value.version === '3.1.0' && value.aiGatewayConfigured && shaReady) return value;
+      if (value.ok && value.version === '3.1.1' && value.modelVersion === 'calibrated-2026-08' && value.aiGatewayConfigured && shaReady) return value;
     } catch (error) { last = String(error?.message || error); }
     await sleep(10000);
   }
@@ -89,14 +89,20 @@ const fullMarkets = [
   { market: '上半大小', pick: '小4+50', water: 0.93, confidence: 1 },
 ];
 const analyzed = await json(`${BASE}/api/analyze`, { method: 'POST', headers: originHeaders, body: JSON.stringify({ game, markets: fullMarkets, settings: { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5 } }) }, 120000);
+assert.equal(analyzed.value.analysis.modelVersion, 'calibrated-2026-08');
 assert.equal(analyzed.value.analysis.results.length, 8);
-assert.ok(analyzed.value.analysis.results.every(row => Number.isFinite(row.score) && Number.isFinite(row.ev)));
+assert.ok(analyzed.value.analysis.results.every(row => Number.isFinite(row.score) && Number.isFinite(row.ev) && Number.isFinite(row.rawEV)));
+assert.ok(analyzed.value.analysis.results.every(row => row.modelProbability >= .35 && row.modelProbability <= .65));
+assert.ok(analyzed.value.analysis.results.every(row => row.score <= 9.4));
+const fullTotalPair = analyzed.value.analysis.results.filter(row => row.market === '全場大小');
+assert.ok(Math.abs(fullTotalPair[0].modelProbability + fullTotalPair[1].modelProbability - 1) < 1e-6);
 
 const partial = await json(`${BASE}/api/analyze`, { method: 'POST', headers: originHeaders, body: JSON.stringify({ game, markets: fullMarkets.filter(row => row.market === '全場大小'), settings: { rebateRate: 0.015 } }) }, 120000);
 assert.equal(partial.value.analysis.results.length, 2);
 assert.deepEqual(partial.value.openMarkets, ['全場大小']);
+assert.ok(partial.value.analysis.results.every(row => row.score < 9.4));
 
 const result = await json(`${BASE}/api/result?gamePk=${game.gamePk}&t=${Date.now()}`, {}, 30000);
 assert.equal(typeof result.value.final, 'boolean');
 
-console.log(JSON.stringify({ ok: true, base: BASE, commit: health.commit, scheduleDate, game: `${game.away} @ ${game.home}`, visionDirections: 8, fullAnalysisResults: 8, partialAnalysisResults: 2, resultEndpoint: true }, null, 2));
+console.log(JSON.stringify({ ok: true, base: BASE, commit: health.commit, version: health.version, modelVersion: health.modelVersion, scheduleDate, game: `${game.away} @ ${game.home}`, visionDirections: 8, fullAnalysisResults: 8, partialAnalysisResults: 2, probabilityRange: [Math.min(...analyzed.value.analysis.results.map(row => row.modelProbability)), Math.max(...analyzed.value.analysis.results.map(row => row.modelProbability))], maximumScore: Math.max(...analyzed.value.analysis.results.map(row => row.score)), resultEndpoint: true }, null, 2));
