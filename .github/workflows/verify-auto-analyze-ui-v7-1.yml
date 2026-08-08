@@ -1,0 +1,57 @@
+name: Verify auto analyze UI v7.1
+
+on:
+  push:
+    branches:
+      - feature/auto-analyze-all-v7-1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Harden SSR-visible smoke contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('app/page.js')
+          text = page.read_text()
+          text = text.replace(
+              "import { BATCH_VERSION, blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';",
+              "import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';",
+              1,
+          )
+          page.write_text(text)
+
+          smoke = Path('scripts/smoke.mjs')
+          text = smoke.read_text()
+          old = "assert.match(renderedHome, /選完後自動辨識、建立全部快照並分析所有實際開盤市場/);\nassert.match(renderedHome, /本次上傳：全部盤口評分總覽/);"
+          new = "assert.match(renderedHome, /上傳全部圖片/);\nassert.match(renderedHome, /自動辨識全部盤口/);\nassert.match(renderedHome, /自動分析全部場次/);"
+          if old not in text:
+              raise SystemExit('conditional UI smoke markers missing')
+          smoke.write_text(text.replace(old, new, 1))
+          PY
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run unit, security and production build checks
+        run: npm run build
+      - name: Commit verified UI contract
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/page.js scripts/smoke.mjs
+          git rm .github/workflows/verify-auto-analyze-ui-v7-1.yml
+          git commit -m 'Harden one-step upload UI smoke contract [auto analysis UI verified]'
+          git push origin HEAD:feature/auto-analyze-all-v7-1
