@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    version: '6.0.0',
+    version: '6.1.0',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     aiGatewayConfigured: Boolean(process.env.AI_GATEWAY_API_KEY),

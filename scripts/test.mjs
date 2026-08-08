@@ -164,6 +164,37 @@ for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上�
   assert.ok(Math.abs(pair[0].score - pair[1].score) < 6, `${marketName} 分數差距過度機械化`);
 }
 
+
+for (const result of analysis.results.filter(row => row.marketAnchorProbability != null)) {
+  assert.ok(result.marketCalibrationWeight >= 0.08 && result.marketCalibrationWeight <= 0.35);
+  assert.ok(result.maximumCalibratedProbabilityEdge >= 0.025 && result.maximumCalibratedProbabilityEdge <= 0.05);
+  assert.ok(Math.abs(result.modelProbability - result.marketAnchorProbability) <= Math.abs(result.rawModelProbability - result.marketAnchorProbability) + 1e-10);
+  assert.ok(result.calibratedMarketProbabilityGap <= result.maximumCalibratedProbabilityEdge + 1e-10);
+  assert.ok(Number.isFinite(result.rawEV));
+}
+
+const disagreementContext = structuredClone(context);
+Object.assign(disagreementContext.home.seasonHitting, { runsPerGame: 6.20, ops: 0.900, iso: 0.245 });
+Object.assign(disagreementContext.home.recentHitting, { runsPerGame: 6.50, ops: 0.930, iso: 0.260 });
+Object.assign(disagreementContext.home.lineup, { offensiveIndex: 1.14 });
+Object.assign(disagreementContext.away.seasonHitting, { runsPerGame: 3.20, ops: 0.620, iso: 0.105 });
+Object.assign(disagreementContext.away.recentHitting, { runsPerGame: 3.00, ops: 0.600, iso: 0.095 });
+Object.assign(disagreementContext.away.lineup, { offensiveIndex: 0.86 });
+Object.assign(disagreementContext.away.starter.season, { era: 6.20, fip: 6.00, whip: 1.62, kMinusBB: 0.07, hrPer9: 1.80 });
+Object.assign(disagreementContext.home.starter.season, { era: 2.45, fip: 2.70, whip: 1.02, kMinusBB: 0.22, hrPer9: 0.72 });
+const disagreement = analyzeMarkets({
+  context: disagreementContext,
+  markets: markets.filter(row => row.market === '全場讓分'),
+  settings,
+});
+const disagreementUnderdog = disagreement.results.find(row => row.pick === `${home}受讓1+10`);
+assert.ok(disagreementUnderdog.rawMarketProbabilityGap > 0.12, 'regression case must create a large raw model/market disagreement');
+assert.ok(disagreementUnderdog.calibratedMarketProbabilityGap <= 0.05 + 1e-10);
+assert.ok(disagreementUnderdog.weightedEV < disagreementUnderdog.rawEV);
+assert.ok(disagreementUnderdog.weightedEV < 0.12, 'market-calibrated EV must not remain at an implausible 20–30% level');
+if (disagreementUnderdog.rawMarketProbabilityGap > 0.18) assert.ok(disagreementUnderdog.score <= 7.4);
+assert.ok(disagreementUnderdog.unitSuggestion <= 0.5);
+
 const repeat = analyzeMarkets({ context, markets, previousMarkets, settings });
 for (let index = 0; index < analysis.results.length; index += 1) {
   assert.equal(analysis.results[index].weightedEV, repeat.results[index].weightedEV);
