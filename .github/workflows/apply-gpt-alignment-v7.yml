@@ -25,6 +25,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Repair patch marker for current MLB source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-gpt-alignment-v7.py')
+          text = path.read_text()
+          old = "      innings: safe(pitching.inningsPitched, 0),\\n    };"
+          new = "      innings: Number.parseFloat(pitching.inningsPitched || 0) || 0,\\n    };"
+          if old not in text:
+              raise SystemExit('reliever marker repair target missing')
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Apply GPT alignment v7 patch
         run: python scripts/apply-gpt-alignment-v7.py
       - name: Install dependencies
