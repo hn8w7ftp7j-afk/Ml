@@ -77,7 +77,8 @@ if (health.authConfigured) {
 const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
-assert.match(home, /第 6\.0\.0 版/);
+const renderedHome = home.replace(/<!--.*?-->/g, '');
+assert.match(renderedHome, /第\s*6\.0\.0\s*版/);
 assert.equal(homeResponse.headers.get('x-content-type-options'), 'nosniff');
 assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
 assert.ok(homeResponse.headers.get('content-security-policy'));
