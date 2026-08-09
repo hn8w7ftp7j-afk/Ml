@@ -31,11 +31,26 @@ jobs:
           from pathlib import Path
           p = Path('scripts/apply-gpt-final-scorer-v8-4.py')
           s = p.read_text()
+
           old = "if (!analysis || analysis.scoreContractVersion !== SCORE_CONTRACT_VERSION || analysis.scoreValidation?.passed !== true) return false;"
           new = "if (!analysis || analysis.scoreContractVersion !== SCORE_CONTRACT_VERSION || analysis.scoreValidation?.passed !== true || analysis.scoreValidation?.distributionAudit?.passed !== true) return false;"
           if old not in s:
               raise SystemExit('snapshot validator source marker missing')
           s = s.replace(old, new, 1)
+
+          old_smoke = """assert.equal(analysis.scoreContractVersion, SCORE_CONTRACT_VERSION);
+          assert.equal(analysis.scoreValidation.passed, true);
+          assert.ok(analysis.results.every(row => row.scoreAudit?.ok === true));"""
+          current_smoke = """assert.equal(analysis.scoreContractVersion, SCORE_CONTRACT_VERSION);
+          assert.equal(analysis.scoreValidation.passed, true);
+          assert.equal(analysis.scoreValidation.distributionAudit?.passed, true);
+          assert.ok(analysis.scoreValidation.distributionAudit?.uniqueDisplayedScores >= 3);
+          assert.ok(analysis.results.every(row => row.scoreAudit?.ok === true));
+          assert.ok(analysis.results.every(row => row.scoreBreakdown?.version === SCORE_CONTRACT_VERSION));"""
+          if old_smoke not in s:
+              raise SystemExit('patcher smoke assertion template missing')
+          s = s.replace(old_smoke, current_smoke, 1)
+
           s = s.replace("    'openai/gpt-5.6-terra',\n    'openai/gpt-5.5',\n    'openai/gpt-5.4',", "    'openai/gpt-5',\n    'openai/gpt-5-mini',")
           s = s.replace("process.env.AI_SCORING_MODEL || 'openai/gpt-5.6-sol'", "process.env.AI_SCORING_MODEL || 'openai/gpt-5'")
           p.write_text(s)
