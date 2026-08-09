@@ -1,0 +1,35 @@
+name: Verify Production v8.1
+on:
+  push:
+    branches: [verify/production-v8-1]
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait for Production alias and verify health
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 18); do
+            if curl -fsS --connect-timeout 10 --max-time 30 'https://mlb-positive-ev.vercel.app/api/health' -o /tmp/health.json; then
+              cat /tmp/health.json
+              if node -e "const x=require('/tmp/health.json'); if(x.ok===true && x.version==='8.1.0' && x.commit==='ceb7d81570e09d4c3ea4e05c687c44d6fc8a3a42' && String(x.modelVersion||'').includes('v8.1.0') && String(x.visionVersion||'').includes('v8.1.0')) process.exit(0); process.exit(1)"; then
+                ok=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ok" = 1
+      - name: Verify login page and protected root
+        run: |
+          set -euo pipefail
+          login_status=$(curl -sS -o /tmp/login.html -w '%{http_code}' --connect-timeout 10 --max-time 30 'https://mlb-positive-ev.vercel.app/login')
+          test "$login_status" = '200'
+          grep -q '登入' /tmp/login.html
+          root_status=$(curl -sS -o /tmp/root.html -D /tmp/root.headers -w '%{http_code}' --connect-timeout 10 --max-time 30 'https://mlb-positive-ev.vercel.app/')
+          case "$root_status" in 200|307|308) ;; *) echo "unexpected root status: $root_status"; exit 1;; esac
+          cat /tmp/root.headers
+          echo 'Production v8.1.0 health, login and protected root verified.'
