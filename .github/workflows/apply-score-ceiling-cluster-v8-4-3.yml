@@ -1,0 +1,26 @@
+name: Apply score ceiling cluster v8.4.3
+on:
+  push:
+    branches: [fix/gpt-score-ceiling-cluster-v8-4-3]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - run: python scripts/apply-score-ceiling-cluster-v8-4-3.py
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - run: npm run build
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-score-ceiling-cluster-v8-4-3.yml scripts/apply-score-ceiling-cluster-v8-4-3.py
+          git add -A
+          git commit -m 'Reject 6.6 ceiling clustering and retry GPT relative ranking v8.4.3 [verified]'
+          git push origin HEAD:fix/gpt-score-ceiling-cluster-v8-4-3
