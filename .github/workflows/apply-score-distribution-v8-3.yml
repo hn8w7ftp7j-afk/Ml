@@ -33,32 +33,16 @@ jobs:
 
           p = Path('lib/analysis.js')
           s = p.read_text()
-          old = '''      const scoreAudit = validateScoreContract(score, conservativeEV, {
-                weightedEV,
-                robustEV: robust.robustEV,
-                flipProbability: evFlipProbability,
-                quality: profile.quality,
-                integrityWarning: integrity.warning,
-                waterEstimated,
-                modelErrorFloor: profile.modelErrorFloor,
-                independentEvidence: profile.independentEvidenceStrength,
-              });'''
-          new = '''      const scoreAudit = validateScoreContract(score, conservativeEV, {
-                weightedEV,
-                robustEV: robust.robustEV,
-                flipProbability: evFlipProbability,
-                quality: profile.quality,
-                edgeStrength,
-                stability,
-                integrityWarning: integrity.warning,
-                waterEstimated,
-                modelErrorFloor: profile.modelErrorFloor,
-                independentEvidence: profile.independentEvidenceStrength,
-                divergenceRisk: calibration.divergenceRisk,
-              });'''
-          if old not in s:
-              raise SystemExit('runtime score audit marker missing')
-          p.write_text(s.replace(old, new, 1))
+          start = s.index('const scoreAudit = validateScoreContract')
+          end = s.index('});', start) + 3
+          block = s[start:end]
+          if 'edgeStrength,' not in block:
+              block = block.replace('quality: profile.quality,\n', 'quality: profile.quality,\n        edgeStrength,\n        stability,\n', 1)
+          if 'divergenceRisk: calibration.divergenceRisk' not in block:
+              block = block.replace('independentEvidence: profile.independentEvidenceStrength,\n', 'independentEvidence: profile.independentEvidenceStrength,\n        divergenceRisk: calibration.divergenceRisk,\n', 1)
+          if 'edgeStrength,' not in block or 'stability,' not in block or 'divergenceRisk: calibration.divergenceRisk' not in block:
+              raise SystemExit(f'runtime score audit patch incomplete:\n{block}')
+          p.write_text(s[:start] + block + s[end:])
 
           p = Path('scripts/test.mjs')
           s = p.read_text()
