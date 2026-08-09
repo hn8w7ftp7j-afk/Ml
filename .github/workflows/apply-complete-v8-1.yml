@@ -1,83 +1,54 @@
 name: Apply complete v8.1
-
 on:
   push:
-    branches:
-      - fix/complete-production-v8-1
+    branches: [fix/complete-production-v8-1]
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   patch-test-build:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: {fetch-depth: 0}
       - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Repair patcher marker
+        with: {node-version: 24}
+      - name: Repair and apply complete v8.1
         run: |
           python - <<'PY'
           from pathlib import Path
-          p=Path('scripts/apply-complete-v8-1.py'); t=p.read_text()
-          old="t = one(t, old, new, 'board parse routing')"
-          new='''route_start = t.find("      const prompt = buildVisionPrompt(schedule, Boolean(text))")
-          route_end_marker = "      warnings = result.failures || [];"
-          route_end = t.find(route_end_marker, route_start)
+          p=Path('scripts/apply-complete-v8-1.py'); t=p.read_text(); old="t = one(t, old, new, 'board parse routing')"; new='''route_start = t.find("      const prompt = buildVisionPrompt(schedule, Boolean(text))")
+          route_end_marker = "      warnings = result.failures || [];"; route_end = t.find(route_end_marker, route_start)
           if route_start < 0 or route_end < 0: raise SystemExit('board parse routing markers missing')
-          t = t[:route_start] + new.rstrip() + t[route_end + len(route_end_marker):]'''
-          p.write_text(t.replace(old,new,1))
+          t = t[:route_start] + new.rstrip() + t[route_end + len(route_end_marker):]'''; p.write_text(t.replace(old,new,1))
           PY
-      - run: python scripts/apply-complete-v8-1.py
-      - name: Fix generated JS newline and Taiwan settlement
+          python scripts/apply-complete-v8-1.py
+      - name: Final source repairs
         run: |
           python - <<'PY'
           from pathlib import Path
-          p=Path('app/api/vision/route.js'); t=p.read_text()
-          t=t.replace("const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? '\n這是完整性補掃：每個可見對戰都不可漏；市場看不清可 null。' : '');", "const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? `\\n這是完整性補掃：每個可見對戰都不可漏；市場看不清可 null。` : '');")
-          # also repair the accidentally materialized literal newline form
-          t=t.replace("const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? '\n這是完整性補掃：每個可見對戰都不可漏；市場看不清可 null。' : '');".replace('\\n','\n'), "const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? `\\n這是完整性補掃：每個可見對戰都不可漏；市場看不清可 null。` : '');")
-          p.write_text(t)
-          p=Path('lib/markets.js'); t=p.read_text()
-          old="""function exactModifierOutcome(modifier, positiveSide) {
+          p=Path('app/api/vision/route.js'); t=p.read_text(); bad="const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? '\n這是完整性補掃：每個可見對戰都不可漏；市場看不清可 null。' : '');".replace('\\n','\n'); good="const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? `\\n這是完整性補掃：每個可見對戰都不可漏；市場看不清可 null。` : '');"; p.write_text(t.replace(bad,good))
+          p=Path('lib/markets.js'); t=p.read_text(); old="""function exactModifierOutcome(modifier, positiveSide) {
             if (!modifier || modifier === '平') return 0;
-            const sign = modifier[0];
-            const fraction = clamp(Number(modifier.slice(1)) / 100, 0, 1);
-            if (!Number.isFinite(fraction)) return 0;
-            const givingOrOver = sign === '+' ? fraction : -fraction;
+            const sign = modifier[0]; const fraction = clamp(Number(modifier.slice(1)) / 100, 0, 1);
+            if (!Number.isFinite(fraction)) return 0; const givingOrOver = sign === '+' ? fraction : -fraction;
             return positiveSide ? givingOrOver : -givingOrOver;
-          }"""
-          new="""function exactModifierOutcome(modifier) {
+          }"""; new="""function exactModifierOutcome(modifier) {
             if (!modifier || modifier === '平') return 0;
-            const sign = modifier[0];
-            const fraction = clamp(Number(modifier.slice(1)) / 100, 0, 1);
-            if (!Number.isFinite(fraction)) return 0;
-            return sign === '+' ? fraction : -fraction;
-          }"""
-          t=t.replace(old,new,1).replace('exactModifierOutcome(parsed.modifier, parsed.isOver)','exactModifierOutcome(parsed.modifier)').replace('exactModifierOutcome(parsed.modifier, true)','exactModifierOutcome(parsed.modifier)').replace('exactModifierOutcome(parsed.modifier, false)','exactModifierOutcome(parsed.modifier)')
-          p.write_text(t)
+            const sign = modifier[0]; const fraction = clamp(Number(modifier.slice(1)) / 100, 0, 1);
+            if (!Number.isFinite(fraction)) return 0; return sign === '+' ? fraction : -fraction;
+          }"""; t=t.replace(old,new,1).replace('exactModifierOutcome(parsed.modifier, parsed.isOver)','exactModifierOutcome(parsed.modifier)').replace('exactModifierOutcome(parsed.modifier, true)','exactModifierOutcome(parsed.modifier)').replace('exactModifierOutcome(parsed.modifier, false)','exactModifierOutcome(parsed.modifier)'); p.write_text(t)
           PY
-      - name: Generate fixture and sync tests
+      - name: Fixtures and contracts
         run: |
           python -m pip install --disable-pip-version-check pillow
           python scripts/generate-dense-board-fixture.py
           python scripts/update-complete-tests-v8-1.py
           python - <<'PY'
           from pathlib import Path
-          p=Path('scripts/test.mjs'); t=p.read_text()
-          replacements={
-          "{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1+50`, water: 0.95 }] },":"{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1-50`, water: 0.95 }] },",
-          "outcomeFractionForScore(`${home}受讓1+50`, 4, 3, away, home), -0.5":"outcomeFractionForScore(`${home}受讓1-50`, 4, 3, away, home), -0.5",
-          "outcomeFractionForScore(`${home}受讓1-30`, 4, 3, away, home), 0.3":"outcomeFractionForScore(`${home}受讓1+30`, 4, 3, away, home), 0.3",
-          "outcomeFractionForScore('小8+50', 4, 4, away, home), -0.5":"outcomeFractionForScore('小8-50', 4, 4, away, home), -0.5",
-          "outcomeFractionForScore('小8-30', 4, 4, away, home), 0.3":"outcomeFractionForScore('小8+30', 4, 4, away, home), 0.3",
-          "assert.ok(Math.abs(pair[0].score - pair[1].score) < 6, `${marketName} 分數差距過度機械化`);":"assert.ok(!(Number(pair[0].score) > 5 && Number(pair[1].score) > 5), `${marketName} 相反方向不可同時高於5分`);"}
-          for a,b in replacements.items(): t=t.replace(a,b,1)
+          p=Path('scripts/test.mjs'); t=p.read_text(); reps={"{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1+50`, water: 0.95 }] },":"{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1-50`, water: 0.95 }] },","outcomeFractionForScore(`${home}受讓1+50`, 4, 3, away, home), -0.5":"outcomeFractionForScore(`${home}受讓1-50`, 4, 3, away, home), -0.5","outcomeFractionForScore(`${home}受讓1-30`, 4, 3, away, home), 0.3":"outcomeFractionForScore(`${home}受讓1+30`, 4, 3, away, home), 0.3","outcomeFractionForScore('小8+50', 4, 4, away, home), -0.5":"outcomeFractionForScore('小8-50', 4, 4, away, home), -0.5","outcomeFractionForScore('小8-30', 4, 4, away, home), 0.3":"outcomeFractionForScore('小8+30', 4, 4, away, home), 0.3","assert.ok(Math.abs(pair[0].score - pair[1].score) < 6, `${marketName} 分數差距過度機械化`);":"assert.ok(!(Number(pair[0].score) > 5 && Number(pair[1].score) > 5), `${marketName} 相反方向不可同時高於5分`);"};
+          for a,b in reps.items(): t=t.replace(a,b,1)
           p.write_text(t)
           PY
       - run: npm install --no-audit --no-fund --package-lock=false
@@ -86,7 +57,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-complete-v8-1.yml scripts/apply-complete-v8-1.py scripts/generate-dense-board-fixture.py scripts/update-complete-tests-v8-1.py
           git add -A
-          git rm .github/workflows/apply-complete-v8-1.yml scripts/apply-complete-v8-1.py scripts/generate-dense-board-fixture.py scripts/update-complete-tests-v8-1.py
           git commit -m 'Release complete upload vision and GPT execution parity v8.1.0 [complete production]'
           git push origin HEAD:fix/complete-production-v8-1
