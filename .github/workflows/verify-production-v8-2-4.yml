@@ -1,0 +1,17 @@
+name: Verify Production v8.2.4
+on:
+  push:
+    branches: [verify/production-v8-2-4]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - name: Run exact live vision and scoring validation
+        run: node scripts/verify-live-v8-2-4.mjs
