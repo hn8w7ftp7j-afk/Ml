@@ -1,0 +1,36 @@
+name: Apply scoring validation v8.2
+on:
+  push:
+    branches: [fix/scoring-validation-v8-2]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: apply-scoring-validation-v8-2
+  cancel-in-progress: false
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply v8.2 scoring and validation patch
+        run: python scripts/apply-scoring-validation-v8-2.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run parity, unit, security and Production build
+        run: npm run build
+      - name: Commit verified v8.2 release
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-scoring-validation-v8-2.yml scripts/apply-scoring-validation-v8-2.py
+          git add -A
+          git commit -m 'Release bounded GPT-style scoring with runtime validation v8.2.0 [verified]'
+          git push origin HEAD:fix/scoring-validation-v8-2
