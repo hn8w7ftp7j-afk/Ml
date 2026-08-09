@@ -47,6 +47,24 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pillow
           python scripts/generate-dense-board-fixture.py
+      - name: Repair test updater for mirrored auto-analysis pair
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/update-complete-tests-v8-1.py')
+          text = path.read_text()
+          marker = "p.write_text(s)\n\n# Production smoke"
+          addition = '''s = s.replace(
+    "{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1+50`, water: 0.95 }] },",
+    "{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1-50`, water: 0.95 }] },",
+)
+p.write_text(s)
+
+# Production smoke'''
+          if marker not in text:
+              raise SystemExit('test updater insertion marker missing')
+          path.write_text(text.replace(marker, addition, 1))
+          PY
       - name: Update unit and Production smoke contracts
         run: python scripts/update-complete-tests-v8-1.py
       - name: Install dependencies
