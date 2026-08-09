@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildGameContext } from '../../../lib/mlb.js';
 import { analyzeMarkets } from '../../../lib/analysis.js';
 import { applyExpertAssessment, buildExpertAssessment } from '../../../lib/expert.js';
+import { applyFinalScoreAssessment, buildFinalScoreAssessment } from '../../../lib/final-scorer.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import {
   checkRateLimit,
@@ -15,7 +16,7 @@ import {
 } from '../../../lib/security.js';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
 function optionalNumber(value) {
@@ -112,13 +113,25 @@ export async function POST(request) {
       timeoutMs: 22000,
     });
     const enrichedContext = applyExpertAssessment(context, expertAssessment);
-    const analysis = analyzeMarkets({ context: enrichedContext, markets: activeMarkets, previousMarkets, settings });
+    const preliminaryAnalysis = analyzeMarkets({ context: enrichedContext, markets: activeMarkets, previousMarkets, settings });
+    const finalScoreAssessment = await buildFinalScoreAssessment({
+      context: enrichedContext,
+      analysis: preliminaryAnalysis,
+      settings,
+      timeoutMs: 42000,
+    });
+    const analysis = applyFinalScoreAssessment({
+      analysis: preliminaryAnalysis,
+      assessment: finalScoreAssessment,
+      settings,
+    });
 
     return NextResponse.json({
       ok: true,
       game,
       context: enrichedContext,
       expertAssessment,
+      finalScoreAssessment,
       analysis,
       openMarkets: [...new Set(activeMarkets.map(row => row.market))],
     }, { headers: { 'Cache-Control': 'no-store' } });

@@ -16,9 +16,10 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.3.0';
-const STORAGE = 'mlb-positive-ev-v7';
-const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
+const VERSION = '8.4.0';
+const STORAGE = 'mlb-positive-ev-v8-4';
+const LEGACY_KEYS = ['mlb-positive-ev-v7', 'mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
+const FINAL_SCORE_VERSION = 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.0';
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
@@ -246,12 +247,13 @@ function latestVersion(history, lockId) {
 
 function scoreSnapshotIsValid(version) {
   const analysis = version?.analysis;
-  if (!analysis || analysis.scoreContractVersion !== SCORE_CONTRACT_VERSION || analysis.scoreValidation?.passed !== true || analysis.scoreValidation?.distributionAudit?.passed !== true) return false;
+  if (!analysis || analysis.finalScoreVersion !== FINAL_SCORE_VERSION || analysis.scoreValidation?.passed !== true) return false;
   return (analysis.results || []).every(result => result.score == null || (
     Number.isFinite(Number(result.score))
     && Number(result.score) >= 1
     && Number(result.score) <= 9.4
     && result.scoreAudit?.ok === true
+    && result.scoreSource === 'GPT 最終 Execution 判讀'
   ));
 }
 
@@ -528,7 +530,7 @@ export default function Home() {
     let finished = 0;
     let completed = 0;
     const analysisFailures = [];
-    await runPool(plan.locks, 2, async lock => {
+    await runPool(plan.locks, 1, async lock => {
       const previous = existingLocks
         .filter(item => String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
         .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))[0];
@@ -953,9 +955,9 @@ export default function Home() {
         const data = versions[0];
         return <div className="card analysisCard" key={lock.id}>
           <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '以最新資料重算新版本'}</button></div>
-          {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、執行 GPT 研究判讀與聯合情境…' : '此快照尚未分析'}/> : <>
+          {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、建立聯合情境並執行 GPT 最終評分…' : '此快照尚未分析'}/> : <>
             <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
-            <div className="note">評分驗算：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜分布 {data.analysis.scoreValidation?.distributionAudit?.passed ? `通過（${data.analysis.scoreValidation.distributionAudit.uniqueDisplayedScores} 種顯示分數）` : '失敗'}｜{data.analysis.scoreContractVersion}</div>
+            <div className="note">GPT 最終評分：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜{data.analysis.finalScoreModel || '模型未回報'}｜無固定 EV 換分公式｜{data.analysis.finalScoreVersion}</div>
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
               return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
@@ -991,7 +993,7 @@ export default function Home() {
         <Setting label="每情境模擬次數" value={store.settings.simulationsPerScenario} step="100" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, simulationsPerScenario: Number(value) } }))}/>
         <label>GPT 研究判讀層<select value={store.settings.expertMode || 'auto'} onChange={event => setStore(row => ({ ...row, settings: { ...row.settings, expertMode: event.target.value } }))}><option value="auto">自動整合；失敗時統計備援</option><option value="off">純統計模式</option><option value="required">GPT 未完成就不評分</option></select></label>
         {MARKET_ORDER.map(market => <Setting key={market} label={`${market} 暫估水位`} value={store.settings.fallbackWater[market]} step=".001" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, fallbackWater: { ...row.settings.fallbackWater, [market]: Number(value) } } }))}/>) }
-      </div><p className="note">未知打線、捕手、主審、牛棚與屋頂不固定扣分；GPT 研究層只提供殘差交互作用與情境權重，不能直接改分。暫估水位只供觀察，不會進正式下注池。</p></div>
+      </div><p className="note">未知打線、捕手、主審、牛棚與屋頂先進入聯合情境，不固定扣分。程式完成比分分布與 EV 後，由 GPT 依最新 MLB 指令同時比較全部方向給最終分數；禁止固定 EV 換分與重複計分。暫估水位只供觀察，不會進正式下注池。</p></div>
       <div className="card"><h2>備份與資料</h2><div className="toolbar wrap"><button className="secondary" onClick={exportJSON}>匯出 JSON 備份</button><button className="secondary" onClick={exportCSV}>匯出 CSV 明細</button><label className="fileButton">匯入 JSON 備份<input type="file" accept="application/json" onChange={event => event.target.files?.[0] && importJSON(event.target.files[0])}/></label><button className="danger" onClick={() => { if (confirm('確定清除全部快照、分析與下注資料？')) setStore({ ...EMPTY, settings: store.settings }); }}>清除資料</button></div><p className="note">資料保存在這台裝置的瀏覽器內。盤口快照與分析版本不互相覆寫，請定期匯出備份。</p></div>
     </section>}
   </main>;
@@ -1005,7 +1007,7 @@ function ClassicResultRow({ result, settings, onBet }) {
   const unit = result.portfolioUnit || result.unitSuggestion || 0;
   return <div className={`classicResult ${strongest ? 'classicStrongest' : candidate ? 'classicCandidate' : ''}`}>
     <div className="classicPrimary"><span className="classicIcon">{icon}</span><b className="classicScore">{score == null ? '—' : score.toFixed(1)}</b><span className="classicPick">｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>{strongest && <span className="classicTag">最強主推</span>}{candidate && !strongest && <span className="classicTag">下注候選</span>}</div>
-    {score != null && <div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜建議 {unit} Unit</div>}
+    {score != null && <><div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜建議 {unit} Unit</div><div className="classicMeta">GPT 評分：{result.scoreReason || '—'}｜{result.scoreModel || '—'}</div></>}
     {result.scoreAudit?.ok === false && <div className="classicMeta">評分已封鎖：{result.scoreAudit.errors?.join('；')}</div>}
     {result.betEligible && <button className="classicBet" onClick={onBet}>記錄下注</button>}
   </div>;
