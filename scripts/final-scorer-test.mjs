@@ -4,11 +4,14 @@ import {
   FINAL_SCORE_VERSION,
   applyFinalScoreAssessment,
   normalizeFinalScoreTimeout,
+  parseRetryAfter,
 } from '../lib/final-scorer.js';
 
 assert.equal(Number.isInteger(normalizeFinalScoreTimeout(12917.52)), true);
 assert.equal(normalizeFinalScoreTimeout(12917.52), 12917);
 assert.equal(normalizeFinalScoreTimeout(undefined, 8000), 8000);
+assert.equal(parseRetryAfter('2'), 2000);
+assert.equal(Number.isInteger(parseRetryAfter('2.75')), true);
 
 const result = (market, pick, values) => ({
   market,
@@ -118,6 +121,27 @@ assert.ok(finalized.results.every(row => row.legacyDiagnosticScore === 3.5));
 assert.ok(new Set(finalized.results.map(row => row.score.toFixed(1))).size >= 5);
 assert.equal(finalized.scoreValidation.distributionAudit.passed, true);
 assert.ok(finalized.portfolio.reduce((sum, row) => sum + row.recommendedUnit, 0) <= 2.000001);
+
+const missingWaterRow = {
+  ...result('全場大小', '小8+50', { weightedEV: 0, robustEV: 0, conservativeEV: 0, modelProbability: 0.5 }),
+  water: null,
+  score: null,
+  tag: '水位未提供｜不評分',
+  betEligible: false,
+};
+const withMissing = applyFinalScoreAssessment({
+  analysis: { ...analysis, results: [...rows, missingWaterRow] },
+  assessment,
+  settings: { candidateThreshold: 7.2, strongestThreshold: 8.5 },
+});
+const preserved = withMissing.results.find(row => row.pick === '小8+50');
+assert.equal(preserved.score, null);
+assert.equal(preserved.tag, '水位未提供｜不評分');
+assert.equal(preserved.scoreSource, '上游資料閘門未通過');
+assert.equal(preserved.scoreAudit.ok, true);
+assert.equal(preserved.scoreAudit.skipped, true);
+assert.equal(preserved.betEligible, false);
+assert.equal(withMissing.scoreValidation.passed, true);
 
 console.log(JSON.stringify({
   ok: true,

@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    version: '8.4.1',
+    version: '8.4.2',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     expertVersion: EXPERT_VERSION,
@@ -23,6 +23,7 @@ export async function GET() {
     finalScoreInstructionVersion: FINAL_SCORE_INSTRUCTION_VERSION,
     configuredScoringModel: process.env.AI_SCORING_MODEL || 'openai/gpt-5-mini',
     aiGatewayConfigured: Boolean(process.env.AI_GATEWAY_API_KEY),
+    directOpenAIConfigured: Boolean(process.env.OPENAI_API_KEY),
     authConfigured: appPasswordConfigured(),
     commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
     time: new Date().toISOString(),
