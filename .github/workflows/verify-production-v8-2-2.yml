@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: verify-production-v8-2-2
+  cancel-in-progress: true
 jobs:
   verify-production:
     runs-on: ubuntu-latest
@@ -35,32 +38,12 @@ jobs:
             && value.aiGatewayConfigured === true;
           process.exit(passed ? 0 : 1);
           NODE
-              then
-                ok=1
-                break
-              fi
+              then ok=1; break; fi
             fi
             sleep 5
           done
           test "$ok" = 1
-      - name: Run complete live smoke with provider-limit retry
-        run: |
-          set -euo pipefail
-          passed=0
-          for attempt in $(seq 1 8); do
-            echo "SMOKE ATTEMPT $attempt"
-            set +e
-            env -u GITHUB_SHA SMOKE_URL=https://mlb-positive-ev.vercel.app node scripts/smoke.mjs 2>&1 | tee /tmp/smoke.log
-            code=${PIPESTATUS[0]}
-            set -e
-            if [ "$code" = 0 ]; then
-              passed=1
-              break
-            fi
-            if grep -Eqi '429|rate.?limit|速率限制|Free tier requests' /tmp/smoke.log; then
-              sleep 75
-            else
-              exit "$code"
-            fi
-          done
-          test "$passed" = 1
+      - name: Log exact live dense-board output
+        run: node scripts/debug-live-vision-v8-2-2.mjs
+      - name: Run complete live smoke
+        run: env -u GITHUB_SHA SMOKE_URL=https://mlb-positive-ev.vercel.app node scripts/smoke.mjs
