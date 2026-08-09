@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   MARKET_ORDER,
+  SCORE_CONTRACT_VERSION,
   calculateProfit,
   extractLineToken,
   hasActualWater,
@@ -15,7 +16,7 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.2.1';
+const VERSION = '8.2.2';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -82,24 +83,13 @@ async function prepareImage(file) {
         return;
       }
 
-      const stripHeight = Math.min(image.height, Math.max(180, Math.min(310, Math.round(image.height * 0.34))));
-      const step = Math.max(90, Math.round(stripHeight * 0.56));
-      const positions = [];
-      for (let position = 0; position < image.height; position += step) {
-        positions.push(Math.min(position, Math.max(0, image.height - stripHeight)));
-        if (position + stripHeight >= image.height) break;
-      }
-      const crops = [...new Set(positions)].slice(0, 8).map(position => renderImageCrop(
-        image,
-        0,
-        position,
-        image.width,
-        stripHeight,
-        { minimumWidth: 2100, maximumDimension: 2500 },
-      ));
-      // Full-image pass discovers every matchup; overlapping crops recover small market text.
-      const parts = [full, ...crops];
-      resolve({ data: full, parts, width: image.width, height: image.height });
+      // Two overlapping high-resolution halves are sent together in one multimodal request.
+      // This keeps every row readable while avoiding the old 9-request crop storm.
+      const halfHeight = Math.min(image.height, Math.ceil(image.height * 0.60));
+      const top = renderImageCrop(image, 0, 0, image.width, halfHeight, { minimumWidth: 2100, maximumDimension: 2500 });
+      const bottomY = Math.max(0, image.height - halfHeight);
+      const bottom = renderImageCrop(image, 0, bottomY, image.width, halfHeight, { minimumWidth: 2100, maximumDimension: 2500 });
+      resolve({ data: full, parts: [top, bottom], width: image.width, height: image.height });
     };
     image.onerror = () => resolve({ data: source, parts: [source], width: 0, height: 0 });
     image.src = source;
@@ -115,11 +105,53 @@ async function requestJSON(url, options = {}, timeout = 180000) {
     let data;
     try { data = JSON.parse(text); }
     catch { throw new Error(`伺服器回傳格式錯誤（${response.status}）`); }
-    if (!response.ok || data.ok === false) throw new Error(data.error || `請求失敗（${response.status}）`);
+    if (!response.ok || data.ok === false) {
+      const error = new Error(data.error || `請求失敗（${response.status}）`);
+      error.status = response.status;
+      error.details = Array.isArray(data.details) ? data.details : [];
+      error.retryAfter = Number(response.headers.get('retry-after')) || 0;
+      throw error;
+    }
     return data;
   } finally {
     clearTimeout(timer);
   }
+}
+
+const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+async function visionFingerprint(images, schedule) {
+  const source = `${VERSION}|${(schedule || []).map(game => game.gamePk).join(',')}|${(images || []).join('|')}`;
+  if (!globalThis.crypto?.subtle) return source.slice(0, 120);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+async function requestVisionJSON(payload) {
+  const cacheKey = `mlb-vision-${await visionFingerprint(payload.images, payload.schedule)}`;
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+    if (cached?.visionVersion === 'MLB-VISION-2026-08-v8.2.2' && Array.isArray(cached.games) && cached.games.length) return cached;
+  } catch {}
+
+  let lastError = null;
+  const delays = [0, 6000, 16000];
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) await sleep(delays[attempt]);
+    try {
+      const data = await requestJSON('/api/vision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      try { sessionStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
+      return data;
+    } catch (error) {
+      lastError = error;
+      if (![429, 503, 504].includes(Number(error?.status))) throw error;
+    }
+  }
+  throw lastError || new Error('圖片辨識未完成');
 }
 
 function download(name, text, type = 'application/json') {
@@ -212,6 +244,24 @@ function latestVersion(history, lockId) {
   return Array.isArray(history?.[lockId]) ? history[lockId][0] : null;
 }
 
+function scoreSnapshotIsValid(version) {
+  const analysis = version?.analysis;
+  if (!analysis || analysis.scoreContractVersion !== SCORE_CONTRACT_VERSION || analysis.scoreValidation?.passed !== true) return false;
+  return (analysis.results || []).every(result => result.score == null || (
+    Number.isFinite(Number(result.score))
+    && Number(result.score) >= 3.5
+    && Number(result.score) <= 9.4
+    && result.scoreAudit?.ok === true
+  ));
+}
+
+function sanitizeAnalysisHistory(history) {
+  return Object.fromEntries(Object.entries(history || {}).map(([lockId, versions]) => [
+    lockId,
+    (Array.isArray(versions) ? versions : []).filter(scoreSnapshotIsValid),
+  ]).filter(([, versions]) => versions.length));
+}
+
 function migrateSaved() {
   try {
     const current = JSON.parse(localStorage.getItem(STORAGE) || 'null');
@@ -220,7 +270,7 @@ function migrateSaved() {
         ...EMPTY,
         ...current,
         locks: Array.isArray(current.locks) ? current.locks : [],
-        analysisHistory: current.analysisHistory || {},
+        analysisHistory: sanitizeAnalysisHistory(current.analysisHistory),
         bets: Array.isArray(current.bets) ? current.bets : [],
         settings: {
           ...DEFAULT_SETTINGS,
@@ -337,42 +387,42 @@ export default function Home() {
     const failures = [];
     const models = new Set();
     const expectedVisible = new Set();
-    const tasks = sourceImages.flatMap((image, imageIndex) => {
-      const parts = Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data];
-      return parts.map((data, partIndex) => ({ image, imageIndex, partIndex, partCount: parts.length, data }));
-    });
 
-    for (let index = 0; index < tasks.length; index += 1) {
-      const task = tasks[index];
-      setVisionStatus(`自動辨識全部圖片：圖片 ${task.imageIndex + 1}/${sourceImages.length}，區塊 ${task.partIndex + 1}/${task.partCount}`);
+    for (let index = 0; index < sourceImages.length; index += 1) {
+      const image = sourceImages[index];
+      const requestImages = (Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data]).slice(0, 2);
+      setVisionStatus(`自動辨識全部圖片：圖片 ${index + 1}/${sourceImages.length}；單次合併掃描全部區域`);
       try {
-        const data = await requestJSON('/api/vision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: [task.data], schedule, defaultWater: store.settings.fallbackWater, boardPass: task.partIndex === 0 }),
+        const data = await requestVisionJSON({
+          images: requestImages,
+          schedule,
+          defaultWater: store.settings.fallbackWater,
+          boardPass: true,
         });
         if (data.model) models.add(data.model);
         for (const gamePk of data.discoveredGamePks || []) expectedVisible.add(String(gamePk));
         all.push(...(data.games || []));
       } catch (error) {
-        failures.push(`圖片 ${task.imageIndex + 1} 區塊 ${task.partIndex + 1}：${error.message}`);
+        const detail = error?.details?.length ? `｜${error.details[0]}` : '';
+        failures.push(`圖片 ${index + 1}：${error.message}${detail}`);
       }
     }
 
     let merged = mergeVision(all);
-    if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或裁切更小範圍');
+    if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或重新上傳');
 
-    // The full-image discovery pass defines how many rows are actually visible in the uploaded board.
     let missingVisible = [...expectedVisible].filter(gamePk => !merged.some(row => String(row.gamePk || '') === gamePk));
     if (missingVisible.length) {
-      setVisionStatus(`已找到 ${expectedVisible.size} 個可見對戰，正在補抓缺少的 ${missingVisible.length} 場盤口…`);
+      setVisionStatus(`已找到 ${expectedVisible.size} 個可見對戰，正在一次補抓缺少的 ${missingVisible.length} 場…`);
       for (const image of sourceImages) {
         if (!missingVisible.length) break;
         try {
-          const data = await requestJSON('/api/vision', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ images: [image.data], schedule, defaultWater: store.settings.fallbackWater, targetGamePks: missingVisible }),
+          const requestImages = (Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data]).slice(0, 2);
+          const data = await requestVisionJSON({
+            images: requestImages,
+            schedule,
+            defaultWater: store.settings.fallbackWater,
+            targetGamePks: missingVisible,
           });
           if (data.model) models.add(data.model);
           all.push(...(data.games || []));
@@ -383,24 +433,25 @@ export default function Home() {
         }
       }
     }
+
     if (expectedVisible.size && missingVisible.length) {
       setParsed(merged);
       setSelected(0);
-      setVisionStatus(`完整性檢查未通過：圖片可見 ${expectedVisible.size} 場，目前只完成 ${expectedVisible.size - missingVisible.length} 場；未發布部分分析`);
+      setVisionStatus(`完整性檢查未通過：圖片可見 ${expectedVisible.size} 場，目前完成 ${expectedVisible.size - missingVisible.length} 場；未發布部分分析`);
       setTab('confirm');
       return;
     }
+
     setParsed(merged);
     setSelected(0);
-    const modelText = models.size ? `｜${[...models].join('、')}` : '';
-    const partialText = failures.length ? `｜${failures.length} 個區塊需注意` : '';
     const finalMatched = new Set(merged.map(row => String(row.gamePk || '')).filter(Boolean)).size;
     const expectedCount = expectedVisible.size || finalMatched;
     const completenessText = `｜圖片可見場次覆蓋 ${Math.min(finalMatched, expectedCount)}/${expectedCount}`;
+    const modelText = models.size ? `｜模型 ${[...models].join('、')}` : '';
+    const partialText = failures.length ? `｜${failures.length} 個重試訊息` : '';
     setVisionStatus(`辨識完成 ${merged.length} 場${completenessText}${modelText}${partialText}；開始自動分析所有有效盤口`);
     await autoAnalyzeAll(merged, failures);
   }
-
   async function recognize() {
     if (!images.length || visionBusy) return;
     setVisionBusy(true);
