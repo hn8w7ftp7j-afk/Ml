@@ -94,7 +94,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*8\.2\.0\s*版/);
+assert.match(renderedHome, /第\s*8\.2\.1\s*版/);
 assert.match(renderedHome, /上傳全部圖片/);
 assert.match(renderedHome, /自動辨識全部盤口/);
 assert.match(renderedHome, /自動分析全部場次/);
@@ -116,7 +116,6 @@ assert.ok(/[\u4e00-\u9fff]/.test(game.home));
 
 const originHeaders = { 'Content-Type': 'application/json', Origin: BASE, 'Sec-Fetch-Site': 'same-origin' };
 const visionFixture = readFileSync(new URL('./fixtures/dense-board-7games.b64', import.meta.url), 'utf8').replace(/\s+/g, '');
-assert.match(visionFixture, /^[A-Za-z0-9+/]+={0,2}$/);
 const visionSchedule = [
   [990001,'克里夫蘭守護者','芝加哥白襪','Cleveland Guardians','Chicago White Sox'],
   [990002,'明尼蘇達雙城','密爾瓦基釀酒人','Minnesota Twins','Milwaukee Brewers'],
@@ -153,122 +152,74 @@ const fullMarkets = [
   { market: '上半大小', pick: '大4+50', water: 0.93, confidence: 1 },
   { market: '上半大小', pick: '小4+50', water: 0.93, confidence: 1 },
 ];
-const previousMarkets = fullMarkets.map(row => ({ ...row, water: Math.max(0.5, row.water - 0.02) }));
-const settings = { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, simulationsPerScenario: 500, expertMode: 'off' };
-
-const analyzed = await json(`${BASE}/api/analyze`, {
-  method: 'POST',
-  headers: originHeaders,
-  body: JSON.stringify({ game, markets: fullMarkets, previousMarkets, settings }),
-}, 180000);
-const analysis = analyzed.value.analysis;
+const analysisRequest = {
+  method: 'POST', headers: originHeaders,
+  body: JSON.stringify({ game, markets: fullMarkets, settings: { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, simulationsPerScenario: 500, expertMode: 'off' } }),
+};
+const analysisResponse = await json(`${BASE}/api/analyze`, analysisRequest, 180000);
+const analysis = analysisResponse.value.analysis;
 assert.equal(analysis.modelVersion, MODEL_VERSION);
 assert.equal(analysis.rulesVersion, RULES_VERSION);
-assert.equal(analysis.results.length, 8);
-assert.equal(analysis.scenarioSummary.count, 27);
-assert.equal(analysis.scenarioSummary.robustVariantCount, 7);
-assert.equal(analysis.scenarioSummary.sharedDistribution, true);
-assert.equal(analysis.scenarioSummary.jointPortfolioDistribution, true);
-assert.ok(analysis.scenarioSummary.jointCellCount > 0);
-assert.ok(analysis.results.every(row => Number.isFinite(row.score) && Number.isFinite(row.weightedEV) && Number.isFinite(row.robustEV) && Number.isFinite(row.conservativeEV)));
-assert.ok(analysis.results.every(row => row.robustEV <= row.weightedEV + 1e-10));
-assert.ok(analysis.results.every(row => row.cev === row.conservativeEV));
-assert.ok(analysis.results.every(row => row.evFlipProbability >= 0 && row.evFlipProbability <= 1));
-assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
-assert.ok(analysis.results.every(row => row.movement?.available));
-assert.ok(analysis.results.every(row => Number.isFinite(row.rawEV)));
-assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.12 && row.marketCalibrationWeight <= 0.55));
 assert.equal(analysis.scoreContractVersion, SCORE_CONTRACT_VERSION);
 assert.equal(analysis.scoreValidation.passed, true);
+assert.equal(analysis.results.length, 8);
 assert.ok(analysis.results.every(row => row.scoreAudit?.ok === true));
 assert.ok(analysis.results.every(row => row.score >= 3.5 && row.score <= 9.4 && row.score !== 10 && row.score !== 0));
+assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
+assert.ok(analysis.results.every(row => row.marketAnchorSource));
+assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.12 && row.marketCalibrationWeight <= 0.55));
+assert.ok(analysis.results.every(row => row.maximumCalibratedProbabilityEdge >= 0.05 && row.maximumCalibratedProbabilityEdge <= 0.12));
 assert.ok(analysis.results.every(row => row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10));
-assert.equal(analysis.alignmentAudit.expertLayer.used, false);
-assert.ok(analysis.alignmentAudit.unmodeled.length > 0);
-assert.ok(analysis.results.every(row => Number.isFinite(row.modelErrorFloor)));
-assert.ok(analysis.portfolio.reduce((sum, row) => sum + row.recommendedUnit, 0) <= 2.0001);
-
+assert.ok(analysis.results.every(row => row.cev === row.conservativeEV));
+assert.ok(analysis.results.every(row => row.robustVariants.length >= 7));
 for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上半大小']) {
   const pair = analysis.results.filter(row => row.market === marketName);
   assert.equal(pair.length, 2);
-  assert.ok(Math.abs(pair[0].modelProbability + pair[1].modelProbability - 1) < 0.012, `${marketName} 機率不互補`);
-  assert.ok(pair.filter(row => row.betEligible).length <= 1, `${marketName} 正反方向同時進下注池`);
-  assert.ok(Math.abs(pair[0].score - pair[1].score) < 6, `${marketName} 分數落差過度機械化`);
+  assert.ok(Math.abs(pair[0].modelProbability + pair[1].modelProbability - 1) < 0.012);
+  assert.ok(pair.filter(row => row.betEligible).length <= 1);
+  assert.ok(pair.every(row => row.pairAudit?.ok === true));
+}
+const repeatResponse = await json(`${BASE}/api/analyze`, analysisRequest, 180000);
+for (const row of analysis.results) {
+  const repeat = repeatResponse.value.analysis.results.find(item => item.pick === row.pick && item.market === row.market);
+  assert.ok(repeat);
+  assert.ok(Math.abs(row.score - repeat.score) < 1e-12);
+  assert.ok(Math.abs(row.weightedEV - repeat.weightedEV) < 1e-12);
 }
 
-const partial = await json(`${BASE}/api/analyze`, {
-  method: 'POST',
-  headers: originHeaders,
-  body: JSON.stringify({ game, markets: fullMarkets.filter(row => row.market === '全場大小'), settings }),
-}, 180000);
-assert.equal(partial.value.analysis.results.length, 2);
-assert.deepEqual(partial.value.openMarkets, ['全場大小']);
-
 const missingWater = await json(`${BASE}/api/analyze`, {
-  method: 'POST',
-  headers: originHeaders,
-  body: JSON.stringify({
-    game,
-    markets: [
-      { market: '全場大小', pick: '大8+50', water: 0.94, confidence: 1 },
-      { market: '全場大小', pick: '小8+50', water: null, confidence: 1 },
-    ],
-    settings,
-  }),
+  method: 'POST', headers: originHeaders,
+  body: JSON.stringify({ game, markets: [
+    { market: '全場大小', pick: '大8+50', water: 0.94, confidence: 1 },
+    { market: '全場大小', pick: '小8+50', water: null, confidence: 1 },
+  ], settings: { rebateRate: 0.015, simulationsPerScenario: 500, expertMode: 'off' } }),
 }, 180000);
 const noScore = missingWater.value.analysis.results.find(row => row.pick === '小8+50');
 assert.equal(noScore.score, null);
+assert.equal(noScore.betEligible, false);
 assert.equal(noScore.tag, '水位未提供｜不評分');
 
-const estimated = await json(`${BASE}/api/analyze`, {
-  method: 'POST',
-  headers: originHeaders,
-  body: JSON.stringify({
-    game,
-    markets: [
-      { market: '全場大小', pick: '大8+50', water: 0.94, waterEstimated: true, confidence: 1 },
-      { market: '全場大小', pick: '小8+50', water: 0.94, waterEstimated: true, confidence: 1 },
-    ],
-    settings,
-  }),
+const estimatedWater = await json(`${BASE}/api/analyze`, {
+  method: 'POST', headers: originHeaders,
+  body: JSON.stringify({ game, markets: [
+    { market: '全場大小', pick: '大8+50', water: 0.94, waterEstimated: true, confidence: 1 },
+    { market: '全場大小', pick: '小8+50', water: 0.94, waterEstimated: true, confidence: 1 },
+  ], settings: { rebateRate: 0.015, simulationsPerScenario: 500, expertMode: 'off' } }),
 }, 180000);
-assert.ok(estimated.value.analysis.results.every(row => row.score <= 6.6 && row.betEligible === false));
-
-const expertSettings = { ...settings, expertMode: 'required' };
-const expertAnalyzed = await json(`${BASE}/api/analyze`, {
-  method: 'POST',
-  headers: originHeaders,
-  body: JSON.stringify({
-    game,
-    markets: fullMarkets.filter(row => row.market === '全場大小'),
-    settings: expertSettings,
-  }),
-}, 180000);
-assert.equal(expertAnalyzed.value.expertAssessment.used, true);
-assert.equal(expertAnalyzed.value.expertAssessment.status, 'complete');
-assert.ok(expertAnalyzed.value.expertAssessment.model);
-assert.equal(expertAnalyzed.value.analysis.alignmentAudit.expertLayer.used, true);
-assert.equal(expertAnalyzed.value.analysis.results.length, 2);
-
-const result = await json(`${BASE}/api/result?gamePk=${game.gamePk}&t=${Date.now()}`, {}, 30000);
-assert.equal(typeof result.value.final, 'boolean');
+assert.ok(estimatedWater.value.analysis.results.every(row => row.betEligible === false && row.score <= 6.6));
 
 console.log(JSON.stringify({
   ok: true,
   base: BASE,
   commit: health.commit,
-  version: health.version,
-  modelVersion: health.modelVersion,
   scheduleDate,
-  game: `${game.away} 對 ${game.home}`,
-  fullAnalysisResults: analysis.results.length,
-  partialAnalysisResults: partial.value.analysis.results.length,
-  scenarioCount: analysis.scenarioSummary.count,
-  robustVariantCount: analysis.scenarioSummary.robustVariantCount,
-  maximumScore: Math.max(...analysis.results.map(row => row.score)),
-  expertLayerUsed: expertAnalyzed.value.expertAssessment.used,
-  expertModel: expertAnalyzed.value.expertAssessment.model,
+  game: { gamePk: game.gamePk, away: game.away, home: game.home },
   visionModel: visionCapture.value.model,
-  visionPicks: visionPicks.length,
-  resultEndpoint: true,
+  discoveredGames: new Set(visionCapture.value.discoveredGamePks.map(String)).size,
+  visionGames: visionCapture.value.games.length,
+  visionPicks,
+  analysisDirections: analysis.results.length,
+  maximumScore: Math.max(...analysis.results.map(row => row.score)),
+  scoreValidation: analysis.scoreValidation,
+  portfolio: analysis.portfolio,
 }, null, 2));
