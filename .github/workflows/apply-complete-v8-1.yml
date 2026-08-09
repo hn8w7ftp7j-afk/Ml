@@ -90,6 +90,7 @@ jobs:
             "outcomeFractionForScore(`${home}受讓1-30`, 4, 3, away, home), 0.3": "outcomeFractionForScore(`${home}受讓1+30`, 4, 3, away, home), 0.3",
             "outcomeFractionForScore('小8+50', 4, 4, away, home), -0.5": "outcomeFractionForScore('小8-50', 4, 4, away, home), -0.5",
             "outcomeFractionForScore('小8-30', 4, 4, away, home), 0.3": "outcomeFractionForScore('小8+30', 4, 4, away, home), 0.3",
+            "assert.ok(Math.abs(pair[0].score - pair[1].score) < 6, `${marketName} 分數差距過度機械化`);": "assert.ok(!(Number(pair[0].score) > 5 && Number(pair[1].score) > 5), `${marketName} 相反方向不可同時高於5分`);",
           }
           for old, new in replacements.items():
               if old not in text:
