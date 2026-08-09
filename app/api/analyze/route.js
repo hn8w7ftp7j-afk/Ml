@@ -110,7 +110,7 @@ export async function POST(request) {
       context,
       markets: activeMarkets,
       mode: settings.expertMode,
-      timeoutMs: 22000,
+      timeoutMs: 14000,
     });
     const enrichedContext = applyExpertAssessment(context, expertAssessment);
     const preliminaryAnalysis = analyzeMarkets({ context: enrichedContext, markets: activeMarkets, previousMarkets, settings });
@@ -118,7 +118,7 @@ export async function POST(request) {
       context: enrichedContext,
       analysis: preliminaryAnalysis,
       settings,
-      timeoutMs: 42000,
+      timeoutMs: 50000,
     });
     const analysis = applyFinalScoreAssessment({
       analysis: preliminaryAnalysis,
