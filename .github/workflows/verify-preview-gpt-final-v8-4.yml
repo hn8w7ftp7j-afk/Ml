@@ -1,0 +1,26 @@
+name: Verify Preview GPT final v8.4
+
+on:
+  push:
+    branches:
+      - verify/preview-gpt-final-v8-4-0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run complete Preview smoke with exact candidate commit
+        run: |
+          GITHUB_SHA=0a57fee7b10ad45a97815840c4420127589843d0 \
+          SMOKE_URL=https://mlb-kahwczobo-5gtbpqpbkx-2201s-projects.vercel.app \
+          node scripts/smoke.mjs
