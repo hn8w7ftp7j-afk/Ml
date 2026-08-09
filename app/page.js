@@ -16,7 +16,7 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.2.5';
+const VERSION = '8.3.0';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -131,7 +131,7 @@ async function requestVisionJSON(payload) {
   const cacheKey = `mlb-vision-${await visionFingerprint(payload.images, payload.schedule)}`;
   try {
     const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
-    if (cached?.visionVersion === 'MLB-VISION-2026-08-v8.2.2' && Array.isArray(cached.games) && cached.games.length) return cached;
+    if (cached?.visionVersion === 'MLB-VISION-2026-08-v8.2.5' && Array.isArray(cached.games) && cached.games.length) return cached;
   } catch {}
 
   let lastError = null;
@@ -246,10 +246,10 @@ function latestVersion(history, lockId) {
 
 function scoreSnapshotIsValid(version) {
   const analysis = version?.analysis;
-  if (!analysis || analysis.scoreContractVersion !== SCORE_CONTRACT_VERSION || analysis.scoreValidation?.passed !== true) return false;
+  if (!analysis || analysis.scoreContractVersion !== SCORE_CONTRACT_VERSION || analysis.scoreValidation?.passed !== true || analysis.scoreValidation?.distributionAudit?.passed !== true) return false;
   return (analysis.results || []).every(result => result.score == null || (
     Number.isFinite(Number(result.score))
-    && Number(result.score) >= 3.5
+    && Number(result.score) >= 1
     && Number(result.score) <= 9.4
     && result.scoreAudit?.ok === true
   ));
@@ -955,7 +955,7 @@ export default function Home() {
           <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '以最新資料重算新版本'}</button></div>
           {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、執行 GPT 研究判讀與聯合情境…' : '此快照尚未分析'}/> : <>
             <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
-            <div className="note">評分驗算：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜{data.analysis.scoreContractVersion}</div>
+            <div className="note">評分驗算：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜分布 {data.analysis.scoreValidation?.distributionAudit?.passed ? `通過（${data.analysis.scoreValidation.distributionAudit.uniqueDisplayedScores} 種顯示分數）` : '失敗'}｜{data.analysis.scoreContractVersion}</div>
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
               return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
