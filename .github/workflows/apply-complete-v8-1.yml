@@ -43,23 +43,59 @@ jobs:
           PY
       - name: Apply complete v8.1 repair
         run: python scripts/apply-complete-v8-1.py
+      - name: Align Taiwan tail settlement with mirrored contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/markets.js')
+          text = path.read_text()
+          old = '''function exactModifierOutcome(modifier, positiveSide) {
+            if (!modifier || modifier === '平') return 0;
+            const sign = modifier[0];
+            const fraction = clamp(Number(modifier.slice(1)) / 100, 0, 1);
+            if (!Number.isFinite(fraction)) return 0;
+            const givingOrOver = sign === '+' ? fraction : -fraction;
+            return positiveSide ? givingOrOver : -givingOrOver;
+          }'''
+          new = '''function exactModifierOutcome(modifier) {
+            if (!modifier || modifier === '平') return 0;
+            const sign = modifier[0];
+            const fraction = clamp(Number(modifier.slice(1)) / 100, 0, 1);
+            if (!Number.isFinite(fraction)) return 0;
+            return sign === '+' ? fraction : -fraction;
+          }'''
+          if old not in text:
+              raise SystemExit('exact modifier settlement marker missing')
+          text = text.replace(old, new, 1)
+          text = text.replace('exactModifierOutcome(parsed.modifier, parsed.isOver)', 'exactModifierOutcome(parsed.modifier)')
+          text = text.replace('exactModifierOutcome(parsed.modifier, true)', 'exactModifierOutcome(parsed.modifier)')
+          text = text.replace('exactModifierOutcome(parsed.modifier, false)', 'exactModifierOutcome(parsed.modifier)')
+          path.write_text(text)
+          PY
       - name: Generate dense seven-game board fixture
         run: |
           python -m pip install --disable-pip-version-check pillow
           python scripts/generate-dense-board-fixture.py
       - name: Update unit and Production smoke contracts
         run: python scripts/update-complete-tests-v8-1.py
-      - name: Keep auto-analysis fixture valid under mirrored tails
+      - name: Keep all fixtures valid under mirrored tails
         run: |
           python - <<'PY'
           from pathlib import Path
           path = Path('scripts/test.mjs')
           text = path.read_text()
-          old = "{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1+50`, water: 0.95 }] },"
-          new = "{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1-50`, water: 0.95 }] },"
-          if old not in text:
-              raise SystemExit('auto-analysis mirrored pair marker missing')
-          path.write_text(text.replace(old, new, 1))
+          replacements = {
+            "{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1+50`, water: 0.95 }] },": "{ market: '全場讓分', directions: [{ pick: `${away}讓1+50`, water: 0.95 }, { pick: `${home}受讓1-50`, water: 0.95 }] },",
+            "outcomeFractionForScore(`${home}受讓1+50`, 4, 3, away, home), -0.5": "outcomeFractionForScore(`${home}受讓1-50`, 4, 3, away, home), -0.5",
+            "outcomeFractionForScore(`${home}受讓1-30`, 4, 3, away, home), 0.3": "outcomeFractionForScore(`${home}受讓1+30`, 4, 3, away, home), 0.3",
+            "outcomeFractionForScore('小8+50', 4, 4, away, home), -0.5": "outcomeFractionForScore('小8-50', 4, 4, away, home), -0.5",
+            "outcomeFractionForScore('小8-30', 4, 4, away, home), 0.3": "outcomeFractionForScore('小8+30', 4, 4, away, home), 0.3",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'mirrored fixture marker missing: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
           PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund --package-lock=false
