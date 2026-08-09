@@ -1,0 +1,26 @@
+name: Verify Production v8.4.1
+
+on:
+  push:
+    branches:
+      - verify/production-v8-4-1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - name: Verify exact Production release and live GPT final scorer
+        run: |
+          GITHUB_SHA=975cac4fc51ac379102368f7e2c545697b2a99c3 \
+          SMOKE_URL=https://mlb-positive-ev.vercel.app \
+          node scripts/smoke.mjs
