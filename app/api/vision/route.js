@@ -280,7 +280,7 @@ async function discoverVisibleGames(key, image, schedule) {
   const failures = [];
   for (const model of modelCandidates().slice(0, 4)) {
     try {
-      const output = await gateway(key, model, content, { jsonFormat: true, timeoutMs: 11000, maxTokens: 900 });
+      const output = await gateway(key, model, content, { jsonFormat: false, timeoutMs: 11000, maxTokens: 900 });
       const payload = cleanVisionJSON(output);
       const ids = unique((payload.ids || payload.gamePks || payload.games || []).map(value => typeof value === 'object' ? value.gamePk ?? value.id : value))
         .map(value => String(value))
@@ -398,6 +398,11 @@ ${text}` });
       const matched = matchScheduleGame(raw, schedule);
       return { ...normalizeVisionGame(raw, matched, defaultWater), matchedGame: matched || null };
     });
+    const independentDiscovery = discoveredGamePks.length > 0;
+    if (!independentDiscovery) {
+      discoveredGamePks = unique(rows.map(row => row.gamePk).filter(Boolean));
+      if (discoveredGamePks.length) warnings.push('獨立場次列舉未完成，已使用成功配對列作完整性備援');
+    }
 
     return NextResponse.json({
       ok: true,
@@ -405,6 +410,7 @@ ${text}` });
       visionVersion: VISION_VERSION,
       games: rows,
       discoveredGamePks,
+      discoverySource: independentDiscovery ? 'independent-board-pass' : discoveredGamePks.length ? 'matched-row-fallback' : 'unavailable',
       warnings,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
