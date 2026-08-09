@@ -3,7 +3,12 @@ import {
   FINAL_SCORE_INSTRUCTION_VERSION,
   FINAL_SCORE_VERSION,
   applyFinalScoreAssessment,
+  normalizeFinalScoreTimeout,
 } from '../lib/final-scorer.js';
+
+assert.equal(Number.isInteger(normalizeFinalScoreTimeout(12917.52)), true);
+assert.equal(normalizeFinalScoreTimeout(12917.52), 12917);
+assert.equal(normalizeFinalScoreTimeout(undefined, 8000), 8000);
 
 const result = (market, pick, values) => ({
   market,
