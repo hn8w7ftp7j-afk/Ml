@@ -24,6 +24,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Repair patcher marker for current vision route
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-complete-v8-1.py')
+          text = path.read_text()
+          old = "t = one(t, old, new, 'board parse routing')"
+          new = '''route_start = t.find("      const prompt = buildVisionPrompt(schedule, Boolean(text))")
+          route_end_marker = "      warnings = result.failures || [];"
+          route_end = t.find(route_end_marker, route_start)
+          if route_start < 0 or route_end < 0:
+              raise SystemExit('board parse routing markers missing')
+          t = t[:route_start] + new.rstrip() + t[route_end + len(route_end_marker):]'''
+          if old not in text:
+              raise SystemExit('patcher repair target missing')
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Apply complete v8.1 repair
         run: python scripts/apply-complete-v8-1.py
       - name: Generate dense seven-game board fixture
