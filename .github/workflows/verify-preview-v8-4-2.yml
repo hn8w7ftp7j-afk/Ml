@@ -1,0 +1,22 @@
+name: Verify Preview v8.4.2
+
+on:
+  push:
+    branches:
+      - verify/preview-v8-4-2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect Preview health
+        run: |
+          set -euo pipefail
+          curl -i -sS --connect-timeout 10 --max-time 30 \
+            'https://mlb-lcgf1zgbe-5gtbpqpbkx-2201s-projects.vercel.app/api/health?t=1' | tee /tmp/response.txt
+          grep -q '8.4.2' /tmp/response.txt
