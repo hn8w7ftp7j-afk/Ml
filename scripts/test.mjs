@@ -14,7 +14,7 @@ import {
 } from '../lib/markets.js';
 import { analyzeMarkets, estimateRuns, MODEL_VERSION, RULES_VERSION } from '../lib/analysis.js';
 import { fallbackExpertAssessment, sanitizeExpertAssessment } from '../lib/expert.js';
-import { VISION_VERSION, buildVisionPrompt, cleanVisionJSON, expandVisionPayload } from '../lib/vision.js';
+import { VISION_VERSION, buildVisionPrompt, cleanVisionJSON, expandVisionPayload, matchScheduleGame } from '../lib/vision.js';
 import { BATCH_VERSION, buildAutoAnalysisPlan } from '../lib/batch.js';
 
 const away = '紐約洋基';
@@ -115,10 +115,12 @@ assert.equal(compactVision.games[0].gamePk, 99);
 assert.equal(compactVision.games[0].fullRunline.lineSide, 'away');
 assert.equal(compactVision.games[0].fullRunline.awayWater, 0.95);
 assert.equal(compactVision.games[0].fullRunline.homeWater, null);
+const canonicalSchedule = [{ gamePk: 990002, away: '明尼蘇達雙城', home: '密爾瓦基釀酒人', awayEnglish: 'Minnesota Twins', homeEnglish: 'Milwaukee Brewers' }];
+assert.equal(matchScheduleGame({ gamePk: 990002, away: 'MIN Twins', home: 'MIL Brewers' }, canonicalSchedule), canonicalSchedule[0]);
 assert.equal(compactVision.games[0].fullTotal.line, '8+50');
 assert.equal(compactVision.games[0].first5Runline.line, '');
 assert.ok(buildVisionPrompt([{ gamePk: 99, away, home }]).includes('"g"'));
-assert.match(VISION_VERSION, /v8\.2\.4$/);
+assert.match(VISION_VERSION, /v8\.2\.5$/);
 
 const autoPlan = buildAutoAnalysisPlan({
   games: [{
