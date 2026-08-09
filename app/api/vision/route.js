@@ -135,12 +135,12 @@ function localTextParse(text, schedule) {
 function modelCandidates() {
   return unique([
     process.env.AI_VISION_MODEL,
+    'alibaba/qwen3.6-27b',
+    'zai/glm-4.5v',
     'zai/glm-4.6v-flash',
     'google/gemini-2.5-flash',
     'openai/gpt-4o-mini',
-    'openai/gpt-4.1-mini',
     process.env.AI_MODEL,
-    'openai/gpt-5-nano',
   ]).slice(0, 5);
 }
 
@@ -153,6 +153,10 @@ async function gateway(key, model, content, { jsonFormat = false, timeoutMs = 14
   };
   if (jsonFormat) body.response_format = { type: 'json_object' };
   if (/gpt-5/i.test(String(model))) body.reasoning_effort = 'minimal';
+  // OCR/table extraction does not benefit from long hidden reasoning. The
+  // OpenAI-compatible gateway accepts this for reasoning-capable providers;
+  // providers that ignore it still receive the same deterministic prompt.
+  if (/^(?:zai|alibaba)\//i.test(String(model))) body.reasoning = { enabled: false };
 
   let response;
   try {
@@ -235,7 +239,7 @@ async function parseModelOutput(key, model, content, prompt, attemptMs) {
 
 async function generateAndParse(key, content, prompt) {
   const models = modelCandidates();
-  const deadline = Date.now() + 50000;
+  const deadline = Date.now() + 58000;
   const failures = [];
   let empty = null;
   let rateLimitedModels = 0;
@@ -244,9 +248,9 @@ async function generateAndParse(key, content, prompt) {
     const model = models[index];
     const remaining = deadline - Date.now();
     if (remaining < 2500) break;
-    const reserve = index < models.length - 1 ? Math.min(15000, Math.max(6000, remaining * 0.34)) : 0;
-    const preferred = index === 0 ? 17000 : index === 1 ? 14000 : 10000;
-    const attemptMs = Math.max(2500, Math.min(preferred, remaining - reserve));
+    const reserve = index < models.length - 1 ? Math.min(18000, Math.max(7000, remaining * 0.28)) : 0;
+    const preferred = index === 0 ? 28000 : index === 1 ? 21000 : index === 2 ? 16000 : 10000;
+    const attemptMs = Math.max(3000, Math.min(preferred, remaining - reserve));
     try {
       const parsed = await parseModelOutput(key, model, content, prompt, attemptMs);
       if (Array.isArray(parsed?.games) && parsed.games.length) return { parsed, model, failures };
