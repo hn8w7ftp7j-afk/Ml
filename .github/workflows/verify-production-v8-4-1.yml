@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: verify-production-v8-4-1
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -21,6 +25,24 @@ jobs:
       - run: npm install --no-audit --no-fund --package-lock=false
       - name: Verify exact Production release and live GPT final scorer
         run: |
-          GITHUB_SHA=975cac4fc51ac379102368f7e2c545697b2a99c3 \
-          SMOKE_URL=https://mlb-positive-ev.vercel.app \
-          node scripts/smoke.mjs
+          set -euo pipefail
+          passed=0
+          for attempt in 1 2 3; do
+            echo "LIVE SMOKE ATTEMPT $attempt"
+            set +e
+            GITHUB_SHA=975cac4fc51ac379102368f7e2c545697b2a99c3 \
+            SMOKE_URL=https://mlb-positive-ev.vercel.app \
+            node scripts/smoke.mjs 2>&1 | tee /tmp/smoke.log
+            code=${PIPESTATUS[0]}
+            set -e
+            if [ "$code" = 0 ]; then
+              passed=1
+              break
+            fi
+            if grep -Eqi '429|rate.?limit|too many requests|額度|credits' /tmp/smoke.log; then
+              sleep 90
+            else
+              exit "$code"
+            fi
+          done
+          test "$passed" = 1
