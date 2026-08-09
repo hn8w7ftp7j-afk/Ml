@@ -26,10 +26,40 @@ jobs:
           node-version: 24
       - name: Apply v8.3 score distribution patch
         run: python scripts/apply-score-distribution-v8-3.py
-      - name: Keep score recomputation inputs identical
+      - name: Keep every score recomputation input identical
         run: |
           python - <<'PY'
           from pathlib import Path
+
+          p = Path('lib/analysis.js')
+          s = p.read_text()
+          old = '''      const scoreAudit = validateScoreContract(score, conservativeEV, {
+                weightedEV,
+                robustEV: robust.robustEV,
+                flipProbability: evFlipProbability,
+                quality: profile.quality,
+                integrityWarning: integrity.warning,
+                waterEstimated,
+                modelErrorFloor: profile.modelErrorFloor,
+                independentEvidence: profile.independentEvidenceStrength,
+              });'''
+          new = '''      const scoreAudit = validateScoreContract(score, conservativeEV, {
+                weightedEV,
+                robustEV: robust.robustEV,
+                flipProbability: evFlipProbability,
+                quality: profile.quality,
+                edgeStrength,
+                stability,
+                integrityWarning: integrity.warning,
+                waterEstimated,
+                modelErrorFloor: profile.modelErrorFloor,
+                independentEvidence: profile.independentEvidenceStrength,
+                divergenceRisk: calibration.divergenceRisk,
+              });'''
+          if old not in s:
+              raise SystemExit('runtime score audit marker missing')
+          p.write_text(s.replace(old, new, 1))
+
           p = Path('scripts/test.mjs')
           s = p.read_text()
           old = "assert.equal(validateScoreContract(candidateScore, 0.041, { weightedEV: 0.052, robustEV: 0.043, flipProbability: 0.12, quality: 0.85, modelErrorFloor: 0.025, independentEvidence: 0.65 }).ok, true);"
