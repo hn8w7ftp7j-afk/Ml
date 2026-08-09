@@ -1,0 +1,163 @@
+name: Verify Production v8.4.2
+
+on:
+  push:
+    branches:
+      - verify/production-v8-4-2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run one controlled live GPT scoring analysis
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+          EXPECTED_SHA: 8943a3e8f31a639e398af315899131a477d2df6e
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+
+          const BASE = process.env.BASE.replace(/\/$/, '');
+          const EXPECTED_SHA = process.env.EXPECTED_SHA;
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+          async function getJson(url, options = {}, timeout = 180000) {
+            const response = await fetch(url, {
+              ...options,
+              signal: AbortSignal.timeout(Math.floor(timeout)),
+              headers: { 'Cache-Control': 'no-cache', ...(options.headers || {}) },
+            });
+            const text = await response.text();
+            let value;
+            try { value = JSON.parse(text); }
+            catch { throw new Error(`非 JSON（${response.status}）：${text.slice(0, 400)}`); }
+            if (!response.ok || value.ok === false) {
+              throw new Error(`${response.status}｜${value.error || text.slice(0, 600)}`);
+            }
+            return value;
+          }
+
+          let health;
+          for (let attempt = 0; attempt < 30; attempt += 1) {
+            try {
+              health = await getJson(`${BASE}/api/health?t=${Date.now()}`, {}, 30000);
+              if (health.version === '8.4.2' && health.commit === EXPECTED_SHA) break;
+            } catch {}
+            await sleep(5000);
+          }
+          assert.equal(health?.version, '8.4.2');
+          assert.equal(health?.commit, EXPECTED_SHA);
+          assert.equal(health?.finalScoreVersion, 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.2');
+          assert.equal(health?.aiGatewayConfigured, true);
+
+          const taipeiDate = offset => new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(new Date(Date.now() + offset * 86400000));
+
+          let game = null;
+          for (let offset = 0; offset < 8 && !game; offset += 1) {
+            const data = await getJson(`${BASE}/api/mlb?date=${taipeiDate(offset)}&t=${Date.now()}`, {}, 30000);
+            game = (data.games || []).find(row => row.gamePk && row.awayTeamId && row.homeTeamId && row.awayProbableId && row.homeProbableId) || null;
+          }
+          assert.ok(game, '未來八天找不到雙方先發皆可建模的 MLB 賽事');
+
+          const markets = [
+            { market: '全場讓分', pick: `${game.home}讓1+50`, water: 0.95, confidence: 1 },
+            { market: '全場讓分', pick: `${game.away}受讓1+50`, water: 0.95, confidence: 1 },
+            { market: '全場大小', pick: '大8+50', water: 0.94, confidence: 1 },
+            { market: '全場大小', pick: '小8+50', water: 0.94, confidence: 1 },
+            { market: '上半讓分', pick: `${game.home}讓0平`, water: 0.94, confidence: 1 },
+            { market: '上半讓分', pick: `${game.away}受讓0平`, water: 0.94, confidence: 1 },
+            { market: '上半大小', pick: '大4+50', water: 0.93, confidence: 1 },
+            { market: '上半大小', pick: '小4+50', water: 0.93, confidence: 1 },
+          ];
+
+          const requestBody = JSON.stringify({
+            game,
+            markets,
+            settings: {
+              rebateRate: 0.015,
+              candidateThreshold: 7.2,
+              strongestThreshold: 8.5,
+              simulationsPerScenario: 500,
+              expertMode: 'off',
+            },
+          });
+
+          let analyzed;
+          let lastError = '';
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
+            try {
+              analyzed = await getJson(`${BASE}/api/analyze`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Origin: BASE,
+                  'Sec-Fetch-Site': 'same-origin',
+                },
+                body: requestBody,
+              }, 180000);
+              break;
+            } catch (error) {
+              lastError = String(error?.message || error);
+              if (!/429|rate.?limit|too many requests|額度|credits/i.test(lastError) || attempt === 3) throw error;
+              await sleep(90000);
+            }
+          }
+          assert.ok(analyzed, lastError || '正式分析沒有回傳');
+
+          const analysis = analyzed.analysis;
+          assert.equal(analysis.results.length, 8);
+          assert.equal(analysis.scenarioSummary.count, 27);
+          assert.equal(analysis.finalScoreVersion, 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.2');
+          assert.equal(analysis.scoreContractVersion, analysis.finalScoreVersion);
+          assert.equal(analysis.scoreValidation.passed, true);
+          assert.equal(analysis.scoreValidation.noFixedFormula, true);
+          assert.equal(analysis.scoreValidation.latestInstructionWins, true);
+          assert.ok(analysis.finalScoreModel);
+          assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 1 && row.score <= 9.4));
+          assert.ok(analysis.results.every(row => row.scoreSource === 'GPT 最終 Execution 判讀'));
+          assert.ok(analysis.results.every(row => row.scoreModel === analysis.finalScoreModel));
+          assert.ok(analysis.results.every(row => row.scoreAudit?.ok === true));
+          assert.ok(analysis.results.every(row => row.scoreBreakdown?.noFixedFormula === true));
+          assert.ok(analysis.results.every(row => row.scoreFormulaVersion == null));
+
+          for (const row of analysis.results) {
+            if (row.weightedEV <= 0) assert.ok(row.score <= 6.6 + 1e-9, `${row.pick} 加權EV非正卻超過6.6`);
+            if (row.weightedEV > 0 && row.robustEV <= 0) assert.ok(row.score <= 7.1 + 1e-9, `${row.pick} 穩健EV非正卻超過7.1`);
+            if (row.score >= 7.2) assert.ok(row.weightedEV > 0 && row.robustEV > 0, `${row.pick} 未過正EV硬門檻`);
+          }
+          for (const market of ['全場讓分', '全場大小', '上半讓分', '上半大小']) {
+            const pair = analysis.results.filter(row => row.market === market);
+            assert.equal(pair.length, 2);
+            assert.ok(pair.filter(row => row.score >= 7.2).length <= 1, `${market} 正反方向同時達7.2`);
+            assert.ok(pair.filter(row => row.betEligible).length <= 1, `${market} 正反方向同時進下注池`);
+          }
+
+          console.log(JSON.stringify({
+            ok: true,
+            version: health.version,
+            commit: health.commit,
+            directOpenAIConfigured: health.directOpenAIConfigured,
+            game: `${game.away} 對 ${game.home}`,
+            finalScoreModel: analysis.finalScoreModel,
+            finalScoreSummary: analysis.finalScoreSummary,
+            scores: analysis.results.map(row => ({
+              market: row.market,
+              pick: row.pick,
+              score: row.score,
+              weightedEV: row.weightedEV,
+              robustEV: row.robustEV,
+              eligible: row.betEligible,
+              reason: row.scoreReason,
+            })),
+          }, null, 2));
+          NODE
