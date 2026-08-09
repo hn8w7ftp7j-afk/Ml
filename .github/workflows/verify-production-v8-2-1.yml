@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: verify-production-v8-2-1
+  cancel-in-progress: true
 jobs:
   verify-production:
     runs-on: ubuntu-latest
@@ -43,5 +46,7 @@ jobs:
             sleep 5
           done
           test "$ok" = 1
+      - name: Log exact live dense-board vision result
+        run: node scripts/debug-live-vision-v8-2-1.mjs
       - name: Run complete live Production smoke
         run: env -u GITHUB_SHA SMOKE_URL=https://mlb-positive-ev.vercel.app node scripts/smoke.mjs
