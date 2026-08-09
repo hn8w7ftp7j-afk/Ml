@@ -1,0 +1,27 @@
+name: Apply canonical gamePk v8.2.5
+on:
+  push:
+    branches: [fix/canonical-gamepk-v8-2-5]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - run: python scripts/apply-canonical-gamepk-v8-2-5.py
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - run: npm run build
+      - name: Commit verified release
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-canonical-gamepk-v8-2-5.yml scripts/apply-canonical-gamepk-v8-2-5.py
+          git add -A
+          git commit -m 'Canonicalize vision rows by official gamePk v8.2.5 [verified]'
+          git push origin HEAD:fix/canonical-gamepk-v8-2-5
