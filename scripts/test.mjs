@@ -7,7 +7,9 @@ import {
   outcomeFractionForScore,
   parseTaiwanLine,
   resultTag,
+  SCORE_CONTRACT_VERSION,
   scoreFromCompositeEV,
+  validateScoreContract,
   validateMarketPair,
 } from '../lib/markets.js';
 import { analyzeMarkets, estimateRuns, MODEL_VERSION, RULES_VERSION } from '../lib/analysis.js';
@@ -152,15 +154,21 @@ assert.ok(autoPlan.issues.some(value => value.includes('全場大小')));
 assert.ok(autoPlan.issues.some(value => value.includes('尚未配對')));
 
 
-assert.equal(scoreFromCompositeEV(0, { weightedEV: 0.01, robustEV: 0.01 }), 5);
-assert.ok(Math.abs(scoreFromCompositeEV(0.044, { weightedEV: 0.05, robustEV: 0.04 }) - 7.2) < 1e-12);
-assert.equal(scoreFromCompositeEV(0.05, { weightedEV: 0.06, robustEV: 0.05 }), 7.5);
-assert.equal(scoreFromCompositeEV(0.06, { weightedEV: 0.07, robustEV: 0.06 }), 8);
-assert.equal(scoreFromCompositeEV(0.07, { weightedEV: 0.08, robustEV: 0.07 }), 8.5);
-assert.equal(scoreFromCompositeEV(0.08, { weightedEV: 0.09, robustEV: 0.08 }), 9);
-assert.equal(scoreFromCompositeEV(0.10, { weightedEV: 0.11, robustEV: 0.10 }), 10);
+const neutralScore = scoreFromCompositeEV(0, { weightedEV: -0.002, robustEV: -0.015, flipProbability: 0.55, quality: 0.78, edgeStrength: 0, stability: 0.40, modelErrorFloor: 0.025, independentEvidence: 0.50, divergenceRisk: 0.08 });
+assert.ok(neutralScore >= 3.5 && neutralScore <= 5.2);
+const candidateScore = scoreFromCompositeEV(0.041, { weightedEV: 0.052, robustEV: 0.043, flipProbability: 0.12, quality: 0.85, edgeStrength: 0.55, stability: 0.80, modelErrorFloor: 0.025, independentEvidence: 0.65, divergenceRisk: 0.05 });
+assert.ok(candidateScore >= 7.2 && candidateScore < 8.0);
+const strongestScore = scoreFromCompositeEV(0.090, { weightedEV: 0.112, robustEV: 0.086, flipProbability: 0.05, quality: 0.92, edgeStrength: 0.85, stability: 0.90, modelErrorFloor: 0.025, independentEvidence: 0.78, divergenceRisk: 0.03 });
+assert.ok(strongestScore >= 8.5 && strongestScore <= 9.4);
+const oldExplosiveCase = scoreFromCompositeEV(0.10, { weightedEV: 0.13, robustEV: 0.1179, flipProbability: 0.06, quality: 0.88, edgeStrength: 0.80, stability: 0.88, modelErrorFloor: 0.025, independentEvidence: 0.70, divergenceRisk: 0.04 });
+assert.ok(oldExplosiveCase >= 8.2 && oldExplosiveCase < 9.4);
+assert.notEqual(oldExplosiveCase, 10);
+assert.ok(scoreFromCompositeEV(-0.12, { weightedEV: -0.14, robustEV: -0.15, flipProbability: 0.90, quality: 0.80, edgeStrength: -1, stability: 0.10 }) >= 3.5);
 assert.ok(scoreFromCompositeEV(0.01, { weightedEV: 0.02, robustEV: -0.001 }) <= 7.1);
 assert.ok(scoreFromCompositeEV(0.12, { weightedEV: 0.15, robustEV: 0.10, waterEstimated: true }) <= 6.6);
+assert.equal(validateScoreContract(candidateScore, 0.041, { weightedEV: 0.052, robustEV: 0.043, flipProbability: 0.12, quality: 0.85, modelErrorFloor: 0.025, independentEvidence: 0.65 }).ok, true);
+assert.equal(validateScoreContract(10, 0.10, { weightedEV: 0.13, robustEV: 0.12, flipProbability: 0.03, quality: 0.95, modelErrorFloor: 0.025, independentEvidence: 0.80 }).ok, false);
+assert.equal(SCORE_CONTRACT_VERSION, 'GPT-COMPOSITE-EVIDENCE-v8.2');
 assert.equal(resultTag(8.5), '最強主推');
 assert.equal(resultTag(8.1), '主推');
 assert.equal(resultTag(7.6), '正常下注');
@@ -283,11 +291,14 @@ assert.ok(analysis.alignmentAudit.unmodeled.length > 0);
 assert.ok(analysis.results.every(row => row.modelErrorFloor >= 0.015 && row.modelErrorFloor <= 0.06));
 assert.ok(analysis.results.every(row => row.independentEvidenceStrength >= 0.15 && row.independentEvidenceStrength <= 0.85));
 assert.ok(analysis.scenarioSummary.jointCellCount > 0);
-assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 0 && row.score <= 10));
+assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 3.5 && row.score <= 9.4));
 assert.ok(analysis.results.every(row => Number.isFinite(row.weightedEV) && Number.isFinite(row.robustEV) && Number.isFinite(row.conservativeEV)));
 assert.ok(analysis.results.every(row => row.robustEV <= row.weightedEV + 1e-10));
 assert.ok(analysis.results.every(row => row.cev === row.conservativeEV));
-assert.ok(analysis.results.every(row => row.scoreFormulaVersion === 'CEV20-5+50x-v1'));
+assert.ok(analysis.results.every(row => row.scoreFormulaVersion === SCORE_CONTRACT_VERSION));
+assert.equal(analysis.scoreContractVersion, SCORE_CONTRACT_VERSION);
+assert.equal(analysis.scoreValidation.passed, true);
+assert.ok(analysis.results.every(row => row.scoreAudit?.ok === true));
 assert.ok(analysis.results.every(row => row.evFlipProbability >= 0 && row.evFlipProbability <= 1));
 assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
 assert.ok(analysis.results.every(row => row.movement.available));
@@ -298,7 +309,8 @@ for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上�
   assert.equal(pair.length, 2);
   assert.ok(Math.abs(pair[0].modelProbability + pair[1].modelProbability - 1) < 0.012, `${marketName} 機率未互補`);
   assert.ok(pair.filter(row => row.betEligible).length <= 1, `${marketName} 正反方向同時進下注池`);
-  assert.ok(!(Number(pair[0].score) > 5 && Number(pair[1].score) > 5), `${marketName} 相反方向不可同時高於5分`);
+  assert.ok(Math.abs(pair[0].score - pair[1].score) <= 5.900001, `${marketName} 分數超出正式尺度`);
+  assert.ok(pair.every(row => row.pairAudit?.ok === true), `${marketName} 正反方向驗算失敗`);
 }
 
 
@@ -307,8 +319,10 @@ for (const result of analysis.results.filter(row => row.marketAnchorProbability 
   assert.ok(result.marketCalibrationWeight >= 0.12 && result.marketCalibrationWeight <= 0.55);
   assert.ok(result.maximumCalibratedProbabilityEdge >= 0.05 && result.maximumCalibratedProbabilityEdge <= 0.12);
   assert.ok(result.calibratedMarketProbabilityGap <= result.maximumCalibratedProbabilityEdge + 1e-10);
-  const expected = Math.min(result.integrityWarning || result.waterEstimated ? 6.6 : result.weightedEV <= 0 ? 6.6 : result.robustEV <= 0 ? 7.1 : 10, Math.max(0, Math.min(10, 5 + 50 * result.cev)));
-  assert.ok(Math.abs(result.score - expected) < 1e-12);
+  assert.equal(result.scoreAudit?.ok, true);
+  assert.equal(result.scoreContractVersion, SCORE_CONTRACT_VERSION);
+  if (result.score >= 7.2) assert.ok(result.weightedEV > 0 && result.robustEV > 0 && result.conservativeEV > 0);
+  if (result.score >= 8.5) assert.ok(result.evFlipProbability <= 0.12 && result.confidence >= 0.78 && result.independentEvidenceStrength >= 0.55);
 }
 
 const disagreementContext = structuredClone(context);

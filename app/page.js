@@ -15,7 +15,7 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.1.0';
+const VERSION = '8.2.0';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -904,6 +904,7 @@ export default function Home() {
           <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '以最新資料重算新版本'}</button></div>
           {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、執行 GPT 研究判讀與聯合情境…' : '此快照尚未分析'}/> : <>
             <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
+            <div className="note">評分驗算：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜{data.analysis.scoreContractVersion}</div>
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
               return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
@@ -953,7 +954,8 @@ function ClassicResultRow({ result, settings, onBet }) {
   const unit = result.portfolioUnit || result.unitSuggestion || 0;
   return <div className={`classicResult ${strongest ? 'classicStrongest' : candidate ? 'classicCandidate' : ''}`}>
     <div className="classicPrimary"><span className="classicIcon">{icon}</span><b className="classicScore">{score == null ? '—' : score.toFixed(1)}</b><span className="classicPick">｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>{strongest && <span className="classicTag">最強主推</span>}{candidate && !strongest && <span className="classicTag">下注候選</span>}</div>
-    {score != null && <div className="classicMeta">穩健 EV {pct(result.robustEV)}｜建議 {unit} Unit</div>}
+    {score != null && <div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜建議 {unit} Unit</div>}
+    {result.scoreAudit?.ok === false && <div className="classicMeta">評分已封鎖：{result.scoreAudit.errors?.join('；')}</div>}
     {result.betEligible && <button className="classicBet" onClick={onBet}>記錄下注</button>}
   </div>;
 }
@@ -969,6 +971,7 @@ function ResultCard({ result, analysis, settings, onBet }) {
         <small>正式加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜統計原始 EV {pct(result.rawEV)}｜情境翻負 {pct(result.evFlipProbability)}</small>
         <small>正式過盤率 {pct(result.modelProbability)}｜統計原始率 {pct(result.rawModelProbability)}｜市場先驗 {pct(result.marketAnchorProbability)}｜資料模型權重 {pct(result.marketCalibrationWeight)}</small>
         <small>模型誤差門檻 {pct(result.modelErrorFloor)}｜獨立資料強度 {pct(result.independentEvidenceStrength)}｜分歧風險 {pct(result.divergenceRisk)}｜合理水位 {result.fairWater?.toFixed?.(3) || '—'}</small>
+        <small>評分驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜規則 {result.scoreContractVersion || result.scoreFormulaVersion || '—'}｜正反方向分差 {result.pairAudit?.scoreSpread == null ? '—' : Number(result.pairAudit.scoreSpread).toFixed(1)}</small>
         <small>原始比分分布：全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜卡洞 {pct(result.exactLineProbability)}｜最不利集合 {result.worstVariant || '—'}</small>
         <small>主要敏感因素：{result.scenarioSensitivity?.primary || '—'}（EV 範圍 {pct(result.scenarioSensitivity?.primaryRange)}）｜建議 {result.portfolioUnit || result.unitSuggestion || 0} Unit</small>
         {result.movement?.available ? <small>盤勢：{result.movement.verdict || result.movement.reason}{result.movement.deltaEV != null ? `｜價值變化 ${pct(result.movement.deltaEV)}` : ''}{result.movement.crossedKeyNumbers?.length ? `｜跨過關鍵數字 ${result.movement.crossedKeyNumbers.join('、')}` : ''}</small> : <small>盤勢：{result.movement?.reason || '無舊盤可比較'}</small>}
