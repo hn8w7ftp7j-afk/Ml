@@ -1,4 +1,4 @@
-# MLB 長期正期望值分析｜第 8.4.1 版
+# MLB 長期正期望值分析｜第 8.4.2 版
 
 私人使用的 MLB 台灣信用盤分析系統。第 6 版把目前的 GPT MLB 長期正 EV 規格程式化成同一套可重算、可追蹤的分析流程，不再使用獨立的「網站 EV 直接換分」模型。
 
@@ -216,3 +216,8 @@ OpenAI GPT 研究模型現在只使用有上限的首段時間，系統會預留
 ### 8.4.1 Runtime hotfix
 
 修正 Node 24 `AbortSignal.timeout()` 不接受小數毫秒，導致第二、第三備援模型在發送請求前直接失敗的問題。所有研究與最終評分逾時值現在先轉為正整數；最終評分改以 GPT-5 mini 快速路由優先、GPT-5 nano 與 GPT-5 備援，OpenAI 使用 minimal reasoning 並縮短輸出。研究層移除不存在的模型名稱，避免無效輪詢。正式評分架構、最新指令、硬門檻與無固定 EV 換分規則不變。
+
+
+### 8.4.2 Gateway／Direct OpenAI 雙通道
+
+正式評分先以單一 AI Gateway 請求交由 Gateway 內建模型 fallback，避免連續多個請求放大 429；遇到 429 會依 Retry-After 等待後重試一次。若 Vercel AI Gateway 額度或速率仍不可用，且站台已設定 `OPENAI_API_KEY`，會改走 OpenAI 官方 Chat Completions 的 `gpt-5-mini`。兩條通道共用完全相同的最新 MLB 最終評分指令、JSON 驗證與硬門檻。健康檢查會分別顯示 Gateway 與 Direct OpenAI 是否已設定。

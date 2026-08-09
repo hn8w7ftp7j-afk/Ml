@@ -16,10 +16,10 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.4.1';
+const VERSION = '8.4.2';
 const STORAGE = 'mlb-positive-ev-v8-4';
 const LEGACY_KEYS = ['mlb-positive-ev-v7', 'mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
-const FINAL_SCORE_VERSION = 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.1';
+const FINAL_SCORE_VERSION = 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.2';
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,

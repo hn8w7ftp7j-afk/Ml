@@ -4,11 +4,14 @@ import {
   FINAL_SCORE_VERSION,
   applyFinalScoreAssessment,
   normalizeFinalScoreTimeout,
+  parseRetryAfter,
 } from '../lib/final-scorer.js';
 
 assert.equal(Number.isInteger(normalizeFinalScoreTimeout(12917.52)), true);
 assert.equal(normalizeFinalScoreTimeout(12917.52), 12917);
 assert.equal(normalizeFinalScoreTimeout(undefined, 8000), 8000);
+assert.equal(parseRetryAfter('2'), 2000);
+assert.equal(Number.isInteger(parseRetryAfter('2.75')), true);
 
 const result = (market, pick, values) => ({
   market,
