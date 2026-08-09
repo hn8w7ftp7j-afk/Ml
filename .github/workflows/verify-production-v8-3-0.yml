@@ -1,0 +1,70 @@
+name: Verify Production v8.3.0
+
+on:
+  push:
+    branches:
+      - verify/production-v8-3-0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Verify exact Production release
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS --connect-timeout 10 --max-time 30 "https://mlb-positive-ev.vercel.app/api/health?t=$(date +%s)" -o /tmp/health.json; then
+              cat /tmp/health.json
+              if node - <<'NODE'
+          const value = require('/tmp/health.json');
+          const passed = value.ok === true
+            && value.version === '8.3.0'
+            && value.commit === 'a2be1531720abb1ad931a50fbf9eb774953c1a6b'
+            && value.modelVersion === 'GPT完整指令聯合情境模型-2026-08-v8.3.0'
+            && value.rulesVersion === 'MLB-TW-EXECUTION-2026-08-v8.3.0'
+            && value.visionVersion === 'MLB-VISION-2026-08-v8.2.5'
+            && value.scoreContractVersion === 'GPT-COMPOSITE-EVIDENCE-v8.3'
+            && value.aiGatewayConfigured === true;
+          process.exit(passed ? 0 : 1);
+          NODE
+              then
+                ok=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ok" = 1
+      - name: Run complete live Production smoke
+        run: |
+          set -euo pipefail
+          passed=0
+          for attempt in $(seq 1 6); do
+            echo "LIVE SMOKE ATTEMPT $attempt"
+            set +e
+            env -u GITHUB_SHA SMOKE_URL=https://mlb-positive-ev.vercel.app node scripts/smoke.mjs 2>&1 | tee /tmp/smoke.log
+            code=${PIPESTATUS[0]}
+            set -e
+            if [ "$code" = 0 ]; then
+              passed=1
+              break
+            fi
+            if grep -Eqi '429|rate.?limit|速率限制|Free tier requests' /tmp/smoke.log; then
+              sleep 75
+            else
+              exit "$code"
+            fi
+          done
+          test "$passed" = 1
