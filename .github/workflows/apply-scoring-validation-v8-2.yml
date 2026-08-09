@@ -19,6 +19,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Repair patcher for exact result metadata block
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/apply-scoring-validation-v8-2.py')
+          t=p.read_text()
+          old="""t = replace_once(t, '        integrityWarning: integrity.warning,', '        integrityWarning: integrity.warning || scoreAuditFailed,', 'result integrity warning')
+t = replace_once(t, '        integrityMessage: integrity.message,', \"        integrityMessage: scoreAuditFailed ? scoreAudit.errors.join('；') : integrity.message,\", 'result integrity message')
+t = replace_once(t, '        score,\\n        scoreBand:', '        score,\\n        scoreContractVersion: SCORE_CONTRACT_VERSION,\\n        scoreAudit,\\n        scoreBand:', 'result score audit metadata')"""
+          new="""t = replace_once(
+    t,
+    '        scenarioSensitivity: sensitivity,\\n        integrityWarning: integrity.warning,\\n        integrityMessage: integrity.message,\\n        confidence: profile.quality,\\n        score,\\n        scoreBand:',
+    \"        scenarioSensitivity: sensitivity,\\n        integrityWarning: integrity.warning || scoreAuditFailed,\\n        integrityMessage: scoreAuditFailed ? scoreAudit.errors.join('；') : integrity.message,\\n        confidence: profile.quality,\\n        score,\\n        scoreContractVersion: SCORE_CONTRACT_VERSION,\\n        scoreAudit,\\n        scoreBand:\",
+    'result score audit metadata block',
+)"""
+          if old not in t:
+              raise SystemExit('patcher result metadata repair target missing')
+          p.write_text(t.replace(old,new,1))
+          PY
       - name: Apply v8.2 scoring and validation patch
         run: python scripts/apply-scoring-validation-v8-2.py
       - name: Install dependencies
