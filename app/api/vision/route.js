@@ -135,12 +135,13 @@ function localTextParse(text, schedule) {
 function modelCandidates() {
   return unique([
     process.env.AI_VISION_MODEL,
+    'zai/glm-4.6v-flash',
     'google/gemini-2.5-flash',
-    'openai/gpt-4.1-mini',
     'openai/gpt-4o-mini',
+    'openai/gpt-4.1-mini',
     process.env.AI_MODEL,
     'openai/gpt-5-nano',
-  ]);
+  ]).slice(0, 5);
 }
 
 async function gateway(key, model, content, { jsonFormat = false, timeoutMs = 14000, maxTokens = 2400 } = {}) {
@@ -223,7 +224,7 @@ async function parseModelOutput(key, model, content, prompt, attemptMs) {
       type: 'text',
       text: `${prompt}\n以下是視覺模型已讀出的內容，只修復成規定的短鍵 JSON；不得重新辨識、不得新增數字：\n${String(output).slice(0, 60000)}`,
     }];
-    const repaired = await gateway(key, 'openai/gpt-5-nano', repairContent, {
+    const repaired = await gateway(key, model, repairContent, {
       jsonFormat: true,
       timeoutMs: Math.min(remaining, 5000),
       maxTokens: 2000,
@@ -237,6 +238,7 @@ async function generateAndParse(key, content, prompt) {
   const deadline = Date.now() + 50000;
   const failures = [];
   let empty = null;
+  let rateLimitedModels = 0;
 
   for (let index = 0; index < models.length; index += 1) {
     const model = models[index];
@@ -252,7 +254,13 @@ async function generateAndParse(key, content, prompt) {
       failures.push(`${model}：回傳成功但沒有可確認場次`);
     } catch (error) {
       failures.push(`${model}：${String(error?.message || error)}`.slice(0, 320));
-      if (error?.code === 'rate_limited') { error.details = failures; throw error; }
+      if (error?.code === 'rate_limited') {
+        rateLimitedModels += 1;
+        // A free-tier limit may be model/provider specific. Try at most two
+        // additional low-cost vision providers, then stop to avoid request storms.
+        if (rateLimitedModels >= 3 || index >= 2) { error.details = failures; throw error; }
+        continue;
+      }
     }
   }
 

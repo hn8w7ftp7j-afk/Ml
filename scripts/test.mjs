@@ -118,7 +118,7 @@ assert.equal(compactVision.games[0].fullRunline.homeWater, null);
 assert.equal(compactVision.games[0].fullTotal.line, '8+50');
 assert.equal(compactVision.games[0].first5Runline.line, '');
 assert.ok(buildVisionPrompt([{ gamePk: 99, away, home }]).includes('"g"'));
-assert.match(VISION_VERSION, /v8\.2\.2$/);
+assert.match(VISION_VERSION, /v8\.2\.3$/);
 
 const autoPlan = buildAutoAnalysisPlan({
   games: [{
