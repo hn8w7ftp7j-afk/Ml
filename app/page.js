@@ -16,17 +16,17 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.4.2';
-const STORAGE = 'mlb-positive-ev-v8-4';
-const LEGACY_KEYS = ['mlb-positive-ev-v7', 'mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
-const FINAL_SCORE_VERSION = 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.2';
+const VERSION = '8.4.3';
+const STORAGE = 'mlb-positive-ev-v8-4-3';
+const LEGACY_KEYS = ['mlb-positive-ev-v8-4', 'mlb-positive-ev-v7', 'mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
+const FINAL_SCORE_VERSION = 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.3';
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
   candidateThreshold: 7.2,
   strongestThreshold: 8.5,
   simulationsPerScenario: 1800,
-  expertMode: 'auto',
+  expertMode: 'off',
   fallbackWater: {
     全場讓分: 0.95,
     全場大小: 0.94,
@@ -120,6 +120,29 @@ async function requestJSON(url, options = {}, timeout = 180000) {
 }
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+async function requestAnalysisJSON(payload, onRetry = null) {
+  let lastError = null;
+  const delays = [0, 30000, 90000];
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) {
+      onRetry?.(`GPT 評分服務忙碌，等待 ${Math.round(delays[attempt] / 1000)} 秒後自動重試（${attempt + 1}/${delays.length}）`);
+      await sleep(delays[attempt]);
+    }
+    try {
+      return await requestJSON('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, 180000);
+    } catch (error) {
+      lastError = error;
+      const retryable = Number(error?.status) === 429 || /429|rate.?limit|too many requests|額度|credits|評分服務忙碌/i.test(String(error?.message || ''));
+      if (!retryable || attempt === delays.length - 1) throw error;
+    }
+  }
+  throw lastError || new Error('GPT 最終評分未完成');
+}
 
 async function visionFingerprint(images, schedule) {
   const source = `${VERSION}|${(schedule || []).map(game => game.gamePk).join(',')}|${(images || []).join('|')}`;
@@ -277,6 +300,7 @@ function migrateSaved() {
         settings: {
           ...DEFAULT_SETTINGS,
           ...current.settings,
+          expertMode: current.settings?.expertMode === 'required' ? 'required' : 'off',
           fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(current.settings?.fallbackWater || {}) },
         },
       };
@@ -290,6 +314,7 @@ function migrateSaved() {
         settings: {
           ...DEFAULT_SETTINGS,
           ...legacy.settings,
+          expertMode: legacy.settings?.expertMode === 'required' ? 'required' : 'off',
           fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater },
         },
       };
@@ -535,16 +560,12 @@ export default function Home() {
         .filter(item => String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
         .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))[0];
       try {
-        const data = await requestJSON('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            game: lock.game,
-            markets: lock.markets,
-            previousMarkets: previous?.markets || [],
-            settings: store.settings,
-          }),
-        }, 180000);
+        const data = await requestAnalysisJSON({
+          game: lock.game,
+          markets: lock.markets,
+          previousMarkets: previous?.markets || [],
+          settings: store.settings,
+        }, message => setVisionStatus(`${matchup(lock.game)}｜${message}`));
         const analysisVersion = { id: uid(), createdAt: new Date().toISOString(), ...data };
         setStore(value => ({
           ...value,
@@ -655,16 +676,12 @@ export default function Home() {
       const previous = [...store.locks]
         .filter(item => item.id !== lock.id && String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
         .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))[0];
-      const data = await requestJSON('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          game: lock.game,
-          markets: lock.markets,
-          previousMarkets: previous?.markets || [],
-          settings: store.settings,
-        }),
-      }, 180000);
+      const data = await requestAnalysisJSON({
+        game: lock.game,
+        markets: lock.markets,
+        previousMarkets: previous?.markets || [],
+        settings: store.settings,
+      });
       const version = { id: uid(), createdAt: new Date().toISOString(), ...data };
       setStore(value => ({
         ...value,
@@ -993,7 +1010,7 @@ export default function Home() {
         <Setting label="每情境模擬次數" value={store.settings.simulationsPerScenario} step="100" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, simulationsPerScenario: Number(value) } }))}/>
         <label>GPT 研究判讀層<select value={store.settings.expertMode || 'auto'} onChange={event => setStore(row => ({ ...row, settings: { ...row.settings, expertMode: event.target.value } }))}><option value="auto">自動整合；失敗時統計備援</option><option value="off">純統計模式</option><option value="required">GPT 未完成就不評分</option></select></label>
         {MARKET_ORDER.map(market => <Setting key={market} label={`${market} 暫估水位`} value={store.settings.fallbackWater[market]} step=".001" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, fallbackWater: { ...row.settings.fallbackWater, [market]: Number(value) } } }))}/>) }
-      </div><p className="note">未知打線、捕手、主審、牛棚與屋頂先進入聯合情境，不固定扣分。程式完成比分分布與 EV 後，由 GPT 依最新 MLB 指令同時比較全部方向給最終分數；禁止固定 EV 換分與重複計分。暫估水位只供觀察，不會進正式下注池。</p></div>
+      </div><p className="note">預設只呼叫一次 GPT 最終評分，避免研究層與評分層重複影響同一資料。未知打線、捕手、主審、牛棚與屋頂先進入聯合情境，不固定扣分；GPT 同時比較全部方向，6.6／7.1 只是上限而不是預設分數。暫估水位只供觀察，不會進正式下注池。</p></div>
       <div className="card"><h2>備份與資料</h2><div className="toolbar wrap"><button className="secondary" onClick={exportJSON}>匯出 JSON 備份</button><button className="secondary" onClick={exportCSV}>匯出 CSV 明細</button><label className="fileButton">匯入 JSON 備份<input type="file" accept="application/json" onChange={event => event.target.files?.[0] && importJSON(event.target.files[0])}/></label><button className="danger" onClick={() => { if (confirm('確定清除全部快照、分析與下注資料？')) setStore({ ...EMPTY, settings: store.settings }); }}>清除資料</button></div><p className="note">資料保存在這台裝置的瀏覽器內。盤口快照與分析版本不互相覆寫，請定期匯出備份。</p></div>
     </section>}
   </main>;
