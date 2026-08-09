@@ -1,0 +1,19 @@
+name: Verify Preview v8.2.4
+on:
+  push:
+    branches: [verify/preview-v8-2-4]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - name: Verify exact preview output
+        env:
+          PREVIEW_URL: https://mlb-340unr84u-5gtbpqpbkx-2201s-projects.vercel.app
+        run: node scripts/verify-preview-v8-2-4.mjs
