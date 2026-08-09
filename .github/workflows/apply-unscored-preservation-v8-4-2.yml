@@ -1,0 +1,34 @@
+name: Apply unscored preservation v8.4.2
+
+on:
+  push:
+    branches:
+      - fix/gpt-final-direct-fallback-v8-4-2
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: python scripts/apply-unscored-preservation-v8-4-2.py
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - run: npm run build
+      - name: Commit verified source
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-unscored-preservation-v8-4-2.yml scripts/apply-unscored-preservation-v8-4-2.py
+          git add -A
+          git commit -m 'Preserve missing-water and upstream unscored directions in GPT finalization [verified]'
+          git push origin HEAD:fix/gpt-final-direct-fallback-v8-4-2
