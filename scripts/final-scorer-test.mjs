@@ -3,6 +3,7 @@ import {
   FINAL_SCORE_INSTRUCTION_VERSION,
   FINAL_SCORE_VERSION,
   applyFinalScoreAssessment,
+  auditFinalScoreShape,
   normalizeFinalScoreTimeout,
   parseRetryAfter,
 } from '../lib/final-scorer.js';
@@ -12,6 +13,31 @@ assert.equal(normalizeFinalScoreTimeout(12917.52), 12917);
 assert.equal(normalizeFinalScoreTimeout(undefined, 8000), 8000);
 assert.equal(parseRetryAfter('2'), 2000);
 assert.equal(Number.isInteger(parseRetryAfter('2.75')), true);
+
+const clusterPayload = {
+  directions: [
+    { key: 'a', weightedEV: -0.1016, robustEV: -0.1131 },
+    { key: 'b', weightedEV: -0.0159, robustEV: -0.0250 },
+    { key: 'c', weightedEV: -0.0126, robustEV: -0.0156 },
+    { key: 'd', weightedEV: -0.0807, robustEV: -0.0898 },
+    { key: 'e', weightedEV: -0.0607, robustEV: -0.0622 },
+    { key: 'f', weightedEV: 0.0836, robustEV: 0.0711 },
+    { key: 'g', weightedEV: 0.0559, robustEV: 0.0465 },
+    { key: 'h', weightedEV: 0.0244, robustEV: 0.0191 },
+  ],
+};
+const clustered = auditFinalScoreShape({
+  directions: clusterPayload.directions.map(row => ({ key: row.key, score: row.weightedEV <= 0 ? 6.6 : 7.5 })),
+}, clusterPayload);
+assert.equal(clustered.passed, false);
+assert.ok(clustered.failures.some(value => value.includes('6.6') || value.includes('同一分數')));
+const separated = auditFinalScoreShape({
+  directions: [
+    { key: 'a', score: 2.4 }, { key: 'b', score: 5.1 }, { key: 'c', score: 5.4 }, { key: 'd', score: 3.0 },
+    { key: 'e', score: 3.4 }, { key: 'f', score: 7.6 }, { key: 'g', score: 7.2 }, { key: 'h', score: 7.5 },
+  ],
+}, clusterPayload);
+assert.equal(separated.passed, true);
 
 const result = (market, pick, values) => ({
   market,

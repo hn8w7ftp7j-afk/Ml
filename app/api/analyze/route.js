@@ -16,7 +16,7 @@ import {
 } from '../../../lib/security.js';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 150;
 export const dynamic = 'force-dynamic';
 
 function optionalNumber(value) {
@@ -118,7 +118,7 @@ export async function POST(request) {
       context: enrichedContext,
       analysis: preliminaryAnalysis,
       settings,
-      timeoutMs: 50000,
+      timeoutMs: 70000,
     });
     const analysis = applyFinalScoreAssessment({
       analysis: preliminaryAnalysis,
@@ -136,9 +136,9 @@ export async function POST(request) {
       openMarkets: [...new Set(activeMarkets.map(row => row.market))],
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: String(error?.message || error) }, {
-      status: Number(error?.status) || 500,
-      headers: { 'Cache-Control': 'no-store' },
-    });
+    const status = Number(error?.status) || 500;
+    const headers = { 'Cache-Control': 'no-store' };
+    if (status === 429) headers['Retry-After'] = String(Math.max(15, Math.ceil(Number(error?.retryAfterMs || 30000) / 1000)));
+    return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status, headers });
   }
 }
