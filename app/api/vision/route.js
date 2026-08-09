@@ -135,11 +135,11 @@ function localTextParse(text, schedule) {
 function modelCandidates() {
   return unique([
     process.env.AI_VISION_MODEL,
-    'openai/gpt-4o-mini',
-    'openai/gpt-4.1-mini',
-    'openai/gpt-5-nano',
-    process.env.AI_MODEL,
     'google/gemini-2.5-flash',
+    'openai/gpt-4.1-mini',
+    'openai/gpt-4o-mini',
+    process.env.AI_MODEL,
+    'openai/gpt-5-nano',
   ]);
 }
 
@@ -195,6 +195,17 @@ async function gateway(key, model, content, { jsonFormat = false, timeoutMs = 14
   return output;
 }
 
+function expandedVisionPayload(payload) {
+  const expanded = expandVisionPayload(payload);
+  const ids = unique([
+    ...(Array.isArray(payload?.ids) ? payload.ids : []),
+    ...(Array.isArray(payload?.gamePks) ? payload.gamePks : []),
+    ...(Array.isArray(payload?.g) ? payload.g.map(row => row?.id ?? row?.gamePk) : []),
+    ...(Array.isArray(payload?.games) ? payload.games.map(row => row?.gamePk ?? row?.id) : []),
+  ]);
+  return { ...expanded, visibleGamePks: ids };
+}
+
 async function parseModelOutput(key, model, content, prompt, attemptMs) {
   const deadline = Date.now() + attemptMs;
   const output = await gateway(key, model, content, {
@@ -204,7 +215,7 @@ async function parseModelOutput(key, model, content, prompt, attemptMs) {
   });
 
   try {
-    return expandVisionPayload(cleanVisionJSON(output));
+    return expandedVisionPayload(cleanVisionJSON(output));
   } catch (parseError) {
     const remaining = deadline - Date.now();
     if (remaining < 2200) throw new Error(`${model} JSON 解析失敗：${String(parseError?.message || parseError)}`);
@@ -217,7 +228,7 @@ async function parseModelOutput(key, model, content, prompt, attemptMs) {
       timeoutMs: Math.min(remaining, 5000),
       maxTokens: 2000,
     });
-    return expandVisionPayload(cleanVisionJSON(repaired));
+    return expandedVisionPayload(cleanVisionJSON(repaired));
   }
 }
 
@@ -241,6 +252,7 @@ async function generateAndParse(key, content, prompt) {
       failures.push(`${model}：回傳成功但沒有可確認場次`);
     } catch (error) {
       failures.push(`${model}：${String(error?.message || error)}`.slice(0, 320));
+      if (error?.code === 'rate_limited') { error.details = failures; throw error; }
     }
   }
 
@@ -268,6 +280,7 @@ async function focusedGenerateAndParse(key, content, prompt) {
       failures.push(`${model}：沒有找到目標場次`);
     } catch (error) {
       failures.push(`${model}：${String(error?.message || error)}`.slice(0, 260));
+      if (error?.code === 'rate_limited') { error.details = failures; throw error; }
     }
   }
   return { parsed: { games: [] }, model: '', failures };
@@ -294,23 +307,26 @@ async function discoverVisibleGames(key, image, schedule) {
   return { ids: [], model: '', failures };
 }
 
-async function parseBoardByTargets(key, image, schedule, requestedIds = []) {
-  const discovery = requestedIds.length
-    ? { ids: requestedIds.map(String), model: '指定補掃', failures: [] }
-    : await discoverVisibleGames(key, image, schedule);
-  const ids = discovery.ids;
-  if (!ids.length) return { parsed: { games: [] }, model: discovery.model, failures: discovery.failures, discoveredGamePks: [] };
-  const chunks = [];
-  for (let index = 0; index < ids.length; index += 2) chunks.push(ids.slice(index, index + 2));
-  const settled = await Promise.all(chunks.map(async chunk => {
-    const prompt = buildVisionTargetPrompt(schedule, chunk);
-    const content = [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }];
-    return focusedGenerateAndParse(key, content, prompt);
-  }));
-  const games = settled.flatMap(result => result.parsed?.games || []);
-  const models = unique([discovery.model, ...settled.map(result => result.model)]);
-  const failures = [...discovery.failures, ...settled.flatMap(result => result.failures || [])];
-  return { parsed: { games }, model: models.join('、'), failures, discoveredGamePks: ids };
+async function parseBoardEfficient(key, images, schedule, requestedIds = []) {
+  const ids = requestedIds.map(String);
+  const prompt = ids.length
+    ? buildVisionTargetPrompt(schedule, ids)
+    : `${buildVisionPrompt(schedule, false)}\n\n這是整張盤口的一次完整掃描。先填 ids，再逐場填 g；不可只輸出前幾場。`;
+  const content = [{ type: 'text', text: prompt }];
+  for (const image of images.slice(0, 2)) content.push({ type: 'image_url', image_url: { url: image } });
+  const result = await generateAndParse(key, content, prompt);
+  const allowed = new Set(schedule.map(game => String(game.gamePk)));
+  const visible = unique([
+    ...(result.parsed?.visibleGamePks || []),
+    ...(result.parsed?.games || []).map(row => row?.gamePk),
+    ...ids,
+  ]).filter(value => allowed.has(String(value)));
+  return {
+    parsed: result.parsed,
+    model: result.model,
+    failures: result.failures || [],
+    discoveredGamePks: visible,
+  };
 }
 
 function sanitizeDefaultWater(value) {
@@ -326,7 +342,7 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'vision-v8-1', limit: 28, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'vision-v8-2-2', limit: 16, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 4_500_000);
@@ -374,8 +390,8 @@ export async function POST(request) {
     if (!parsed) {
       const key = process.env.AI_GATEWAY_API_KEY;
       if (!key) return NextResponse.json({ ok: false, error: '人工智慧金鑰未設定' }, { status: 503 });
-      if (images.length === 1 && (boardPass || targetGamePks.length)) {
-        const result = await parseBoardByTargets(key, images[0], schedule, targetGamePks);
+      if (images.length && (boardPass || targetGamePks.length)) {
+        const result = await parseBoardEfficient(key, images, schedule, targetGamePks);
         parsed = result.parsed;
         model = result.model;
         warnings = result.failures || [];
@@ -415,16 +431,19 @@ ${text}` });
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const timedOut = error?.code === 'timeout' || /Timeout|AbortError/i.test(String(error?.name || '')) || /timeout|逾時/i.test(String(error?.message || ''));
-    const message = timedOut
-      ? '圖片內容較密，系統已自動切換辨識模型但仍逾時；請重新上傳，系統會自動分段處理'
-      : String(error?.message || error);
+    const rateLimited = error?.code === 'rate_limited' || Number(error?.status) === 429;
+    const message = rateLimited
+      ? '人工智慧辨識服務目前達到供應商速率限制，系統已停止重複扣用請求；請稍後自動重試'
+      : timedOut
+        ? '圖片內容較密，辨識模型仍逾時；請重新上傳，系統會自動重試'
+        : String(error?.message || error);
     const details = (Array.isArray(error?.details) ? error.details : [])
       .map(value => String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 320))
       .filter(Boolean)
       .slice(0, 8);
     return NextResponse.json({ ok: false, error: message, details }, {
-      status: Number(error?.status) || (timedOut ? 504 : 500),
-      headers: { 'Cache-Control': 'no-store' },
+      status: rateLimited ? 429 : Number(error?.status) || (timedOut ? 504 : 500),
+      headers: { 'Cache-Control': 'no-store', ...(rateLimited ? { 'Retry-After': '30' } : {}) },
     });
   }
 }
