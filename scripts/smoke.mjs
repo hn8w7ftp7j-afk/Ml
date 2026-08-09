@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '8.0.0';
-const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.0.0';
-const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.0.0';
+const VERSION = '8.1.0';
+const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.1.0';
+const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.1.0';
 const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.2';
-const VISION_VERSION = 'MLB-VISION-2026-08-v7.3.0';
+const VISION_VERSION = 'MLB-VISION-2026-08-v8.1.0';
 const BATCH_VERSION = 'MLB-AUTO-ANALYZE-ALL-2026-08-v1';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
@@ -91,7 +91,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*8\.0\.0\s*版/);
+assert.match(renderedHome, /第\s*8\.1\.0\s*版/);
 assert.match(renderedHome, /上傳全部圖片/);
 assert.match(renderedHome, /自動辨識全部盤口/);
 assert.match(renderedHome, /自動分析全部場次/);
@@ -112,33 +112,34 @@ assert.ok(/[\u4e00-\u9fff]/.test(game.away));
 assert.ok(/[\u4e00-\u9fff]/.test(game.home));
 
 const originHeaders = { 'Content-Type': 'application/json', Origin: BASE, 'Sec-Fetch-Site': 'same-origin' };
-const visionFixture = readFileSync(new URL('./fixtures/vision-table.b64', import.meta.url), 'utf8').replace(/\s+/g, '');
+const visionFixture = readFileSync(new URL('./fixtures/dense-board-7games.b64', import.meta.url), 'utf8').replace(/\s+/g, '');
 assert.match(visionFixture, /^[A-Za-z0-9+/]+={0,2}$/);
-const visionSchedule = [{
-  gamePk: 990001,
-  away: '克里夫蘭守護者',
-  home: '芝加哥白襪',
-  awayEnglish: 'Cleveland Guardians',
-  homeEnglish: 'Chicago White Sox',
-  gameNumber: 1,
-  scheduledInnings: 9,
-}];
+const visionSchedule = [
+  [990001,'克里夫蘭守護者','芝加哥白襪','Cleveland Guardians','Chicago White Sox'],
+  [990002,'明尼蘇達雙城','密爾瓦基釀酒人','Minnesota Twins','Milwaukee Brewers'],
+  [990003,'芝加哥小熊','堪薩斯市皇家','Chicago Cubs','Kansas City Royals'],
+  [990004,'科羅拉多落磯','聖路易紅雀','Colorado Rockies','St. Louis Cardinals'],
+  [990005,'巴爾的摩金鶯','德州遊騎兵','Baltimore Orioles','Texas Rangers'],
+  [990006,'底特律老虎','舊金山巨人','Detroit Tigers','San Francisco Giants'],
+  [990007,'洛杉磯道奇','亞利桑那響尾蛇','Los Angeles Dodgers','Arizona Diamondbacks'],
+].map(([gamePk,away,home,awayEnglish,homeEnglish]) => ({ gamePk, away, home, awayEnglish, homeEnglish, gameNumber:1, scheduledInnings:9 }));
 const visionCapture = await json(`${BASE}/api/vision`, {
-  method: 'POST',
-  headers: originHeaders,
-  body: JSON.stringify({
-    images: [`data:image/png;base64,${visionFixture}`],
-    schedule: visionSchedule,
-    defaultWater: { 全場讓分: 0.95, 全場大小: 0.94, 上半讓分: 0.94, 上半大小: 0.93 },
-  }),
-}, 150000);
+  method: 'POST', headers: originHeaders,
+  body: JSON.stringify({ images: [`data:image/jpeg;base64,${visionFixture}`], schedule: visionSchedule, boardPass: true, defaultWater: { 全場讓分:0.95, 全場大小:0.94, 上半讓分:0.94, 上半大小:0.93 } }),
+}, 180000);
 assert.equal(visionCapture.value.visionVersion, VISION_VERSION);
 assert.ok(visionCapture.value.model && visionCapture.value.model !== '本地信用盤解析器');
-const visionGame = visionCapture.value.games.find(row => Number(row.gamePk) === 990001);
-assert.ok(visionGame, '遠端圖片辨識未配對測試賽事');
-const visionPicks = (visionGame.markets || []).flatMap(row => row.directions || []).map(row => row.pick).filter(Boolean);
-assert.ok(visionPicks.length >= 4, '遠端圖片辨識未取得足夠盤口');
-assert.ok(visionPicks.some(pick => pick.includes('8+50') || pick.includes('1+15')), '遠端圖片辨識未讀到核心盤口數字');
+assert.equal(new Set(visionCapture.value.discoveredGamePks.map(String)).size, 7);
+assert.equal(visionCapture.value.games.filter(row => row.gamePk).length, 7);
+const visionById = new Map(visionCapture.value.games.map(row => [Number(row.gamePk), row]));
+const picksFor = id => (visionById.get(id)?.markets || []).flatMap(row => row.directions || []).map(row => row.pick).filter(Boolean);
+assert.ok(picksFor(990002).includes('密爾瓦基釀酒人讓2+60'));
+assert.ok(picksFor(990002).includes('明尼蘇達雙城受讓2+60'));
+assert.ok(picksFor(990003).includes('大10+10'));
+assert.ok(picksFor(990003).includes('小10+10'));
+assert.ok(picksFor(990007).includes('大4.5'));
+const visionPicks = [...visionById.values()].flatMap(row => (row.markets || []).flatMap(market => market.directions || [])).map(row => row.pick).filter(Boolean);
+
 const fullMarkets = [
   { market: '全場讓分', pick: `${game.home}讓1+50`, water: 0.95, confidence: 1 },
   { market: '全場讓分', pick: `${game.away}受讓1+50`, water: 0.95, confidence: 1 },
@@ -168,12 +169,13 @@ assert.equal(analysis.scenarioSummary.jointPortfolioDistribution, true);
 assert.ok(analysis.scenarioSummary.jointCellCount > 0);
 assert.ok(analysis.results.every(row => Number.isFinite(row.score) && Number.isFinite(row.weightedEV) && Number.isFinite(row.robustEV) && Number.isFinite(row.conservativeEV)));
 assert.ok(analysis.results.every(row => row.robustEV <= row.weightedEV + 1e-10));
-assert.ok(analysis.results.every(row => row.conservativeEV <= row.robustEV + 1e-10));
+assert.ok(analysis.results.every(row => row.cev === row.conservativeEV));
 assert.ok(analysis.results.every(row => row.evFlipProbability >= 0 && row.evFlipProbability <= 1));
 assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
 assert.ok(analysis.results.every(row => row.movement?.available));
 assert.ok(analysis.results.every(row => Number.isFinite(row.rawEV)));
 assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.12 && row.marketCalibrationWeight <= 0.55));
+assert.ok(analysis.results.every(row => Math.abs(row.score - Math.min(row.integrityWarning || row.waterEstimated ? 6.6 : row.weightedEV <= 0 ? 6.6 : row.robustEV <= 0 ? 7.1 : 10, Math.max(0, Math.min(10, 5 + 50 * row.cev)))) < 1e-12));
 assert.ok(analysis.results.every(row => row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10));
 assert.equal(analysis.alignmentAudit.expertLayer.used, false);
 assert.ok(analysis.alignmentAudit.unmodeled.length > 0);

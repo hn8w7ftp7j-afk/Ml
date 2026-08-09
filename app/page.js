@@ -15,7 +15,7 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.0.0';
+const VERSION = '8.1.0';
 const STORAGE = 'mlb-positive-ev-v7';
 const LEGACY_KEYS = ['mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const DEFAULT_SETTINGS = {
@@ -82,20 +82,20 @@ async function prepareImage(file) {
         return;
       }
 
-      const ratio = image.height / Math.max(1, image.width);
-      const segmentCount = ratio > 1.7 ? 5 : ratio > 1.15 ? 4 : 3;
-      const cropHeight = Math.min(image.height, Math.ceil((image.height / segmentCount) * 1.62));
-      const travel = Math.max(0, image.height - cropHeight);
-      const positions = segmentCount === 1
-        ? [0]
-        : Array.from({ length: segmentCount }, (_, index) => Math.round(travel * index / (segmentCount - 1)));
-      const crops = [...new Set(positions)].map(position => renderImageCrop(
+      const stripHeight = Math.min(image.height, Math.max(180, Math.min(310, Math.round(image.height * 0.34))));
+      const step = Math.max(90, Math.round(stripHeight * 0.56));
+      const positions = [];
+      for (let position = 0; position < image.height; position += step) {
+        positions.push(Math.min(position, Math.max(0, image.height - stripHeight)));
+        if (position + stripHeight >= image.height) break;
+      }
+      const crops = [...new Set(positions)].slice(0, 8).map(position => renderImageCrop(
         image,
         0,
         position,
         image.width,
-        cropHeight,
-        { minimumWidth: 1900, maximumDimension: 2400 },
+        stripHeight,
+        { minimumWidth: 2100, maximumDimension: 2500 },
       ));
       // Full-image pass discovers every matchup; overlapping crops recover small market text.
       const parts = [full, ...crops];
@@ -142,6 +142,36 @@ function blankGame(game) {
   };
 }
 
+function directionQuality(direction) {
+  if (!direction) return 0;
+  return (String(direction.pick || '').trim() ? 4 : 0)
+    + (hasActualWater(direction.water) ? 3 : 0)
+    + Math.max(0, Math.min(1, Number(direction.confidence) || 0));
+}
+
+function marketQuality(row) {
+  if (!row) return -100;
+  const directions = Array.isArray(row.directions) ? row.directions.slice(0, 2) : [];
+  const errors = validateMarketPair(row.market, directions);
+  return directions.reduce((sum, direction) => sum + directionQuality(direction), 0) - errors.length * 8;
+}
+
+function mergeVisionMarket(left, right, market) {
+  if (!left) return right || { market, directions: [blankDirection(), blankDirection()] };
+  if (!right) return left;
+  const primary = marketQuality(right) > marketQuality(left) ? right : left;
+  const secondary = primary === right ? left : right;
+  const directions = [0, 1].map(index => {
+    const chosen = { ...blankDirection(), ...(primary.directions?.[index] || {}) };
+    const other = secondary.directions?.[index];
+    if (!hasActualWater(chosen.water) && other && chosen.pick === other.pick && hasActualWater(other.water)) {
+      return { ...chosen, water: Number(other.water), waterEstimated: false, waterMissing: false, confidence: Math.max(Number(chosen.confidence) || 0, Number(other.confidence) || 0) };
+    }
+    return chosen;
+  });
+  return { market, directions };
+}
+
 function mergeVision(rows) {
   const map = new Map();
   for (const row of rows) {
@@ -155,20 +185,11 @@ function mergeVision(rows) {
       ...previous,
       matchedGame: row.matchedGame || previous.matchedGame,
       gamePk: row.gamePk || previous.gamePk,
-      markets: MARKET_ORDER.map(market => {
-        const left = previous.markets?.find(item => item.market === market);
-        const right = row.markets?.find(item => item.market === market);
-        return {
-          market,
-          directions: [0, 1].map(index => {
-            const a = left?.directions?.[index];
-            const b = right?.directions?.[index];
-            if (!a) return b || blankDirection();
-            if (!b) return a;
-            return Number(b.confidence || 0) > Number(a.confidence || 0) ? b : a;
-          }),
-        };
-      }),
+      markets: MARKET_ORDER.map(market => mergeVisionMarket(
+        previous.markets?.find(item => item.market === market),
+        row.markets?.find(item => item.market === market),
+        market,
+      )),
     });
   }
   return [...map.values()];
@@ -226,7 +247,7 @@ function migrateSaved() {
 }
 
 export default function Home() {
-  const [tab, setTab] = useState('today');
+  const [tab, setTab] = useState('upload');
   const [date, setDate] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()));
   const [games, setGames] = useState([]);
   const [loadingGames, setLoadingGames] = useState(false);
@@ -315,6 +336,7 @@ export default function Home() {
     const all = [];
     const failures = [];
     const models = new Set();
+    const expectedVisible = new Set();
     const tasks = sourceImages.flatMap((image, imageIndex) => {
       const parts = Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data];
       return parts.map((data, partIndex) => ({ image, imageIndex, partIndex, partCount: parts.length, data }));
@@ -327,9 +349,10 @@ export default function Home() {
         const data = await requestJSON('/api/vision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: [task.data], schedule, defaultWater: store.settings.fallbackWater }),
+          body: JSON.stringify({ images: [task.data], schedule, defaultWater: store.settings.fallbackWater, boardPass: task.partIndex === 0 }),
         });
         if (data.model) models.add(data.model);
+        for (const gamePk of data.discoveredGamePks || []) expectedVisible.add(String(gamePk));
         all.push(...(data.games || []));
       } catch (error) {
         failures.push(`圖片 ${task.imageIndex + 1} 區塊 ${task.partIndex + 1}：${error.message}`);
@@ -339,34 +362,41 @@ export default function Home() {
     let merged = mergeVision(all);
     if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或裁切更小範圍');
 
-    // Completeness pass: a board screenshot must not silently finish after returning only part of the visible slate.
-    const matchedIds = new Set(merged.map(row => String(row.gamePk || '')).filter(Boolean));
-    const scheduledIds = new Set((schedule || []).map(row => String(row.gamePk || '')).filter(Boolean));
-    const coverage = scheduledIds.size ? matchedIds.size / scheduledIds.size : 1;
-    if (sourceImages.length && merged.length < 7 && coverage < 0.70) {
-      setVisionStatus(`目前只辨識 ${merged.length} 場，正在執行整張圖完整性補掃…`);
-      for (let imageIndex = 0; imageIndex < sourceImages.length; imageIndex += 1) {
+    // The full-image discovery pass defines how many rows are actually visible in the uploaded board.
+    let missingVisible = [...expectedVisible].filter(gamePk => !merged.some(row => String(row.gamePk || '') === gamePk));
+    if (missingVisible.length) {
+      setVisionStatus(`已找到 ${expectedVisible.size} 個可見對戰，正在補抓缺少的 ${missingVisible.length} 場盤口…`);
+      for (const image of sourceImages) {
+        if (!missingVisible.length) break;
         try {
           const data = await requestJSON('/api/vision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ images: [sourceImages[imageIndex].data], schedule, defaultWater: store.settings.fallbackWater, completenessPass: true }),
+            body: JSON.stringify({ images: [image.data], schedule, defaultWater: store.settings.fallbackWater, targetGamePks: missingVisible }),
           });
           if (data.model) models.add(data.model);
           all.push(...(data.games || []));
+          merged = mergeVision(all);
+          missingVisible = [...expectedVisible].filter(gamePk => !merged.some(row => String(row.gamePk || '') === gamePk));
         } catch (error) {
-          failures.push(`圖片 ${imageIndex + 1} 完整性補掃：${error.message}`);
+          failures.push(`精準補掃：${error.message}`);
         }
       }
-      merged = mergeVision(all);
+    }
+    if (expectedVisible.size && missingVisible.length) {
+      setParsed(merged);
+      setSelected(0);
+      setVisionStatus(`完整性檢查未通過：圖片可見 ${expectedVisible.size} 場，目前只完成 ${expectedVisible.size - missingVisible.length} 場；未發布部分分析`);
+      setTab('confirm');
+      return;
     }
     setParsed(merged);
     setSelected(0);
     const modelText = models.size ? `｜${[...models].join('、')}` : '';
     const partialText = failures.length ? `｜${failures.length} 個區塊需注意` : '';
     const finalMatched = new Set(merged.map(row => String(row.gamePk || '')).filter(Boolean)).size;
-    const scheduleCount = (schedule || []).length;
-    const completenessText = scheduleCount ? `｜官方賽程覆蓋 ${finalMatched}/${scheduleCount}` : '';
+    const expectedCount = expectedVisible.size || finalMatched;
+    const completenessText = `｜圖片可見場次覆蓋 ${Math.min(finalMatched, expectedCount)}/${expectedCount}`;
     setVisionStatus(`辨識完成 ${merged.length} 場${completenessText}${modelText}${partialText}；開始自動分析所有有效盤口`);
     await autoAnalyzeAll(merged, failures);
   }

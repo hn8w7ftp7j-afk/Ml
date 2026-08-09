@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { normalizeVisionGame } from '../../../lib/markets.js';
 import {
   VISION_VERSION,
+  buildVisionDiscoveryPrompt,
   buildVisionPrompt,
+  buildVisionTargetPrompt,
   cleanVisionJSON,
   expandVisionPayload,
   matchScheduleGame,
@@ -252,6 +254,65 @@ async function generateAndParse(key, content, prompt) {
   throw error;
 }
 
+async function focusedGenerateAndParse(key, content, prompt) {
+  const failures = [];
+  const models = modelCandidates().slice(0, 4);
+  const deadline = Date.now() + 22000;
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    const remaining = deadline - Date.now();
+    if (remaining < 2200) break;
+    try {
+      const parsed = await parseModelOutput(key, model, content, prompt, Math.min(index === 0 ? 12000 : 8000, remaining));
+      if (parsed?.games?.length) return { parsed, model, failures };
+      failures.push(`${model}：沒有找到目標場次`);
+    } catch (error) {
+      failures.push(`${model}：${String(error?.message || error)}`.slice(0, 260));
+    }
+  }
+  return { parsed: { games: [] }, model: '', failures };
+}
+
+async function discoverVisibleGames(key, image, schedule) {
+  const prompt = buildVisionDiscoveryPrompt(schedule);
+  const content = [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }];
+  const allowed = new Set(schedule.map(game => String(game.gamePk)));
+  const failures = [];
+  for (const model of modelCandidates().slice(0, 4)) {
+    try {
+      const output = await gateway(key, model, content, { jsonFormat: true, timeoutMs: 11000, maxTokens: 900 });
+      const payload = cleanVisionJSON(output);
+      const ids = unique((payload.ids || payload.gamePks || payload.games || []).map(value => typeof value === 'object' ? value.gamePk ?? value.id : value))
+        .map(value => String(value))
+        .filter(value => allowed.has(value));
+      if (ids.length) return { ids, model, failures };
+      failures.push(`${model}：場次列舉為空`);
+    } catch (error) {
+      failures.push(`${model}：${String(error?.message || error)}`.slice(0, 260));
+    }
+  }
+  return { ids: [], model: '', failures };
+}
+
+async function parseBoardByTargets(key, image, schedule, requestedIds = []) {
+  const discovery = requestedIds.length
+    ? { ids: requestedIds.map(String), model: '指定補掃', failures: [] }
+    : await discoverVisibleGames(key, image, schedule);
+  const ids = discovery.ids;
+  if (!ids.length) return { parsed: { games: [] }, model: discovery.model, failures: discovery.failures, discoveredGamePks: [] };
+  const chunks = [];
+  for (let index = 0; index < ids.length; index += 2) chunks.push(ids.slice(index, index + 2));
+  const settled = await Promise.all(chunks.map(async chunk => {
+    const prompt = buildVisionTargetPrompt(schedule, chunk);
+    const content = [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }];
+    return focusedGenerateAndParse(key, content, prompt);
+  }));
+  const games = settled.flatMap(result => result.parsed?.games || []);
+  const models = unique([discovery.model, ...settled.map(result => result.model)]);
+  const failures = [...discovery.failures, ...settled.flatMap(result => result.failures || [])];
+  return { parsed: { games }, model: models.join('、'), failures, discoveredGamePks: ids };
+}
+
 function sanitizeDefaultWater(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, Number(item)]));
@@ -265,7 +326,7 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'vision-v7-3', limit: 28, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'vision-v8-1', limit: 28, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
 
     const body = await readJsonBody(request, 4_500_000);
@@ -273,6 +334,8 @@ export async function POST(request) {
     const images = rawImages.map(canonicalImageDataURL);
     const text = cleanText(body.text, 40000);
     const completenessPass = body.completenessPass === true;
+    const boardPass = body.boardPass === true;
+    const targetGamePks = (Array.isArray(body.targetGamePks) ? body.targetGamePks : []).map(positiveInteger).filter(Boolean).slice(0, 20);
     const schedule = (Array.isArray(body.schedule) ? body.schedule : []).slice(0, 25).map(game => ({
       gamePk: positiveInteger(game?.gamePk),
       away: cleanText(game?.away, 80),
@@ -306,18 +369,29 @@ export async function POST(request) {
     let parsed = !images.length && text ? localTextParse(text, schedule) : null;
     let model = parsed ? '本地信用盤解析器' : '';
     let warnings = [];
+    let discoveredGamePks = [];
 
     if (!parsed) {
       const key = process.env.AI_GATEWAY_API_KEY;
       if (!key) return NextResponse.json({ ok: false, error: '人工智慧金鑰未設定' }, { status: 503 });
-      const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? '\n這是完整性補掃：優先確認整張圖所有可見對戰都已列出；市場看不清可 null，但任何可配對賽事都不可漏。' : '');
-      const content = [{ type: 'text', text: prompt }];
-      if (text) content.push({ type: 'text', text: `盤口文字：\n${text}` });
-      for (const url of images) content.push({ type: 'image_url', image_url: { url } });
-      const result = await generateAndParse(key, content, prompt);
-      parsed = result.parsed;
-      model = result.model;
-      warnings = result.failures || [];
+      if (images.length === 1 && (boardPass || targetGamePks.length)) {
+        const result = await parseBoardByTargets(key, images[0], schedule, targetGamePks);
+        parsed = result.parsed;
+        model = result.model;
+        warnings = result.failures || [];
+        discoveredGamePks = result.discoveredGamePks || [];
+      }
+      if (!parsed?.games?.length) {
+        const prompt = buildVisionPrompt(schedule, Boolean(text)) + (completenessPass ? `\n這是完整性補掃：每個可見對戰都不可漏；市場看不清可 null。` : '');
+        const content = [{ type: 'text', text: prompt }];
+        if (text) content.push({ type: 'text', text: `盤口文字：
+${text}` });
+        for (const url of images) content.push({ type: 'image_url', image_url: { url } });
+        const result = await generateAndParse(key, content, prompt);
+        parsed = result.parsed;
+        model = result.model;
+        warnings = [...warnings, ...(result.failures || [])];
+      }
     }
 
     const rows = (Array.isArray(parsed?.games) ? parsed.games : []).slice(0, 30).map(raw => {
@@ -330,6 +404,7 @@ export async function POST(request) {
       model,
       visionVersion: VISION_VERSION,
       games: rows,
+      discoveredGamePks,
       warnings,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   calculateProfit,
   hasActualWater,
+  mirrorTaiwanLineToken,
   normalizeVisionGame,
   outcomeFractionForScore,
   parseTaiwanLine,
@@ -50,25 +51,32 @@ assert.deepEqual(profit, { profit: 0, rebate: 0, settledAmount: 0 });
 assert.equal(hasActualWater(0.95), true);
 assert.equal(hasActualWater(null), false);
 assert.deepEqual(validateMarketPair('全場大小', [{ pick: '大8+50', water: 0.94 }, { pick: '小8+50', water: null }]), []);
+assert.deepEqual(validateMarketPair('全場大小', [{ pick: '大8+50', water: 0.94 }, { pick: '小8+50', water: 0.94 }]), []);
+assert.equal(mirrorTaiwanLineToken('8-80'), '8+80');
+assert.equal(mirrorTaiwanLineToken('1+40'), '1-40');
 assert.ok(validateMarketPair('全場大小', [{ pick: '大8+50', water: 0.94 }, { pick: '小9+50', water: 0.94 }]).length > 0);
 
 const vision = normalizeVisionGame({
   away,
   home,
-  fullRunline: { favoriteSide: 'away', line: '1+50', favoriteWater: null, underdogWater: null, confidence: 1 },
+  fullRunline: { lineSide: 'away', line: '1+50', awayWater: null, homeWater: null, confidence: 1 },
   fullTotal: { line: '8+50', overWater: 0.94, underWater: null, confidence: 1 },
 }, { gamePk: 1, away, home }, { 全場讓分: 0.95, 全場大小: 0.94 });
 assert.equal(vision.markets[0].directions[0].waterEstimated, true);
 assert.equal(vision.markets[0].directions[1].waterEstimated, true);
 assert.equal(vision.markets[1].directions[0].waterEstimated, false);
 assert.equal(vision.markets[1].directions[1].water, null);
+assert.equal(vision.markets[0].directions[0].pick, `${away}讓1+50`);
+assert.equal(vision.markets[0].directions[1].pick, `${home}受讓1+50`);
+assert.equal(vision.markets[1].directions[0].pick, '大8+50');
+assert.equal(vision.markets[1].directions[1].pick, '小8+50');
 assert.equal(vision.markets[2].directions[0].pick, '');
 
 const nullLikeVision = normalizeVisionGame({
   away,
   home,
   first5Total: { line: 'null', overWater: null, underWater: null, confidence: 0 },
-  first5Runline: { favoriteSide: 'away', line: 'undefined', favoriteWater: null, underdogWater: null, confidence: 0 },
+  first5Runline: { lineSide: 'away', line: 'undefined', awayWater: null, homeWater: null, confidence: 0 },
 }, { gamePk: 2, away, home }, { 上半大小: 0.93, 上半讓分: 0.94 });
 assert.equal(nullLikeVision.markets[2].directions[0].pick, '');
 assert.equal(nullLikeVision.markets[2].directions[0].water, null);
@@ -84,7 +92,7 @@ assert.ok(validateMarketPair('上半讓分', [
   { pick: '匹茲堡海盜讓9-10', water: 0.95 },
   { pick: '紐約大都會受讓9-10', water: 0.95 },
 ]).some(error => error.includes('疑似辨識錯欄')));
-assert.equal(normalizeVisionGame({ away: '紐約大都會', home: '匹茲堡海盜', fullRunline: { favoriteSide:'home', line:'9-10', favoriteWater:0.95, underdogWater:null } }, { gamePk:9, away:'紐約大都會', home:'匹茲堡海盜' }).markets[0].directions[0].pick, '');
+assert.equal(normalizeVisionGame({ away: '紐約大都會', home: '匹茲堡海盜', fullRunline: { lineSide:'home', line:'9-10', awayWater:null, homeWater:0.95 } }, { gamePk:9, away:'紐約大都會', home:'匹茲堡海盜' }).markets[0].directions[0].pick, '');
 
 
 
@@ -102,12 +110,13 @@ const compactVision = expandVisionPayload(cleanVisionJSON(JSON.stringify({
 })));
 assert.equal(compactVision.games.length, 1);
 assert.equal(compactVision.games[0].gamePk, 99);
-assert.equal(compactVision.games[0].fullRunline.favoriteSide, 'away');
-assert.equal(compactVision.games[0].fullRunline.underdogWater, null);
+assert.equal(compactVision.games[0].fullRunline.lineSide, 'away');
+assert.equal(compactVision.games[0].fullRunline.awayWater, 0.95);
+assert.equal(compactVision.games[0].fullRunline.homeWater, null);
 assert.equal(compactVision.games[0].fullTotal.line, '8+50');
 assert.equal(compactVision.games[0].first5Runline.line, '');
 assert.ok(buildVisionPrompt([{ gamePk: 99, away, home }]).includes('"g"'));
-assert.match(VISION_VERSION, /v7\.3\.0$/);
+assert.match(VISION_VERSION, /v8\.1\.0$/);
 
 const autoPlan = buildAutoAnalysisPlan({
   games: [{
@@ -143,10 +152,15 @@ assert.ok(autoPlan.issues.some(value => value.includes('全場大小')));
 assert.ok(autoPlan.issues.some(value => value.includes('尚未配對')));
 
 
-assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) >= 3.5);
-assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) <= 6.6);
-assert.ok(scoreFromCompositeEV(0.01, { weightedEV: 0.02, robustEV: -0.001, flipProbability: 0.4, quality: 0.9 }) <= 7.1);
-assert.ok(scoreFromCompositeEV(0.12, { weightedEV: 0.15, robustEV: 0.10, flipProbability: 0.04, quality: 0.92, waterEstimated: true }) <= 6.6);
+assert.equal(scoreFromCompositeEV(0, { weightedEV: 0.01, robustEV: 0.01 }), 5);
+assert.ok(Math.abs(scoreFromCompositeEV(0.044, { weightedEV: 0.05, robustEV: 0.04 }) - 7.2) < 1e-12);
+assert.equal(scoreFromCompositeEV(0.05, { weightedEV: 0.06, robustEV: 0.05 }), 7.5);
+assert.equal(scoreFromCompositeEV(0.06, { weightedEV: 0.07, robustEV: 0.06 }), 8);
+assert.equal(scoreFromCompositeEV(0.07, { weightedEV: 0.08, robustEV: 0.07 }), 8.5);
+assert.equal(scoreFromCompositeEV(0.08, { weightedEV: 0.09, robustEV: 0.08 }), 9);
+assert.equal(scoreFromCompositeEV(0.10, { weightedEV: 0.11, robustEV: 0.10 }), 10);
+assert.ok(scoreFromCompositeEV(0.01, { weightedEV: 0.02, robustEV: -0.001 }) <= 7.1);
+assert.ok(scoreFromCompositeEV(0.12, { weightedEV: 0.15, robustEV: 0.10, waterEstimated: true }) <= 6.6);
 assert.equal(resultTag(8.5), '最強主推');
 assert.equal(resultTag(8.1), '主推');
 assert.equal(resultTag(7.6), '正常下注');
@@ -269,10 +283,11 @@ assert.ok(analysis.alignmentAudit.unmodeled.length > 0);
 assert.ok(analysis.results.every(row => row.modelErrorFloor >= 0.015 && row.modelErrorFloor <= 0.06));
 assert.ok(analysis.results.every(row => row.independentEvidenceStrength >= 0.15 && row.independentEvidenceStrength <= 0.85));
 assert.ok(analysis.scenarioSummary.jointCellCount > 0);
-assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 3.5 && row.score <= 9.4));
+assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 0 && row.score <= 10));
 assert.ok(analysis.results.every(row => Number.isFinite(row.weightedEV) && Number.isFinite(row.robustEV) && Number.isFinite(row.conservativeEV)));
 assert.ok(analysis.results.every(row => row.robustEV <= row.weightedEV + 1e-10));
-assert.ok(analysis.results.every(row => row.conservativeEV <= row.robustEV + 1e-10));
+assert.ok(analysis.results.every(row => row.cev === row.conservativeEV));
+assert.ok(analysis.results.every(row => row.scoreFormulaVersion === 'CEV20-5+50x-v1'));
 assert.ok(analysis.results.every(row => row.evFlipProbability >= 0 && row.evFlipProbability <= 1));
 assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
 assert.ok(analysis.results.every(row => row.movement.available));
@@ -283,34 +298,26 @@ for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上�
   assert.equal(pair.length, 2);
   assert.ok(Math.abs(pair[0].modelProbability + pair[1].modelProbability - 1) < 0.012, `${marketName} 機率未互補`);
   assert.ok(pair.filter(row => row.betEligible).length <= 1, `${marketName} 正反方向同時進下注池`);
-  assert.ok(Math.abs(pair[0].score - pair[1].score) < 6, `${marketName} 分數差距過度機械化`);
+  assert.ok(!(Number(pair[0].score) > 5 && Number(pair[1].score) > 5), `${marketName} 相反方向不可同時高於5分`);
 }
 
 
 for (const result of analysis.results.filter(row => row.marketAnchorProbability != null)) {
-  assert.equal(result.marketCalibrationApplied, false);
-  assert.equal(result.marketCalibrationWeight, 0);
-  assert.equal(result.maximumCalibratedProbabilityEdge, null);
-  assert.equal(result.calibratedMarketProbabilityGap, null);
-  assert.ok(Math.abs(result.modelProbability - result.rawModelProbability) < 1e-12);
-  assert.ok(Number.isFinite(result.rawEV));
-  assert.ok(Number.isFinite(result.weightedEV));
+  assert.equal(result.marketCalibrationApplied, true);
+  assert.ok(result.marketCalibrationWeight >= 0.12 && result.marketCalibrationWeight <= 0.55);
+  assert.ok(result.maximumCalibratedProbabilityEdge >= 0.05 && result.maximumCalibratedProbabilityEdge <= 0.12);
+  assert.ok(result.calibratedMarketProbabilityGap <= result.maximumCalibratedProbabilityEdge + 1e-10);
+  const expected = Math.min(result.integrityWarning || result.waterEstimated ? 6.6 : result.weightedEV <= 0 ? 6.6 : result.robustEV <= 0 ? 7.1 : 10, Math.max(0, Math.min(10, 5 + 50 * result.cev)));
+  assert.ok(Math.abs(result.score - expected) < 1e-12);
 }
 
-// v8 regression: even under strong model/market disagreement, the market price must not shrink the baseball probability.
 const disagreementContext = structuredClone(context);
 Object.assign(disagreementContext.home.seasonHitting, { runsPerGame: 6.20, ops: 0.900, iso: 0.245 });
-Object.assign(disagreementContext.home.recentHitting, { runsPerGame: 6.50, ops: 0.930, iso: 0.260 });
-Object.assign(disagreementContext.home.lineup, { offensiveIndex: 1.14 });
 Object.assign(disagreementContext.away.seasonHitting, { runsPerGame: 3.20, ops: 0.620, iso: 0.105 });
-Object.assign(disagreementContext.away.recentHitting, { runsPerGame: 3.00, ops: 0.600, iso: 0.095 });
-Object.assign(disagreementContext.away.lineup, { offensiveIndex: 0.86 });
-Object.assign(disagreementContext.away.starter.season, { era: 6.20, fip: 6.00, whip: 1.62, kMinusBB: 0.07, hrPer9: 1.80 });
-Object.assign(disagreementContext.home.starter.season, { era: 2.45, fip: 2.70, whip: 1.02, kMinusBB: 0.22, hrPer9: 0.72 });
 const disagreement = analyzeMarkets({ context: disagreementContext, markets: markets.filter(row => row.market === '全場讓分'), settings });
 for (const row of disagreement.results) {
-  assert.equal(row.marketCalibrationApplied, false);
-  assert.ok(Math.abs(row.modelProbability - row.rawModelProbability) < 1e-12);
+  assert.equal(row.marketCalibrationApplied, true);
+  assert.ok(row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10);
 }
 
 const repeat = analyzeMarkets({ context, markets, previousMarkets, settings });
