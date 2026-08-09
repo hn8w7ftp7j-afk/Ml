@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '8.2.0';
+const VERSION = '8.2.1';
 const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.2.0';
 const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.2.0';
 const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.2';
-const VISION_VERSION = 'MLB-VISION-2026-08-v8.1.0';
+const VISION_VERSION = 'MLB-VISION-2026-08-v8.2.1';
 const BATCH_VERSION = 'MLB-AUTO-ANALYZE-ALL-2026-08-v1';
 const SCORE_CONTRACT_VERSION = 'GPT-COMPOSITE-EVIDENCE-v8.2';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
