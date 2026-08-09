@@ -23,9 +23,9 @@ old = '''    const judged = scoreMap.get(directionKey(row));
 new = '''    const judged = scoreMap.get(directionKey(row));
     row.legacyDiagnosticScore = row.score;
 
-    // Directions that were intentionally not scored upstream (for example a
-    // missing water price) are not part of the GPT payload. Preserve their
-    // original reason instead of mislabelling them as a GPT failure.
+    // Directions intentionally left unscored upstream (for example a missing
+    // water price) are not sent to GPT. Preserve the original data-gate reason
+    // instead of converting it into a false GPT-scoring failure.
     if (source.score == null) {
       row.score = null;
       row.betEligible = false;
@@ -56,6 +56,59 @@ new = '''    const judged = scoreMap.get(directionKey(row));
       return row;
     }'''
 s = one(s, old, new, 'preserve unscored direction')
+
+old_loop = '''  applyPairRules(results, corrections);
+  for (const row of results) {
+    row.betEligible = row.score != null
+      && !row.waterEstimated
+      && !row.integrityWarning
+      && finite(row.weightedEV, -1) > 0
+      && finite(row.robustEV, -1) > 0
+      && row.score >= candidateThreshold;
+    row.unitSuggestion = row.betEligible ? baseUnit(row.score, row) : 0;
+    row.tag = row.score == null ? 'GPT 評分驗算失敗｜不評分' : row.waterEstimated ? '暫估水位｜觀察' : resultTag(row.score, candidateThreshold, strongestThreshold);
+  }
+  applyPairRules(results, corrections);'''
+new_loop = '''  applyPairRules(results, corrections);
+  for (const row of results) {
+    if (row.scoreAudit?.skipped === true) {
+      row.betEligible = false;
+      row.unitSuggestion = 0;
+      row.portfolioUnit = 0;
+      row.portfolioRole = '';
+      continue;
+    }
+    row.betEligible = row.score != null
+      && !row.waterEstimated
+      && !row.integrityWarning
+      && finite(row.weightedEV, -1) > 0
+      && finite(row.robustEV, -1) > 0
+      && row.score >= candidateThreshold;
+    row.unitSuggestion = row.betEligible ? baseUnit(row.score, row) : 0;
+    row.tag = row.score == null ? 'GPT 評分驗算失敗｜不評分' : row.waterEstimated ? '暫估水位｜觀察' : resultTag(row.score, candidateThreshold, strongestThreshold);
+  }
+  applyPairRules(results, corrections);'''
+s = one(s, old_loop, new_loop, 'skip upstream unscored rows during eligibility refresh')
+
+old_distribution = '''  if (!spreadAudit.passed) {
+    for (const row of results) {
+      row.betEligible = false;
+      row.unitSuggestion = 0;
+      row.portfolioUnit = 0;
+      row.tag = '評分分布驗算失敗｜PASS';
+    }
+    failures.push(...spreadAudit.failures);
+  }'''
+new_distribution = '''  if (!spreadAudit.passed) {
+    for (const row of results) {
+      row.betEligible = false;
+      row.unitSuggestion = 0;
+      row.portfolioUnit = 0;
+      if (row.scoreAudit?.skipped !== true) row.tag = '評分分布驗算失敗｜PASS';
+    }
+    failures.push(...spreadAudit.failures);
+  }'''
+s = one(s, old_distribution, new_distribution, 'preserve data-gate tag during distribution failure')
 p.write_text(s)
 
 p = Path('scripts/final-scorer-test.mjs')
@@ -80,8 +133,10 @@ const withMissing = applyFinalScoreAssessment({
 const preserved = withMissing.results.find(row => row.pick === '小8+50');
 assert.equal(preserved.score, null);
 assert.equal(preserved.tag, '水位未提供｜不評分');
+assert.equal(preserved.scoreSource, '上游資料閘門未通過');
 assert.equal(preserved.scoreAudit.ok, true);
 assert.equal(preserved.scoreAudit.skipped, true);
+assert.equal(preserved.betEligible, false);
 assert.equal(withMissing.scoreValidation.passed, true);
 
 console.log(JSON.stringify({"""
