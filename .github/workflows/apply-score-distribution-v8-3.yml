@@ -26,6 +26,18 @@ jobs:
           node-version: 24
       - name: Apply v8.3 score distribution patch
         run: python scripts/apply-score-distribution-v8-3.py
+      - name: Keep score recomputation inputs identical
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/test.mjs')
+          s = p.read_text()
+          old = "assert.equal(validateScoreContract(candidateScore, 0.041, { weightedEV: 0.052, robustEV: 0.043, flipProbability: 0.12, quality: 0.85, modelErrorFloor: 0.025, independentEvidence: 0.65 }).ok, true);"
+          new = "assert.equal(validateScoreContract(candidateScore, 0.041, { weightedEV: 0.052, robustEV: 0.043, flipProbability: 0.12, quality: 0.85, edgeStrength: 0.55, stability: 0.80, modelErrorFloor: 0.025, independentEvidence: 0.65, divergenceRisk: 0.05 }).ok, true);"
+          if old not in s:
+              raise SystemExit('candidate score parity test marker missing')
+          p.write_text(s.replace(old, new, 1))
+          PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund --package-lock=false
       - name: Run score parity, unit, security and Production build
