@@ -1,0 +1,159 @@
+name: Apply complete v8.1
+on:
+  push:
+    branches: [fix/complete-production-v8-1]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - name: Apply complete v8.1 repair
+        run: python scripts/apply-complete-v8-1.py
+      - name: Build seven-game dense-board vision fixture
+        run: |
+          python -m pip install --disable-pip-version-check pillow
+          python - <<'PY'
+          from PIL import Image, ImageDraw, ImageFont
+          from pathlib import Path
+          import base64
+
+          W,H=1280,676
+          im=Image.new('RGB',(W,H),'white'); d=ImageDraw.Draw(im)
+          reg='/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
+          bold='/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf'
+          f=ImageFont.truetype(reg,17); fb=ImageFont.truetype(bold,18); fh=ImageFont.truetype(bold,18)
+          cols=[0,90,360,500,685,800,930,1085,1280]
+          headers=['TIME','TEAMS','RUNLINE','TOTAL','ML','ALT','F5 RL','F5 TOTAL']
+          d.rectangle((0,0,W,38),fill=(34,93,151))
+          for i,h in enumerate(headers): d.text((cols[i]+8,8),h,font=fh,fill='white')
+          rows=[
+            ('CLE Guardians','CWS White Sox',('away','0'),('8-80'),('home','0'),('4-90')),
+            ('MIN Twins','MIL Brewers',('home','2+60'),('7-50'),('home','1-35'),('4+50')),
+            ('CHC Cubs','KC Royals',('away','1-90'),('10+10'),('away','1+90'),('5-50')),
+            ('COL Rockies','STL Cardinals',('home','1-30'),('9-50'),('home','1+80'),('5-60')),
+            ('BAL Orioles','TEX Rangers',('home','1+50'),('8平'),('home','0-55'),('4-90')),
+            ('DET Tigers','SF Giants',('away','1+40'),('7-70'),('away','0-50'),('4+50')),
+            ('LAD Dodgers','ARI D-backs',('away','1-35'),('9+50'),('away','0-65'),('4.5')),
+          ]
+          y=38; rh=90
+          for idx,(away,home,rl,total,f5rl,f5total) in enumerate(rows):
+            fill=(246,246,246) if idx%2==0 else (207,207,207)
+            d.rectangle((0,y,W,y+rh),fill=fill)
+            for x in cols: d.line((x,y,x,y+rh),fill=(170,180,190),width=1)
+            d.line((0,y+rh,W,y+rh),fill=(150,160,170),width=1)
+            d.text((8,y+16),'08-10',font=f,fill=(20,20,20)); d.text((8,y+51),f'{2+idx//5:02d}:{10 if idx<5 else 5:02d}',font=f,fill=(20,20,20))
+            d.text((98,y+14),away,font=fb,fill=(20,20,20)); d.text((98,y+49),home,font=fb,fill=(20,20,20))
+            line_side,line=rl
+            if line_side=='away': d.text((368,y+14),line,font=fb,fill=(20,20,20))
+            else: d.text((368,y+49),line,font=fb,fill=(20,20,20))
+            d.text((430,y+14),'0.950',font=f,fill=(190,50,50)); d.text((430,y+49),'0.950',font=f,fill=(190,50,50))
+            d.text((508,y+14),f'{total} O',font=fb,fill=(20,20,20)); d.text((620,y+14),'0.940',font=f,fill=(190,50,50)); d.text((570,y+49),'U',font=fb,fill=(20,20,20)); d.text((620,y+49),'0.940',font=f,fill=(190,50,50))
+            d.text((700,y+14),'0.650',font=f,fill=(190,50,50)); d.text((700,y+49),'1.160',font=f,fill=(190,50,50))
+            d.text((820,y+14),'1.5 1.160',font=f,fill=(190,50,50)); d.text((820,y+49),'0.760',font=f,fill=(190,50,50))
+            side5,line5=f5rl
+            if side5=='away': d.text((938,y+14),line5,font=fb,fill=(20,20,20))
+            else: d.text((938,y+49),line5,font=fb,fill=(20,20,20))
+            d.text((1015,y+14),'0.940',font=f,fill=(190,50,50)); d.text((1015,y+49),'0.940',font=f,fill=(190,50,50))
+            d.text((1093,y+14),f'{f5total} O',font=fb,fill=(20,20,20)); d.text((1200,y+14),'0.930',font=f,fill=(190,50,50)); d.text((1150,y+49),'U',font=fb,fill=(20,20,20)); d.text((1200,y+49),'0.930',font=f,fill=(190,50,50))
+            y+=rh
+          out=Path('/tmp/dense-board-7games.jpg'); im.save(out,'JPEG',quality=90,optimize=True)
+          raw=out.read_bytes(); assert raw[:3]==b'\xff\xd8\xff'
+          Path('scripts/fixtures/dense-board-7games.b64').write_text(base64.b64encode(raw).decode()+'\n')
+          print('fixture',len(raw))
+          PY
+      - name: Update unit and production smoke contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('scripts/test.mjs'); s=p.read_text()
+          s=s.replace('  normalizeVisionGame,', '  mirrorTaiwanLineToken,\n  normalizeVisionGame,')
+          s=s.replace("assert.deepEqual(validateMarketPair('全場大小', [{ pick: '大8+50', water: 0.94 }, { pick: '小8+50', water: null }]), []);", "assert.deepEqual(validateMarketPair('全場大小', [{ pick: '大8+50', water: 0.94 }, { pick: '小8-50', water: null }]), []);\nassert.ok(validateMarketPair('全場大小', [{ pick: '大8+50', water: 0.94 }, { pick: '小8+50', water: 0.94 }]).some(error => error.includes('尾數必須鏡像')));\nassert.equal(mirrorTaiwanLineToken('8-80'), '8+80');\nassert.equal(mirrorTaiwanLineToken('1+40'), '1-40');")
+          s=s.replace("fullRunline: { favoriteSide: 'away', line: '1+50', favoriteWater: null, underdogWater: null, confidence: 1 },", "fullRunline: { lineSide: 'away', line: '1+50', awayWater: null, homeWater: null, confidence: 1 },")
+          s=s.replace("assert.equal(vision.markets[1].directions[1].water, null);", "assert.equal(vision.markets[1].directions[1].water, null);\nassert.equal(vision.markets[0].directions[0].pick, `${away}讓1+50`);\nassert.equal(vision.markets[0].directions[1].pick, `${home}受讓1-50`);\nassert.equal(vision.markets[1].directions[0].pick, '大8+50');\nassert.equal(vision.markets[1].directions[1].pick, '小8-50');")
+          s=s.replace("first5Runline: { favoriteSide: 'away', line: 'undefined', favoriteWater: null, underdogWater: null, confidence: 0 },", "first5Runline: { lineSide: 'away', line: 'undefined', awayWater: null, homeWater: null, confidence: 0 },")
+          s=s.replace("fullRunline: { favoriteSide:'home', line:'9-10', favoriteWater:0.95, underdogWater:null }", "fullRunline: { lineSide:'home', line:'9-10', awayWater:null, homeWater:0.95 }")
+          s=s.replace("assert.equal(compactVision.games[0].fullRunline.favoriteSide, 'away');\nassert.equal(compactVision.games[0].fullRunline.underdogWater, null);", "assert.equal(compactVision.games[0].fullRunline.lineSide, 'away');\nassert.equal(compactVision.games[0].fullRunline.awayWater, 0.95);\nassert.equal(compactVision.games[0].fullRunline.homeWater, null);")
+          s=s.replace('assert.match(VISION_VERSION, /v7\\.3\\.0$/);', 'assert.match(VISION_VERSION, /v8\\.1\\.0$/);')
+          s=s.replace("assert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) >= 3.5);\nassert.ok(scoreFromCompositeEV(-0.03, { weightedEV: -0.02, robustEV: -0.04, flipProbability: 0.8, quality: 0.9 }) <= 6.6);\nassert.ok(scoreFromCompositeEV(0.01, { weightedEV: 0.02, robustEV: -0.001, flipProbability: 0.4, quality: 0.9 }) <= 7.1);\nassert.ok(scoreFromCompositeEV(0.12, { weightedEV: 0.15, robustEV: 0.10, flipProbability: 0.04, quality: 0.92, waterEstimated: true }) <= 6.6);", "assert.equal(scoreFromCompositeEV(0, { weightedEV: 0.01, robustEV: 0.01 }), 5);\nassert.ok(Math.abs(scoreFromCompositeEV(0.044, { weightedEV: 0.05, robustEV: 0.04 }) - 7.2) < 1e-12);\nassert.equal(scoreFromCompositeEV(0.05, { weightedEV: 0.06, robustEV: 0.05 }), 7.5);\nassert.equal(scoreFromCompositeEV(0.06, { weightedEV: 0.07, robustEV: 0.06 }), 8);\nassert.equal(scoreFromCompositeEV(0.07, { weightedEV: 0.08, robustEV: 0.07 }), 8.5);\nassert.equal(scoreFromCompositeEV(0.08, { weightedEV: 0.09, robustEV: 0.08 }), 9);\nassert.equal(scoreFromCompositeEV(0.10, { weightedEV: 0.11, robustEV: 0.10 }), 10);\nassert.ok(scoreFromCompositeEV(0.01, { weightedEV: 0.02, robustEV: -0.001 }) <= 7.1);\nassert.ok(scoreFromCompositeEV(0.12, { weightedEV: 0.15, robustEV: 0.10, waterEstimated: true }) <= 6.6);")
+          s=s.replace("{ market: '全場讓分', pick: `${home}受讓1+10`, water: 0.95, confidence: 1 },", "{ market: '全場讓分', pick: `${home}受讓1-10`, water: 0.95, confidence: 1 },")
+          s=s.replace("{ market: '全場大小', pick: '小8+90', water: 0.94, confidence: 1 },", "{ market: '全場大小', pick: '小8-90', water: 0.94, confidence: 1 },")
+          s=s.replace("{ market: '上半大小', pick: '小4+50', water: 0.93, confidence: 1 },", "{ market: '上半大小', pick: '小4-50', water: 0.93, confidence: 1 },")
+          s=s.replace('assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 3.5 && row.score <= 9.4));', 'assert.ok(analysis.results.every(row => Number.isFinite(row.score) && row.score >= 0 && row.score <= 10));')
+          s=s.replace('assert.ok(analysis.results.every(row => row.conservativeEV <= row.robustEV + 1e-10));', "assert.ok(analysis.results.every(row => row.cev === row.conservativeEV));\nassert.ok(analysis.results.every(row => row.scoreFormulaVersion === 'CEV20-5+50x-v1'));")
+          start=s.index("for (const result of analysis.results.filter(row => row.marketAnchorProbability != null)) {")
+          end=s.index("\nconst repeat = analyzeMarkets", start)
+          replacement='''for (const result of analysis.results.filter(row => row.marketAnchorProbability != null)) {\n  assert.equal(result.marketCalibrationApplied, true);\n  assert.ok(result.marketCalibrationWeight >= 0.12 && result.marketCalibrationWeight <= 0.55);\n  assert.ok(result.maximumCalibratedProbabilityEdge >= 0.05 && result.maximumCalibratedProbabilityEdge <= 0.12);\n  assert.ok(result.calibratedMarketProbabilityGap <= result.maximumCalibratedProbabilityEdge + 1e-10);\n  const expected = Math.min(result.integrityWarning || result.waterEstimated ? 6.6 : result.weightedEV <= 0 ? 6.6 : result.robustEV <= 0 ? 7.1 : 10, Math.max(0, Math.min(10, 5 + 50 * result.cev)));\n  assert.ok(Math.abs(result.score - expected) < 1e-12);\n}\n\n// Strong disagreement is allowed, but the calibrated posterior must remain bounded and auditable.\nconst disagreementContext = structuredClone(context);\nObject.assign(disagreementContext.home.seasonHitting, { runsPerGame: 6.20, ops: 0.900, iso: 0.245 });\nObject.assign(disagreementContext.away.seasonHitting, { runsPerGame: 3.20, ops: 0.620, iso: 0.105 });\nconst disagreement = analyzeMarkets({ context: disagreementContext, markets: markets.filter(row => row.market === '全場讓分'), settings });\nfor (const row of disagreement.results) {\n  assert.equal(row.marketCalibrationApplied, true);\n  assert.ok(row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10);\n}\n'''
+          s=s[:start]+replacement+s[end:]
+          s=s.replace("{ market: '全場大小', pick: '小8+50', water: null, confidence: 1 },", "{ market: '全場大小', pick: '小8-50', water: null, confidence: 1 },")
+          s=s.replace("missing.results.find(row => row.pick === '小8+50')", "missing.results.find(row => row.pick === '小8-50')")
+          s=s.replace("{ market: '全場大小', pick: '小8+50', water: 0.94, waterEstimated: true, confidence: 1 },", "{ market: '全場大小', pick: '小8-50', water: 0.94, waterEstimated: true, confidence: 1 },")
+          p.write_text(s)
+
+          p=Path('scripts/smoke.mjs'); s=p.read_text()
+          s=s.replace("const VERSION = '8.0.0';", "const VERSION = '8.1.0';")
+          s=s.replace("const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.0.0';", "const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.1.0';")
+          s=s.replace("const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.0.0';", "const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.1.0';")
+          s=s.replace("const VISION_VERSION = 'MLB-VISION-2026-08-v7.3.0';", "const VISION_VERSION = 'MLB-VISION-2026-08-v8.1.0';")
+          s=s.replace('/第\\s*8\\.0\\.0\\s*版/', '/第\\s*8\\.1\\.0\\s*版/')
+          s=s.replace("const visionFixture = readFileSync(new URL('./fixtures/vision-table.b64', import.meta.url), 'utf8').replace(/\\s+/g, '');", "const visionFixture = readFileSync(new URL('./fixtures/dense-board-7games.b64', import.meta.url), 'utf8').replace(/\\s+/g, '');")
+          start=s.index('const visionSchedule = [')
+          end=s.index('const fullMarkets = [', start)
+          vision_block=r'''const visionSchedule = [
+  [990001,'克里夫蘭守護者','芝加哥白襪','Cleveland Guardians','Chicago White Sox'],
+  [990002,'明尼蘇達雙城','密爾瓦基釀酒人','Minnesota Twins','Milwaukee Brewers'],
+  [990003,'芝加哥小熊','堪薩斯市皇家','Chicago Cubs','Kansas City Royals'],
+  [990004,'科羅拉多落磯','聖路易紅雀','Colorado Rockies','St. Louis Cardinals'],
+  [990005,'巴爾的摩金鶯','德州遊騎兵','Baltimore Orioles','Texas Rangers'],
+  [990006,'底特律老虎','舊金山巨人','Detroit Tigers','San Francisco Giants'],
+  [990007,'洛杉磯道奇','亞利桑那響尾蛇','Los Angeles Dodgers','Arizona Diamondbacks'],
+].map(([gamePk,away,home,awayEnglish,homeEnglish]) => ({ gamePk, away, home, awayEnglish, homeEnglish, gameNumber:1, scheduledInnings:9 }));
+const visionCapture = await json(`${BASE}/api/vision`, {
+  method: 'POST', headers: originHeaders,
+  body: JSON.stringify({ images: [`data:image/jpeg;base64,${visionFixture}`], schedule: visionSchedule, boardPass: true, defaultWater: { 全場讓分:0.95, 全場大小:0.94, 上半讓分:0.94, 上半大小:0.93 } }),
+}, 180000);
+assert.equal(visionCapture.value.visionVersion, VISION_VERSION);
+assert.ok(visionCapture.value.model && visionCapture.value.model !== '本地信用盤解析器');
+assert.equal(new Set(visionCapture.value.discoveredGamePks.map(String)).size, 7);
+assert.equal(visionCapture.value.games.filter(row => row.gamePk).length, 7);
+const visionById = new Map(visionCapture.value.games.map(row => [Number(row.gamePk), row]));
+const picksFor = id => (visionById.get(id)?.markets || []).flatMap(row => row.directions || []).map(row => row.pick).filter(Boolean);
+assert.ok(picksFor(990002).includes('密爾瓦基釀酒人讓2+60'));
+assert.ok(picksFor(990002).includes('明尼蘇達雙城受讓2-60'));
+assert.ok(picksFor(990003).includes('大10+10'));
+assert.ok(picksFor(990003).includes('小10-10'));
+assert.ok(picksFor(990007).includes('大4.5'));
+const visionPicks = [...visionById.values()].flatMap(row => (row.markets || []).flatMap(market => market.directions || [])).map(row => row.pick).filter(Boolean);
+'''
+          s=s[:start]+vision_block+'\n'+s[end:]
+          s=s.replace("{ market: '全場讓分', pick: `${game.away}受讓1+50`, water: 0.95, confidence: 1 },", "{ market: '全場讓分', pick: `${game.away}受讓1-50`, water: 0.95, confidence: 1 },")
+          s=s.replace("{ market: '全場大小', pick: '小8+50', water: 0.94, confidence: 1 },", "{ market: '全場大小', pick: '小8-50', water: 0.94, confidence: 1 },")
+          s=s.replace("{ market: '上半大小', pick: '小4+50', water: 0.93, confidence: 1 },", "{ market: '上半大小', pick: '小4-50', water: 0.93, confidence: 1 },")
+          s=s.replace('assert.ok(analysis.results.every(row => row.conservativeEV <= row.robustEV + 1e-10));', "assert.ok(analysis.results.every(row => row.cev === row.conservativeEV));")
+          s=s.replace("assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.12 && row.marketCalibrationWeight <= 0.55));", "assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.12 && row.marketCalibrationWeight <= 0.55));\nassert.ok(analysis.results.every(row => Math.abs(row.score - Math.min(row.integrityWarning || row.waterEstimated ? 6.6 : row.weightedEV <= 0 ? 6.6 : row.robustEV <= 0 ? 7.1 : 10, Math.max(0, Math.min(10, 5 + 50 * row.cev)))) < 1e-12));")
+          s=s.replace("{ market: '全場大小', pick: '小8+50', water: null, confidence: 1 },", "{ market: '全場大小', pick: '小8-50', water: null, confidence: 1 },")
+          s=s.replace("const noScore = missingWater.value.analysis.results.find(row => row.pick === '小8+50');", "const noScore = missingWater.value.analysis.results.find(row => row.pick === '小8-50');")
+          s=s.replace("{ market: '全場大小', pick: '小8+50', water: 0.94, waterEstimated: true, confidence: 1 },", "{ market: '全場大小', pick: '小8-50', water: 0.94, waterEstimated: true, confidence: 1 },")
+          p.write_text(s)
+          PY
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run unit security and production build
+        run: npm run build
+      - name: Commit verified complete release
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add DEPLOYMENT_VERSION README.md package.json app/page.js app/api/health/route.js app/api/vision/route.js lib/analysis.js lib/markets.js lib/vision.js scripts/test.mjs scripts/smoke.mjs scripts/fixtures/dense-board-7games.b64
+          git rm .github/workflows/apply-complete-v8-1.yml scripts/apply-complete-v8-1.py
+          git commit -m 'Release complete upload vision and GPT execution parity v8.1.0 [complete production]'
+          git push origin HEAD:fix/complete-production-v8-1
