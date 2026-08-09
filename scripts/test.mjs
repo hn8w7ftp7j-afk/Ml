@@ -288,13 +288,16 @@ for (const marketName of ['全場讓分', '全場大小', '上半讓分', '上�
 
 
 for (const result of analysis.results.filter(row => row.marketAnchorProbability != null)) {
-  assert.ok(result.marketCalibrationWeight >= 0.12 && result.marketCalibrationWeight <= 0.55);
-  assert.ok(result.maximumCalibratedProbabilityEdge >= 0.05 && result.maximumCalibratedProbabilityEdge <= 0.12);
-  assert.ok(Math.abs(result.modelProbability - result.marketAnchorProbability) <= Math.abs(result.rawModelProbability - result.marketAnchorProbability) + 1e-10);
-  assert.ok(result.calibratedMarketProbabilityGap <= result.maximumCalibratedProbabilityEdge + 1e-10);
+  assert.equal(result.marketCalibrationApplied, false);
+  assert.equal(result.marketCalibrationWeight, 0);
+  assert.equal(result.maximumCalibratedProbabilityEdge, null);
+  assert.equal(result.calibratedMarketProbabilityGap, null);
+  assert.ok(Math.abs(result.modelProbability - result.rawModelProbability) < 1e-12);
   assert.ok(Number.isFinite(result.rawEV));
+  assert.ok(Number.isFinite(result.weightedEV));
 }
 
+// v8 regression: even under strong model/market disagreement, the market price must not shrink the baseball probability.
 const disagreementContext = structuredClone(context);
 Object.assign(disagreementContext.home.seasonHitting, { runsPerGame: 6.20, ops: 0.900, iso: 0.245 });
 Object.assign(disagreementContext.home.recentHitting, { runsPerGame: 6.50, ops: 0.930, iso: 0.260 });
@@ -304,18 +307,11 @@ Object.assign(disagreementContext.away.recentHitting, { runsPerGame: 3.00, ops: 
 Object.assign(disagreementContext.away.lineup, { offensiveIndex: 0.86 });
 Object.assign(disagreementContext.away.starter.season, { era: 6.20, fip: 6.00, whip: 1.62, kMinusBB: 0.07, hrPer9: 1.80 });
 Object.assign(disagreementContext.home.starter.season, { era: 2.45, fip: 2.70, whip: 1.02, kMinusBB: 0.22, hrPer9: 0.72 });
-const disagreement = analyzeMarkets({
-  context: disagreementContext,
-  markets: markets.filter(row => row.market === '全場讓分'),
-  settings,
-});
-const disagreementUnderdog = disagreement.results.find(row => row.pick === `${home}受讓1+10`);
-assert.ok(disagreementUnderdog.rawMarketProbabilityGap > 0.12, 'regression case must create a large raw model/market disagreement');
-assert.ok(disagreementUnderdog.calibratedMarketProbabilityGap <= 0.12 + 1e-10);
-assert.ok(disagreementUnderdog.weightedEV < disagreementUnderdog.rawEV);
-assert.ok(disagreementUnderdog.weightedEV < 0.18, 'formal EV must not remain at an unbounded 20–30% level');
-if (disagreementUnderdog.divergenceRisk > 0.18) assert.ok(disagreementUnderdog.score <= 7.4);
-assert.ok(disagreementUnderdog.unitSuggestion <= 0.5);
+const disagreement = analyzeMarkets({ context: disagreementContext, markets: markets.filter(row => row.market === '全場讓分'), settings });
+for (const row of disagreement.results) {
+  assert.equal(row.marketCalibrationApplied, false);
+  assert.ok(Math.abs(row.modelProbability - row.rawModelProbability) < 1e-12);
+}
 
 const repeat = analyzeMarkets({ context, markets, previousMarkets, settings });
 for (let index = 0; index < analysis.results.length; index += 1) {
