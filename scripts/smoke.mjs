@@ -3,12 +3,13 @@ import { readFileSync } from 'node:fs';
 
 const BASE = (process.env.SMOKE_URL || 'https://mlb-positive-ev.vercel.app').replace(/\/$/, '');
 const EXPECTED_SHA = process.env.GITHUB_SHA || '';
-const VERSION = '8.1.0';
-const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.1.0';
-const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.1.0';
+const VERSION = '8.2.0';
+const MODEL_VERSION = 'GPT完整指令聯合情境模型-2026-08-v8.2.0';
+const RULES_VERSION = 'MLB-TW-EXECUTION-2026-08-v8.2.0';
 const EXPERT_VERSION = 'GPT-MLB-RESEARCH-LAYER-2026-08-v2.2';
 const VISION_VERSION = 'MLB-VISION-2026-08-v8.1.0';
 const BATCH_VERSION = 'MLB-AUTO-ANALYZE-ALL-2026-08-v1';
+const SCORE_CONTRACT_VERSION = 'GPT-COMPOSITE-EVIDENCE-v8.2';
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function response(url, options = {}, timeout = 90000) {
@@ -54,6 +55,7 @@ async function waitForDeployment() {
         && value.expertVersion === EXPERT_VERSION
         && value.visionVersion === VISION_VERSION
         && value.batchVersion === BATCH_VERSION
+        && value.scoreContractVersion === SCORE_CONTRACT_VERSION
         && value.aiGatewayConfigured
         && shaReady
       ) return value;
@@ -78,6 +80,7 @@ assert.equal(health.rulesVersion, RULES_VERSION);
 assert.equal(health.expertVersion, EXPERT_VERSION);
 assert.equal(health.visionVersion, VISION_VERSION);
 assert.equal(health.batchVersion, BATCH_VERSION);
+assert.equal(health.scoreContractVersion, SCORE_CONTRACT_VERSION);
 assert.equal(health.aiGatewayConfigured, true);
 if (EXPECTED_SHA && health.commit) assert.equal(health.commit, EXPECTED_SHA);
 
@@ -91,7 +94,7 @@ const home = await homeResponse.text();
 assert.equal(homeResponse.ok, true);
 assert.match(home, /MLB 長期正期望值分析/);
 const renderedHome = home.replace(/<!--.*?-->/g, '');
-assert.match(renderedHome, /第\s*8\.1\.0\s*版/);
+assert.match(renderedHome, /第\s*8\.2\.0\s*版/);
 assert.match(renderedHome, /上傳全部圖片/);
 assert.match(renderedHome, /自動辨識全部盤口/);
 assert.match(renderedHome, /自動分析全部場次/);
@@ -175,7 +178,10 @@ assert.ok(analysis.results.every(row => row.distributionCoverage > 0.999));
 assert.ok(analysis.results.every(row => row.movement?.available));
 assert.ok(analysis.results.every(row => Number.isFinite(row.rawEV)));
 assert.ok(analysis.results.every(row => row.marketCalibrationWeight >= 0.12 && row.marketCalibrationWeight <= 0.55));
-assert.ok(analysis.results.every(row => Math.abs(row.score - Math.min(row.integrityWarning || row.waterEstimated ? 6.6 : row.weightedEV <= 0 ? 6.6 : row.robustEV <= 0 ? 7.1 : 10, Math.max(0, Math.min(10, 5 + 50 * row.cev)))) < 1e-12));
+assert.equal(analysis.scoreContractVersion, SCORE_CONTRACT_VERSION);
+assert.equal(analysis.scoreValidation.passed, true);
+assert.ok(analysis.results.every(row => row.scoreAudit?.ok === true));
+assert.ok(analysis.results.every(row => row.score >= 3.5 && row.score <= 9.4 && row.score !== 10 && row.score !== 0));
 assert.ok(analysis.results.every(row => row.calibratedMarketProbabilityGap <= row.maximumCalibratedProbabilityEdge + 1e-10));
 assert.equal(analysis.alignmentAudit.expertLayer.used, false);
 assert.ok(analysis.alignmentAudit.unmodeled.length > 0);
