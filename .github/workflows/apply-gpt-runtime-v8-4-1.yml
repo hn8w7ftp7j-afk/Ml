@@ -1,0 +1,41 @@
+name: Apply GPT runtime v8.4.1
+
+on:
+  push:
+    branches:
+      - fix/gpt-final-scorer-runtime-v8-4-1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-gpt-runtime-v8-4-1
+  cancel-in-progress: false
+
+jobs:
+  patch-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply v8.4.1 runtime hotfix
+        run: python scripts/apply-gpt-runtime-v8-4-1.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run parity, final scorer, unit, security and Production build
+        run: npm run build
+      - name: Commit verified hotfix
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-gpt-runtime-v8-4-1.yml scripts/apply-gpt-runtime-v8-4-1.py
+          git add -A
+          git commit -m 'Fix GPT final scorer runtime fallbacks and integer timeouts v8.4.1 [verified]'
+          git push origin HEAD:fix/gpt-final-scorer-runtime-v8-4-1
