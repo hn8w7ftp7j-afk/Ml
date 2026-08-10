@@ -1,0 +1,32 @@
+name: Apply v9.2 reference actual layer separation
+
+on:
+  push:
+    branches: [feature/one-click-reference-board-v9-2]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: python scripts/apply-v92-separate-price-layers.py
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - run: npm run build
+      - name: Commit verified source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-v92-separate-price-layers.yml scripts/apply-v92-separate-price-layers.py
+          git add app/page.js
+          git commit -m 'Separate reference screening and actual credit price layers v9.2'
+          git push origin HEAD:feature/one-click-reference-board-v9-2
