@@ -1,106 +1,80 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import {
-  MARKET_ORDER,
-  SCORE_CONTRACT_VERSION,
-  calculateProfit,
-  extractLineToken,
-  hasActualWater,
-  marketIsOpen,
-  outcomeFractionForScore,
-  settleTaiwanContract,
-  priceCLV,
-  resultLabel,
-  validateMarketPair,
-} from '../lib/markets.js';
-import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { MARKET_ORDER, hasActualWater, parseTaiwanLine, validateMarketPair } from '../lib/markets.js';
+import { flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '9.1.0-preview';
-const STORAGE = 'mlb-positive-ev-v9-1-preview';
-const LEGACY_KEYS = ['mlb-positive-ev-v8-4', 'mlb-positive-ev-v7', 'mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
-const SCORE_FORMULA_VERSION = 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0';
+const VERSION = '9.2.0';
+const STORAGE = 'mlb-positive-ev-v9-2';
+const LEGACY_KEYS = ['mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
-  candidateThreshold: 7.2,
-  strongestThreshold: 8.5,
   simulationsPerScenario: 1800,
-  expertMode: 'off',
-  fallbackWater: {
-    全場讓分: 0.95,
-    全場大小: 0.94,
-    上半讓分: 0.94,
-    上半大小: 0.93,
-  },
+  fallbackWater: { 全場讓分: 0.95, 全場大小: 0.94, 上半讓分: 0.94, 上半大小: 0.93 },
 };
-const EMPTY = { locks: [], analysisHistory: {}, bets: [], settings: DEFAULT_SETTINGS, lastBatchId: null };
-const money = value => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(Number(value) || 0);
+
+const clean = value => String(value || '').replace(/\s+/g, '').trim();
+const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const pct = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
-const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+const scoreText = value => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toFixed(1);
+const waterText = value => hasActualWater(value) ? Number(value).toFixed(3) : '水位未提供';
 const matchup = game => `${translateTeamText(game?.away || '')} 對 ${translateTeamText(game?.home || '')}`;
-const dateText = value => value ? new Date(value).toLocaleString('zh-TW') : '—';
+const statusIsStarted = game => /Final|In Progress|Game Over|Completed/i.test(`${game?.statusEnglish || ''} ${game?.status || ''}`);
 
-async function readDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+function taipeiDate(offset = 0) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(Date.now() + offset * 86400000));
 }
 
-function canvasDataURL(canvas, quality = 0.92) {
-  return canvas.toDataURL('image/jpeg', quality);
+function localTime(value) {
+  if (!value) return '時間未定';
+  try {
+    return new Intl.DateTimeFormat('zh-TW', {
+      timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date(value));
+  } catch { return String(value); }
 }
 
-function renderImageCrop(image, sx, sy, sw, sh, { minimumWidth = 1500, maximumDimension = 2400 } = {}) {
-  const sourceMaximum = Math.max(sw, sh);
-  const desiredScale = Math.max(1, minimumWidth / Math.max(1, sw));
-  const scale = Math.max(0.35, Math.min(2, maximumDimension / Math.max(1, sourceMaximum), desiredScale));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(sw * scale));
-  canvas.height = Math.max(1, Math.round(sh * scale));
-  const context = canvas.getContext('2d', { alpha: false });
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-  let data = canvasDataURL(canvas, 0.9);
-  if (data.length > 3_000_000) data = canvas.toDataURL('image/jpeg', 0.76);
-  return data;
+function safeParse(value) {
+  try { return JSON.parse(value); } catch { return null; }
 }
 
-async function prepareImage(file) {
-  const source = await readDataURL(file);
-  return new Promise(resolve => {
-    const image = new Image();
-    image.onload = () => {
-      const full = renderImageCrop(image, 0, 0, image.width, image.height, { minimumWidth: 1600, maximumDimension: 2400 });
-      const denseBoard = image.width >= 850 && image.height >= 500;
-      if (!denseBoard) {
-        resolve({ data: full, parts: [full], width: image.width, height: image.height });
-        return;
-      }
-
-      // Two overlapping high-resolution halves are sent together in one multimodal request.
-      // This keeps every row readable while avoiding the old 9-request crop storm.
-      const halfHeight = Math.min(image.height, Math.ceil(image.height * 0.60));
-      const top = renderImageCrop(image, 0, 0, image.width, halfHeight, { minimumWidth: 2100, maximumDimension: 2500 });
-      const bottomY = Math.max(0, image.height - halfHeight);
-      const bottom = renderImageCrop(image, 0, bottomY, image.width, halfHeight, { minimumWidth: 2100, maximumDimension: 2500 });
-      resolve({ data: full, parts: [top, bottom], width: image.width, height: image.height });
+function loadCompactStore() {
+  if (typeof window === 'undefined') return { settings: DEFAULT_SETTINGS, bets: [] };
+  const own = safeParse(window.localStorage.getItem(STORAGE) || 'null');
+  if (own && typeof own === 'object') {
+    return {
+      settings: { ...DEFAULT_SETTINGS, ...(own.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(own.settings?.fallbackWater || {}) } },
+      bets: Array.isArray(own.bets) ? own.bets.slice(0, 500) : [],
     };
-    image.onerror = () => resolve({ data: source, parts: [source], width: 0, height: 0 });
-    image.src = source;
-  });
+  }
+  for (const key of LEGACY_KEYS) {
+    const legacy = safeParse(window.localStorage.getItem(key) || 'null');
+    if (!legacy || typeof legacy !== 'object') continue;
+    return {
+      settings: { ...DEFAULT_SETTINGS, ...(legacy.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(legacy.settings?.fallbackWater || {}) } },
+      bets: Array.isArray(legacy.bets) ? legacy.bets.slice(0, 500) : [],
+    };
+  }
+  return { settings: DEFAULT_SETTINGS, bets: [] };
 }
 
-async function requestJSON(url, options = {}, timeout = 180000) {
+function saveCompactStore(value) {
+  try {
+    window.localStorage.setItem(STORAGE, JSON.stringify({ settings: value.settings, bets: value.bets.slice(0, 500) }));
+    return true;
+  } catch {
+    try { window.localStorage.removeItem(STORAGE); } catch {}
+    return false;
+  }
+}
+
+async function requestJSON(url, options = {}, timeoutMs = 180000) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
     const text = await response.text();
@@ -110,1042 +84,435 @@ async function requestJSON(url, options = {}, timeout = 180000) {
     if (!response.ok || data.ok === false) {
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
-      error.details = Array.isArray(data.details) ? data.details : [];
-      error.retryAfter = Number(response.headers.get('retry-after')) || 0;
       throw error;
     }
     return data;
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('分析逾時，請稍後重試');
+    throw error;
   } finally {
     clearTimeout(timer);
   }
 }
 
-const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-
-async function requestAnalysisJSON(payload, onRetry = null) {
-  let lastError = null;
-  const delays = [0, 3000, 9000];
-  for (let attempt = 0; attempt < delays.length; attempt += 1) {
-    if (delays[attempt]) {
-      onRetry?.(`資料服務暫時忙碌，${Math.round(delays[attempt] / 1000)} 秒後自動重試`);
-      await sleep(delays[attempt]);
-    }
-    try {
-      return await requestJSON('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
-        body: JSON.stringify(payload),
-      }, 120000);
-    } catch (error) {
-      lastError = error;
-      if (![429, 503, 504].includes(Number(error?.status)) || attempt === delays.length - 1) throw error;
-    }
-  }
-  throw lastError || new Error('固定分析尚未完成');
-}
-
-async function requestRepriceJSON(payload) {
-  return requestJSON('/api/reprice', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
-    body: JSON.stringify(payload),
-  }, 120000);
-}
-
-async function visionFingerprint(images, schedule) {
-  const source = `${VERSION}|${(schedule || []).map(game => game.gamePk).join(',')}|${(images || []).join('|')}`;
-  if (!globalThis.crypto?.subtle) return source.slice(0, 120);
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
-  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
-}
-
-async function requestVisionJSON(payload) {
-  const cacheKey = `mlb-vision-${await visionFingerprint(payload.images, payload.schedule)}`;
-  try {
-    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
-    if (cached?.visionVersion === 'MLB-VISION-2026-08-v8.2.5' && Array.isArray(cached.games) && cached.games.length) return cached;
-  } catch {}
-
-  let lastError = null;
-  const delays = [0, 6000, 16000];
-  for (let attempt = 0; attempt < delays.length; attempt += 1) {
-    if (delays[attempt]) await sleep(delays[attempt]);
-    try {
-      const data = await requestJSON('/api/vision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      try { sessionStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
-      return data;
-    } catch (error) {
-      lastError = error;
-      if (![429, 503, 504].includes(Number(error?.status))) throw error;
-    }
-  }
-  throw lastError || new Error('圖片辨識未完成');
-}
-
-function download(name, text, type = 'application/json') {
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(new Blob([text], { type }));
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-}
-
-function blankGame(game) {
-  return {
-    id: uid(),
-    away: game?.away || '',
-    home: game?.home || '',
-    gamePk: game?.gamePk || null,
-    matchedGame: game || null,
-    confidence: 0,
-    markets: MARKET_ORDER.map(market => ({ market, directions: [blankDirection(), blankDirection()] })),
-  };
-}
-
-function directionQuality(direction) {
-  if (!direction) return 0;
-  return (String(direction.pick || '').trim() ? 4 : 0)
-    + (hasActualWater(direction.water) ? 3 : 0)
-    + Math.max(0, Math.min(1, Number(direction.confidence) || 0));
-}
-
-function marketQuality(row) {
-  if (!row) return -100;
-  const directions = Array.isArray(row.directions) ? row.directions.slice(0, 2) : [];
-  const errors = validateMarketPair(row.market, directions);
-  return directions.reduce((sum, direction) => sum + directionQuality(direction), 0) - errors.length * 8;
-}
-
-function mergeVisionMarket(left, right, market) {
-  if (!left) return right || { market, directions: [blankDirection(), blankDirection()] };
-  if (!right) return left;
-  const primary = marketQuality(right) > marketQuality(left) ? right : left;
-  const secondary = primary === right ? left : right;
-  const directions = [0, 1].map(index => {
-    const chosen = { ...blankDirection(), ...(primary.directions?.[index] || {}) };
-    const other = secondary.directions?.[index];
-    if (!hasActualWater(chosen.water) && other && chosen.pick === other.pick && hasActualWater(other.water)) {
-      return { ...chosen, water: Number(other.water), waterEstimated: false, waterMissing: false, confidence: Math.max(Number(chosen.confidence) || 0, Number(other.confidence) || 0) };
-    }
-    return chosen;
-  });
-  return { market, directions };
-}
-
-function mergeVision(rows) {
-  const map = new Map();
-  for (const row of rows) {
-    const key = String(row.gamePk || `${row.away}-${row.home}`).toLowerCase();
-    if (!map.has(key)) {
-      map.set(key, { ...row, id: uid() });
-      continue;
-    }
-    const previous = map.get(key);
-    map.set(key, {
-      ...previous,
-      matchedGame: row.matchedGame || previous.matchedGame,
-      gamePk: row.gamePk || previous.gamePk,
-      markets: MARKET_ORDER.map(market => mergeVisionMarket(
-        previous.markets?.find(item => item.market === market),
-        row.markets?.find(item => item.market === market),
-        market,
-      )),
-    });
-  }
-  return [...map.values()];
-}
-
 async function runPool(items, concurrency, worker) {
-  const rows = Array.isArray(items) ? items : [];
   let cursor = 0;
-  const runners = Array.from({ length: Math.max(1, Math.min(concurrency, rows.length || 1)) }, async () => {
-    while (cursor < rows.length) {
-      const index = cursor;
-      cursor += 1;
-      await worker(rows[index], index);
+  const runners = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      await worker(items[index], index);
     }
   });
   await Promise.all(runners);
 }
 
-function latestVersion(history, lockId) {
-  return Array.isArray(history?.[lockId]) ? history[lockId][0] : null;
+function groupResults(results) {
+  return MARKET_ORDER.map(market => ({ market, rows: (results || []).filter(row => row.market === market).sort((a, b) => Number(b.score ?? -99) - Number(a.score ?? -99)) }));
 }
 
-function scoreSnapshotIsValid(version) {
-  const analysis = version?.analysis;
-  if (!analysis || analysis.scoreFormulaVersion !== SCORE_FORMULA_VERSION || analysis.scoreValidation?.passed !== true) return false;
-  return (analysis.results || []).every(result => result.score == null || (
-    Number.isFinite(Number(result.score))
-    && Number(result.score) >= 1
-    && Number(result.score) <= 8.9
-    && result.scoreAudit?.ok === true
-    && result.scoreSource === '固定雙EV短板公式'
-  ));
+function rowKey(row) {
+  return `${row?.market || ''}|||${row?.pick || ''}`;
 }
 
-function sanitizeAnalysisHistory(history) {
-  return Object.fromEntries(Object.entries(history || {}).map(([lockId, versions]) => [
-    lockId,
-    (Array.isArray(versions) ? versions : []).filter(scoreSnapshotIsValid),
-  ]).filter(([, versions]) => versions.length));
+function sourcePrice(referenceMarkets, row) {
+  const source = (referenceMarkets || []).find(item => rowKey(item) === rowKey(row));
+  return source?.rawDecimalOdds;
 }
 
-function migrateSaved() {
-  try {
-    const current = JSON.parse(localStorage.getItem(STORAGE) || 'null');
-    if (current) {
-      return {
-        ...EMPTY,
-        ...current,
-        locks: Array.isArray(current.locks) ? current.locks : [],
-        analysisHistory: sanitizeAnalysisHistory(current.analysisHistory),
-        bets: Array.isArray(current.bets) ? current.bets : [],
-        settings: {
-          ...DEFAULT_SETTINGS,
-          ...current.settings,
-          expertMode: current.settings?.expertMode === 'required' ? 'required' : 'off',
-          fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(current.settings?.fallbackWater || {}) },
-        },
-      };
-    }
-    for (const key of LEGACY_KEYS) {
-      const legacy = JSON.parse(localStorage.getItem(key) || 'null');
-      if (!legacy) continue;
-      return {
-        ...EMPTY,
-        bets: Array.isArray(legacy.bets) ? legacy.bets : [],
-        settings: {
-          ...DEFAULT_SETTINGS,
-          ...legacy.settings,
-          expertMode: legacy.settings?.expertMode === 'required' ? 'required' : 'off',
-          fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater },
-        },
-      };
-    }
-  } catch {}
-  return EMPTY;
+function prefixFromPick(pick) {
+  const parsed = parseTaiwanLine(pick);
+  if (!parsed.valid) return '';
+  if (parsed.isTotal) return parsed.isOver ? '大' : '小';
+  return `${parsed.team}${parsed.isGiving ? '讓' : '受讓'}`;
+}
+
+function normalizeActualPick(input, basePick) {
+  let value = clean(input).replace(/[－–—]/g, '-').replace(/[＋]/g, '+');
+  if (!value) throw new Error('請輸入完整盤口');
+  if (parseTaiwanLine(value).valid) return value;
+  const base = parseTaiwanLine(basePick);
+  if (!base.valid) throw new Error('原參考盤無法作為輸入基準');
+  if (/^(讓|受讓)/.test(value) && !base.isTotal) value = `${base.team}${value}`;
+  else if (/^\d/.test(value)) value = `${prefixFromPick(basePick)}${value}`;
+  if (!parseTaiwanLine(value).valid) throw new Error(`盤口格式無法辨識：${input}`);
+  return value;
+}
+
+function teamMatches(value, team) {
+  const a = clean(value).toLowerCase();
+  const b = clean(team).toLowerCase();
+  return Boolean(a && b && (a === b || a.includes(b) || b.includes(a)));
+}
+
+function buildActualPair({ pick, water, market, game }) {
+  const parsed = parseTaiwanLine(pick);
+  if (!parsed.valid) throw new Error('實際信用盤格式無法辨識');
+  const token = `${parsed.lineText}${parsed.modifier || ''}`;
+  const now = new Date().toISOString();
+  let oppositePick;
+  if (parsed.isTotal) {
+    oppositePick = `${parsed.isOver ? '小' : '大'}${token}`;
+  } else {
+    const away = translateTeamText(game.away);
+    const home = translateTeamText(game.home);
+    const opponent = teamMatches(parsed.team, away) ? home : teamMatches(parsed.team, home) ? away : null;
+    if (!opponent) throw new Error('盤口球隊與本場對戰不一致');
+    oppositePick = `${opponent}${parsed.isGiving ? '受讓' : '讓'}${token}`;
+  }
+  const rows = [
+    { market, pick, water: Number(water), waterEstimated: false, confidence: 1, sourceType: 'ACTUAL_TW_CREDIT', lineAsOf: now, executable: true, marketVerification: null },
+    { market, pick: oppositePick, water: null, waterEstimated: false, confidence: 1, sourceType: 'ACTUAL_TW_CREDIT', lineAsOf: now, executable: false, marketVerification: null },
+  ];
+  const errors = validateMarketPair(market, rows);
+  if (errors.length) throw new Error(errors.join('、'));
+  return rows;
+}
+
+function compactAnalysisData(data) {
+  return { game: data.game, context: data.context, analysis: data.analysis, openMarkets: data.openMarkets || [] };
+}
+
+async function fileToDataURL(file) {
+  const source = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  return new Promise(resolve => {
+    const image = new Image();
+    image.onload = () => {
+      const maximum = 2100;
+      const scale = Math.min(1, maximum / Math.max(image.width, image.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext('2d', { alpha: false });
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.86));
+    };
+    image.onerror = () => resolve(source);
+    image.src = source;
+  });
+}
+
+function scoreClass(score) {
+  const value = Number(score);
+  if (value >= 8.5) return 'score strongest';
+  if (value >= 7.2) return 'score candidate';
+  return 'score pass';
+}
+
+function LoadingLine({ progress }) {
+  if (!progress?.active) return null;
+  const ratio = progress.total ? Math.round(progress.done / progress.total * 100) : 0;
+  return <div className="progressBox"><div className="progressTop"><strong>{progress.label}</strong><span>{progress.done}/{progress.total}</span></div><div className="progressTrack"><i style={{ width: `${ratio}%` }}/></div></div>;
+}
+
+function ResultRow({ row, referenceMarkets, onEdit, onBet, actual = false }) {
+  const decimalOdds = sourcePrice(referenceMarkets, row);
+  const formal = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
+  return <div className={`scoreRow ${Number(row.score) >= 7.2 ? 'qualified' : ''}`}>
+    <div className={scoreClass(row.score)}>{scoreText(row.score)}</div>
+    <div className="scoreBody">
+      <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
+      <div className="scorePrice">{formal ? `信用盤水位 ${waterText(row.water)}` : decimalOdds ? `運彩賠率 ${Number(decimalOdds).toFixed(2)}` : `等值淨賠付 ${waterText(row.water)}`}</div>
+      <div className="scoreMeta">加權EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}｜{row.tag || '—'}</div>
+      {formal && row.score >= 7.2 && <div className="qaLine">QA：{row.qaSummary?.passed === false ? 'BLOCK' : 'PASS'}｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 分數上限✓</div>}
+    </div>
+    <div className="rowActions">
+      {!actual && <button className="mini" onClick={() => onEdit(row)}>改成我的信用盤</button>}
+      {actual && row.betEligible && <button className="mini green" onClick={() => onBet(row)}>記錄下注</button>}
+    </div>
+  </div>;
+}
+
+function GameCard({ item, onEdit, onBet, onResetMarket }) {
+  const referenceGroups = groupResults(item.referenceData?.analysis?.results || []);
+  const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water));
+  return <section className="gameCard">
+    <div className="gameHead">
+      <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
+      <span className={`state ${item.status}`}>{item.statusLabel}</span>
+    </div>
+    {item.source && <div className="sourceBanner"><strong>{item.source.label}</strong><span>更新：{localTime(item.source.observedAt)}</span></div>}
+    {item.error && <div className="errorBox">{item.error}</div>}
+    {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
+    {item.referenceData && <>
+      <div className="sectionLabel">運彩／參考盤篩選分數</div>
+      {referenceGroups.map(group => <div className="marketBlock" key={group.market}>
+        <h3>{group.market}</h3>
+        {group.rows.length ? group.rows.map(row => <ResultRow key={rowKey(row)} row={row} referenceMarkets={item.referenceMarkets} onEdit={value => onEdit(item, value)} onBet={onBet}/>) : <div className="unopened">此市場未開盤</div>}
+      </div>)}
+      {actualRows.length > 0 && <div className="actualBox">
+        <div className="actualHead"><strong>我的實際信用盤</strong><span>沿用同一份凍結比分分布即時重算</span></div>
+        {MARKET_ORDER.map(market => {
+          const rows = actualRows.filter(row => row.market === market);
+          if (!rows.length) return null;
+          return <div className="marketBlock actualMarket" key={market}><div className="marketTitle"><h3>{market}</h3><button onClick={() => onResetMarket(item, market)}>恢復參考盤</button></div>{rows.map(row => <ResultRow actual key={rowKey(row)} row={row} referenceMarkets={[]} onEdit={onEdit} onBet={value => onBet(item, value)}/>)}</div>;
+        })}
+      </div>}
+      <details className="details"><summary>查看模型與QA明細</summary><div className="detailGrid">
+        <div><span>分析類型</span><b>{item.customData?.analysis?.analysisType || item.referenceData.analysis.analysisType}</b></div>
+        <div><span>固定公式</span><b>{item.referenceData.analysis.scoreFormulaVersion}</b></div>
+        <div><span>比分分布</span><b>{item.referenceData.analysis.distributionHash?.slice(0, 12) || '—'}</b></div>
+        <div><span>資料狀態</span><b>{item.referenceData.analysis.analysisStatus}</b></div>
+      </div></details>
+    </>}
+  </section>;
 }
 
 export default function Home() {
-  const [tab, setTab] = useState('upload');
-  const [date, setDate] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()));
-  const [games, setGames] = useState([]);
-  const [loadingGames, setLoadingGames] = useState(false);
+  const initial = useMemo(() => loadCompactStore(), []);
+  const [settings, setSettings] = useState(initial.settings);
+  const [bets, setBets] = useState(initial.bets);
+  const [tab, setTab] = useState('board');
+  const [date, setDate] = useState(taipeiDate());
+  const [schedule, setSchedule] = useState([]);
+  const [board, setBoard] = useState([]);
+  const [providerStatus, setProviderStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState({ active: false, done: 0, total: 0, label: '' });
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [editor, setEditor] = useState(null);
+  const [draftPick, setDraftPick] = useState('');
+  const [draftWater, setDraftWater] = useState('0.950');
+  const [uploadStatus, setUploadStatus] = useState('');
   const [health, setHealth] = useState(null);
-  const [store, setStore] = useState(EMPTY);
-  const [ready, setReady] = useState(false);
-  const [images, setImages] = useState([]);
-  const [visionStatus, setVisionStatus] = useState('');
-  const [visionBusy, setVisionBusy] = useState(false);
-  const [batchReport, setBatchReport] = useState(null);
-  const [manualText, setManualText] = useState('');
-  const [manualGamePk, setManualGamePk] = useState('');
-  const [parsed, setParsed] = useState([]);
-  const [selected, setSelected] = useState(0);
-  const [busyLocks, setBusyLocks] = useState({});
+  const snapshots = useRef(new Map());
 
+  useEffect(() => { saveCompactStore({ settings, bets }); }, [settings, bets]);
   useEffect(() => {
-    setStore(migrateSaved());
-    setReady(true);
-    loadGames(date);
-    requestJSON('/api/health').then(setHealth).catch(() => setHealth({ ok: false }));
+    requestJSON('/api/health', {}, 20000).then(setHealth).catch(() => setHealth(null));
+    requestJSON('/api/reference-lines', {}, 20000).then(setProviderStatus).catch(cause => setProviderStatus({ configured: false, message: String(cause?.message || cause) }));
   }, []);
 
-  useEffect(() => {
-    if (ready) localStorage.setItem(STORAGE, JSON.stringify(store));
-  }, [store, ready]);
+  const ranked = useMemo(() => board.flatMap(item => {
+    const analysis = item.customData?.analysis || item.referenceData?.analysis;
+    return (analysis?.results || []).map(row => ({ ...row, game: item.game }));
+  }).filter(row => Number.isFinite(Number(row.score))).sort((a, b) => Number(b.score) - Number(a.score)), [board]);
 
-  async function loadGames(targetDate = date) {
-    setLoadingGames(true);
-    try {
-      const data = await requestJSON(`/api/mlb?date=${targetDate}`);
-      setGames(data.games || []);
-    } catch (error) {
-      alert(`賽程載入失敗：${error.message}`);
-    } finally {
-      setLoadingGames(false);
-    }
+  function updateBoard(gamePk, updater) {
+    setBoard(current => current.map(item => item.game.gamePk === gamePk ? updater(item) : item));
   }
 
-  async function scheduleForRecognition() {
-  if (games.length) return games;
-  setVisionStatus('正在先載入當日 MLB 官方賽程…');
-  const data = await requestJSON(`/api/mlb?date=${date}`);
-  const schedule = data.games || [];
-  setGames(schedule);
-  if (!schedule.length) throw new Error('當日沒有可配對的 MLB 官方賽事');
-  return schedule;
-}
-
-  async function chooseImages(files) {
-    const list = [...(files || [])].slice(0, 8);
-    if (!list.length || visionBusy) return;
-    setVisionBusy(true);
-    setBatchReport(null);
-    setVisionStatus('正在保留文字清晰度並分段全部圖片…');
-    try {
-      const rows = [];
-      for (let index = 0; index < list.length; index += 1) {
-        const file = list[index];
-        const prepared = await prepareImage(file);
-        rows.push({
-          id: uid(),
-          name: file.name,
-          preview: URL.createObjectURL(file),
-          data: prepared.data,
-          parts: prepared.parts,
-          width: prepared.width,
-          height: prepared.height,
-          size: file.size,
-        });
-        setVisionStatus(`正在處理第 ${index + 1} 張，共 ${list.length} 張；此圖分為 ${prepared.parts.length} 區塊`);
-      }
-      setImages(rows);
-      const regions = rows.reduce((sum, row) => sum + Math.max(1, row.parts?.length || 0), 0);
-      setVisionStatus(`已準備 ${rows.length} 張圖片、${regions} 個區塊；現在自動辨識全部盤口`);
-      const schedule = await scheduleForRecognition();
-      await recognizeAndAnalyze(rows, schedule);
-    } catch (error) {
-      setVisionStatus(`自動處理失敗：${error.message}`);
-    } finally {
-      setVisionBusy(false);
-    }
+  async function fetchSchedule(targetDate = date) {
+    const data = await requestJSON(`/api/mlb?date=${encodeURIComponent(targetDate)}&t=${Date.now()}`, {}, 40000);
+    const rows = Array.isArray(data.games) ? data.games.filter(game => !statusIsStarted(game)) : [];
+    setSchedule(rows);
+    return rows;
   }
 
-  async function recognizeAndAnalyze(sourceImages, schedule) {
-    const all = [];
-    const failures = [];
-    const models = new Set();
-    const expectedVisible = new Set();
-
-    for (let index = 0; index < sourceImages.length; index += 1) {
-      const image = sourceImages[index];
-      const requestImages = (Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data]).slice(0, 2);
-      setVisionStatus(`自動辨識全部圖片：圖片 ${index + 1}/${sourceImages.length}；單次合併掃描全部區域`);
-      try {
-        const data = await requestVisionJSON({
-          images: requestImages,
-          schedule,
-          defaultWater: store.settings.fallbackWater,
-          boardPass: true,
-        });
-        if (data.model) models.add(data.model);
-        for (const gamePk of data.discoveredGamePks || []) expectedVisible.add(String(gamePk));
-        all.push(...(data.games || []));
-      } catch (error) {
-        const detail = error?.details?.length ? `｜${error.details[0]}` : '';
-        failures.push(`圖片 ${index + 1}：${error.message}${detail}`);
-      }
-    }
-
-    let merged = mergeVision(all);
-    if (!merged.length) throw new Error(failures[0] || '沒有辨識到任何場次，請改貼盤口文字或重新上傳');
-
-    let missingVisible = [...expectedVisible].filter(gamePk => !merged.some(row => String(row.gamePk || '') === gamePk));
-    if (missingVisible.length) {
-      setVisionStatus(`已找到 ${expectedVisible.size} 個可見對戰，正在一次補抓缺少的 ${missingVisible.length} 場…`);
-      for (const image of sourceImages) {
-        if (!missingVisible.length) break;
-        try {
-          const requestImages = (Array.isArray(image.parts) && image.parts.length ? image.parts : [image.data]).slice(0, 2);
-          const data = await requestVisionJSON({
-            images: requestImages,
-            schedule,
-            defaultWater: store.settings.fallbackWater,
-            targetGamePks: missingVisible,
-          });
-          if (data.model) models.add(data.model);
-          all.push(...(data.games || []));
-          merged = mergeVision(all);
-          missingVisible = [...expectedVisible].filter(gamePk => !merged.some(row => String(row.gamePk || '') === gamePk));
-        } catch (error) {
-          failures.push(`精準補掃：${error.message}`);
-        }
-      }
-    }
-
-    if (expectedVisible.size && missingVisible.length) {
-      setParsed(merged);
-      setSelected(0);
-      setVisionStatus(`完整性檢查未通過：圖片可見 ${expectedVisible.size} 場，目前完成 ${expectedVisible.size - missingVisible.length} 場；未發布部分分析`);
-      setTab('confirm');
-      return;
-    }
-
-    setParsed(merged);
-    setSelected(0);
-    const finalMatched = new Set(merged.map(row => String(row.gamePk || '')).filter(Boolean)).size;
-    const expectedCount = expectedVisible.size || finalMatched;
-    const completenessText = `｜圖片可見場次覆蓋 ${Math.min(finalMatched, expectedCount)}/${expectedCount}`;
-    const modelText = models.size ? `｜模型 ${[...models].join('、')}` : '';
-    const partialText = failures.length ? `｜${failures.length} 個重試訊息` : '';
-    setVisionStatus(`辨識完成 ${merged.length} 場${completenessText}${modelText}${partialText}；開始自動分析所有有效盤口`);
-    await autoAnalyzeAll(merged, failures);
-  }
-  async function recognize() {
-    if (!images.length || visionBusy) return;
-    setVisionBusy(true);
-    setBatchReport(null);
+  async function analyzeBoardItem(reference, index, total) {
+    const game = reference.game;
+    updateBoard(game.gamePk, item => ({ ...item, status: 'running', statusLabel: '建立比分分布中…' }));
     try {
-      const schedule = await scheduleForRecognition();
-      await recognizeAndAnalyze(images, schedule);
-    } catch (error) {
-      setVisionStatus(`重新處理失敗：${error.message}`);
-    } finally {
-      setVisionBusy(false);
-    }
-  }
-
-  async function parseText() {
-    if (!manualText.trim() || visionBusy) return;
-    setVisionBusy(true);
-    setBatchReport(null);
-    setVisionStatus('正在解析全部盤口文字…');
-    try {
-      const schedule = await scheduleForRecognition();
-      const data = await requestJSON('/api/vision', {
+      const data = await requestJSON('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: manualText, schedule, defaultWater: store.settings.fallbackWater }),
-      });
-      const rows = mergeVision(data.games || []);
-      if (!rows.length) throw new Error('沒有解析到場次');
-      setParsed(rows);
-      setSelected(0);
-      setVisionStatus(`解析完成 ${rows.length} 場；開始自動分析所有有效盤口`);
-      await autoAnalyzeAll(rows, []);
-    } catch (error) {
-      setVisionStatus(`解析或分析失敗：${error.message}`);
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ game, markets: reference.markets, settings: { ...settings, rebateRate: 0, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' } }),
+      }, 180000);
+      snapshots.current.set(game.gamePk, data.repriceSnapshot);
+      updateBoard(game.gamePk, item => ({ ...item, status: 'done', statusLabel: '參考盤分析完成', referenceData: compactAnalysisData(data), customMarkets: reference.markets, error: '' }));
+    } catch (cause) {
+      updateBoard(game.gamePk, item => ({ ...item, status: 'failed', statusLabel: '分析失敗', error: String(cause?.message || cause) }));
     } finally {
-      setVisionBusy(false);
+      setProgress(value => ({ ...value, done: Math.min(total, value.done + 1), label: `分析今日全部盤口：${index + 1}/${total}` }));
     }
   }
 
-  async function autoAnalyzeAll(rows, recognitionFailures = []) {
-    const existingLocks = [...store.locks];
-    const plan = buildAutoAnalysisPlan({
-      games: rows,
-      settings: store.settings,
-      version: VERSION,
-      batchId: uid(),
-      idFactory: uid,
-    });
-    setParsed(plan.preparedGames);
-
-    if (!plan.locks.length) {
-      const report = {
-        batchId: plan.batchId,
-        recognized: plan.recognizedGameCount,
-        analyzed: 0,
-        failed: 0,
-        skipped: plan.recognizedGameCount,
-        directions: 0,
-        issues: [...plan.issues, ...recognitionFailures],
-      };
-      setBatchReport(report);
-      setVisionStatus('辨識已完成，但沒有可直接分析的有效盤口；請到盤口確認頁修正');
-      setTab('confirm');
-      return;
-    }
-
-    setStore(value => ({
-      ...value,
-      lastBatchId: plan.batchId,
-      locks: [...plan.locks, ...value.locks],
-    }));
-    setBusyLocks(value => ({ ...value, ...Object.fromEntries(plan.locks.map(lock => [lock.id, true])) }));
-
-    let finished = 0;
-    let completed = 0;
-    const analysisFailures = [];
-    await runPool(plan.locks, 1, async lock => {
-      const previous = existingLocks
-        .filter(item => String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
-        .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))[0];
-      try {
-        const data = await requestAnalysisJSON({
-          game: lock.game,
-          markets: lock.markets,
-          previousMarkets: previous?.markets || [],
-          settings: store.settings,
-        }, message => setVisionStatus(`${matchup(lock.game)}｜${message}`));
-        const analysisVersion = { id: uid(), createdAt: new Date().toISOString(), ...data };
-        setStore(value => ({
-          ...value,
-          analysisHistory: {
-            ...value.analysisHistory,
-            [lock.id]: [analysisVersion, ...(value.analysisHistory[lock.id] || [])],
-          },
-        }));
-        completed += 1;
-      } catch (error) {
-        analysisFailures.push(`${matchup(lock.game)}：${error.message}`);
-      } finally {
-        finished += 1;
-        setBusyLocks(value => ({ ...value, [lock.id]: false }));
-        setVisionStatus(`自動分析全部盤口：已完成 ${finished}/${plan.locks.length} 場`);
+  async function oneClickAnalyze() {
+    if (busy) return;
+    setBusy(true); setError(''); setNotice(''); setTab('board'); snapshots.current.clear();
+    try {
+      setProgress({ active: true, done: 0, total: 1, label: '取得今日MLB賽事' });
+      const games = await fetchSchedule(date);
+      if (!games.length) throw new Error('這個日期沒有可分析的賽前MLB賽事');
+      setProgress({ active: true, done: 0, total: 1, label: '取得合法運彩／參考盤' });
+      const reference = await requestJSON('/api/reference-lines', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() }, body: JSON.stringify({ date, schedule: games }),
+      }, 60000);
+      setProviderStatus(reference);
+      const byPk = new Map((reference.games || []).map(row => [Number(row.gamePk), row]));
+      const items = games.map(game => {
+        const found = byPk.get(Number(game.gamePk));
+        return {
+          game, source: found?.source || null, referenceMarkets: found?.markets || [], customMarkets: found?.markets || [],
+          status: found ? 'queued' : 'unopened',
+          statusLabel: found ? '等待分析' : reference.configured === false ? '合法盤源尚未設定' : '運彩尚未開盤或未配對',
+          referenceData: null, customData: null, error: '',
+        };
+      });
+      setBoard(items);
+      const analyzable = (reference.games || []).filter(row => row.markets?.length);
+      if (!reference.configured) {
+        setNotice(reference.message || '合法盤源尚未設定；可先用下方截圖匯入。');
+        setProgress({ active: false, done: 0, total: 0, label: '' });
+        return;
       }
-    });
-
-    const issues = [...plan.issues, ...recognitionFailures, ...analysisFailures];
-    const report = {
-      batchId: plan.batchId,
-      recognized: plan.recognizedGameCount,
-      analyzed: completed,
-      failed: analysisFailures.length,
-      skipped: Math.max(0, plan.recognizedGameCount - plan.locks.length),
-      directions: plan.directionCount,
-      markets: plan.marketCount,
-      issues,
-    };
-    setBatchReport(report);
-    setVisionStatus(`全部完成：辨識 ${report.recognized} 場，自動分析 ${report.analyzed} 場、${report.markets} 個市場、${report.directions} 個方向${issues.length ? `；${issues.length} 項需核對` : ''}`);
-    setTab(completed > 0 ? 'analysis' : 'confirm');
+      if (!analyzable.length) {
+        setNotice('目前合法參考盤來源尚未開出可分析盤口。');
+        setProgress({ active: false, done: 0, total: 0, label: '' });
+        return;
+      }
+      setProgress({ active: true, done: 0, total: analyzable.length, label: '分析今日全部盤口' });
+      await runPool(analyzable, 2, (item, index) => analyzeBoardItem(item, index, analyzable.length));
+      setNotice(`完成 ${analyzable.length} 場參考盤分析。看到你的信用盤後，直接修改完整盤口與水位即可立即重算。`);
+    } catch (cause) { setError(String(cause?.message || cause)); }
+    finally { setBusy(false); setProgress(value => ({ ...value, active: false })); }
   }
 
-  function addManual() {
-    const game = games.find(item => String(item.gamePk) === String(manualGamePk));
-    if (!game) return alert('請先選擇一場 MLB 賽事');
-    setParsed(previous => [...previous, blankGame(game)]);
-    setSelected(parsed.length);
-    setTab('confirm');
+  function openEditor(item, row) {
+    setEditor({ gamePk: item.game.gamePk, market: row.market, basePick: row.pick });
+    setDraftPick(row.pick);
+    setDraftWater(String(settings.fallbackWater[row.market] || 0.95));
   }
 
-  const current = parsed[selected];
-  function updateCurrent(updater) {
-    setParsed(previous => previous.map((game, index) => index === selected ? updater(game) : game));
-  }
-
-  function setMatch(gamePk) {
-    const game = games.find(item => String(item.gamePk) === String(gamePk)) || null;
-    updateCurrent(row => ({ ...row, gamePk: game?.gamePk || null, matchedGame: game, away: game?.away || row.away, home: game?.home || row.home }));
-  }
-
-  function editDirection(market, index, key, value) {
-    updateCurrent(game => ({
-      ...game,
-      markets: game.markets.map(row => row.market !== market ? row : {
-        ...row,
-        directions: [0, 1].map(directionIndex => {
-          const direction = { ...blankDirection(), ...(row.directions?.[directionIndex] || {}) };
-          if (directionIndex !== index) return direction;
-          if (key === 'water') {
-            return { ...direction, water: value === '' ? null : Number(value), waterEstimated: false, waterMissing: value === '' };
-          }
-          if (key === 'waterEstimated') return { ...direction, waterEstimated: Boolean(value), waterMissing: false, sourceType: value ? 'ESTIMATED' : direction.sourceType };
-          if (key === 'sourceType') return { ...direction, sourceType: value, executable: value === 'ACTUAL_TW_CREDIT' ? direction.executable !== false : false };
-          if (key === 'executable') return { ...direction, executable: Boolean(value) };
-          if (key === 'pick') return { ...direction, pick: value, confidence: String(value).trim() ? 1 : 0 };
-          return { ...direction, [key]: value };
-        }),
-      }),
-    }));
-  }
-
-  const preparedCurrent = useMemo(() => current ? withFallbackWater(current, store.settings) : null, [current, store.settings]);
-  const currentErrors = useMemo(() => {
-    if (!preparedCurrent) return [];
-    const errors = [];
-    if (!preparedCurrent.matchedGame) errors.push('尚未配對 MLB 官方賽事');
-    for (const market of MARKET_ORDER) {
-      const row = preparedCurrent.markets?.find(item => item.market === market);
-      errors.push(...validateMarketPair(market, row?.directions || []).map(error => `${market}：${error}`));
-    }
-    return [...new Set(errors)];
-  }, [preparedCurrent]);
-  const currentOpenMarkets = useMemo(() => preparedCurrent ? MARKET_ORDER.filter(market => marketIsOpen(preparedCurrent.markets?.find(item => item.market === market)?.directions || [])) : [], [preparedCurrent]);
-  const currentDirections = useMemo(() => preparedCurrent ? flattenMarkets(preparedCurrent) : [], [preparedCurrent]);
-
-  function lockCurrent() {
-    if (!preparedCurrent) return;
-    if (currentErrors.length) return alert(currentErrors.join('\n'));
-    const markets = flattenMarkets(preparedCurrent);
-    if (!markets.length) return alert('這場目前沒有任何已開盤市場，不需要鎖定');
-    const lock = {
-      id: uid(),
-      sourceId: preparedCurrent.id,
-      lockedAt: new Date().toISOString(),
-      game: preparedCurrent.matchedGame,
-      markets,
-      version: VERSION,
-      status: 'locked',
-    };
-    setStore(value => ({ ...value, locks: [lock, ...value.locks] }));
-    alert(`盤口快照已建立：${new Set(markets.map(item => item.market)).size} 個市場、${markets.length} 個方向`);
-  }
-
-  async function analyze(lock) {
-    if (busyLocks[lock.id]) return;
-    setBusyLocks(value => ({ ...value, [lock.id]: true }));
+  async function applyActualLine(event) {
+    event.preventDefault();
+    if (!editor) return;
+    const item = board.find(row => row.game.gamePk === editor.gamePk);
+    const snapshot = snapshots.current.get(editor.gamePk);
+    if (!item || !snapshot) { setError('凍結比分分布已不存在，請重新執行今日分析'); return; }
     try {
-      const previous = [...store.locks]
-        .filter(item => item.id !== lock.id && String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
-        .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))[0];
-      const data = await requestAnalysisJSON({
-        game: lock.game,
-        markets: lock.markets,
-        previousMarkets: previous?.markets || [],
-        settings: store.settings,
-      });
-      const version = { id: uid(), createdAt: new Date().toISOString(), ...data };
-      setStore(value => ({
-        ...value,
-        analysisHistory: {
-          ...value.analysisHistory,
-          [lock.id]: [version, ...(value.analysisHistory[lock.id] || [])],
-        },
-      }));
-      setTab('analysis');
-    } catch (error) {
-      alert(`分析失敗：${error.message}`);
-    } finally {
-      setBusyLocks(value => ({ ...value, [lock.id]: false }));
-    }
+      setBusy(true); setError('');
+      const pick = normalizeActualPick(draftPick, editor.basePick);
+      if (!hasActualWater(draftWater)) throw new Error('實際信用盤水位必須為0.500～1.500');
+      const pair = buildActualPair({ pick, water: Number(draftWater), market: editor.market, game: item.game });
+      const markets = [...(item.customMarkets || item.referenceMarkets || []).filter(row => row.market !== editor.market), ...pair];
+      const data = await requestJSON('/api/reprice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ snapshot, markets, previousMarkets: item.customMarkets || item.referenceMarkets, settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' } }),
+      }, 120000);
+      snapshots.current.set(item.game.gamePk, data.repriceSnapshot);
+      updateBoard(item.game.gamePk, current => ({ ...current, customMarkets: markets, customData: compactAnalysisData(data) }));
+      setNotice(`${pick}｜${Number(draftWater).toFixed(3)} 已沿用原比分分布完成快速重算。`);
+      setEditor(null);
+    } catch (cause) { setError(String(cause?.message || cause)); }
+    finally { setBusy(false); }
   }
 
-  async function reprice(lock) {
-    if (busyLocks[lock.id]) return;
-    const parentLock = [...store.locks]
-      .filter(item => item.id !== lock.id && String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
-      .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))
-      .find(item => latestVersion(store.analysisHistory, item.id)?.repriceSnapshot?.distributionSnapshot);
-    const parent = parentLock ? latestVersion(store.analysisHistory, parentLock.id) : null;
-    if (!parent?.repriceSnapshot) return alert('找不到同場上一個凍結比分分布，請先做一次完整分析');
-    setBusyLocks(value => ({ ...value, [lock.id]: true }));
+  async function resetMarket(item, market) {
+    const snapshot = snapshots.current.get(item.game.gamePk);
+    if (!snapshot) return;
+    const referencePair = item.referenceMarkets.filter(row => row.market === market);
+    const markets = [...item.customMarkets.filter(row => row.market !== market), ...referencePair];
     try {
-      const data = await requestRepriceJSON({
-        snapshot: parent.repriceSnapshot,
-        markets: lock.markets,
-        previousMarkets: parentLock.markets || [],
-        settings: store.settings,
-      });
-      const version = { id: uid(), createdAt: new Date().toISOString(), ...data };
-      setStore(value => ({
-        ...value,
-        analysisHistory: {
-          ...value.analysisHistory,
-          [lock.id]: [version, ...(value.analysisHistory[lock.id] || [])],
-        },
-      }));
-      setTab('analysis');
-    } catch (error) {
-      alert(`快速重算失敗：${error.message}`);
-    } finally {
-      setBusyLocks(value => ({ ...value, [lock.id]: false }));
-    }
+      setBusy(true);
+      const data = await requestJSON('/api/reprice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ snapshot, markets, previousMarkets: item.customMarkets, settings: { ...settings, rebateRate: 0.015 } }),
+      }, 120000);
+      snapshots.current.set(item.game.gamePk, data.repriceSnapshot);
+      const hasActual = markets.some(row => row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water));
+      updateBoard(item.game.gamePk, current => ({ ...current, customMarkets: markets, customData: hasActual ? compactAnalysisData(data) : null }));
+    } catch (cause) { setError(String(cause?.message || cause)); }
+    finally { setBusy(false); }
   }
 
-  function removeLock(id) {
-    if (!confirm('刪除這個盤口快照與其分析版本？下注紀錄不受影響。')) return;
-    setStore(value => {
-      const history = { ...value.analysisHistory };
-      delete history[id];
-      return { ...value, locks: value.locks.filter(lock => lock.id !== id), analysisHistory: history };
-    });
-  }
-
-  function addBet(game, result, analysis) {
-    if (!result.betEligible) return;
-    const unit = Number(result.portfolioUnit ?? result.unitSuggestion ?? 0);
-    const stake = unit * store.settings.unitValue;
+  function recordBet(item, row) {
     const bet = {
-      id: uid(),
-      createdAt: new Date().toISOString(),
-      analysisSnapshotId: analysis.snapshotId,
-      modelVersion: analysis.modelVersion,
-      rulesVersion: analysis.rulesVersion,
-      gamePk: game.gamePk,
-      away: game.away,
-      home: game.home,
-      game: matchup(game),
-      market: result.market,
-      pick: result.pick,
-      water: result.water,
-      score: result.score,
-      weightedEV: result.weightedEV,
-      robustEV: result.robustEV,
-      conservativeEV: result.conservativeEV,
-      evFlipProbability: result.evFlipProbability,
-      portfolioRole: result.portfolioRole,
-      unit,
-      stake,
-      result: '未結算',
-      fraction: null,
-      profit: 0,
-      rebate: 0,
-      awayRuns: '',
-      homeRuns: '',
-      awayFirst5: '',
-      homeFirst5: '',
-      closeWater: '',
-      closePick: '',
-      clv: null,
+      id: uid(), gamePk: item.game.gamePk, matchup: matchup(item.game), gameDate: item.game.gameDate,
+      market: row.market, pick: row.pick, water: row.water, score: row.score, weightedEV: row.weightedEV, robustEV: row.robustEV,
+      stake: settings.unitValue, placedAt: new Date().toISOString(), status: 'pending',
     };
-    setStore(value => ({ ...value, bets: [bet, ...value.bets] }));
+    setBets(current => [bet, ...current].slice(0, 500));
+    setNotice(`已記錄：${row.pick}｜${Number(row.water).toFixed(3)}`);
   }
 
-  function updateBet(id, patch) {
-    setStore(value => ({ ...value, bets: value.bets.map(bet => bet.id === id ? { ...bet, ...patch } : bet) }));
-  }
-
-  function settleBet(bet, awayRuns = bet.market.includes('上半') ? bet.awayFirst5 : bet.awayRuns, homeRuns = bet.market.includes('上半') ? bet.homeFirst5 : bet.homeRuns) {
-    const settlement = settleTaiwanContract(bet.pick, Number(awayRuns), Number(homeRuns), bet.away, bet.home);
-    if (settlement == null) return alert('盤口或球隊名稱無法結算');
-    const fraction = settlement.netFraction;
-    const stake = Number(bet.unit || 0) * store.settings.unitValue;
-    const calculation = calculateProfit({ stake, water: bet.water, settlement, rebateRate: store.settings.rebateRate });
-    const sameLine = !bet.closePick || extractLineToken(bet.closePick) === extractLineToken(bet.pick);
-    const clv = bet.closeWater && sameLine ? priceCLV(bet.water, bet.closeWater) : null;
-    const scorePatch = bet.market.includes('上半')
-      ? { awayFirst5: Number(awayRuns), homeFirst5: Number(homeRuns) }
-      : { awayRuns: Number(awayRuns), homeRuns: Number(homeRuns) };
-    updateBet(bet.id, { ...scorePatch, stake, fraction, settlement, result: resultLabel(fraction), profit: calculation.profit, rebate: calculation.rebate, clv });
-  }
-
-  async function autoSettle(bet) {
+  async function uploadScreenshots(event) {
+    const files = [...(event.target.files || [])].slice(0, 8);
+    event.target.value = '';
+    if (!files.length || busy) return;
+    setBusy(true); setError(''); setUploadStatus('準備圖片中…'); snapshots.current.clear();
     try {
-      const data = await requestJSON(`/api/result?gamePk=${bet.gamePk}`);
-      if (!data.final) return alert(`比賽尚未結束：${data.status}`);
-      settleBet(bet, bet.market.includes('上半') ? data.awayFirst5 : data.awayRuns, bet.market.includes('上半') ? data.homeFirst5 : data.homeRuns);
-    } catch (error) {
-      alert(error.message);
-    }
-  }
-
-  function removeBet(id) {
-    if (confirm('確定刪除這筆下注紀錄？')) setStore(value => ({ ...value, bets: value.bets.filter(bet => bet.id !== id) }));
-  }
-
-  const gameSummary = useMemo(() => games.map(game => {
-    const snapshots = store.locks.filter(item => String(item.game?.gamePk) === String(game.gamePk));
-    const analyses = snapshots.map(lock => latestVersion(store.analysisHistory, lock.id)).filter(version => version?.ok);
-    const scores = analyses.flatMap(version => version.analysis?.results || []).map(result => result.score).filter(Number.isFinite);
-    return { ...game, snapshotCount: snapshots.length, analyzed: analyses.length > 0, highest: scores.length ? Math.max(...scores) : null };
-  }), [games, store]);
-
-  const allLatestResults = useMemo(() => store.locks.flatMap(lock => latestVersion(store.analysisHistory, lock.id)?.analysis?.results || []), [store]);
-  const latestBatchLocks = useMemo(() => store.lastBatchId ? store.locks.filter(lock => lock.batchId === store.lastBatchId) : [], [store]);
-  const latestBatchRows = useMemo(() => latestBatchLocks.flatMap(lock => {
-    const data = latestVersion(store.analysisHistory, lock.id);
-    return (data?.analysis?.results || []).map(result => ({ lock, data, result }));
-  }).sort((left, right) => (right.result.score ?? -1) - (left.result.score ?? -1)), [latestBatchLocks, store.analysisHistory]);
-  const performance = useMemo(() => {
-    const settled = store.bets.filter(bet => bet.fraction != null);
-    const profit = settled.reduce((sum, bet) => sum + Number(bet.profit || 0), 0);
-    const risk = settled.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
-    const rebate = settled.reduce((sum, bet) => sum + Number(bet.rebate || 0), 0);
-    const closing = settled.filter(bet => bet.clv != null);
-    return {
-      settled,
-      profit,
-      risk,
-      rebate,
-      roi: risk ? profit / risk : 0,
-      avgClv: closing.length ? closing.reduce((sum, bet) => sum + Number(bet.clv), 0) / closing.length : null,
-      positiveClv: closing.length ? closing.filter(bet => Number(bet.clv) > 0).length / closing.length : null,
-      w: settled.filter(bet => Number(bet.fraction) > 0).length,
-      l: settled.filter(bet => Number(bet.fraction) < 0).length,
-      p: settled.filter(bet => Number(bet.fraction) === 0).length,
-    };
-  }, [store.bets]);
-
-  function exportJSON() {
-    download(`mlb-positive-ev-v9-${Date.now()}.json`, JSON.stringify(store, null, 2));
-  }
-
-  function exportCSV() {
-    const head = ['時間', '分析快照', '模型版本', '比賽', '市場', '投注方向', '水位', '評分', '加權EV', '穩健EV', '保守EV', '翻負機率', 'Unit', '結果', '盈虧', '退水', '純水位CLV'];
-    const rows = store.bets.map(bet => [
-      bet.createdAt, bet.analysisSnapshotId, bet.modelVersion, translateTeamText(bet.game), bet.market, translateTeamText(bet.pick), bet.water, bet.score,
-      bet.weightedEV, bet.robustEV, bet.conservativeEV, bet.evFlipProbability, bet.unit, bet.result, bet.profit, bet.rebate, bet.clv,
-    ]);
-    download(`mlb-bets-v9-${Date.now()}.csv`, [head, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'), 'text/csv');
-  }
-
-  async function importJSON(file) {
-    try {
-      const data = JSON.parse(await file.text());
-      setStore({
-        ...EMPTY,
-        ...data,
-        locks: Array.isArray(data.locks) ? data.locks : [],
-        analysisHistory: data.analysisHistory || {},
-        bets: Array.isArray(data.bets) ? data.bets : [],
-        settings: {
-          ...DEFAULT_SETTINGS,
-          ...data.settings,
-          fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(data.settings?.fallbackWater || {}) },
-        },
+      const games = schedule.length ? schedule : await fetchSchedule(date);
+      const recognized = [];
+      for (let index = 0; index < files.length; index += 1) {
+        setUploadStatus(`辨識圖片 ${index + 1}/${files.length}`);
+        const image = await fileToDataURL(files[index]);
+        const data = await requestJSON('/api/vision', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+          body: JSON.stringify({ images: [image], schedule: games, defaultWater: settings.fallbackWater }),
+        }, 180000);
+        recognized.push(...(data.games || []));
+      }
+      const prepared = recognized.map(raw => {
+        const matchedGame = games.find(game => Number(game.gamePk) === Number(raw.gamePk)) || games.find(game => clean(game.away) === clean(raw.away) && clean(game.home) === clean(raw.home));
+        return withFallbackWater({ ...raw, matchedGame }, settings);
+      }).filter(row => row.matchedGame);
+      const items = prepared.map(row => ({
+        game: row.matchedGame, source: { label: '我的信用盤截圖', observedAt: new Date().toISOString() }, referenceMarkets: flattenMarkets(row), customMarkets: flattenMarkets(row),
+        status: 'queued', statusLabel: '等待分析', referenceData: null, customData: null, error: '',
+      }));
+      setBoard(items); setTab('board');
+      setProgress({ active: true, done: 0, total: items.length, label: '分析截圖中的全部盤口' });
+      await runPool(items, 2, async (item, index) => {
+        updateBoard(item.game.gamePk, value => ({ ...value, status: 'running', statusLabel: '分析中…' }));
+        try {
+          const data = await requestJSON('/api/analyze', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+            body: JSON.stringify({ game: item.game, markets: item.customMarkets, settings: { ...settings, rebateRate: 0.015 } }),
+          }, 180000);
+          snapshots.current.set(item.game.gamePk, data.repriceSnapshot);
+          updateBoard(item.game.gamePk, value => ({ ...value, status: 'done', statusLabel: '信用盤分析完成', referenceData: compactAnalysisData(data), customData: compactAnalysisData(data) }));
+        } catch (cause) {
+          updateBoard(item.game.gamePk, value => ({ ...value, status: 'failed', statusLabel: '分析失敗', error: String(cause?.message || cause) }));
+        } finally {
+          setProgress(value => ({ ...value, done: value.done + 1, label: `分析截圖盤口：${index + 1}/${items.length}` }));
+        }
       });
-      alert('備份已還原；舊版分數保留為歷史資料，不會冒充固定公式分數');
-    } catch {
-      alert('備份檔格式錯誤');
-    }
+      setUploadStatus(`完成 ${items.length} 場盤口分析`);
+    } catch (cause) { setError(String(cause?.message || cause)); setUploadStatus('辨識失敗'); }
+    finally { setBusy(false); setProgress(value => ({ ...value, active: false })); }
   }
 
-  const sampleMessage = performance.settled.length < 30
-    ? '少於 30 筆：只記錄，不判定模型有效。'
-    : performance.settled.length < 50
-      ? '30～49 筆：只能做初步診斷。'
-      : performance.settled.length < 100
-        ? '50～99 筆：仍屬初步樣本。'
-        : performance.settled.length < 200
-          ? '100～199 筆：進入滾動監控。'
-          : '200 筆以上：才適合正式檢查評分校準、CLV 與 ROI。';
-
-  const scoreGroups = [
-    ['8.5 分以上', bet => bet.score >= 8.5],
-    ['8.0～8.4 分', bet => bet.score >= 8 && bet.score < 8.5],
-    ['7.5～7.9 分', bet => bet.score >= 7.5 && bet.score < 8],
-    ['7.2～7.4 分', bet => bet.score >= 7.2 && bet.score < 7.5],
-    ['低於 7.2 分', bet => bet.score < 7.2],
-  ];
-
-  return <main className="shell">
-    <header className="header">
-      <div>
-        <div className="eyebrow">私人分析系統</div>
-        <h1>⚾ MLB 長期正期望值分析</h1>
-        <p>上傳全部圖片 → 自動辨識全部盤口 → 自動分析全部場次 → 一次顯示所有評分</p>
-      </div>
-      <div className="headerRight">
-        <span className={`health ${health?.ok && health?.deterministicScoring ? 'ok' : 'warn'}`}>
-          {health?.ok ? (health.deterministicScoring ? '固定評分正常' : '固定評分未啟用') : '系統檢查中'}
-        </span>
-        <span className="badge">第 {VERSION} 版</span>
-      </div>
+  return <main className="appShell">
+    <header className="appHeader">
+      <div><div className="eyebrow">MLB POSITIVE EV</div><h1>今日盤口分析</h1><p>先用運彩參考盤建立今日模型，再把你的完整信用盤改上去立即重算。</p></div>
+      <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{health?.ok ? '系統正常' : '系統檢查中'}</span><span className="version">v{VERSION}</span></div>
     </header>
 
-    <nav className="tabs">
-      {[
-        ['today', '今日賽事'], ['upload', '📷 上傳'], ['confirm', '盤口確認'], ['analysis', '分析結果'],
-        ['bets', '下注紀錄'], ['perf', '績效'], ['settings', '設定'],
-      ].map(([key, name]) => <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{name}</button>)}
+    <nav className="mainTabs">
+      <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日分析</button>
+      <button className={tab === 'import' ? 'active' : ''} onClick={() => setTab('import')}>上傳盤口</button>
+      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>總排名</button>
+      <button className={tab === 'bets' ? 'active' : ''} onClick={() => setTab('bets')}>下注紀錄</button>
+      <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
     </nav>
 
-    {tab === 'today' && <section>
-      <div className="metrics">
-        <Metric t="今日賽事" v={games.length}/>
-        <Metric t="盤口快照" v={store.locks.length}/>
-        <Metric t="正式候選" v={allLatestResults.filter(result => result.betEligible).length}/>
-        <Metric t="最高評分" v={allLatestResults.filter(result => Number.isFinite(result.score)).length ? Math.max(...allLatestResults.filter(result => Number.isFinite(result.score)).map(result => result.score)).toFixed(1) : '—'}/>
-      </div>
-      <div className="card toolbar">
-        <input type="date" value={date} onChange={event => setDate(event.target.value)}/>
-        <button className="primary" onClick={() => loadGames(date)}>{loadingGames ? '載入中…' : '重新載入'}</button>
-      </div>
-      <div className="card">
-        <h2>今日 MLB 賽事儀表板</h2>
-        {!gameSummary.length ? <Empty text="今天沒有賽事或尚未載入"/> : gameSummary.map(game => <div className="gameRow" key={game.gamePk}>
-          <div>
-            <b>{matchup(game)}{game.doubleHeader !== 'N' ? `｜雙重賽第 ${game.gameNumber} 場` : ''}</b>
-            <small>{dateText(game.gameDate)}｜{game.venue}</small>
-            <small>先發投手（官方原文）：{game.awayProbable || '未公布'} 對 {game.homeProbable || '未公布'}</small>
-          </div>
-          <div className="gameStatus"><span className="pill">{game.status}</span><span>{game.snapshotCount} 個快照</span><strong>{game.highest?.toFixed(1) || '—'}</strong></div>
-        </div>)}
-      </div>
+    {error && <div className="errorBox global"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
+    {notice && <div className="noticeBox">{notice}</div>}
+    <LoadingLine progress={progress}/>
+
+    {tab === 'board' && <>
+      <section className="heroCard">
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>一鍵分析今日全部 MLB</h2><p>取得今日賽事與合法運彩／參考盤，一次建立所有可分析比賽的凍結比分分布與固定分數。</p></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy} onClick={oneClickAnalyze}>{busy ? '執行中…' : '一鍵分析今日 MLB'}</button></div>
+        <div className={`providerState ${providerStatus?.configured ? 'ready' : 'missing'}`}>
+          <strong>{providerStatus?.configured ? '合法參考盤來源已連接' : '合法參考盤來源尚未設定'}</strong>
+          <span>{providerStatus?.configured ? providerStatus.provider || providerStatus.primary || '可使用' : '網站不會模擬登入或爬取未授權頁面；仍可用截圖匯入。'}</span>
+        </div>
+      </section>
+      {!board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日分析</h2><p>按上方按鈕後，今天全部已開參考盤的比賽會一次列出並完成分析。</p></section>}
+      {board.map(item => <GameCard key={item.game.gamePk} item={item} onEdit={openEditor} onBet={recordBet} onResetMarket={resetMarket}/>) }
+    </>}
+
+    {tab === 'import' && <section className="panel">
+      <h2>上傳我的信用盤截圖</h2><p className="muted">一次可選最多8張。辨識後直接分析全部有效盤口；此功能是合法盤源尚未連接時的備援，也是你輸入實際信用盤的方式。</p>
+      <label className="uploadDrop"><input type="file" accept="image/*" multiple onChange={uploadScreenshots}/><strong>點這裡選擇盤口圖片</strong><span>{uploadStatus || '選完後自動辨識並分析，不必逐場按按鈕'}</span></label>
+      <div className="explainGrid"><div><b>支援完整盤口</b><span>讓1+50、讓2-80、大9-20、0/0.5等</span></div><div><b>不自動進位</b><span>1+100不會自行猜成2-10</span></div><div><b>快速重算</b><span>只改盤口／水位時不重建棒球模型</span></div></div>
     </section>}
 
-    {tab === 'upload' && <section>
-      <div className="card">
-        <h2>一、上傳後自動分析全部盤口</h2>
-        <label className="drop">點這裡一次選擇所有盤口圖片<input type="file" accept="image/*" multiple disabled={visionBusy} onChange={event => { chooseImages(event.target.files); event.target.value = ''; }}/><span>最多 8 張；選完後自動辨識、建立全部快照並分析所有實際開盤市場，不必逐場按分析</span></label>
-        <div className="previews">{images.map(image => <div className="preview" key={image.id}><img src={image.preview} alt="盤口截圖"/><button disabled={visionBusy} onClick={() => setImages(value => value.filter(item => item.id !== image.id))}>移除</button><small>{image.name}</small></div>)}</div>
-        <div className="status">{visionStatus || '尚未選擇圖片；選圖後會直接跑到全部評分'}</div>
-        {batchReport && <div className={batchReport.issues?.length ? 'warnings' : 'success'}>本次辨識 {batchReport.recognized} 場｜成功分析 {batchReport.analyzed} 場｜{batchReport.markets || 0} 個市場｜{batchReport.directions || 0} 個方向{batchReport.issues?.length ? `｜${batchReport.issues.length} 項需核對` : '｜全部完成'}</div>}
-        <button className="secondary full" disabled={visionBusy || !images.length} onClick={recognize}>{visionBusy ? '正在自動辨識並分析全部盤口…' : '重新辨識並分析目前全部圖片'}</button>
-      </div>
-      <div className="card">
-        <h2>二、盤口文字備援</h2>
-        <textarea rows="7" value={manualText} onChange={event => setManualText(event.target.value)} placeholder="可直接貼上整段盤口文字"/>
-        <button className="secondary full" disabled={visionBusy} onClick={parseText}>解析盤口文字</button>
-      </div>
-      <div className="card">
-        <h2>三、手動建立空白賽事</h2>
-        <div className="toolbar"><select value={manualGamePk} onChange={event => setManualGamePk(event.target.value)}><option value="">選擇今日賽事</option>{games.map(game => <option key={game.gamePk} value={game.gamePk}>{matchup(game)}</option>)}</select><button className="secondary" onClick={addManual}>建立</button></div>
-      </div>
-    </section>}
+    {tab === 'ranking' && <section className="panel"><h2>全部賽事總排名</h2>{ranked.length ? ranked.map((row, index) => <div className="rankRow" key={`${row.game.gamePk}-${rowKey(row)}`}><b>{index + 1}</b><strong>{scoreText(row.score)}</strong><div><span>{row.pick}</span><small>{matchup(row.game)}｜{row.market}｜加權EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}</small></div></div>) : <div className="emptySmall">完成今日分析後顯示排名。</div>}</section>}
 
-    {tab === 'confirm' && <section>
-      <div className="card">
-        <h2>盤口確認與不可覆寫快照</h2><p className="note">一般上傳不需要逐場操作；只有未配對或辨識異常的市場才需要在這裡修正。</p>
-        {!parsed.length ? <Empty text="尚無辨識結果，請先到上傳頁"/> : <>
-          <div className="chips">{parsed.map((game, index) => <button key={game.id} className={index === selected ? 'chip activeChip' : 'chip'} onClick={() => setSelected(index)}>{matchup(game)}</button>)}</div>
-          <label>配對 MLB 官方賽事<select value={current?.matchedGame?.gamePk || ''} onChange={event => setMatch(event.target.value)}><option value="">請選擇</option>{games.map(game => <option key={game.gamePk} value={game.gamePk}>{matchup(game)}</option>)}</select></label>
-          {MARKET_ORDER.map(market => {
-            const row = current?.markets?.find(item => item.market === market) || { directions: [] };
-            const directions = [0, 1].map(index => ({ ...blankDirection(), ...(row.directions?.[index] || {}) }));
-            const opened = marketIsOpen(directions);
-            return <div className="market" key={market}>
-              <h3>{market} {!opened && <span className="pill">未開盤</span>}</h3>
-              <div className="two">{directions.map((direction, index) => <div className="direction" key={index}>
-                <label>方向＋盤口<input value={direction.pick || ''} onChange={event => editDirection(market, index, 'pick', event.target.value)}/></label>
-                <label>水位<input type="number" step=".001" value={direction.water ?? ''} placeholder="可留空" onChange={event => editDirection(market, index, 'water', event.target.value)}/></label>
-                <label>盤口來源<select value={direction.sourceType || 'ACTUAL_TW_CREDIT'} onChange={event => editDirection(market, index, 'sourceType', event.target.value)}><option value="ACTUAL_TW_CREDIT">實際台灣信用盤</option><option value="REFERENCE">參考盤</option><option value="INTERNATIONAL">國際盤／使用者匯入</option><option value="HISTORICAL">歷史價格</option><option value="ESTIMATED">暫估水位</option></select></label>
-                <label className="check"><input type="checkbox" checked={direction.executable !== false && direction.sourceType === 'ACTUAL_TW_CREDIT'} disabled={direction.sourceType !== 'ACTUAL_TW_CREDIT'} onChange={event => editDirection(market, index, 'executable', event.target.checked)}/>目前仍可下注</label>
-                <small>辨識信心 {Math.round(Number(direction.confidence || 0) * 100)}%｜{direction.waterEstimated ? '暫估水位' : direction.waterMissing ? '水位未提供' : hasActualWater(direction.water) ? '已輸入水位' : '未開盤'}｜{direction.sourceType || 'ACTUAL_TW_CREDIT'}｜{direction.executable !== false ? '可執行' : '非正式下注價格'}</small>
-              </div>)}</div>
-            </div>;
-          })}
-          {currentErrors.length ? <div className="errors">{currentErrors.map(error => <div key={error}>• {error}</div>)}</div> : currentOpenMarkets.length ? <div className="success">✓ 已開 {currentOpenMarkets.length} 個市場、{currentDirections.length} 個方向。兩邊皆缺水位時自動套用市場暫估水位；單邊缺水位時只評實際水位方向。</div> : <div className="warnings">目前沒有已開盤市場</div>}
-          <button className="primary full" onClick={lockCurrent}>🔒 建立不可覆寫盤口快照</button>
-        </>}
-      </div>
-      <div className="card">
-        <h2>盤口快照</h2>
-        {!store.locks.length ? <Empty text="尚無盤口快照"/> : store.locks.map(lock => <div className="locked" key={lock.id}>
-          <div><b>{matchup(lock.game)}</b><small>{dateText(lock.lockedAt)}｜{new Set(lock.markets.map(item => item.market)).size} 個市場｜分析版本 {(store.analysisHistory[lock.id] || []).length}</small></div>
-          <div className="toolbar"><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => reprice(lock)}>{busyLocks[lock.id] ? '處理中…' : '快速重算價格'}</button><button className="primary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '完整重算核心資料'}</button><button className="dangerSmall" onClick={() => removeLock(lock.id)}>刪除</button></div>
-        </div>)}
-      </div>
-    </section>}
+    {tab === 'bets' && <section className="panel"><div className="panelHead"><h2>下注紀錄</h2><button className="textButton" onClick={() => setBets([])}>清空</button></div>{bets.length ? bets.map(bet => <div className="betRow" key={bet.id}><div><strong>{scoreText(bet.score)}｜{bet.pick}｜{Number(bet.water).toFixed(3)}</strong><span>{bet.matchup}｜{bet.market}</span></div><small>{localTime(bet.placedAt)}｜{bet.stake.toLocaleString()}元</small></div>) : <div className="emptySmall">尚未記錄下注。</div>}</section>}
 
-    {tab === 'analysis' && <section>
-      {latestBatchRows.length > 0 && <div className="batchStrip">
-        <div><span>本次分析完成</span><b>{latestBatchLocks.length} 場</b></div>
-        <div><span>最高評分</span><b>{Math.max(...latestBatchRows.map(row => Number(row.result.score) || 0)).toFixed(1)}</b></div>
-        <div><span>下注候選</span><b>{latestBatchRows.filter(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible).length}</b></div>
-      </div>}
-      {!store.locks.length ? <div className="card"><Empty text="尚無盤口快照"/></div> : store.locks.map(lock => {
-        const versions = store.analysisHistory[lock.id] || [];
-        const data = versions[0];
-        return <div className="card analysisCard" key={lock.id}>
-          <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><div className="toolbar"><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => reprice(lock)}>{busyLocks[lock.id] ? '處理中…' : '只改盤口／水位快速重算'}</button><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '核心資料完整重算'}</button></div></div>
-          {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、建立聯合情境並執行固定雙EV評分…' : '此快照尚未分析'}/> : <>
-            <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
-            <div className="note">固定評分：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜雙EV短板法｜GPT不得調分｜價格變動沿用凍結比分分布｜{data.analysis.scoreFormulaVersion}</div>
-            {MARKET_ORDER.map(market => {
-              const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
-              return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
-            })}
-            <details className="analysisDetails"><summary>查看完整分析細節</summary><Context context={data.context} analysis={data.analysis}/><AlignmentAudit audit={data.analysis.alignmentAudit}/>{data.analysis.portfolio?.length > 0 && <div className="market"><h3>同場主選／次選與總曝險</h3><div className="portfolio">{data.analysis.portfolio.map((row, index) => <div className="portfolioRow" key={`${row.market}-${row.pick}`}><b>{index + 1}</b><span>{row.role}｜{row.market}｜{translateTeamText(row.pick)}</span><strong>{row.score.toFixed(1)}</strong><span>{row.recommendedUnit} Unit{index > 0 ? `｜與主選相關 ${pct(row.correlationToPrimary)}` : ''}</span></div>)}</div></div>}</details>
-          </>}
-        </div>;
-      })}
-      {latestBatchRows.some(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible) && <div className="card candidateList"><h2>今日下注候選</h2><p className="note">只列本次上傳中達 {store.settings.candidateThreshold.toFixed(1)} 分以上且可進下注池的方向。</p>{latestBatchRows.filter(row => Number(row.result.score) >= store.settings.candidateThreshold && row.result.betEligible).map(({ lock, result }, index) => <div className={`candidateRow ${Number(result.score) >= store.settings.strongestThreshold ? 'strongestRow' : ''}`} key={`${lock.id}-${result.market}-${result.pick}-${index}`}><b>{Number(result.score).toFixed(1)}</b><span>{matchup(lock.game)}｜{result.market}｜{translateTeamText(result.pick)}｜{Number(result.water).toFixed(3)}</span><strong>{Number(result.score) >= store.settings.strongestThreshold ? '最強主推' : '下注候選'}</strong></div>)}</div>}
-      {batchReport?.issues?.length > 0 && <details className="card analysisDetails"><summary>本次辨識需核對 {batchReport.issues.length} 項</summary><div className="warnings">{batchReport.issues.slice(0, 12).map(item => <div key={item}>• {item}</div>)}</div></details>}
-    </section>}
+    {tab === 'settings' && <section className="panel"><h2>設定</h2><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="1000">1000</option><option value="1800">1800</option><option value="2500">2500</option></select></label></div><div className="settingsNote">評分固定使用雙EV短板公式；GPT不得調分。模型核心資料改變才完整重算，盤口／尾碼／水位改變只走凍結分布快速重算。</div></section>}
 
-    {tab === 'bets' && <section><div className="card"><h2>下注紀錄</h2>{!store.bets.length ? <Empty text="尚無下注紀錄"/> : <div className="betList">{store.bets.map(bet => <div className="betCard" key={bet.id}>
-      <div className="betTop"><div><b>{translateTeamText(bet.game)}</b><small>{bet.market}｜{translateTeamText(bet.pick)}｜{Number(bet.water).toFixed(3)}｜評分 {Number(bet.score).toFixed(1)}｜{bet.portfolioRole || '單筆'}</small><small>加權 {pct(bet.weightedEV)}｜穩健 {pct(bet.robustEV)}｜保守 {pct(bet.conservativeEV)}｜翻負 {pct(bet.evFlipProbability)}</small><small>下注 {dateText(bet.createdAt)}｜模型快照 {bet.analysisSnapshotId || '—'}</small></div><button className="dangerSmall" onClick={() => removeBet(bet.id)}>刪除</button></div>
-      <div className="betGrid"><label>Unit<input type="number" step=".25" value={bet.unit} onChange={event => updateBet(bet.id, { unit: Number(event.target.value), stake: Number(event.target.value) * store.settings.unitValue })}/></label>{bet.market.includes('上半') ? <><label>客隊前五局<input type="number" value={bet.awayFirst5} onChange={event => updateBet(bet.id, { awayFirst5: event.target.value })}/></label><label>主隊前五局<input type="number" value={bet.homeFirst5} onChange={event => updateBet(bet.id, { homeFirst5: event.target.value })}/></label></> : <><label>客隊得分<input type="number" value={bet.awayRuns} onChange={event => updateBet(bet.id, { awayRuns: event.target.value })}/></label><label>主隊得分<input type="number" value={bet.homeRuns} onChange={event => updateBet(bet.id, { homeRuns: event.target.value })}/></label></>}<label>收盤水位<input type="number" step=".001" value={bet.closeWater} onChange={event => updateBet(bet.id, { closeWater: event.target.value })}/></label><label>收盤盤口<input value={bet.closePick} onChange={event => updateBet(bet.id, { closePick: event.target.value })}/></label></div>
-      <div className="toolbar"><button className="secondary" onClick={() => settleBet(bet)}>依比分結算</button><button className="secondary" onClick={() => autoSettle(bet)}>自動抓取終場</button><span className={`settle ${Number(bet.profit) >= 0 ? 'positive' : 'negative'}`}>{bet.result}｜{money(bet.profit)}｜退水 {money(bet.rebate)}{bet.clv != null ? `｜純水位 CLV ${pct(bet.clv)}` : ''}</span></div>
-    </div>)}</div>}</div></section>}
-
-    {tab === 'perf' && <section>
-      <div className="metrics"><Metric t="總下注" v={store.bets.length}/><Metric t="已結算" v={performance.settled.length}/><Metric t="勝／敗／走" v={`${performance.w}/${performance.l}/${performance.p}`}/><Metric t="ROI" v={pct(performance.roi)}/><Metric t="總盈虧" v={money(performance.profit)}/><Metric t="總退水" v={money(performance.rebate)}/><Metric t="平均純水位 CLV" v={pct(performance.avgClv)}/><Metric t="正 CLV 比例" v={pct(performance.positiveClv)}/></div>
-      <div className="card"><h2>樣本狀態</h2><div className="note">{sampleMessage}</div></div>
-      <div className="card"><h2>評分區間</h2><GroupTable groups={scoreGroups.map(([name, filter]) => [name, store.bets.filter(filter)])}/></div>
-      <div className="card"><h2>市場統計</h2><GroupTable groups={MARKET_ORDER.map(market => [market, store.bets.filter(bet => bet.market === market)])}/></div>
-      <div className="card"><h2>球隊統計</h2><GroupTable groups={[...new Set(store.bets.flatMap(bet => [bet.away, bet.home]).filter(Boolean))].map(team => [translateTeamText(team), store.bets.filter(bet => bet.away === team || bet.home === team)])}/></div>
-    </section>}
-
-    {tab === 'settings' && <section>
-      <div className="card"><h2>系統設定</h2><div className="settingsGrid">
-        <Setting label="1 Unit 金額" value={store.settings.unitValue} step="1000" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, unitValue: Number(value) } }))}/>
-        <Setting label="每萬退水比例" value={store.settings.rebateRate} step=".001" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, rebateRate: Number(value) } }))}/>
-        <Setting label="下注候選門檻" value={store.settings.candidateThreshold} step=".1" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, candidateThreshold: Number(value) } }))}/>
-        <Setting label="最強主推門檻" value={store.settings.strongestThreshold} step=".1" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, strongestThreshold: Number(value) } }))}/>
-        <Setting label="每情境模擬次數" value={store.settings.simulationsPerScenario} step="100" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, simulationsPerScenario: Number(value) } }))}/>
-        <label>GPT 研究判讀層<select value={store.settings.expertMode || 'auto'} onChange={event => setStore(row => ({ ...row, settings: { ...row.settings, expertMode: event.target.value } }))}><option value="auto">自動整合；失敗時統計備援</option><option value="off">純統計模式</option><option value="required">GPT 未完成就不評分</option></select></label>
-        {MARKET_ORDER.map(market => <Setting key={market} label={`${market} 暫估水位`} value={store.settings.fallbackWater[market]} step=".001" onChange={value => setStore(row => ({ ...row, settings: { ...row.settings, fallbackWater: { ...row.settings.fallbackWater, [market]: Number(value) } } }))}/>) }
-      </div><p className="note">預設只呼叫一次 GPT 最終評分，避免研究層與評分層重複影響同一資料。未知打線、捕手、主審、牛棚與屋頂先進入聯合情境，不固定扣分；GPT 同時比較全部方向，6.6／7.1 只是上限而不是預設分數。暫估水位只供觀察，不會進正式下注池。</p></div>
-      <div className="card"><h2>備份與資料</h2><div className="toolbar wrap"><button className="secondary" onClick={exportJSON}>匯出 JSON 備份</button><button className="secondary" onClick={exportCSV}>匯出 CSV 明細</button><label className="fileButton">匯入 JSON 備份<input type="file" accept="application/json" onChange={event => event.target.files?.[0] && importJSON(event.target.files[0])}/></label><button className="danger" onClick={() => { if (confirm('確定清除全部快照、分析與下注資料？')) setStore({ ...EMPTY, settings: store.settings }); }}>清除資料</button></div><p className="note">資料保存在這台裝置的瀏覽器內。盤口快照與分析版本不互相覆寫，請定期匯出備份。</p></div>
-    </section>}
+    {editor && <div className="modalBackdrop" onClick={() => !busy && setEditor(null)}><form className="modal" onSubmit={applyActualLine} onClick={event => event.stopPropagation()}><div className="modalHead"><div><span>我的實際信用盤</span><h2>{editor.market}</h2></div><button type="button" onClick={() => setEditor(null)}>×</button></div><label>完整盤口<input value={draftPick} onChange={event => setDraftPick(event.target.value)} placeholder="例如 讓2-80、受讓1+70、大9-20" autoFocus/></label><label>實際水位<input inputMode="decimal" value={draftWater} onChange={event => setDraftWater(event.target.value)} placeholder="0.950"/></label><div className="modalHint">可直接跨盤階，例如1+50改成2-80。系統不會把1+100自動猜成2-10，只依你輸入的完整合約計算。</div><button className="primary full" disabled={busy}>{busy ? '快速重算中…' : '套用並立即重算分數'}</button></form></div>}
   </main>;
-}
-
-function ClassicResultRow({ result, settings, onBet }) {
-  const score = Number.isFinite(Number(result.score)) ? Number(result.score) : null;
-  const strongest = score != null && score >= settings.strongestThreshold && result.betEligible;
-  const candidate = score != null && score >= settings.candidateThreshold && result.betEligible;
-  const icon = strongest ? '🟡' : candidate ? '🟢' : '⚪';
-  const unit = result.portfolioUnit || result.unitSuggestion || 0;
-  return <div className={`classicResult ${strongest ? 'classicStrongest' : candidate ? 'classicCandidate' : ''}`}>
-    <div className="classicPrimary"><span className="classicIcon">{icon}</span><b className="classicScore">{score == null ? '—' : score.toFixed(1)}</b><span className="classicPick">｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>{strongest && <span className="classicTag">最強主推</span>}{candidate && !strongest && <span className="classicTag">下注候選</span>}</div>
-    {score != null && <><div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜Unit {result.unitSuggestion == null ? '待風控公式校準' : `${unit}`}</div><div className="classicMeta">固定公式：{result.scoreFormulaVersion || '—'}{result.scoreBreakdown?.caps?.length ? `｜封頂 ${result.scoreBreakdown.caps.join('、')}` : ''}</div>{score >= 7.2 && <div className="classicMeta">QA：PASS｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 市場{score >= 8.5 ? '✓' : '—'} 分數上限✓</div>}{result.minimumWater?.score7_2?.requiredWater != null && <div className="classicMeta">目前盤口7.2最低水位：{result.minimumWater.score7_2.comparator} {Number(result.minimumWater.score7_2.requiredWater).toFixed(3)}｜距離PASS {Number(result.minimumWater.score7_2.distanceFromCurrent).toFixed(3)}</div>}{result.holeAudit?.audits?.map((audit, index) => <div className="classicMeta" key={`hole-${index}`}>洞口驗算：{audit.trigger}｜贏 {pct(audit.winFraction)}／輸 {pct(audit.lossFraction)}／走 {pct(audit.pushFraction)}｜每萬 {money(audit.netProfitPer10000)}</div>)}</>}
-    {result.scoreAudit?.ok === false && <div className="classicMeta">評分已封鎖：{result.scoreAudit?.baseQa?.failures?.join('；') || result.scoreAudit?.boundary?.errors?.join('；') || 'QA未通過'}</div>}
-    {result.betEligible && <button className="classicBet" onClick={onBet}>記錄下注</button>}
-  </div>;
-}
-
-function ResultCard({ result, analysis, settings, onBet }) {
-  const score = result.score;
-  const invalid = result.integrityWarning || score == null;
-  const className = `result ${invalid ? 'invalid' : score >= settings.strongestThreshold ? 'best' : score >= settings.candidateThreshold ? 'candidate' : ''}`;
-  return <div className={className}>
-    <div className="resultMain">
-      <div className="resultLine"><span className="score">{score == null ? '—' : score.toFixed(1)}</span>｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? '（暫估）' : ''}<span className="tag">{result.tag}</span></div>
-      {score != null && <>
-        <small>正式加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜統計原始 EV {pct(result.rawEV)}｜情境翻負 {pct(result.evFlipProbability)}</small>
-        <small>正式過盤率 {pct(result.modelProbability)}｜統計原始率 {pct(result.rawModelProbability)}｜市場先驗 {pct(result.marketAnchorProbability)}｜資料模型權重 {pct(result.marketCalibrationWeight)}</small>
-        <small>模型誤差門檻 {pct(result.modelErrorFloor)}｜獨立資料強度 {pct(result.independentEvidenceStrength)}｜分歧風險 {pct(result.divergenceRisk)}｜合理水位 {result.fairWater?.toFixed?.(3) || '—'}</small>
-        <small>評分驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜規則 {result.scoreContractVersion || result.scoreFormulaVersion || '—'}｜正反方向分差 {result.pairAudit?.scoreSpread == null ? '—' : Number(result.pairAudit.scoreSpread).toFixed(1)}</small>
-        <small>原始比分分布：全贏 {pct(result.fullWinProbability)}｜部分贏 {pct(result.partialWinProbability)}｜走水 {pct(result.pushProbability)}｜卡洞 {pct(result.exactLineProbability)}｜最不利集合 {result.worstVariant || '—'}</small>
-        <small>主要敏感因素：{result.scenarioSensitivity?.primary || '—'}（EV 範圍 {pct(result.scenarioSensitivity?.primaryRange)}）｜建議 {result.portfolioUnit || result.unitSuggestion || 0} Unit</small>
-        {result.movement?.available ? <small>盤勢：{result.movement.verdict || result.movement.reason}{result.movement.deltaEV != null ? `｜價值變化 ${pct(result.movement.deltaEV)}` : ''}{result.movement.crossedKeyNumbers?.length ? `｜跨過關鍵數字 ${result.movement.crossedKeyNumbers.join('、')}` : ''}</small> : <small>盤勢：{result.movement?.reason || '無舊盤可比較'}</small>}
-        {result.integrityMessage && <div className="errors">{result.integrityMessage}</div>}
-        {result.primaryRisks?.length > 0 && <ul className="riskList">{result.primaryRisks.map(risk => <li key={risk}>{risk}</li>)}</ul>}
-      </>}
-    </div>
-    <button disabled={!result.betEligible} onClick={onBet}>{result.betEligible ? '記錄下注' : '不進下注池'}</button>
-  </div>;
-}
-
-function Context({ context, analysis }) {
-  const away = context.away || {};
-  const home = context.home || {};
-  const umpireName = context.umpire?.name || (typeof context.umpire === 'string' ? context.umpire : '') || '未公布';
-  return <>
-    <div className="contextGrid">
-      <Info t="模型／規則" v={`${analysis.modelVersion}｜${analysis.rulesVersion}`}/>
-      <Info t="分析版本" v={`${analysis.analysisStatus}｜${analysis.snapshotId}`}/>
-      <Info t="先發" v={`${away.starter?.status || '未知'} ${away.starter?.name || '—'} 對 ${home.starter?.status || '未知'} ${home.starter?.name || '—'}`}/>
-      <Info t="預估得分" v={`全場 ${analysis.expectedRuns.full.away.toFixed(2)}－${analysis.expectedRuns.full.home.toFixed(2)}｜前五局 ${analysis.expectedRuns.first5.away.toFixed(2)}－${analysis.expectedRuns.first5.home.toFixed(2)}`}/>
-      <Info t="打線／捕手" v={`${away.lineup?.official ? '正式' : '預估'} ${away.lineup?.catcher || '中性'}｜${home.lineup?.official ? '正式' : '預估'} ${home.lineup?.catcher || '中性'}`}/>
-      <Info t="牛棚疲勞" v={`客隊 ${Math.round((away.bullpen?.fatigueIndex || 0) * 100)}%｜主隊 ${Math.round((home.bullpen?.fatigueIndex || 0) * 100)}%`}/>
-      <Info t="球場／天氣" v={`${context.park?.name || '—'}（${context.park?.roofZh || '屋頂未知'}）｜${context.weather?.available ? `${context.weather.temperature}°C、風 ${context.weather.windSpeed} km/h、雨 ${context.weather.precipitationProbability}%` : '預估情境'}`}/>
-      <Info t="旅行／休息" v={`客隊休 ${away.rest?.days ?? '—'} 天／${away.rest?.travelKm || 0} km｜主隊休 ${home.rest?.days ?? '—'} 天／${home.rest?.travelKm || 0} km`}/>
-      <Info t="主審／資料品質" v={`${umpireName}｜${pct(analysis.dataQuality)}`}/>
-      <Info t="聯合情境" v={`${analysis.scenarioSummary.count} 組 × ${analysis.scenarioSummary.simulationsPerScenario} 次｜${analysis.scenarioSummary.robustVariantCount} 組穩健壓力`}/>
-      <Info t="固定評分" v={`${analysis.scoreFormulaVersion || '—'}｜GPT不參與數字評分`}/>
-    </div>
-    {analysis.featureProvenance?.length > 0 && <div className="sourceRows">{analysis.featureProvenance.map(row => <div className="sourceRow" key={row.feature}><b>{row.feature}</b><span>{row.status}</span><span>{row.source}</span></div>)}</div>}
-    {analysis.warnings?.length > 0 && <div className="warnings">{analysis.warnings.join('；')}</div>}
-  </>;
-}
-
-function AlignmentAudit({ audit }) {
-  if (!audit) return null;
-  const unknown = [...(audit.unknown || []), ...(audit.unmodeled || [])].slice(0, 8);
-  return <div className="alignmentAudit">
-    <div className="alignmentHead"><b>資料狀態與未知資訊檢查</b><span className="pill">聯合情境</span></div>
-    {audit.expertLayer?.summary && <small>{audit.expertLayer.summary}</small>}
-    <div className="auditGrid">
-      <div><span>已確認</span><b>{audit.confirmed?.length || 0}</b></div>
-      <div><span>預估</span><b>{audit.estimated?.length || 0}</b></div>
-      <div><span>未知</span><b>{audit.unknown?.length || 0}</b></div>
-      <div><span>尚未建模</span><b>{audit.unmodeled?.length || 0}</b></div>
-    </div>
-    {unknown.length > 0 && <ul className="riskList">{unknown.map(item => <li key={item}>{item}</li>)}</ul>}
-  </div>;
-}
-
-function Metric({ t, v }) { return <div className="metric"><span>{t}</span><b>{v}</b></div>; }
-function Empty({ text }) { return <div className="empty">{text}</div>; }
-function Setting({ label, value, onChange, step }) { return <label>{label}<input type="number" value={value} step={step} onChange={event => onChange(event.target.value)}/></label>; }
-function Info({ t, v }) { return <div className="info"><span>{t}</span><b>{v}</b></div>; }
-function GroupTable({ groups }) {
-  return <div className="groupTable">{groups.filter(([, rows]) => rows.length).map(([name, rows]) => {
-    const settled = rows.filter(bet => bet.fraction != null);
-    const profit = settled.reduce((sum, bet) => sum + Number(bet.profit || 0), 0);
-    const risk = settled.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
-    return <div key={name}><b>{name}</b><span>{rows.length} 筆</span><span>{settled.length} 已結算</span><span>ROI {pct(risk ? profit / risk : 0)}</span><span>{money(profit)}</span></div>;
-  })}</div>;
 }
