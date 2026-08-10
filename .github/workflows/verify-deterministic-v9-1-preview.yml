@@ -1,0 +1,97 @@
+name: Verify deterministic v9.1 Preview
+
+on:
+  push:
+    branches: [verify/deterministic-v9-1-e2e]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE: https://mlb-59opfa9pt-5gtbpqpbkx-2201s-projects.vercel.app
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify deployed Preview health, deterministic analysis and frozen reprice
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const BASE = process.env.BASE.replace(/\/$/, '');
+          const request = async (path, options = {}, timeout = 180000) => {
+            const response = await fetch(`${BASE}${path}`, {
+              ...options,
+              signal: AbortSignal.timeout(timeout),
+              headers: { 'Cache-Control':'no-cache', ...(options.headers || {}) },
+            });
+            const text = await response.text();
+            let data; try { data = JSON.parse(text); } catch { throw new Error(`${response.status}: ${text.slice(0,600)}`); }
+            if (!response.ok || data.ok === false) throw new Error(`${response.status}: ${data.error || text.slice(0,700)}`);
+            return data;
+          };
+          const get = path => request(path);
+          const post = (path, body) => request(path, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', Origin:BASE, 'Sec-Fetch-Site':'same-origin' },
+            body:JSON.stringify(body),
+          });
+          const health = await get('/api/health');
+          assert.equal(health.version, '9.1.0-preview');
+          assert.equal(health.commit, 'b642700e9a732894a1b6a94969bb128ad6984beb');
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+
+          const day = offset => new Intl.DateTimeFormat('en-CA', {
+            timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit',
+          }).format(new Date(Date.now() + offset * 86400000));
+          let game = null;
+          for (let offset = 0; offset < 10 && !game; offset += 1) {
+            const schedule = await get(`/api/mlb?date=${day(offset)}&t=${Date.now()}`);
+            game = (schedule.games || []).find(row => row.gamePk && row.awayTeamId && row.homeTeamId && row.awayProbableId && row.homeProbableId && !/Final|In Progress/i.test(row.statusEnglish || '')) || null;
+          }
+          assert.ok(game);
+          const now = new Date().toISOString();
+          const markets = [
+            { market:'全場讓分', pick:`${game.home}讓1+50`, water:0.95, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'全場讓分', pick:`${game.away}受讓1+50`, water:0.95, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'全場大小', pick:'大8+50', water:0.94, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'全場大小', pick:'小8+50', water:0.94, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'上半讓分', pick:`${game.home}讓0平`, water:0.94, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'上半讓分', pick:`${game.away}受讓0平`, water:0.94, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'上半大小', pick:'大4+50', water:0.93, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'上半大小', pick:'小4+50', water:0.93, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+          ];
+          const settings = { rebateRate:0.015, simulationsPerScenario:500 };
+          const first = await post('/api/analyze', { game, markets, settings });
+          assert.equal(first.analysis.scoreFormulaVersion, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
+          assert.equal(first.analysis.scoreValidation.passed, true);
+          assert.equal(first.analysis.scenarioSummary.persistedForReprice, true);
+          assert.ok(first.analysis.results.every(row => row.evDoubleCheck?.passed === true));
+          assert.ok(first.analysis.results.every(row => row.marketCalibrationApplied === false));
+
+          const changed = markets.map((row, index) => index === 2 ? { ...row, water:0.90, lineAsOf:new Date(Date.now()+1000).toISOString() } : row);
+          const repriced = await post('/api/reprice', { snapshot:first.repriceSnapshot, markets:changed, previousMarkets:markets, settings });
+          assert.equal(repriced.reprice.noCoreDataFetch, true);
+          assert.equal(repriced.reprice.noSimulation, true);
+          assert.equal(repriced.reprice.noGpt, true);
+          assert.equal(repriced.analysis.distributionHash, first.analysis.distributionHash);
+          assert.equal(repriced.analysis.coreFingerprint, first.analysis.coreFingerprint);
+          assert.notEqual(repriced.analysis.inputHash, first.analysis.inputHash);
+
+          console.log(JSON.stringify({
+            ok:true,
+            preview:BASE,
+            version:health.version,
+            commit:health.commit,
+            game:`${game.away} 對 ${game.home}`,
+            inputHash:first.analysis.inputHash,
+            distributionHash:first.analysis.distributionHash,
+            scoreFormula:first.analysis.scoreFormulaVersion,
+            results:first.analysis.results.map(row => ({ market:row.market, pick:row.pick, weightedEV:row.weightedEV, robustEV:row.robustEV, score:row.score, eligible:row.betEligible })),
+          }, null, 2));
+          NODE
