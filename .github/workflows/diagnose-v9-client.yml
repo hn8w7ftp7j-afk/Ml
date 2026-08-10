@@ -75,15 +75,15 @@ jobs:
           const results = [];
           for (const [name, engine] of [['chromium', chromium], ['webkit', webkit]]) {
             const browser = await engine.launch({ headless:true });
-            const context = await browser.newContext({
-              viewport:{ width:390, height:844 },
-              isMobile:name === 'webkit',
-              hasTouch:name === 'webkit',
-            });
+            const context = await browser.newContext({ viewport:{ width:390, height:844 } });
             const page = await context.newPage();
             const pageErrors = [];
+            const consoleErrors = [];
+            const failedRequests = [];
             const requests = [];
             page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+            page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+            page.on('requestfailed', request => failedRequests.push(`${request.url()} :: ${request.failure()?.errorText || 'failed'}`));
 
             await page.route('**/api/**', async route => {
               const request = route.request();
@@ -121,7 +121,13 @@ jobs:
             const response = await page.goto('http://localhost:3000', { waitUntil:'networkidle', timeout:120000 });
             assert.equal(response?.status(), 200);
             await page.getByRole('button', { name:'一鍵分析今日 MLB' }).click();
-            await page.getByText('測試運彩參考盤').waitFor({ timeout:30000 });
+            try {
+              await page.getByText('測試運彩參考盤').waitFor({ timeout:30000 });
+            } catch (error) {
+              const body = await page.locator('body').innerText().catch(() => '');
+              console.log(JSON.stringify({ name, phase:'reference-timeout', requests, pageErrors, consoleErrors, failedRequests, body:body.slice(0,2500) }, null, 2));
+              throw error;
+            }
             await page.getByText('7.5', { exact:true }).first().waitFor();
             await page.getByRole('button', { name:'改成我的信用盤' }).first().click();
             const inputs = page.locator('.modal input');
@@ -134,7 +140,9 @@ jobs:
             const bodyText = await page.locator('body').innerText();
             assert.doesNotMatch(bodyText, /Application error|client-side exception/i);
             assert.deepEqual(pageErrors, []);
-            results.push({ name, status:response?.status(), requests, pageErrors, body:bodyText.slice(0,900) });
+            assert.deepEqual(consoleErrors, []);
+            assert.deepEqual(failedRequests, []);
+            results.push({ name, status:response?.status(), requests, pageErrors, consoleErrors, failedRequests, body:bodyText.slice(0,900) });
             await browser.close();
           }
           console.log(JSON.stringify(results, null, 2));
