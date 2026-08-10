@@ -296,8 +296,10 @@ export default function Home() {
   }, []);
 
   const ranked = useMemo(() => board.flatMap(item => {
-    const analysis = item.customData?.analysis || item.referenceData?.analysis;
-    return (analysis?.results || []).map(row => ({ ...row, game: item.game }));
+    const actual = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water));
+    const actualMarkets = new Set(actual.map(row => row.market));
+    const reference = (item.referenceData?.analysis?.results || []).filter(row => !actualMarkets.has(row.market));
+    return [...actual, ...reference].map(row => ({ ...row, game: item.game }));
   }).filter(row => Number.isFinite(Number(row.score))).sort((a, b) => Number(b.score) - Number(a.score)), [board]);
 
   function updateBoard(gamePk, updater) {
@@ -321,7 +323,7 @@ export default function Home() {
         body: JSON.stringify({ game, markets: reference.markets, settings: { ...settings, rebateRate: 0, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' } }),
       }, 180000);
       snapshots.current.set(game.gamePk, data.repriceSnapshot);
-      updateBoard(game.gamePk, item => ({ ...item, status: 'done', statusLabel: '參考盤分析完成', referenceData: compactAnalysisData(data), customMarkets: reference.markets, error: '' }));
+      updateBoard(game.gamePk, item => ({ ...item, status: 'done', statusLabel: '參考盤分析完成', referenceData: compactAnalysisData(data), customMarkets: [], customData: null, error: '' }));
     } catch (cause) {
       updateBoard(game.gamePk, item => ({ ...item, status: 'failed', statusLabel: '分析失敗', error: String(cause?.message || cause) }));
     } finally {
@@ -345,7 +347,7 @@ export default function Home() {
       const items = games.map(game => {
         const found = byPk.get(Number(game.gamePk));
         return {
-          game, mode: 'reference', source: found?.source || null, referenceMarkets: found?.markets || [], customMarkets: found?.markets || [],
+          game, mode: 'reference', source: found?.source || null, referenceMarkets: found?.markets || [], customMarkets: [],
           status: found ? 'queued' : 'unopened',
           statusLabel: found ? '等待分析' : reference.configured === false ? '合法盤源尚未設定' : '運彩尚未開盤或未配對',
           referenceData: null, customData: null, error: '',
@@ -387,10 +389,11 @@ export default function Home() {
       const pick = normalizeActualPick(draftPick, editor.basePick);
       if (!hasActualWater(draftWater)) throw new Error('實際信用盤水位必須為0.500～1.500');
       const pair = buildActualPair({ pick, water: Number(draftWater), market: editor.market, game: item.game });
-      const markets = [...(item.customMarkets || item.referenceMarkets || []).filter(row => row.market !== editor.market), ...pair];
+      const previousActualMarkets = item.customMarkets || [];
+      const markets = [...previousActualMarkets.filter(row => row.market !== editor.market), ...pair];
       const data = await requestJSON('/api/reprice', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
-        body: JSON.stringify({ snapshot, markets, previousMarkets: item.customMarkets || item.referenceMarkets, settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' } }),
+        body: JSON.stringify({ snapshot, markets, previousMarkets: previousActualMarkets, settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' } }),
       }, 120000);
       snapshots.current.set(item.game.gamePk, data.repriceSnapshot);
       updateBoard(item.game.gamePk, current => ({ ...current, customMarkets: markets, customData: compactAnalysisData(data) }));
@@ -403,17 +406,20 @@ export default function Home() {
   async function resetMarket(item, market) {
     const snapshot = snapshots.current.get(item.game.gamePk);
     if (!snapshot) return;
-    const referencePair = item.referenceMarkets.filter(row => row.market === market);
-    const markets = [...item.customMarkets.filter(row => row.market !== market), ...referencePair];
+    const markets = (item.customMarkets || []).filter(row => row.market !== market);
+    if (!markets.length) {
+      updateBoard(item.game.gamePk, current => ({ ...current, customMarkets: [], customData: null }));
+      setNotice(`${market}已恢復顯示運彩／參考盤；凍結比分分布仍保留。`);
+      return;
+    }
     try {
       setBusy(true);
       const data = await requestJSON('/api/reprice', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
-        body: JSON.stringify({ snapshot, markets, previousMarkets: item.customMarkets, settings: { ...settings, rebateRate: 0.015 } }),
+        body: JSON.stringify({ snapshot, markets, previousMarkets: item.customMarkets || [], settings: { ...settings, rebateRate: 0.015 } }),
       }, 120000);
       snapshots.current.set(item.game.gamePk, data.repriceSnapshot);
-      const hasActual = markets.some(row => row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water));
-      updateBoard(item.game.gamePk, current => ({ ...current, customMarkets: markets, customData: hasActual ? compactAnalysisData(data) : null }));
+      updateBoard(item.game.gamePk, current => ({ ...current, customMarkets: markets, customData: compactAnalysisData(data) }));
     } catch (cause) { setError(String(cause?.message || cause)); }
     finally { setBusy(false); }
   }
