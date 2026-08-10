@@ -17,8 +17,8 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '9.0.0-preview';
-const STORAGE = 'mlb-positive-ev-v9-preview';
+const VERSION = '9.1.0-preview';
+const STORAGE = 'mlb-positive-ev-v9-1-preview';
 const LEGACY_KEYS = ['mlb-positive-ev-v8-4', 'mlb-positive-ev-v7', 'mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
 const SCORE_FORMULA_VERSION = 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0';
 const DEFAULT_SETTINGS = {
@@ -637,7 +637,9 @@ export default function Home() {
           if (key === 'water') {
             return { ...direction, water: value === '' ? null : Number(value), waterEstimated: false, waterMissing: value === '' };
           }
-          if (key === 'waterEstimated') return { ...direction, waterEstimated: Boolean(value), waterMissing: false };
+          if (key === 'waterEstimated') return { ...direction, waterEstimated: Boolean(value), waterMissing: false, sourceType: value ? 'ESTIMATED' : direction.sourceType };
+          if (key === 'sourceType') return { ...direction, sourceType: value, executable: value === 'ACTUAL_TW_CREDIT' ? direction.executable !== false : false };
+          if (key === 'executable') return { ...direction, executable: Boolean(value) };
           if (key === 'pick') return { ...direction, pick: value, confidence: String(value).trim() ? 1 : 0 };
           return { ...direction, [key]: value };
         }),
@@ -711,7 +713,7 @@ export default function Home() {
     const parentLock = [...store.locks]
       .filter(item => item.id !== lock.id && String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
       .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))
-      .find(item => latestVersion(store.analysisHistory, item.id)?.repriceSnapshot);
+      .find(item => latestVersion(store.analysisHistory, item.id)?.repriceSnapshot?.distributionSnapshot);
     const parent = parentLock ? latestVersion(store.analysisHistory, parentLock.id) : null;
     if (!parent?.repriceSnapshot) return alert('找不到同場上一個凍結比分分布，請先做一次完整分析');
     setBusyLocks(value => ({ ...value, [lock.id]: true }));
@@ -985,7 +987,9 @@ export default function Home() {
               <div className="two">{directions.map((direction, index) => <div className="direction" key={index}>
                 <label>方向＋盤口<input value={direction.pick || ''} onChange={event => editDirection(market, index, 'pick', event.target.value)}/></label>
                 <label>水位<input type="number" step=".001" value={direction.water ?? ''} placeholder="可留空" onChange={event => editDirection(market, index, 'water', event.target.value)}/></label>
-                <small>辨識信心 {Math.round(Number(direction.confidence || 0) * 100)}%｜{direction.waterEstimated ? '暫估水位' : direction.waterMissing ? '水位未提供' : hasActualWater(direction.water) ? '實際水位' : '未開盤'}</small>
+                <label>盤口來源<select value={direction.sourceType || 'ACTUAL_TW_CREDIT'} onChange={event => editDirection(market, index, 'sourceType', event.target.value)}><option value="ACTUAL_TW_CREDIT">實際台灣信用盤</option><option value="REFERENCE">參考盤</option><option value="INTERNATIONAL">國際盤／使用者匯入</option><option value="HISTORICAL">歷史價格</option><option value="ESTIMATED">暫估水位</option></select></label>
+                <label className="check"><input type="checkbox" checked={direction.executable !== false && direction.sourceType === 'ACTUAL_TW_CREDIT'} disabled={direction.sourceType !== 'ACTUAL_TW_CREDIT'} onChange={event => editDirection(market, index, 'executable', event.target.checked)}/>目前仍可下注</label>
+                <small>辨識信心 {Math.round(Number(direction.confidence || 0) * 100)}%｜{direction.waterEstimated ? '暫估水位' : direction.waterMissing ? '水位未提供' : hasActualWater(direction.water) ? '已輸入水位' : '未開盤'}｜{direction.sourceType || 'ACTUAL_TW_CREDIT'}｜{direction.executable !== false ? '可執行' : '非正式下注價格'}</small>
               </div>)}</div>
             </div>;
           })}
@@ -1015,7 +1019,7 @@ export default function Home() {
           <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><div className="toolbar"><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => reprice(lock)}>{busyLocks[lock.id] ? '處理中…' : '只改盤口／水位快速重算'}</button><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '核心資料完整重算'}</button></div></div>
           {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、建立聯合情境並執行固定雙EV評分…' : '此快照尚未分析'}/> : <>
             <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
-            <div className="note">固定評分：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜雙EV短板法｜GPT不得調分｜{data.analysis.scoreFormulaVersion}</div>
+            <div className="note">固定評分：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜雙EV短板法｜GPT不得調分｜價格變動沿用凍結比分分布｜{data.analysis.scoreFormulaVersion}</div>
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
               return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
@@ -1065,7 +1069,7 @@ function ClassicResultRow({ result, settings, onBet }) {
   const unit = result.portfolioUnit || result.unitSuggestion || 0;
   return <div className={`classicResult ${strongest ? 'classicStrongest' : candidate ? 'classicCandidate' : ''}`}>
     <div className="classicPrimary"><span className="classicIcon">{icon}</span><b className="classicScore">{score == null ? '—' : score.toFixed(1)}</b><span className="classicPick">｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>{strongest && <span className="classicTag">最強主推</span>}{candidate && !strongest && <span className="classicTag">下注候選</span>}</div>
-    {score != null && <><div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜Unit {result.unitSuggestion == null ? '待風控公式校準' : `${unit}`}</div><div className="classicMeta">固定公式：{result.scoreFormulaVersion || '—'}{result.scoreBreakdown?.caps?.length ? `｜封頂 ${result.scoreBreakdown.caps.join('、')}` : ''}</div>{score >= 7.2 && <div className="classicMeta">QA：PASS｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 市場{score >= 8.5 ? '✓' : '—'} 分數上限✓</div>}</>}
+    {score != null && <><div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜Unit {result.unitSuggestion == null ? '待風控公式校準' : `${unit}`}</div><div className="classicMeta">固定公式：{result.scoreFormulaVersion || '—'}{result.scoreBreakdown?.caps?.length ? `｜封頂 ${result.scoreBreakdown.caps.join('、')}` : ''}</div>{score >= 7.2 && <div className="classicMeta">QA：PASS｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 市場{score >= 8.5 ? '✓' : '—'} 分數上限✓</div>}{result.minimumWater?.score7_2?.requiredWater != null && <div className="classicMeta">目前盤口7.2最低水位：{result.minimumWater.score7_2.comparator} {Number(result.minimumWater.score7_2.requiredWater).toFixed(3)}｜距離PASS {Number(result.minimumWater.score7_2.distanceFromCurrent).toFixed(3)}</div>}{result.holeAudit?.audits?.map((audit, index) => <div className="classicMeta" key={`hole-${index}`}>洞口驗算：{audit.trigger}｜贏 {pct(audit.winFraction)}／輸 {pct(audit.lossFraction)}／走 {pct(audit.pushFraction)}｜每萬 {money(audit.netProfitPer10000)}</div>)}</>}
     {result.scoreAudit?.ok === false && <div className="classicMeta">評分已封鎖：{result.scoreAudit?.baseQa?.failures?.join('；') || result.scoreAudit?.boundary?.errors?.join('；') || 'QA未通過'}</div>}
     {result.betEligible && <button className="classicBet" onClick={onBet}>記錄下注</button>}
   </div>;

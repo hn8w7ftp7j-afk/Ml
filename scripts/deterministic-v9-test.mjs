@@ -126,3 +126,8 @@ console.log(JSON.stringify({
   settlementRuleVersion: SETTLEMENT_RULE_VERSION,
   mixedSplitProfit: mixedProfit,
 }, null, 2));
+
+
+// Source/eligibility and score boundaries remain deterministic.
+assert.equal(score(0.08, 0.048, { crossMarketVerified: false }).score, 8.4);
+assert.equal(score(0.08, 0.048, { crossMarketVerified: true }).score, 8.6);
