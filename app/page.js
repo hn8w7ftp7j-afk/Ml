@@ -44,20 +44,24 @@ function safeParse(value) {
 
 function loadCompactStore() {
   if (typeof window === 'undefined') return { settings: DEFAULT_SETTINGS, bets: [] };
-  const own = safeParse(window.localStorage.getItem(STORAGE) || 'null');
-  if (own && typeof own === 'object') {
-    return {
-      settings: { ...DEFAULT_SETTINGS, ...(own.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(own.settings?.fallbackWater || {}) } },
-      bets: Array.isArray(own.bets) ? own.bets.slice(0, 500) : [],
-    };
-  }
-  for (const key of LEGACY_KEYS) {
-    const legacy = safeParse(window.localStorage.getItem(key) || 'null');
-    if (!legacy || typeof legacy !== 'object') continue;
-    return {
-      settings: { ...DEFAULT_SETTINGS, ...(legacy.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(legacy.settings?.fallbackWater || {}) } },
-      bets: Array.isArray(legacy.bets) ? legacy.bets.slice(0, 500) : [],
-    };
+  try {
+    const own = safeParse(window.localStorage.getItem(STORAGE) || 'null');
+    if (own && typeof own === 'object') {
+      return {
+        settings: { ...DEFAULT_SETTINGS, ...(own.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(own.settings?.fallbackWater || {}) } },
+        bets: Array.isArray(own.bets) ? own.bets.slice(0, 500) : [],
+      };
+    }
+    for (const key of LEGACY_KEYS) {
+      const legacy = safeParse(window.localStorage.getItem(key) || 'null');
+      if (!legacy || typeof legacy !== 'object') continue;
+      return {
+        settings: { ...DEFAULT_SETTINGS, ...(legacy.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(legacy.settings?.fallbackWater || {}) } },
+        bets: Array.isArray(legacy.bets) ? legacy.bets.slice(0, 500) : [],
+      };
+    }
+  } catch {
+    // Safari private mode, quota failures and corrupted legacy storage must never crash the app.
   }
   return { settings: DEFAULT_SETTINGS, bets: [] };
 }
@@ -230,6 +234,7 @@ function ResultRow({ row, referenceMarkets, onEdit, onBet, actual = false }) {
 }
 
 function GameCard({ item, onEdit, onBet, onResetMarket }) {
+  const screenshotMode = item.mode === 'actual';
   const referenceGroups = groupResults(item.referenceData?.analysis?.results || []);
   const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water));
   return <section className="gameCard">
@@ -241,11 +246,11 @@ function GameCard({ item, onEdit, onBet, onResetMarket }) {
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
     {item.referenceData && <>
-      <div className="sectionLabel">運彩／參考盤篩選分數</div>
+      {!screenshotMode && <><div className="sectionLabel">運彩／參考盤篩選分數</div>
       {referenceGroups.map(group => <div className="marketBlock" key={group.market}>
         <h3>{group.market}</h3>
         {group.rows.length ? group.rows.map(row => <ResultRow key={rowKey(row)} row={row} referenceMarkets={item.referenceMarkets} onEdit={value => onEdit(item, value)} onBet={onBet}/>) : <div className="unopened">此市場未開盤</div>}
-      </div>)}
+      </div>)}</>}
       {actualRows.length > 0 && <div className="actualBox">
         <div className="actualHead"><strong>我的實際信用盤</strong><span>沿用同一份凍結比分分布即時重算</span></div>
         {MARKET_ORDER.map(market => {
@@ -340,7 +345,7 @@ export default function Home() {
       const items = games.map(game => {
         const found = byPk.get(Number(game.gamePk));
         return {
-          game, source: found?.source || null, referenceMarkets: found?.markets || [], customMarkets: found?.markets || [],
+          game, mode: 'reference', source: found?.source || null, referenceMarkets: found?.markets || [], customMarkets: found?.markets || [],
           status: found ? 'queued' : 'unopened',
           statusLabel: found ? '等待分析' : reference.configured === false ? '合法盤源尚未設定' : '運彩尚未開盤或未配對',
           referenceData: null, customData: null, error: '',
@@ -445,7 +450,7 @@ export default function Home() {
         return withFallbackWater({ ...raw, matchedGame }, settings);
       }).filter(row => row.matchedGame);
       const items = prepared.map(row => ({
-        game: row.matchedGame, source: { label: '我的信用盤截圖', observedAt: new Date().toISOString() }, referenceMarkets: flattenMarkets(row), customMarkets: flattenMarkets(row),
+        game: row.matchedGame, mode: 'actual', source: { label: '我的信用盤截圖', observedAt: new Date().toISOString() }, referenceMarkets: [], customMarkets: flattenMarkets(row),
         status: 'queued', statusLabel: '等待分析', referenceData: null, customData: null, error: '',
       }));
       setBoard(items); setTab('board');
