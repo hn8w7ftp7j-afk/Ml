@@ -77,9 +77,8 @@ jobs:
             const browser = await engine.launch({ headless:true });
             const context = await browser.newContext({
               viewport:{ width:390, height:844 },
-              userAgent:name === 'webkit'
-                ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
-                : undefined,
+              isMobile:name === 'webkit',
+              hasTouch:name === 'webkit',
             });
             const page = await context.newPage();
             const pageErrors = [];
@@ -122,10 +121,7 @@ jobs:
             const response = await page.goto('http://localhost:3000', { waitUntil:'networkidle', timeout:120000 });
             assert.equal(response?.status(), 200);
             await page.getByRole('button', { name:'一鍵分析今日 MLB' }).click();
-            await page.waitForTimeout(4000);
-            const afterClick = await page.locator('body').innerText();
-            console.log(JSON.stringify({ phase:'after-click', name, requests, pageErrors, body:afterClick.slice(0,2500) }, null, 2));
-            assert.match(afterClick, /測試運彩參考盤/, '一鍵分析後未顯示參考盤來源');
+            await page.getByText('測試運彩參考盤').waitFor({ timeout:30000 });
             await page.getByText('7.5', { exact:true }).first().waitFor();
             await page.getByRole('button', { name:'改成我的信用盤' }).first().click();
             const inputs = page.locator('.modal input');
@@ -138,7 +134,7 @@ jobs:
             const bodyText = await page.locator('body').innerText();
             assert.doesNotMatch(bodyText, /Application error|client-side exception/i);
             assert.deepEqual(pageErrors, []);
-            results.push({ name, status:response?.status(), pageErrors, body:bodyText.slice(0,900) });
+            results.push({ name, status:response?.status(), requests, pageErrors, body:bodyText.slice(0,900) });
             await browser.close();
           }
           console.log(JSON.stringify(results, null, 2));
