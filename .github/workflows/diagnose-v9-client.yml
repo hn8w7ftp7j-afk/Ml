@@ -83,15 +83,15 @@ jobs:
             });
             const page = await context.newPage();
             const pageErrors = [];
+            const requests = [];
             page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
             await page.route('**/api/**', async route => {
               const request = route.request();
               const url = new URL(request.url());
+              requests.push(`${request.method()} ${url.pathname}`);
               if (url.pathname === '/api/health') return json(route, { ok:true, version:'9.2.0' });
-              if (url.pathname === '/api/reference-lines' && request.method() === 'GET') {
-                return json(route, { ok:true, configured:true, primary:'TEST_REFERENCE_PROVIDER' });
-              }
+              if (url.pathname === '/api/reference-lines' && request.method() === 'GET') return json(route, { ok:true, configured:true, primary:'TEST_REFERENCE_PROVIDER' });
               if (url.pathname === '/api/mlb') return json(route, { ok:true, games:[game] });
               if (url.pathname === '/api/reference-lines' && request.method() === 'POST') {
                 return json(route, {
@@ -100,9 +100,7 @@ jobs:
                   unmatched:[], fetchedAt:'2026-08-11T04:51:00+08:00',
                 });
               }
-              if (url.pathname === '/api/analyze') {
-                return json(route, { ok:true, game, context:{ game }, analysis:baseAnalysis, repriceSnapshot:snapshot, openMarkets:['全場讓分'] });
-              }
+              if (url.pathname === '/api/analyze') return json(route, { ok:true, game, context:{ game }, analysis:baseAnalysis, repriceSnapshot:snapshot, openMarkets:['全場讓分'] });
               if (url.pathname === '/api/reprice') {
                 const body = request.postDataJSON();
                 const actual = body.markets.find(row => row.sourceType === 'ACTUAL_TW_CREDIT' && Number.isFinite(Number(row.water)));
@@ -124,7 +122,10 @@ jobs:
             const response = await page.goto('http://localhost:3000', { waitUntil:'networkidle', timeout:120000 });
             assert.equal(response?.status(), 200);
             await page.getByRole('button', { name:'一鍵分析今日 MLB' }).click();
-            await page.getByText('測試運彩參考盤').waitFor({ timeout:30000 });
+            await page.waitForTimeout(4000);
+            const afterClick = await page.locator('body').innerText();
+            console.log(JSON.stringify({ phase:'after-click', name, requests, pageErrors, body:afterClick.slice(0,2500) }, null, 2));
+            assert.match(afterClick, /測試運彩參考盤/, '一鍵分析後未顯示參考盤來源');
             await page.getByText('7.5', { exact:true }).first().waitFor();
             await page.getByRole('button', { name:'改成我的信用盤' }).first().click();
             const inputs = page.locator('.modal input');
