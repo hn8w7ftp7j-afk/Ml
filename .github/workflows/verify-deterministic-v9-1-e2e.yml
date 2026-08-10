@@ -1,0 +1,157 @@
+name: Verify deterministic v9.1 E2E
+
+on:
+  push:
+    branches: [verify/deterministic-v9-1-e2e]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - run: npm run build
+      - name: Start local production server
+        run: |
+          npm start > /tmp/mlb-v91-server.log 2>&1 &
+          echo $! > /tmp/mlb-v91-server.pid
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:3000/api/health >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/mlb-v91-server.log
+          exit 1
+      - name: Verify full analysis, exact replay, source gates and frozen distribution reprice
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const BASE = 'http://localhost:3000';
+          const json = async (path, options = {}, timeout = 180000) => {
+            const response = await fetch(`${BASE}${path}`, {
+              ...options,
+              signal: AbortSignal.timeout(timeout),
+              headers: { 'Cache-Control':'no-cache', ...(options.headers || {}) },
+            });
+            const text = await response.text();
+            let data; try { data = JSON.parse(text); } catch { throw new Error(`${response.status}: ${text.slice(0,900)}`); }
+            if (!response.ok || data.ok === false) throw new Error(`${response.status}: ${data.error || text.slice(0,900)}`);
+            return data;
+          };
+          const get = path => json(path);
+          const post = (path, body) => json(path, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', Origin:BASE, 'Sec-Fetch-Site':'same-origin' },
+            body:JSON.stringify(body),
+          });
+
+          const health = await get('/api/health');
+          assert.equal(health.version, '9.1.0-preview');
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+          assert.equal(health.scoreFormulaVersion, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
+          assert.equal(health.settlementRuleVersion, 'TW-CREDIT-PER-LEG-REBATE-2026-08-v1.0.0');
+          assert.match(health.modelVersion, /v9\.1\.0$/);
+
+          const day = offset => new Intl.DateTimeFormat('en-CA', {
+            timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit',
+          }).format(new Date(Date.now() + offset * 86400000));
+          let game = null;
+          for (let offset = 0; offset < 10 && !game; offset += 1) {
+            const schedule = await get(`/api/mlb?date=${day(offset)}`);
+            game = (schedule.games || []).find(row => row.gamePk && row.awayTeamId && row.homeTeamId && row.awayProbableId && row.homeProbableId && !/Final|In Progress/i.test(row.statusEnglish || '')) || null;
+          }
+          assert.ok(game, '找不到可建模未開打賽事');
+
+          const now = new Date().toISOString();
+          const markets = [
+            { market:'全場讓分', pick:`${game.home}讓1/1.5+50`, water:0.95, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'全場讓分', pick:`${game.away}受讓1/1.5+50`, water:0.95, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'全場大小', pick:'大8+50', water:0.94, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'全場大小', pick:'小8+50', water:0.94, sourceType:'REFERENCE', lineAsOf:now, executable:false },
+            { market:'上半讓分', pick:`${game.home}讓0+70`, water:0.94, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'上半讓分', pick:`${game.away}受讓0+70`, water:0.94, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'上半大小', pick:'大4+50', water:0.93, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+            { market:'上半大小', pick:'小4+50', water:0.93, sourceType:'ACTUAL_TW_CREDIT', lineAsOf:now, executable:true },
+          ];
+          const settings = { rebateRate:0.015, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5 };
+          const first = await post('/api/analyze', { game, markets, settings });
+          const second = await post('/api/analyze', { game, markets, settings });
+
+          assert.equal(first.analysis.inputHash, second.analysis.inputHash);
+          assert.equal(first.analysis.coreFingerprint, second.analysis.coreFingerprint);
+          assert.equal(first.analysis.distributionHash, second.analysis.distributionHash);
+          assert.equal(first.analysis.distributionId, second.analysis.distributionId);
+          assert.deepEqual(first.analysis.results.map(row => row.score), second.analysis.results.map(row => row.score));
+          assert.equal(first.analysis.finalScoreModel, null);
+          assert.equal(first.analysis.scoreValidation.deterministic, true);
+          assert.equal(first.analysis.scoreValidation.noGptScoring, true);
+          assert.equal(first.analysis.scenarioSummary.persistedForReprice, true);
+          assert.equal(first.analysis.scenarioSummary.targetPriceCalibratesDistribution, false);
+          assert.ok(first.repriceSnapshot?.distributionSnapshot?.distributionHash);
+          assert.equal(first.repriceSnapshot.distributionHash, first.analysis.distributionHash);
+          assert.ok(first.analysis.results.every(row => row.scoreSource === '固定雙EV短板公式'));
+          assert.ok(first.analysis.results.every(row => row.score == null || row.score <= 8.9));
+          assert.ok(first.analysis.results.every(row => row.robustEV == null || row.robustEV <= row.weightedEV + 1e-10));
+          assert.ok(first.analysis.results.every(row => row.water == null || row.evDoubleCheck?.passed === true));
+          assert.ok(first.analysis.results.every(row => row.marketCalibrationApplied === false));
+          assert.ok(first.analysis.results.every(row => row.scoreBreakdown?.noGptScoring === true));
+          assert.ok(first.analysis.results.every(row => row.minimumWater?.score7_2));
+
+          const reference = first.analysis.results.find(row => row.pick === '小8+50');
+          assert.equal(reference.scoreType, '參考盤篩選評分｜非最終下注評分');
+          assert.equal(reference.betEligible, false);
+
+          const split = first.analysis.results.find(row => row.market === '全場讓分' && row.pick.includes('讓1/1.5+50'));
+          assert.ok(split);
+          assert.ok(split.holeAudit?.audits?.length >= 1);
+          assert.ok(split.mixedWinLossProbability >= 0);
+
+          const changedAt = new Date(Date.now() + 1000).toISOString();
+          const repricedMarkets = markets.map((row, index) => index === 0 ? { ...row, water:0.90, lineAsOf:changedAt } : row);
+          const repriced = await post('/api/reprice', {
+            snapshot:first.repriceSnapshot,
+            markets:repricedMarkets,
+            previousMarkets:markets,
+            settings,
+          });
+          assert.equal(repriced.analysis.analysisType, 'PRICE_ONLY_REPRICE');
+          assert.equal(repriced.analysis.distributionReused, true);
+          assert.equal(repriced.reprice.noCoreDataFetch, true);
+          assert.equal(repriced.reprice.noSimulation, true);
+          assert.equal(repriced.reprice.noGpt, true);
+          assert.equal(repriced.analysis.distributionId, first.analysis.distributionId);
+          assert.equal(repriced.analysis.distributionHash, first.analysis.distributionHash);
+          assert.equal(repriced.analysis.coreFingerprint, first.analysis.coreFingerprint);
+          assert.notEqual(repriced.analysis.priceFingerprint, first.analysis.priceFingerprint);
+          assert.notEqual(repriced.analysis.inputHash, first.analysis.inputHash);
+          assert.ok(repriced.repriceSnapshot?.distributionSnapshot?.distributionHash);
+          assert.ok(repriced.analysis.results.every(row => row.evDoubleCheck?.passed === true));
+          assert.ok(repriced.analysis.results.every(row => row.marketCalibrationApplied === false));
+
+          const originalDirection = first.analysis.results.find(row => row.pick === `${game.home}讓1/1.5+50`);
+          const newDirection = repriced.analysis.results.find(row => row.pick === `${game.home}讓1/1.5+50`);
+          assert.notEqual(originalDirection.weightedEV, newDirection.weightedEV);
+
+          console.log(JSON.stringify({
+            ok:true,
+            version:health.version,
+            game:`${game.away} 對 ${game.home}`,
+            inputHash:first.analysis.inputHash,
+            distributionHash:first.analysis.distributionHash,
+            distributionId:first.analysis.distributionId,
+            resultCount:first.analysis.results.length,
+            scores:first.analysis.results.map(row => ({ market:row.market, pick:row.pick, sourceType:row.sourceType, weightedEV:row.weightedEV, robustEV:row.robustEV, score:row.score, eligible:row.betEligible, evDoubleCheck:row.evDoubleCheck?.passed })),
+            reprice:{ oldEV:originalDirection.weightedEV, newEV:newDirection.weightedEV, oldScore:originalDirection.score, newScore:newDirection.score },
+          }, null, 2));
+          NODE
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/mlb-v91-server.log || true
