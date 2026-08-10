@@ -1,0 +1,27 @@
+name: Promote verified v9.2 to Production
+
+on:
+  push:
+    branches: [feature/one-click-reference-board-v9-2]
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Merge verified feature into main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main feature/one-click-reference-board-v9-2
+          git checkout -B production-release origin/main
+          git merge --no-ff origin/feature/one-click-reference-board-v9-2 -m 'Release one-click MLB reference board and instant credit reprice v9.2'
+          git rm -f .github/workflows/promote-v9-2-production.yml
+          git commit --amend --no-edit
+          git push origin HEAD:main
