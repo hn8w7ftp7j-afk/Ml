@@ -1,18 +1,21 @@
 {
   "name": "mlb-positive-ev",
-  "version": "8.4.3",
+  "version": "9.1.0-preview",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20.9.0" },
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
-    "test": "node scripts/scoring-parity.mjs && node scripts/final-scorer-test.mjs && node scripts/test.mjs && node scripts/security-test.mjs",
+    "test": "node scripts/deterministic-v9-test.mjs && node scripts/security-test.mjs",
     "build": "npm test && next build",
     "start": "next start"
   },
   "dependencies": {
     "next": "15.5.16",
     "react": "19.1.7",
-    "react-dom": "19.1.7"
+    "react-dom": "19.1.7",
+    "decimal.js": "^10.6.0"
   }
 }
