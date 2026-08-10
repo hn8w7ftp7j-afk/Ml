@@ -1,0 +1,55 @@
+name: Verify v9.2 Production
+
+on:
+  push:
+    branches: [verify/production-v9-2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify formal Production URL
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { chromium } from 'playwright';
+          const BASE = process.env.BASE;
+          const healthResponse = await fetch(`${BASE}/api/health`, { cache:'no-store', signal:AbortSignal.timeout(60000) });
+          const healthText = await healthResponse.text();
+          let health; try { health = JSON.parse(healthText); } catch { throw new Error(`health ${healthResponse.status}: ${healthText.slice(0,500)}`); }
+          assert.equal(healthResponse.status, 200);
+          assert.equal(health.ok, true);
+          assert.equal(health.version, '9.2.0');
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+          assert.equal(health.commit, '358023995cbcd4d3b7b04a8f9aa33c90dcc88df9');
+
+          const browser = await chromium.launch({ headless:true });
+          const context = await browser.newContext({ viewport:{ width:390, height:844 }, isMobile:true, hasTouch:true });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+          page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+          const response = await page.goto(BASE, { waitUntil:'networkidle', timeout:120000 });
+          assert.equal(response?.status(), 200);
+          await page.getByRole('button', { name:'一鍵分析今日 MLB' }).waitFor({ timeout:30000 });
+          const body = await page.locator('body').innerText();
+          assert.doesNotMatch(body, /Application error|client-side exception/i);
+          assert.deepEqual(pageErrors, []);
+          assert.deepEqual(consoleErrors, []);
+          console.log(JSON.stringify({ ok:true, health, pageStatus:response?.status(), pageErrors, consoleErrors, body:body.slice(0,1200) }, null, 2));
+          await browser.close();
+          NODE
