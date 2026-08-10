@@ -3,8 +3,8 @@ import './security.css';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
-  title: 'MLB 長期正期望值分析｜完整 GPT 聯合情境模型',
-  description: '私人 MLB 台灣信用盤長期正期望值分析系統：實際開盤、聯合情境、穩健 EV、版本化績效追蹤',
+  title: 'MLB 長期正期望值分析｜固定雙EV短板聯合情境模型',
+  description: '私人 MLB 台灣信用盤長期正期望值分析系統：實際開盤、逐腿結算、加權EV、穩健EV、固定可重現評分',
   robots: { index: false, follow: false },
 };
 

@@ -9,6 +9,7 @@ import {
   hasActualWater,
   marketIsOpen,
   outcomeFractionForScore,
+  settleTaiwanContract,
   priceCLV,
   resultLabel,
   validateMarketPair,
@@ -16,10 +17,10 @@ import {
 import { blankDirection, buildAutoAnalysisPlan, flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '8.4.3';
-const STORAGE = 'mlb-positive-ev-v8-4-3';
+const VERSION = '9.0.0-preview';
+const STORAGE = 'mlb-positive-ev-v9-preview';
 const LEGACY_KEYS = ['mlb-positive-ev-v8-4', 'mlb-positive-ev-v7', 'mlb-positive-ev-v6-1', 'mlb-positive-ev-v6', 'mlb-positive-ev-v5', 'mlb-positive-ev-v4', 'mlb-positive-ev-v3'];
-const FINAL_SCORE_VERSION = 'GPT-FINAL-EXECUTION-JUDGE-2026-08-v8.4.3';
+const SCORE_FORMULA_VERSION = 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0';
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
@@ -123,25 +124,32 @@ const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, millise
 
 async function requestAnalysisJSON(payload, onRetry = null) {
   let lastError = null;
-  const delays = [0, 30000, 90000];
+  const delays = [0, 3000, 9000];
   for (let attempt = 0; attempt < delays.length; attempt += 1) {
     if (delays[attempt]) {
-      onRetry?.(`GPT 評分服務忙碌，等待 ${Math.round(delays[attempt] / 1000)} 秒後自動重試（${attempt + 1}/${delays.length}）`);
+      onRetry?.(`資料服務暫時忙碌，${Math.round(delays[attempt] / 1000)} 秒後自動重試`);
       await sleep(delays[attempt]);
     }
     try {
       return await requestJSON('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
         body: JSON.stringify(payload),
-      }, 180000);
+      }, 120000);
     } catch (error) {
       lastError = error;
-      const retryable = Number(error?.status) === 429 || /429|rate.?limit|too many requests|額度|credits|評分服務忙碌/i.test(String(error?.message || ''));
-      if (!retryable || attempt === delays.length - 1) throw error;
+      if (![429, 503, 504].includes(Number(error?.status)) || attempt === delays.length - 1) throw error;
     }
   }
-  throw lastError || new Error('GPT 最終評分未完成');
+  throw lastError || new Error('固定分析尚未完成');
+}
+
+async function requestRepriceJSON(payload) {
+  return requestJSON('/api/reprice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
+    body: JSON.stringify(payload),
+  }, 120000);
 }
 
 async function visionFingerprint(images, schedule) {
@@ -270,13 +278,13 @@ function latestVersion(history, lockId) {
 
 function scoreSnapshotIsValid(version) {
   const analysis = version?.analysis;
-  if (!analysis || analysis.finalScoreVersion !== FINAL_SCORE_VERSION || analysis.scoreValidation?.passed !== true) return false;
+  if (!analysis || analysis.scoreFormulaVersion !== SCORE_FORMULA_VERSION || analysis.scoreValidation?.passed !== true) return false;
   return (analysis.results || []).every(result => result.score == null || (
     Number.isFinite(Number(result.score))
     && Number(result.score) >= 1
-    && Number(result.score) <= 9.4
+    && Number(result.score) <= 8.9
     && result.scoreAudit?.ok === true
-    && result.scoreSource === 'GPT 最終 Execution 判讀'
+    && result.scoreSource === '固定雙EV短板公式'
   ));
 }
 
@@ -548,7 +556,7 @@ export default function Home() {
     setStore(value => ({
       ...value,
       lastBatchId: plan.batchId,
-      locks: [...plan.locks, ...value.locks].slice(0, 300),
+      locks: [...plan.locks, ...value.locks],
     }));
     setBusyLocks(value => ({ ...value, ...Object.fromEntries(plan.locks.map(lock => [lock.id, true])) }));
 
@@ -571,7 +579,7 @@ export default function Home() {
           ...value,
           analysisHistory: {
             ...value.analysisHistory,
-            [lock.id]: [analysisVersion, ...(value.analysisHistory[lock.id] || [])].slice(0, 30),
+            [lock.id]: [analysisVersion, ...(value.analysisHistory[lock.id] || [])],
           },
         }));
         completed += 1;
@@ -665,7 +673,7 @@ export default function Home() {
       version: VERSION,
       status: 'locked',
     };
-    setStore(value => ({ ...value, locks: [lock, ...value.locks].slice(0, 300) }));
+    setStore(value => ({ ...value, locks: [lock, ...value.locks] }));
     alert(`盤口快照已建立：${new Set(markets.map(item => item.market)).size} 個市場、${markets.length} 個方向`);
   }
 
@@ -687,12 +695,44 @@ export default function Home() {
         ...value,
         analysisHistory: {
           ...value.analysisHistory,
-          [lock.id]: [version, ...(value.analysisHistory[lock.id] || [])].slice(0, 30),
+          [lock.id]: [version, ...(value.analysisHistory[lock.id] || [])],
         },
       }));
       setTab('analysis');
     } catch (error) {
       alert(`分析失敗：${error.message}`);
+    } finally {
+      setBusyLocks(value => ({ ...value, [lock.id]: false }));
+    }
+  }
+
+  async function reprice(lock) {
+    if (busyLocks[lock.id]) return;
+    const parentLock = [...store.locks]
+      .filter(item => item.id !== lock.id && String(item.game?.gamePk) === String(lock.game?.gamePk) && new Date(item.lockedAt) < new Date(lock.lockedAt))
+      .sort((left, right) => new Date(right.lockedAt) - new Date(left.lockedAt))
+      .find(item => latestVersion(store.analysisHistory, item.id)?.repriceSnapshot);
+    const parent = parentLock ? latestVersion(store.analysisHistory, parentLock.id) : null;
+    if (!parent?.repriceSnapshot) return alert('找不到同場上一個凍結比分分布，請先做一次完整分析');
+    setBusyLocks(value => ({ ...value, [lock.id]: true }));
+    try {
+      const data = await requestRepriceJSON({
+        snapshot: parent.repriceSnapshot,
+        markets: lock.markets,
+        previousMarkets: parentLock.markets || [],
+        settings: store.settings,
+      });
+      const version = { id: uid(), createdAt: new Date().toISOString(), ...data };
+      setStore(value => ({
+        ...value,
+        analysisHistory: {
+          ...value.analysisHistory,
+          [lock.id]: [version, ...(value.analysisHistory[lock.id] || [])],
+        },
+      }));
+      setTab('analysis');
+    } catch (error) {
+      alert(`快速重算失敗：${error.message}`);
     } finally {
       setBusyLocks(value => ({ ...value, [lock.id]: false }));
     }
@@ -709,7 +749,7 @@ export default function Home() {
 
   function addBet(game, result, analysis) {
     if (!result.betEligible) return;
-    const unit = result.portfolioUnit || result.unitSuggestion || 0.5;
+    const unit = Number(result.portfolioUnit ?? result.unitSuggestion ?? 0);
     const stake = unit * store.settings.unitValue;
     const bet = {
       id: uid(),
@@ -752,16 +792,17 @@ export default function Home() {
   }
 
   function settleBet(bet, awayRuns = bet.market.includes('上半') ? bet.awayFirst5 : bet.awayRuns, homeRuns = bet.market.includes('上半') ? bet.homeFirst5 : bet.homeRuns) {
-    const fraction = outcomeFractionForScore(bet.pick, Number(awayRuns), Number(homeRuns), bet.away, bet.home);
-    if (fraction == null) return alert('盤口或球隊名稱無法結算');
-    const stake = Number(bet.unit || 1) * store.settings.unitValue;
-    const calculation = calculateProfit({ stake, water: bet.water, fraction, rebateRate: store.settings.rebateRate });
+    const settlement = settleTaiwanContract(bet.pick, Number(awayRuns), Number(homeRuns), bet.away, bet.home);
+    if (settlement == null) return alert('盤口或球隊名稱無法結算');
+    const fraction = settlement.netFraction;
+    const stake = Number(bet.unit || 0) * store.settings.unitValue;
+    const calculation = calculateProfit({ stake, water: bet.water, settlement, rebateRate: store.settings.rebateRate });
     const sameLine = !bet.closePick || extractLineToken(bet.closePick) === extractLineToken(bet.pick);
     const clv = bet.closeWater && sameLine ? priceCLV(bet.water, bet.closeWater) : null;
     const scorePatch = bet.market.includes('上半')
       ? { awayFirst5: Number(awayRuns), homeFirst5: Number(homeRuns) }
       : { awayRuns: Number(awayRuns), homeRuns: Number(homeRuns) };
-    updateBet(bet.id, { ...scorePatch, stake, fraction, result: resultLabel(fraction), profit: calculation.profit, rebate: calculation.rebate, clv });
+    updateBet(bet.id, { ...scorePatch, stake, fraction, settlement, result: resultLabel(fraction), profit: calculation.profit, rebate: calculation.rebate, clv });
   }
 
   async function autoSettle(bet) {
@@ -812,7 +853,7 @@ export default function Home() {
   }, [store.bets]);
 
   function exportJSON() {
-    download(`mlb-positive-ev-v7-${Date.now()}.json`, JSON.stringify(store, null, 2));
+    download(`mlb-positive-ev-v9-${Date.now()}.json`, JSON.stringify(store, null, 2));
   }
 
   function exportCSV() {
@@ -821,7 +862,7 @@ export default function Home() {
       bet.createdAt, bet.analysisSnapshotId, bet.modelVersion, translateTeamText(bet.game), bet.market, translateTeamText(bet.pick), bet.water, bet.score,
       bet.weightedEV, bet.robustEV, bet.conservativeEV, bet.evFlipProbability, bet.unit, bet.result, bet.profit, bet.rebate, bet.clv,
     ]);
-    download(`mlb-bets-v7-${Date.now()}.csv`, [head, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'), 'text/csv');
+    download(`mlb-bets-v9-${Date.now()}.csv`, [head, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'), 'text/csv');
   }
 
   async function importJSON(file) {
@@ -839,7 +880,7 @@ export default function Home() {
           fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(data.settings?.fallbackWater || {}) },
         },
       });
-      alert('第 7 版備份已還原');
+      alert('備份已還原；舊版分數保留為歷史資料，不會冒充固定公式分數');
     } catch {
       alert('備份檔格式錯誤');
     }
@@ -871,8 +912,8 @@ export default function Home() {
         <p>上傳全部圖片 → 自動辨識全部盤口 → 自動分析全部場次 → 一次顯示所有評分</p>
       </div>
       <div className="headerRight">
-        <span className={`health ${health?.ok && health?.aiGatewayConfigured ? 'ok' : 'warn'}`}>
-          {health?.ok ? (health.aiGatewayConfigured ? '人工智慧正常' : '人工智慧未設定') : '系統檢查中'}
+        <span className={`health ${health?.ok && health?.deterministicScoring ? 'ok' : 'warn'}`}>
+          {health?.ok ? (health.deterministicScoring ? '固定評分正常' : '固定評分未啟用') : '系統檢查中'}
         </span>
         <span className="badge">第 {VERSION} 版</span>
       </div>
@@ -956,7 +997,7 @@ export default function Home() {
         <h2>盤口快照</h2>
         {!store.locks.length ? <Empty text="尚無盤口快照"/> : store.locks.map(lock => <div className="locked" key={lock.id}>
           <div><b>{matchup(lock.game)}</b><small>{dateText(lock.lockedAt)}｜{new Set(lock.markets.map(item => item.market)).size} 個市場｜分析版本 {(store.analysisHistory[lock.id] || []).length}</small></div>
-          <div className="toolbar"><button className="primary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '建立新分析版本'}</button><button className="dangerSmall" onClick={() => removeLock(lock.id)}>刪除</button></div>
+          <div className="toolbar"><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => reprice(lock)}>{busyLocks[lock.id] ? '處理中…' : '快速重算價格'}</button><button className="primary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '完整重算核心資料'}</button><button className="dangerSmall" onClick={() => removeLock(lock.id)}>刪除</button></div>
         </div>)}
       </div>
     </section>}
@@ -971,10 +1012,10 @@ export default function Home() {
         const versions = store.analysisHistory[lock.id] || [];
         const data = versions[0];
         return <div className="card analysisCard" key={lock.id}>
-          <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '以最新資料重算新版本'}</button></div>
-          {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、建立聯合情境並執行 GPT 最終評分…' : '此快照尚未分析'}/> : <>
+          <div className="analysisHead"><div><h2>{matchup(lock.game)}</h2><small>盤口快照 {dateText(lock.lockedAt)}｜分析版本 {versions.length}</small></div><div className="toolbar"><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => reprice(lock)}>{busyLocks[lock.id] ? '處理中…' : '只改盤口／水位快速重算'}</button><button className="secondary" disabled={busyLocks[lock.id]} onClick={() => analyze(lock)}>{busyLocks[lock.id] ? '完整分析中…' : '核心資料完整重算'}</button></div></div>
+          {!data?.ok ? <Empty text={busyLocks[lock.id] ? '正在取得資料、建立聯合情境並執行固定雙EV評分…' : '此快照尚未分析'}/> : <>
             <div className="starterLine">先發：{data.context?.away?.starter?.name || lock.game?.awayProbable || '未公布'} 對 {data.context?.home?.starter?.name || lock.game?.homeProbable || '未公布'}</div>
-            <div className="note">GPT 最終評分：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜{data.analysis.finalScoreModel || '模型未回報'}｜無固定 EV 換分公式｜{data.analysis.finalScoreVersion}</div>
+            <div className="note">固定評分：{data.analysis.scoreValidation?.passed ? `通過（${data.analysis.scoreValidation.checkedDirections} 個方向）` : `失敗，已封鎖異常分數（${data.analysis.scoreValidation?.failures?.length || 0} 項）`}｜雙EV短板法｜GPT不得調分｜{data.analysis.scoreFormulaVersion}</div>
             {MARKET_ORDER.map(market => {
               const rows = data.analysis.results.filter(result => result.market === market).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
               return <div className="classicMarket" key={market}><h3>{market}</h3>{!rows.length ? <div className="unopened">未開盤</div> : rows.map((result, index) => <ClassicResultRow key={`${result.pick}-${index}`} result={result} settings={store.settings} onBet={() => addBet(lock.game, result, data.analysis)}/>)}</div>;
@@ -1024,8 +1065,8 @@ function ClassicResultRow({ result, settings, onBet }) {
   const unit = result.portfolioUnit || result.unitSuggestion || 0;
   return <div className={`classicResult ${strongest ? 'classicStrongest' : candidate ? 'classicCandidate' : ''}`}>
     <div className="classicPrimary"><span className="classicIcon">{icon}</span><b className="classicScore">{score == null ? '—' : score.toFixed(1)}</b><span className="classicPick">｜{translateTeamText(result.pick)}｜{result.water == null ? '水位未提供' : Number(result.water).toFixed(3)}{result.waterEstimated ? ' 暫估' : ''}</span>{strongest && <span className="classicTag">最強主推</span>}{candidate && !strongest && <span className="classicTag">下注候選</span>}</div>
-    {score != null && <><div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜保守 EV {pct(result.conservativeEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜建議 {unit} Unit</div><div className="classicMeta">GPT 評分：{result.scoreReason || '—'}｜{result.scoreModel || '—'}</div></>}
-    {result.scoreAudit?.ok === false && <div className="classicMeta">評分已封鎖：{result.scoreAudit.errors?.join('；')}</div>}
+    {score != null && <><div className="classicMeta">加權 EV {pct(result.weightedEV)}｜穩健 EV {pct(result.robustEV)}｜驗算 {result.scoreAudit?.ok ? '通過' : '失敗'}｜Unit {result.unitSuggestion == null ? '待風控公式校準' : `${unit}`}</div><div className="classicMeta">固定公式：{result.scoreFormulaVersion || '—'}{result.scoreBreakdown?.caps?.length ? `｜封頂 ${result.scoreBreakdown.caps.join('、')}` : ''}</div>{score >= 7.2 && <div className="classicMeta">QA：PASS｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 市場{score >= 8.5 ? '✓' : '—'} 分數上限✓</div>}</>}
+    {result.scoreAudit?.ok === false && <div className="classicMeta">評分已封鎖：{result.scoreAudit?.baseQa?.failures?.join('；') || result.scoreAudit?.boundary?.errors?.join('；') || 'QA未通過'}</div>}
     {result.betEligible && <button className="classicBet" onClick={onBet}>記錄下注</button>}
   </div>;
 }
@@ -1069,7 +1110,7 @@ function Context({ context, analysis }) {
       <Info t="旅行／休息" v={`客隊休 ${away.rest?.days ?? '—'} 天／${away.rest?.travelKm || 0} km｜主隊休 ${home.rest?.days ?? '—'} 天／${home.rest?.travelKm || 0} km`}/>
       <Info t="主審／資料品質" v={`${umpireName}｜${pct(analysis.dataQuality)}`}/>
       <Info t="聯合情境" v={`${analysis.scenarioSummary.count} 組 × ${analysis.scenarioSummary.simulationsPerScenario} 次｜${analysis.scenarioSummary.robustVariantCount} 組穩健壓力`}/>
-      <Info t="GPT 研究判讀" v={`${analysis.alignmentAudit?.expertLayer?.used ? '已整合' : '統計備援'}｜${analysis.alignmentAudit?.expertLayer?.model || analysis.alignmentAudit?.expertLayer?.reason || '—'}`}/>
+      <Info t="固定評分" v={`${analysis.scoreFormulaVersion || '—'}｜GPT不參與數字評分`}/>
     </div>
     {analysis.featureProvenance?.length > 0 && <div className="sourceRows">{analysis.featureProvenance.map(row => <div className="sourceRow" key={row.feature}><b>{row.feature}</b><span>{row.status}</span><span>{row.source}</span></div>)}</div>}
     {analysis.warnings?.length > 0 && <div className="warnings">{analysis.warnings.join('；')}</div>}
@@ -1080,7 +1121,7 @@ function AlignmentAudit({ audit }) {
   if (!audit) return null;
   const unknown = [...(audit.unknown || []), ...(audit.unmodeled || [])].slice(0, 8);
   return <div className="alignmentAudit">
-    <div className="alignmentHead"><b>GPT 指令對齊與未知資料檢查</b><span className="pill">{audit.expertLayer?.used ? 'GPT 已整合' : '統計備援'}</span></div>
+    <div className="alignmentHead"><b>資料狀態與未知資訊檢查</b><span className="pill">聯合情境</span></div>
     {audit.expertLayer?.summary && <small>{audit.expertLayer.summary}</small>}
     <div className="auditGrid">
       <div><span>已確認</span><b>{audit.confirmed?.length || 0}</b></div>
