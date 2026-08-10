@@ -36,7 +36,7 @@ export async function POST(request) {
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'reprice-v9-1', limit: 120, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'reprice-v9-2', limit: 120, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 8_000_000);
     const snapshot = body.snapshot && typeof body.snapshot === 'object' ? body.snapshot : null;
@@ -59,7 +59,14 @@ export async function POST(request) {
     if (errors.length) return NextResponse.json({ ok: false, error: `盤口快速重算QA未通過：${[...new Set(errors)].join('、')}` }, { status: 400 });
     if (!markets.some(row => row.pick)) return NextResponse.json({ ok: false, error: '沒有可重算的盤口' }, { status: 400 });
 
-    const settings = { rebateRate: Math.max(0, Math.min(0.1, Number(body.settings?.rebateRate) || 0.015)), candidateThreshold: 7.2, strongestThreshold: 8.5, simulationsPerScenario: distributionSnapshot.simulationsPerScenario, expertMode: 'off' };
+    const requestedRebateRate = Number(body.settings?.rebateRate);
+    const settings = {
+      rebateRate: Number.isFinite(requestedRebateRate) ? Math.max(0, Math.min(0.1, requestedRebateRate)) : 0.015,
+      candidateThreshold: 7.2,
+      strongestThreshold: 8.5,
+      simulationsPerScenario: distributionSnapshot.simulationsPerScenario,
+      expertMode: 'off',
+    };
     const preliminary = repriceMarkets({ context, markets, previousMarkets, settings, distributionSnapshot });
     const deterministic = finalizeDeterministicAnalysis({ analysis: preliminary, game: context.game, settings });
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;

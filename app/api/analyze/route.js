@@ -77,7 +77,7 @@ export async function POST(request) {
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'analyze-v9-1-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'analyze-v9-2-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500000);
     const game = sanitizeGame(body.game);
@@ -96,9 +96,13 @@ export async function POST(request) {
     const activeMarkets = markets.filter(row => row.pick);
     if (!activeMarkets.length) return NextResponse.json({ ok: false, error: '目前沒有任何已開盤市場可分析' }, { status: 400 });
 
+    const requestedRebateRate = Number(body.settings?.rebateRate);
     const settings = {
-      rebateRate: Math.max(0, Math.min(0.1, Number(body.settings?.rebateRate) || 0.015)), candidateThreshold: 7.2, strongestThreshold: 8.5,
-      simulationsPerScenario: Math.max(500, Math.min(4000, Math.round(Number(body.settings?.simulationsPerScenario) || 1800))), expertMode: 'off',
+      rebateRate: Number.isFinite(requestedRebateRate) ? Math.max(0, Math.min(0.1, requestedRebateRate)) : 0.015,
+      candidateThreshold: 7.2,
+      strongestThreshold: 8.5,
+      simulationsPerScenario: Math.max(500, Math.min(4000, Math.round(Number(body.settings?.simulationsPerScenario) || 1800))),
+      expertMode: 'off',
     };
     const versions = {
       modelVersion: MODEL_VERSION, rulesVersion: RULES_VERSION, dataVersion: DATA_VERSION,
