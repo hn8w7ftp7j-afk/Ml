@@ -270,9 +270,9 @@ function GameCard({ item, onEdit, onBet, onResetMarket }) {
 }
 
 export default function Home() {
-  const initial = useMemo(() => loadCompactStore(), []);
-  const [settings, setSettings] = useState(initial.settings);
-  const [bets, setBets] = useState(initial.bets);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [bets, setBets] = useState([]);
+  const [storageReady, setStorageReady] = useState(false);
   const [tab, setTab] = useState('board');
   const [date, setDate] = useState(taipeiDate());
   const [schedule, setSchedule] = useState([]);
@@ -289,7 +289,15 @@ export default function Home() {
   const [health, setHealth] = useState(null);
   const snapshots = useRef(new Map());
 
-  useEffect(() => { saveCompactStore({ settings, bets }); }, [settings, bets]);
+  useEffect(() => {
+    const initial = loadCompactStore();
+    setSettings(initial.settings);
+    setBets(initial.bets);
+    setStorageReady(true);
+  }, []);
+  useEffect(() => {
+    if (storageReady) saveCompactStore({ settings, bets });
+  }, [settings, bets, storageReady]);
   useEffect(() => {
     requestJSON('/api/health', {}, 20000).then(setHealth).catch(() => setHealth(null));
     requestJSON('/api/reference-lines', {}, 20000).then(setProviderStatus).catch(cause => setProviderStatus({ configured: false, message: String(cause?.message || cause) }));
