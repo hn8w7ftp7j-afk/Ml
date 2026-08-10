@@ -9,6 +9,13 @@
 5. Enter a complete actual Taiwan-credit contract and water, including cross-key-number changes such as `讓1+50 → 讓2-80`.
 6. Price-only changes use `/api/reprice` with the frozen distribution. No MLB refetch, simulation, or GPT numeric scoring is allowed.
 
+## Two price layers
+
+- Reference lines are analyzed with the provider’s actual decimal payout and no Taiwan-credit rebate.
+- Actual Taiwan-credit contracts are repriced separately with the configured 1.5% rebate.
+- The two price layers are never mixed in one formal result set.
+- Rankings prefer the actual contract for a market after the user enters one; other markets continue to show their reference screening result.
+
 ## Safety
 
 - GPT cannot choose numeric scores.
