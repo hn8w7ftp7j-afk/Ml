@@ -1,4 +1,4 @@
-name: Diagnose v9 client runtime
+name: Verify v9.2 one-click board
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  browser-diagnosis:
+  browser-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -23,42 +23,125 @@ jobs:
       - run: npm run build
       - name: Start local production server
         run: |
-          npm start > /tmp/mlb-client.log 2>&1 &
+          npm start > /tmp/mlb-v92.log 2>&1 &
           for i in $(seq 1 90); do
             curl -fsS http://localhost:3000/api/health >/dev/null && exit 0
             sleep 1
           done
-          cat /tmp/mlb-client.log
+          cat /tmp/mlb-v92.log
           exit 1
-      - name: Open app in Chromium and WebKit
+      - name: Verify one-click board and cross-key-number reprice
         run: |
           node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
           import { chromium, webkit } from 'playwright';
+
+          const game = {
+            gamePk: 123456,
+            gameDate: '2026-08-12T02:10:00Z',
+            officialDate: '2026-08-11',
+            status: '賽前', statusEnglish: 'Preview', statusCode: 'P',
+            gameNumber: 1, scheduledInnings: 9,
+            away: '波士頓紅襪', home: '多倫多藍鳥',
+            awayEnglish: 'Boston Red Sox', homeEnglish: 'Toronto Blue Jays',
+            awayTeamId: 111, homeTeamId: 141,
+            awayProbable: '客隊先發', homeProbable: '主隊先發',
+            awayProbableId: 1001, homeProbableId: 1002,
+          };
+          const referenceMarkets = [
+            { market:'全場讓分', pick:'波士頓紅襪受讓1+50', water:0.82, rawDecimalOdds:1.82, sourceType:'REFERENCE', lineAsOf:'2026-08-11T04:50:00+08:00', executable:false },
+            { market:'全場讓分', pick:'多倫多藍鳥讓1+50', water:0.78, rawDecimalOdds:1.78, sourceType:'REFERENCE', lineAsOf:'2026-08-11T04:50:00+08:00', executable:false },
+          ];
+          const referenceResults = referenceMarkets.map((row, index) => ({
+            ...row, score:index ? 6.6 : 7.5, weightedEV:index ? -0.02 : 0.025,
+            robustEV:index ? -0.04 : 0.012, tag:index ? 'PASS' : '正常下注',
+            betEligible:false, scoreType:'參考盤篩選評分｜非最終下注評分',
+            qaSummary:{ passed:true },
+          }));
+          const baseAnalysis = {
+            analysisType:'FULL', scoreFormulaVersion:'DUAL-EV-BOTTLENECK-2026-08-v1.0.0',
+            distributionHash:'dist-hash-v92', analysisStatus:'聯合情境版', results:referenceResults,
+          };
+          const snapshot = {
+            frozenContext:{ game }, coreFingerprint:'core-v92', priceFingerprint:'price-ref', inputHash:'input-ref',
+            distributionId:'distribution-v92', distributionHash:'dist-hash-v92', dataAsOf:'2026-08-11T04:45:00+08:00',
+            distributionSnapshot:{ distributionId:'distribution-v92', distributionHash:'dist-hash-v92', simulationsPerScenario:500 },
+          };
+
+          function json(route, payload, status = 200) {
+            return route.fulfill({ status, contentType:'application/json', body:JSON.stringify(payload) });
+          }
+
           const results = [];
           for (const [name, engine] of [['chromium', chromium], ['webkit', webkit]]) {
-            const browser = await engine.launch({ headless: true });
+            const browser = await engine.launch({ headless:true });
             const context = await browser.newContext({
-              viewport: { width: 390, height: 844 },
-              userAgent: name === 'webkit'
+              viewport:{ width:390, height:844 },
+              userAgent:name === 'webkit'
                 ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
                 : undefined,
             });
             const page = await context.newPage();
-            const errors = [];
-            page.on('pageerror', error => errors.push(`pageerror: ${error.stack || error.message}`));
-            page.on('console', message => {
-              if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+            const pageErrors = [];
+            page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+
+            await page.route('**/api/**', async route => {
+              const request = route.request();
+              const url = new URL(request.url());
+              if (url.pathname === '/api/health') return json(route, { ok:true, version:'9.2.0' });
+              if (url.pathname === '/api/reference-lines' && request.method() === 'GET') {
+                return json(route, { ok:true, configured:true, primary:'TEST_REFERENCE_PROVIDER' });
+              }
+              if (url.pathname === '/api/mlb') return json(route, { ok:true, games:[game] });
+              if (url.pathname === '/api/reference-lines' && request.method() === 'POST') {
+                return json(route, {
+                  ok:true, configured:true, provider:'TEST_REFERENCE_PROVIDER',
+                  games:[{ gamePk:game.gamePk, game, source:{ label:'測試運彩參考盤', observedAt:'2026-08-11T04:50:00+08:00' }, markets:referenceMarkets }],
+                  unmatched:[], fetchedAt:'2026-08-11T04:51:00+08:00',
+                });
+              }
+              if (url.pathname === '/api/analyze') {
+                return json(route, { ok:true, game, context:{ game }, analysis:baseAnalysis, repriceSnapshot:snapshot, openMarkets:['全場讓分'] });
+              }
+              if (url.pathname === '/api/reprice') {
+                const body = request.postDataJSON();
+                const actual = body.markets.find(row => row.sourceType === 'ACTUAL_TW_CREDIT' && Number.isFinite(Number(row.water)));
+                assert.ok(actual, '快速重算請求缺少實際信用盤');
+                const actualResult = {
+                  ...actual, score:7.7, weightedEV:0.034, robustEV:0.016, tag:'正常下注',
+                  betEligible:true, qaSummary:{ passed:true }, scoreType:'正式下注評分',
+                };
+                return json(route, {
+                  ok:true, game, context:{ game },
+                  analysis:{ ...baseAnalysis, analysisType:'PRICE_ONLY_REPRICE', results:[actualResult] },
+                  repriceSnapshot:{ ...snapshot, priceFingerprint:'price-actual', inputHash:'input-actual' },
+                  reprice:{ noCoreDataFetch:true, noSimulation:true, noGpt:true },
+                });
+              }
+              return json(route, { ok:false, error:`unmocked ${url.pathname}` }, 404);
             });
-            const response = await page.goto('http://localhost:3000', { waitUntil: 'networkidle', timeout: 120000 });
-            await page.waitForTimeout(2500);
-            const text = await page.locator('body').innerText().catch(() => '');
-            results.push({ name, status: response?.status(), url: page.url(), errors, body: text.slice(0, 1200) });
-            await page.screenshot({ path: `/tmp/${name}.png`, fullPage: true });
+
+            const response = await page.goto('http://localhost:3000', { waitUntil:'networkidle', timeout:120000 });
+            assert.equal(response?.status(), 200);
+            await page.getByRole('button', { name:'一鍵分析今日 MLB' }).click();
+            await page.getByText('測試運彩參考盤').waitFor({ timeout:30000 });
+            await page.getByText('7.5').first().waitFor();
+            await page.getByRole('button', { name:'改成我的信用盤' }).first().click();
+            const inputs = page.locator('.modal input');
+            await inputs.nth(0).fill('讓2-80');
+            await inputs.nth(1).fill('0.950');
+            await page.getByRole('button', { name:'套用並立即重算分數' }).click();
+            await page.getByText('我的實際信用盤').waitFor({ timeout:30000 });
+            await page.getByText('波士頓紅襪讓2-80').waitFor();
+            await page.getByText('7.7').waitFor();
+            const bodyText = await page.locator('body').innerText();
+            assert.doesNotMatch(bodyText, /Application error|client-side exception/i);
+            assert.deepEqual(pageErrors, []);
+            results.push({ name, status:response?.status(), pageErrors, body:bodyText.slice(0,900) });
             await browser.close();
           }
           console.log(JSON.stringify(results, null, 2));
-          if (results.some(row => row.errors.length || /Application error|client-side exception/i.test(row.body))) process.exit(1);
           NODE
       - name: Show server log on failure
         if: failure()
-        run: cat /tmp/mlb-client.log || true
+        run: cat /tmp/mlb-v92.log || true
