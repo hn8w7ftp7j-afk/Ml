@@ -25,7 +25,7 @@ jobs:
         run: |
           npm start > /tmp/mlb-v92.log 2>&1 &
           for i in $(seq 1 90); do
-            curl -fsS http://localhost:3000/api/health >/dev/null && exit 0
+            curl -fsS http://127.0.0.1:3000/api/health >/dev/null && exit 0
             sleep 1
           done
           cat /tmp/mlb-v92.log
@@ -118,7 +118,7 @@ jobs:
               return json(route, { ok:false, error:`unmocked ${url.pathname}` }, 404);
             });
 
-            const response = await page.goto('http://localhost:3000', { waitUntil:'networkidle', timeout:120000 });
+            const response = await page.goto('http://127.0.0.1:3000', { waitUntil:'networkidle', timeout:120000 });
             assert.equal(response?.status(), 200);
             await page.getByRole('button', { name:'一鍵分析今日 MLB' }).click();
             try {
