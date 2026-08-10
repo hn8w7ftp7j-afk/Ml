@@ -22,6 +22,7 @@
 - Only actual executable Taiwan-credit prices enter the formal bet pool.
 - Split lines settle and rebate per leg before aggregation.
 - Large distribution snapshots are not written into browser storage.
+- The server and first client render use the same deterministic defaults; browser storage loads only after hydration.
 - Safari/private-mode storage failures are caught and cannot crash the app.
 - App-level and global error recovery screens are available.
 - No unauthorized page scraping, login simulation, cookie reuse, CAPTCHA bypass, or Cloudflare bypass is used.
