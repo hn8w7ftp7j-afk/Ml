@@ -5,9 +5,9 @@ import { MARKET_ORDER, hasActualWater, parseTaiwanLine, validateMarketPair } fro
 import { flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '9.3.4';
-const STORAGE = 'mlb-positive-ev-v9-3-4';
-const LEGACY_KEYS = ['mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
+const VERSION = '9.4.0';
+const STORAGE = 'mlb-positive-ev-v9-4-0';
+const LEGACY_KEYS = ['mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
@@ -280,6 +280,7 @@ export default function Home() {
   const [board, setBoard] = useState([]);
   const [providerStatus, setProviderStatus] = useState(null);
   const [creditProviderStatus, setCreditProviderStatus] = useState(null);
+  const [readerStatus, setReaderStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ active: false, done: 0, total: 0, label: '' });
   const [notice, setNotice] = useState('');
@@ -292,6 +293,9 @@ export default function Home() {
   const [pasteStatus, setPasteStatus] = useState('');
   const [health, setHealth] = useState(null);
   const snapshots = useRef(new Map());
+  const creditHashRef = useRef('');
+  const readerPollBusyRef = useRef(false);
+  const autoAnalyzeRef = useRef(false);
 
   useEffect(() => {
     const initial = loadCompactStore();
@@ -306,7 +310,19 @@ export default function Home() {
     requestJSON('/api/health', {}, 20000).then(setHealth).catch(() => setHealth(null));
     requestJSON('/api/reference-lines', {}, 20000).then(setProviderStatus).catch(cause => setProviderStatus({ configured: false, message: String(cause?.message || cause) }));
     requestJSON('/api/credit-lines', {}, 20000).then(setCreditProviderStatus).catch(cause => setCreditProviderStatus({ configured: false, message: String(cause?.message || cause) }));
+    requestJSON('/api/reader/status', {}, 20000).then(setReaderStatus).catch(cause => setReaderStatus({ fresh: false, message: String(cause?.message || cause) }));
   }, []);
+  useEffect(() => {
+    if (!readerStatus?.fresh || board.length || busy || autoAnalyzeRef.current) return;
+    autoAnalyzeRef.current = true;
+    const timer = window.setTimeout(() => oneClickAnalyze(), 600);
+    return () => window.clearTimeout(timer);
+  }, [readerStatus?.fresh, board.length, busy]);
+  useEffect(() => {
+    if (!board.length) return;
+    const timer = window.setInterval(() => pollReaderAndReprice(), 30000);
+    return () => window.clearInterval(timer);
+  }, [board, date, busy]);
 
   const ranked = useMemo(() => board.flatMap(item => {
     const actual = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water));
@@ -412,6 +428,8 @@ export default function Home() {
         : { configured: creditProviderStatus?.configured || false, games: [], error: String(creditOutcome.reason?.message || creditOutcome.reason) };
       setProviderStatus(reference);
       setCreditProviderStatus(credit);
+      if (credit?.payloadHash) creditHashRef.current = credit.payloadHash;
+      if (credit?.readerStatus) setReaderStatus({ ...credit.readerStatus, payloadHash: credit.payloadHash, matchedGameCount: credit.matchedGameCount, observedAt: credit.observedAt, receivedAt: credit.receivedAt });
 
       const referenceByPk = new Map((reference.games || []).map(row => [Number(row.gamePk), row]));
       const creditByPk = new Map((credit.games || []).map(row => [Number(row.gamePk), row]));
@@ -461,6 +479,58 @@ export default function Home() {
       setNotice(`完成 ${tasks.length} 場分析｜參考盤 ${referenceCount} 場｜實際信用盤 ${creditCount} 場${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
     } catch (cause) { setError(String(cause?.message || cause)); }
     finally { setBusy(false); setProgress(value => ({ ...value, active: false })); }
+  }
+
+  async function pollReaderAndReprice() {
+    if (busy || readerPollBusyRef.current || !board.length) return;
+    readerPollBusyRef.current = true;
+    try {
+      const status = await requestJSON(`/api/reader/status?date=${encodeURIComponent(date)}&t=${Date.now()}`, {}, 20000);
+      setReaderStatus(status);
+      if (!status.fresh || !status.payloadHash || status.payloadHash === creditHashRef.current) return;
+      const games = schedule.length ? schedule : board.map(item => item.game);
+      const credit = await requestJSON('/api/credit-lines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ date, schedule: games }),
+      }, 60000);
+      setCreditProviderStatus(credit);
+      if (!credit.readerFresh || !credit.payloadHash || credit.payloadHash === creditHashRef.current) return;
+      const creditByPk = new Map((credit.games || []).map(row => [Number(row.gamePk), row]));
+      let updated = 0;
+      let skipped = 0;
+      await runPool(board, 2, async item => {
+        const actual = creditByPk.get(Number(item.game.gamePk));
+        if (!actual?.markets?.length) return;
+        const snapshot = snapshots.current.get(item.game.gamePk);
+        if (!snapshot) { skipped += 1; return; }
+        try {
+          const data = await requestJSON('/api/reprice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+            body: JSON.stringify({
+              snapshot,
+              markets: actual.markets,
+              previousMarkets: item.customMarkets || [],
+              settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
+            }),
+          }, 120000);
+          snapshots.current.set(item.game.gamePk, data.repriceSnapshot);
+          updateBoard(item.game.gamePk, current => ({
+            ...current, actualSource: actual.source, customMarkets: actual.markets,
+            customData: compactAnalysisData(data), status: 'done', statusLabel: 'Tai888最新盤快速重算完成', error: '',
+          }));
+          updated += 1;
+        } catch { skipped += 1; }
+      });
+      creditHashRef.current = credit.payloadHash;
+      setReaderStatus(current => ({ ...current, fresh: true, payloadHash: credit.payloadHash, matchedGameCount: credit.matchedGameCount, observedAt: credit.observedAt, receivedAt: credit.receivedAt }));
+      if (updated) setNotice(`Tai888盤口已自動更新：${updated}場沿用凍結比分分布快速重算${skipped ? '｜' + skipped + '場待下次完整分析' : ''}。`);
+    } catch (cause) {
+      setReaderStatus(current => ({ ...(current || {}), fresh: false, message: String(cause?.message || cause) }));
+    } finally {
+      readerPollBusyRef.current = false;
+    }
   }
 
   function openEditor(item, row) {
@@ -636,7 +706,7 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">MLB POSITIVE EV</div><h1>今日盤口分析</h1><p>國際參考盤建立模型；Tai888可自動套入，若受瀏覽器驗證限制則可貼文字或截圖匯入。</p></div>
+      <div><div className="eyebrow">MLB POSITIVE EV</div><h1>今日盤口分析</h1><p>Tai888 Reader 持續同步實際信用盤；盤口變動自動沿用凍結比分分布快速重算。</p></div>
       <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{health?.ok ? '系統正常' : '系統檢查中'}</span><span className="version">v{VERSION}</span></div>
     </header>
 
@@ -654,15 +724,15 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>一鍵分析今日全部 MLB</h2><p>先完成全部國際參考盤分析；Tai888可讀取時自動套入，受Cloudflare限制時不會中斷參考盤分析。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>一鍵分析今日全部 MLB</h2><p>Reader有新盤時自動分析；國際參考盤建立模型，Tai888實際盤負責正式信用盤重算。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy} onClick={oneClickAnalyze}>{busy ? '執行中…' : '一鍵分析今日 MLB'}</button></div>
         <div className={`providerState ${providerStatus?.configured ? 'ready' : 'missing'}`}>
           <strong>{providerStatus?.configured ? '國際參考盤已連接' : '國際參考盤尚未設定'}</strong>
           <span>{providerStatus?.configured ? providerStatus.provider || providerStatus.primary || '可使用' : '設定THE_ODDS_API_KEY後可自動取得國際參考盤。'}</span>
         </div>
-        <div className={`providerState ${creditProviderStatus?.blocked ? 'missing' : creditProviderStatus?.configured ? 'ready' : 'missing'}`}>
-          <strong>{creditProviderStatus?.blocked ? 'Tai888受Cloudflare瀏覽器驗證保護' : creditProviderStatus?.configured ? 'Tai888唯讀信用盤已連接' : 'Tai888唯讀信用盤待設定'}</strong>
-          <span>{creditProviderStatus?.blocked ? '伺服器端不能直接登入；請到「上傳盤口」貼文字或上傳截圖。' : creditProviderStatus?.configured ? creditProviderStatus.label || creditProviderStatus.provider : '只使用一般帳密表單與可見盤口頁，不繞過驗證或隱藏接口。'}</span>
+        <div className={`providerState ${readerStatus?.fresh || creditProviderStatus?.readerFresh ? 'ready' : 'missing'}`}>
+          <strong>{readerStatus?.fresh || creditProviderStatus?.readerFresh ? 'Tai888 Reader 自動同步正常' : readerStatus?.stale ? 'Tai888 Reader 盤口已過期' : 'Tai888 Reader 等待同步'}</strong>
+          <span>{readerStatus?.fresh || creditProviderStatus?.readerFresh ? `最後同步：${localTime(readerStatus?.receivedAt || creditProviderStatus?.receivedAt)}｜${readerStatus?.matchedGameCount || creditProviderStatus?.matchedGameCount || 0}場｜每60秒更新` : readerStatus?.message || creditProviderStatus?.readerMessage || '保持讀盤電腦、Chrome與Tai888 MLB頁面開啟。'}</span>
         </div>
       </section>
       {!board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日分析</h2><p>按上方按鈕後，今天全部已開參考盤的比賽會一次列出並完成分析。</p></section>}

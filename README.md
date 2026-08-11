@@ -251,3 +251,8 @@ OpenAI GPT 研究模型現在只使用有上限的首段時間，系統會預留
 - `coreFingerprint`在模擬前建立並進入固定seed；核心資料改變必定建立不同distribution hash。
 - 只有`ACTUAL_TW_CREDIT`、實際水位且仍可下注的方向可進正式下注池；參考盤、國際盤、歷史盤與暫估盤只作非最終篩選。
 - 每個方向輸出目前盤口的7.2／7.5／8.0／8.5水位門檻，以及整數洞口逐腿每萬損益。
+
+
+## Tai888 Reader v2
+
+Chrome Reader 只讀使用者已登入後可見的 MLB 盤口表格，自動同步至 `/api/reader/ingest`。Production 使用 Vercel Runtime Cache 保存最新盤口；網站偵測價格指紋變動後只走 `/api/reprice`，不重建比分分布。
