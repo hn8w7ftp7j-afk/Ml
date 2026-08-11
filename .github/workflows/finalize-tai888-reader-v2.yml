@@ -1,0 +1,56 @@
+name: Finalize and verify Tai888 Reader v2
+
+on:
+  push:
+    branches: [feature/tai888-reader-v1]
+    paths:
+      - scripts/finalize-tai888-reader-v2.mjs
+      - .github/workflows/finalize-tai888-reader-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tai888-reader-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply final patch
+        run: node scripts/finalize-tai888-reader-v2.mjs
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run permanent tests
+        run: npm test
+      - name: Run Production build
+        run: npm run build
+      - name: Validate extension package
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
+          assert.equal(manifest.manifest_version, 3);
+          assert.equal(manifest.version, '2.0.0');
+          assert.ok(manifest.host_permissions.includes('https://www1.tai888.in/*'));
+          assert.ok(manifest.host_permissions.includes('https://mlb-positive-ev.vercel.app/*'));
+          for (const file of ['background.js','parser.js','tai888-content.js','popup.html','popup.css','popup.js','README.md','INSTALL.md']) {
+            assert.ok(fs.existsSync(`reader/${file}`), `${file} missing`);
+          }
+          console.log('Reader v2 package validated');
+          NODE
+      - name: Commit verified release source and remove one-off workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/finalize-tai888-reader-v2.yml scripts/finalize-tai888-reader-v2.mjs
+          git add -A
+          git commit -m "Release v9.4.0 Tai888 Reader 2.0 full automation"
+          git push origin HEAD:feature/tai888-reader-v1
