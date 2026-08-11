@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Tai888 Reader",
+  "version": "2.0.0",
+  "description": "自動讀取目前瀏覽器已顯示的 Tai888 MLB 盤口，安全同步至 MLB EV。",
+  "permissions": ["storage", "tabs", "alarms", "webNavigation"],
+  "host_permissions": [
+    "https://*.tai888.in/*",
+    "https://tai888.in/*",
+    "https://mlb-positive-ev.vercel.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.tai888.in/*", "https://tai888.in/*"],
+      "js": ["tai888-content.js"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Tai888 Reader"
+  }
+}
