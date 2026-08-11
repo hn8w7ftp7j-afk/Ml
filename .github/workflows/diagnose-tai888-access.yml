@@ -1,0 +1,55 @@
+name: Diagnose Tai888 public login access
+
+on:
+  push:
+    branches: [verify/tai888-production-live]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check normal public login pages
+        run: |
+          node --input-type=module <<'NODE'
+          const targets = [
+            'https://xg1.tai888.in/',
+            'https://xg1.tai888.in/member/login',
+          ];
+          const headers = {
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-TW,zh-Hant;q=0.9,en;q=0.7',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
+            'Cache-Control': 'no-cache',
+          };
+          for (const url of targets) {
+            try {
+              const response = await fetch(url, {
+                headers,
+                redirect: 'manual',
+                cache: 'no-store',
+                signal: AbortSignal.timeout(30000),
+              });
+              const text = await response.text();
+              const safe = text.replace(/\s+/g, ' ').slice(0, 300);
+              console.log(JSON.stringify({
+                url,
+                status: response.status,
+                location: response.headers.get('location'),
+                contentType: response.headers.get('content-type'),
+                server: response.headers.get('server'),
+                length: text.length,
+                preview: safe,
+              }, null, 2));
+            } catch (error) {
+              console.log(JSON.stringify({ url, error: String(error?.message || error) }, null, 2));
+            }
+          }
+          NODE
