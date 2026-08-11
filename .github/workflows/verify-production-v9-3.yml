@@ -1,0 +1,92 @@
+name: Verify v9.3 Production
+
+on:
+  push:
+    branches: [verify/production-v9-3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify formal Production and live The Odds API flow
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+          EXPECTED_COMMIT: 879c2f8abe1f3ae835abf03d26ceec4dbbbd50b6
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          import { chromium } from 'playwright';
+
+          const BASE = process.env.BASE;
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          let health = null;
+          for (let attempt = 0; attempt < 90; attempt += 1) {
+            try {
+              const response = await fetch(`${BASE}/api/health?t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(30000) });
+              const data = await response.json();
+              if (response.ok && data.version === '9.3.0' && data.commit === process.env.EXPECTED_COMMIT) { health = data; break; }
+            } catch {}
+            await sleep(5000);
+          }
+          assert.ok(health, 'v9.3 Production did not become ready');
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+          assert.equal(health.referenceLinesConfigured, true);
+
+          const date = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+          const scheduleResponse = await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(60000) });
+          const schedule = await scheduleResponse.json();
+          assert.equal(scheduleResponse.status, 200);
+          assert.ok(Array.isArray(schedule.games) && schedule.games.length > 0, 'official MLB schedule is empty');
+
+          const referenceResponse = await fetch(`${BASE}/api/reference-lines`, {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              Origin:BASE,
+              Referer:`${BASE}/`,
+              'Idempotency-Key':crypto.randomUUID(),
+            },
+            body:JSON.stringify({ date, schedule:schedule.games }),
+            signal:AbortSignal.timeout(90000),
+          });
+          const referenceText = await referenceResponse.text();
+          let reference;
+          try { reference = JSON.parse(referenceText); }
+          catch { throw new Error(`reference ${referenceResponse.status}: ${referenceText.slice(0,800)}`); }
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference));
+          assert.equal(reference.ok, true);
+          assert.equal(reference.configured, true);
+          assert.doesNotMatch(JSON.stringify(reference), /Invalid commenceTimeFrom|Invalid commenceTimeTo/i);
+          assert.match(String(reference.provider || ''), /THE_ODDS_API|JBOT/);
+          assert.ok(Array.isArray(reference.games));
+
+          const browser = await chromium.launch({ headless:true });
+          const context = await browser.newContext({ viewport:{ width:390, height:844 }, isMobile:true, hasTouch:true });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+          page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+          const pageResponse = await page.goto(BASE, { waitUntil:'networkidle', timeout:120000 });
+          assert.equal(pageResponse?.status(), 200);
+          await page.getByRole('button', { name:'一鍵分析今日 MLB' }).waitFor({ timeout:30000 });
+          const body = await page.locator('body').innerText();
+          assert.match(body, /v9\.3\.0/);
+          assert.doesNotMatch(body, /Application error|client-side exception/i);
+          assert.deepEqual(pageErrors, []);
+          assert.deepEqual(consoleErrors, []);
+          console.log(JSON.stringify({ ok:true, health, date, referenceProvider:reference.provider, matchedGames:reference.games.length, unmatched:reference.unmatched?.length || 0, pageErrors, consoleErrors }, null, 2));
+          await browser.close();
+          NODE
