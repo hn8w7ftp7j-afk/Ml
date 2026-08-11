@@ -1,0 +1,44 @@
+name: Diagnose v9.3.1 Reference Pairing
+
+on:
+  push:
+    branches: [verify/production-v9-3-1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Print every matched reference contract
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          const BASE = process.env.BASE;
+          const date = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+          const schedule = await (await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, { cache:'no-store' })).json();
+          const response = await fetch(`${BASE}/api/reference-lines`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', Origin:BASE, Referer:`${BASE}/`, 'Idempotency-Key':crypto.randomUUID() },
+            body:JSON.stringify({ date, schedule:schedule.games }),
+          });
+          const data = await response.json();
+          console.log(JSON.stringify({
+            status:response.status,
+            provider:data.provider,
+            games:(data.games || []).map(row => ({
+              gamePk:row.gamePk,
+              matchup:`${row.game?.away} @ ${row.game?.home}`,
+              markets:(row.markets || []).map(market => ({ market:market.market, pick:market.pick, water:market.water, rawDecimalOdds:market.rawDecimalOdds, providerEventId:market.providerEventId })),
+            })),
+            unmatched:data.unmatched,
+          }, null, 2));
+          NODE
