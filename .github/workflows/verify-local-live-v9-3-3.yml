@@ -1,0 +1,237 @@
+name: Verify v9.3.3 local engine with live slate
+
+on:
+  push:
+    branches: [verify/production-v9-3-3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-slate-local-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Start v9.3.3 local Production server
+        run: |
+          npm start > /tmp/mlb-v933-live.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -fsS http://127.0.0.1:3000/api/health >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/mlb-v933-live.log
+          exit 1
+      - name: Run all-game live-data isolation and local one-click flow
+        env:
+          LOCAL: http://127.0.0.1:3000
+          FORMAL: https://mlb-positive-ev.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          import { chromium } from 'playwright';
+
+          const LOCAL = process.env.LOCAL;
+          const FORMAL = process.env.FORMAL;
+          const localHeaders = () => ({
+            'Content-Type':'application/json',
+            Origin:LOCAL,
+            Referer:`${LOCAL}/`,
+            'Idempotency-Key':crypto.randomUUID(),
+          });
+          const formalHeaders = () => ({
+            'Content-Type':'application/json',
+            Origin:FORMAL,
+            Referer:`${FORMAL}/`,
+            'Idempotency-Key':crypto.randomUUID(),
+          });
+          const parse = async response => {
+            const text = await response.text();
+            try { return JSON.parse(text); }
+            catch { throw new Error(`${response.status}: ${text.slice(0,1200)}`); }
+          };
+          const sortedPicks = rows => (rows || []).map(row => `${row.market}|${row.pick}`).sort();
+          const date = new Intl.DateTimeFormat('en-CA', {
+            timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit',
+          }).format(new Date());
+
+          const health = await parse(await fetch(`${LOCAL}/api/health`));
+          assert.equal(health.version, '9.3.3');
+          assert.match(health.dataVersion, /v1\.2\.0/);
+          assert.match(health.analysisCacheVersion, /v2\.1\.0/);
+
+          const scheduleResponse = await fetch(`${FORMAL}/api/mlb?date=${date}&t=${Date.now()}`, {
+            cache:'no-store', signal:AbortSignal.timeout(60000),
+          });
+          const schedule = await parse(scheduleResponse);
+          assert.equal(scheduleResponse.status, 200);
+          assert.ok(schedule.games.length >= 10);
+          const referenceResponse = await fetch(`${FORMAL}/api/reference-lines`, {
+            method:'POST', headers:formalHeaders(),
+            body:JSON.stringify({ date, schedule:schedule.games }),
+            signal:AbortSignal.timeout(90000),
+          });
+          const reference = await parse(referenceResponse);
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference).slice(0,1600));
+          assert.ok(reference.games.length >= 10);
+          assert.doesNotMatch(JSON.stringify(reference), /Invalid commenceTimeFrom|Invalid commenceTimeTo/i);
+
+          const settings500 = {
+            rebateRate:0,
+            simulationsPerScenario:500,
+            candidateThreshold:7.2,
+            strongestThreshold:8.5,
+            expertMode:'off',
+          };
+          let cursor = 0;
+          const summaries = new Array(reference.games.length);
+          let firstFull = null;
+          await Promise.all(Array.from({ length:2 }, async () => {
+            while (cursor < reference.games.length) {
+              const index = cursor++;
+              const source = reference.games[index];
+              const response = await fetch(`${LOCAL}/api/analyze`, {
+                method:'POST', headers:localHeaders(),
+                body:JSON.stringify({ game:source.game, markets:source.markets, previousMarkets:[], settings:settings500 }),
+                signal:AbortSignal.timeout(180000),
+              });
+              const data = await parse(response);
+              assert.equal(response.status, 200, `${source.game.away} @ ${source.game.home}: ${JSON.stringify(data).slice(0,1800)}`);
+              assert.equal(Number(data.game?.gamePk), Number(source.gamePk));
+              assert.equal(Number(data.context?.game?.gamePk), Number(source.gamePk));
+              assert.deepEqual(sortedPicks(data.analysis?.results), sortedPicks(source.markets));
+              if (!source.game.awayProbableId || !source.game.homeProbableId) {
+                assert.equal(data.context?.starterModelingMode, 'NEUTRAL_STARTER_UNCERTAINTY');
+              }
+              summaries[index] = {
+                gamePk:source.gamePk,
+                matchup:`${source.game.away} @ ${source.game.home}`,
+                inputHash:data.analysis.inputHash,
+                distributionHash:data.analysis.distributionHash,
+                directions:data.analysis.results.length,
+                starterModelingMode:data.context?.starterModelingMode,
+              };
+              if (index === 0) firstFull = { source, data };
+            }
+          }));
+          assert.equal(new Set(summaries.map(row => row.inputHash)).size, summaries.length, 'cross-game inputHash collision');
+
+          const first = firstFull;
+          assert.ok(first?.data?.repriceSnapshot);
+          const repeatResponse = await fetch(`${LOCAL}/api/analyze`, {
+            method:'POST', headers:localHeaders(),
+            body:JSON.stringify({ game:first.source.game, markets:first.source.markets, previousMarkets:[], settings:settings500 }),
+            signal:AbortSignal.timeout(180000),
+          });
+          const repeat = await parse(repeatResponse);
+          assert.equal(repeatResponse.status, 200);
+          assert.equal(repeat.analysis.inputHash, first.data.analysis.inputHash);
+          assert.equal(repeat.analysis.distributionHash, first.data.analysis.distributionHash);
+          assert.equal(repeatResponse.headers.get('x-analysis-cache'), 'HIT');
+
+          const settings1800 = { ...settings500, simulationsPerScenario:1800 };
+          const highResponse = await fetch(`${LOCAL}/api/analyze`, {
+            method:'POST', headers:localHeaders(),
+            body:JSON.stringify({ game:first.source.game, markets:first.source.markets, previousMarkets:[], settings:settings1800 }),
+            signal:AbortSignal.timeout(180000),
+          });
+          const high = await parse(highResponse);
+          assert.equal(highResponse.status, 200, JSON.stringify(high).slice(0,1800));
+          assert.notEqual(high.analysis.inputHash, first.data.analysis.inputHash);
+          assert.equal(high.analysis.scenarioSummary.simulationsPerScenario, 1800);
+
+          const market = first.source.markets[0].market;
+          const pair = first.source.markets.filter(row => row.market === market).slice(0,2);
+          assert.equal(pair.length, 2);
+          const actualPair = pair.map((row,index) => ({
+            market:row.market,
+            pick:row.pick,
+            water:index === 0 ? 0.95 : null,
+            waterEstimated:false,
+            waterMissing:index === 1,
+            sourceType:'ACTUAL_TW_CREDIT',
+            sourceLabel:'v9.3.3 local live actual-credit QA',
+            lineAsOf:new Date().toISOString(),
+            executable:index === 0,
+          }));
+          const repriceResponse = await fetch(`${LOCAL}/api/reprice`, {
+            method:'POST', headers:localHeaders(),
+            body:JSON.stringify({ snapshot:first.data.repriceSnapshot, markets:actualPair, previousMarkets:[], settings:{ ...settings500, rebateRate:0.015 } }),
+            signal:AbortSignal.timeout(120000),
+          });
+          const repriced = await parse(repriceResponse);
+          assert.equal(repriceResponse.status, 200, JSON.stringify(repriced).slice(0,2000));
+          const actualResults = repriced.analysis.results.filter(row => row.sourceType === 'ACTUAL_TW_CREDIT');
+          assert.equal(actualResults.length, 2);
+          assert.equal(typeof actualResults[0].score, 'number');
+          assert.equal(actualResults[1].score, null);
+          assert.match(String(actualResults[1].tag), /水位未提供/);
+          assert.notEqual(repriced.analysis.inputHash, first.data.analysis.inputHash);
+          assert.equal(repriced.analysis.distributionHash, first.data.analysis.distributionHash);
+          assert.equal(repriced.reprice.noCoreDataFetch, true);
+          assert.equal(repriced.reprice.noSimulation, true);
+          assert.equal(repriced.reprice.noGpt, true);
+
+          const browser = await chromium.launch({ headless:true });
+          const context = await browser.newContext({ viewport:{ width:390, height:844 }, isMobile:true, hasTouch:true });
+          await context.addInitScript(({ key }) => {
+            localStorage.setItem(key, JSON.stringify({
+              settings:{ unitValue:10000, rebateRate:0.015, simulationsPerScenario:500, fallbackWater:{ '全場讓分':0.95, '全場大小':0.94, '上半讓分':0.94, '上半大小':0.93 } },
+              bets:[],
+            }));
+          }, { key:'mlb-positive-ev-v9-3-3' });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+          page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+          await page.route('**/api/mlb**', route => route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(schedule) }));
+          await page.route('**/api/reference-lines', route => {
+            if (route.request().method() === 'GET') return route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ ok:true, configured:true, primary:reference.provider }) });
+            return route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(reference) });
+          });
+          await page.route('**/api/credit-lines', route => route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ ok:true, configured:false, provider:'TAI888_READ_ONLY_CREDIT', label:'Tai888唯讀信用盤', games:[] }) }));
+          const pageResponse = await page.goto(LOCAL, { waitUntil:'networkidle', timeout:120000 });
+          assert.equal(pageResponse?.status(), 200);
+          await page.getByRole('button', { name:'一鍵分析今日 MLB' }).click();
+          await page.getByText(/完成\s+\d+\s+場分析/).waitFor({ timeout:15 * 60 * 1000 });
+          const body = await page.locator('body').innerText();
+          const cards = await page.locator('.gameCard').count();
+          const scores = await page.locator('.score').count();
+          const failedCards = await page.getByText('分析失敗', { exact:true }).count();
+          assert.equal(cards, schedule.games.length);
+          assert.ok(scores >= reference.games.length * 2);
+          assert.equal(failedCards, 0, body.slice(0,5000));
+          assert.doesNotMatch(body, /Application error|client-side exception|Invalid commenceTimeFrom/i);
+          assert.deepEqual(pageErrors, []);
+          assert.deepEqual(consoleErrors, []);
+          await browser.close();
+
+          console.log(JSON.stringify({
+            ok:true,
+            version:health.version,
+            date,
+            scheduleGames:schedule.games.length,
+            referenceGames:reference.games.length,
+            uniqueInputHashes:new Set(summaries.map(row => row.inputHash)).size,
+            tbdStarterGames:summaries.filter(row => row.starterModelingMode === 'NEUTRAL_STARTER_UNCERTAINTY').length,
+            simulation500InputHash:first.data.analysis.inputHash,
+            simulation1800InputHash:high.analysis.inputHash,
+            actualCreditInputHash:repriced.analysis.inputHash,
+            repriceFlags:repriced.reprice,
+            browser:{ cards, scores, failedCards, pageErrors, consoleErrors },
+            summaries,
+          }, null, 2));
+          NODE
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/mlb-v933-live.log || true
