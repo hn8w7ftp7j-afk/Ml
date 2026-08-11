@@ -5,9 +5,9 @@ import { MARKET_ORDER, hasActualWater, parseTaiwanLine, validateMarketPair } fro
 import { flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '9.3.3';
-const STORAGE = 'mlb-positive-ev-v9-3-3';
-const LEGACY_KEYS = ['mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
+const VERSION = '9.3.4';
+const STORAGE = 'mlb-positive-ev-v9-3-4';
+const LEGACY_KEYS = ['mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
@@ -288,6 +288,8 @@ export default function Home() {
   const [draftPick, setDraftPick] = useState('');
   const [draftWater, setDraftWater] = useState('0.950');
   const [uploadStatus, setUploadStatus] = useState('');
+  const [pasteText, setPasteText] = useState('');
+  const [pasteStatus, setPasteStatus] = useState('');
   const [health, setHealth] = useState(null);
   const snapshots = useRef(new Map());
 
@@ -441,6 +443,7 @@ export default function Home() {
       const sourceWarnings = [
         reference.error ? `國際參考盤：${reference.error}` : '',
         credit.error ? `Tai888信用盤：${credit.error}` : '',
+        credit.blocked && credit.message ? `Tai888信用盤：${credit.message}` : '',
         ...(reference.failures || []),
         ...(credit.warnings || []),
       ].filter(Boolean);
@@ -522,6 +525,68 @@ export default function Home() {
     setNotice(`已記錄：${row.pick}｜${Number(row.water).toFixed(3)}`);
   }
 
+  async function pasteCreditText() {
+    try {
+      if (!navigator?.clipboard?.readText) throw new Error('clipboard unavailable');
+      const value = await navigator.clipboard.readText();
+      if (!String(value || '').trim()) throw new Error('clipboard empty');
+      setPasteText(value);
+      setPasteStatus('已貼上剪貼簿內容，按「辨識並分析文字」即可。');
+      setError('');
+    } catch {
+      setError('Safari目前無法直接讀取剪貼簿，請長按下方文字框後選擇「貼上」。');
+    }
+  }
+
+  async function importCreditText(event) {
+    event?.preventDefault?.();
+    const text = String(pasteText || '').trim();
+    if (busy) return;
+    if (!text) { setError('請先貼上Tai888盤口文字'); return; }
+    setBusy(true); setError(''); setNotice(''); setPasteStatus('辨識貼上的盤口文字中…'); snapshots.current.clear();
+    try {
+      const games = schedule.length ? schedule : await fetchSchedule(date);
+      const recognized = await requestJSON('/api/vision', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ text, schedule: games, defaultWater: settings.fallbackWater }),
+      }, 180000);
+      const prepared = (recognized.games || []).map(raw => {
+        const matchedGame = games.find(game => Number(game.gamePk) === Number(raw.gamePk)) || games.find(game => clean(game.away) === clean(raw.away) && clean(game.home) === clean(raw.home));
+        return withFallbackWater({ ...raw, matchedGame }, settings);
+      }).filter(row => row.matchedGame);
+      if (!prepared.length) throw new Error('沒有辨識到可配對的信用盤場次，請確認複製內容包含對戰、盤口與水位');
+      const items = prepared.map(row => ({
+        game: row.matchedGame, mode: 'actual', source: { label: '我的Tai888盤口文字', observedAt: new Date().toISOString() }, referenceMarkets: [], customMarkets: flattenMarkets(row),
+        status: 'queued', statusLabel: '等待分析', referenceData: null, customData: null, error: '',
+      }));
+      setBoard(items); setTab('board');
+      setProgress({ active: true, done: 0, total: items.length, label: '分析貼上的信用盤文字' });
+      await runPool(items, 2, async (item, index) => {
+        updateBoard(item.game.gamePk, value => ({ ...value, status: 'running', statusLabel: '分析中…' }));
+        try {
+          const data = await requestJSON('/api/analyze', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+            body: JSON.stringify({ game: item.game, markets: item.customMarkets, settings: { ...settings, rebateRate: 0.015 } }),
+          }, 180000);
+          snapshots.current.set(item.game.gamePk, data.repriceSnapshot);
+          updateBoard(item.game.gamePk, value => ({ ...value, status: 'done', statusLabel: '信用盤分析完成', referenceData: compactAnalysisData(data), customData: compactAnalysisData(data) }));
+        } catch (cause) {
+          updateBoard(item.game.gamePk, value => ({ ...value, status: 'failed', statusLabel: '分析失敗', error: String(cause?.message || cause) }));
+        } finally {
+          setProgress(value => ({ ...value, done: value.done + 1, label: `分析文字盤口：${index + 1}/${items.length}` }));
+        }
+      });
+      setPasteStatus(`完成 ${items.length} 場盤口分析`);
+      setNotice(`已從貼上的Tai888盤口文字完成 ${items.length} 場分析。`);
+    } catch (cause) {
+      setError(String(cause?.message || cause));
+      setPasteStatus('文字辨識失敗');
+    } finally {
+      setBusy(false);
+      setProgress(value => ({ ...value, active: false }));
+    }
+  }
+
   async function uploadScreenshots(event) {
     const files = [...(event.target.files || [])].slice(0, 8);
     event.target.value = '';
@@ -571,7 +636,7 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">MLB POSITIVE EV</div><h1>今日盤口分析</h1><p>國際參考盤建立模型，Tai888唯讀信用盤自動套入；完整盤口仍可立即改價重算。</p></div>
+      <div><div className="eyebrow">MLB POSITIVE EV</div><h1>今日盤口分析</h1><p>國際參考盤建立模型；Tai888可自動套入，若受瀏覽器驗證限制則可貼文字或截圖匯入。</p></div>
       <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{health?.ok ? '系統正常' : '系統檢查中'}</span><span className="version">v{VERSION}</span></div>
     </header>
 
@@ -589,15 +654,15 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>一鍵分析今日全部 MLB</h2><p>同時取得國際參考盤與你的唯讀信用盤，一次建立凍結比分分布並直接產生實際信用盤分數。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>一鍵分析今日全部 MLB</h2><p>先完成全部國際參考盤分析；Tai888可讀取時自動套入，受Cloudflare限制時不會中斷參考盤分析。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy} onClick={oneClickAnalyze}>{busy ? '執行中…' : '一鍵分析今日 MLB'}</button></div>
         <div className={`providerState ${providerStatus?.configured ? 'ready' : 'missing'}`}>
           <strong>{providerStatus?.configured ? '國際參考盤已連接' : '國際參考盤尚未設定'}</strong>
           <span>{providerStatus?.configured ? providerStatus.provider || providerStatus.primary || '可使用' : '設定THE_ODDS_API_KEY後可自動取得國際參考盤。'}</span>
         </div>
-        <div className={`providerState ${creditProviderStatus?.configured ? 'ready' : 'missing'}`}>
-          <strong>{creditProviderStatus?.configured ? 'Tai888唯讀信用盤已連接' : 'Tai888唯讀信用盤待設定'}</strong>
-          <span>{creditProviderStatus?.configured ? creditProviderStatus.label || creditProviderStatus.provider : '只使用一般帳密表單與可見盤口頁，不繞過驗證或隱藏接口。'}</span>
+        <div className={`providerState ${creditProviderStatus?.blocked ? 'missing' : creditProviderStatus?.configured ? 'ready' : 'missing'}`}>
+          <strong>{creditProviderStatus?.blocked ? 'Tai888受Cloudflare瀏覽器驗證保護' : creditProviderStatus?.configured ? 'Tai888唯讀信用盤已連接' : 'Tai888唯讀信用盤待設定'}</strong>
+          <span>{creditProviderStatus?.blocked ? '伺服器端不能直接登入；請到「上傳盤口」貼文字或上傳截圖。' : creditProviderStatus?.configured ? creditProviderStatus.label || creditProviderStatus.provider : '只使用一般帳密表單與可見盤口頁，不繞過驗證或隱藏接口。'}</span>
         </div>
       </section>
       {!board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日分析</h2><p>按上方按鈕後，今天全部已開參考盤的比賽會一次列出並完成分析。</p></section>}
@@ -605,7 +670,15 @@ export default function Home() {
     </>}
 
     {tab === 'import' && <section className="panel">
-      <h2>上傳我的信用盤截圖</h2><p className="muted">一次可選最多8張。辨識後直接分析全部有效盤口；此功能是合法盤源尚未連接時的備援，也是你輸入實際信用盤的方式。</p>
+      <h2>匯入我的Tai888信用盤</h2><p className="muted">Tai888目前啟用Cloudflare瀏覽器驗證，伺服器不能直接代登入。你仍可在自己的瀏覽器正常登入後，把可見盤口文字貼到下方，一次辨識並分析。</p>
+      <form className="textImport" onSubmit={importCreditText}>
+        <div className="textImportHead"><strong>貼上盤口文字</strong><span>不會上傳帳號、密碼或餘額</span></div>
+        <textarea rows="10" value={pasteText} onChange={event => setPasteText(event.target.value)} placeholder="在Tai888盤口頁複製可見文字後貼在這裡…"/>
+        <div className="importActions"><button type="button" className="secondary" onClick={pasteCreditText}>貼上剪貼簿</button><button className="primary" disabled={busy || !pasteText.trim()}>{busy ? '處理中…' : '辨識並分析文字'}</button></div>
+        {pasteStatus && <div className="importStatus">{pasteStatus}</div>}
+      </form>
+      <div className="importDivider"><span>或使用圖片</span></div>
+      <h3>上傳信用盤截圖</h3><p className="muted">一次可選最多8張。辨識後直接分析全部有效盤口。</p>
       <label className="uploadDrop"><input type="file" accept="image/*" multiple onChange={uploadScreenshots}/><strong>點這裡選擇盤口圖片</strong><span>{uploadStatus || '選完後自動辨識並分析，不必逐場按按鈕'}</span></label>
       <div className="explainGrid"><div><b>支援完整盤口</b><span>讓1+50、讓2-80、大9-20、0/0.5等</span></div><div><b>不自動進位</b><span>1+100不會自行猜成2-10</span></div><div><b>快速重算</b><span>只改盤口／水位時不重建棒球模型</span></div></div>
     </section>}
