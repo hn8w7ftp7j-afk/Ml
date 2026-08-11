@@ -1,0 +1,251 @@
+name: Verify v9.3.3 Production end to end
+
+on:
+  push:
+    branches: [verify/production-v9-3-3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify formal Production, all-game isolation and one-click board
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+          EXPECTED_COMMIT: 7cdb4b23f3d9368e5c5119a06fef3df4a66548d1
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          import { chromium } from 'playwright';
+
+          const BASE = process.env.BASE;
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const headers = () => ({
+            'Content-Type': 'application/json',
+            Origin: BASE,
+            Referer: `${BASE}/`,
+            'Idempotency-Key': crypto.randomUUID(),
+          });
+          const parse = async response => {
+            const text = await response.text();
+            try { return JSON.parse(text); }
+            catch { throw new Error(`${response.status}: ${text.slice(0, 1200)}`); }
+          };
+          const sortedPicks = rows => (rows || []).map(row => `${row.market}|${row.pick}`).sort();
+
+          let health = null;
+          for (let attempt = 0; attempt < 120; attempt += 1) {
+            try {
+              const response = await fetch(`${BASE}/api/health?t=${Date.now()}`, {
+                cache: 'no-store', signal: AbortSignal.timeout(30000),
+              });
+              const data = await parse(response);
+              if (response.ok && data.version === '9.3.3' && data.commit === process.env.EXPECTED_COMMIT) {
+                health = data;
+                break;
+              }
+            } catch {}
+            await sleep(5000);
+          }
+          assert.ok(health, 'v9.3.3 formal Production did not become ready');
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+          assert.equal(health.referenceLinesConfigured, true);
+          assert.match(health.dataVersion, /v1\.2\.0/);
+          assert.match(health.repriceVersion, /v1\.2\.0/);
+          assert.match(health.analysisCacheVersion, /v2\.1\.0/);
+
+          const date = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(new Date());
+          const scheduleResponse = await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, {
+            cache: 'no-store', signal: AbortSignal.timeout(60000),
+          });
+          const schedule = await parse(scheduleResponse);
+          assert.equal(scheduleResponse.status, 200);
+          assert.ok(Array.isArray(schedule.games) && schedule.games.length >= 10, 'official MLB slate is unexpectedly small');
+
+          const referenceResponse = await fetch(`${BASE}/api/reference-lines`, {
+            method: 'POST', headers: headers(),
+            body: JSON.stringify({ date, schedule: schedule.games }),
+            signal: AbortSignal.timeout(90000),
+          });
+          const reference = await parse(referenceResponse);
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference).slice(0, 1600));
+          assert.equal(reference.ok, true);
+          assert.equal(reference.configured, true);
+          assert.doesNotMatch(JSON.stringify(reference), /Invalid commenceTimeFrom|Invalid commenceTimeTo/i);
+          assert.ok(Array.isArray(reference.games) && reference.games.length >= 10, 'reference source did not match the daily slate');
+
+          const settings500 = {
+            rebateRate: 0,
+            simulationsPerScenario: 500,
+            candidateThreshold: 7.2,
+            strongestThreshold: 8.5,
+            expertMode: 'off',
+          };
+          let cursor = 0;
+          const summaries = new Array(reference.games.length);
+          let firstFull = null;
+          const workers = Array.from({ length: 2 }, async () => {
+            while (cursor < reference.games.length) {
+              const index = cursor++;
+              const source = reference.games[index];
+              const response = await fetch(`${BASE}/api/analyze`, {
+                method: 'POST', headers: headers(),
+                body: JSON.stringify({ game: source.game, markets: source.markets, previousMarkets: [], settings: settings500 }),
+                signal: AbortSignal.timeout(180000),
+              });
+              const data = await parse(response);
+              assert.equal(response.status, 200, `${source.game.away} @ ${source.game.home}: ${JSON.stringify(data).slice(0, 1600)}`);
+              assert.equal(data.ok, true);
+              assert.equal(Number(data.game?.gamePk), Number(source.gamePk));
+              assert.equal(Number(data.context?.game?.gamePk), Number(source.gamePk));
+              assert.deepEqual(sortedPicks(data.analysis?.results), sortedPicks(source.markets));
+              assert.ok(data.analysis?.inputHash);
+              assert.ok(data.analysis?.distributionHash);
+              assert.equal(data.analysis?.scoreFormulaVersion, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
+              if (!source.game.awayProbableId || !source.game.homeProbableId) {
+                assert.equal(data.context?.starterModelingMode, 'NEUTRAL_STARTER_UNCERTAINTY');
+              }
+              summaries[index] = {
+                gamePk: source.gamePk,
+                matchup: `${source.game.away} @ ${source.game.home}`,
+                inputHash: data.analysis.inputHash,
+                distributionHash: data.analysis.distributionHash,
+                cache: response.headers.get('x-analysis-cache'),
+                starterModelingMode: data.context?.starterModelingMode,
+                directions: data.analysis.results.length,
+              };
+              if (index === 0) firstFull = { source, data };
+            }
+          });
+          await Promise.all(workers);
+          assert.equal(summaries.length, reference.games.length);
+          assert.equal(new Set(summaries.map(row => row.inputHash)).size, summaries.length, 'different games shared an inputHash');
+
+          const first = firstFull || { source: reference.games[0], data: null };
+          assert.ok(first.data?.repriceSnapshot, 'missing first frozen distribution snapshot');
+
+          const repeatResponse = await fetch(`${BASE}/api/analyze`, {
+            method: 'POST', headers: headers(),
+            body: JSON.stringify({ game: first.source.game, markets: first.source.markets, previousMarkets: [], settings: settings500 }),
+            signal: AbortSignal.timeout(180000),
+          });
+          const repeated = await parse(repeatResponse);
+          assert.equal(repeatResponse.status, 200, JSON.stringify(repeated).slice(0, 1600));
+          assert.equal(repeated.analysis?.inputHash, first.data.analysis.inputHash);
+          assert.equal(repeated.analysis?.distributionHash, first.data.analysis.distributionHash);
+
+          const settings1800 = { ...settings500, simulationsPerScenario: 1800 };
+          const highSimulationResponse = await fetch(`${BASE}/api/analyze`, {
+            method: 'POST', headers: headers(),
+            body: JSON.stringify({ game: first.source.game, markets: first.source.markets, previousMarkets: [], settings: settings1800 }),
+            signal: AbortSignal.timeout(180000),
+          });
+          const highSimulation = await parse(highSimulationResponse);
+          assert.equal(highSimulationResponse.status, 200, JSON.stringify(highSimulation).slice(0, 1600));
+          assert.notEqual(highSimulation.analysis?.inputHash, first.data.analysis.inputHash, '500 and 1800 simulations shared an inputHash');
+          assert.equal(highSimulation.analysis?.scenarioSummary?.simulationsPerScenario, 1800);
+
+          const market = first.source.markets[0].market;
+          const pair = first.source.markets.filter(row => row.market === market).slice(0, 2);
+          assert.equal(pair.length, 2);
+          const actualPair = pair.map((row, index) => ({
+            market: row.market,
+            pick: row.pick,
+            water: index === 0 ? 0.95 : null,
+            waterEstimated: false,
+            waterMissing: index === 1,
+            sourceType: 'ACTUAL_TW_CREDIT',
+            sourceLabel: 'v9.3.3 Production actual-credit QA',
+            lineAsOf: new Date().toISOString(),
+            executable: index === 0,
+          }));
+          const repriceResponse = await fetch(`${BASE}/api/reprice`, {
+            method: 'POST', headers: headers(),
+            body: JSON.stringify({
+              snapshot: first.data.repriceSnapshot,
+              markets: actualPair,
+              previousMarkets: [],
+              settings: { ...settings500, rebateRate: 0.015 },
+            }),
+            signal: AbortSignal.timeout(120000),
+          });
+          const repriced = await parse(repriceResponse);
+          assert.equal(repriceResponse.status, 200, JSON.stringify(repriced).slice(0, 1800));
+          const actualResults = repriced.analysis.results.filter(row => row.sourceType === 'ACTUAL_TW_CREDIT');
+          assert.equal(actualResults.length, 2);
+          assert.equal(typeof actualResults[0].score, 'number', JSON.stringify(actualResults));
+          assert.ok(Number.isFinite(actualResults[0].score));
+          assert.equal(actualResults[1].score, null);
+          assert.match(String(actualResults[1].tag), /水位未提供/);
+          assert.notEqual(repriced.analysis.inputHash, first.data.analysis.inputHash, 'reference and actual-credit inputs shared an inputHash');
+          assert.equal(repriced.analysis.distributionHash, first.data.analysis.distributionHash);
+          assert.equal(repriced.reprice.noCoreDataFetch, true);
+          assert.equal(repriced.reprice.noSimulation, true);
+          assert.equal(repriced.reprice.noGpt, true);
+
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+          await context.addInitScript(({ key }) => {
+            try {
+              localStorage.setItem(key, JSON.stringify({
+                settings: {
+                  unitValue: 10000,
+                  rebateRate: 0.015,
+                  simulationsPerScenario: 500,
+                  fallbackWater: { '全場讓分': 0.95, '全場大小': 0.94, '上半讓分': 0.94, '上半大小': 0.93 },
+                },
+                bets: [],
+              }));
+            } catch {}
+          }, { key: 'mlb-positive-ev-v9-3-3' });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+          page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+          const pageResponse = await page.goto(BASE, { waitUntil: 'networkidle', timeout: 120000 });
+          assert.equal(pageResponse?.status(), 200);
+          await page.getByRole('button', { name: '一鍵分析今日 MLB' }).click();
+          await page.getByText(/完成\s+\d+\s+場分析/).waitFor({ timeout: 15 * 60 * 1000 });
+          const body = await page.locator('body').innerText();
+          const cards = await page.locator('.gameCard').count();
+          const scores = await page.locator('.score').count();
+          const failedCards = await page.getByText('分析失敗', { exact: true }).count();
+          assert.equal(cards, schedule.games.length);
+          assert.ok(scores >= reference.games.length * 2, `expected scored rows, found ${scores}`);
+          assert.equal(failedCards, 0, body.slice(0, 5000));
+          assert.doesNotMatch(body, /Invalid commenceTimeFrom|Invalid commenceTimeTo|Application error|client-side exception/i);
+          assert.deepEqual(pageErrors, []);
+          assert.deepEqual(consoleErrors, []);
+          await browser.close();
+
+          console.log(JSON.stringify({
+            ok: true,
+            health,
+            date,
+            scheduleGames: schedule.games.length,
+            referenceGames: reference.games.length,
+            uniqueInputHashes: new Set(summaries.map(row => row.inputHash)).size,
+            tbdStarterGames: summaries.filter(row => row.starterModelingMode === 'NEUTRAL_STARTER_UNCERTAINTY').length,
+            repeatedCache: repeatResponse.headers.get('x-analysis-cache'),
+            simulation500InputHash: first.data.analysis.inputHash,
+            simulation1800InputHash: highSimulation.analysis.inputHash,
+            actualCreditInputHash: repriced.analysis.inputHash,
+            distributionReused: repriced.reprice,
+            browser: { cards, scores, failedCards, pageErrors, consoleErrors },
+            summaries,
+          }, null, 2));
+          NODE
