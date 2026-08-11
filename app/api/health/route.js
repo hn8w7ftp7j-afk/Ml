@@ -9,6 +9,7 @@ import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/reference-lines.js';
 import { TAI888_SOURCE_VERSION, tai888SourceStatus } from '../../../lib/tai888-source.js';
+import { ANALYSIS_CACHE_VERSION } from '../../../lib/analysis-cache-v9.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ export async function GET() {
   const creditLines = tai888SourceStatus();
   return NextResponse.json({
     ok: true,
-    version: '9.3.1',
+    version: '9.3.2',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     dataVersion: DATA_VERSION,
@@ -29,6 +30,7 @@ export async function GET() {
     settlementRuleVersion: SETTLEMENT_RULE_VERSION,
     uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
     repriceVersion: REPRICE_VERSION,
+    analysisCacheVersion: ANALYSIS_CACHE_VERSION,
     referenceLinesVersion: REFERENCE_LINES_VERSION,
     referenceLinesConfigured: referenceLines.configured,
     referenceLinesProvider: referenceLines.primary,

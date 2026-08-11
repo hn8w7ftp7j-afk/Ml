@@ -5,9 +5,9 @@ import { MARKET_ORDER, hasActualWater, parseTaiwanLine, validateMarketPair } fro
 import { flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '9.3.1';
-const STORAGE = 'mlb-positive-ev-v9-3';
-const LEGACY_KEYS = ['mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
+const VERSION = '9.3.2';
+const STORAGE = 'mlb-positive-ev-v9-3-2';
+const LEGACY_KEYS = ['mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
@@ -371,7 +371,14 @@ export default function Home() {
         error: '',
       }));
     } catch (cause) {
-      updateBoard(game.gamePk, item => ({ ...item, status: 'failed', statusLabel: '分析失敗', error: String(cause?.message || cause) }));
+      const message = String(cause?.message || cause);
+      const blocked = /資料不足｜不評分|比賽已開打或結束/.test(message);
+      updateBoard(game.gamePk, item => ({
+        ...item,
+        status: blocked ? 'blocked' : 'failed',
+        statusLabel: blocked ? '資料不足｜不評分' : '分析失敗',
+        error: message,
+      }));
     } finally {
       setProgress(value => ({ ...value, done: Math.min(total, value.done + 1), label: `分析今日全部盤口：${index + 1}/${total}` }));
     }
