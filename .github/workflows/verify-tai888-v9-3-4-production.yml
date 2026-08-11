@@ -1,0 +1,153 @@
+name: Verify v9.3.4 Tai888 Production fallback
+
+on:
+  push:
+    branches: [verify/tai888-v9-3-4-production]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify Production source state, paste import and deterministic analysis
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+          EXPECTED_COMMIT: 78ade0bfa5f1d82884de655c2ebb08e165085fcf
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+
+          const BASE = process.env.BASE;
+          const parse = async response => {
+            const text = await response.text();
+            try { return JSON.parse(text); }
+            catch { throw new Error(`${response.status}: ${text.slice(0, 1200)}`); }
+          };
+          const headers = () => ({
+            'Content-Type': 'application/json',
+            Origin: BASE,
+            Referer: `${BASE}/`,
+            'Idempotency-Key': crypto.randomUUID(),
+          });
+          const taipeiDate = offset => new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(new Date(Date.now() + offset * 86400000));
+
+          let health = null;
+          for (let attempt = 0; attempt < 30; attempt += 1) {
+            const response = await fetch(`${BASE}/api/health?t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(30000) });
+            const data = await parse(response);
+            if (response.ok && data.version === '9.3.4' && data.commit === process.env.EXPECTED_COMMIT) {
+              health = data;
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          assert.ok(health, 'v9.3.4 Production did not become ready');
+          assert.equal(health.ok, true);
+          assert.equal(health.creditLinesConfigured, true);
+          assert.equal(health.creditLinesProvider, 'TAI888_READ_ONLY_CREDIT');
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+
+          const sourceStatusResponse = await fetch(`${BASE}/api/credit-lines?t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(30000) });
+          const sourceStatus = await parse(sourceStatusResponse);
+          assert.equal(sourceStatusResponse.status, 200, JSON.stringify(sourceStatus));
+          assert.equal(sourceStatus.ok, true);
+          assert.equal(sourceStatus.configured, true);
+
+          let selected = null;
+          for (const offset of [0, -1, 1]) {
+            const date = taipeiDate(offset);
+            const response = await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(60000) });
+            const data = await parse(response);
+            if (response.ok && Array.isArray(data.games) && data.games.length && (!selected || data.games.length > selected.games.length)) {
+              selected = { date, games:data.games };
+            }
+          }
+          assert.ok(selected, 'No MLB schedule available');
+
+          const [creditResponse, referenceResponse] = await Promise.all([
+            fetch(`${BASE}/api/credit-lines`, {
+              method:'POST', headers:headers(),
+              body:JSON.stringify({ date:selected.date, schedule:selected.games }),
+              signal:AbortSignal.timeout(90000),
+            }),
+            fetch(`${BASE}/api/reference-lines`, {
+              method:'POST', headers:headers(),
+              body:JSON.stringify({ date:selected.date, schedule:selected.games }),
+              signal:AbortSignal.timeout(90000),
+            }),
+          ]);
+          const credit = await parse(creditResponse);
+          const reference = await parse(referenceResponse);
+          assert.equal(creditResponse.status, 200, JSON.stringify(credit).slice(0, 2500));
+          assert.equal(credit.ok, true);
+          assert.equal(credit.configured, true);
+          assert.equal(credit.blocked, true);
+          assert.equal(credit.blockCode, 'TAI888_CLOUDFLARE_BLOCKED');
+          assert.deepEqual(credit.games, []);
+          assert.ok(Array.isArray(credit.importModes) && credit.importModes.includes('clipboard_text') && credit.importModes.includes('screenshot'));
+          assert.match(String(credit.message), /Cloudflare/);
+
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference).slice(0, 2500));
+          assert.equal(reference.ok, true);
+          assert.ok(Array.isArray(reference.games) && reference.games.length > 0, 'Reference board unavailable');
+
+          const first = reference.games.find(row => Array.isArray(row.markets) && row.markets.length);
+          assert.ok(first, 'No reference market available');
+          const pasteText = `${first.game.away} 對 ${first.game.home}\n全場大小 大8.5 0.940 0.940`;
+          const visionResponse = await fetch(`${BASE}/api/vision`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({ text:pasteText, schedule:selected.games, defaultWater:{ '全場讓分':0.95, '全場大小':0.94, '上半讓分':0.94, '上半大小':0.93 } }),
+            signal:AbortSignal.timeout(60000),
+          });
+          const vision = await parse(visionResponse);
+          assert.equal(visionResponse.status, 200, JSON.stringify(vision).slice(0, 2500));
+          assert.equal(vision.ok, true);
+          assert.equal(vision.model, '本地信用盤解析器');
+          assert.ok(Array.isArray(vision.games) && vision.games.some(row => Number(row.gamePk) === Number(first.gamePk)), 'Pasted Tai888 text was not matched');
+
+          const analyzeResponse = await fetch(`${BASE}/api/analyze`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({
+              game:first.game,
+              markets:first.markets,
+              previousMarkets:[],
+              settings:{ rebateRate:0, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' },
+            }),
+            signal:AbortSignal.timeout(180000),
+          });
+          const analysis = await parse(analyzeResponse);
+          assert.equal(analyzeResponse.status, 200, JSON.stringify(analysis).slice(0, 3000));
+          assert.equal(analysis.ok, true);
+          assert.ok(analysis.analysis?.inputHash);
+          assert.ok(analysis.analysis?.distributionHash);
+          assert.equal(analysis.analysis?.scoreFormulaVersion, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
+
+          const pageResponse = await fetch(`${BASE}/?t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(30000) });
+          const html = await pageResponse.text();
+          assert.equal(pageResponse.status, 200);
+          assert.match(html, /今日盤口分析/);
+
+          console.log(JSON.stringify({
+            ok:true,
+            version:health.version,
+            commit:health.commit,
+            date:selected.date,
+            scheduleGames:selected.games.length,
+            referenceGames:reference.games.length,
+            tai888:{ configured:credit.configured, blocked:credit.blocked, blockCode:credit.blockCode, importModes:credit.importModes },
+            pasteImport:{ model:vision.model, matchedGames:vision.games.length },
+            analyzedGame:first.gamePk,
+            results:analysis.analysis?.results?.length,
+          }, null, 2));
+          NODE
