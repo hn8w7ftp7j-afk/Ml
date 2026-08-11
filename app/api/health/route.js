@@ -17,7 +17,7 @@ export async function GET() {
   const creditLines = tai888SourceStatus();
   return NextResponse.json({
     ok: true,
-    version: '9.3.0',
+    version: '9.3.1',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     dataVersion: DATA_VERSION,
