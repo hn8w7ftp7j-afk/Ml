@@ -1,0 +1,38 @@
+name: Apply and verify v9.3.4 Tai888 fallback
+
+on:
+  push:
+    branches: [fix/tai888-cloudflare-fallback-v9-3-4]
+    paths:
+      - scripts/apply-v9-3-4.mjs
+      - .github/workflows/apply-v9-3-4.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/tai888-cloudflare-fallback-v9-3-4
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply patch
+        run: node scripts/apply-v9-3-4.mjs
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run permanent tests and Production build
+        run: npm run build
+      - name: Commit verified implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.js app/globals.css app/api/credit-lines/route.js app/api/health/route.js lib/tai888-source.js package.json scripts/tai888-cloudflare-test.mjs
+          git commit -m "Release v9.3.4 Cloudflare-safe Tai888 import fallback"
+          git push origin HEAD:fix/tai888-cloudflare-fallback-v9-3-4
