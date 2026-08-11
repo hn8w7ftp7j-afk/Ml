@@ -4,7 +4,7 @@ on:
   push:
     branches: [fix/tai888-cloudflare-fallback-v9-3-4]
     paths:
-      - scripts/apply-v9-3-4.mjs
+      - scripts/apply-v9-3-4-fixed.mjs
       - .github/workflows/apply-v9-3-4.yml
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 24
       - name: Apply patch
-        run: node scripts/apply-v9-3-4.mjs
+        run: node scripts/apply-v9-3-4-fixed.mjs
       - name: Install dependencies
         run: npm install --no-audit --no-fund --package-lock=false
       - name: Run permanent tests and Production build
