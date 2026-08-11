@@ -4,7 +4,12 @@ import { analyzeMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analy
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
-import { buildSnapshotFingerprints, DATA_VERSION, sha256 } from '../../../lib/snapshot-v9.js';
+import { buildSnapshotFingerprints, DATA_VERSION } from '../../../lib/snapshot-v9.js';
+import {
+  analysisCacheKey,
+  analysisCachePayloadMatches,
+  analysisContractSignature,
+} from '../../../lib/analysis-cache-v9.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import {
   checkRateLimit,
@@ -72,34 +77,6 @@ function sanitizeMarketRows(rows, maximum = 16) {
   })).filter(row => row.market);
 }
 
-function contractSignature(game, markets) {
-  return sha256({
-    gamePk: game.gamePk,
-    officialDate: game.officialDate,
-    gameNumber: game.gameNumber,
-    contracts: markets.map(row => ({
-      market: row.market,
-      pick: row.pick,
-      water: row.water,
-      waterEstimated: row.waterEstimated,
-      waterMissing: row.waterMissing,
-      sourceType: row.sourceType,
-      lineAsOf: row.lineAsOf,
-      executable: row.executable,
-    })).sort((left, right) => `${left.market}|${left.pick}`.localeCompare(`${right.market}|${right.pick}`)),
-  });
-}
-
-function cachePayloadMatches(entry, { game, fingerprints, signature }) {
-  const payload = entry?.payload;
-  if (!payload) return false;
-  return Number(payload?.game?.gamePk) === Number(game.gamePk)
-    && Number(payload?.context?.game?.gamePk) === Number(game.gamePk)
-    && payload?.analysis?.inputHash === fingerprints.inputHash
-    && payload?.repriceSnapshot?.inputHash === fingerprints.inputHash
-    && entry.signature === signature;
-}
-
 function cacheSet(key, signature, value) {
   responseCache.set(key, { signature, payload: value, cachedAt: Date.now() });
   while (responseCache.size > 100) responseCache.delete(responseCache.keys().next().value);
@@ -151,10 +128,10 @@ export async function POST(request) {
     const coreOnly = buildSnapshotFingerprints({ context, markets: [], versions });
     const frozenContext = { ...context, coreFingerprint: coreOnly.coreFingerprint };
     const fingerprints = buildSnapshotFingerprints({ context: frozenContext, markets: activeMarkets, versions });
-    const signature = contractSignature(game, activeMarkets);
-    const cacheKey = `${game.gamePk}:${fingerprints.inputHash}`;
+    const signature = analysisContractSignature(game, activeMarkets);
+    const cacheKey = analysisCacheKey(game.gamePk, fingerprints.inputHash);
     const cached = responseCache.get(cacheKey);
-    if (cachePayloadMatches(cached, { game, fingerprints, signature })) {
+    if (analysisCachePayloadMatches(cached, { game, fingerprints, signature })) {
       return NextResponse.json(cached.payload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT' } });
     }
     if (cached) responseCache.delete(cacheKey);
