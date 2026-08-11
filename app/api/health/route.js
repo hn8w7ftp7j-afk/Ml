@@ -8,14 +8,16 @@ import { SCORE_FORMULA_VERSION, SCORE_POLICY_VERSION } from '../../../lib/determ
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/reference-lines.js';
+import { TAI888_SOURCE_VERSION, tai888SourceStatus } from '../../../lib/tai888-source.js';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const referenceLines = referenceProviderStatus();
+  const creditLines = tai888SourceStatus();
   return NextResponse.json({
     ok: true,
-    version: '9.2.0',
+    version: '9.3.0',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     dataVersion: DATA_VERSION,
@@ -30,6 +32,9 @@ export async function GET() {
     referenceLinesVersion: REFERENCE_LINES_VERSION,
     referenceLinesConfigured: referenceLines.configured,
     referenceLinesProvider: referenceLines.primary,
+    creditLinesVersion: TAI888_SOURCE_VERSION,
+    creditLinesConfigured: creditLines.configured,
+    creditLinesProvider: creditLines.configured ? creditLines.provider : null,
     deterministicScoring: true,
     gptScoringEnabled: false,
     aiGatewayConfiguredForVision: Boolean(process.env.AI_GATEWAY_API_KEY),
