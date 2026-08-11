@@ -1,0 +1,71 @@
+name: Verify v9.3 Single-side Water
+
+on:
+  push:
+    branches: [verify/production-v9-3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  single-side:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify only provided water side receives a formal score
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          const BASE = process.env.BASE;
+          const date = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+          const headers = () => ({ 'Content-Type':'application/json', Origin:BASE, Referer:`${BASE}/`, 'Idempotency-Key':crypto.randomUUID() });
+          const parse = async response => {
+            const text = await response.text();
+            try { return JSON.parse(text); } catch { throw new Error(`${response.status}: ${text.slice(0,800)}`); }
+          };
+          const schedule = await parse(await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(60000) }));
+          const referenceResponse = await fetch(`${BASE}/api/reference-lines`, { method:'POST', headers:headers(), body:JSON.stringify({ date, schedule:schedule.games }), signal:AbortSignal.timeout(90000) });
+          const reference = await parse(referenceResponse);
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference));
+          const sourceGame = reference.games.find(row => Array.isArray(row.markets) && row.markets.length >= 2);
+          assert.ok(sourceGame);
+          const analyzeResponse = await fetch(`${BASE}/api/analyze`, { method:'POST', headers:headers(), body:JSON.stringify({ game:sourceGame.game, markets:sourceGame.markets, settings:{ rebateRate:0, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' } }), signal:AbortSignal.timeout(180000) });
+          const analyzed = await parse(analyzeResponse);
+          assert.equal(analyzeResponse.status, 200, JSON.stringify(analyzed).slice(0,1200));
+
+          const market = sourceGame.markets[0].market;
+          const pair = sourceGame.markets.filter(row => row.market === market).slice(0,2);
+          assert.equal(pair.length, 2);
+          const input = pair.map((row, index) => ({
+            market:row.market,
+            pick:row.pick,
+            water:index === 0 ? 0.95 : null,
+            waterEstimated:false,
+            waterMissing:index === 1,
+            sourceType:'ACTUAL_TW_CREDIT',
+            sourceLabel:'single-side Production QA',
+            lineAsOf:new Date().toISOString(),
+            executable:index === 0,
+          }));
+          const response = await fetch(`${BASE}/api/reprice`, { method:'POST', headers:headers(), body:JSON.stringify({ snapshot:analyzed.repriceSnapshot, markets:input, previousMarkets:[], settings:{ rebateRate:0.015, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' } }), signal:AbortSignal.timeout(120000) });
+          const output = await parse(response);
+          assert.equal(response.status, 200, JSON.stringify(output).slice(0,1600));
+          const results = output.analysis.results.filter(row => row.sourceType === 'ACTUAL_TW_CREDIT');
+          const details = results.map(row => ({ pick:row.pick, water:row.water, weightedEV:row.weightedEV, robustEV:row.robustEV, score:row.score, tag:row.tag, scoreAudit:row.scoreAudit, pairAudit:row.pairAudit }));
+          console.log(JSON.stringify({ matchup:`${sourceGame.game.away} @ ${sourceGame.game.home}`, market, details }, null, 2));
+          assert.equal(results.length, 2);
+          assert.equal(typeof results[0].score, 'number', JSON.stringify(details));
+          assert.ok(Number.isFinite(results[0].score), JSON.stringify(details));
+          assert.equal(results[1].score, null, JSON.stringify(details));
+          assert.match(String(results[1].tag), /水位未提供/);
+          assert.equal(output.reprice.noCoreDataFetch, true);
+          assert.equal(output.reprice.noSimulation, true);
+          assert.equal(output.reprice.noGpt, true);
+          NODE
