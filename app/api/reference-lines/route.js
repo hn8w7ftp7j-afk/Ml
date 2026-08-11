@@ -19,12 +19,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const cache = globalThis.__MLB_REFERENCE_LINES_CACHE_V92__ || new Map();
-globalThis.__MLB_REFERENCE_LINES_CACHE_V92__ = cache;
+const cache = globalThis.__MLB_REFERENCE_LINES_CACHE_V93__ || new Map();
+globalThis.__MLB_REFERENCE_LINES_CACHE_V93__ = cache;
 let lastJbotRequestAt = globalThis.__MLB_LAST_JBOT_REQUEST_AT__ || 0;
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+const strictIsoSeconds = value => new Date(value).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
 function sanitizeSchedule(rows) {
   return (Array.isArray(rows) ? rows : []).slice(0, 40).map(game => ({
@@ -77,21 +78,50 @@ async function loadJbot(date, schedule) {
   return { ...normalizeJbotReference(payload, schedule), provider: 'JBOT_TAIWAN_SPORTS_LOTTERY' };
 }
 
-async function loadOddsApi(date, schedule) {
-  const key = process.env.THE_ODDS_API_KEY;
-  if (!key) return null;
+function oddsApiWindow(date, schedule) {
+  const timestamps = schedule.map(game => Date.parse(game.gameDate || '')).filter(Number.isFinite);
+  if (timestamps.length) {
+    return {
+      start: strictIsoSeconds(Math.min(...timestamps) - 2 * 60 * 60 * 1000),
+      end: strictIsoSeconds(Math.max(...timestamps) + 8 * 60 * 60 * 1000),
+    };
+  }
+  const start = new Date(`${date}T00:00:00+08:00`);
+  return {
+    start: strictIsoSeconds(start),
+    end: strictIsoSeconds(start.getTime() + 36 * 60 * 60 * 1000 - 1000),
+  };
+}
+
+function oddsApiUrl(key, window = null) {
   const url = new URL('https://api.the-odds-api.com/v4/sports/baseball_mlb/odds');
   url.searchParams.set('apiKey', key);
   url.searchParams.set('regions', 'us');
   url.searchParams.set('markets', 'spreads,totals');
   url.searchParams.set('oddsFormat', 'decimal');
   url.searchParams.set('dateFormat', 'iso');
-  const start = new Date(`${date}T00:00:00+08:00`);
-  const end = new Date(start.getTime() + 36 * 60 * 60 * 1000);
-  url.searchParams.set('commenceTimeFrom', start.toISOString());
-  url.searchParams.set('commenceTimeTo', end.toISOString());
-  const payload = await fetchJson(url, { headers: { Accept: 'application/json' } });
-  return { ...normalizeOddsApiReference(payload, schedule), provider: 'THE_ODDS_API_CONSENSUS' };
+  if (window) {
+    url.searchParams.set('commenceTimeFrom', window.start);
+    url.searchParams.set('commenceTimeTo', window.end);
+  }
+  return url;
+}
+
+async function loadOddsApi(date, schedule) {
+  const key = process.env.THE_ODDS_API_KEY;
+  if (!key) return null;
+  const window = oddsApiWindow(date, schedule);
+  let payload;
+  try {
+    payload = await fetchJson(oddsApiUrl(key, window), { headers: { Accept: 'application/json' } });
+  } catch (error) {
+    if (!/commenceTime(?:From|To)|ISO 8601|timestamp/i.test(String(error?.message || error))) throw error;
+    // Some upstream revisions are stricter than JavaScript's millisecond ISO output.
+    // The first request already uses second precision; this no-window retry keeps the
+    // board usable if the provider temporarily rejects its optional time filters.
+    payload = await fetchJson(oddsApiUrl(key), { headers: { Accept: 'application/json' } });
+  }
+  return { ...normalizeOddsApiReference(payload, schedule), provider: 'THE_ODDS_API_CONSENSUS', requestWindow: window };
 }
 
 export async function GET(request) {
@@ -105,7 +135,7 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'reference-lines-v9-2', limit: 12, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'reference-lines-v9-3', limit: 12, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500_000);
     const date = cleanText(body?.date, 20);
@@ -148,6 +178,7 @@ export async function POST(request) {
       providers: status.providers,
       games: result.games,
       unmatched: result.unmatched,
+      requestWindow: result.requestWindow || null,
       fetchedAt: new Date().toISOString(),
       failures,
       cache: 'MISS',
