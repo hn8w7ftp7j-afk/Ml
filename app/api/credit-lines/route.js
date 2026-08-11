@@ -170,8 +170,8 @@ export async function POST(request) {
 
     const source = await loadTai888VisibleText();
     const safeText = String(source.text || '')
-      .replace(/((?:帳號|账号|會員|会员|使用者|用户名|username))s*[:：]?s*[^|\n]{1,80}/gi, '$1：[已遮蔽]')
-      .replace(/((?:餘額|余额|信用額度|信用额度|可用額度|可用额度|balance|credit))s*[:：]?s*[-+]?[$NT\s]*[0-9,.]+/gi, '$1：[已遮蔽]');
+      .replace(/((?:帳號|账号|會員|会员|使用者|用户名|username))\s*[:：]?\s*[^|\n]{1,80}/gi, '$1：[已遮蔽]')
+      .replace(/((?:餘額|余额|信用額度|信用额度|可用額度|可用额度|balance|credit))\s*[:：]?\s*[-+]?[$NT\s]*[0-9,.]+/gi, '$1：[已遮蔽]');
     const extracted = await gatewayExtract(extractionPrompt(schedule, safeText));
     const games = [];
     const warnings = [...(extracted.failures || [])];
