@@ -5,6 +5,7 @@ import {
   normalizeOddsApiReference,
   referenceProviderStatus,
 } from '../../../lib/reference-lines.js';
+import { oddsApiWindow } from '../../../lib/reference-time.js';
 import {
   checkRateLimit,
   cleanText,
@@ -25,7 +26,6 @@ let lastJbotRequestAt = globalThis.__MLB_LAST_JBOT_REQUEST_AT__ || 0;
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
-const strictIsoSeconds = value => new Date(value).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
 function sanitizeSchedule(rows) {
   return (Array.isArray(rows) ? rows : []).slice(0, 40).map(game => ({
@@ -78,21 +78,6 @@ async function loadJbot(date, schedule) {
   return { ...normalizeJbotReference(payload, schedule), provider: 'JBOT_TAIWAN_SPORTS_LOTTERY' };
 }
 
-function oddsApiWindow(date, schedule) {
-  const timestamps = schedule.map(game => Date.parse(game.gameDate || '')).filter(Number.isFinite);
-  if (timestamps.length) {
-    return {
-      start: strictIsoSeconds(Math.min(...timestamps) - 2 * 60 * 60 * 1000),
-      end: strictIsoSeconds(Math.max(...timestamps) + 8 * 60 * 60 * 1000),
-    };
-  }
-  const start = new Date(`${date}T00:00:00+08:00`);
-  return {
-    start: strictIsoSeconds(start),
-    end: strictIsoSeconds(start.getTime() + 36 * 60 * 60 * 1000 - 1000),
-  };
-}
-
 function oddsApiUrl(key, window = null) {
   const url = new URL('https://api.the-odds-api.com/v4/sports/baseball_mlb/odds');
   url.searchParams.set('apiKey', key);
@@ -116,9 +101,6 @@ async function loadOddsApi(date, schedule) {
     payload = await fetchJson(oddsApiUrl(key, window), { headers: { Accept: 'application/json' } });
   } catch (error) {
     if (!/commenceTime(?:From|To)|ISO 8601|timestamp/i.test(String(error?.message || error))) throw error;
-    // Some upstream revisions are stricter than JavaScript's millisecond ISO output.
-    // The first request already uses second precision; this no-window retry keeps the
-    // board usable if the provider temporarily rejects its optional time filters.
     payload = await fetchJson(oddsApiUrl(key), { headers: { Accept: 'application/json' } });
   }
   return { ...normalizeOddsApiReference(payload, schedule), provider: 'THE_ODDS_API_CONSENSUS', requestWindow: window };
