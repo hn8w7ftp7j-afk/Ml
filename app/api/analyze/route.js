@@ -4,7 +4,7 @@ import { analyzeMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analy
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
-import { buildSnapshotFingerprints, DATA_VERSION } from '../../../lib/snapshot-v9.js';
+import { buildSnapshotFingerprints, DATA_VERSION, sha256 } from '../../../lib/snapshot-v9.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import {
   checkRateLimit,
@@ -21,8 +21,9 @@ export const runtime = 'nodejs';
 export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
-const responseCache = globalThis.__MLB_V91_ANALYSIS_CACHE__ || new Map();
-globalThis.__MLB_V91_ANALYSIS_CACHE__ = responseCache;
+// A new namespace intentionally discards the poisoned v9.1-v9.3 runtime cache.
+const responseCache = globalThis.__MLB_V932_ANALYSIS_CACHE__ || new Map();
+globalThis.__MLB_V932_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -62,14 +63,45 @@ function cleanVerification(value) {
 function sanitizeMarketRows(rows, maximum = 16) {
   return (Array.isArray(rows) ? rows : []).slice(0, maximum).map(row => ({
     market: MARKET_ORDER.includes(row?.market) ? row.market : '', pick: cleanText(row?.pick, 120), water: optionalNumber(row?.water),
-    waterEstimated: Boolean(row?.waterEstimated), confidence: Math.max(0, Math.min(1, Number(row?.confidence) || 0)),
+    waterEstimated: Boolean(row?.waterEstimated), waterMissing: row?.waterMissing === true,
+    confidence: Math.max(0, Math.min(1, Number(row?.confidence) || 0)),
     sourceType: cleanText(row?.sourceType, 40) || (row?.waterEstimated ? 'ESTIMATED' : 'ACTUAL_TW_CREDIT'),
+    sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
     lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: cleanVerification(row?.marketVerification),
+    rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
   })).filter(row => row.market);
 }
 
-function cacheSet(key, value) {
-  responseCache.set(key, value);
+function contractSignature(game, markets) {
+  return sha256({
+    gamePk: game.gamePk,
+    officialDate: game.officialDate,
+    gameNumber: game.gameNumber,
+    contracts: markets.map(row => ({
+      market: row.market,
+      pick: row.pick,
+      water: row.water,
+      waterEstimated: row.waterEstimated,
+      waterMissing: row.waterMissing,
+      sourceType: row.sourceType,
+      lineAsOf: row.lineAsOf,
+      executable: row.executable,
+    })).sort((left, right) => `${left.market}|${left.pick}`.localeCompare(`${right.market}|${right.pick}`)),
+  });
+}
+
+function cachePayloadMatches(entry, { game, fingerprints, signature }) {
+  const payload = entry?.payload;
+  if (!payload) return false;
+  return Number(payload?.game?.gamePk) === Number(game.gamePk)
+    && Number(payload?.context?.game?.gamePk) === Number(game.gamePk)
+    && payload?.analysis?.inputHash === fingerprints.inputHash
+    && payload?.repriceSnapshot?.inputHash === fingerprints.inputHash
+    && entry.signature === signature;
+}
+
+function cacheSet(key, signature, value) {
+  responseCache.set(key, { signature, payload: value, cachedAt: Date.now() });
   while (responseCache.size > 100) responseCache.delete(responseCache.keys().next().value);
 }
 
@@ -77,7 +109,7 @@ export async function POST(request) {
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'analyze-v9-2-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'analyze-v9-3-2-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500000);
     const game = sanitizeGame(body.game);
@@ -112,29 +144,40 @@ export async function POST(request) {
       buildGameContext(game),
       new Promise((_, reject) => setTimeout(() => reject(new Error('MLB資料取得逾時，請稍後重試')), 30000)),
     ]);
+    if (!context?.coreModelable) {
+      return NextResponse.json({ ok: false, error: '資料不足｜不評分', warnings: context?.warnings || [] }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
+    }
+
     const coreOnly = buildSnapshotFingerprints({ context, markets: [], versions });
     const frozenContext = { ...context, coreFingerprint: coreOnly.coreFingerprint };
+    const fingerprints = buildSnapshotFingerprints({ context: frozenContext, markets: activeMarkets, versions });
+    const signature = contractSignature(game, activeMarkets);
+    const cacheKey = `${game.gamePk}:${fingerprints.inputHash}`;
+    const cached = responseCache.get(cacheKey);
+    if (cachePayloadMatches(cached, { game, fingerprints, signature })) {
+      return NextResponse.json(cached.payload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT' } });
+    }
+    if (cached) responseCache.delete(cacheKey);
+
     const preliminary = analyzeMarkets({ context: frozenContext, markets: activeMarkets, previousMarkets, settings });
     const deterministic = finalizeDeterministicAnalysis({ analysis: preliminary, game, settings });
-    const fingerprints = buildSnapshotFingerprints({ context: frozenContext, markets: activeMarkets, versions });
-    const cached = responseCache.get(fingerprints.inputHash);
-    if (cached) return NextResponse.json(cached, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT' } });
-
     const distributionSnapshot = deterministic.distributionSnapshot;
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
     const analysisAsOf = new Date().toISOString();
     const lineAsOf = activeMarkets.map(row => row.lineAsOf).filter(Boolean).sort().at(-1) || analysisAsOf;
     const finalized = {
-      ...analysisWithoutDistribution, ...fingerprints, analysisType: 'FULL', dataVersion: DATA_VERSION,
+      ...analysisWithoutDistribution, ...fingerprints, contractSignature: signature,
+      analysisType: 'FULL', dataVersion: DATA_VERSION,
       dataAsOf: frozenContext.fetchedAt || analysisAsOf, lineAsOf, analysisAsOf, snapshotId: fingerprints.inputHash,
     };
     const repriceSnapshot = {
       frozenContext, distributionSnapshot, coreFingerprint: fingerprints.coreFingerprint, priceFingerprint: fingerprints.priceFingerprint,
-      inputHash: fingerprints.inputHash, distributionId: finalized.distributionId, distributionHash: finalized.distributionHash,
+      inputHash: fingerprints.inputHash, contractSignature: signature,
+      distributionId: finalized.distributionId, distributionHash: finalized.distributionHash,
       dataAsOf: finalized.dataAsOf, simulationsPerScenario: finalized.scenarioSummary?.simulationsPerScenario, versions,
     };
     const payload = { ok: true, game, context: frozenContext, analysis: finalized, repriceSnapshot, openMarkets: [...new Set(activeMarkets.map(row => row.market))] };
-    cacheSet(fingerprints.inputHash, payload);
+    cacheSet(cacheKey, signature, payload);
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS' } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
