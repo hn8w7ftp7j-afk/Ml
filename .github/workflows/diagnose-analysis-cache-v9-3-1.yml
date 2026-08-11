@@ -1,0 +1,50 @@
+name: Diagnose v9.3.1 Analysis Cache
+
+on:
+  push:
+    branches: [verify/production-v9-3-1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Analyze every reference game sequentially and verify isolation
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          const BASE = process.env.BASE;
+          const date = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+          const headers = () => ({ 'Content-Type':'application/json', Origin:BASE, Referer:`${BASE}/`, 'Idempotency-Key':crypto.randomUUID() });
+          const schedule = await (await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, { cache:'no-store' })).json();
+          const reference = await (await fetch(`${BASE}/api/reference-lines`, { method:'POST', headers:headers(), body:JSON.stringify({ date, schedule:schedule.games }) })).json();
+          const output = [];
+          for (const source of reference.games) {
+            const response = await fetch(`${BASE}/api/analyze`, {
+              method:'POST', headers:headers(),
+              body:JSON.stringify({ game:source.game, markets:source.markets, settings:{ rebateRate:0, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' } }),
+              signal:AbortSignal.timeout(180000),
+            });
+            const text = await response.text();
+            let data; try { data = JSON.parse(text); } catch { data = { error:text.slice(0,500) }; }
+            output.push({
+              requested:{ gamePk:source.gamePk, matchup:`${source.game.away} @ ${source.game.home}`, picks:source.markets.map(row => row.pick) },
+              status:response.status,
+              cache:response.headers.get('x-analysis-cache'),
+              returned:{ gamePk:data.game?.gamePk, matchup:data.game ? `${data.game.away} @ ${data.game.home}` : null, contextGamePk:data.context?.game?.gamePk, inputHash:data.analysis?.inputHash, coreFingerprint:data.analysis?.coreFingerprint, priceFingerprint:data.analysis?.priceFingerprint, picks:(data.analysis?.results || []).map(row => row.pick), error:data.error },
+            });
+          }
+          const duplicateHashes = Object.entries(output.reduce((map,row) => { const key=row.returned.inputHash || 'none'; (map[key] ||= []).push(row.requested.gamePk); return map; }, {})).filter(([,ids]) => ids.length > 1);
+          const mismatches = output.filter(row => row.status === 200 && (row.requested.gamePk !== row.returned.gamePk || row.requested.picks.join('|') !== row.returned.picks.join('|')));
+          console.log(JSON.stringify({ output, duplicateHashes, mismatches }, null, 2));
+          if (mismatches.length) process.exitCode = 2;
+          NODE
