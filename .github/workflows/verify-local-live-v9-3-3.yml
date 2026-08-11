@@ -25,14 +25,14 @@ jobs:
         run: |
           npm start > /tmp/mlb-v933-live.log 2>&1 &
           for i in $(seq 1 90); do
-            curl -fsS http://127.0.0.1:3000/api/health >/dev/null && exit 0
+            curl -fsS http://localhost:3000/api/health >/dev/null && exit 0
             sleep 1
           done
           cat /tmp/mlb-v933-live.log
           exit 1
       - name: Run all-game live-data isolation and local one-click flow
         env:
-          LOCAL: http://127.0.0.1:3000
+          LOCAL: http://localhost:3000
           FORMAL: https://mlb-positive-ev.vercel.app
         run: |
           node --input-type=module <<'NODE'
