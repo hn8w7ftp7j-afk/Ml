@@ -5,9 +5,9 @@ import { MARKET_ORDER, hasActualWater, parseTaiwanLine, validateMarketPair } fro
 import { flattenMarkets, withFallbackWater } from '../lib/batch.js';
 import { translateTeamText } from '../lib/i18n.js';
 
-const VERSION = '9.3.2';
-const STORAGE = 'mlb-positive-ev-v9-3-2';
-const LEGACY_KEYS = ['mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
+const VERSION = '9.3.3';
+const STORAGE = 'mlb-positive-ev-v9-3-3';
+const LEGACY_KEYS = ['mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
