@@ -1,0 +1,39 @@
+name: Alias verified v9.3.3 without rebuild
+
+on:
+  push:
+    branches: [verify/production-v9-3-3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  alias:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN || secrets.VERCEL_ACCESS_TOKEN }}
+      PREVIEW_DEPLOYMENT: mlb-rjsju9e99-5gtbpqpbkx-2201s-projects.vercel.app
+      PRODUCTION_DOMAIN: mlb-positive-ev.vercel.app
+      VERCEL_SCOPE: 5gtbpqpbkx-2201s-projects
+    steps:
+      - name: Confirm Vercel automation credential exists
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "No VERCEL_TOKEN or VERCEL_ACCESS_TOKEN GitHub secret is configured."
+            exit 78
+          fi
+      - run: npm install --global vercel@latest
+      - name: Assign the production domain to the already-built identical v9.3.3 tree
+        run: |
+          vercel alias set "$PREVIEW_DEPLOYMENT" "$PRODUCTION_DOMAIN" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+      - name: Verify alias
+        run: |
+          for i in $(seq 1 30); do
+            BODY=$(curl -fsS "https://$PRODUCTION_DOMAIN/api/health?t=$(date +%s)" || true)
+            echo "$BODY" | grep -q '"version":"9.3.3"' && exit 0
+            sleep 2
+          done
+          echo "Production alias did not report v9.3.3"
+          exit 1
