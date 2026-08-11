@@ -26,9 +26,12 @@ function cleanVerification(value) {
 function sanitizeMarkets(rows, maximum = 16) {
   return (Array.isArray(rows) ? rows : []).slice(0, maximum).map(row => ({
     market: MARKET_ORDER.includes(row?.market) ? row.market : '', pick: cleanText(row?.pick, 120), water: optionalNumber(row?.water),
-    waterEstimated: Boolean(row?.waterEstimated), confidence: Math.max(0, Math.min(1, Number(row?.confidence) || 0)),
+    waterEstimated: Boolean(row?.waterEstimated), waterMissing: row?.waterMissing === true,
+    confidence: Math.max(0, Math.min(1, Number(row?.confidence) || 0)),
     sourceType: cleanText(row?.sourceType, 40) || (row?.waterEstimated ? 'ESTIMATED' : 'ACTUAL_TW_CREDIT'),
+    sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
     lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: cleanVerification(row?.marketVerification),
+    rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
   })).filter(row => row.market);
 }
 
@@ -36,7 +39,7 @@ export async function POST(request) {
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'reprice-v9-2', limit: 120, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'reprice-v9-3-3', limit: 120, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 8_000_000);
     const snapshot = body.snapshot && typeof body.snapshot === 'object' ? body.snapshot : null;
@@ -71,7 +74,13 @@ export async function POST(request) {
     const deterministic = finalizeDeterministicAnalysis({ analysis: preliminary, game: context.game, settings });
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
     const versions = { modelVersion: MODEL_VERSION, rulesVersion: RULES_VERSION, dataVersion: DATA_VERSION, scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION, repriceVersion: REPRICE_VERSION };
-    const fingerprints = buildSnapshotFingerprints({ context, markets, versions });
+    const fingerprints = buildSnapshotFingerprints({
+      context,
+      markets,
+      versions,
+      calculationSettings: settings,
+      auxiliaryInput: { previousMarkets },
+    });
     if (fingerprints.coreFingerprint !== snapshot.coreFingerprint) return NextResponse.json({ ok: false, error: '核心資料指紋已改變，必須完整重算' }, { status: 409 });
     if (analysisWithoutDistribution.distributionId !== snapshot.distributionId || analysisWithoutDistribution.distributionHash !== snapshot.distributionHash) {
       return NextResponse.json({ ok: false, error: '快速重算不得改變比分分布' }, { status: 409 });
@@ -85,8 +94,16 @@ export async function POST(request) {
       analysisAsOf, snapshotId: fingerprints.inputHash,
     };
     const repriceSnapshot = {
-      ...snapshot, priceFingerprint: fingerprints.priceFingerprint, inputHash: fingerprints.inputHash,
-      distributionId: snapshot.distributionId, distributionHash: snapshot.distributionHash, versions,
+      ...snapshot,
+      priceFingerprint: fingerprints.priceFingerprint,
+      calculationFingerprint: fingerprints.calculationFingerprint,
+      auxiliaryFingerprint: fingerprints.auxiliaryFingerprint,
+      inputHash: fingerprints.inputHash,
+      calculationSettings: fingerprints.calculationPayload,
+      auxiliaryInput: fingerprints.auxiliaryPayload,
+      distributionId: snapshot.distributionId,
+      distributionHash: snapshot.distributionHash,
+      versions,
     };
     return NextResponse.json({
       ok: true, game: context.game, context, analysis: finalized, repriceSnapshot,

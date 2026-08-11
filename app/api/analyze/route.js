@@ -27,8 +27,8 @@ export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // A new namespace intentionally discards the poisoned v9.1-v9.3 runtime cache.
-const responseCache = globalThis.__MLB_V932_ANALYSIS_CACHE__ || new Map();
-globalThis.__MLB_V932_ANALYSIS_CACHE__ = responseCache;
+const responseCache = globalThis.__MLB_V933_ANALYSIS_CACHE__ || new Map();
+globalThis.__MLB_V933_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -86,7 +86,7 @@ export async function POST(request) {
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'analyze-v9-3-2-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'analyze-v9-3-3-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500000);
     const game = sanitizeGame(body.game);
@@ -127,7 +127,13 @@ export async function POST(request) {
 
     const coreOnly = buildSnapshotFingerprints({ context, markets: [], versions });
     const frozenContext = { ...context, coreFingerprint: coreOnly.coreFingerprint };
-    const fingerprints = buildSnapshotFingerprints({ context: frozenContext, markets: activeMarkets, versions });
+    const fingerprints = buildSnapshotFingerprints({
+      context: frozenContext,
+      markets: activeMarkets,
+      versions,
+      calculationSettings: settings,
+      auxiliaryInput: { previousMarkets },
+    });
     const signature = analysisContractSignature(game, activeMarkets);
     const cacheKey = analysisCacheKey(game.gamePk, fingerprints.inputHash);
     const cached = responseCache.get(cacheKey);
@@ -150,6 +156,8 @@ export async function POST(request) {
     const repriceSnapshot = {
       frozenContext, distributionSnapshot, coreFingerprint: fingerprints.coreFingerprint, priceFingerprint: fingerprints.priceFingerprint,
       inputHash: fingerprints.inputHash, contractSignature: signature,
+      calculationSettings: fingerprints.calculationPayload,
+      auxiliaryInput: fingerprints.auxiliaryPayload,
       distributionId: finalized.distributionId, distributionHash: finalized.distributionHash,
       dataAsOf: finalized.dataAsOf, simulationsPerScenario: finalized.scenarioSummary?.simulationsPerScenario, versions,
     };
