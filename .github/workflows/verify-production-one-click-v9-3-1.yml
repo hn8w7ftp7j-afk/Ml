@@ -1,0 +1,56 @@
+name: Verify v9.3.1 Production One-click Board
+
+on:
+  push:
+    branches: [verify/production-v9-3-1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  one-click-board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Run the real formal one-click daily flow
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { chromium } from 'playwright';
+
+          const browser = await chromium.launch({ headless:true });
+          const context = await browser.newContext({ viewport:{ width:390, height:844 }, isMobile:true, hasTouch:true });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          const failedRequests = [];
+          page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+          page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+          page.on('requestfailed', request => failedRequests.push(`${request.method()} ${request.url()} :: ${request.failure()?.errorText || 'failed'}`));
+
+          const response = await page.goto(process.env.BASE, { waitUntil:'networkidle', timeout:120000 });
+          assert.equal(response?.status(), 200);
+          await page.getByRole('button', { name:'一鍵分析今日 MLB' }).click();
+          await page.getByText(/完成\s+\d+\s+場分析/).waitFor({ timeout:20 * 60 * 1000 });
+          const body = await page.locator('body').innerText();
+          const cards = await page.locator('.gameCard').count();
+          const scores = await page.locator('.score').count();
+          const failedCards = await page.getByText('分析失敗', { exact:true }).count();
+          assert.ok(cards >= 10, `expected daily board cards, found ${cards}`);
+          assert.ok(scores >= 20, `expected scored directions, found ${scores}`);
+          assert.equal(failedCards, 0, body.slice(0,4000));
+          assert.doesNotMatch(body, /Invalid commenceTimeFrom|Invalid commenceTimeTo|Application error|client-side exception/i);
+          assert.deepEqual(pageErrors, []);
+          assert.deepEqual(consoleErrors, []);
+          assert.deepEqual(failedRequests, []);
+          console.log(JSON.stringify({ ok:true, cards, scores, failedCards, pageErrors, consoleErrors, failedRequests, summary:body.slice(-2500) }, null, 2));
+          await browser.close();
+          NODE
