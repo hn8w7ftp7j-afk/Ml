@@ -1,0 +1,126 @@
+name: Verify v9.3.4 Tai888 Preview fallback
+
+on:
+  push:
+    branches: [verify/tai888-v9-3-4-preview]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify Preview source state, reference board and deterministic analysis
+        env:
+          BASE: https://mlb-ev-git-fix-tai888-cloudfla-40643d-5gtbpqpbkx-2201s-projects.vercel.app
+          EXPECTED_COMMIT: 47b8c649ebf5b9503e236ef7789610c1f59d1588
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+
+          const BASE = process.env.BASE;
+          const parse = async response => {
+            const text = await response.text();
+            try { return JSON.parse(text); }
+            catch { throw new Error(`${response.status}: ${text.slice(0, 1200)}`); }
+          };
+          const headers = () => ({
+            'Content-Type': 'application/json',
+            Origin: BASE,
+            Referer: `${BASE}/`,
+            'Idempotency-Key': crypto.randomUUID(),
+          });
+          const taipeiDate = offset => new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(new Date(Date.now() + offset * 86400000));
+
+          const healthResponse = await fetch(`${BASE}/api/health?t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(30000) });
+          const health = await parse(healthResponse);
+          assert.equal(healthResponse.status, 200, JSON.stringify(health));
+          assert.equal(health.ok, true);
+          assert.equal(health.version, '9.3.4');
+          assert.equal(health.commit, process.env.EXPECTED_COMMIT);
+          assert.equal(health.creditLinesConfigured, true);
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+
+          const sourceStatusResponse = await fetch(`${BASE}/api/credit-lines?t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(30000) });
+          const sourceStatus = await parse(sourceStatusResponse);
+          assert.equal(sourceStatusResponse.status, 200, JSON.stringify(sourceStatus));
+          assert.equal(sourceStatus.configured, true);
+
+          let selected = null;
+          for (const offset of [0, -1, 1]) {
+            const date = taipeiDate(offset);
+            const response = await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(60000) });
+            const data = await parse(response);
+            if (response.ok && Array.isArray(data.games) && data.games.length && (!selected || data.games.length > selected.games.length)) {
+              selected = { date, games:data.games };
+            }
+          }
+          assert.ok(selected, 'No MLB schedule available');
+
+          const [creditResponse, referenceResponse] = await Promise.all([
+            fetch(`${BASE}/api/credit-lines`, {
+              method:'POST', headers:headers(),
+              body:JSON.stringify({ date:selected.date, schedule:selected.games }),
+              signal:AbortSignal.timeout(90000),
+            }),
+            fetch(`${BASE}/api/reference-lines`, {
+              method:'POST', headers:headers(),
+              body:JSON.stringify({ date:selected.date, schedule:selected.games }),
+              signal:AbortSignal.timeout(90000),
+            }),
+          ]);
+          const credit = await parse(creditResponse);
+          const reference = await parse(referenceResponse);
+          assert.equal(creditResponse.status, 200, JSON.stringify(credit).slice(0, 2500));
+          assert.equal(credit.ok, true);
+          assert.equal(credit.configured, true);
+          assert.equal(credit.blocked, true);
+          assert.equal(credit.blockCode, 'TAI888_CLOUDFLARE_BLOCKED');
+          assert.deepEqual(credit.games, []);
+          assert.ok(Array.isArray(credit.importModes) && credit.importModes.includes('clipboard_text') && credit.importModes.includes('screenshot'));
+
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference).slice(0, 2500));
+          assert.equal(reference.ok, true);
+          assert.ok(Array.isArray(reference.games) && reference.games.length > 0, 'Reference board unavailable');
+
+          const first = reference.games.find(row => Array.isArray(row.markets) && row.markets.length);
+          assert.ok(first, 'No reference market available');
+          const analyzeResponse = await fetch(`${BASE}/api/analyze`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({
+              game:first.game,
+              markets:first.markets,
+              previousMarkets:[],
+              settings:{ rebateRate:0, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' },
+            }),
+            signal:AbortSignal.timeout(180000),
+          });
+          const analysis = await parse(analyzeResponse);
+          assert.equal(analyzeResponse.status, 200, JSON.stringify(analysis).slice(0, 3000));
+          assert.equal(analysis.ok, true);
+          assert.ok(analysis.analysis?.inputHash);
+          assert.ok(analysis.analysis?.distributionHash);
+          assert.equal(analysis.analysis?.scoreFormulaVersion, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
+
+          console.log(JSON.stringify({
+            ok:true,
+            version:health.version,
+            commit:health.commit,
+            date:selected.date,
+            scheduleGames:selected.games.length,
+            referenceGames:reference.games.length,
+            tai888:{ configured:credit.configured, blocked:credit.blocked, blockCode:credit.blockCode, importModes:credit.importModes },
+            analyzedGame:first.gamePk,
+            results:analysis.analysis?.results?.length,
+          }, null, 2));
+          NODE
