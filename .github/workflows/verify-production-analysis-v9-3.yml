@@ -1,0 +1,87 @@
+name: Verify v9.3 Production Analysis
+
+on:
+  push:
+    branches: [verify/production-v9-3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify one real reference analysis and actual credit reprice
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          const BASE = process.env.BASE;
+          const date = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+          const headers = () => ({ 'Content-Type':'application/json', Origin:BASE, Referer:`${BASE}/`, 'Idempotency-Key':crypto.randomUUID() });
+          const json = async response => {
+            const text = await response.text();
+            try { return JSON.parse(text); } catch { throw new Error(`${response.status}: ${text.slice(0,800)}`); }
+          };
+
+          const schedule = await json(await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(60000) }));
+          const referenceResponse = await fetch(`${BASE}/api/reference-lines`, { method:'POST', headers:headers(), body:JSON.stringify({ date, schedule:schedule.games }), signal:AbortSignal.timeout(90000) });
+          const reference = await json(referenceResponse);
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference));
+          const sourceGame = reference.games.find(row => Array.isArray(row.markets) && row.markets.length >= 2);
+          assert.ok(sourceGame, 'no matched reference game with a market pair');
+
+          const analyzeResponse = await fetch(`${BASE}/api/analyze`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({
+              game:sourceGame.game,
+              markets:sourceGame.markets,
+              settings:{ rebateRate:0, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' },
+            }),
+            signal:AbortSignal.timeout(180000),
+          });
+          const analyzed = await json(analyzeResponse);
+          assert.equal(analyzeResponse.status, 200, JSON.stringify(analyzed).slice(0,1200));
+          assert.equal(analyzed.ok, true);
+          assert.ok(analyzed.repriceSnapshot?.distributionHash);
+          assert.ok(Array.isArray(analyzed.analysis?.results) && analyzed.analysis.results.length >= 2);
+          assert.equal(analyzed.analysis.scoreFormulaVersion, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
+
+          const referenceDirection = sourceGame.markets.find(row => row.pick);
+          const actual = {
+            market:referenceDirection.market,
+            pick:referenceDirection.pick,
+            water:0.95,
+            waterEstimated:false,
+            sourceType:'ACTUAL_TW_CREDIT',
+            sourceLabel:'Production smoke actual credit',
+            lineAsOf:new Date().toISOString(),
+            executable:true,
+          };
+          const repriceResponse = await fetch(`${BASE}/api/reprice`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({
+              snapshot:analyzed.repriceSnapshot,
+              markets:[actual],
+              previousMarkets:[],
+              settings:{ rebateRate:0.015, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' },
+            }),
+            signal:AbortSignal.timeout(120000),
+          });
+          const repriced = await json(repriceResponse);
+          assert.equal(repriceResponse.status, 200, JSON.stringify(repriced).slice(0,1200));
+          assert.equal(repriced.ok, true);
+          assert.equal(repriced.reprice?.noCoreDataFetch, true);
+          assert.equal(repriced.reprice?.noSimulation, true);
+          assert.equal(repriced.reprice?.noGpt, true);
+          assert.equal(repriced.analysis?.distributionHash, analyzed.analysis?.distributionHash);
+          assert.ok(repriced.analysis?.results?.some(row => row.sourceType === 'ACTUAL_TW_CREDIT'));
+          console.log(JSON.stringify({ ok:true, date, matchup:`${sourceGame.game.away} @ ${sourceGame.game.home}`, referenceDirections:sourceGame.markets.length, analyzedResults:analyzed.analysis.results.length, referenceDistribution:analyzed.analysis.distributionHash, repriceDistribution:repriced.analysis.distributionHash, repriceFlags:repriced.reprice }, null, 2));
+          NODE
