@@ -1,0 +1,168 @@
+name: Verify v9.3.1 Production
+
+on:
+  push:
+    branches: [verify/production-v9-3-1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify formal Production reference, score and single-side flow
+        env:
+          BASE: https://mlb-positive-ev.vercel.app
+          EXPECTED_COMMIT: d4a7e433a2a274d5c94e544fde371b442d6f64ac
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          import { chromium } from 'playwright';
+
+          const BASE = process.env.BASE;
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const headers = () => ({
+            'Content-Type':'application/json',
+            Origin:BASE,
+            Referer:`${BASE}/`,
+            'Idempotency-Key':crypto.randomUUID(),
+          });
+          const parse = async response => {
+            const text = await response.text();
+            try { return JSON.parse(text); }
+            catch { throw new Error(`${response.status}: ${text.slice(0,1000)}`); }
+          };
+
+          let health;
+          for (let attempt = 0; attempt < 120; attempt += 1) {
+            try {
+              const response = await fetch(`${BASE}/api/health?t=${Date.now()}`, { cache:'no-store', signal:AbortSignal.timeout(30000) });
+              const data = await parse(response);
+              if (response.ok && data.version === '9.3.1' && data.commit === process.env.EXPECTED_COMMIT) {
+                health = data;
+                break;
+              }
+            } catch {}
+            await sleep(5000);
+          }
+          assert.ok(health, 'v9.3.1 formal Production did not become ready');
+          assert.equal(health.deterministicScoring, true);
+          assert.equal(health.gptScoringEnabled, false);
+          assert.equal(health.referenceLinesConfigured, true);
+
+          const date = new Intl.DateTimeFormat('en-CA', {
+            timeZone:'Asia/Taipei', year:'numeric', month:'2-digit', day:'2-digit',
+          }).format(new Date());
+          const scheduleResponse = await fetch(`${BASE}/api/mlb?date=${date}&t=${Date.now()}`, {
+            cache:'no-store', signal:AbortSignal.timeout(60000),
+          });
+          const schedule = await parse(scheduleResponse);
+          assert.equal(scheduleResponse.status, 200);
+          assert.ok(Array.isArray(schedule.games) && schedule.games.length > 0);
+
+          const referenceResponse = await fetch(`${BASE}/api/reference-lines`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({ date, schedule:schedule.games }),
+            signal:AbortSignal.timeout(90000),
+          });
+          const reference = await parse(referenceResponse);
+          assert.equal(referenceResponse.status, 200, JSON.stringify(reference));
+          assert.equal(reference.ok, true);
+          assert.equal(reference.configured, true);
+          assert.doesNotMatch(JSON.stringify(reference), /Invalid commenceTimeFrom|Invalid commenceTimeTo/i);
+          const sourceGame = reference.games.find(row => Array.isArray(row.markets) && row.markets.length >= 2);
+          assert.ok(sourceGame, 'no matched reference market pair');
+
+          const analyzeResponse = await fetch(`${BASE}/api/analyze`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({
+              game:sourceGame.game,
+              markets:sourceGame.markets,
+              settings:{ rebateRate:0, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' },
+            }),
+            signal:AbortSignal.timeout(180000),
+          });
+          const analyzed = await parse(analyzeResponse);
+          assert.equal(analyzeResponse.status, 200, JSON.stringify(analyzed).slice(0,1600));
+          assert.ok(analyzed.repriceSnapshot?.distributionHash);
+
+          const market = sourceGame.markets[0].market;
+          const pair = sourceGame.markets.filter(row => row.market === market).slice(0, 2);
+          assert.equal(pair.length, 2);
+          const actualPair = pair.map((row, index) => ({
+            market:row.market,
+            pick:row.pick,
+            water:index === 0 ? 0.95 : null,
+            waterEstimated:false,
+            waterMissing:index === 1,
+            sourceType:'ACTUAL_TW_CREDIT',
+            sourceLabel:'Production v9.3.1 single-side QA',
+            lineAsOf:new Date().toISOString(),
+            executable:index === 0,
+          }));
+          const repriceResponse = await fetch(`${BASE}/api/reprice`, {
+            method:'POST', headers:headers(),
+            body:JSON.stringify({
+              snapshot:analyzed.repriceSnapshot,
+              markets:actualPair,
+              previousMarkets:[],
+              settings:{ rebateRate:0.015, simulationsPerScenario:500, candidateThreshold:7.2, strongestThreshold:8.5, expertMode:'off' },
+            }),
+            signal:AbortSignal.timeout(120000),
+          });
+          const repriced = await parse(repriceResponse);
+          assert.equal(repriceResponse.status, 200, JSON.stringify(repriced).slice(0,1800));
+          const actualResults = repriced.analysis.results.filter(row => row.sourceType === 'ACTUAL_TW_CREDIT');
+          assert.equal(actualResults.length, 2);
+          assert.equal(typeof actualResults[0].score, 'number', JSON.stringify(actualResults));
+          assert.ok(Number.isFinite(actualResults[0].score));
+          assert.equal(actualResults[0].pairAudit?.passed, true);
+          assert.equal(actualResults[1].score, null);
+          assert.match(String(actualResults[1].tag), /水位未提供/);
+          assert.equal(actualResults[1].pairAudit?.passed, true);
+          assert.equal(repriced.reprice.noCoreDataFetch, true);
+          assert.equal(repriced.reprice.noSimulation, true);
+          assert.equal(repriced.reprice.noGpt, true);
+          assert.equal(repriced.analysis.distributionHash, analyzed.analysis.distributionHash);
+
+          const browser = await chromium.launch({ headless:true });
+          const context = await browser.newContext({ viewport:{ width:390, height:844 }, isMobile:true, hasTouch:true });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+          page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+          const pageResponse = await page.goto(BASE, { waitUntil:'networkidle', timeout:120000 });
+          assert.equal(pageResponse?.status(), 200);
+          await page.getByRole('button', { name:'一鍵分析今日 MLB' }).waitFor({ timeout:30000 });
+          const body = await page.locator('body').innerText();
+          assert.match(body, /v9\.3\.1/);
+          assert.doesNotMatch(body, /Application error|client-side exception/i);
+          assert.deepEqual(pageErrors, []);
+          assert.deepEqual(consoleErrors, []);
+          await browser.close();
+
+          console.log(JSON.stringify({
+            ok:true,
+            health,
+            date,
+            referenceProvider:reference.provider,
+            matchedGames:reference.games.length,
+            matchup:`${sourceGame.game.away} @ ${sourceGame.game.home}`,
+            market,
+            scoredSide:{ pick:actualResults[0].pick, water:actualResults[0].water, score:actualResults[0].score },
+            missingSide:{ pick:actualResults[1].pick, water:actualResults[1].water, score:actualResults[1].score, tag:actualResults[1].tag },
+            distributionReused:repriced.reprice,
+            pageErrors,
+            consoleErrors,
+          }, null, 2));
+          NODE
