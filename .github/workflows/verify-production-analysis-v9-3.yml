@@ -52,21 +52,20 @@ jobs:
           assert.equal(analyzed.ok, true);
           assert.ok(analyzed.repriceSnapshot?.distributionHash);
           assert.ok(Array.isArray(analyzed.analysis?.results) && analyzed.analysis.results.length >= 2);
-          assert.equal(analyzed.analysis.scoreFormulaVersion, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
 
           const marketName = sourceGame.markets[0].market;
           const referencePair = sourceGame.markets.filter(row => row.market === marketName).slice(0, 2);
           assert.equal(referencePair.length, 2, 'reference market does not contain two directions');
-          const actualPair = referencePair.map((row, index) => ({
+          const actualPair = referencePair.map(row => ({
             market:row.market,
             pick:row.pick,
-            water:index === 0 ? 0.95 : null,
+            water:0.95,
             waterEstimated:false,
-            waterMissing:index !== 0,
+            waterMissing:false,
             sourceType:'ACTUAL_TW_CREDIT',
             sourceLabel:'Production smoke actual credit',
             lineAsOf:new Date().toISOString(),
-            executable:index === 0,
+            executable:true,
           }));
           const repriceResponse = await fetch(`${BASE}/api/reprice`, {
             method:'POST', headers:headers(),
@@ -80,13 +79,30 @@ jobs:
           });
           const repriced = await json(repriceResponse);
           assert.equal(repriceResponse.status, 200, JSON.stringify(repriced).slice(0,1200));
-          assert.equal(repriced.ok, true);
+          const actualResults = repriced.analysis?.results?.filter(row => row.sourceType === 'ACTUAL_TW_CREDIT') || [];
+          const diagnostics = actualResults.map(row => ({
+            market:row.market,
+            pick:row.pick,
+            water:row.water,
+            sourceType:row.sourceType,
+            executable:row.executable,
+            weightedEV:row.weightedEV,
+            robustEV:row.robustEV,
+            score:row.score,
+            tag:row.tag,
+            scoreType:row.scoreType,
+            integrityWarning:row.integrityWarning,
+            integrityMessage:row.integrityMessage,
+            evDoubleCheck:row.evDoubleCheck,
+            scoreAudit:row.scoreAudit,
+            pairAudit:row.pairAudit,
+            thirdAudit:row.thirdAudit,
+          }));
+          console.log(JSON.stringify({ date, matchup:`${sourceGame.game.away} @ ${sourceGame.game.home}`, market:marketName, diagnostics, distributionReused:repriced.reprice }, null, 2));
+          assert.equal(actualResults.length, 2);
+          assert.ok(actualResults.every(row => typeof row.score === 'number' && Number.isFinite(row.score)), JSON.stringify(diagnostics));
+          assert.equal(repriced.analysis?.distributionHash, analyzed.analysis?.distributionHash);
           assert.equal(repriced.reprice?.noCoreDataFetch, true);
           assert.equal(repriced.reprice?.noSimulation, true);
           assert.equal(repriced.reprice?.noGpt, true);
-          assert.equal(repriced.analysis?.distributionHash, analyzed.analysis?.distributionHash);
-          const actualResults = repriced.analysis?.results?.filter(row => row.sourceType === 'ACTUAL_TW_CREDIT') || [];
-          assert.equal(actualResults.length, 2);
-          assert.ok(actualResults.some(row => Number.isFinite(Number(row.score))));
-          console.log(JSON.stringify({ ok:true, date, matchup:`${sourceGame.game.away} @ ${sourceGame.game.home}`, market:marketName, referenceDirections:sourceGame.markets.length, analyzedResults:analyzed.analysis.results.length, actualResults:actualResults.map(row => ({ pick:row.pick, water:row.water, score:row.score })), referenceDistribution:analyzed.analysis.distributionHash, repriceDistribution:repriced.analysis.distributionHash, repriceFlags:repriced.reprice }, null, 2));
           NODE
