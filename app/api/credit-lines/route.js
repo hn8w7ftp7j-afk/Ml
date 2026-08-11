@@ -215,6 +215,20 @@ export async function POST(request) {
     if (cache.size > 20) cache.delete(cache.keys().next().value);
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    if (error?.code === 'TAI888_CLOUDFLARE_BLOCKED') {
+      return NextResponse.json({
+        ok: true,
+        configured: true,
+        blocked: true,
+        blockCode: 'TAI888_CLOUDFLARE_BLOCKED',
+        version: TAI888_SOURCE_VERSION,
+        provider: 'TAI888_READ_ONLY_CREDIT',
+        label: 'Tai888唯讀信用盤',
+        games: [],
+        message: String(error.message),
+        importModes: ['clipboard_text', 'screenshot'],
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
     return NextResponse.json({
       ok: false,
       error: String(error?.message || error),
