@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tai888 Reader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <div class="eyebrow">MLB POSITIVE EV</div>
+    <div class="titleRow"><h1>Tai888 Reader</h1><span>v2.0.0</span></div>
+    <p class="intro">只讀你已正常登入後、目前頁面上顯示的 MLB 盤口。Reader 不讀密碼、Cookie、Session、帳戶或下注按鈕。</p>
+
+    <section id="pairPanel" class="panel hidden">
+      <h2>第一次配對</h2>
+      <p>輸入一次配對密碼。密碼只送到你的 MLB EV 驗證，不會存進 Reader。</p>
+      <label>配對密碼<input id="password" type="password" autocomplete="current-password" placeholder="輸入你先前設定的 Tai888 唯讀帳號密碼"></label>
+      <label>裝置名稱<input id="deviceName" type="text" maxlength="80" placeholder="例如：店裡讀盤電腦"></label>
+      <button id="pair" class="primary">配對並啟用自動同步</button>
+    </section>
+
+    <section id="statusPanel" class="panel hidden">
+      <div class="statusHead"><div><span class="label">目前狀態</span><strong id="state">檢查中…</strong></div><i id="dot"></i></div>
+      <div class="metrics">
+        <div><span>最後同步</span><b id="lastSync">—</b></div>
+        <div><span>配對場次</span><b id="matched">—</b></div>
+      </div>
+      <label class="toggle"><span><b>自動同步</b><small>頁面變動＋每60秒心跳</small></span><input id="auto" type="checkbox"><i></i></label>
+      <button id="sync" class="primary">立即同步一次</button>
+      <button id="unpair" class="secondary">重新配對</button>
+    </section>
+
+    <div id="message" class="message">正在讀取 Reader 狀態…</div>
+    <p class="foot">電腦需保持開機、Chrome 不睡眠，Tai888 MLB 盤口頁保持登入並開著。</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

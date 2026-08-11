@@ -10,15 +10,19 @@ import { DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/reference-lines.js';
 import { TAI888_SOURCE_VERSION, tai888SourceStatus } from '../../../lib/tai888-source.js';
 import { ANALYSIS_CACHE_VERSION } from '../../../lib/analysis-cache-v9.js';
+import { readerPairingConfigured } from '../../../lib/reader-auth-v2.js';
+import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const referenceLines = referenceProviderStatus();
   const creditLines = tai888SourceStatus();
+  const readerSnapshot = await loadReaderSnapshot();
+  const readerStatus = readerSnapshotStatus(readerSnapshot);
   return NextResponse.json({
     ok: true,
-    version: '9.3.4',
+    version: '9.4.0',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     dataVersion: DATA_VERSION,
@@ -37,6 +41,13 @@ export async function GET() {
     creditLinesVersion: TAI888_SOURCE_VERSION,
     creditLinesConfigured: creditLines.configured,
     creditLinesProvider: creditLines.configured ? creditLines.provider : null,
+    readerPairingConfigured: readerPairingConfigured(),
+    readerStoreVersion: READER_STORE_VERSION,
+    readerAvailable: readerStatus.available,
+    readerFresh: readerStatus.fresh,
+    readerAgeSeconds: readerStatus.ageSeconds,
+    readerMatchedGameCount: readerSnapshot?.matchedGameCount || 0,
+    readerPayloadHash: readerSnapshot?.payloadHash || null,
     deterministicScoring: true,
     gptScoringEnabled: false,
     aiGatewayConfiguredForVision: Boolean(process.env.AI_GATEWAY_API_KEY),

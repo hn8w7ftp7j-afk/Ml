@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+process.env.READER_PAIR_SECRET = 'reader-test-secret-123';
+const { createReaderToken, verifyReaderToken, readerPairPasswordMatches } = await import('../lib/reader-auth-v2.js');
+assert.equal(await readerPairPasswordMatches('reader-test-secret-123'), true);
+assert.equal(await readerPairPasswordMatches('wrong'), false);
+const token = await createReaderToken({ deviceId: 'device-12345678', deviceName: 'test' });
+const verified = await verifyReaderToken(token);
+assert.equal(verified.deviceId, 'device-12345678');
+assert.equal(await verifyReaderToken(`${token}x`), null);
+console.log('reader auth v2: ok');

@@ -11,6 +11,8 @@ import {
   loadTai888VisibleText,
   tai888SourceStatus,
 } from '../../../lib/tai888-source.js';
+import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
+import { TAI888_READER_PARSER_VERSION } from '../../../lib/tai888-reader-parser-v2.js';
 import {
   checkRateLimit,
   cleanText,
@@ -130,14 +132,29 @@ function formalizeGame(raw, matched, observedAt) {
 export async function GET(request) {
   const auth = await requireApiAuth(request);
   if (auth) return auth;
+  const snapshot = await loadReaderSnapshot();
+  const reader = readerSnapshotStatus(snapshot);
   return NextResponse.json({
     ok: true,
     version: TAI888_SOURCE_VERSION,
     ...tai888SourceStatus(),
+    readerStoreVersion: READER_STORE_VERSION,
+    readerParserVersion: TAI888_READER_PARSER_VERSION,
+    readerAvailable: reader.available,
+    readerFresh: reader.fresh,
+    readerStale: reader.stale,
+    readerAgeSeconds: reader.ageSeconds,
+    readerMessage: reader.message,
+    payloadHash: snapshot?.payloadHash || null,
+    matchedGameCount: snapshot?.matchedGameCount || 0,
+    observedAt: snapshot?.observedAt || null,
+    receivedAt: snapshot?.receivedAt || null,
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request) {
+  let readerSnapshot = null;
+  let readerState = readerSnapshotStatus(null);
   try {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
@@ -148,6 +165,27 @@ export async function POST(request) {
     const schedule = sanitizeSchedule(body?.schedule);
     const date = cleanText(body?.date, 20);
     if (!schedule.length) return NextResponse.json({ ok: false, error: '今日賽事清單為空，無法配對信用盤' }, { status: 400 });
+
+    readerSnapshot = await loadReaderSnapshot(date);
+    readerState = readerSnapshotStatus(readerSnapshot);
+    if (readerState.fresh && readerSnapshot?.games?.length) {
+      const scheduleByPk = new Map(schedule.map(game => [Number(game.gamePk), game]));
+      const games = readerSnapshot.games
+        .filter(row => scheduleByPk.has(Number(row.gamePk)) && Array.isArray(row.markets) && row.markets.length)
+        .map(row => ({ ...row, game: scheduleByPk.get(Number(row.gamePk)), source: { ...row.source, observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt } }));
+      if (games.length) {
+        return NextResponse.json({
+          ok: true, configured: true, blocked: false, readerFresh: true,
+          version: TAI888_READER_PARSER_VERSION, provider: 'TAI888_READER_AUTO',
+          label: 'Tai888 Reader 自動信用盤', games,
+          payloadHash: readerSnapshot.payloadHash, boardDate: readerSnapshot.boardDate,
+          observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt,
+          rawGameCount: readerSnapshot.rawGameCount, matchedGameCount: games.length,
+          scheduleGameCount: schedule.length, unmatched: readerSnapshot.unmatched || [],
+          readerStatus: readerState, fetchedAt: new Date().toISOString(), cache: 'READER_RUNTIME_CACHE',
+        }, { headers: { 'Cache-Control': 'no-store' } });
+      }
+    }
 
     const status = tai888SourceStatus();
     if (!status.configured) {
@@ -226,7 +264,12 @@ export async function POST(request) {
         label: 'Tai888唯讀信用盤',
         games: [],
         message: String(error.message),
-        importModes: ['clipboard_text', 'screenshot'],
+        importModes: ['reader_auto', 'clipboard_text', 'screenshot'],
+        readerFresh: readerState.fresh,
+        readerStale: readerState.stale,
+        readerAgeSeconds: readerState.ageSeconds,
+        readerMessage: readerState.message,
+        payloadHash: readerSnapshot?.payloadHash || null,
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
     return NextResponse.json({

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { appPasswordConfigured, requestIsAuthenticated } from './lib/security.js';
 
-const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health']);
+const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health', '/api/reader/pair', '/api/reader/ingest', '/api/reader/status']);
 
 export async function middleware(request) {
   if (!appPasswordConfigured()) return NextResponse.next();
