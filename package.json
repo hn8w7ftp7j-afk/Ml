@@ -1,6 +1,6 @@
 {
   "name": "mlb-positive-ev",
-  "version": "9.3.1",
+  "version": "9.3.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "test": "node scripts/reference-lines-test.mjs && node scripts/tai888-source-test.mjs && node scripts/single-side-water-test.mjs && node scripts/deterministic-v9-test.mjs && node scripts/security-test.mjs",
+    "test": "node scripts/reference-lines-test.mjs && node scripts/tai888-source-test.mjs && node scripts/single-side-water-test.mjs && node scripts/snapshot-isolation-test.mjs && node scripts/deterministic-v9-test.mjs && node scripts/security-test.mjs",
     "build": "npm test && next build",
     "start": "next start"
   },
