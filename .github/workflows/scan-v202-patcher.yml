@@ -1,0 +1,32 @@
+name: Scan v202 patcher
+
+on:
+  push:
+    branches: [fix/tai888-reader-v2-0-2-production]
+    paths: [.github/workflows/scan-v202-patcher.yml, scripts/apply-v202-production-patch.mjs]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/tai888-reader-v2-0-2-production
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Print unescaped template interpolations
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('scripts/apply-v202-production-patch.mjs')
+          for number, line in enumerate(path.read_text().splitlines(), 1):
+              matches = list(re.finditer(r'(?<!\\)\$\{', line))
+              if matches:
+                  print(f'{number}: {line}')
+          PY
