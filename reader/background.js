@@ -1,6 +1,6 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 
-const READER_VERSION = '2.0.1';
+const READER_VERSION = '2.0.2';
 const MLB_EV_ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const TAI888_PATTERNS = [
   'https://www1.tai888.in/*',
@@ -102,8 +102,18 @@ async function pairReader(password, deviceName = '') {
     lastSyncAt: 0,
   });
   await ensureAlarm();
-  const sync = await syncNow('paired');
-  return { ok: true, message: data.message, sync };
+
+  try {
+    const sync = await syncNow('paired');
+    return { ok: true, paired: true, message: data.message, sync };
+  } catch (error) {
+    return {
+      ok: true,
+      paired: true,
+      message: 'Reader 配對已完成；首次讀盤尚未成功，請依下方診斷處理後按「立即同步一次」。',
+      syncWarning: String(error?.message || error),
+    };
+  }
 }
 
 async function syncNow(reason = 'manual', preferredTabId = null) {
@@ -172,7 +182,7 @@ async function performSync(reason, preferredTabId) {
     const responding = diagnostics.filter(row => row.ok).length;
     const frames = diagnostics.length;
     throw await rememberError(
-      `目前畫面尚未辨識到標準 MLB 讓分／大小盤口（已檢查 ${frames} 個框架、${responding} 個框架有回應）。請確認停在「美棒 → 讓分＆大小」並重新整理頁面一次。`,
+      `目前畫面尚未辨識到標準 MLB 讓分／大小盤口（已檢查 ${frames} 個框架、${responding} 個框架有回應）。請確認停在「美棒 → 讓分＆大小」，再按 F5 重新整理頁面。`,
       { diagnostics },
     );
   }
