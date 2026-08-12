@@ -1,0 +1,9 @@
+Tai888 Reader 2.0.2
+
+- Supports Tai888 games rendered as separate away/home rows.
+- Honors one-cell league boundary rows and excludes team-total/special sections.
+- Scans Tai888 subframes and fallback div/list layouts only when table capture fails.
+- Preserves pairing after a successful password check even when the first board sync needs attention.
+- Shows frame response diagnostics instead of asking for the password repeatedly.
+- Pairing password autocomplete is disabled and the password is never written to extension storage.
+- Requires one F5 reload after installing or updating the unpacked extension.
