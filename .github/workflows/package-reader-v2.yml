@@ -6,6 +6,11 @@ on:
     paths:
       - .github/workflows/package-reader-v2.yml
       - reader/**
+      - scripts/tai888-reader-**
+      - scripts/reader-**
+      - lib/tai888-reader-**
+      - lib/reader-**
+      - app/api/reader/**
   workflow_dispatch:
 
 permissions:
@@ -14,7 +19,7 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,45 +27,61 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Verify Reader source
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Verify Reader source and fixtures
         run: |
           node --check reader/background.js
           node --check reader/parser.js
+          node --check reader/row-normalizer.js
           node --check reader/tai888-content.js
           node --check reader/popup.js
-          node -e "const m=require('./reader/manifest.json'); if(m.version!=='2.0.0') throw new Error('manifest version mismatch'); console.log(m.name,m.version)"
+          node -e "const m=require('./reader/manifest.json'); if(m.version!=='2.0.1') throw new Error('manifest version mismatch'); if(!m.content_scripts[0].js.includes('row-normalizer.js')) throw new Error('normalizer missing'); if(!m.host_permissions.includes('https://*.tai888.in/*')) throw new Error('subframe host permission missing'); console.log(m.name,m.version)"
           node scripts/tai888-reader-dom-v2-test.mjs
-      - name: Build ZIP
+          node scripts/tai888-reader-split-row-v2-test.mjs
+          node scripts/tai888-reader-parser-v2-test.mjs
+          node scripts/reader-auth-v2-test.mjs
+          node scripts/reader-store-v2-test.mjs
+      - name: Run complete regression suite
+        run: npm test
+      - name: Run Next.js production build
+        run: npx next build
+      - name: Build and verify installable ZIP
         run: |
-          rm -rf dist stage
-          mkdir -p stage/Tai888-Reader dist
+          rm -rf dist stage verify
+          mkdir -p stage/Tai888-Reader dist verify
           cp -a reader/. stage/Tai888-Reader/
-          cat > stage/Tai888-Reader/安裝步驟.txt <<'TXT'
-          Tai888 Reader 2.0.0 安裝步驟
+          cat > stage/Tai888-Reader/INSTALL.txt <<'TXT'
+          Tai888 Reader 2.0.1 installation
 
-          1. Chrome 開啟 chrome://extensions
-          2. 開啟「開發人員模式」
-          3. 移除舊版 Tai888 Reader 1.0.1
-          4. 按「載入未封裝項目」
-          5. 選擇本資料夾 Tai888-Reader（裡面直接看得到 manifest.json）
-          6. 確認版本為 2.0.0
-          7. 回到 www1.tai888.in 的 MLB 盤口頁
-          8. 點 Reader 圖示，輸入配對密碼後按「配對並啟用自動同步」
+          1. Open chrome://extensions
+          2. Enable Developer mode
+          3. Remove Tai888 Reader 2.0.0 or older
+          4. Click Load unpacked
+          5. Select the Tai888-Reader folder containing manifest.json
+          6. Confirm version 2.0.1
+          7. Open https://www1.tai888.in/newapp/#/BS and stay on MLB > Spread & Total
+          8. Open Tai888 Reader and pair once
 
-          長期運作：電腦保持開機且不睡眠，Chrome 與 Tai888 MLB 頁面保持開啟。
+          Keep Windows awake, Chrome open, and the Tai888 MLB board logged in.
           TXT
           cd stage
-          zip -r -9 ../dist/Tai888-Reader-v2.0.0.zip Tai888-Reader
+          zip -r -9 ../dist/Tai888-Reader-v2.0.1.zip Tai888-Reader
           cd ..
-          unzip -t dist/Tai888-Reader-v2.0.0.zip
-          unzip -l dist/Tai888-Reader-v2.0.0.zip
-          test "$(stat -c%s dist/Tai888-Reader-v2.0.0.zip)" -gt 5000
-          sha256sum dist/Tai888-Reader-v2.0.0.zip | tee dist/SHA256.txt
+          unzip -t dist/Tai888-Reader-v2.0.1.zip
+          unzip -q dist/Tai888-Reader-v2.0.1.zip -d verify
+          test -s verify/Tai888-Reader/manifest.json
+          test -s verify/Tai888-Reader/row-normalizer.js
+          test -s verify/Tai888-Reader/tai888-content.js
+          node -e "const m=require('./verify/Tai888-Reader/manifest.json'); if(m.version!=='2.0.1') process.exit(1)"
+          test "$(stat -c%s dist/Tai888-Reader-v2.0.1.zip)" -gt 8000
+          sha256sum dist/Tai888-Reader-v2.0.1.zip | tee dist/SHA256.txt
+          unzip -l dist/Tai888-Reader-v2.0.1.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Tai888-Reader-v2.0.0
+          name: Tai888-Reader-v2.0.1
           path: |
-            dist/Tai888-Reader-v2.0.0.zip
+            dist/Tai888-Reader-v2.0.1.zip
             dist/SHA256.txt
           if-no-files-found: error
           retention-days: 30
