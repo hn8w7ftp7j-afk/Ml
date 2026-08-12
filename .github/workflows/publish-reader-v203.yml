@@ -1,0 +1,89 @@
+name: Publish Tai888 Reader 2.0.3 package
+
+on:
+  push:
+    branches: [feature/tai888-reader-v1]
+    paths:
+      - .github/workflows/publish-reader-v203.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tai888-reader-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - name: Final source and regression verification
+        run: |
+          node --check reader/background.js
+          node --check reader/parser.js
+          node --check reader/row-normalizer.js
+          node --check reader/tai888-content.js
+          node --check reader/popup.js
+          node scripts/tai888-reader-content-dom-v2-test.mjs
+          node scripts/tai888-reader-pair-flow-v2-test.mjs
+          node scripts/tai888-reader-real-board-e2e-v2-test.mjs
+          node scripts/tai888-reader-deep-edge-v203-test.mjs
+          node scripts/tai888-reader-parser-v2-test.mjs
+          node scripts/full-spec-audit-v9-4.mjs
+          npm test
+          npm audit --audit-level=high --omit=dev
+          npx next build
+      - name: Build deterministic release ZIP
+        run: |
+          rm -rf release-stage release-verify
+          mkdir -p release-stage/Tai888-Reader release-verify release
+          cp reader/manifest.json reader/background.js reader/parser.js reader/row-normalizer.js reader/tai888-content.js reader/popup.html reader/popup.js reader/popup.css reader/README.md reader/CHANGELOG-v2.0.3.txt release-stage/Tai888-Reader/
+          cat > release-stage/Tai888-Reader/INSTALL.txt <<'TXT'
+          Tai888 Reader 2.0.3
+
+          1. Extract this ZIP completely.
+          2. Open chrome://extensions and enable Developer mode.
+          3. Remove Tai888 Reader 2.0.2 or older.
+          4. Click Load unpacked and select the Tai888-Reader folder containing manifest.json.
+          5. Confirm version 2.0.3.
+          6. Open https://www1.tai888.in/newapp/#/BS and press F5 once.
+          7. Stay on MLB > Spread & Total, open Tai888 Reader, and pair once.
+          8. Keep Windows awake and add www1.tai888.in to Chrome sites that are always kept active.
+          TXT
+          python3 - <<'PY'
+          import os, pathlib, zipfile
+          root=pathlib.Path('release-stage/Tai888-Reader')
+          out=pathlib.Path('release/Tai888-Reader-v2.0.3.zip')
+          if out.exists(): out.unlink()
+          fixed=(2026,8,12,12,0,0)
+          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(root.rglob('*')):
+                  if not p.is_file(): continue
+                  arc=pathlib.Path('Tai888-Reader')/p.relative_to(root)
+                  info=zipfile.ZipInfo(str(arc).replace('\\','/'),fixed)
+                  info.compress_type=zipfile.ZIP_DEFLATED
+                  info.external_attr=(0o100644 & 0xFFFF)<<16
+                  z.writestr(info,p.read_bytes())
+          PY
+          unzip -t release/Tai888-Reader-v2.0.3.zip
+          unzip -q release/Tai888-Reader-v2.0.3.zip -d release-verify
+          node -e "const m=require('./release-verify/Tai888-Reader/manifest.json'); if(m.version!=='2.0.3') process.exit(1)"
+          node --check release-verify/Tai888-Reader/background.js
+          node --check release-verify/Tai888-Reader/parser.js
+          node --check release-verify/Tai888-Reader/row-normalizer.js
+          node --check release-verify/Tai888-Reader/tai888-content.js
+          test "$(stat -c%s release/Tai888-Reader-v2.0.3.zip)" -gt 10000
+          sha256sum release/Tai888-Reader-v2.0.3.zip > release/Tai888-Reader-v2.0.3.sha256.txt
+      - name: Commit verified package
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release/Tai888-Reader-v2.0.3.zip release/Tai888-Reader-v2.0.3.sha256.txt
+          git commit -m "Publish verified Tai888 Reader 2.0.3 package" || exit 0
+          git push origin HEAD:feature/tai888-reader-v1
