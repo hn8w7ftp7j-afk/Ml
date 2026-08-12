@@ -9,7 +9,7 @@ assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
 );
-for (const forbidden of ['cookies', 'downloads', 'history', 'scripting', 'webRequest', 'webRequestBlocking', 'management', 'nativeMessaging']) {
+for (const forbidden of ['tabs', 'cookies', 'downloads', 'history', 'scripting', 'webRequest', 'webRequestBlocking', 'management', 'nativeMessaging']) {
   assert.equal(manifest.permissions.includes(forbidden), false, `forbidden permission: ${forbidden}`);
 }
 assert.equal(manifest.host_permissions.includes('<all_urls>'), false);
@@ -32,8 +32,10 @@ assert.match(background, /fetchWithTimeout/);
 assert.match(background, /PAIR_TIMEOUT_MS = 20_000/);
 assert.match(background, /INGEST_TIMEOUT_MS = 45_000/);
 assert.doesNotMatch(background, /chrome\.cookies|document\.cookie|localStorage|sessionStorage/i);
-assert.doesNotMatch(background, /password\s*:/i, 'The request property is allowed but secrets must never be persisted');
-assert.doesNotMatch(background, /set\([^)]*password|readerPassword|tai888Password/i);
+// Pairing password is sent once in a POST body, but it must never be written to extension storage.
+assert.match(background, /password: String\(password \|\| ''\)/);
+assert.doesNotMatch(background, /chrome\.storage\.[\s\S]{0,240}(password|readerPassword|tai888Password)/i);
+assert.doesNotMatch(background, /(password|readerPassword|tai888Password)[\s\S]{0,120}chrome\.storage/i);
 assert.match(background, /readerToken/);
 assert.match(background, /X-Device-Id/);
 
@@ -58,4 +60,4 @@ assert.match(ingest, /X-Device-Id|x-device-id/i);
 assert.match(ingest, /部分解析/);
 assert.match(ingest, /Runtime Cache/);
 
-console.log('Reader 2.0.2 static security audit: minimal permissions, no credential access, signed device token and strict origins PASS');
+console.log('Reader 2.0.2 static security audit: minimal permissions, no credential storage, signed device token and strict origins PASS');
