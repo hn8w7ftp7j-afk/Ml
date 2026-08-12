@@ -2,6 +2,7 @@ import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 
 const READER_VERSION = '2.0.0';
 const MLB_EV_ORIGIN = 'https://mlb-positive-ev.vercel.app';
+const TAI888_PATTERN = 'https://www1.tai888.in/*';
 const ALARM_NAME = 'tai888-reader-auto-sync';
 let syncPromise = null;
 let mutationTimer = null;
@@ -68,7 +69,7 @@ async function ensureAlarm() {
 function isTai888Url(url) {
   try {
     const parsed = new URL(url || '');
-    return parsed.protocol === 'https:' && (parsed.hostname === 'tai888.in' || parsed.hostname.endsWith('.tai888.in'));
+    return parsed.protocol === 'https:' && parsed.hostname === 'www1.tai888.in';
   } catch { return false; }
 }
 
@@ -79,11 +80,22 @@ async function pairReader(password, deviceName = '') {
   const response = await fetch(`${MLB_EV_ORIGIN}/api/reader/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Reader-Version': READER_VERSION },
-    body: JSON.stringify({ deviceId, deviceName: deviceName || navigator.userAgent.slice(0, 80), password: String(password || '') }),
+    body: JSON.stringify({
+      deviceId,
+      deviceName: deviceName || 'Tai888 Reader PC',
+      password: String(password || ''),
+    }),
   });
   const data = await jsonResponse(response);
   if (!response.ok || !data.ok) throw new Error(data.error || `配對失敗（${response.status}）`);
-  await chrome.storage.local.set({ readerToken: data.token, pairedAt: Date.now(), autoEnabled: true, pairError: '' });
+  await chrome.storage.local.set({
+    readerToken: data.token,
+    pairedAt: Date.now(),
+    autoEnabled: true,
+    pairError: '',
+    lastPayloadHash: '',
+    lastSyncAt: 0,
+  });
   await ensureAlarm();
   const sync = await syncNow('paired');
   return { ok: true, message: data.message, sync };
@@ -96,11 +108,15 @@ async function syncNow(reason = 'manual', preferredTabId = null) {
 }
 
 async function performSync(reason, preferredTabId) {
-  const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled']);
+  const stored = await chrome.storage.local.get([
+    'readerToken', 'deviceId', 'autoEnabled', 'lastPayloadHash', 'lastSyncAt',
+  ]);
   if (!stored.readerToken) throw await rememberError('尚未配對 MLB EV，請先在 Reader 視窗輸入一次配對密碼。');
-  if (reason !== 'manual' && stored.autoEnabled === false) return { ok: true, skipped: true, message: '自動同步已關閉' };
+  if (reason !== 'manual' && stored.autoEnabled === false) {
+    return { ok: true, skipped: true, message: '自動同步已關閉' };
+  }
 
-  const tabs = await chrome.tabs.query({ url: ['https://*.tai888.in/*', 'https://tai888.in/*'] });
+  const tabs = await chrome.tabs.query({ url: [TAI888_PATTERN] });
   const ordered = [...tabs].sort((left, right) => {
     if (left.id === preferredTabId) return -1;
     if (right.id === preferredTabId) return 1;
@@ -115,14 +131,20 @@ async function performSync(reason, preferredTabId) {
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0 }]);
     for (const frame of frames || [{ frameId: 0 }]) {
       try {
-        const response = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_MLB_TABLE' }, { frameId: frame.frameId });
+        const response = await chrome.tabs.sendMessage(
+          tab.id,
+          { type: 'TAI888_CAPTURE_MLB_TABLE' },
+          { frameId: frame.frameId },
+        );
         if (response?.ok && response.capture?.tables?.length) captures.push(response.capture);
       } catch {
-        // Frames without an injected content script are expected on old pages.
+        // Some frames do not contain the injected Reader script.
       }
     }
   }
-  if (!captures.length) throw await rememberError('目前 Tai888 畫面找不到 MLB 盤口表格，請停在「美棒 → 讓分＆大小」。');
+  if (!captures.length) {
+    throw await rememberError('目前 Tai888 畫面找不到 MLB 盤口表格，請停在「美棒 → 讓分＆大小」。');
+  }
 
   const combined = {
     sourceHost: new URL(ordered[0].url).hostname,
@@ -138,6 +160,12 @@ async function performSync(reason, preferredTabId) {
 
   const payloadHash = await sha256(canonicalReaderPayload(parsed));
   parsed.payloadHash = payloadHash;
+  if (reason !== 'manual'
+    && stored.lastPayloadHash === payloadHash
+    && Date.now() - Number(stored.lastSyncAt || 0) < 45_000) {
+    return { ok: true, skipped: true, message: '盤口未變，等待下一次心跳', payloadHash };
+  }
+
   const response = await fetch(`${MLB_EV_ORIGIN}/api/reader/ingest`, {
     method: 'POST',
     headers: {
@@ -159,6 +187,7 @@ async function performSync(reason, preferredTabId) {
     ok: true,
     state: 'synced',
     reason,
+    heartbeat: Boolean(data.heartbeat),
     message: data.message || `已同步 ${data.matchedGameCount} 場`,
     lastSyncAt: Date.now(),
     lastObservedAt: parsed.observedAt,
@@ -171,12 +200,19 @@ async function performSync(reason, preferredTabId) {
     readerVersion: READER_VERSION,
     runtimeCache: data.runtimeCache,
   };
-  await chrome.storage.local.set({ readerStatus: status, pairError: '' });
+  await chrome.storage.local.set({
+    readerStatus: status,
+    pairError: '',
+    lastPayloadHash: payloadHash,
+    lastSyncAt: Date.now(),
+  });
   return status;
 }
 
 async function readerStatus() {
-  const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatus', 'pairError', 'pairedAt']);
+  const stored = await chrome.storage.local.get([
+    'readerToken', 'deviceId', 'autoEnabled', 'readerStatus', 'pairError', 'pairedAt',
+  ]);
   return {
     ok: true,
     paired: Boolean(stored.readerToken),
@@ -193,7 +229,13 @@ async function rememberError(message) {
   const error = new Error(message);
   await chrome.storage.local.set({
     pairError: message,
-    readerStatus: { ok: false, state: 'error', message, lastAttemptAt: Date.now(), readerVersion: READER_VERSION },
+    readerStatus: {
+      ok: false,
+      state: 'error',
+      message,
+      lastAttemptAt: Date.now(),
+      readerVersion: READER_VERSION,
+    },
   });
   return error;
 }
