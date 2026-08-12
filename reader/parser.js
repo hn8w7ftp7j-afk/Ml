@@ -1,10 +1,22 @@
 const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
 const WATER_TOKEN = /^(?:0|1)\.\d{3}$/;
 
-const clean = value => String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+const clean = value => String(value || '')
+  .replace(/[\u0000-\u001F\u007F]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+function explicitPair(cell) {
+  if (!Array.isArray(cell?.pair) || cell.pair.length < 2) return null;
+  return [clean(cell.pair[0]), clean(cell.pair[1])];
+}
 
 function cellLines(cell) {
-  const raw = Array.isArray(cell?.lines) ? cell.lines : typeof cell === 'string' ? cell.split(/\r?\n/) : [];
+  const pair = explicitPair(cell);
+  if (pair) return pair.filter(Boolean);
+  const raw = Array.isArray(cell?.lines)
+    ? cell.lines
+    : typeof cell === 'string' ? cell.split(/\r?\n/) : [];
   return raw.map(clean).filter(Boolean).slice(0, 20);
 }
 
@@ -16,7 +28,8 @@ function waterIn(value) {
 
 function tokenCandidates(value) {
   return clean(value)
-    .replace(/[＋]/g, '+').replace(/[－–—]/g, '-')
+    .replace(/[＋]/g, '+')
+    .replace(/[－–—]/g, '-')
     .split(/\s+/)
     .map(token => token.replace(/^[^0-9]+|[^0-9平+\-./]+$/g, ''))
     .filter(token => token && LINE_TOKEN.test(token) && !WATER_TOKEN.test(token));
@@ -31,6 +44,9 @@ function lineTokenIn(value) {
 }
 
 function pairLines(cell) {
+  const pair = explicitPair(cell);
+  if (pair) return pair;
+
   const lines = cellLines(cell);
   if (lines.length <= 2) return [lines[0] || '', lines[1] || ''];
 
@@ -90,41 +106,59 @@ function headerIndex(headers, patterns) {
 
 function mapHeaders(headers) {
   return {
-    time: headerIndex(headers, [/^時間$/, /開賽/]),
-    teams: headerIndex(headers, [/主客隊伍/, /隊伍/, /球队/]),
-    runline: headerIndex(headers, [/^讓球$/, /^让球$/, /全場讓球/, /全场让球/]),
-    total: headerIndex(headers, [/^大小盤$/, /^大小盘$/, /全場大小/, /全场大小/]),
+    time: headerIndex(headers, [/^時間$/, /^时间$/, /開賽/, /开赛/]),
+    teams: headerIndex(headers, [/主客隊伍/, /主客队伍/, /^隊伍$/, /^队伍$/]),
+    runline: headerIndex(headers, [/^讓球$/, /^让球$/, /^全場讓球$/, /^全场让球$/]),
+    total: headerIndex(headers, [/^大小盤$/, /^大小盘$/, /^全場大小$/, /^全场大小$/]),
     first5Runline: headerIndex(headers, [/上半讓球/, /上半让球/, /前5.*讓球/, /前五.*讓球/]),
     first5Total: headerIndex(headers, [/上半大小/, /前5.*大小/, /前五.*大小/]),
   };
 }
 
 function teamCodes(cell) {
-  const lines = cellLines(cell);
+  const pair = explicitPair(cell);
+  const lines = pair || cellLines(cell);
   const found = [];
   for (const line of lines) {
     for (const match of line.matchAll(/(?:^|\s)([A-Z]{2,4})\s*-/g)) {
       const code = match[1].toUpperCase();
-      if (!found.some(row => row.code === code)) found.push({ code, text: line, homeMarked: /\[主\]/.test(line) });
+      if (!found.some(row => row.code === code)) {
+        found.push({ code, text: line, homeMarked: /\[主\]/.test(line) });
+      }
     }
   }
   return found.slice(0, 2);
 }
 
+function taipeiParts(now) {
+  return Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(now)
+    .filter(part => part.type !== 'literal')
+    .map(part => [part.type, Number(part.value)]));
+}
+
 function parseDateTime(cell, now = new Date()) {
-  const text = cellLines(cell).join(' ');
+  const pair = explicitPair(cell);
+  const text = (pair || cellLines(cell)).join(' ');
   const date = text.match(/\b(\d{1,2})-(\d{1,2})\b/);
   const time = text.match(/\b(\d{1,2}):(\d{2})\b/);
   let boardDate = '';
   if (date) {
-    let year = now.getUTCFullYear();
+    const current = taipeiParts(now);
+    let year = current.year;
     const month = Number(date[1]);
-    const currentMonth = now.getUTCMonth() + 1;
-    if (currentMonth === 12 && month === 1) year += 1;
-    else if (currentMonth === 1 && month === 12) year -= 1;
+    if (current.month === 12 && month === 1) year += 1;
+    else if (current.month === 1 && month === 12) year -= 1;
     boardDate = `${year}-${String(month).padStart(2, '0')}-${String(Number(date[2])).padStart(2, '0')}`;
   }
-  return { boardDate, time: time ? `${String(Number(time[1])).padStart(2, '0')}:${time[2]}` : '' };
+  return {
+    boardDate,
+    time: time ? `${String(Number(time[1])).padStart(2, '0')}:${time[2]}` : '',
+  };
 }
 
 export function parseTai888Capture(capture, now = new Date()) {
@@ -136,12 +170,16 @@ export function parseTai888Capture(capture, now = new Date()) {
     if (map.teams < 0 || map.time < 0) continue;
     for (const row of (table?.rows || []).slice(0, 60)) {
       const cells = Array.isArray(row?.cells) ? row.cells : [];
-      if (cells.length <= Math.max(...Object.values(map).filter(index => index >= 0))) continue;
+      const requiredIndexes = Object.values(map).filter(index => index >= 0);
+      if (!requiredIndexes.length || cells.length <= Math.max(...requiredIndexes)) continue;
       const teams = teamCodes(cells[map.teams]);
       if (teams.length !== 2) continue;
       const homeIndex = teams.findIndex(team => team.homeMarked);
-      const away = homeIndex === 0 ? teams[1] : teams[0];
-      const home = homeIndex === 0 ? teams[0] : teams[1];
+      const awayIndex = homeIndex === 0 ? 1 : 0;
+      const normalizedHomeIndex = homeIndex >= 0 ? homeIndex : 1;
+      const away = teams[awayIndex];
+      const home = teams[normalizedHomeIndex];
+      if (!away || !home || away.code === home.code) continue;
       const timing = parseDateTime(cells[map.time], now);
       const game = {
         awayCode: away.code,
@@ -171,7 +209,7 @@ export function parseTai888Capture(capture, now = new Date()) {
   }
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
   return {
-    version: 'TAI888-READER-DOM-v2.0.0',
+    version: 'TAI888-READER-DOM-v2.0.1',
     sourceHost: clean(capture?.sourceHost).toLowerCase(),
     pageUrl: clean(capture?.pageUrl).slice(0, 500),
     pageTitle: clean(capture?.pageTitle).slice(0, 200),
