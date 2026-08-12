@@ -1,8 +1,11 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 
-const READER_VERSION = '2.0.0';
+const READER_VERSION = '2.0.2';
 const MLB_EV_ORIGIN = 'https://mlb-positive-ev.vercel.app';
+const TAI888_PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const ALARM_NAME = 'tai888-reader-auto-sync';
+const PAIR_TIMEOUT_MS = 20_000;
+const INGEST_TIMEOUT_MS = 45_000;
 let syncPromise = null;
 let mutationTimer = null;
 
@@ -11,12 +14,10 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!current.deviceId) await chrome.storage.local.set({ deviceId: crypto.randomUUID() });
   if (current.autoEnabled == null) await chrome.storage.local.set({ autoEnabled: true });
   await ensureAlarm();
-  setTimeout(() => syncNow('installed').catch(() => {}), 5000);
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await ensureAlarm();
-  setTimeout(() => syncNow('startup').catch(() => {}), 5000);
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
@@ -25,7 +26,8 @@ chrome.alarms.onAlarm.addListener(alarm => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !isTai888Url(tab.url)) return;
-  setTimeout(() => syncNow('tai888-tab-loaded', tabId).catch(() => {}), 5000);
+  clearTimeout(mutationTimer);
+  mutationTimer = setTimeout(() => syncNow('tai888-tab-loaded', tabId).catch(() => {}), 3500);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -50,7 +52,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(async () => {
         await ensureAlarm();
         sendResponse({ ok: true, enabled: Boolean(message.enabled) });
-      });
+      })
+      .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
     return true;
   }
   if (message?.type === 'TAI888_BOARD_MUTATED') {
@@ -62,31 +65,70 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function ensureAlarm() {
   const { autoEnabled = true } = await chrome.storage.local.get('autoEnabled');
   await chrome.alarms.clear(ALARM_NAME);
-  if (autoEnabled) chrome.alarms.create(ALARM_NAME, { delayInMinutes: 0.2, periodInMinutes: 1 });
+  if (autoEnabled) {
+    await chrome.alarms.create(ALARM_NAME, { delayInMinutes: 0.5, periodInMinutes: 1 });
+  }
 }
 
 function isTai888Url(url) {
   try {
     const parsed = new URL(url || '');
-    return parsed.protocol === 'https:' && (parsed.hostname === 'tai888.in' || parsed.hostname.endsWith('.tai888.in'));
+    return parsed.protocol === 'https:'
+      && (parsed.hostname === 'tai888.in' || parsed.hostname.endsWith('.tai888.in'));
   } catch { return false; }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('連線逾時，Reader 會於下一次心跳重試');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function pairReader(password, deviceName = '') {
   const stored = await chrome.storage.local.get('deviceId');
   const deviceId = stored.deviceId || crypto.randomUUID();
   await chrome.storage.local.set({ deviceId });
-  const response = await fetch(`${MLB_EV_ORIGIN}/api/reader/pair`, {
+  const response = await fetchWithTimeout(`${MLB_EV_ORIGIN}/api/reader/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Reader-Version': READER_VERSION },
-    body: JSON.stringify({ deviceId, deviceName: deviceName || navigator.userAgent.slice(0, 80), password: String(password || '') }),
-  });
+    body: JSON.stringify({
+      deviceId,
+      deviceName: String(deviceName || 'Tai888 Reader PC').slice(0, 80),
+      password: String(password || ''),
+    }),
+  }, PAIR_TIMEOUT_MS);
   const data = await jsonResponse(response);
   if (!response.ok || !data.ok) throw new Error(data.error || `配對失敗（${response.status}）`);
-  await chrome.storage.local.set({ readerToken: data.token, pairedAt: Date.now(), autoEnabled: true, pairError: '' });
+
+  await chrome.storage.local.set({
+    readerToken: data.token,
+    pairedAt: Date.now(),
+    autoEnabled: true,
+    pairError: '',
+    lastPayloadHash: '',
+    lastSyncAt: 0,
+  });
   await ensureAlarm();
-  const sync = await syncNow('paired');
-  return { ok: true, message: data.message, sync };
+
+  try {
+    const sync = await syncNow('paired');
+    return { ok: true, paired: true, syncOk: true, message: data.message, sync };
+  } catch (error) {
+    // Pairing already succeeded. Preserve the token and show the sync problem separately.
+    return {
+      ok: true,
+      paired: true,
+      syncOk: false,
+      message: `配對完成，但首次讀盤未成功：${String(error?.message || error)}`,
+    };
+  }
 }
 
 async function syncNow(reason = 'manual', preferredTabId = null) {
@@ -96,33 +138,70 @@ async function syncNow(reason = 'manual', preferredTabId = null) {
 }
 
 async function performSync(reason, preferredTabId) {
-  const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled']);
-  if (!stored.readerToken) throw await rememberError('尚未配對 MLB EV，請先在 Reader 視窗輸入一次配對密碼。');
-  if (reason !== 'manual' && stored.autoEnabled === false) return { ok: true, skipped: true, message: '自動同步已關閉' };
+  const stored = await chrome.storage.local.get([
+    'readerToken', 'deviceId', 'autoEnabled', 'lastPayloadHash', 'lastSyncAt',
+  ]);
+  if (!stored.readerToken) {
+    throw await rememberError('尚未配對 MLB EV，請先在 Reader 視窗輸入一次配對密碼。');
+  }
+  if (reason !== 'manual' && stored.autoEnabled === false) {
+    return { ok: true, skipped: true, message: '自動同步已關閉' };
+  }
 
-  const tabs = await chrome.tabs.query({ url: ['https://*.tai888.in/*', 'https://tai888.in/*'] });
-  const ordered = [...tabs].sort((left, right) => {
+  const tabs = await chrome.tabs.query({ url: TAI888_PATTERNS });
+  const ordered = [...new Map(tabs.map(tab => [tab.id, tab])).values()].sort((left, right) => {
     if (left.id === preferredTabId) return -1;
     if (right.id === preferredTabId) return 1;
     if (left.active && !right.active) return -1;
     if (right.active && !left.active) return 1;
     return Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0);
   });
-  if (!ordered.length) throw await rememberError('找不到已開啟的 Tai888 分頁。請保持 Tai888 MLB 盤口頁開著。');
+  if (!ordered.length) {
+    throw await rememberError('找不到已開啟的 Tai888 分頁。請保持 Tai888 MLB 盤口頁開著。');
+  }
 
   const captures = [];
+  const diagnostics = [];
   for (const tab of ordered.slice(0, 4)) {
-    const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0 }]);
-    for (const frame of frames || [{ frameId: 0 }]) {
+    const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id })
+      .catch(() => [{ frameId: 0, url: tab.url }]);
+    for (const frame of frames || [{ frameId: 0, url: tab.url }]) {
       try {
-        const response = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_MLB_TABLE' }, { frameId: frame.frameId });
+        const response = await chrome.tabs.sendMessage(
+          tab.id,
+          { type: 'TAI888_CAPTURE_MLB_TABLE' },
+          { frameId: frame.frameId },
+        );
+        diagnostics.push({
+          tabId: tab.id,
+          frameId: frame.frameId,
+          frameUrl: frame.url || response?.capture?.frameUrl || '',
+          ok: response?.ok === true,
+          tableCount: response?.capture?.tables?.length || 0,
+          capture: response?.capture?.diagnostics || null,
+          error: response?.error || '',
+        });
         if (response?.ok && response.capture?.tables?.length) captures.push(response.capture);
-      } catch {
-        // Frames without an injected content script are expected on old pages.
+      } catch (error) {
+        diagnostics.push({
+          tabId: tab.id,
+          frameId: frame.frameId,
+          frameUrl: frame.url || '',
+          ok: false,
+          tableCount: 0,
+          error: String(error?.message || error).slice(0, 200),
+        });
       }
     }
   }
-  if (!captures.length) throw await rememberError('目前 Tai888 畫面找不到 MLB 盤口表格，請停在「美棒 → 讓分＆大小」。');
+
+  if (!captures.length) {
+    const responding = diagnostics.filter(row => row.ok).length;
+    throw await rememberError(
+      `目前畫面尚未辨識到標準 MLB 讓分／大小盤口（已檢查 ${diagnostics.length} 個框架、${responding} 個框架有回應）。請停在「美棒 → 讓分＆大小」並按一次 F5。`,
+      { diagnostics },
+    );
+  }
 
   const combined = {
     sourceHost: new URL(ordered[0].url).hostname,
@@ -134,11 +213,19 @@ async function performSync(reason, preferredTabId) {
   const parsed = parseTai888Capture(combined, new Date());
   parsed.readerVersion = READER_VERSION;
   parsed.deviceId = stored.deviceId;
-  if (!parsed.games.length) throw await rememberError('Reader 找到 Tai888 頁面，但沒有解析到 MLB 場次。');
+  if (!parsed.games.length) {
+    throw await rememberError('Reader 已抓到 Tai888 表格，但標準 MLB 場次解析為0；已停止上傳，避免錯盤。', { diagnostics });
+  }
 
   const payloadHash = await sha256(canonicalReaderPayload(parsed));
   parsed.payloadHash = payloadHash;
-  const response = await fetch(`${MLB_EV_ORIGIN}/api/reader/ingest`, {
+  if (reason !== 'manual'
+    && stored.lastPayloadHash === payloadHash
+    && Date.now() - Number(stored.lastSyncAt || 0) < 45_000) {
+    return { ok: true, skipped: true, message: '盤口未變，等待下一次心跳', payloadHash };
+  }
+
+  const response = await fetchWithTimeout(`${MLB_EV_ORIGIN}/api/reader/ingest`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${stored.readerToken}`,
@@ -147,18 +234,21 @@ async function performSync(reason, preferredTabId) {
       'X-Device-Id': stored.deviceId,
     },
     body: JSON.stringify(parsed),
-  });
+  }, INGEST_TIMEOUT_MS);
   const data = await jsonResponse(response);
   if (response.status === 401) {
     await chrome.storage.local.remove('readerToken');
     throw await rememberError('Reader 配對已過期，請重新輸入一次配對密碼。');
   }
-  if (!response.ok || !data.ok) throw await rememberError(data.error || `同步失敗（${response.status}）`);
+  if (!response.ok || !data.ok) {
+    throw await rememberError(data.error || `同步失敗（${response.status}）`, { diagnostics });
+  }
 
   const status = {
     ok: true,
     state: 'synced',
     reason,
+    heartbeat: Boolean(data.heartbeat),
     message: data.message || `已同步 ${data.matchedGameCount} 場`,
     lastSyncAt: Date.now(),
     lastObservedAt: parsed.observedAt,
@@ -170,13 +260,21 @@ async function performSync(reason, preferredTabId) {
     unmatched: data.unmatched || [],
     readerVersion: READER_VERSION,
     runtimeCache: data.runtimeCache,
+    diagnostics: diagnostics.slice(0, 20),
   };
-  await chrome.storage.local.set({ readerStatus: status, pairError: '' });
+  await chrome.storage.local.set({
+    readerStatus: status,
+    pairError: '',
+    lastPayloadHash: payloadHash,
+    lastSyncAt: Date.now(),
+  });
   return status;
 }
 
 async function readerStatus() {
-  const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatus', 'pairError', 'pairedAt']);
+  const stored = await chrome.storage.local.get([
+    'readerToken', 'deviceId', 'autoEnabled', 'readerStatus', 'pairError', 'pairedAt',
+  ]);
   return {
     ok: true,
     paired: Boolean(stored.readerToken),
@@ -189,11 +287,18 @@ async function readerStatus() {
   };
 }
 
-async function rememberError(message) {
+async function rememberError(message, details = {}) {
   const error = new Error(message);
   await chrome.storage.local.set({
     pairError: message,
-    readerStatus: { ok: false, state: 'error', message, lastAttemptAt: Date.now(), readerVersion: READER_VERSION },
+    readerStatus: {
+      ok: false,
+      state: 'error',
+      message,
+      lastAttemptAt: Date.now(),
+      readerVersion: READER_VERSION,
+      diagnostics: details.diagnostics?.slice?.(0, 20) || [],
+    },
   });
   return error;
 }
