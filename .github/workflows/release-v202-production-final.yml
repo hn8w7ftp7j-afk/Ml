@@ -44,7 +44,9 @@ jobs:
         run: npm test
 
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm audit --omit=dev --audit-level=high
 
       - name: Build Next.js production application
         run: npx next build
