@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.0.1",
-  "description": "自動讀取使用者已登入瀏覽器中可見的 Tai888 MLB 盤口，支援分列表格與子框架並安全同步到 MLB EV。",
+  "version": "2.0.2",
+  "description": "自動讀取使用者已登入瀏覽器中可見的 Tai888 MLB 盤口，支援分列表格、子框架與診斷後安全同步到 MLB EV。",
   "permissions": ["storage", "tabs", "alarms", "webNavigation"],
   "host_permissions": [
     "https://*.tai888.in/*",
