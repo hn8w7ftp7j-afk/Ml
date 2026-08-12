@@ -1,0 +1,66 @@
+name: Package Tai888 Reader v2
+
+on:
+  push:
+    branches: [feature/tai888-reader-v1]
+    paths:
+      - .github/workflows/package-reader-v2.yml
+      - reader/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tai888-reader-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify Reader source
+        run: |
+          node --check reader/background.js
+          node --check reader/parser.js
+          node --check reader/tai888-content.js
+          node --check reader/popup.js
+          node -e "const m=require('./reader/manifest.json'); if(m.version!=='2.0.0') throw new Error('manifest version mismatch'); console.log(m.name,m.version)"
+          node scripts/tai888-reader-dom-v2-test.mjs
+      - name: Build ZIP
+        run: |
+          rm -rf dist stage
+          mkdir -p stage/Tai888-Reader dist
+          cp -a reader/. stage/Tai888-Reader/
+          cat > stage/Tai888-Reader/安裝步驟.txt <<'TXT'
+          Tai888 Reader 2.0.0 安裝步驟
+
+          1. Chrome 開啟 chrome://extensions
+          2. 開啟「開發人員模式」
+          3. 移除舊版 Tai888 Reader 1.0.1
+          4. 按「載入未封裝項目」
+          5. 選擇本資料夾 Tai888-Reader（裡面直接看得到 manifest.json）
+          6. 確認版本為 2.0.0
+          7. 回到 www1.tai888.in 的 MLB 盤口頁
+          8. 點 Reader 圖示，輸入配對密碼後按「配對並啟用自動同步」
+
+          長期運作：電腦保持開機且不睡眠，Chrome 與 Tai888 MLB 頁面保持開啟。
+          TXT
+          cd stage
+          zip -r -9 ../dist/Tai888-Reader-v2.0.0.zip Tai888-Reader
+          cd ..
+          unzip -t dist/Tai888-Reader-v2.0.0.zip
+          unzip -l dist/Tai888-Reader-v2.0.0.zip
+          test "$(stat -c%s dist/Tai888-Reader-v2.0.0.zip)" -gt 5000
+          sha256sum dist/Tai888-Reader-v2.0.0.zip | tee dist/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tai888-Reader-v2.0.0
+          path: |
+            dist/Tai888-Reader-v2.0.0.zip
+            dist/SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
