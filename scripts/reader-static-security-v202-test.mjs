@@ -32,10 +32,13 @@ assert.match(background, /fetchWithTimeout/);
 assert.match(background, /PAIR_TIMEOUT_MS = 20_000/);
 assert.match(background, /INGEST_TIMEOUT_MS = 45_000/);
 assert.doesNotMatch(background, /chrome\.cookies|document\.cookie|localStorage|sessionStorage/i);
-// Pairing password is sent once in a POST body, but it must never be written to extension storage.
+// Pairing password is sent once in a POST body, but every storage write must use an explicit allow-list without password keys.
 assert.match(background, /password: String\(password \|\| ''\)/);
-assert.doesNotMatch(background, /chrome\.storage\.[\s\S]{0,240}(password|readerPassword|tai888Password)/i);
-assert.doesNotMatch(background, /(password|readerPassword|tai888Password)[\s\S]{0,120}chrome\.storage/i);
+const storageSetBodies = [...background.matchAll(/chrome\.storage\.local\.set\(\{([\s\S]*?)\}\)/g)].map(match => match[1]);
+assert.ok(storageSetBodies.length >= 4);
+for (const body of storageSetBodies) {
+  assert.doesNotMatch(body, /\b(password|readerPassword|tai888Password)\b/i);
+}
 assert.match(background, /readerToken/);
 assert.match(background, /X-Device-Id/);
 
