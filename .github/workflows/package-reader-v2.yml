@@ -19,7 +19,7 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,59 +29,76 @@ jobs:
           node-version: 24
       - name: Install dependencies
         run: npm install --no-audit --no-fund --package-lock=false
-      - name: Verify Reader source and fixtures
+      - name: Verify Reader source, DOM and pairing fixtures
         run: |
           node --check reader/background.js
           node --check reader/parser.js
           node --check reader/row-normalizer.js
           node --check reader/tai888-content.js
           node --check reader/popup.js
-          node -e "const m=require('./reader/manifest.json'); if(m.version!=='2.0.1') throw new Error('manifest version mismatch'); if(!m.content_scripts[0].js.includes('row-normalizer.js')) throw new Error('normalizer missing'); if(!m.host_permissions.includes('https://*.tai888.in/*')) throw new Error('subframe host permission missing'); console.log(m.name,m.version)"
+          node -e "const m=require('./reader/manifest.json'); if(m.version!=='2.0.2') throw new Error('manifest version mismatch'); if(!m.content_scripts[0].js.includes('row-normalizer.js')) throw new Error('normalizer missing'); if(!m.host_permissions.includes('https://*.tai888.in/*')) throw new Error('subframe host permission missing'); if((m.permissions||[]).some(x=>['cookies','webRequest','scripting'].includes(x))) throw new Error('excess permission'); console.log(m.name,m.version)"
           node scripts/tai888-reader-dom-v2-test.mjs
           node scripts/tai888-reader-split-row-v2-test.mjs
+          node scripts/tai888-reader-content-dom-v2-test.mjs
+          node scripts/tai888-reader-pair-flow-v2-test.mjs
           node scripts/tai888-reader-parser-v2-test.mjs
           node scripts/reader-auth-v2-test.mjs
           node scripts/reader-store-v2-test.mjs
-      - name: Run complete regression suite
+      - name: Run complete website regression suite
         run: npm test
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high --omit=dev
       - name: Run Next.js production build
         run: npx next build
-      - name: Build and verify installable ZIP
+      - name: Static secret and permission audit
+        run: |
+          ! grep -RInE --exclude-dir=node_modules --exclude-dir=.git '(sk-[A-Za-z0-9_-]{20,}|OPENAI_API_KEY\s*=\s*[^[:space:]]+|THE_ODDS_API_KEY\s*=\s*[^[:space:]]+)' reader app lib scripts
+          ! grep -RInE 'chrome\.(cookies|webRequest)|document\.cookie|localStorage[^\n]*(password|secret)' reader
+          grep -q "const READER_VERSION = '2.0.2'" reader/background.js
+          grep -q 'v2.0.2' reader/popup.html
+          grep -q 'TAI888-DOM-CAPTURE-v2.0.2' reader/tai888-content.js
+      - name: Build and independently verify installable ZIP
         run: |
           rm -rf dist stage verify
           mkdir -p stage/Tai888-Reader dist verify
           cp -a reader/. stage/Tai888-Reader/
           cat > stage/Tai888-Reader/INSTALL.txt <<'TXT'
-          Tai888 Reader 2.0.1 installation
+          Tai888 Reader 2.0.2 installation
 
           1. Open chrome://extensions
           2. Enable Developer mode
-          3. Remove Tai888 Reader 2.0.0 or older
+          3. Remove Tai888 Reader 2.0.1 or older
           4. Click Load unpacked
           5. Select the Tai888-Reader folder containing manifest.json
-          6. Confirm version 2.0.1
-          7. Open https://www1.tai888.in/newapp/#/BS and stay on MLB > Spread & Total
-          8. Open Tai888 Reader and pair once
+          6. Confirm version 2.0.2
+          7. Reload https://www1.tai888.in/newapp/#/BS once with F5
+          8. Stay on MLB > Spread & Total and open Tai888 Reader
+          9. Pair once; if first sync needs attention, pairing remains saved and the status panel shows exact diagnostics
 
           Keep Windows awake, Chrome open, and the Tai888 MLB board logged in.
           TXT
           cd stage
-          zip -r -9 ../dist/Tai888-Reader-v2.0.1.zip Tai888-Reader
+          zip -r -9 ../dist/Tai888-Reader-v2.0.2.zip Tai888-Reader
           cd ..
-          unzip -t dist/Tai888-Reader-v2.0.1.zip
-          unzip -q dist/Tai888-Reader-v2.0.1.zip -d verify
+          unzip -t dist/Tai888-Reader-v2.0.2.zip
+          unzip -q dist/Tai888-Reader-v2.0.2.zip -d verify
           test -s verify/Tai888-Reader/manifest.json
           test -s verify/Tai888-Reader/row-normalizer.js
           test -s verify/Tai888-Reader/tai888-content.js
-          node -e "const m=require('./verify/Tai888-Reader/manifest.json'); if(m.version!=='2.0.1') process.exit(1)"
-          test "$(stat -c%s dist/Tai888-Reader-v2.0.1.zip)" -gt 8000
-          sha256sum dist/Tai888-Reader-v2.0.1.zip | tee dist/SHA256.txt
-          unzip -l dist/Tai888-Reader-v2.0.1.zip
+          test -s verify/Tai888-Reader/background.js
+          node -e "const m=require('./verify/Tai888-Reader/manifest.json'); if(m.version!=='2.0.2') process.exit(1); if(m.content_scripts[0].js[0]!=='row-normalizer.js') process.exit(1)"
+          node --check verify/Tai888-Reader/background.js
+          node --check verify/Tai888-Reader/parser.js
+          node --check verify/Tai888-Reader/row-normalizer.js
+          node --check verify/Tai888-Reader/tai888-content.js
+          test "$(stat -c%s dist/Tai888-Reader-v2.0.2.zip)" -gt 10000
+          sha256sum dist/Tai888-Reader-v2.0.2.zip | tee dist/SHA256.txt
+          unzip -l dist/Tai888-Reader-v2.0.2.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Tai888-Reader-v2.0.1
+          name: Tai888-Reader-v2.0.2
           path: |
-            dist/Tai888-Reader-v2.0.1.zip
+            dist/Tai888-Reader-v2.0.2.zip
             dist/SHA256.txt
           if-no-files-found: error
           retention-days: 30
