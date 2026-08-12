@@ -1,0 +1,68 @@
+name: Production deep audit v9.4
+
+on:
+  push:
+    branches: [feature/tai888-reader-v1]
+    paths: [.github/workflows/production-deep-audit-v9-4.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Probe production without credentials
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const BASE = 'https://mlb-positive-ev.vercel.app';
+          async function request(path, options={}) {
+            const response = await fetch(BASE + path, { redirect: 'manual', cache: 'no-store', ...options });
+            const text = await response.text();
+            let json = null;
+            try { json = JSON.parse(text); } catch {}
+            return { status: response.status, headers: Object.fromEntries(response.headers), text: text.slice(0,1000), json };
+          }
+          const health = await request('/api/health?t=' + Date.now());
+          const home = await request('/?audit=' + Date.now());
+          const mlb = await request('/api/mlb?date=2026-08-13&t=' + Date.now());
+          const reader = await request('/api/reader/status?t=' + Date.now(), { headers: { Origin: BASE } });
+          const preflight = await request('/api/reader/ingest', {
+            method: 'OPTIONS',
+            headers: {
+              Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              'Access-Control-Request-Method': 'POST',
+              'Access-Control-Request-Headers': 'authorization,content-type,x-device-id,x-reader-version',
+            },
+          });
+          const maliciousOrigin = await request('/api/reader/status?t=' + Date.now(), { headers: { Origin: 'https://evil.example' } });
+          const output = {
+            health: health.json,
+            home: { status: home.status, location: home.headers.location || null, contentType: home.headers['content-type'] || null },
+            protectedApi: { status: mlb.status, ok: mlb.json?.ok, error: mlb.json?.error || null },
+            readerStatus: { status: reader.status, body: reader.json },
+            readerPreflight: {
+              status: preflight.status,
+              allowOrigin: preflight.headers['access-control-allow-origin'] || null,
+              allowMethods: preflight.headers['access-control-allow-methods'] || null,
+            },
+            maliciousOrigin: {
+              status: maliciousOrigin.status,
+              allowOrigin: maliciousOrigin.headers['access-control-allow-origin'] || null,
+              ok: maliciousOrigin.json?.ok,
+              error: maliciousOrigin.json?.error || null,
+            },
+          };
+          console.log(JSON.stringify(output, null, 2));
+          assert.equal(health.status, 200);
+          assert.equal(health.json?.ok, true);
+          assert.equal(health.json?.version, '9.4.0');
+          assert.equal(reader.status, 200);
+          assert.equal(preflight.status, 204);
+          NODE
