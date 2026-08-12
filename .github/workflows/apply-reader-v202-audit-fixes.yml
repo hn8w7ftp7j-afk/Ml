@@ -1,0 +1,46 @@
+name: Apply Reader 2.0.2 audit fixes
+
+on:
+  push:
+    branches: [feature/tai888-reader-v1]
+    paths:
+      - scripts/apply-reader-v202-audit-fixes.mjs
+      - .github/workflows/apply-reader-v202-audit-fixes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tai888-reader-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply audit normalization
+        run: node scripts/apply-reader-v202-audit-fixes.mjs
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Run complete permanent test suite
+        run: npm test
+      - name: Run production build
+        run: npx next build
+      - name: Reject retired Tai888 hostname
+        run: |
+          if grep -R --line-number --exclude-dir=.git --exclude='*.log' 'xg1\.tai888\.in' .; then
+            echo 'Retired Tai888 hostname remains' >&2
+            exit 1
+          fi
+      - name: Commit verified audit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Complete Reader 2.0.2 multi-layer audit fixes" || exit 0
+          git push origin HEAD:feature/tai888-reader-v1
