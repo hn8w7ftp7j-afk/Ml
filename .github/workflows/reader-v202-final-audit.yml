@@ -1,0 +1,101 @@
+name: Reader 2.0.2 final independent audit
+
+on:
+  push:
+    branches: [feature/tai888-reader-v1]
+    paths:
+      - .github/workflows/reader-v202-final-audit.yml
+      - reader/**
+      - scripts/tai888-reader-**
+      - lib/tai888-reader-**
+      - app/api/reader/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tai888-reader-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund --package-lock=false
+      - name: Reader syntax and manifest contract
+        run: |
+          node --check reader/background.js
+          node --check reader/parser.js
+          node --check reader/row-normalizer.js
+          node --check reader/tai888-content.js
+          node --check reader/popup.js
+          node - <<'NODE'
+          const m = require('./reader/manifest.json');
+          if (m.version !== '2.0.2') throw new Error('wrong Reader version');
+          if (m.content_scripts[0].js.join(',') !== 'row-normalizer.js,tai888-content.js') throw new Error('wrong script order');
+          for (const forbidden of ['cookies', 'webRequest', 'scripting', 'activeTab']) {
+            if ((m.permissions || []).includes(forbidden)) throw new Error(`forbidden permission: ${forbidden}`);
+          }
+          if (!m.host_permissions.includes('https://*.tai888.in/*')) throw new Error('Tai888 subframe permission missing');
+          NODE
+      - name: Reader focused fixtures
+        run: |
+          node scripts/tai888-reader-dom-v2-test.mjs
+          node scripts/tai888-reader-split-row-v2-test.mjs
+          node scripts/tai888-reader-content-dom-v2-test.mjs
+          node scripts/tai888-reader-pair-flow-v2-test.mjs
+          node scripts/tai888-reader-real-board-e2e-v2-test.mjs
+          node scripts/tai888-reader-parser-v2-test.mjs
+          node scripts/reader-auth-v2-test.mjs
+          node scripts/reader-store-v2-test.mjs
+      - name: Full website regression and production build
+        run: |
+          npm test
+          npm audit --audit-level=high --omit=dev
+          npx next build
+      - name: Secret and capability audit
+        run: |
+          ! grep -RInE --exclude-dir=node_modules --exclude-dir=.git '(sk-[A-Za-z0-9_-]{20,}|OPENAI_API_KEY\s*=\s*[^[:space:]]+|THE_ODDS_API_KEY\s*=\s*[^[:space:]]+)' reader app lib scripts
+          ! grep -RInE 'chrome\.(cookies|webRequest)|document\.cookie|localStorage[^\n]*(password|secret)' reader
+          ! grep -RInE 'fetch\([^\n]*(tai888\.in)' reader
+          grep -q "const READER_VERSION = '2.0.2'" reader/background.js
+          grep -q 'autocomplete="off"' reader/popup.html
+          grep -q 'cells.length < 2 && !LEAGUE_MARKER' reader/tai888-content.js
+          grep -q 'syncWarning' reader/background.js
+      - name: Package and cross-verify ZIP
+        run: |
+          rm -rf audit-dist audit-stage audit-verify
+          mkdir -p audit-stage/Tai888-Reader audit-dist audit-verify
+          cp -a reader/. audit-stage/Tai888-Reader/
+          cd audit-stage
+          zip -r -9 ../audit-dist/Tai888-Reader-v2.0.2.zip Tai888-Reader
+          cd ..
+          unzip -t audit-dist/Tai888-Reader-v2.0.2.zip
+          python - <<'PY'
+          import json, zipfile, hashlib, pathlib
+          path = pathlib.Path('audit-dist/Tai888-Reader-v2.0.2.zip')
+          with zipfile.ZipFile(path) as z:
+              assert z.testzip() is None
+              names = set(z.namelist())
+              required = {
+                  'Tai888-Reader/manifest.json', 'Tai888-Reader/background.js',
+                  'Tai888-Reader/parser.js', 'Tai888-Reader/row-normalizer.js',
+                  'Tai888-Reader/tai888-content.js', 'Tai888-Reader/popup.html',
+                  'Tai888-Reader/popup.js', 'Tai888-Reader/popup.css',
+              }
+              assert not (required - names), required - names
+              assert json.loads(z.read('Tai888-Reader/manifest.json'))['version'] == '2.0.2'
+          assert path.stat().st_size > 10000
+          print(path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest())
+          PY
+          sha256sum audit-dist/Tai888-Reader-v2.0.2.zip > audit-dist/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tai888-Reader-v2.0.2-final-audit
+          path: audit-dist/
+          if-no-files-found: error
+          retention-days: 30
