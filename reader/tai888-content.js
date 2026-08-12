@@ -1,6 +1,6 @@
 (() => {
-  if (globalThis.__TAI888_READER_CAPTURE_V201__) return;
-  globalThis.__TAI888_READER_CAPTURE_V201__ = true;
+  if (globalThis.__TAI888_READER_CAPTURE_V202__) return;
+  globalThis.__TAI888_READER_CAPTURE_V202__ = true;
 
   const clean = value => String(value || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
@@ -8,6 +8,8 @@
     .replace(/\n[ \t]+/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  const LEAGUE_MARKER = /(?:聯盟|联盟)\s*[:：]?/i;
 
   function visible(element) {
     if (!element || !(element instanceof Element)) return false;
@@ -35,7 +37,9 @@
       if (!value) continue;
       const range = document.createRange();
       range.selectNodeContents(node);
-      const rectangles = [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0);
+      const rectangles = typeof range.getClientRects === 'function'
+        ? [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0)
+        : [];
       if (!rectangles.length) continue;
       for (const rectangle of rectangles.slice(0, 4)) {
         fragments.push({ text: value, top: rectangle.top, left: rectangle.left });
@@ -104,18 +108,20 @@
   function meaningfulRowText(text) {
     const value = clean(text);
     return /(?:時間|主客隊伍|主客队伍|讓球|让球|大小盤|大小盘)/.test(value)
-      || /(?:聯盟|联盟)\s*[:：]?/.test(value)
+      || LEAGUE_MARKER.test(value)
       || /(?:^|\s)[A-Z]{2,4}\s*-/.test(value)
       || (/\b\d{1,2}-\d{1,2}\b/.test(value) && /(?:0|1)\.\d{3}/.test(value));
   }
 
   function rowRecord(element, order) {
     if (!visible(element)) return null;
+    const elementText = clean(element.innerText || element.textContent || '');
     const cells = rowCellElements(element).map(cellRecord)
       .filter(cell => cell.text && cell.right > cell.left);
-    if (cells.length < 2) return null;
+    if (!cells.length) return null;
+    if (cells.length < 2 && !LEAGUE_MARKER.test(elementText)) return null;
     const rectangle = element.getBoundingClientRect();
-    const text = clean(cells.map(cell => cell.text).join(' '));
+    const text = clean(cells.map(cell => cell.text).join(' ')) || elementText;
     if (!meaningfulRowText(text)) return null;
     return {
       order,
@@ -129,17 +135,18 @@
     };
   }
 
-  function collectCandidateElements() {
+  function collectCandidateElements(includeFallback = false) {
     const primary = [...document.querySelectorAll('tr,[role="row"]')].filter(visible);
     const set = new Set(primary);
 
-    if (primary.length < 6) {
+    if (includeFallback) {
       for (const element of [...document.querySelectorAll('div,li')].slice(0, 6000)) {
         if (!visible(element) || element.querySelector('tr,[role="row"]')) continue;
         const text = clean(element.innerText || element.textContent || '');
         if (!meaningfulRowText(text) || text.length > 2500) continue;
-        const children = [...element.children].filter(child => visible(child) && clean(child.innerText || child.textContent || ''));
-        if (children.length < 4 || children.length > 24) continue;
+        const children = [...element.children]
+          .filter(child => visible(child) && clean(child.innerText || child.textContent || ''));
+        if (children.length < 2 || children.length > 24) continue;
         set.add(element);
       }
     }
@@ -153,33 +160,47 @@
     });
   }
 
-  function capture() {
-    const elements = collectCandidateElements();
+  function normalizeElements(elements, documentLooksStandardMlb) {
     const records = elements.map((element, index) => rowRecord(element, index)).filter(Boolean);
-    const bodyText = clean(document.body?.innerText || '');
+    const normalizer = globalThis.Tai888RowNormalizer;
+    if (!normalizer?.normalizeRowRecords) throw new Error('Tai888 split-row normalizer 未載入');
+    return {
+      records,
+      normalized: normalizer.normalizeRowRecords(records, { documentLooksStandardMlb }),
+    };
+  }
+
+  function capture() {
+    const bodyText = clean(document.body?.innerText || document.body?.textContent || '');
     const documentLooksStandardMlb = /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i.test(bodyText)
       && /(?:時間|时间)/.test(bodyText)
       && /(?:主客隊伍|主客队伍)/.test(bodyText)
       && /(?:讓球|让球)/.test(bodyText)
       && /(?:大小盤|大小盘)/.test(bodyText);
 
-    const normalizer = globalThis.Tai888RowNormalizer;
-    if (!normalizer?.normalizeRowRecords) throw new Error('Tai888 split-row normalizer 未載入');
-    const normalized = normalizer.normalizeRowRecords(records, { documentLooksStandardMlb });
+    let fallbackUsed = false;
+    let elements = collectCandidateElements(false);
+    let result = normalizeElements(elements, documentLooksStandardMlb);
+    if (!result.normalized.tables.length) {
+      fallbackUsed = true;
+      elements = collectCandidateElements(true);
+      result = normalizeElements(elements, documentLooksStandardMlb);
+    }
 
     return {
-      version: 'TAI888-DOM-CAPTURE-v2.0.1',
+      version: 'TAI888-DOM-CAPTURE-v2.0.2',
       sourceHost: location.hostname,
       pageUrl: location.href,
       pageTitle: document.title,
       observedAt: new Date().toISOString(),
       frameUrl: location.href,
-      tables: normalized.tables,
+      tables: result.normalized.tables,
       diagnostics: {
-        ...normalized.diagnostics,
+        ...result.normalized.diagnostics,
         candidateElementCount: elements.length,
-        acceptedRecordCount: records.length,
+        acceptedRecordCount: result.records.length,
         documentLooksStandardMlb,
+        fallbackUsed,
         frameHost: location.hostname,
       },
     };
