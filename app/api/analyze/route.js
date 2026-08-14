@@ -11,6 +11,10 @@ import {
   analysisContractSignature,
 } from '../../../lib/analysis-cache-v9.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
+import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
+import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
+import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
+import { assertGameHasNotStarted, resolveOfficialGame, withClearedTimeout } from '../../../lib/official-schedule-v1.js';
 import {
   checkRateLimit,
   cleanText,
@@ -50,21 +54,6 @@ function sanitizeGame(game) {
   return safe.gamePk && safe.awayTeamId && safe.homeTeamId && safe.away && safe.home ? safe : null;
 }
 
-function gameAlreadyStarted(game) {
-  const text = `${game?.statusCode || ''} ${game?.statusEnglish || ''} ${game?.status || ''}`.toLowerCase();
-  return /in progress|game over|final|completed|live/.test(text) || ['I', 'F', 'O'].includes(String(game?.statusCode || '').toUpperCase());
-}
-
-function cleanVerification(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const sources = (Array.isArray(value.sources) ? value.sources : []).slice(0, 4).map(source => ({
-    provider: cleanText(source?.provider, 80), independentGroup: cleanText(source?.independentGroup, 80),
-    observedAt: cleanText(source?.observedAt, 40), contractKey: cleanText(source?.contractKey, 160),
-  })).filter(source => source.provider && source.independentGroup && source.observedAt && source.contractKey);
-  const groups = new Set(sources.map(source => source.independentGroup));
-  return { sources, verified: value.verified === true && sources.length >= 2 && groups.size >= 2, policyStatus: cleanText(value.policyStatus, 80) || 'MANUAL_EVIDENCE_ONLY' };
-}
-
 function sanitizeMarketRows(rows, maximum = 16) {
   return (Array.isArray(rows) ? rows : []).slice(0, maximum).map(row => ({
     market: MARKET_ORDER.includes(row?.market) ? row.market : '', pick: cleanText(row?.pick, 120), water: optionalNumber(row?.water),
@@ -72,9 +61,19 @@ function sanitizeMarketRows(rows, maximum = 16) {
     confidence: Math.max(0, Math.min(1, Number(row?.confidence) || 0)),
     sourceType: cleanText(row?.sourceType, 40) || (row?.waterEstimated ? 'ESTIMATED' : 'ACTUAL_TW_CREDIT'),
     sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
-    lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: cleanVerification(row?.marketVerification),
+    lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: null,
     rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
+    referenceSide: cleanText(row?.referenceSide, 40), rawText: cleanText(row?.rawText, 300),
+    sourceTemplateVersion: cleanText(row?.sourceTemplateVersion, 80), authorizationStatus: cleanText(row?.authorizationStatus, 80),
+    integrityOrigin: cleanText(row?.integrityOrigin, 80),
+    marketSignatureVersion: cleanText(row?.marketSignatureVersion, 80), marketSignature: cleanText(row?.marketSignature, 160),
   })).filter(row => row.market);
+}
+
+async function prepareMarketRows(game, rows, maximum) {
+  const attested = await attestIncomingMarketRows(game, sanitizeMarketRows(rows, maximum));
+  const now = Date.now();
+  return attested.map(row => applyMarketFreshness(row, now));
 }
 
 function cacheSet(key, signature, value) {
@@ -89,12 +88,15 @@ export async function POST(request) {
     const rate = checkRateLimit(request, { id: 'analyze-v9-3-3-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500000);
-    const game = sanitizeGame(body.game);
-    if (!game || !Array.isArray(body.markets)) return NextResponse.json({ ok: false, error: '缺少或無效的賽事／盤口資料' }, { status: 400 });
-    if (gameAlreadyStarted(game)) return NextResponse.json({ ok: false, error: '比賽已開打或結束｜賽前模型停止評分' }, { status: 409 });
+    const requestedGame = sanitizeGame(body.game);
+    if (!requestedGame || !Array.isArray(body.markets)) return NextResponse.json({ ok: false, error: '缺少或無效的賽事／盤口資料' }, { status: 400 });
+    const { game } = await resolveOfficialGame(requestedGame);
+    assertGameHasNotStarted(game);
 
-    const markets = sanitizeMarketRows(body.markets, 12);
-    const previousMarkets = sanitizeMarketRows(body.previousMarkets, 24);
+    const suppliedMarkets = await prepareMarketRows(game, body.markets, 12);
+    const verificationMarkets = await prepareMarketRows(game, body.verificationMarkets, 16);
+    const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
+    const previousMarkets = await prepareMarketRows(game, body.previousMarkets, 24);
     const errors = [];
     for (const name of MARKET_ORDER) {
       const pair = markets.filter(row => row.market === name);
@@ -117,10 +119,7 @@ export async function POST(request) {
       modelVersion: MODEL_VERSION, rulesVersion: RULES_VERSION, dataVersion: DATA_VERSION,
       scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
     };
-    const context = await Promise.race([
-      buildGameContext(game),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('MLB資料取得逾時，請稍後重試')), 30000)),
-    ]);
+    const context = await withClearedTimeout(buildGameContext(game), 30000, 'MLB資料取得逾時，請稍後重試');
     if (!context?.coreModelable) {
       return NextResponse.json({ ok: false, error: '資料不足｜不評分', warnings: context?.warnings || [] }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
     }
@@ -153,7 +152,7 @@ export async function POST(request) {
       analysisType: 'FULL', dataVersion: DATA_VERSION,
       dataAsOf: frozenContext.fetchedAt || analysisAsOf, lineAsOf, analysisAsOf, snapshotId: fingerprints.inputHash,
     };
-    const repriceSnapshot = {
+    const unsignedRepriceSnapshot = {
       frozenContext, distributionSnapshot, coreFingerprint: fingerprints.coreFingerprint, priceFingerprint: fingerprints.priceFingerprint,
       inputHash: fingerprints.inputHash, contractSignature: signature,
       calculationSettings: fingerprints.calculationPayload,
@@ -161,6 +160,7 @@ export async function POST(request) {
       distributionId: finalized.distributionId, distributionHash: finalized.distributionHash,
       dataAsOf: finalized.dataAsOf, simulationsPerScenario: finalized.scenarioSummary?.simulationsPerScenario, versions,
     };
+    const repriceSnapshot = await signRepriceSnapshot(game, unsignedRepriceSnapshot);
     const payload = { ok: true, game, context: frozenContext, analysis: finalized, repriceSnapshot, openMarkets: [...new Set(activeMarkets.map(row => row.market))] };
     cacheSet(cacheKey, signature, payload);
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS' } });

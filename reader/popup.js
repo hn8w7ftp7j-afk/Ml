@@ -77,6 +77,7 @@ unpairButton.addEventListener('click', async () => {
   await chrome.storage.local.remove([
     'readerToken', 'pairedAt', 'readerStatus', 'pairError',
     'lastPayloadHash', 'lastSyncAt',
+    'lastSuccessfulPayloadHash', 'lastSuccessfulSyncAt',
   ]);
   await refresh();
   setMessage('已移除裝置配對，請重新輸入配對密碼。');

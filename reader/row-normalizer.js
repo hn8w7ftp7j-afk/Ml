@@ -17,7 +17,11 @@
 
   const TEAM_CODE = /(?:^|\s)([A-Z]{2,4})\s*-/g;
   const STANDARD_MLB = /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i;
-  const SPECIAL_MARKET = /(?:總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
+  // In-play rows can share the exact same MLB columns as the pre-game board.
+  // They are a different contract and must never be merged into the official
+  // pre-game slate merely because both league markers say MLB.
+  const SPECIAL_MARKET = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
+  const HOME_MARKER = /[\[［【(（]\s*主\s*[\]］】)）]/u;
 
   function number(value, fallback = 0) {
     const result = Number(value);
@@ -52,7 +56,7 @@
       if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) continue;
       columns[definition.key] = { left, right, label: definition.label };
     }
-    const minimum = ['time', 'teams', 'runline', 'total'];
+    const minimum = ['time', 'teams', 'runline', 'total', 'first5Runline', 'first5Total'];
     if (!minimum.every(key => columns[key])) return null;
     return {
       order: number(record?.order),
@@ -123,28 +127,36 @@
     const sourceRows = mappedRow?.mapped?.teams?.rows?.length
       ? mappedRow.mapped.teams.rows
       : (mappedRow?.mapped?.teams?.lines || []).map((text, index) => ({ text, top: index * 20 }));
-    const found = [];
+    const found = new Map();
     for (const row of sourceRows) {
       for (const match of clean(row.text).matchAll(TEAM_CODE)) {
-        found.push({
-          code: match[1].toUpperCase(),
+        const code = match[1].toUpperCase();
+        const candidate = {
+          code,
           text: clean(row.text),
           top: number(row.top),
-          homeMarked: /\[主\]/.test(row.text),
-        });
+          homeMarked: HOME_MARKER.test(row.text),
+        };
+        const previous = found.get(code);
+        if (!previous || candidate.homeMarked || candidate.text.length > previous.text.length) {
+          found.set(code, candidate);
+        }
       }
     }
-    if (!found.length) {
+    if (!found.size) {
       for (const match of clean(mappedRow?.rawText).matchAll(TEAM_CODE)) {
-        found.push({
-          code: match[1].toUpperCase(),
-          text: clean(mappedRow?.rawText),
-          top: number(mappedRow?.top),
-          homeMarked: /\[主\]/.test(mappedRow?.rawText),
-        });
+        const code = match[1].toUpperCase();
+        if (!found.has(code)) {
+          found.set(code, {
+            code,
+            text: clean(mappedRow?.rawText),
+            top: number(mappedRow?.top),
+            homeMarked: HOME_MARKER.test(mappedRow?.rawText),
+          });
+        }
       }
     }
-    return found.slice(0, 2);
+    return [...found.values()].sort((left, right) => left.top - right.top).slice(0, 2);
   }
 
   function valueNear(cell, targetTop, fallbackIndex = 0) {
@@ -163,18 +175,21 @@
 
   function buildFromSingle(mappedRow, teams) {
     if (teams.length !== 2) return null;
-    const homeIndex = teams.findIndex(team => team.homeMarked);
+    const homeIndexes = teams
+      .map((team, index) => team.homeMarked ? index : -1)
+      .filter(index => index >= 0);
+    if (homeIndexes.length !== 1) return null;
+    const homeIndex = homeIndexes[0];
     const awayIndex = homeIndex === 0 ? 1 : 0;
-    const normalizedHomeIndex = homeIndex >= 0 ? homeIndex : 1;
     const away = teams[awayIndex];
-    const home = teams[normalizedHomeIndex];
+    const home = teams[homeIndex];
     if (!away || !home || away.code === home.code) return null;
 
     const cells = DEFINITIONS.map(definition => {
       const cell = mappedRow.mapped[definition.key];
       return pairedCell(
         valueNear(cell, away.top, awayIndex),
-        valueNear(cell, home.top, normalizedHomeIndex),
+        valueNear(cell, home.top, homeIndex),
       );
     });
     return { cells, text: mappedRow.rawText, awayCode: away.code, homeCode: home.code };
@@ -186,7 +201,13 @@
     if (awayTeams.length !== 1 || homeTeams.length !== 1) return null;
     const away = awayTeams[0];
     const home = homeTeams[0];
-    if (away.code === home.code) return null;
+    if (away.code === home.code || away.homeMarked || !home.homeMarked) return null;
+    const awayTime = clean(awayRow.mapped.time?.text);
+    const homeTime = clean(homeRow.mapped.time?.text);
+    // Tai888 split rows carry the date on the away row and clock time on the
+    // home row.  Requiring that structure prevents adjacent events from being
+    // paired merely because their visual coordinates happen to be close.
+    if (!/^\d{1,2}-\d{1,2}$/.test(awayTime) || !/^\d{1,2}:\d{2}$/.test(homeTime)) return null;
     const cells = DEFINITIONS.map(definition => pairedCell(
       awayRow.mapped[definition.key]?.text,
       homeRow.mapped[definition.key]?.text,
@@ -222,6 +243,7 @@
     let insideStandardMlb = false;
     let sawLeagueMarker = false;
     let pendingAway = null;
+    let expectedGameCount = null;
     const games = [];
     let candidateRows = 0;
     let pairedRows = 0;
@@ -238,6 +260,10 @@
       if (isLeagueMarker(record.text)) {
         sawLeagueMarker = true;
         insideStandardMlb = isStandardLeagueRow(record.text);
+        if (insideStandardMlb) {
+          const count = clean(record.text).match(/[（(]\s*(\d{1,2})\s*[）)]/);
+          if (count) expectedGameCount = Math.max(Number(expectedGameCount || 0), Number(count[1]));
+        }
         pendingAway = null;
         continue;
       }
@@ -266,7 +292,8 @@
 
       const one = teams[0];
       if (!one.homeMarked) {
-        pendingAway = mapped;
+        const awayTime = clean(mapped.mapped.time?.text);
+        pendingAway = /^\d{1,2}-\d{1,2}$/.test(awayTime) ? mapped : null;
         continue;
       }
       if (!pendingAway) continue;
@@ -284,12 +311,17 @@
     }
 
     const unique = [];
-    const seen = new Set();
+    const seen = new Map();
+    const conflictingGameKeys = [];
     for (const game of games) {
       const timeText = game.cells[0]?.pair?.join('|') || '';
       const key = `${game.awayCode}|${game.homeCode}|${timeText}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const fingerprint = JSON.stringify(game.cells.map(cell => cell?.pair || []));
+      if (seen.has(key)) {
+        if (seen.get(key) !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
+        continue;
+      }
+      seen.set(key, fingerprint);
       unique.push(game);
     }
 
@@ -306,6 +338,8 @@
         pairedRows,
         singleRows,
         sawLeagueMarker,
+        expectedGameCount,
+        conflictingGameKeys,
       },
     };
   }
@@ -313,6 +347,6 @@
   globalThis.Tai888RowNormalizer = Object.freeze({
     normalizeRowRecords,
     isStandardLeagueRow,
-    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.2',
+    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.6',
   });
 })();

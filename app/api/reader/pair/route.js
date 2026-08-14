@@ -6,6 +6,7 @@ import {
   readerPairingConfigured,
   readerPairPasswordMatches,
 } from '../../../../lib/reader-auth-v2.js';
+import { MINIMUM_READER_VERSION, readerVersionSupported } from '../../../../lib/tai888-reader-parser-v2.js';
 import { checkRateLimit, cleanText, rateLimitResponse, readJsonBody } from '../../../../lib/security.js';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,12 @@ export async function POST(request) {
       const response = rateLimitResponse(rate);
       for (const [key, value] of Object.entries(headers)) response.headers.set(key, value);
       return response;
+    }
+    if (!readerVersionSupported(request.headers.get('x-reader-version'))) {
+      return NextResponse.json({
+        ok: false,
+        error: `Reader 版本過舊，最低需要 ${MINIMUM_READER_VERSION}`,
+      }, { status: 426, headers });
     }
     if (!readerPairingConfigured()) {
       return NextResponse.json({ ok: false, error: 'Reader 配對密碼尚未設定' }, { status: 503, headers });

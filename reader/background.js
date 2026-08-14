@@ -1,6 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
+import { MAX_TAI888_TABS, selectAuthoritativeBoard, shouldSkipSuccessfulPayload, withinTai888TabScanLimit } from './board-selector.js';
 
-const READER_VERSION = '2.0.2';
+const READER_VERSION = '2.0.6';
 const MLB_EV_ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const TAI888_PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const ALARM_NAME = 'tai888-reader-auto-sync';
@@ -13,6 +14,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   const current = await chrome.storage.local.get(['deviceId', 'autoEnabled']);
   if (!current.deviceId) await chrome.storage.local.set({ deviceId: crypto.randomUUID() });
   if (current.autoEnabled == null) await chrome.storage.local.set({ autoEnabled: true });
+  // Older builds could retain raw frame URLs in local diagnostics.  Remove the
+  // transient status/error on install or update; pairing state is unaffected.
+  await chrome.storage.local.remove(['readerStatus', 'pairError']);
   await ensureAlarm();
 });
 
@@ -26,8 +30,9 @@ chrome.alarms.onAlarm.addListener(alarm => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !isTai888Url(tab.url)) return;
+  const preferredTabId = tab.active === true ? tabId : null;
   clearTimeout(mutationTimer);
-  mutationTimer = setTimeout(() => syncNow('tai888-tab-loaded', tabId).catch(() => {}), 3500);
+  mutationTimer = setTimeout(() => syncNow('tai888-tab-loaded', preferredTabId).catch(() => {}), 3500);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -57,8 +62,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'TAI888_BOARD_MUTATED') {
+    // Mutation events also arrive from background/old Tai888 tabs.  Only the
+    // active sender may request preference; board-selector checks activity
+    // again against the fresh tabs.query() result before honoring it.
+    const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null;
     clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(() => syncNow('mutation', sender?.tab?.id).catch(() => {}), 3500);
+    mutationTimer = setTimeout(() => syncNow('mutation', preferredTabId).catch(() => {}), 3500);
   }
 });
 
@@ -71,11 +80,80 @@ async function ensureAlarm() {
 }
 
 function isTai888Url(url) {
+  return Boolean(sanitizeTai888PageUrl(url));
+}
+
+function tai888Host(value) {
   try {
-    const parsed = new URL(url || '');
-    return parsed.protocol === 'https:'
-      && (parsed.hostname === 'tai888.in' || parsed.hostname.endsWith('.tai888.in'));
-  } catch { return false; }
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const parsed = text.includes('://') ? new URL(text) : new URL(`https://${text}`);
+    const host = parsed.hostname.toLowerCase();
+    return host === 'tai888.in' || host.endsWith('.tai888.in') ? host : '';
+  } catch { return ''; }
+}
+
+function sanitizeTai888PageUrl(value) {
+  try {
+    const parsed = new URL(String(value || ''));
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'https:'
+      || (host !== 'tai888.in' && !host.endsWith('.tai888.in'))) return '';
+    const marker = /^#\/BS(?:$|[/?&])/i.test(parsed.hash || '') ? '#/BS' : '';
+    return `${parsed.origin}${parsed.pathname || '/'}${marker}`.slice(0, 500);
+  } catch { return ''; }
+}
+
+function diagnosticInteger(value, maximum = 10_000) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 && number <= maximum ? number : 0;
+}
+
+function diagnosticIso(value) {
+  const time = Date.parse(String(value || ''));
+  return Number.isFinite(time) ? new Date(time).toISOString() : '';
+}
+
+function sanitizeCaptureDiagnostics(value) {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    recordCount: diagnosticInteger(input.recordCount),
+    headerCount: diagnosticInteger(input.headerCount),
+    candidateRows: diagnosticInteger(input.candidateRows),
+    gameCount: diagnosticInteger(input.gameCount, 40),
+    pairedRows: diagnosticInteger(input.pairedRows, 80),
+    singleRows: diagnosticInteger(input.singleRows, 80),
+    expectedGameCount: diagnosticInteger(input.expectedGameCount, 40),
+    rootCount: diagnosticInteger(input.rootCount),
+    candidateElementCount: diagnosticInteger(input.candidateElementCount),
+    acceptedRecordCount: diagnosticInteger(input.acceptedRecordCount),
+    mutationAgeSeconds: diagnosticInteger(input.mutationAgeSeconds, 86_400),
+    sawLeagueMarker: input.sawLeagueMarker === true,
+    documentLooksStandardMlb: input.documentLooksStandardMlb === true,
+    frameHost: tai888Host(input.frameHost),
+    sourceHost: tai888Host(input.sourceHost),
+    lastMutationAt: diagnosticIso(input.lastMutationAt),
+    // Board selection only needs to know that a conflict exists.  Never retain
+    // attacker-controlled row keys or other unexpected diagnostic metadata.
+    conflictingGameKeys: Array.isArray(input.conflictingGameKeys) && input.conflictingGameKeys.length
+      ? ['redacted-conflict']
+      : [],
+  };
+}
+
+function sanitizeCaptureMetadata(value) {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const pageUrl = sanitizeTai888PageUrl(input.pageUrl);
+  const frameUrl = sanitizeTai888PageUrl(input.frameUrl);
+  return {
+    version: input.version === 'TAI888-DOM-CAPTURE-v2.0.6' ? input.version : '',
+    sourceHost: tai888Host(input.sourceHost) || tai888Host(pageUrl) || tai888Host(frameUrl),
+    pageUrl,
+    frameUrl,
+    observedAt: diagnosticIso(input.observedAt),
+    tables: Array.isArray(input.tables) ? input.tables.slice(0, 12) : [],
+    diagnostics: sanitizeCaptureDiagnostics(input.diagnostics),
+  };
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 20_000) {
@@ -114,6 +192,8 @@ async function pairReader(password, deviceName = '') {
     pairError: '',
     lastPayloadHash: '',
     lastSyncAt: 0,
+    lastSuccessfulPayloadHash: '',
+    lastSuccessfulSyncAt: 0,
   });
   await ensureAlarm();
 
@@ -140,6 +220,7 @@ async function syncNow(reason = 'manual', preferredTabId = null) {
 async function performSync(reason, preferredTabId) {
   const stored = await chrome.storage.local.get([
     'readerToken', 'deviceId', 'autoEnabled', 'lastPayloadHash', 'lastSyncAt',
+    'lastSuccessfulPayloadHash', 'lastSuccessfulSyncAt',
   ]);
   if (!stored.readerToken) {
     throw await rememberError('尚未配對 MLB EV，請先在 Reader 視窗輸入一次配對密碼。');
@@ -150,8 +231,9 @@ async function performSync(reason, preferredTabId) {
 
   const tabs = await chrome.tabs.query({ url: TAI888_PATTERNS });
   const ordered = [...new Map(tabs.map(tab => [tab.id, tab])).values()].sort((left, right) => {
-    if (left.id === preferredTabId) return -1;
-    if (right.id === preferredTabId) return 1;
+    const leftPreferred = left.active === true && left.id === preferredTabId;
+    const rightPreferred = right.active === true && right.id === preferredTabId;
+    if (leftPreferred !== rightPreferred) return Number(rightPreferred) - Number(leftPreferred);
     if (left.active && !right.active) return -1;
     if (right.active && !left.active) return 1;
     return Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0);
@@ -159,10 +241,15 @@ async function performSync(reason, preferredTabId) {
   if (!ordered.length) {
     throw await rememberError('找不到已開啟的 Tai888 分頁。請保持 Tai888 MLB 盤口頁開著。');
   }
+  if (!withinTai888TabScanLimit(ordered.length)) {
+    throw await rememberError(
+      `偵測到 ${ordered.length} 個 Tai888 分頁；Reader 最多檢查 ${MAX_TAI888_TABS} 個。已停止上傳，請關閉多餘分頁後再同步。`,
+    );
+  }
 
-  const captures = [];
+  const boardCandidates = [];
   const diagnostics = [];
-  for (const tab of ordered.slice(0, 4)) {
+  for (const tab of ordered) {
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id })
       .catch(() => [{ frameId: 0, url: tab.url }]);
     for (const frame of frames || [{ frameId: 0, url: tab.url }]) {
@@ -172,30 +259,40 @@ async function performSync(reason, preferredTabId) {
           { type: 'TAI888_CAPTURE_MLB_TABLE' },
           { frameId: frame.frameId },
         );
+        const capture = sanitizeCaptureMetadata(response?.capture);
         diagnostics.push({
           tabId: tab.id,
           frameId: frame.frameId,
-          frameUrl: frame.url || response?.capture?.frameUrl || '',
+          frameUrl: sanitizeTai888PageUrl(frame.url) || capture.frameUrl,
           ok: response?.ok === true,
-          tableCount: response?.capture?.tables?.length || 0,
-          capture: response?.capture?.diagnostics || null,
-          error: response?.error || '',
+          tableCount: capture.tables.length,
+          capture: capture.diagnostics,
+          error: response?.ok === true ? '' : 'capture-failed',
         });
-        if (response?.ok && response.capture?.tables?.length) captures.push(response.capture);
+        if (response?.ok && capture.tables.length) {
+          boardCandidates.push({
+            tabId: tab.id,
+            frameId: frame.frameId,
+            active: Boolean(tab.active),
+            lastAccessed: Number(tab.lastAccessed || 0),
+            capture,
+            parsed: parseTai888Capture(capture, new Date()),
+          });
+        }
       } catch (error) {
         diagnostics.push({
           tabId: tab.id,
           frameId: frame.frameId,
-          frameUrl: frame.url || '',
+          frameUrl: sanitizeTai888PageUrl(frame.url),
           ok: false,
           tableCount: 0,
-          error: String(error?.message || error).slice(0, 200),
+          error: 'capture-unavailable',
         });
       }
     }
   }
 
-  if (!captures.length) {
+  if (!boardCandidates.length) {
     const responding = diagnostics.filter(row => row.ok).length;
     throw await rememberError(
       `目前畫面尚未辨識到標準 MLB 讓分／大小盤口（已檢查 ${diagnostics.length} 個框架、${responding} 個框架有回應）。請停在「美棒 → 讓分＆大小」並按一次 F5。`,
@@ -203,25 +300,62 @@ async function performSync(reason, preferredTabId) {
     );
   }
 
-  const combined = {
-    sourceHost: new URL(ordered[0].url).hostname,
-    pageUrl: ordered[0].url,
-    pageTitle: ordered[0].title || '',
-    observedAt: new Date().toISOString(),
-    tables: captures.flatMap(capture => capture.tables || []),
-  };
-  const parsed = parseTai888Capture(combined, new Date());
+  const selection = selectAuthoritativeBoard(boardCandidates, {
+    now: Date.now(),
+    preferredTabId,
+  });
+  const selectionDiagnostics = selection.assessed?.map(row => ({
+    tabId: row.candidate?.tabId,
+    frameId: row.candidate?.frameId,
+    ok: row.ok,
+    issues: row.issues,
+    expectedGameCount: row.expectedGameCount,
+    detectedGameCount: row.detectedGameCount,
+    rawDetectedGameCount: row.rawDetectedGameCount,
+    parsedGameCount: Array.isArray(row.candidate?.parsed?.games) ? row.candidate.parsed.games.length : 0,
+    pageActivityAt: row.pageActivityAt,
+  })) || [];
+  if (!selection.ok) {
+    const stale = selectionDiagnostics.some(row => row.issues?.includes('stale-page-activity'));
+    const frameConflict = selection.error === 'conflicting-complete-frames';
+    const tabConflict = selection.error === 'conflicting-complete-tabs';
+    const authorityDiagnostic = selectionDiagnostics.find(row => row.tabId === selection.authorityTabId)
+      || selectionDiagnostics[0];
+    const diagnosticSummary = authorityDiagnostic
+      ? `〔診斷：應有${authorityDiagnostic.expectedGameCount ?? '—'}場／原始節點${authorityDiagnostic.rawDetectedGameCount ?? '—'}筆／去重${authorityDiagnostic.detectedGameCount ?? '—'}場／解析${authorityDiagnostic.parsedGameCount ?? '—'}場；${(authorityDiagnostic.issues || []).slice(0, 4).join('、') || '未提供原因'}〕`
+      : '';
+    const message = tabConflict
+      ? '同一盤日有多個 Tai888 分頁回報互相衝突的完整盤面；已停止上傳。請關閉或重新整理舊分頁後再同步。'
+      : frameConflict
+        ? '同一 Tai888 分頁內有兩個互相衝突的完整盤面；已停止上傳，避免跨框架錯盤。'
+        : stale
+          ? 'Tai888 權威盤面超過3分鐘沒有頁面活動；已停止刷新舊盤，請重新整理或重新登入後再同步。'
+          : `目前權威 Tai888 分頁尚未完整辨識每場4市場／8方向與雙方水位；已停止上傳，避免部分盤覆蓋完整盤。${diagnosticSummary}`;
+    throw await rememberError(message, {
+      diagnostics: [...diagnostics, ...selectionDiagnostics],
+    });
+  }
+
+  // Never combine captures here.  The selected parsed board came from one
+  // proven-complete frame in one authoritative tab.
+  const selected = selection.selected;
+  const parsed = selected.candidate.parsed;
   parsed.readerVersion = READER_VERSION;
   parsed.deviceId = stored.deviceId;
-  if (!parsed.games.length) {
-    throw await rememberError('Reader 已抓到 Tai888 表格，但標準 MLB 場次解析為0；已停止上傳，避免錯盤。', { diagnostics });
-  }
+  parsed.pageActivityAt = selected.pageActivityAt;
+  parsed.expectedGameCount = selected.expectedGameCount;
+  parsed.detectedGameCount = selected.detectedGameCount;
 
   const payloadHash = await sha256(canonicalReaderPayload(parsed));
   parsed.payloadHash = payloadHash;
-  if (reason !== 'manual'
-    && stored.lastPayloadHash === payloadHash
-    && Date.now() - Number(stored.lastSyncAt || 0) < 45_000) {
+  const lastSuccessfulPayloadHash = stored.lastSuccessfulPayloadHash || stored.lastPayloadHash || '';
+  const lastSuccessfulSyncAt = stored.lastSuccessfulSyncAt || stored.lastSyncAt || 0;
+  if (shouldSkipSuccessfulPayload({
+    reason,
+    payloadHash,
+    lastSuccessfulPayloadHash,
+    lastSuccessfulSyncAt,
+  })) {
     return { ok: true, skipped: true, message: '盤口未變，等待下一次心跳', payloadHash };
   }
 
@@ -244,13 +378,14 @@ async function performSync(reason, preferredTabId) {
     throw await rememberError(data.error || `同步失敗（${response.status}）`, { diagnostics });
   }
 
+  const successfulSyncAt = Date.now();
   const status = {
     ok: true,
     state: 'synced',
     reason,
     heartbeat: Boolean(data.heartbeat),
     message: data.message || `已同步 ${data.matchedGameCount} 場`,
-    lastSyncAt: Date.now(),
+    lastSyncAt: successfulSyncAt,
     lastObservedAt: parsed.observedAt,
     rawGameCount: data.rawGameCount,
     matchedGameCount: data.matchedGameCount,
@@ -260,13 +395,22 @@ async function performSync(reason, preferredTabId) {
     unmatched: data.unmatched || [],
     readerVersion: READER_VERSION,
     runtimeCache: data.runtimeCache,
+    expectedGameCount: selected.expectedGameCount,
+    detectedGameCount: selected.detectedGameCount,
+    pageActivityAt: selected.pageActivityAt,
+    selectedTabId: selected.candidate.tabId,
+    selectedFrameId: selected.candidate.frameId,
     diagnostics: diagnostics.slice(0, 20),
   };
   await chrome.storage.local.set({
     readerStatus: status,
     pairError: '',
     lastPayloadHash: payloadHash,
-    lastSyncAt: Date.now(),
+    lastSyncAt: successfulSyncAt,
+    // These keys are written only after the ingest response confirms success.
+    // A failed new hash therefore remains retryable on the next alarm/mutation.
+    lastSuccessfulPayloadHash: payloadHash,
+    lastSuccessfulSyncAt: successfulSyncAt,
   });
   return status;
 }

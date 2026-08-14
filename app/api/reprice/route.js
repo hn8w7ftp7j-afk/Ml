@@ -5,6 +5,10 @@ import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { buildSnapshotFingerprints, DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
+import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
+import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
+import { attestIncomingMarketRows, signRepriceSnapshot, verifyRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
+import { assertGameHasNotStarted, resolveOfficialGame } from '../../../lib/official-schedule-v1.js';
 import { checkRateLimit, cleanText, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
 
 export const runtime = 'nodejs';
@@ -15,14 +19,6 @@ function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
   const number = Number(value); return Number.isFinite(number) ? number : null;
 }
-function cleanVerification(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const sources = (Array.isArray(value.sources) ? value.sources : []).slice(0, 4).map(source => ({
-    provider: cleanText(source?.provider, 80), independentGroup: cleanText(source?.independentGroup, 80),
-    observedAt: cleanText(source?.observedAt, 40), contractKey: cleanText(source?.contractKey, 160),
-  })).filter(source => source.provider && source.independentGroup && source.observedAt && source.contractKey);
-  return { sources, verified: value.verified === true && sources.length >= 2 && new Set(sources.map(source => source.independentGroup)).size >= 2 };
-}
 function sanitizeMarkets(rows, maximum = 16) {
   return (Array.isArray(rows) ? rows : []).slice(0, maximum).map(row => ({
     market: MARKET_ORDER.includes(row?.market) ? row.market : '', pick: cleanText(row?.pick, 120), water: optionalNumber(row?.water),
@@ -30,9 +26,19 @@ function sanitizeMarkets(rows, maximum = 16) {
     confidence: Math.max(0, Math.min(1, Number(row?.confidence) || 0)),
     sourceType: cleanText(row?.sourceType, 40) || (row?.waterEstimated ? 'ESTIMATED' : 'ACTUAL_TW_CREDIT'),
     sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
-    lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: cleanVerification(row?.marketVerification),
+    lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: null,
     rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
+    referenceSide: cleanText(row?.referenceSide, 40), rawText: cleanText(row?.rawText, 300),
+    sourceTemplateVersion: cleanText(row?.sourceTemplateVersion, 80), authorizationStatus: cleanText(row?.authorizationStatus, 80),
+    integrityOrigin: cleanText(row?.integrityOrigin, 80),
+    marketSignatureVersion: cleanText(row?.marketSignatureVersion, 80), marketSignature: cleanText(row?.marketSignature, 160),
   })).filter(row => row.market);
+}
+
+async function prepareMarkets(game, rows, maximum) {
+  const attested = await attestIncomingMarketRows(game, sanitizeMarkets(rows, maximum));
+  const now = Date.now();
+  return attested.map(row => applyMarketFreshness(row, now));
 }
 
 export async function POST(request) {
@@ -48,11 +54,18 @@ export async function POST(request) {
     if (!context?.game?.gamePk || !snapshot?.coreFingerprint || !distributionSnapshot?.distributionHash) {
       return NextResponse.json({ ok: false, error: '缺少已保存的凍結比分分布，不能快速重算' }, { status: 400 });
     }
+    const { game } = await resolveOfficialGame(context.game);
+    assertGameHasNotStarted(game);
+    if (!(await verifyRepriceSnapshot(game, snapshot))) {
+      return NextResponse.json({ ok: false, error: '凍結快照簽章無效或內容已被修改，必須完整重算' }, { status: 409 });
+    }
     if (distributionSnapshot.distributionId !== snapshot.distributionId || distributionSnapshot.distributionHash !== snapshot.distributionHash) {
       return NextResponse.json({ ok: false, error: '凍結比分分布識別不一致，已停止快速重算' }, { status: 409 });
     }
-    const markets = sanitizeMarkets(body.markets, 12);
-    const previousMarkets = sanitizeMarkets(body.previousMarkets, 24);
+    const suppliedMarkets = await prepareMarkets(game, body.markets, 12);
+    const verificationMarkets = await prepareMarkets(game, body.verificationMarkets, 16);
+    const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
+    const previousMarkets = await prepareMarkets(game, body.previousMarkets, 24);
     const errors = [];
     for (const name of MARKET_ORDER) {
       const pair = markets.filter(row => row.market === name);
@@ -71,7 +84,7 @@ export async function POST(request) {
       expertMode: 'off',
     };
     const preliminary = repriceMarkets({ context, markets, previousMarkets, settings, distributionSnapshot });
-    const deterministic = finalizeDeterministicAnalysis({ analysis: preliminary, game: context.game, settings });
+    const deterministic = finalizeDeterministicAnalysis({ analysis: preliminary, game, settings });
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
     const versions = { modelVersion: MODEL_VERSION, rulesVersion: RULES_VERSION, dataVersion: DATA_VERSION, scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION, repriceVersion: REPRICE_VERSION };
     const fingerprints = buildSnapshotFingerprints({
@@ -93,7 +106,7 @@ export async function POST(request) {
       lineAsOf: markets.map(row => row.lineAsOf).filter(Boolean).sort().at(-1) || analysisAsOf,
       analysisAsOf, snapshotId: fingerprints.inputHash,
     };
-    const repriceSnapshot = {
+    const unsignedRepriceSnapshot = {
       ...snapshot,
       priceFingerprint: fingerprints.priceFingerprint,
       calculationFingerprint: fingerprints.calculationFingerprint,
@@ -105,8 +118,9 @@ export async function POST(request) {
       distributionHash: snapshot.distributionHash,
       versions,
     };
+    const repriceSnapshot = await signRepriceSnapshot(game, unsignedRepriceSnapshot);
     return NextResponse.json({
-      ok: true, game: context.game, context, analysis: finalized, repriceSnapshot,
+      ok: true, game, context, analysis: finalized, repriceSnapshot,
       openMarkets: [...new Set(markets.map(row => row.market))],
       reprice: { distributionReused: true, noCoreDataFetch: true, noSimulation: true, noGpt: true, distributionId: snapshot.distributionId, distributionHash: snapshot.distributionHash, coreFingerprint: snapshot.coreFingerprint, previousInputHash: snapshot.inputHash || null, newInputHash: fingerprints.inputHash },
     }, { headers: { 'Cache-Control': 'no-store' } });

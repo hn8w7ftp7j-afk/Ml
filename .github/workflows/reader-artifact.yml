@@ -1,0 +1,49 @@
+name: Build verified Reader artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+      - run: npm run build
+      - name: Reader full-flow E2E
+        env:
+          APP_PASSWORD: local-artifact-app-password
+          SESSION_SECRET: local-artifact-session-secret-9-4-2
+          MARKET_INTEGRITY_SECRET: local-artifact-market-secret-9-4-2
+          READER_PAIR_SECRET: local-artifact-reader-secret-2-0-3
+          READER_STORE_MEMORY_ONLY: 'true'
+          TAI888_ENABLED: 'false'
+          NEXT_TELEMETRY_DISABLED: '1'
+          LOCAL_E2E_URL: http://localhost:3000
+        run: |
+          npm start > /tmp/mlb-reader-e2e.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          npm run e2e:reader
+      - run: node scripts/package-reader.mjs release
+      - run: npm run report:release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tai888-Reader-v2.0.6-DUPLICATE-DOM-FIX-${{ github.sha }}
+          path: |
+            release/Tai888-Reader-v2.0.6-DUPLICATE-DOM-FIX.zip
+            release/Tai888-Reader-v2.0.6-DUPLICATE-DOM-FIX.zip.sha256
+            release/Tai888-Reader-v2.0.6-VERIFICATION.md
+          if-no-files-found: error
+          retention-days: 14

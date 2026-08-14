@@ -1,11 +1,38 @@
 (() => {
-  if (globalThis.__TAI888_READER_CAPTURE_V202__) return;
-  globalThis.__TAI888_READER_CAPTURE_V202__ = true;
+  if (globalThis.__TAI888_READER_CAPTURE_V206__) return;
+  globalThis.__TAI888_READER_CAPTURE_V206__ = true;
 
   const policy = globalThis.Tai888CapturePolicy;
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
+  // This timestamp is deliberately independent from capture().observedAt.
+  // A capture request must not make a frozen page look newly active.
+  let lastMutationAt = Date.now();
+
+  // Never read or forward the full document URL.  The Reader only needs a
+  // route hint, so retain the Tai888 origin/pathname and one fixed board marker.
+  // Query strings and every other hash fragment are deliberately discarded.
+  function currentTai888PageUrl() {
+    try {
+      const host = String(document.location.hostname || '').toLowerCase();
+      if (document.location.protocol !== 'https:'
+        || (host !== 'tai888.in' && !host.endsWith('.tai888.in'))) return '';
+      const marker = /^#\/BS(?:$|[/?&])/i.test(document.location.hash || '') ? '#/BS' : '';
+      return `${document.location.origin}${document.location.pathname || '/'}${marker}`.slice(0, 500);
+    } catch {
+      return '';
+    }
+  }
+
+  function tai888SourceHost() {
+    const candidates = [location.hostname];
+    try {
+      candidates.push(...Array.from(document.location.ancestorOrigins || []).map(origin => new URL(origin).hostname));
+    } catch {}
+    try { candidates.push(new URL(document.referrer || '').hostname); } catch {}
+    return candidates.find(host => host === 'tai888.in' || host?.endsWith('.tai888.in')) || '';
+  }
 
   function visible(element) {
     if (!element || !(element instanceof Element)) return false;
@@ -216,12 +243,11 @@
     const normalized = normalizer.normalizeRowRecords(records, { documentLooksStandardMlb });
 
     return {
-      version: 'TAI888-DOM-CAPTURE-v2.0.2',
-      sourceHost: location.hostname,
-      pageUrl: location.href,
-      pageTitle: document.title,
+      version: 'TAI888-DOM-CAPTURE-v2.0.6',
+      sourceHost: tai888SourceHost(),
+      pageUrl: currentTai888PageUrl(),
       observedAt: new Date().toISOString(),
-      frameUrl: location.href,
+      frameUrl: currentTai888PageUrl(),
       tables: normalized.tables,
       diagnostics: {
         ...normalized.diagnostics,
@@ -230,6 +256,9 @@
         acceptedRecordCount: records.length,
         documentLooksStandardMlb,
         frameHost: location.hostname,
+        sourceHost: tai888SourceHost(),
+        lastMutationAt: new Date(lastMutationAt).toISOString(),
+        mutationAgeSeconds: Math.max(0, Math.floor((Date.now() - lastMutationAt) / 1000)),
       },
     };
   }
@@ -237,20 +266,21 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type !== 'TAI888_CAPTURE_MLB_TABLE') return;
     try { sendResponse({ ok: true, capture: capture() }); }
-    catch (error) {
+    catch {
       sendResponse({
         ok: false,
-        error: String(error?.message || error),
-        frameUrl: location.href,
+        error: 'capture-failed',
+        frameUrl: currentTai888PageUrl(),
       });
     }
   });
 
   let mutationTimer = null;
   const observer = new MutationObserver(() => {
+    lastMutationAt = Date.now();
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(() => {
-      chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', pageUrl: location.href }).catch(() => {});
+      chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED' }).catch(() => {});
     }, 2500);
   });
   if (document.documentElement) {

@@ -43,6 +43,6 @@
     isDataRowText,
     shouldKeepRecord,
     shouldInspectFallback,
-    version: 'TAI888-DOM-CAPTURE-POLICY-v2.0.2',
+    version: 'TAI888-DOM-CAPTURE-POLICY-v2.0.6',
   });
 })();

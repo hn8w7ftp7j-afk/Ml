@@ -9,7 +9,7 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const normalizer = context.globalThis.Tai888RowNormalizer;
 assert.ok(normalizer?.normalizeRowRecords, 'row normalizer missing');
-assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.2');
+assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.6');
 
 const spans = {
   time: [0, 80], teams: [80, 260], runline: [260, 380], total: [380, 500],
@@ -95,6 +95,7 @@ assert.equal(normalized.tables[0].rows.length, 8);
 assert.equal(normalized.diagnostics.pairedRows, 8);
 assert.equal(normalized.diagnostics.gameCount, 8);
 assert.equal(normalized.diagnostics.sawLeagueMarker, true);
+assert.equal(normalized.diagnostics.expectedGameCount, 8);
 
 const capture = {
   sourceHost: 'www1.tai888.in',
@@ -104,7 +105,7 @@ const capture = {
   tables: normalized.tables,
 };
 const parsed = parseTai888Capture(capture, new Date('2026-08-12T12:12:00Z'));
-assert.equal(parsed.version, 'TAI888-READER-DOM-v2.0.2');
+assert.equal(parsed.version, 'TAI888-READER-DOM-v2.0.6');
 assert.equal(parsed.boardDate, '2026-08-13');
 assert.equal(parsed.games.length, 8);
 assert.equal(parsed.games[0].awayCode, 'BAL');
@@ -121,4 +122,4 @@ assert.equal(parsed.games[6].homeCode, 'TOR');
 assert.equal(parsed.games[7].first5Total.line, '5-50');
 assert.equal(parsed.games.some(game => /總得分/.test(game.rawRowText)), false);
 
-console.log('Tai888 Reader 2.0.2 split-row fixture: 8/8 standard MLB games parsed; team-total section excluded');
+console.log('Tai888 Reader 2.0.3 split-row fixture: 8/8 standard MLB games parsed; team-total section excluded');

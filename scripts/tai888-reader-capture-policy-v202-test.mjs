@@ -8,7 +8,7 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const policy = context.globalThis.Tai888CapturePolicy;
 assert.ok(policy);
-assert.equal(policy.version, 'TAI888-DOM-CAPTURE-POLICY-v2.0.2');
+assert.equal(policy.version, 'TAI888-DOM-CAPTURE-POLICY-v2.0.6');
 
 assert.equal(policy.shouldKeepRecord(1, '聯盟：MLB 美國職棒(8)'), true);
 assert.equal(policy.shouldKeepRecord(1, '聯盟：MLB 美國職棒-主隊總得分(9)'), true);
@@ -32,4 +32,4 @@ assert.match(content, /Always inspect div\/li grids/);
 assert.doesNotMatch(content, /primary\.length\s*<\s*6/);
 assert.match(content, /if \(!cells\.length\) cells = \[cellRecord\(element\)\]/);
 
-console.log('Tai888 Reader 2.0.2 capture policy: one-cell league markers and div grids PASS');
+console.log('Tai888 Reader 2.0.3 capture policy: one-cell league markers and div grids PASS');
