@@ -460,10 +460,11 @@ export default function Home() {
   }, [board.length, date, busy, readerStatus?.fresh]);
 
   const currentReaderKey = readerRevisionKey(date, readerStatus?.payloadHash, readerStatus?.pageActivityAt);
+  const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerStatus?.fresh === true
     && readerStatus?.boardDate === date
-    && Boolean(currentReaderKey)
-    && currentReaderKey === acknowledgedReaderKey;
+    && Boolean(currentReaderHashKey)
+    && acknowledgedReaderKey.startsWith(`${currentReaderHashKey}:`);
 
   const ranked = useMemo(() => board.flatMap(item => {
     if (!gameIsPrestartNow(item.game, clockNow)) return [];
@@ -733,9 +734,6 @@ export default function Home() {
       let completed = 0;
       let updated = 0;
       let removed = 0;
-      setBoard(current => current.map(item => item.actualSource?.provider === 'TAI888_READER_AUTO'
-        ? { ...item, actualSource: null, customMarkets: [], customData: null, status: 'running', statusLabel: 'Tai888新盤驗證中…', error: '' }
-        : item));
       await runPool(board, 2, async item => {
         if (!stillCurrent()) return;
         const actual = creditByPk.get(Number(item.game.gamePk));

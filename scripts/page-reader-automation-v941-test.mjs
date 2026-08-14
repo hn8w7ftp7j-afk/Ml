@@ -23,7 +23,7 @@ assert.match(page, /!snapshot \|\| !item\.referenceData/);
 assert.match(page, /formalBetEligibility/);
 assert.match(page, /mergeRecognizedGameInputs/);
 assert.match(page, /readerExecutable=\{readerExecutable\}/);
-assert.match(page, /currentReaderKey === acknowledgedReaderKey/);
+assert.match(page, /acknowledgedReaderKey\.startsWith\(`\$\{currentReaderHashKey\}:`\)/);
 assert.match(page, /confirmLiveReaderRevision/);
 assert.match(page, /readerRevisionKey/);
 assert.match(page, /creditRevisionRef/);
