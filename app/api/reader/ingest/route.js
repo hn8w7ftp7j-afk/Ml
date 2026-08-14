@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchOfficialTaipeiSlate } from '../../../../lib/official-schedule-v1.js';
+import { fetchOfficialTaipeiSlate, officialPrestartSlate } from '../../../../lib/official-schedule-v1.js';
 import {
   bearerToken,
   readerCorsHeaders,
@@ -90,12 +90,15 @@ export async function POST(request) {
     const previous = await loadReaderSnapshot(boardDate);
     let schedule;
     try {
-      schedule = await fetchOfficialTaipeiSlate(boardDate);
+      schedule = officialPrestartSlate(
+        await fetchOfficialTaipeiSlate(boardDate),
+        Date.parse(envelope.pageActivityAt),
+      );
     } catch {
       return NextResponse.json({ ok: false, error: '無法取得完整 MLB 官方賽程，Reader 本次未寫入' }, { status: 502, headers });
     }
     if (!schedule.length) {
-      return NextResponse.json({ ok: false, error: '官方台北盤日 MLB 賽程為空，Reader 本次未寫入' }, { status: 502, headers });
+      return NextResponse.json({ ok: false, error: '官方台北盤日已無未開賽 MLB 場次，Reader 本次未寫入' }, { status: 409, headers });
     }
 
     const unchangedBoard = previous?.rawBoardHash === envelope.rawBoardHash;

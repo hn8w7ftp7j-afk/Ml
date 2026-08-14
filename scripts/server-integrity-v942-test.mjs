@@ -10,6 +10,7 @@ import {
 import {
   assertGameHasNotStarted,
   fetchOfficialTaipeiSlate,
+  officialPrestartSlate,
   validateOfficialScheduleSubset,
 } from '../lib/official-schedule-v1.js';
 import { normalizeJbotReference } from '../lib/reference-lines.js';
@@ -105,6 +106,10 @@ const fetchImpl = async () => new Response(JSON.stringify(statsPayload), {
   headers: { 'Content-Type': 'application/json' },
 });
 const fullSlate = await fetchOfficialTaipeiSlate('2099-08-12', { fetchImpl });
+assert.deepEqual(officialPrestartSlate([
+  { ...fullSlate[0], gameDate: '2099-08-11T22:59:00Z' },
+  { ...fullSlate[1], gameDate: '2099-08-11T23:01:00Z' },
+], Date.parse('2099-08-11T23:00:00Z')).map(game => game.gamePk), [fullSlate[1].gamePk]);
 assert.deepEqual(fullSlate.map(row => row.gamePk), [990001, 990002]);
 assert.equal(validateOfficialScheduleSubset([game], fullSlate, '2099-08-12')[0].gamePk, 990001);
 assert.throws(

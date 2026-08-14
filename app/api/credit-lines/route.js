@@ -14,7 +14,7 @@ import {
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 import { readerSnapshotIsComplete, TAI888_READER_PARSER_VERSION } from '../../../lib/tai888-reader-parser-v2.js';
 import { signMarketGames } from '../../../lib/market-integrity-v1.js';
-import { fetchOfficialTaipeiSlate, validateOfficialScheduleSubset } from '../../../lib/official-schedule-v1.js';
+import { fetchOfficialTaipeiSlate, officialPrestartSlate, validateOfficialScheduleSubset } from '../../../lib/official-schedule-v1.js';
 import {
   checkRateLimit,
   cleanText,
@@ -207,7 +207,11 @@ export async function POST(request) {
 
     readerSnapshot = await loadReaderSnapshot(date);
     readerState = readerSnapshotStatus(readerSnapshot);
-    const completeReaderSlate = readerSnapshotMatchesFullOfficialSlate(readerSnapshot, fullOfficialSlate, date);
+    const executableOfficialSlate = officialPrestartSlate(
+      fullOfficialSlate,
+      Date.parse(readerSnapshot?.pageActivityAt || ''),
+    );
+    const completeReaderSlate = readerSnapshotMatchesFullOfficialSlate(readerSnapshot, executableOfficialSlate, date);
     if (readerState.fresh && completeReaderSlate) {
       const verifiedReaderGames = readerSnapshot.games.filter(row => {
         const official = officialByPk.get(Number(row.gamePk));
