@@ -9,13 +9,13 @@
 <body>
   <main>
     <div class="eyebrow">MLB POSITIVE EV</div>
-    <div class="titleRow"><h1>Tai888 Reader</h1><span>v2.0.0</span></div>
-    <p class="intro">只讀你已正常登入後、目前頁面上顯示的 MLB 盤口。Reader 不讀密碼、Cookie、Session、帳戶或下注按鈕。</p>
+    <div class="titleRow"><h1>Tai888 Reader</h1><span>v2.0.6 DUPLICATE DOM FIX</span></div>
+    <p class="intro">只讀你已正常登入後、畫面上可見的 MLB 標準盤口。支援分列表格、子框架與特殊盤排除；不讀密碼、Cookie、Session、帳戶或下注按鈕。</p>
 
     <section id="pairPanel" class="panel hidden">
       <h2>第一次配對</h2>
-      <p>輸入一次配對密碼。密碼只送到你的 MLB EV 驗證，不會存進 Reader。</p>
-      <label>配對密碼<input id="password" type="password" autocomplete="current-password" placeholder="輸入你先前設定的 Tai888 唯讀帳號密碼"></label>
+      <p>輸入一次 Reader 配對密碼。密碼只送到你的 MLB EV 驗證，不會保存在 Reader。</p>
+      <label>配對密碼<input id="password" type="password" autocomplete="current-password" placeholder="輸入 Vercel 設定的 Reader 配對密碼"></label>
       <label>裝置名稱<input id="deviceName" type="text" maxlength="80" placeholder="例如：店裡讀盤電腦"></label>
       <button id="pair" class="primary">配對並啟用自動同步</button>
     </section>
@@ -32,7 +32,7 @@
     </section>
 
     <div id="message" class="message">正在讀取 Reader 狀態…</div>
-    <p class="foot">電腦需保持開機、Chrome 不睡眠，Tai888 MLB 盤口頁保持登入並開著。</p>
+    <p class="foot">電腦需保持開機、Chrome 不睡眠，Tai888 MLB「讓分＆大小」頁保持登入並開著。更新擴充功能後需按一次 F5。</p>
   </main>
   <script src="popup.js"></script>
 </body>

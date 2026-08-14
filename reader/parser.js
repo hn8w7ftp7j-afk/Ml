@@ -1,22 +1,61 @@
 const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
-const WATER_TOKEN = /^(?:0|1)\.\d{3}$/;
+const WATER_TOKEN = /^\d(?:\.\d{3})$/;
+const HOME_MARKER = /[\[［【(（]\s*主\s*[\]］】)）]/u;
 
-const clean = value => String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+const clean = value => String(value || '')
+  .replace(/[\u0000-\u001F\u007F]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+function sanitizeTai888Host(value) {
+  try {
+    const text = clean(value);
+    if (!text) return '';
+    const parsed = text.includes('://') ? new URL(text) : new URL(`https://${text}`);
+    const host = parsed.hostname.toLowerCase();
+    return host === 'tai888.in' || host.endsWith('.tai888.in') ? host : '';
+  } catch {
+    return '';
+  }
+}
+
+export function sanitizeTai888PageUrl(value) {
+  try {
+    const parsed = new URL(String(value || ''));
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'https:'
+      || (host !== 'tai888.in' && !host.endsWith('.tai888.in'))) return '';
+    const marker = /^#\/BS(?:$|[/?&])/i.test(parsed.hash || '') ? '#/BS' : '';
+    return `${parsed.origin}${parsed.pathname || '/'}${marker}`.slice(0, 500);
+  } catch {
+    return '';
+  }
+}
+
+function explicitPair(cell) {
+  if (!Array.isArray(cell?.pair) || cell.pair.length < 2) return null;
+  return [clean(cell.pair[0]), clean(cell.pair[1])];
+}
 
 function cellLines(cell) {
-  const raw = Array.isArray(cell?.lines) ? cell.lines : typeof cell === 'string' ? cell.split(/\r?\n/) : [];
-  return raw.map(clean).filter(Boolean).slice(0, 20);
+  const pair = explicitPair(cell);
+  if (pair) return pair.filter(Boolean);
+  const raw = Array.isArray(cell?.lines)
+    ? cell.lines
+    : typeof cell === 'string' ? cell.split(/\r?\n/) : [];
+  return raw.map(clean).filter(Boolean).slice(0, 24);
 }
 
 function waterIn(value) {
-  const match = clean(value).match(/(?:^|\s)((?:0|1)\.\d{3})(?=\s|$)/);
+  const match = clean(value).match(/(?:^|[^0-9.])(\d\.\d{3})(?![0-9.])/);
   const number = match ? Number(match[1]) : null;
-  return number != null && number >= 0.5 && number <= 1.5 ? number : null;
+  return number != null && number >= 0.01 && number <= 3 ? number : null;
 }
 
 function tokenCandidates(value) {
   return clean(value)
-    .replace(/[＋]/g, '+').replace(/[－–—]/g, '-')
+    .replace(/[＋]/g, '+')
+    .replace(/[－–—]/g, '-')
     .split(/\s+/)
     .map(token => token.replace(/^[^0-9]+|[^0-9平+\-./]+$/g, ''))
     .filter(token => token && LINE_TOKEN.test(token) && !WATER_TOKEN.test(token));
@@ -31,6 +70,8 @@ function lineTokenIn(value) {
 }
 
 function pairLines(cell) {
+  const pair = explicitPair(cell);
+  if (pair) return pair;
   const lines = cellLines(cell);
   if (lines.length <= 2) return [lines[0] || '', lines[1] || ''];
 
@@ -46,7 +87,6 @@ function pairLines(cell) {
   }
   if (buffer.length && rows.length < 2) rows.push(clean(buffer.join(' ')));
   if (rows.length >= 2) return [rows[0], rows[1]];
-
   const midpoint = Math.ceil(lines.length / 2);
   return [clean(lines.slice(0, midpoint).join(' ')), clean(lines.slice(midpoint).join(' '))];
 }
@@ -55,30 +95,42 @@ function parseRunline(cell) {
   const [awayRow, homeRow] = pairLines(cell);
   const awayLine = lineTokenIn(awayRow);
   const homeLine = lineTokenIn(homeRow);
+  // A Tai888 runline belongs to exactly one side.  If both visual rows contain
+  // a line token, ownership cannot be proven and guessing would invert the bet.
+  if ((!awayLine && !homeLine) || (awayLine && homeLine)) return null;
   const line = awayLine || homeLine;
-  if (!line) return null;
   return {
-    lineSide: awayLine ? 'away' : homeLine ? 'home' : null,
+    lineSide: awayLine ? 'away' : 'home',
     line,
     awayWater: waterIn(awayRow),
     homeWater: waterIn(homeRow),
-    confidence: awayLine && homeLine ? 0.5 : 1,
+    confidence: 1,
     rawRows: [awayRow, homeRow],
   };
 }
 
 function parseTotal(cell) {
   const [topRow, bottomRow] = pairLines(cell);
-  const line = lineTokenIn(topRow) || lineTokenIn(bottomRow);
+  const topLine = lineTokenIn(topRow);
+  const bottomLine = lineTokenIn(bottomRow);
+  if (topLine && bottomLine && topLine !== bottomLine) return null;
+  const line = topLine || bottomLine;
   if (!line) return null;
   const topWater = waterIn(topRow);
   const bottomWater = waterIn(bottomRow);
-  const topIsUnder = /(?:^|\s)小(?:\s|$)/.test(topRow);
-  const bottomIsOver = /(?:^|\s)大(?:\s|$)/.test(bottomRow);
+  const topOver = /大/u.test(topRow);
+  const topUnder = /小/u.test(topRow);
+  const bottomOver = /大/u.test(bottomRow);
+  const bottomUnder = /小/u.test(bottomRow);
+  const normal = topOver && !topUnder && bottomUnder && !bottomOver;
+  const inverted = topUnder && !topOver && bottomOver && !bottomUnder;
+  // Row order is not a direction signal.  Both complementary labels must be
+  // present, and a repeated line (when shown twice) must agree exactly.
+  if (!normal && !inverted) return null;
   return {
     line,
-    overWater: topIsUnder ? bottomWater : topWater,
-    underWater: bottomIsOver ? topWater : bottomWater,
+    overWater: normal ? topWater : bottomWater,
+    underWater: normal ? bottomWater : topWater,
     confidence: 1,
     rawRows: [topRow, bottomRow],
   };
@@ -90,41 +142,106 @@ function headerIndex(headers, patterns) {
 
 function mapHeaders(headers) {
   return {
-    time: headerIndex(headers, [/^時間$/, /開賽/]),
-    teams: headerIndex(headers, [/主客隊伍/, /隊伍/, /球队/]),
-    runline: headerIndex(headers, [/^讓球$/, /^让球$/, /全場讓球/, /全场让球/]),
-    total: headerIndex(headers, [/^大小盤$/, /^大小盘$/, /全場大小/, /全场大小/]),
+    time: headerIndex(headers, [/^時間$/, /^时间$/, /開賽/, /开赛/]),
+    teams: headerIndex(headers, [/主客隊伍/, /主客队伍/, /^隊伍$/, /^队伍$/]),
+    runline: headerIndex(headers, [/^讓球$/, /^让球$/, /^全場讓球$/, /^全场让球$/]),
+    total: headerIndex(headers, [/^大小盤$/, /^大小盘$/, /^全場大小$/, /^全场大小$/]),
     first5Runline: headerIndex(headers, [/上半讓球/, /上半让球/, /前5.*讓球/, /前五.*讓球/]),
     first5Total: headerIndex(headers, [/上半大小/, /前5.*大小/, /前五.*大小/]),
   };
 }
 
 function teamCodes(cell) {
-  const lines = cellLines(cell);
-  const found = [];
-  for (const line of lines) {
+  const pair = explicitPair(cell);
+  const lines = pair || cellLines(cell);
+  const found = new Map();
+  for (const [index, line] of lines.entries()) {
     for (const match of line.matchAll(/(?:^|\s)([A-Z]{2,4})\s*-/g)) {
       const code = match[1].toUpperCase();
-      if (!found.some(row => row.code === code)) found.push({ code, text: line, homeMarked: /\[主\]/.test(line) });
+      const candidate = {
+        code,
+        text: line,
+        homeMarked: HOME_MARKER.test(line),
+        order: index,
+      };
+      const previous = found.get(code);
+      if (!previous || candidate.homeMarked || candidate.text.length > previous.text.length) {
+        found.set(code, candidate);
+      }
     }
   }
-  return found.slice(0, 2);
+  return [...found.values()].sort((left, right) => left.order - right.order).slice(0, 2);
+}
+
+function taipeiParts(now) {
+  return Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(now)
+    .filter(part => part.type !== 'literal')
+    .map(part => [part.type, Number(part.value)]));
 }
 
 function parseDateTime(cell, now = new Date()) {
-  const text = cellLines(cell).join(' ');
+  const pair = explicitPair(cell);
+  const text = (pair || cellLines(cell)).join(' ');
   const date = text.match(/\b(\d{1,2})-(\d{1,2})\b/);
   const time = text.match(/\b(\d{1,2}):(\d{2})\b/);
   let boardDate = '';
   if (date) {
-    let year = now.getUTCFullYear();
+    const current = taipeiParts(now);
+    let year = current.year;
     const month = Number(date[1]);
-    const currentMonth = now.getUTCMonth() + 1;
-    if (currentMonth === 12 && month === 1) year += 1;
-    else if (currentMonth === 1 && month === 12) year -= 1;
-    boardDate = `${year}-${String(month).padStart(2, '0')}-${String(Number(date[2])).padStart(2, '0')}`;
+    const day = Number(date[2]);
+    if (current.month === 12 && month === 1) year += 1;
+    else if (current.month === 1 && month === 12) year -= 1;
+    const check = new Date(Date.UTC(year, month - 1, day));
+    if (month >= 1 && month <= 12 && day >= 1
+      && check.getUTCFullYear() === year
+      && check.getUTCMonth() === month - 1
+      && check.getUTCDate() === day) {
+      boardDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
   }
-  return { boardDate, time: time ? `${String(Number(time[1])).padStart(2, '0')}:${time[2]}` : '' };
+  const hour = time ? Number(time[1]) : NaN;
+  const minute = time ? Number(time[2]) : NaN;
+  return {
+    boardDate,
+    time: Number.isInteger(hour) && hour >= 0 && hour <= 23
+      && Number.isInteger(minute) && minute >= 0 && minute <= 59
+      ? `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+      : '',
+  };
+}
+
+function marketFingerprint(game) {
+  return JSON.stringify({
+    fullRunline: canonicalRunline(game?.fullRunline),
+    fullTotal: canonicalTotal(game?.fullTotal),
+    first5Runline: canonicalRunline(game?.first5Runline),
+    first5Total: canonicalTotal(game?.first5Total),
+  });
+}
+
+function canonicalRunline(market) {
+  if (!market) return null;
+  return {
+    lineSide: market.lineSide || '',
+    line: market.line || '',
+    awayWater: typeof market.awayWater === 'number' && Number.isFinite(market.awayWater) ? market.awayWater : null,
+    homeWater: typeof market.homeWater === 'number' && Number.isFinite(market.homeWater) ? market.homeWater : null,
+  };
+}
+
+function canonicalTotal(market) {
+  if (!market) return null;
+  return {
+    line: market.line || '',
+    overWater: typeof market.overWater === 'number' && Number.isFinite(market.overWater) ? market.overWater : null,
+    underWater: typeof market.underWater === 'number' && Number.isFinite(market.underWater) ? market.underWater : null,
+  };
 }
 
 export function parseTai888Capture(capture, now = new Date()) {
@@ -136,13 +253,21 @@ export function parseTai888Capture(capture, now = new Date()) {
     if (map.teams < 0 || map.time < 0) continue;
     for (const row of (table?.rows || []).slice(0, 60)) {
       const cells = Array.isArray(row?.cells) ? row.cells : [];
-      if (cells.length <= Math.max(...Object.values(map).filter(index => index >= 0))) continue;
+      const requiredIndexes = Object.values(map).filter(index => index >= 0);
+      if (!requiredIndexes.length || cells.length <= Math.max(...requiredIndexes)) continue;
       const teams = teamCodes(cells[map.teams]);
       if (teams.length !== 2) continue;
-      const homeIndex = teams.findIndex(team => team.homeMarked);
-      const away = homeIndex === 0 ? teams[1] : teams[0];
-      const home = homeIndex === 0 ? teams[0] : teams[1];
+      const homeIndexes = teams
+        .map((team, index) => team.homeMarked ? index : -1)
+        .filter(index => index >= 0);
+      if (homeIndexes.length !== 1) continue;
+      const homeIndex = homeIndexes[0];
+      const awayIndex = homeIndex === 0 ? 1 : 0;
+      const away = teams[awayIndex];
+      const home = teams[homeIndex];
+      if (!away || !home || away.code === home.code) continue;
       const timing = parseDateTime(cells[map.time], now);
+      if (!timing.boardDate || !timing.time) continue;
       const game = {
         awayCode: away.code,
         homeCode: home.code,
@@ -162,39 +287,50 @@ export function parseTai888Capture(capture, now = new Date()) {
   }
 
   const unique = [];
-  const seen = new Set();
+  const seen = new Map();
+  const conflictingGameKeys = [];
   for (const game of games) {
     const key = `${game.boardDate}|${game.awayCode}|${game.homeCode}|${game.boardTime}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const fingerprint = marketFingerprint(game);
+    if (seen.has(key)) {
+      if (seen.get(key) !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
+      continue;
+    }
+    seen.set(key, fingerprint);
     unique.push(game);
   }
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
+  const pageUrl = sanitizeTai888PageUrl(capture?.pageUrl);
   return {
-    version: 'TAI888-READER-DOM-v2.0.0',
-    sourceHost: clean(capture?.sourceHost).toLowerCase(),
-    pageUrl: clean(capture?.pageUrl).slice(0, 500),
-    pageTitle: clean(capture?.pageTitle).slice(0, 200),
+    version: 'TAI888-READER-DOM-v2.0.6',
+    sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
+    pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),
     boardDate,
     games: unique.slice(0, 40),
+    parseIssues: conflictingGameKeys.map(key => `conflicting-duplicate:${key}`),
   };
 }
 
 export function canonicalReaderPayload(payload) {
+  const orderedGames = [...(payload?.games || [])].sort((left, right) => {
+    const leftKey = `${left?.boardDate || ''}|${left?.boardTime || ''}|${left?.awayCode || ''}|${left?.homeCode || ''}`;
+    const rightKey = `${right?.boardDate || ''}|${right?.boardTime || ''}|${right?.awayCode || ''}|${right?.homeCode || ''}`;
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+  });
   return JSON.stringify({
     version: payload?.version || '',
     sourceHost: payload?.sourceHost || '',
     boardDate: payload?.boardDate || '',
-    games: (payload?.games || []).map(game => ({
+    games: orderedGames.map(game => ({
       awayCode: game.awayCode,
       homeCode: game.homeCode,
       boardDate: game.boardDate,
       boardTime: game.boardTime,
-      fullRunline: game.fullRunline,
-      fullTotal: game.fullTotal,
-      first5Runline: game.first5Runline,
-      first5Total: game.first5Total,
+      fullRunline: canonicalRunline(game.fullRunline),
+      fullTotal: canonicalTotal(game.fullTotal),
+      first5Runline: canonicalRunline(game.first5Runline),
+      first5Total: canonicalTotal(game.first5Total),
     })),
   });
 }

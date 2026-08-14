@@ -59,7 +59,7 @@ function canonicalImageDataURL(value) {
 function waters(line) {
   return [...String(line || '').matchAll(WATER_RE)]
     .map(match => Number(match[1]))
-    .filter(value => Number.isFinite(value) && value >= 0.5 && value <= 1.5);
+    .filter(value => Number.isFinite(value) && value >= 0.01 && value <= 3);
 }
 
 function containsTeam(line, team) {
@@ -346,7 +346,7 @@ function sanitizeDefaultWater(value) {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, Number(item)]));
   }
   const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0.5, Math.min(1.5, number)) : null;
+  return Number.isFinite(number) ? Math.max(0.01, Math.min(3, number)) : null;
 }
 
 export async function POST(request) {

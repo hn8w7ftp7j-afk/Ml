@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
-import { appPasswordConfigured, checkRateLimit, createSessionToken, passwordMatches, rateLimitResponse, readJsonBody, requestIsAuthenticated, validateSameOrigin, originErrorResponse } from '../../../lib/security.js';
+import { appPasswordConfigured, checkRateLimit, createSessionToken, originErrorResponse, passwordMatches, rateLimitResponse, readJsonBody, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured, validateSameOrigin } from '../../../lib/security.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
-  return NextResponse.json({ ok: true, configured: appPasswordConfigured(), authenticated: await requestIsAuthenticated(request) }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({
+    ok: true,
+    configured: siteAuthConfigured(),
+    passwordConfigured: appPasswordConfigured(),
+    sessionSecretConfigured: sessionSecretConfigured(),
+    authenticated: await requestIsAuthenticated(request),
+  }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request) {
@@ -19,7 +25,9 @@ export async function POST(request) {
       response.cookies.set('mlb_session', '', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: 0 });
       return response;
     }
-    if (!appPasswordConfigured()) return NextResponse.json({ ok: false, error: '尚未設定 APP_PASSWORD' }, { status: 503 });
+    if (!siteAuthConfigured()) {
+      return NextResponse.json({ ok: false, error: 'APP_PASSWORD 與 SESSION_SECRET 都必須設定，且不得以 Tai888 登入密碼代替' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
     const password = String(body.password || '').slice(0, 256);
     if (!(await passwordMatches(password))) return NextResponse.json({ ok: false, error: '密碼錯誤' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
     const maxAge = 60 * 60 * 24 * 30;

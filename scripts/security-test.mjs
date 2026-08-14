@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { checkRateLimit, cleanText, createSessionToken, passwordMatches, positiveInteger, readJsonBody, validDateString, validateSameOrigin, verifySessionToken } from '../lib/security.js';
+import { appPasswordConfigured, checkRateLimit, cleanText, createSessionToken, passwordMatches, positiveInteger, readJsonBody, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured, validDateString, validateSameOrigin, verifySessionToken } from '../lib/security.js';
 import { marketIsOpen, validateMarketPair } from '../lib/markets.js';
 
 process.env.APP_PASSWORD = 'test-password';
@@ -10,6 +10,20 @@ assert.equal(await passwordMatches('wrong-password'), false);
 const token = await createSessionToken(60);
 assert.equal(await verifySessionToken(token), true);
 assert.equal(await verifySessionToken(`${token}x`), false);
+assert.equal(siteAuthConfigured(), true);
+assert.equal(sessionSecretConfigured(), true);
+
+delete process.env.SESSION_SECRET;
+process.env.TAI888_PASSWORD = 'must-not-be-a-session-secret';
+assert.equal(sessionSecretConfigured(), false);
+assert.equal(siteAuthConfigured(), false);
+assert.equal(await requestIsAuthenticated(new Request('https://example.com')), false);
+process.env.SESSION_SECRET = 'test-session-secret-with-sufficient-entropy';
+
+delete process.env.APP_PASSWORD;
+process.env.TAI888_PASSWORD = 'must-not-be-a-site-password';
+assert.equal(appPasswordConfigured(), false);
+process.env.APP_PASSWORD = 'test-password';
 
 assert.equal(validDateString('2026-08-08'), true);
 assert.equal(validDateString('2026-02-30'), false);

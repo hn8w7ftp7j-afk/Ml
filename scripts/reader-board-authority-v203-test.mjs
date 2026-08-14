@@ -1,0 +1,120 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+import {
+  MAX_TAI888_TABS,
+  selectAuthoritativeBoard,
+  withinTai888TabScanLimit,
+} from '../reader/board-selector.js';
+
+const NOW = Date.parse('2026-08-14T17:00:00.000Z');
+
+assert.equal(MAX_TAI888_TABS, 4);
+assert.equal(withinTai888TabScanLimit(4), true);
+assert.equal(withinTai888TabScanLimit(5), false, 'a fifth tab must fail closed instead of going unscanned');
+assert.equal(withinTai888TabScanLimit(-1), false);
+assert.equal(withinTai888TabScanLimit('4'), false);
+
+function game(overWater = 0.94) {
+  return {
+    awayCode: 'BAL',
+    homeCode: 'MIN',
+    boardDate: '2026-08-15',
+    boardTime: '01:10',
+    fullRunline: { lineSide: 'home', line: '1+95', awayWater: 0.95, homeWater: 0.95 },
+    fullTotal: { line: '9+30', overWater, underWater: 0.94 },
+    first5Runline: { lineSide: 'home', line: '0-20', awayWater: 0.94, homeWater: 0.94 },
+    first5Total: { line: '4+50', overWater: 0.93, underWater: 0.93 },
+  };
+}
+
+function candidate({ tabId, active, overWater = 0.94, complete = true, lastAccessed = 100 }) {
+  const games = complete ? [game(overWater)] : [];
+  return {
+    tabId,
+    frameId: 0,
+    active,
+    lastAccessed,
+    capture: {
+      sourceHost: 'www1.tai888.in',
+      pageUrl: 'https://www1.tai888.in/newapp/#/BS',
+      observedAt: '2026-08-14T17:00:00.000Z',
+      tables: [{ headers: ['時間', '主客隊伍', '讓球', '大小盤'], rows: [{}] }],
+      diagnostics: {
+        expectedGameCount: 1,
+        gameCount: games.length,
+        lastMutationAt: '2026-08-14T16:59:59.000Z',
+      },
+    },
+    parsed: {
+      version: 'TAI888-READER-DOM-v2.0.3',
+      sourceHost: 'www1.tai888.in',
+      boardDate: '2026-08-15',
+      games,
+      parseIssues: [],
+    },
+  };
+}
+
+const activeComplete = candidate({ tabId: 1, active: true, lastAccessed: 200 });
+const hiddenSameBoard = candidate({ tabId: 2, active: false, lastAccessed: 300 });
+const hiddenPreferred = selectAuthoritativeBoard(
+  [activeComplete, hiddenSameBoard],
+  { now: NOW, preferredTabId: 2 },
+);
+assert.equal(hiddenPreferred.ok, true);
+assert.equal(hiddenPreferred.authorityTabId, 1, 'an inactive preferred tab must not outrank the active tab');
+
+const activeIncomplete = candidate({ tabId: 1, active: true, complete: false, lastAccessed: 200 });
+const inactiveCannotRescue = selectAuthoritativeBoard(
+  [activeIncomplete, hiddenSameBoard],
+  { now: NOW, preferredTabId: 2 },
+);
+assert.equal(inactiveCannotRescue.ok, false);
+assert.equal(inactiveCannotRescue.error, 'authoritative-tab-incomplete');
+assert.equal(inactiveCannotRescue.authorityTabId, 1);
+
+const hiddenDifferentBoard = candidate({ tabId: 2, active: false, overWater: 0.95, lastAccessed: 300 });
+const conflictingTabs = selectAuthoritativeBoard(
+  [activeComplete, hiddenDifferentBoard],
+  { now: NOW },
+);
+assert.equal(conflictingTabs.ok, false);
+assert.equal(conflictingTabs.error, 'conflicting-complete-tabs');
+assert.equal(conflictingTabs.authorityTabId, 1);
+assert.equal(conflictingTabs.boardDate, '2026-08-15');
+
+const otherDate = candidate({ tabId: 3, active: false, overWater: 0.95 });
+otherDate.parsed.boardDate = '2026-08-16';
+otherDate.parsed.games[0].boardDate = '2026-08-16';
+const separateDates = selectAuthoritativeBoard([activeComplete, otherDate], { now: NOW });
+assert.equal(separateDates.ok, true, 'different complete board dates do not create same-slate ambiguity');
+assert.equal(separateDates.authorityTabId, 1);
+
+const backgroundSource = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
+assert.match(
+  backgroundSource,
+  /sender\?\.tab\?\.active === true \? sender\.tab\.id : null/,
+  'a mutation sender may only become preferred while its tab is active',
+);
+assert.match(
+  backgroundSource,
+  /tab\.active === true \? tabId : null/,
+  'an inactive tab load may not become preferred either',
+);
+assert.match(
+  backgroundSource,
+  /left\.active === true && left\.id === preferredTabId/,
+  'capture ordering must re-check that a delayed preferred tab is still active',
+);
+assert.match(backgroundSource, /MAX_TAI888_TABS/);
+assert.match(
+  backgroundSource,
+  /!withinTai888TabScanLimit\(ordered\.length\)/,
+  'more tabs than the capture limit must fail closed instead of hiding conflicts',
+);
+assert.match(backgroundSource, /for \(const tab of ordered\)/);
+assert.doesNotMatch(backgroundSource, /ordered\.slice\(0,\s*4\)/);
+assert.match(backgroundSource, /selection\.error === 'conflicting-complete-tabs'/);
+
+console.log('Reader 2.0.3 board authority: active-only preference and same-date conflict fail-closed PASS');

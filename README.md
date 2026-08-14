@@ -1,4 +1,8 @@
-# MLB 長期正期望值分析｜第 8.4.3 版
+# MLB 長期正期望值分析｜9.4.2 / Tai888 Reader 2.0.6
+
+目前唯一整合基線為網站 `9.4.2`、Next.js `15.5.23` 與 Reader `2.0.6 DUPLICATE DOM FIX`。Production 評分只使用固定雙 EV 短板公式，GPT 不得調分；下方 6.x～8.x 段落保留為歷史變更紀錄，不是目前發布規格。
+
+Reader 只接受單一權威 tab/frame 的完整官方台北盤日：每場四市場、八方向、含雙重賽唯一配對；同盤日完整分頁若互相衝突或開啟超過四個 Tai888 分頁會直接停止上傳。盤口與 reprice snapshot 由伺服器簽章；畫面只有在最新 Reader hash 與 `pageActivityAt` 版本的全部分析成功後才允許正式下注。URL 中繼資料不含 query、任意 hash、頁面標題或原始 frame URL。Vercel Runtime Cache 沒有原子 compare-and-swap，目前務必只運行一台 Reader。
 
 私人使用的 MLB 台灣信用盤分析系統。第 6 版把目前的 GPT MLB 長期正 EV 規格程式化成同一套可重算、可追蹤的分析流程，不再使用獨立的「網站 EV 直接換分」模型。
 
@@ -71,10 +75,12 @@ Vercel 環境變數：
 
 - `AI_GATEWAY_API_KEY`：盤口圖片／文字辨識必要
 - `AI_MODEL`：選填
-- `APP_PASSWORD`：設定後啟用私人登入牆
-- `SESSION_SECRET`：建議至少 32 個隨機字元
+- `APP_PASSWORD`：私人登入牆必要設定
+- `SESSION_SECRET`：必要；使用獨立且至少 32 個隨機字元的值，不得以網站登入密碼或 Tai888 密碼代替
+- `MARKET_INTEGRITY_SECRET`：選填的獨立盤口／快照 HMAC 金鑰；未設定時只會使用 `SESSION_SECRET`
+- `READER_PAIR_SECRET`：Tai888 Reader 配對必要；不得回退使用 `TAI888_PASSWORD`
 
-網站含同源檢查、輸入大小限制、格式驗證、頻率限制、安全標頭、單元測試與 Production smoke test。
+網站在 `APP_PASSWORD` 或 `SESSION_SECRET` 任一缺少時會 fail-closed。Reader／信用盤／參考盤均由伺服器重新核對 MLB 官方台北日期賽程並簽章；分析與快速重算會驗證盤口及凍結快照簽章。手動貼文、截圖與人工修改只會標記為已登入同源的 `USER_MANUAL_ENTRY`，不能冒充 Reader 自動來源。
 
 ## 使用限制
 
@@ -256,3 +262,5 @@ OpenAI GPT 研究模型現在只使用有上限的首段時間，系統會預留
 ## Tai888 Reader v2
 
 Chrome Reader 只讀使用者已登入後可見的 MLB 盤口表格，自動同步至 `/api/reader/ingest`。Production 使用 Vercel Runtime Cache 保存最新盤口；網站偵測價格指紋變動後只走 `/api/reprice`，不重建比分分布。
+
+目前唯一發布版本是 `2.0.6 DUPLICATE DOM FIX`；安裝前應移除所有舊版，完整解壓後再從 Chrome 擴充功能頁載入 `Tai888-Reader` 資料夾。iPhone 可保存或轉傳 ZIP，但不能安裝未封裝 Chrome 擴充功能。

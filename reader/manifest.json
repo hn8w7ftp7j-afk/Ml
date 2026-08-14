@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.0.0",
-  "description": "自動讀取目前瀏覽器已顯示的 Tai888 MLB 盤口，安全同步至 MLB EV。",
-  "permissions": ["storage", "tabs", "alarms", "webNavigation"],
+  "version": "2.0.6",
+  "version_name": "2.0.6 DUPLICATE DOM FIX",
+  "description": "只讀已登入瀏覽器中可見的 Tai888 MLB 標準盤，支援分列、子框架與自動同步。",
+  "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [
     "https://*.tai888.in/*",
     "https://tai888.in/*",
@@ -15,11 +16,19 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.tai888.in/*", "https://tai888.in/*"],
-      "js": ["tai888-content.js"],
+      "matches": [
+        "https://*.tai888.in/*",
+        "https://tai888.in/*"
+      ],
+      "js": [
+        "capture-policy.js",
+        "row-normalizer.js",
+        "tai888-content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": true,
-      "match_about_blank": true
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
     }
   ],
   "action": {

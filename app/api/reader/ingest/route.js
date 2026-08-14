@@ -1,36 +1,69 @@
 import { NextResponse } from 'next/server';
-import { fetchSchedule } from '../../../../lib/mlb.js';
+import { fetchOfficialTaipeiSlate } from '../../../../lib/official-schedule-v1.js';
 import {
   bearerToken,
   readerCorsHeaders,
+  readerOriginAllowed,
   verifyReaderToken,
 } from '../../../../lib/reader-auth-v2.js';
-import { storeReaderSnapshot, readerSnapshotStatus } from '../../../../lib/reader-store-v2.js';
-import { normalizeTai888ReaderPayload } from '../../../../lib/tai888-reader-parser-v2.js';
+import {
+  loadReaderSnapshot,
+  refreshReaderSnapshot,
+  storeReaderSnapshot,
+  readerSnapshotStatus,
+} from '../../../../lib/reader-store-v2.js';
+import {
+  normalizeTai888ReaderPayload,
+  readerSnapshotIsComplete,
+  validateTai888ReaderEnvelope,
+} from '../../../../lib/tai888-reader-parser-v2.js';
 import { checkRateLimit, cleanText, rateLimitResponse, readJsonBody, validDateString } from '../../../../lib/security.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-function dateShift(value, days) {
-  const date = new Date(`${value}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+function temporalError(message) {
+  const error = new Error(message);
+  error.status = 409;
+  return error;
 }
 
-async function scheduleWindow(boardDate) {
-  const dates = [dateShift(boardDate, -1), boardDate, dateShift(boardDate, 1)];
-  const rows = await Promise.all(dates.map(date => fetchSchedule(date).catch(() => [])));
-  return [...new Map(rows.flat().map(game => [Number(game.gamePk), game])).values()];
+function assertMonotonic(previous, envelope, boardChanged) {
+  if (!previous) return;
+  const previousObserved = Date.parse(previous.observedAt || '');
+  const previousActivity = Date.parse(previous.pageActivityAt || '');
+  const observed = Date.parse(envelope.observedAt);
+  const activity = Date.parse(envelope.pageActivityAt);
+  if (Number.isFinite(previousObserved) && observed <= previousObserved) {
+    throw temporalError('Reader observedAt 未向前推進，已拒絕重播快照');
+  }
+  if (Number.isFinite(previousActivity) && activity < previousActivity) {
+    throw temporalError('Reader pageActivityAt 時間倒退，已拒絕舊盤覆蓋');
+  }
+  if (boardChanged && Number.isFinite(previousActivity) && activity <= previousActivity) {
+    throw temporalError('Reader 盤口內容變更但頁面活動時間未推進，已拒絕重播');
+  }
+}
+
+function snapshotMatchesSchedule(snapshot, schedule) {
+  if (!readerSnapshotIsComplete(snapshot) || snapshot.games.length !== schedule.length) return false;
+  const expected = schedule.map(game => Number(game.gamePk)).sort((left, right) => left - right);
+  const actual = snapshot.games.map(game => Number(game.gamePk)).sort((left, right) => left - right);
+  return expected.every((gamePk, index) => gamePk === actual[index]);
 }
 
 export async function OPTIONS(request) {
-  return new Response(null, { status: 204, headers: readerCorsHeaders(request) });
+  const headers = readerCorsHeaders(request);
+  if (!readerOriginAllowed(request)) return new Response(null, { status: 403, headers });
+  return new Response(null, { status: 204, headers });
 }
 
 export async function POST(request) {
   const headers = readerCorsHeaders(request);
+  if (!readerOriginAllowed(request)) {
+    return NextResponse.json({ ok: false, error: '不允許的 Reader 請求來源' }, { status: 403, headers });
+  }
   try {
     const rate = checkRateLimit(request, { id: 'reader-ingest-v2', limit: 180, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) {
@@ -38,48 +71,98 @@ export async function POST(request) {
       for (const [key, value] of Object.entries(headers)) response.headers.set(key, value);
       return response;
     }
+
     const token = await verifyReaderToken(bearerToken(request));
     if (!token) return NextResponse.json({ ok: false, error: 'Reader 配對已失效，請重新配對' }, { status: 401, headers });
     const deviceHeader = cleanText(request.headers.get('x-device-id'), 100);
-    if (deviceHeader && deviceHeader !== token.deviceId) {
+    if (!deviceHeader || deviceHeader !== token.deviceId) {
       return NextResponse.json({ ok: false, error: 'Reader 裝置識別碼不一致' }, { status: 401, headers });
     }
+
     const body = await readJsonBody(request, 600_000);
     const boardDate = cleanText(body.boardDate, 20);
     if (!validDateString(boardDate)) {
       return NextResponse.json({ ok: false, error: 'Tai888 Reader 盤口日期格式錯誤' }, { status: 400, headers });
     }
+
     const receivedAt = new Date().toISOString();
-    const schedule = await scheduleWindow(boardDate);
-    if (!schedule.length) {
-      return NextResponse.json({ ok: false, error: '無法取得相鄰日期 MLB 官方賽程，Reader 本次未寫入' }, { status: 502, headers });
+    const envelope = validateTai888ReaderEnvelope(body, { receivedAt });
+    const previous = await loadReaderSnapshot(boardDate);
+    let schedule;
+    try {
+      schedule = await fetchOfficialTaipeiSlate(boardDate);
+    } catch {
+      return NextResponse.json({ ok: false, error: '無法取得完整 MLB 官方賽程，Reader 本次未寫入' }, { status: 502, headers });
     }
+    if (!schedule.length) {
+      return NextResponse.json({ ok: false, error: '官方台北盤日 MLB 賽程為空，Reader 本次未寫入' }, { status: 502, headers });
+    }
+
+    const unchangedBoard = previous?.rawBoardHash === envelope.rawBoardHash;
+    assertMonotonic(previous, envelope, !unchangedBoard);
+    if (unchangedBoard
+      && previous?.deviceId === token.deviceId
+      && previous?.sourceHost === envelope.sourceHost
+      && previous?.boardDate === envelope.boardDate
+      && snapshotMatchesSchedule(previous, schedule)) {
+      const refreshedResult = await refreshReaderSnapshot(previous, {
+        observedAt: envelope.observedAt,
+        receivedAt: envelope.receivedAt,
+        pageActivityAt: envelope.pageActivityAt,
+        readerVersion: envelope.readerVersion,
+      });
+      const refreshed = refreshedResult?.snapshot;
+      const storage = refreshedResult?.storage;
+      if (!refreshed || !storage?.allRequiredWritesSucceeded) {
+        return NextResponse.json({ ok: false, error: 'Reader 心跳未完成所有必要儲存寫入' }, { status: 503, headers });
+      }
+      return NextResponse.json({
+        ok: true,
+        heartbeat: true,
+        message: `Tai888 Reader 心跳正常｜盤口未變｜${refreshed.matchedGameCount}/${refreshed.rawGameCount} 場`,
+        boardDate: refreshed.boardDate,
+        payloadHash: refreshed.payloadHash,
+        rawBoardHash: refreshed.rawBoardHash,
+        rawGameCount: refreshed.rawGameCount,
+        matchedGameCount: refreshed.matchedGameCount,
+        scheduleGameCount: refreshed.scheduleGameCount,
+        unmatched: refreshed.unmatched || [],
+        receivedAt: refreshed.receivedAt,
+        observedAt: refreshed.observedAt,
+        pageActivityAt: refreshed.pageActivityAt,
+        runtimeCache: Boolean(storage?.runtimeCache),
+        allRequiredWritesSucceeded: true,
+        freshness: readerSnapshotStatus(refreshed),
+      }, { headers });
+    }
+
     const normalized = normalizeTai888ReaderPayload(body, schedule, {
       deviceId: token.deviceId,
-      receivedAt,
+      receivedAt: envelope.receivedAt,
+      envelope,
     });
-    if (!normalized.matchedGameCount) {
-      return NextResponse.json({
-        ok: false,
-        error: 'Reader 已讀到 Tai888 表格，但沒有場次能配對 MLB 官方賽程',
-        rawGameCount: normalized.rawGameCount,
-        unmatched: normalized.unmatched,
-      }, { status: 422, headers });
-    }
+
     const storage = await storeReaderSnapshot(normalized);
+    if (!storage.allRequiredWritesSucceeded) {
+      return NextResponse.json({ ok: false, error: 'Reader 快照未完成所有必要儲存寫入' }, { status: 503, headers });
+    }
     const status = readerSnapshotStatus(normalized);
     return NextResponse.json({
       ok: true,
+      heartbeat: false,
       message: `Tai888 Reader 已自動同步 ${normalized.matchedGameCount}/${normalized.rawGameCount} 場`,
       boardDate: normalized.boardDate,
       payloadHash: normalized.payloadHash,
+      rawBoardHash: normalized.rawBoardHash,
       rawGameCount: normalized.rawGameCount,
       matchedGameCount: normalized.matchedGameCount,
       scheduleGameCount: normalized.scheduleGameCount,
       unmatched: normalized.unmatched,
       receivedAt: normalized.receivedAt,
       observedAt: normalized.observedAt,
+      pageActivityAt: normalized.pageActivityAt,
       runtimeCache: storage.runtimeCache,
+      allRequiredWritesSucceeded: true,
       freshness: status,
     }, { headers });
   } catch (error) {
