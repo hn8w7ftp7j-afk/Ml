@@ -17,6 +17,7 @@ import {
   readerSnapshotIsComplete,
   validateTai888ReaderEnvelope,
 } from '../../../../lib/tai888-reader-parser-v2.js';
+import { leagueConfig, requestedLeagueId } from '../../../../lib/leagues.js';
 import { checkRateLimit, cleanText, rateLimitResponse, readJsonBody, validDateString } from '../../../../lib/security.js';
 
 export const runtime = 'nodejs';
@@ -82,6 +83,19 @@ export async function POST(request) {
     }
 
     const body = await readJsonBody(request, 600_000);
+    const league = requestedLeagueId(body?.league);
+    if (!league) {
+      return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400, headers });
+    }
+    const config = leagueConfig(league);
+    if (!config.capabilities.reader) {
+      return NextResponse.json({
+        ok: false,
+        code: 'LEAGUE_NOT_READY',
+        league,
+        error: `${config.label} Reader 尚未完成正式盤面驗證，本次未寫入`,
+      }, { status: 409, headers });
+    }
     const boardDate = cleanText(body.boardDate, 20);
     if (!validDateString(boardDate)) {
       return NextResponse.json({ ok: false, error: 'Tai888 Reader 盤口日期格式錯誤' }, { status: 400, headers });
@@ -122,6 +136,7 @@ export async function POST(request) {
       }
       return NextResponse.json({
         ok: true,
+        league,
         heartbeat: true,
         message: `Tai888 Reader 心跳正常｜已開盤 ${refreshed.matchedGameCount} 場｜未開盤 ${refreshed.unopenedGameCount || 0} 場`,
         boardDate: refreshed.boardDate,
@@ -155,6 +170,7 @@ export async function POST(request) {
     const status = readerSnapshotStatus(normalized);
     return NextResponse.json({
       ok: true,
+      league,
       heartbeat: false,
       message: `Tai888 Reader 已同步｜已開盤 ${normalized.matchedGameCount} 場｜未開盤 ${normalized.unopenedGameCount || 0} 場`,
       boardDate: normalized.boardDate,

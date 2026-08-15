@@ -11,6 +11,7 @@ import { DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { ANALYSIS_CACHE_VERSION } from '../../../lib/analysis-cache-v9.js';
 import { readerPairingConfigured } from '../../../lib/reader-auth-v2.js';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
+import { LEAGUE_REGISTRY_VERSION, publicLeagueRegistry } from '../../../lib/leagues.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,9 @@ export async function GET() {
   const readerStatus = readerSnapshotStatus(readerSnapshot);
   return NextResponse.json({
     ok: true,
-    version: '9.4.4',
+    version: '9.5.0',
+    leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
+    leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     dataVersion: DATA_VERSION,

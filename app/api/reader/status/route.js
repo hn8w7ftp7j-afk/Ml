@@ -11,6 +11,7 @@ import {
   READER_STORE_VERSION,
 } from '../../../../lib/reader-store-v2.js';
 import { readerSnapshotIsComplete } from '../../../../lib/tai888-reader-parser-v2.js';
+import { leagueConfig, requestedLeagueId } from '../../../../lib/leagues.js';
 import { checkRateLimit, rateLimitResponse, validDateString } from '../../../../lib/security.js';
 
 export const runtime = 'nodejs';
@@ -33,7 +34,21 @@ export async function GET(request) {
     for (const [key, value] of Object.entries(headers)) response.headers.set(key, value);
     return response;
   }
-  const date = new URL(request.url).searchParams.get('date') || '';
+  const searchParams = new URL(request.url).searchParams;
+  const league = requestedLeagueId(searchParams.get('league'));
+  if (!league) {
+    return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400, headers });
+  }
+  const config = leagueConfig(league);
+  if (!config.capabilities.reader) {
+    return NextResponse.json({
+      ok: false,
+      code: 'LEAGUE_NOT_READY',
+      league,
+      error: `${config.label} Reader 尚未完成正式盤面驗證`,
+    }, { status: 409, headers: { ...headers, 'Cache-Control': 'no-store' } });
+  }
+  const date = searchParams.get('date') || '';
   if (date && !validDateString(date)) {
     return NextResponse.json({ ok: false, error: 'Reader 查詢日期格式錯誤' }, { status: 400, headers });
   }
@@ -42,6 +57,7 @@ export async function GET(request) {
   const publicView = readerSnapshotPublicView(snapshot, { complete });
   return NextResponse.json({
     ok: true,
+    league,
     pairingConfigured: readerPairingConfigured(),
     storeVersion: READER_STORE_VERSION,
     freshnessTtlSeconds: READER_FRESH_SECONDS,

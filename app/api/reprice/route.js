@@ -9,6 +9,7 @@ import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
 import { attestIncomingMarketRows, signRepriceSnapshot, verifyRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
 import { assertGameHasNotStarted, resolveOfficialGame } from '../../../lib/official-schedule-v1.js';
+import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import { checkRateLimit, cleanText, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
 
 export const runtime = 'nodejs';
@@ -48,6 +49,19 @@ export async function POST(request) {
     const rate = checkRateLimit(request, { id: 'reprice-v9-3-3', limit: 120, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 8_000_000);
+    const league = requestedLeagueId(body?.league);
+    if (!league) {
+      return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
+    }
+    if (!leagueCanAnalyze(league)) {
+      const config = leagueConfig(league);
+      return NextResponse.json({
+        ok: false,
+        code: 'LEAGUE_NOT_READY',
+        league,
+        error: `${config.label}尚未完成正式賽程、Reader 與模型驗證，已停止快速重算`,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+    }
     const snapshot = body.snapshot && typeof body.snapshot === 'object' ? body.snapshot : null;
     const context = snapshot?.frozenContext;
     const distributionSnapshot = snapshot?.distributionSnapshot;
@@ -120,7 +134,7 @@ export async function POST(request) {
     };
     const repriceSnapshot = await signRepriceSnapshot(game, unsignedRepriceSnapshot);
     return NextResponse.json({
-      ok: true, game, context, analysis: finalized, repriceSnapshot,
+      ok: true, league, game, context, analysis: finalized, repriceSnapshot,
       openMarkets: [...new Set(markets.map(row => row.market))],
       reprice: { distributionReused: true, noCoreDataFetch: true, noSimulation: true, noGpt: true, distributionId: snapshot.distributionId, distributionHash: snapshot.distributionHash, coreFingerprint: snapshot.coreFingerprint, previousInputHash: snapshot.inputHash || null, newInputHash: fingerprints.inputHash },
     }, { headers: { 'Cache-Control': 'no-store' } });

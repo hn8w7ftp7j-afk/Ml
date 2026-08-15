@@ -3,6 +3,7 @@ import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '
 import { readerSnapshotIsComplete, TAI888_READER_PARSER_VERSION } from '../../../lib/tai888-reader-parser-v2.js';
 import { signMarketGames } from '../../../lib/market-integrity-v1.js';
 import { fetchOfficialTaipeiSlate, officialPrestartSlate, validateOfficialScheduleSubset } from '../../../lib/official-schedule-v1.js';
+import { leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import {
   checkRateLimit,
   cleanText,
@@ -63,10 +64,24 @@ function readerSnapshotMatchesFullOfficialSlate(snapshot, officialSlate, boardDa
 export async function GET(request) {
   const auth = await requireApiAuth(request);
   if (auth) return auth;
+  const league = requestedLeagueId(new URL(request.url).searchParams.get('league'));
+  if (!league) {
+    return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
+  }
+  const config = leagueConfig(league);
+  if (!config.capabilities.reader) {
+    return NextResponse.json({
+      ok: false,
+      code: 'LEAGUE_NOT_READY',
+      league,
+      error: `${config.label} Reader 尚未完成正式盤面驗證，已停止讀取信用盤`,
+    }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+  }
   const snapshot = await loadReaderSnapshot();
   const reader = readerSnapshotStatus(snapshot);
   return NextResponse.json({
     ok: true,
+    league,
     configured: Boolean(process.env.READER_PAIR_SECRET),
     version: TAI888_READER_PARSER_VERSION,
     provider: 'TAI888_READER_AUTO',
@@ -96,6 +111,19 @@ export async function POST(request) {
     const rate = checkRateLimit(request, { id: 'tai888-credit-lines-v9-4-1', limit: 180, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500_000);
+    const league = requestedLeagueId(body?.league);
+    if (!league) {
+      return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
+    }
+    const config = leagueConfig(league);
+    if (!config.capabilities.reader) {
+      return NextResponse.json({
+        ok: false,
+        code: 'LEAGUE_NOT_READY',
+        league,
+        error: `${config.label} Reader 尚未完成正式盤面驗證，已停止配對信用盤`,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+    }
     const requestedSchedule = sanitizeSchedule(body?.schedule);
     const date = cleanText(body?.date, 20);
     if (!validDateString(date)) return NextResponse.json({ ok: false, error: '日期格式必須為 YYYY-MM-DD' }, { status: 400 });
@@ -133,7 +161,7 @@ export async function POST(request) {
         : [];
       if (games.length === requestedOpenCount) {
         return NextResponse.json({
-          ok: true, configured: true, blocked: false, readerFresh: true,
+          ok: true, league, configured: true, blocked: false, readerFresh: true,
           version: TAI888_READER_PARSER_VERSION, provider: 'TAI888_READER_AUTO',
           label: 'Tai888 Reader 自動信用盤', games,
           payloadHash: readerSnapshot.payloadHash, boardDate: readerSnapshot.boardDate,
@@ -152,6 +180,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       ok: true,
+      league,
       configured: Boolean(process.env.READER_PAIR_SECRET),
       blocked: true,
       readerFresh: readerState.fresh,

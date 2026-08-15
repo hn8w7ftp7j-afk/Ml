@@ -3,8 +3,8 @@ import './security.css';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
-  title: 'MLB 長期正期望值分析｜固定雙EV短板聯合情境模型',
-  description: '私人 MLB 台灣信用盤長期正期望值分析系統：實際開盤、逐腿結算、加權EV、穩健EV、固定可重現評分',
+  title: '棒球長期正期望值分析｜MLB・NPB・KBO・CPBL',
+  description: '私人多聯盟台灣信用盤長期正期望值分析系統：各聯盟獨立資料、模型、排名與下注識別',
   robots: { index: false, follow: false },
 };
 

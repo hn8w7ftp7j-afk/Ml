@@ -15,6 +15,7 @@ import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
 import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
 import { assertGameHasNotStarted, resolveOfficialGame, withClearedTimeout } from '../../../lib/official-schedule-v1.js';
+import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import {
   checkRateLimit,
   cleanText,
@@ -88,6 +89,19 @@ export async function POST(request) {
     const rate = checkRateLimit(request, { id: 'analyze-v9-3-3-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500000);
+    const league = requestedLeagueId(body?.league);
+    if (!league) {
+      return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
+    }
+    if (!leagueCanAnalyze(league)) {
+      const config = leagueConfig(league);
+      return NextResponse.json({
+        ok: false,
+        code: 'LEAGUE_NOT_READY',
+        league,
+        error: `${config.label}尚未完成正式賽程、Reader 與模型驗證，已停止分析`,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+    }
     const requestedGame = sanitizeGame(body.game);
     if (!requestedGame || !Array.isArray(body.markets)) return NextResponse.json({ ok: false, error: '缺少或無效的賽事／盤口資料' }, { status: 400 });
     const { game } = await resolveOfficialGame(requestedGame);
@@ -161,7 +175,7 @@ export async function POST(request) {
       dataAsOf: finalized.dataAsOf, simulationsPerScenario: finalized.scenarioSummary?.simulationsPerScenario, versions,
     };
     const repriceSnapshot = await signRepriceSnapshot(game, unsignedRepriceSnapshot);
-    const payload = { ok: true, game, context: frozenContext, analysis: finalized, repriceSnapshot, openMarkets: [...new Set(activeMarkets.map(row => row.market))] };
+    const payload = { ok: true, league, game, context: frozenContext, analysis: finalized, repriceSnapshot, openMarkets: [...new Set(activeMarkets.map(row => row.market))] };
     cacheSet(cacheKey, signature, payload);
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS' } });
   } catch (error) {
