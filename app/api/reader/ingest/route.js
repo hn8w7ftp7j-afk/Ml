@@ -91,11 +91,10 @@ export async function POST(request) {
     const envelope = validateTai888ReaderEnvelope(body, { receivedAt });
     const previous = await loadReaderSnapshot(boardDate);
     let schedule;
+    let fullSchedule;
     try {
-      schedule = officialPrestartSlate(
-        await fetchOfficialTaipeiSlate(boardDate),
-        Date.parse(envelope.pageActivityAt),
-      );
+      fullSchedule = await fetchOfficialTaipeiSlate(boardDate);
+      schedule = officialPrestartSlate(fullSchedule, Date.parse(envelope.pageActivityAt));
     } catch {
       return NextResponse.json({ ok: false, error: '無法取得完整 MLB 官方賽程，Reader 本次未寫入' }, { status: 502, headers });
     }
@@ -146,6 +145,7 @@ export async function POST(request) {
       deviceId: token.deviceId,
       receivedAt: envelope.receivedAt,
       envelope,
+      fullSchedule,
     });
 
     const storage = await storeReaderSnapshot(normalized);
