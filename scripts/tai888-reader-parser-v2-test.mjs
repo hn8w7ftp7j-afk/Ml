@@ -149,6 +149,29 @@ assert.throws(
   () => normalizeTai888ReaderPayload({ ...payload, expectedGameCount: 3 }, schedule, options),
   /顯示應有 3 場.*超過官方台北盤日 2 場/,
 );
+
+const retainedStartedGame = {
+  ...structuredClone(payload.games[0]),
+  awayCode: 'NYY', homeCode: 'TOR', boardTime: '05:00',
+};
+const boardWithStartedGame = {
+  ...payload,
+  expectedGameCount: 3,
+  detectedGameCount: 3,
+  games: [retainedStartedGame, ...structuredClone(payload.games)],
+};
+const filteredStartedResult = normalizeTai888ReaderPayload(boardWithStartedGame, schedule, {
+  ...options,
+  fullSchedule: [
+    { gamePk: 3, awayTeamId: 147, homeTeamId: 141, away: '紐約洋基', home: '多倫多藍鳥', gameDate: '2026-08-11T21:00:00Z' },
+    ...schedule,
+  ],
+});
+assert.equal(filteredStartedResult.rawGameCount, 2);
+assert.equal(filteredStartedResult.matchedGameCount, 2);
+assert.deepEqual(filteredStartedResult.games.map(game => game.gamePk), [1, 2]);
+assert.equal(filteredStartedResult.games.some(game => game.gamePk === 3), false);
+assert.equal(readerSnapshotIsComplete(filteredStartedResult), true);
 assert.throws(
   () => normalizeTai888ReaderPayload({ ...payload, detectedGameCount: 1 }, schedule, options),
   /detectedGameCount.*不一致/,
