@@ -140,7 +140,7 @@ function LoadingLine({ progress }) {
   return <div className="progressBox"><div className="progressTop"><strong>{progress.label}</strong><span>{progress.done}/{progress.total}</span></div><div className="progressTrack"><i style={{ width: `${ratio}%` }}/></div></div>;
 }
 
-function ResultRow({ row, onBet, betRecorded = false, now }) {
+function ResultRow({ row, onBet, betRecorded = false, now, verificationPending = false }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const formal = actualLine && row.executable === true && actualLineFreshNow(row, now);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
@@ -152,7 +152,9 @@ function ResultRow({ row, onBet, betRecorded = false, now }) {
       <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
       <div className="scoreMeta">校準等值勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜正式EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}｜{row.tag || '—'}</div>
-      {actualLine && candidate && <div className="qaLine">QA：{eligibility.passed ? 'PASS' : 'BLOCK'}{eligibility.passed ? '｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 分數上限✓' : '｜未通過完整正式下注門檻'}</div>}
+      {actualLine && candidate && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
+        ? '驗證中｜等待今日整批盤口分析完成'
+        : `QA：${eligibility.passed ? 'PASS｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 分數上限✓' : 'BLOCK｜未通過完整正式下注門檻'}`}</div>}
     </div>
     <div className="rowActions">
       {(eligibility.passed || betRecorded) && <button className={`mini ${betRecorded ? 'recorded' : 'green'}`} title={betRecorded ? '再按一次可取消標記' : '標記這個盤口已下注'} onClick={() => onBet(row)}>{betRecorded ? '已下注 ✓' : '記錄下注'}</button>}
@@ -160,12 +162,18 @@ function ResultRow({ row, onBet, betRecorded = false, now }) {
   </div>;
 }
 
-function GameCard({ item, onBet, isBetRecorded, readerExecutable, now }) {
+function GameCard({ item, onBet, isBetRecorded, readerExecutable, now, analysisInProgress = false }) {
   const readerBacked = item.actualSource?.provider === 'TAI888_READER_AUTO';
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT').map(row => {
     if (!gamePrestart) return { ...row, executable: false, lineFresh: false, betEligible: false, tag: '已達官方預定開打時間｜不下注' };
-    if (readerBacked && !readerExecutable) return { ...row, executable: false, lineFresh: false, betEligible: false, tag: '盤口尚未完成最新版本驗證｜不下注' };
+    if (readerBacked && !readerExecutable) return {
+      ...row,
+      executable: false,
+      lineFresh: false,
+      betEligible: false,
+      tag: analysisInProgress ? '今日整批分析進行中｜完成前暫不下注' : '盤口尚未完成最新版本驗證｜不下注',
+    };
     return row;
   });
   return <section className="gameCard">
@@ -182,7 +190,7 @@ function GameCard({ item, onBet, isBetRecorded, readerExecutable, now }) {
         {MARKET_ORDER.map(market => {
           const rows = actualRows.filter(row => row.market === market);
           if (!rows.length) return null;
-          return <div className="marketBlock actualMarket" key={market}><div className="marketTitle"><h3>{market}</h3></div>{rows.map(row => <ResultRow key={rowKey(row)} row={row} betRecorded={isBetRecorded(item, row)} onBet={value => onBet(item, value)} now={now}/>)}</div>;
+          return <div className="marketBlock actualMarket" key={market}><div className="marketTitle"><h3>{market}</h3></div>{rows.map(row => <ResultRow key={rowKey(row)} row={row} betRecorded={isBetRecorded(item, row)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)}</div>;
         })}
       </div>}
       <details className="details"><summary>查看模型與QA明細</summary><div className="detailGrid">
@@ -421,7 +429,7 @@ export default function Home() {
       return false;
     } finally {
       if (task.generation === analysisGenerationRef.current) {
-        setProgress(value => ({ ...value, done: Math.min(total, value.done + 1), label: `分析今日全部盤口：${index + 1}/${total}` }));
+        setProgress(value => ({ ...value, done: Math.min(total, value.done + 1), label: '分析今日全部盤口' }));
       }
     }
   }
@@ -688,7 +696,7 @@ export default function Home() {
         </div>
       </section>
       {!board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日分析</h2><p>按上方按鈕後，今天 Reader 已同步的 Tai888 信用盤會一次列出並完成分析。</p></section>}
-      {board.map(item => <GameCard key={item.game.gamePk} item={item} onBet={recordBet} isBetRecorded={isBetRecorded} readerExecutable={readerExecutable} now={clockNow}/>) }
+      {board.map(item => <GameCard key={item.game.gamePk} item={item} onBet={recordBet} isBetRecorded={isBetRecorded} readerExecutable={readerExecutable} analysisInProgress={progress.active} now={clockNow}/>) }
     </>}
 
     {tab === 'ranking' && <section className="panel"><h2>Tai888 信用盤總排名</h2>{ranked.length ? ranked.map((row, index) => {
