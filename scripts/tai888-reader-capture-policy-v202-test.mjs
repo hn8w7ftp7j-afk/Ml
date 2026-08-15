@@ -8,7 +8,7 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const policy = context.globalThis.Tai888CapturePolicy;
 assert.ok(policy);
-assert.equal(policy.version, 'TAI888-DOM-CAPTURE-POLICY-v2.0.8');
+assert.equal(policy.version, 'TAI888-DOM-CAPTURE-POLICY-v2.0.9');
 
 assert.equal(policy.shouldKeepRecord(1, '聯盟：MLB 美國職棒(8)'), true);
 assert.equal(policy.shouldKeepRecord(1, '聯盟：MLB 美國職棒-主隊總得分(9)'), true);

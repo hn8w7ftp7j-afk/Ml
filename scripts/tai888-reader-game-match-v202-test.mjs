@@ -57,10 +57,14 @@ const partial = payload([
   marketGame('KAN', 'LAD', '10:10', 10),
   marketGame('SDG', 'SFO', '19:45', 30),
 ]);
-assert.throws(
-  () => normalizeTai888ReaderPayload(partial, schedule, options),
-  /場次不完整：讀到 2 場.*共有 3 場/,
-);
+partial.expectedGameCount = 3;
+const partialResult = normalizeTai888ReaderPayload(partial, schedule, options);
+assert.equal(partialResult.rawGameCount, 2);
+assert.equal(partialResult.matchedGameCount, 2);
+assert.equal(partialResult.unopenedGameCount, 1);
+assert.equal(partialResult.unopenedGames[0].gamePk, 102);
+assert.equal(partialResult.unopenedGames[0].unavailableReason, 'not-rendered-by-reader');
+assert.equal(partialResult.unopenedGames[0].source.executable, false);
 
 const ambiguousSchedule = [
   { ...schedule[0], gameDate: '2026-08-12T02:10:00Z' },

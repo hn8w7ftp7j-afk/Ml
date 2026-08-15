@@ -147,7 +147,7 @@ assert.throws(
 
 assert.throws(
   () => normalizeTai888ReaderPayload({ ...payload, expectedGameCount: 3 }, schedule, options),
-  /expectedGameCount.*不一致/,
+  /顯示應有 3 場.*官方台北盤日 2 場不一致/,
 );
 assert.throws(
   () => normalizeTai888ReaderPayload({ ...payload, detectedGameCount: 1 }, schedule, options),

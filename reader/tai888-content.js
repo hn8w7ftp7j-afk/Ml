@@ -1,6 +1,6 @@
 (() => {
-  if (globalThis.__TAI888_READER_CAPTURE_V208__) return;
-  globalThis.__TAI888_READER_CAPTURE_V208__ = true;
+  if (globalThis.__TAI888_READER_CAPTURE_V209__) return;
+  globalThis.__TAI888_READER_CAPTURE_V209__ = true;
 
   const policy = globalThis.Tai888CapturePolicy;
   const normalizer = globalThis.Tai888RowNormalizer;
@@ -277,7 +277,7 @@
     const normalized = normalizer.normalizeRowRecords(records, { documentLooksStandardMlb });
 
     return {
-      version: 'TAI888-DOM-CAPTURE-v2.0.8',
+      version: 'TAI888-DOM-CAPTURE-v2.0.9',
       sourceHost: tai888SourceHost(),
       pageUrl: currentTai888PageUrl(),
       observedAt: new Date().toISOString(),

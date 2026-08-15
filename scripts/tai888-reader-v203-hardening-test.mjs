@@ -213,8 +213,9 @@ assert.equal(selected.selected.candidate.parsed.games.length, 2);
 const hiddenComplete = candidate({ tabId: 2, active: false, frameId: 3, lastAccessed: 50 });
 const activeIncomplete = candidate({ tabId: 1, active: true, games: [payloadA.games[0]], expected: 2 });
 const activeFailClosed = selectAuthoritativeBoard([hiddenComplete, activeIncomplete], { now });
-assert.equal(activeFailClosed.ok, false);
+assert.equal(activeFailClosed.ok, true, 'a complete open-market subset may represent DOM-hidden locked events');
 assert.equal(activeFailClosed.authorityTabId, 1, 'a hidden old tab must not replace the active incomplete board');
+assert.equal(activeFailClosed.selected.candidate.parsed.games.length, 1);
 
 const stale = candidate({ activity: '2026-08-14T16:56:00.000Z' });
 assert.equal(assessBoardCandidate(stale, now).issues.includes('stale-page-activity'), true);

@@ -309,7 +309,7 @@ export function parseTai888Capture(capture, now = new Date()) {
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
   const pageUrl = sanitizeTai888PageUrl(capture?.pageUrl);
   return {
-    version: 'TAI888-READER-DOM-v2.0.8',
+    version: 'TAI888-READER-DOM-v2.0.9',
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
     pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),

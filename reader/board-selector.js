@@ -102,7 +102,13 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   }
   if (rawDetectedGameCount == null || rawDetectedGameCount < 1) issues.push('missing-detected-game-count');
   if (!games.length) issues.push('no-parsed-games');
-  if (expectedGameCount && games.length !== expectedGameCount) {
+  // Tai888 keeps locked events in the league header count, but some rendered
+  // lock rows expose no usable DOM identity at all.  A smaller parsed set is
+  // therefore allowed only as a fail-closed subset: every parsed event still
+  // has to be a complete 4-market board (or an explicitly captured lock), and
+  // the server will reconcile the absent identities against the official
+  // slate as non-executable events.
+  if (expectedGameCount && games.length > expectedGameCount) {
     issues.push(`expected-${expectedGameCount}-parsed-${games.length}`);
   }
   if (rawDetectedGameCount != null && rawDetectedGameCount < games.length) {
@@ -201,7 +207,9 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
   const authorityTabId = tabs[0]?.tabId;
   const assessed = boardCandidates.map(candidate => assessBoardCandidate(candidate, now));
   const authorityFrames = assessed.filter(row => row.candidate.tabId === authorityTabId);
-  const complete = authorityFrames.filter(row => row.ok);
+  const validAuthorityFrames = authorityFrames.filter(row => row.ok);
+  const bestAuthorityCoverage = Math.max(0, ...validAuthorityFrames.map(row => row.detectedGameCount || 0));
+  const complete = validAuthorityFrames.filter(row => row.detectedGameCount === bestAuthorityCoverage);
   if (!complete.length) {
     return {
       ok: false,
@@ -226,10 +234,12 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
   // frame from one authoritative tab, but conflicting complete observations
   // for that same board date make the authority ambiguous and must fail closed.
   const authorityBoardDate = String(complete[0]?.candidate?.parsed?.boardDate || '');
-  const sameDateComplete = assessed.filter(row => (
+  const sameDateValid = assessed.filter(row => (
     row.ok
     && String(row.candidate?.parsed?.boardDate || '') === authorityBoardDate
   ));
+  const bestSameDateCoverage = Math.max(0, ...sameDateValid.map(row => row.detectedGameCount || 0));
+  const sameDateComplete = sameDateValid.filter(row => row.detectedGameCount === bestSameDateCoverage);
   const sameDateFingerprints = new Set(sameDateComplete.map(row => row.payloadFingerprint));
   if (sameDateFingerprints.size !== 1) {
     return {
