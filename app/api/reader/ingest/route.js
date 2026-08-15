@@ -47,9 +47,11 @@ function assertMonotonic(previous, envelope, boardChanged) {
 }
 
 function snapshotMatchesSchedule(snapshot, schedule) {
-  if (!readerSnapshotIsComplete(snapshot) || snapshot.games.length !== schedule.length) return false;
+  if (!readerSnapshotIsComplete(snapshot)) return false;
   const expected = schedule.map(game => Number(game.gamePk)).sort((left, right) => left - right);
-  const actual = snapshot.games.map(game => Number(game.gamePk)).sort((left, right) => left - right);
+  const actual = [...snapshot.games, ...(snapshot.unopenedGames || [])]
+    .map(game => Number(game.gamePk)).sort((left, right) => left - right);
+  if (actual.length !== expected.length) return false;
   return expected.every((gamePk, index) => gamePk === actual[index]);
 }
 
@@ -122,12 +124,13 @@ export async function POST(request) {
       return NextResponse.json({
         ok: true,
         heartbeat: true,
-        message: `Tai888 Reader 心跳正常｜盤口未變｜${refreshed.matchedGameCount}/${refreshed.rawGameCount} 場`,
+        message: `Tai888 Reader 心跳正常｜已開盤 ${refreshed.matchedGameCount} 場｜未開盤 ${refreshed.unopenedGameCount || 0} 場`,
         boardDate: refreshed.boardDate,
         payloadHash: refreshed.payloadHash,
         rawBoardHash: refreshed.rawBoardHash,
         rawGameCount: refreshed.rawGameCount,
         matchedGameCount: refreshed.matchedGameCount,
+        unopenedGameCount: refreshed.unopenedGameCount || 0,
         scheduleGameCount: refreshed.scheduleGameCount,
         unmatched: refreshed.unmatched || [],
         receivedAt: refreshed.receivedAt,
@@ -153,12 +156,13 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       heartbeat: false,
-      message: `Tai888 Reader 已自動同步 ${normalized.matchedGameCount}/${normalized.rawGameCount} 場`,
+      message: `Tai888 Reader 已同步｜已開盤 ${normalized.matchedGameCount} 場｜未開盤 ${normalized.unopenedGameCount || 0} 場`,
       boardDate: normalized.boardDate,
       payloadHash: normalized.payloadHash,
       rawBoardHash: normalized.rawBoardHash,
       rawGameCount: normalized.rawGameCount,
       matchedGameCount: normalized.matchedGameCount,
+      unopenedGameCount: normalized.unopenedGameCount || 0,
       scheduleGameCount: normalized.scheduleGameCount,
       unmatched: normalized.unmatched,
       receivedAt: normalized.receivedAt,

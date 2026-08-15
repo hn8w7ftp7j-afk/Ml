@@ -47,10 +47,11 @@ function readerSnapshotMatchesFullOfficialSlate(snapshot, officialSlate, boardDa
   if (!readerSnapshotIsComplete(snapshot)
     || snapshot?.boardDate !== boardDate
     || !slate.length
-    || snapshot.games.length !== slate.length
     || Number(snapshot.scheduleGameCount) !== slate.length) return false;
   try {
-    const verified = validateOfficialScheduleSubset(snapshot.games.map(row => row.game), slate, boardDate);
+    const snapshotRows = [...snapshot.games, ...(snapshot.unopenedGames || [])];
+    if (snapshotRows.length !== slate.length) return false;
+    const verified = validateOfficialScheduleSubset(snapshotRows.map(row => row.game), slate, boardDate);
     const expected = slate.map(game => Number(game.gamePk)).sort((left, right) => left - right);
     const actual = verified.map(game => Number(game.gamePk)).sort((left, right) => left - right);
     return expected.every((gamePk, index) => gamePk === actual[index]);
@@ -124,10 +125,13 @@ export async function POST(request) {
         game: officialByPk.get(Number(row.gamePk)),
         source: { ...row.source, observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt },
       }));
-      const games = verifiedReaderGames.length === schedule.length
+      const requestedOpenCount = schedule.filter(game => (
+        !new Set((readerSnapshot.unopenedGames || []).map(row => Number(row.gamePk))).has(Number(game.gamePk))
+      )).length;
+      const games = verifiedReaderGames.length === requestedOpenCount
         ? await signMarketGames(verifiedReaderGames)
         : [];
-      if (games.length === schedule.length) {
+      if (games.length === requestedOpenCount) {
         return NextResponse.json({
           ok: true, configured: true, blocked: false, readerFresh: true,
           version: TAI888_READER_PARSER_VERSION, provider: 'TAI888_READER_AUTO',
@@ -136,6 +140,10 @@ export async function POST(request) {
           observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt,
           pageActivityAt: readerSnapshot.pageActivityAt,
           rawGameCount: readerSnapshot.rawGameCount, matchedGameCount: games.length,
+          unopenedGameCount: schedule.length - games.length,
+          unopenedGames: (readerSnapshot.unopenedGames || [])
+            .filter(row => requestedGamePks.has(Number(row.gamePk)))
+            .map(row => ({ gamePk: row.gamePk, marketStatus: 'locked' })),
           scheduleGameCount: schedule.length, unmatched: readerSnapshot.unmatched || [],
           readerStatus: readerState, fetchedAt: new Date().toISOString(), cache: 'READER_RUNTIME_CACHE',
         }, { headers: { 'Cache-Control': 'no-store' } });

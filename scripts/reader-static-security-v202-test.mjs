@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.0.6');
-assert.equal(manifest.version_name, '2.0.6 DUPLICATE DOM FIX');
+assert.equal(manifest.version, '2.0.7');
+assert.equal(manifest.version_name, '2.0.7 LOCKED MARKET FIX');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -28,7 +28,7 @@ assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const READER_VERSION = '2\.0\.6'/);
+assert.match(background, /const READER_VERSION = '2\.0\.7'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.doesNotMatch(background, /captures\.flatMap|tables:\s*captures\.flatMap/);
 assert.match(background, /lastSuccessfulPayloadHash/);
@@ -76,7 +76,7 @@ vm.runInContext(
   backgroundContext,
 );
 const privateCapture = {
-  version: 'TAI888-DOM-CAPTURE-v2.0.6',
+  version: 'TAI888-DOM-CAPTURE-v2.0.7',
   sourceHost: 'www1.tai888.in',
   pageUrl: 'https://www1.tai888.in/newapp/?token=BACKGROUND_QUERY_SECRET#/BS?session=BACKGROUND_HASH_SECRET',
   frameUrl: 'https://www1.tai888.in/frame?token=BACKGROUND_FRAME_SECRET#private',

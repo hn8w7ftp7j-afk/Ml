@@ -118,6 +118,7 @@
       top: number(record?.top),
       bottom: number(record?.bottom),
       rawText: clean(record?.text),
+      marketLocked: record?.marketLocked === true,
       mapped,
       profile,
     };
@@ -192,7 +193,7 @@
         valueNear(cell, home.top, homeIndex),
       );
     });
-    return { cells, text: mappedRow.rawText, awayCode: away.code, homeCode: home.code };
+    return { cells, text: mappedRow.rawText, awayCode: away.code, homeCode: home.code, marketLocked: mappedRow.marketLocked };
   }
 
   function buildFromSplit(awayRow, homeRow) {
@@ -217,6 +218,7 @@
       text: clean(`${awayRow.rawText} | ${homeRow.rawText}`),
       awayCode: away.code,
       homeCode: home.code,
+      marketLocked: awayRow.marketLocked || homeRow.marketLocked,
     };
   }
 
@@ -316,7 +318,10 @@
     for (const game of games) {
       const timeText = game.cells[0]?.pair?.join('|') || '';
       const key = `${game.awayCode}|${game.homeCode}|${timeText}`;
-      const fingerprint = JSON.stringify(game.cells.map(cell => cell?.pair || []));
+      const fingerprint = JSON.stringify({
+        cells: game.cells.map(cell => cell?.pair || []),
+        marketLocked: game.marketLocked === true,
+      });
       if (seen.has(key)) {
         if (seen.get(key) !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
         continue;
@@ -328,7 +333,7 @@
     return {
       tables: unique.length ? [{
         headers: DEFINITIONS.map(definition => definition.label),
-        rows: unique.map(game => ({ cells: game.cells, text: game.text })),
+        rows: unique.map(game => ({ cells: game.cells, text: game.text, marketLocked: game.marketLocked === true })),
       }] : [],
       diagnostics: {
         recordCount: sorted.length,
@@ -347,6 +352,6 @@
   globalThis.Tai888RowNormalizer = Object.freeze({
     normalizeRowRecords,
     isStandardLeagueRow,
-    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.6',
+    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.7',
   });
 })();

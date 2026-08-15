@@ -280,8 +280,11 @@ export function parseTai888Capture(capture, now = new Date()) {
         first5Runline: map.first5Runline >= 0 ? parseRunline(cells[map.first5Runline]) : null,
         first5Total: map.first5Total >= 0 ? parseTotal(cells[map.first5Total]) : null,
         rawRowText: clean(row?.text || ''),
+        marketStatus: row?.marketLocked === true ? 'locked' : 'open',
       };
-      if (![game.fullRunline, game.fullTotal, game.first5Runline, game.first5Total].some(Boolean)) continue;
+      const markets = [game.fullRunline, game.fullTotal, game.first5Runline, game.first5Total];
+      if (!markets.some(Boolean) && game.marketStatus !== 'locked') continue;
+      if (game.marketStatus === 'locked' && markets.some(Boolean)) game.marketStatus = 'open';
       games.push(game);
     }
   }
@@ -302,7 +305,7 @@ export function parseTai888Capture(capture, now = new Date()) {
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
   const pageUrl = sanitizeTai888PageUrl(capture?.pageUrl);
   return {
-    version: 'TAI888-READER-DOM-v2.0.6',
+    version: 'TAI888-READER-DOM-v2.0.7',
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
     pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),
@@ -327,6 +330,7 @@ export function canonicalReaderPayload(payload) {
       homeCode: game.homeCode,
       boardDate: game.boardDate,
       boardTime: game.boardTime,
+      marketStatus: game.marketStatus === 'locked' ? 'locked' : 'open',
       fullRunline: canonicalRunline(game.fullRunline),
       fullTotal: canonicalTotal(game.fullTotal),
       first5Runline: canonicalRunline(game.first5Runline),

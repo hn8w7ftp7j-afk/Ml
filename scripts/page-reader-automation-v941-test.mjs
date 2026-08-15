@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
-assert.match(page, /const VERSION = '9\.4\.3'/);
+assert.match(page, /const VERSION = '9\.4\.4'/);
 assert.match(page, /mlb-positive-ev-v9-4-3/);
 assert.match(page, /mlb-positive-ev-v9-4-2/);
 assert.match(page, /setInterval\(refreshReader, 30000\)/);
@@ -72,7 +72,9 @@ assert.match(finalizer, /!executable/);
 const credit = fs.readFileSync('app/api/credit-lines/route.js', 'utf8');
 assert.match(credit, /limit: 180/);
 assert.match(credit, /readerSnapshotMatchesFullOfficialSlate/);
-assert.match(credit, /games\.length === schedule\.length/);
+assert.match(credit, /snapshotRows\.length !== slate\.length/);
+assert.match(credit, /unopenedGames/);
+assert.match(credit, /games\.length === requestedOpenCount/);
 assert.doesNotMatch(credit, /loadTai888VisibleText/);
 assert.doesNotMatch(credit, /TAI888_READ_ONLY_CREDIT/);
 assert.doesNotMatch(credit, /clipboard_text|screenshot/);
@@ -81,4 +83,4 @@ const visionRoute = fs.readFileSync('app/api/vision/route.js', 'utf8');
 assert.match(visionRoute, /VISION_IMPORT_REMOVED/);
 assert.match(visionRoute, /status: 410/);
 
-console.log('MLB EV v9.4.3 Reader-only automation, bet ledger and stale-gating audit PASS');
+console.log('MLB EV v9.4.4 Reader-only automation, bet ledger and stale-gating audit PASS');

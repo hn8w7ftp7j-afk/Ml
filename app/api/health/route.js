@@ -19,7 +19,7 @@ export async function GET() {
   const readerStatus = readerSnapshotStatus(readerSnapshot);
   return NextResponse.json({
     ok: true,
-    version: '9.4.3',
+    version: '9.4.4',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     dataVersion: DATA_VERSION,

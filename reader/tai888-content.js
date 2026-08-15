@@ -165,6 +165,21 @@
     };
   }
 
+  function hasExplicitMarketLock(element) {
+    const text = clean(element?.innerText || element?.textContent || '');
+    if (/(?:未開盤|未开盘|封盤|封盘|鎖盤|锁盘|暫停受注|暂停受注|🔒)/u.test(text)) return true;
+    const selector = [
+      '[class*="lock" i]', '[id*="lock" i]', '[title*="lock" i]',
+      '[aria-label*="lock" i]', '[alt*="lock" i]', 'img[src*="lock" i]',
+      '[title*="鎖" i]', '[title*="锁" i]', '[aria-label*="鎖" i]', '[aria-label*="锁" i]',
+    ].join(',');
+    try {
+      return Boolean(element?.matches?.(selector) || element?.querySelector?.(selector));
+    } catch {
+      return false;
+    }
+  }
+
   function rowRecord(element, order) {
     if (!visible(element)) return null;
     let cells = rowCellElements(element).map(cellRecord)
@@ -186,6 +201,7 @@
       left: rectangle.left,
       right: rectangle.right,
       tag: element.tagName,
+      marketLocked: hasExplicitMarketLock(element),
     };
   }
 
@@ -243,7 +259,7 @@
     const normalized = normalizer.normalizeRowRecords(records, { documentLooksStandardMlb });
 
     return {
-      version: 'TAI888-DOM-CAPTURE-v2.0.6',
+      version: 'TAI888-DOM-CAPTURE-v2.0.7',
       sourceHost: tai888SourceHost(),
       pageUrl: currentTai888PageUrl(),
       observedAt: new Date().toISOString(),

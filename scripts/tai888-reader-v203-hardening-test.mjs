@@ -227,6 +227,21 @@ const missingMarket = candidate();
 missingMarket.parsed.games[0].first5Total = null;
 assert.equal(assessBoardCandidate(missingMarket, now).ok, false, 'all four markets are mandatory');
 
+const explicitlyLocked = candidate();
+explicitlyLocked.parsed.games[0] = {
+  ...explicitlyLocked.parsed.games[0],
+  marketStatus: 'locked',
+  fullRunline: null,
+  fullTotal: null,
+  first5Runline: null,
+  first5Total: null,
+};
+assert.equal(assessBoardCandidate(explicitlyLocked, now).ok, true, 'an explicitly locked event may have no markets');
+
+const fakeLocked = structuredClone(explicitlyLocked);
+fakeLocked.parsed.games[0].marketStatus = 'open';
+assert.equal(assessBoardCandidate(fakeLocked, now).ok, false, 'missing markets without explicit DOM lock evidence must fail closed');
+
 const extremeWater = candidate();
 extremeWater.parsed.games[0].fullTotal.overWater = 0.49;
 extremeWater.parsed.games[0].fullTotal.underWater = 1.83;
@@ -256,5 +271,8 @@ const contentSource = fs.readFileSync(new URL('../reader/tai888-content.js', imp
 assert.match(contentSource, /let lastMutationAt = Date\.now\(\)/);
 assert.match(contentSource, /lastMutationAt = Date\.now\(\)/);
 assert.match(contentSource, /lastMutationAt: new Date\(lastMutationAt\)\.toISOString\(\)/);
+assert.match(contentSource, /hasExplicitMarketLock/);
+assert.match(contentSource, /img\[src\*="lock" i\]/);
+assert.match(contentSource, /marketLocked: hasExplicitMarketLock\(element\)/);
 
 console.log('Tai888 Reader 2.0.3 hardening: strict contracts, multiframes, completeness, liveness and retry semantics PASS');

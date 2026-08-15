@@ -77,6 +77,35 @@ assert.equal(
   false,
 );
 
+const lockedPayload = structuredClone(payload);
+lockedPayload.games[1] = {
+  awayCode: 'CLE', homeCode: 'DET', boardDate: '2026-08-12', boardTime: '06:40',
+  marketStatus: 'locked',
+  fullRunline: null, fullTotal: null, first5Runline: null, first5Total: null,
+};
+const lockedResult = normalizeTai888ReaderPayload(lockedPayload, schedule, options);
+assert.equal(lockedResult.rawGameCount, 2);
+assert.equal(lockedResult.matchedGameCount, 1);
+assert.equal(lockedResult.unopenedGameCount, 1);
+assert.equal(lockedResult.games.length, 1);
+assert.equal(lockedResult.unopenedGames.length, 1);
+assert.equal(lockedResult.unopenedGames[0].gamePk, 2);
+assert.equal(readerSnapshotIsComplete(lockedResult), true);
+
+const fakeLockedPayload = structuredClone(lockedPayload);
+fakeLockedPayload.games[1].marketStatus = 'open';
+assert.throws(
+  () => normalizeTai888ReaderPayload(fakeLockedPayload, schedule, options),
+  /四個市場與八個可執行方向/,
+);
+
+const contaminatedLockedPayload = structuredClone(lockedPayload);
+contaminatedLockedPayload.games[1].fullTotal = { line: '8+30', overWater: .94, underWater: .94 };
+assert.throws(
+  () => normalizeTai888ReaderPayload(contaminatedLockedPayload, schedule, options),
+  /鎖盤場次不得夾帶盤口資料/,
+);
+
 const spoofed = { ...payload, payloadHash: 'f'.repeat(64) };
 assert.equal(rawTai888ReaderPayloadHash(spoofed), result.rawBoardHash, 'client hash must not control server board identity');
 assert.equal(normalizeTai888ReaderPayload(spoofed, schedule, options).payloadHash, result.payloadHash);

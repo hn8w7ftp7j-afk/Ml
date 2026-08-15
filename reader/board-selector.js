@@ -66,6 +66,20 @@ export function validateStandardReaderGame(game) {
   return { ok: issues.length === 0, issues, directionCount };
 }
 
+function validateLockedReaderGame(game) {
+  const issues = [];
+  if (!TEAM_CODE.test(String(game?.awayCode || ''))) issues.push('invalid-away-code');
+  if (!TEAM_CODE.test(String(game?.homeCode || ''))) issues.push('invalid-home-code');
+  if (game?.awayCode === game?.homeCode) issues.push('same-team');
+  if (!DATE_TOKEN.test(String(game?.boardDate || ''))) issues.push('invalid-date');
+  if (!TIME_TOKEN.test(String(game?.boardTime || ''))) issues.push('invalid-time');
+  if (game?.marketStatus !== 'locked') issues.push('missing-explicit-lock');
+  if ([game?.fullRunline, game?.fullTotal, game?.first5Runline, game?.first5Total].some(Boolean)) {
+    issues.push('locked-game-has-market');
+  }
+  return { ok: issues.length === 0, issues, directionCount: 0 };
+}
+
 export function assessBoardCandidate(candidate, now = Date.now()) {
   const capture = candidate?.capture || {};
   const parsed = candidate?.parsed || {};
@@ -104,7 +118,9 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   const identities = new Set();
   const dates = new Set();
   for (const [index, game] of games.entries()) {
-    const validation = validateStandardReaderGame(game);
+    const validation = game?.marketStatus === 'locked'
+      ? validateLockedReaderGame(game)
+      : validateStandardReaderGame(game);
     issues.push(...validation.issues.map(issue => `game-${index + 1}:${issue}`));
     const identity = `${game?.boardDate || ''}|${game?.boardTime || ''}|${game?.awayCode || ''}|${game?.homeCode || ''}`;
     if (identities.has(identity)) issues.push(`duplicate-game:${identity}`);

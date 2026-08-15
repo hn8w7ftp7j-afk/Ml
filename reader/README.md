@@ -1,4 +1,4 @@
-# Tai888 Reader v2.0.6 DUPLICATE DOM FIX
+# Tai888 Reader v2.0.7 LOCKED MARKET FIX
 
 ## 功能
 
@@ -20,4 +20,4 @@
 5. 按「載入未封裝項目」，選擇解壓後的 `Tai888-Reader` 資料夾。
 6. 點 Reader 圖示，第一次輸入一次配對密碼。
 7. 保持 Tai888 MLB 盤口頁開著，之後自動同步。
-8. 在擴充功能頁確認顯示 `2.0.6 DUPLICATE DOM FIX`。
+8. 在擴充功能頁確認顯示 `2.0.7 LOCKED MARKET FIX`。
