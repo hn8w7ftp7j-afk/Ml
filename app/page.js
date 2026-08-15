@@ -355,14 +355,10 @@ export default function Home() {
 
   const ranked = useMemo(() => board.flatMap(item => {
     if (!gameIsPrestartNow(item.game, clockNow)) return [];
-    const readerBacked = item.actualSource?.provider === 'TAI888_READER_AUTO';
-    const actualAllowed = !readerBacked || readerExecutable;
-    return actualAllowed
-      ? (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT'
-        && hasActualWater(row.water) && row.executable === true && actualLineFreshNow(row, clockNow))
-        .map(row => ({ ...row, game: item.game, item }))
-      : [];
-  }).filter(row => Number.isFinite(Number(row.score))).sort((a, b) => Number(b.score) - Number(a.score)), [board, readerExecutable, clockNow]);
+    return (item.customData?.analysis?.results || [])
+      .filter(row => row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water))
+      .map(row => ({ ...row, game: item.game, item }));
+  }).filter(row => Number.isFinite(Number(row.score))).sort((a, b) => Number(b.score) - Number(a.score)), [board, clockNow]);
 
   function isBetRecorded(item, row) {
     return bets.some(bet => betMatches(bet, date, item.game.gamePk, row));
@@ -701,7 +697,7 @@ export default function Home() {
 
     {tab === 'ranking' && <section className="panel"><h2>Tai888 信用盤總排名</h2>{ranked.length ? ranked.map((row, index) => {
       const recorded = isBetRecorded(row.item, row);
-      const eligible = formalBetEligibility(row, 7.2, clockNow).passed;
+      const eligible = readerExecutable && formalBetEligibility(row, 7.2, clockNow).passed;
       return <div className={`rankRow ${recorded ? 'betRecorded' : ''}`} key={`${row.game.gamePk}-${rowKey(row)}`}><b>{index + 1}</b><strong>{scoreText(row.score)}</strong><div><span>{row.pick}</span><small>{matchup(row.game)}｜{row.market}｜信用盤 {waterText(row.water)}｜校準等值勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEvenProbability(row.water, 0.015))}｜正式EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}</small></div>{(eligible || recorded) && <button className={`mini ${recorded ? 'recorded' : 'green'}`} title={recorded ? '再按一次可取消標記' : '標記這個盤口已下注'} onClick={() => recordBet(row.item, row)}>{recorded ? '已下注 ✓' : '記錄下注'}</button>}</div>;
     }) : <div className="emptySmall">完成今日 Tai888 信用盤分析後顯示排名。</div>}</section>}
 
