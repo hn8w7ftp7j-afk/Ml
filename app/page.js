@@ -283,13 +283,31 @@ export default function Home() {
   }, []);
   useEffect(() => {
     let active = true;
-    const refreshReader = () => requestJSON(`/api/reader/status?date=${encodeURIComponent(date)}&t=${Date.now()}`, {}, 20000)
-      .then(value => { if (active) commitReaderStatus(value); })
-      .catch(cause => { if (active) invalidateReaderStatus(cause?.message || cause); });
+    const refreshReader = async () => {
+      try {
+        const value = await requestJSON(`/api/reader/status?date=${encodeURIComponent(date)}&t=${Date.now()}`, {}, 20000);
+        if (!active) return;
+        commitReaderStatus(value);
+        if (value?.fresh || board.length || operationBusyRef.current || readerPollBusyRef.current) return;
+
+        // The Tai888 board commonly rolls to the next Taipei date during the
+        // evening while the browser calendar still defaults to today. Discover
+        // the latest complete Reader snapshot and follow its board date so the
+        // user never analyzes yesterday's expired snapshot by mistake.
+        const latest = await requestJSON(`/api/reader/status?t=${Date.now()}`, {}, 20000);
+        if (!active || !latest?.fresh || !/^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))) return;
+        if (latest.boardDate !== currentDateRef.current) {
+          setNotice(`已依 Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
+          setDate(latest.boardDate);
+        }
+      } catch (cause) {
+        if (active) invalidateReaderStatus(cause?.message || cause);
+      }
+    };
     refreshReader();
     const timer = window.setInterval(refreshReader, 30000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [date]);
+  }, [date, board.length]);
   useEffect(() => {
     const hash = readerStatus?.payloadHash || '';
     const key = readerHashKey(date, hash);
