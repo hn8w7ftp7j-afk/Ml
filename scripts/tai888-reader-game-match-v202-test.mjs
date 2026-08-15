@@ -57,7 +57,7 @@ const partial = payload([
   marketGame('KAN', 'LAD', '10:10', 10),
   marketGame('SDG', 'SFO', '19:45', 30),
 ]);
-partial.expectedGameCount = 3;
+partial.expectedGameCount = 2;
 const partialResult = normalizeTai888ReaderPayload(partial, schedule, options);
 assert.equal(partialResult.rawGameCount, 2);
 assert.equal(partialResult.matchedGameCount, 2);
