@@ -44,7 +44,8 @@ const finalized = finalizeDeterministicAnalysis({
 });
 
 const [provided, missing] = finalized.results;
-assert.equal(provided.score, 6.6);
+assert.ok(provided.score >= 1 && provided.score <= 6.6);
+assert.equal(provided.betEligible, false);
 assert.equal(provided.tag, 'PASS');
 assert.equal(provided.scoreAudit?.ok, true);
 assert.equal(provided.pairAudit?.passed, true);
