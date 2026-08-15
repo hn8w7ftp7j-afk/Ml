@@ -1,4 +1,4 @@
-# Tai888 Reader 2.0.6 / MLB EV 9.4.2
+# Tai888 Reader 2.0.6 / MLB EV 9.4.3
 
 ## Goal
 
@@ -31,7 +31,7 @@ A user-authenticated desktop Chrome session displays the Tai888 MLB board. The R
 
 ## Versions
 
-- Website: 9.4.2
+- Website: 9.4.3
 - Next.js: 15.5.23
 - Extension: 2.0.6 (`2.0.6 DUPLICATE DOM FIX`)
 - Reader API/parser/store versions are returned by health/status endpoints and included in stored snapshots.

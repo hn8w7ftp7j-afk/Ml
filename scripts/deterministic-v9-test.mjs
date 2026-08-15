@@ -18,7 +18,7 @@ const score = (weightedEV, robustEV, options = {}) => deterministicScore({
   ...options,
 });
 
-assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.0.0');
+assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.1.0');
 assert.equal(score(0, 0).score, 6.6);
 assert.equal(score(-0.001, 0.02).score, 6.6);
 assert.equal(score(0.01, 0).score, 7.1);
@@ -49,6 +49,9 @@ assert.equal(score(0.080, 0.048, { crossMarketVerified: true }).score, 8.6);
 assert.equal(score(0.095, 0.060, { crossMarketVerified: true }).score, 8.7);
 assert.equal(score(0.115, 0.076, { crossMarketVerified: true }).score, 8.9);
 assert.equal(score(0.115, 0.076, { crossMarketVerified: false }).score, 8.4);
+assert.equal(score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: 0.12 }).score, 7.9);
+assert.equal(score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: 0.18 }).score, 7.4);
+assert.ok(score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: 0.18 }).caps.includes('RAW_MARKET_PROBABILITY_GAP_GTE_18_PERCENT'));
 const saturated = score(0.120, 0.080, { crossMarketVerified: true });
 assert.equal(saturated.score, 8.9);
 assert.equal(saturated.rawScore, 9);

@@ -51,7 +51,7 @@ async function waitUntilReady() {
   for (let index = 0; index < 60; index += 1) {
     try {
       const { value } = await json('/api/health?t=' + Date.now(), {}, 20000);
-      if (value.ok && value.version === '9.4.2') return value;
+      if (value.ok && value.version === '9.4.3') return value;
       last = JSON.stringify(value);
     } catch (error) { last = String(error?.message || error); }
     await new Promise(resolve => setTimeout(resolve, 1000));

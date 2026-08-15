@@ -3,14 +3,11 @@ import { appPasswordConfigured, sessionSecretConfigured, siteAuthConfigured } fr
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
 import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
-import { VISION_VERSION } from '../../../lib/vision.js';
 import { BATCH_VERSION } from '../../../lib/batch.js';
 import { FINAL_ENGINE_VERSION, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
 import { SCORE_FORMULA_VERSION, SCORE_POLICY_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
-import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/reference-lines.js';
-import { TAI888_SOURCE_VERSION, tai888SourceStatus } from '../../../lib/tai888-source.js';
 import { ANALYSIS_CACHE_VERSION } from '../../../lib/analysis-cache-v9.js';
 import { readerPairingConfigured } from '../../../lib/reader-auth-v2.js';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
@@ -18,17 +15,15 @@ import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const referenceLines = referenceProviderStatus();
-  const creditLines = tai888SourceStatus();
   const readerSnapshot = await loadReaderSnapshot();
   const readerStatus = readerSnapshotStatus(readerSnapshot);
   return NextResponse.json({
     ok: true,
-    version: '9.4.2',
+    version: '9.4.3',
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
     dataVersion: DATA_VERSION,
-    visionVersion: VISION_VERSION,
+    visionImportEnabled: false,
     batchVersion: BATCH_VERSION,
     finalEngineVersion: FINAL_ENGINE_VERSION,
     scoreFormulaVersion: SCORE_FORMULA_VERSION,
@@ -37,12 +32,8 @@ export async function GET() {
     uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
     repriceVersion: REPRICE_VERSION,
     analysisCacheVersion: ANALYSIS_CACHE_VERSION,
-    referenceLinesVersion: REFERENCE_LINES_VERSION,
-    referenceLinesConfigured: referenceLines.configured,
-    referenceLinesProvider: referenceLines.primary,
-    creditLinesVersion: TAI888_SOURCE_VERSION,
-    creditLinesConfigured: creditLines.configured,
-    creditLinesProvider: creditLines.configured ? creditLines.provider : null,
+    referenceLinesEnabled: false,
+    creditLinesProvider: 'TAI888_READER_AUTO',
     readerPairingConfigured: readerPairingConfigured(),
     readerStoreVersion: READER_STORE_VERSION,
     readerAvailable: readerStatus.available,
@@ -52,7 +43,6 @@ export async function GET() {
     readerPayloadHash: readerSnapshot?.payloadHash || null,
     deterministicScoring: true,
     gptScoringEnabled: false,
-    aiGatewayConfiguredForVision: Boolean(process.env.AI_GATEWAY_API_KEY),
     databaseConfigured: Boolean(process.env.DATABASE_URL),
     authConfigured: siteAuthConfigured(),
     appPasswordConfigured: appPasswordConfigured(),
