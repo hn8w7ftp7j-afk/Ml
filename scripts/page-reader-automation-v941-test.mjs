@@ -24,7 +24,7 @@ assert.match(page, /formalBetEligibility/);
 assert.match(page, /mergeRecognizedGameInputs/);
 assert.match(page, /readerExecutable=\{readerExecutable\}/);
 assert.match(page, /acknowledgedReaderKey\.startsWith\(`\$\{currentReaderHashKey\}:`\)/);
-assert.match(page, /confirmLiveReaderRevision/);
+assert.match(page, /confirmLiveReaderHash/);
 assert.match(page, /readerRevisionKey/);
 assert.match(page, /creditRevisionRef/);
 assert.match(page, /pageActivityAt: credit\.pageActivityAt/);

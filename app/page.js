@@ -8,7 +8,7 @@ import {
   actualLineFreshNow,
   formalBetEligibility,
   gameIsPrestartNow,
-  liveReaderRevisionMatches,
+  liveReaderHashMatches,
   mergeReaderStatusHighWater,
   mergeRecognizedGameInputs,
   readerHashKey,
@@ -490,12 +490,12 @@ export default function Home() {
     return rows;
   }
 
-  async function confirmLiveReaderRevision(targetDate, payloadHash, pageActivityAt, generation) {
+  async function confirmLiveReaderHash(targetDate, payloadHash, generation) {
     const live = await requestJSON(`/api/reader/status?date=${encodeURIComponent(targetDate)}&t=${Date.now()}`, {}, 20000);
     if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
     commitReaderStatus(live);
     const current = readerStatusRef.current;
-    return liveReaderRevisionMatches(targetDate, current, payloadHash, pageActivityAt);
+    return liveReaderHashMatches(targetDate, current, payloadHash);
   }
 
   async function analyzeBoardItem(task, index, total) {
@@ -672,7 +672,7 @@ export default function Home() {
       });
       let readerHashAcknowledged = !readerHashRequired;
       const creditRevision = readerRevisionKey(targetDate, credit.payloadHash, credit.pageActivityAt);
-      if (hashEligible && creditRevision && await confirmLiveReaderRevision(targetDate, credit.payloadHash, credit.pageActivityAt, generation)) {
+      if (hashEligible && creditRevision && await confirmLiveReaderHash(targetDate, credit.payloadHash, generation)) {
         creditRevisionRef.current = creditRevision;
         const completedKey = readerHashKey(targetDate, credit.payloadHash);
         autoAnalyzeHashRef.current = completedKey;
@@ -776,7 +776,7 @@ export default function Home() {
       });
       if (!stillCurrent()) return;
       const hashEligible = shouldAcknowledgeReaderHash({ payloadHash: credit.payloadHash, expectedCount: expectedItems.length, completedCount: completed, failedCount: failed });
-      const acknowledged = hashEligible && await confirmLiveReaderRevision(targetDate, credit.payloadHash, credit.pageActivityAt, generation);
+      const acknowledged = hashEligible && await confirmLiveReaderHash(targetDate, credit.payloadHash, generation);
       if (!stillCurrent()) return;
       if (acknowledged) {
         creditRevisionRef.current = creditRevision;
