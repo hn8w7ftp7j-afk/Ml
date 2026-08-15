@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.0.9",
-  "version_name": "2.0.9 LOCKED SLATE FIX",
+  "version": "2.0.10",
+  "version_name": "2.0.10 PARTIAL MARKET FIX",
   "description": "只讀已登入瀏覽器中可見的 Tai888 MLB 標準盤，支援分列、子框架與自動同步。",
   "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [

@@ -226,7 +226,10 @@ assert.equal(assessBoardCandidate(captureConflict, now).ok, false);
 
 const missingMarket = candidate();
 missingMarket.parsed.games[0].first5Total = null;
-assert.equal(assessBoardCandidate(missingMarket, now).ok, false, 'all four markets are mandatory');
+const partialMarketAssessment = assessBoardCandidate(missingMarket, now);
+assert.equal(partialMarketAssessment.ok, true, 'a half-open event must not block complete games');
+assert.equal(partialMarketAssessment.candidate.parsed.games[0].marketStatus, 'locked');
+assert.equal(partialMarketAssessment.candidate.parsed.games[0].fullRunline, null, 'partial odds must be discarded, not uploaded');
 
 const explicitlyLocked = candidate();
 explicitlyLocked.parsed.games[0] = {

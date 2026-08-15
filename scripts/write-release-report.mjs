@@ -6,9 +6,9 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const RELEASE = path.join(ROOT, 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.0.9-LOCKED-SLATE-FIX.zip';
+const ARCHIVE_NAME = 'Tai888-Reader-v2.0.10-PARTIAL-MARKET-FIX.zip';
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
-const REPORT_NAME = 'Tai888-Reader-v2.0.9-VERIFICATION.md';
+const REPORT_NAME = 'Tai888-Reader-v2.0.10-VERIFICATION.md';
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
 const flags = new Map(process.argv.slice(2).map(argument => {
   const [name, ...rest] = argument.replace(/^--/, '').split('=');
@@ -38,7 +38,7 @@ const dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: ROOT
 const sourceRef = process.env.GITHUB_SHA || `${commit}${dirty ? '+working-tree' : ''}`;
 const generatedAt = new Date().toISOString();
 
-const report = `# Tai888 Reader 2.0.9 / MLB EV 9.4.4 驗證報告
+const report = `# Tai888 Reader 2.0.10 / MLB EV 9.4.4 驗證報告
 
 - 產生時間：${generatedAt}
 - 原始碼基線：\`${sourceRef}\`

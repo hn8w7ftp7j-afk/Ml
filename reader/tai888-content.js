@@ -277,7 +277,7 @@
     const normalized = normalizer.normalizeRowRecords(records, { documentLooksStandardMlb });
 
     return {
-      version: 'TAI888-DOM-CAPTURE-v2.0.9',
+      version: 'TAI888-DOM-CAPTURE-v2.0.10',
       sourceHost: tai888SourceHost(),
       pageUrl: currentTai888PageUrl(),
       observedAt: new Date().toISOString(),

@@ -352,6 +352,6 @@
   globalThis.Tai888RowNormalizer = Object.freeze({
     normalizeRowRecords,
     isStandardLeagueRow,
-    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.9',
+    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.10',
   });
 })();

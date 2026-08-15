@@ -80,12 +80,37 @@ function validateLockedReaderGame(game) {
   return { ok: issues.length === 0, issues, directionCount: 0 };
 }
 
+function normalizePartialGameAsUnavailable(game) {
+  if (game?.marketStatus === 'locked') return game;
+  const validation = validateStandardReaderGame(game);
+  if (validation.ok || validation.directionCount <= 0 || validation.directionCount >= 8) return game;
+  const nonMissingIssues = validation.issues.filter(issue => (
+    !/:missing$/.test(issue) && !/^direction-count:\d+$/.test(issue)
+  ));
+  if (nonMissingIssues.length) return game;
+  // Tai888 may open only the full-game or first-five pair for an event. Never
+  // upload that half-board as executable and never fabricate the missing
+  // directions. Preserve only its identity as an unavailable event so the
+  // remaining complete games can still sync safely.
+  return {
+    ...game,
+    marketStatus: 'locked',
+    fullRunline: null,
+    fullTotal: null,
+    first5Runline: null,
+    first5Total: null,
+  };
+}
+
 export function assessBoardCandidate(candidate, now = Date.now()) {
   const capture = candidate?.capture || {};
   const parsed = candidate?.parsed || {};
   const diagnostics = capture?.diagnostics || {};
   const issues = [];
-  const games = Array.isArray(parsed.games) ? parsed.games : [];
+  const games = (Array.isArray(parsed.games) ? parsed.games : []).map(normalizePartialGameAsUnavailable);
+  const normalizedCandidate = games === parsed.games
+    ? candidate
+    : { ...candidate, parsed: { ...parsed, games } };
   const expectedGameCount = finiteInteger(diagnostics.expectedGameCount);
   const rawDetectedGameCount = finiteInteger(diagnostics.gameCount);
   // Tai888 renders duplicate responsive/measurement nodes for the same event.
@@ -151,7 +176,7 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   return {
     ok: issues.length === 0,
     issues,
-    candidate,
+    candidate: normalizedCandidate,
     expectedGameCount,
     detectedGameCount,
     rawDetectedGameCount,
@@ -159,7 +184,7 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
     pageActivityTime,
     // Host/frame metadata identifies the source but must not make two frames
     // with the exact same contracts appear to disagree.
-    payloadFingerprint: games.length ? canonicalReaderPayload({ ...parsed, sourceHost: '' }) : '',
+    payloadFingerprint: games.length ? canonicalReaderPayload({ ...parsed, games, sourceHost: '' }) : '',
   };
 }
 

@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { MAX_TAI888_TABS, selectAuthoritativeBoard, shouldSkipSuccessfulPayload, withinTai888TabScanLimit } from './board-selector.js';
 
-const READER_VERSION = '2.0.9';
+const READER_VERSION = '2.0.10';
 const MLB_EV_ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const TAI888_PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const ALARM_NAME = 'tai888-reader-auto-sync';
@@ -146,7 +146,7 @@ function sanitizeCaptureMetadata(value) {
   const pageUrl = sanitizeTai888PageUrl(input.pageUrl);
   const frameUrl = sanitizeTai888PageUrl(input.frameUrl);
   return {
-    version: input.version === 'TAI888-DOM-CAPTURE-v2.0.9' ? input.version : '',
+    version: input.version === 'TAI888-DOM-CAPTURE-v2.0.10' ? input.version : '',
     sourceHost: tai888Host(input.sourceHost) || tai888Host(pageUrl) || tai888Host(frameUrl),
     pageUrl,
     frameUrl,
