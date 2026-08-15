@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.0.7');
-assert.equal(manifest.version_name, '2.0.7 LOCKED MARKET FIX');
+assert.equal(manifest.version, '2.0.8');
+assert.equal(manifest.version_name, '2.0.8 RENDERED LOCK FIX');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -28,7 +28,7 @@ assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const READER_VERSION = '2\.0\.7'/);
+assert.match(background, /const READER_VERSION = '2\.0\.8'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.doesNotMatch(background, /captures\.flatMap|tables:\s*captures\.flatMap/);
 assert.match(background, /lastSuccessfulPayloadHash/);
@@ -76,7 +76,7 @@ vm.runInContext(
   backgroundContext,
 );
 const privateCapture = {
-  version: 'TAI888-DOM-CAPTURE-v2.0.7',
+  version: 'TAI888-DOM-CAPTURE-v2.0.8',
   sourceHost: 'www1.tai888.in',
   pageUrl: 'https://www1.tai888.in/newapp/?token=BACKGROUND_QUERY_SECRET#/BS?session=BACKGROUND_HASH_SECRET',
   frameUrl: 'https://www1.tai888.in/frame?token=BACKGROUND_FRAME_SECRET#private',
@@ -108,6 +108,10 @@ assert.doesNotMatch(content, /document\.title|(?:document\.)?location\.href/);
 assert.match(content, /document\.location\.origin/);
 assert.match(content, /document\.location\.pathname/);
 assert.match(content, /\^#\\\/BS/);
+assert.match(content, /getComputedStyle\(node, '::before'\)/);
+assert.match(content, /getComputedStyle\(node, '::after'\)/);
+assert.equal(content.includes('\\\\f023'), true);
+assert.match(content, /aria-disabled/);
 assert.doesNotMatch(content, /TAI888_BOARD_MUTATED[^\n]*pageUrl/);
 
 const browserParser = fs.readFileSync('reader/parser.js', 'utf8');

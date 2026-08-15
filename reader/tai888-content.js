@@ -1,6 +1,6 @@
 (() => {
-  if (globalThis.__TAI888_READER_CAPTURE_V206__) return;
-  globalThis.__TAI888_READER_CAPTURE_V206__ = true;
+  if (globalThis.__TAI888_READER_CAPTURE_V208__) return;
+  globalThis.__TAI888_READER_CAPTURE_V208__ = true;
 
   const policy = globalThis.Tai888CapturePolicy;
   const normalizer = globalThis.Tai888RowNormalizer;
@@ -172,9 +172,27 @@
       '[class*="lock" i]', '[id*="lock" i]', '[title*="lock" i]',
       '[aria-label*="lock" i]', '[alt*="lock" i]', 'img[src*="lock" i]',
       '[title*="鎖" i]', '[title*="锁" i]', '[aria-label*="鎖" i]', '[aria-label*="锁" i]',
+      '[aria-disabled="true"]', '[data-disabled="true"]',
+      '[class*="disabled" i]', '[class*="closed" i]', '[class*="suspend" i]',
+      '[class*="unavailable" i]', '[class*="seal" i]',
     ].join(',');
     try {
-      return Boolean(element?.matches?.(selector) || element?.querySelector?.(selector));
+      if (element?.matches?.(selector) || element?.querySelector?.(selector)) return true;
+
+      // Tai888 sometimes draws its padlock from an icon-font pseudo element or
+      // a shared CSS sprite.  Neither form contributes textContent, title or
+      // an image URL, so inspect rendered styles without reading page secrets.
+      const nodes = [element, ...element.querySelectorAll('*')].slice(0, 160);
+      for (const node of nodes) {
+        const styles = [getComputedStyle(node), getComputedStyle(node, '::before'), getComputedStyle(node, '::after')];
+        for (const style of styles) {
+          const content = String(style?.content || '').replace(/^['"]|['"]$/g, '');
+          const image = `${style?.backgroundImage || ''} ${style?.maskImage || ''}`;
+          if (/[🔒🔐]|\\f023|\\f3c1|\\e033/i.test(content)) return true;
+          if (/(?:lock|padlock|closed|suspend|seal)[^)]*\.(?:png|gif|svg|webp)/i.test(image)) return true;
+        }
+      }
+      return false;
     } catch {
       return false;
     }
@@ -259,7 +277,7 @@
     const normalized = normalizer.normalizeRowRecords(records, { documentLooksStandardMlb });
 
     return {
-      version: 'TAI888-DOM-CAPTURE-v2.0.7',
+      version: 'TAI888-DOM-CAPTURE-v2.0.8',
       sourceHost: tai888SourceHost(),
       pageUrl: currentTai888PageUrl(),
       observedAt: new Date().toISOString(),

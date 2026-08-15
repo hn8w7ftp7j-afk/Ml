@@ -1,6 +1,6 @@
-# MLB 長期正期望值分析｜9.4.4 / Tai888 Reader 2.0.7
+# MLB 長期正期望值分析｜9.4.4 / Tai888 Reader 2.0.8
 
-目前唯一整合基線為網站 `9.4.4`、Next.js `15.5.23` 與 Reader `2.0.7 LOCKED MARKET FIX`。Reader 會把 Tai888 明確顯示鎖頭且沒有任何賠率的賽事列為「尚未開盤」，其餘已開盤賽事仍須逐場完整 4 市場／8 方向；鎖頭與已開盤場次的聯集必須一對一吻合官方賽程。Production 評分只使用固定雙 EV 短板公式，GPT 不得調分；正式 EV 會用 Tai888 同市場雙邊水位去水基準有限校準。網站只顯示 Reader 實際信用盤，並在比賽卡與總排名保留同瀏覽器的「已下注」標記。下方 6.x～8.x 段落保留為歷史變更紀錄，不是目前發布規格。
+目前唯一整合基線為網站 `9.4.4`、Next.js `15.5.23` 與 Reader `2.0.8 RENDERED LOCK FIX`。Reader 會把 Tai888 明確顯示鎖頭（包括 icon-font／CSS sprite）且沒有任何賠率的賽事列為「尚未開盤」，其餘已開盤賽事仍須逐場完整 4 市場／8 方向；鎖頭與已開盤場次的聯集必須一對一吻合官方賽程。Production 評分只使用固定雙 EV 短板公式，GPT 不得調分；正式 EV 會用 Tai888 同市場雙邊水位去水基準有限校準。網站只顯示 Reader 實際信用盤，並在比賽卡與總排名保留同瀏覽器的「已下注」標記。下方 6.x～8.x 段落保留為歷史變更紀錄，不是目前發布規格。
 
 Reader 只接受單一權威 tab/frame 的完整官方台北盤日：每場四市場、八方向、含雙重賽唯一配對；同盤日完整分頁若互相衝突或開啟超過四個 Tai888 分頁會直接停止上傳。盤口與 reprice snapshot 由伺服器簽章；畫面只有在最新 Reader hash 與 `pageActivityAt` 版本的全部分析成功後才允許正式下注。URL 中繼資料不含 query、任意 hash、頁面標題或原始 frame URL。Vercel Runtime Cache 沒有原子 compare-and-swap，目前務必只運行一台 Reader。
 
@@ -261,4 +261,4 @@ OpenAI GPT 研究模型現在只使用有上限的首段時間，系統會預留
 
 Chrome Reader 只讀使用者已登入後可見的 MLB 盤口表格，自動同步至 `/api/reader/ingest`。Production 使用 Vercel Runtime Cache 保存最新盤口；網站偵測價格指紋變動後只走 `/api/reprice`，不重建比分分布。
 
-目前唯一發布版本是 `2.0.7 LOCKED MARKET FIX`；安裝前應移除所有舊版，完整解壓後再從 Chrome 擴充功能頁載入 `Tai888-Reader` 資料夾。iPhone 可保存或轉傳 ZIP，但不能安裝未封裝 Chrome 擴充功能。
+目前唯一發布版本是 `2.0.8 RENDERED LOCK FIX`；安裝前應移除所有舊版，完整解壓後再從 Chrome 擴充功能頁載入 `Tai888-Reader` 資料夾。iPhone 可保存或轉傳 ZIP，但不能安裝未封裝 Chrome 擴充功能。

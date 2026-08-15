@@ -9,7 +9,7 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const normalizer = context.globalThis.Tai888RowNormalizer;
 assert.ok(normalizer?.normalizeRowRecords, 'row normalizer missing');
-assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.7');
+assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.8');
 
 const spans = {
   time: [0, 80], teams: [80, 260], runline: [260, 380], total: [380, 500],
@@ -105,7 +105,7 @@ const capture = {
   tables: normalized.tables,
 };
 const parsed = parseTai888Capture(capture, new Date('2026-08-12T12:12:00Z'));
-assert.equal(parsed.version, 'TAI888-READER-DOM-v2.0.7');
+assert.equal(parsed.version, 'TAI888-READER-DOM-v2.0.8');
 assert.equal(parsed.boardDate, '2026-08-13');
 assert.equal(parsed.games.length, 8);
 assert.equal(parsed.games[0].awayCode, 'BAL');
@@ -121,5 +121,17 @@ assert.equal(parsed.games[6].awayCode, 'BOS');
 assert.equal(parsed.games[6].homeCode, 'TOR');
 assert.equal(parsed.games[7].first5Total.line, '5-50');
 assert.equal(parsed.games.some(game => /總得分/.test(game.rawRowText)), false);
+
+const zeroMarketRow = structuredClone(normalized.tables[0].rows[0]);
+zeroMarketRow.marketLocked = false;
+for (let index = 2; index < zeroMarketRow.cells.length; index += 1) {
+  zeroMarketRow.cells[index] = { pair: ['', ''], lines: [] };
+}
+const zeroMarketCapture = { ...capture, tables: [{ ...normalized.tables[0], rows: [zeroMarketRow] }] };
+const zeroMarketParsed = parseTai888Capture(zeroMarketCapture, new Date('2026-08-12T12:12:00Z'));
+assert.equal(zeroMarketParsed.games.length, 1);
+assert.equal(zeroMarketParsed.games[0].marketStatus, 'locked');
+assert.equal(zeroMarketParsed.games[0].fullRunline, null);
+assert.equal(zeroMarketParsed.games[0].first5Total, null);
 
 console.log('Tai888 Reader 2.0.3 split-row fixture: 8/8 standard MLB games parsed; team-total section excluded');

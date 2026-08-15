@@ -8,11 +8,11 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const policy = context.globalThis.Tai888CapturePolicy;
 assert.ok(policy);
-assert.equal(policy.version, 'TAI888-DOM-CAPTURE-POLICY-v2.0.7');
+assert.equal(policy.version, 'TAI888-DOM-CAPTURE-POLICY-v2.0.8');
 
 assert.equal(policy.shouldKeepRecord(1, '聯盟：MLB 美國職棒(8)'), true);
 assert.equal(policy.shouldKeepRecord(1, '聯盟：MLB 美國職棒-主隊總得分(9)'), true);
-assert.equal(policy.shouldKeepRecord(1, 'BAL-金鶯 投手[右]'), false);
+assert.equal(policy.shouldKeepRecord(1, 'BAL-金鶯[主] 投手[右]'), true);
 assert.equal(policy.shouldKeepRecord(2, '08-13 BAL-金鶯 投手[右] 0.950'), true);
 assert.equal(policy.shouldKeepRecord(4, '時間 主客隊伍 讓球 大小盤'), true);
 
@@ -21,6 +21,9 @@ assert.equal(policy.shouldInspectFallback({
 }), true);
 assert.equal(policy.shouldInspectFallback({
   text: 'BAL-金鶯 投手[右] 0.950', childCount: 6, hasRowDescendant: false,
+}), true);
+assert.equal(policy.shouldInspectFallback({
+  text: 'BAL-金鶯[主] 投手[右]', childCount: 1, hasRowDescendant: false,
 }), true);
 assert.equal(policy.shouldInspectFallback({
   text: 'BAL-金鶯 投手[右] 0.950', childCount: 6, hasRowDescendant: true,

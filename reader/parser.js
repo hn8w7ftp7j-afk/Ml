@@ -283,7 +283,11 @@ export function parseTai888Capture(capture, now = new Date()) {
         marketStatus: row?.marketLocked === true ? 'locked' : 'open',
       };
       const markets = [game.fullRunline, game.fullTotal, game.first5Runline, game.first5Total];
-      if (!markets.some(Boolean) && game.marketStatus !== 'locked') continue;
+      // A complete date/time/team identity with zero captured market values is
+      // non-executable by definition. Tai888 renders some locked games without
+      // textual lock metadata, so retain it only as an unopened game. Partial
+      // markets remain open and will fail the strict 4-market/8-direction gate.
+      if (!markets.some(Boolean)) game.marketStatus = 'locked';
       if (game.marketStatus === 'locked' && markets.some(Boolean)) game.marketStatus = 'open';
       games.push(game);
     }
@@ -305,7 +309,7 @@ export function parseTai888Capture(capture, now = new Date()) {
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
   const pageUrl = sanitizeTai888PageUrl(capture?.pageUrl);
   return {
-    version: 'TAI888-READER-DOM-v2.0.7',
+    version: 'TAI888-READER-DOM-v2.0.8',
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
     pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),

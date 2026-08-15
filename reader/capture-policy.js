@@ -26,14 +26,16 @@
   function shouldKeepRecord(cellCount, text) {
     const count = Number(cellCount) || 0;
     if (isHeaderText(text) || isLeagueMarkerText(text)) return count >= 1;
-    return count >= 2 && isDataRowText(text);
+    // A locked split game can render its home row with only the team cell;
+    // pairing still requires an adjacent away date row and a home clock row.
+    return count >= 1 && isDataRowText(text);
   }
 
   function shouldInspectFallback({ text, childCount = 0, hasRowDescendant = false } = {}) {
     if (hasRowDescendant) return false;
     if (isHeaderText(text) || isLeagueMarkerText(text)) return true;
     const count = Number(childCount) || 0;
-    return count >= 2 && count <= 40 && isDataRowText(text);
+    return count >= 1 && count <= 40 && isDataRowText(text);
   }
 
   globalThis.Tai888CapturePolicy = Object.freeze({
@@ -43,6 +45,6 @@
     isDataRowText,
     shouldKeepRecord,
     shouldInspectFallback,
-    version: 'TAI888-DOM-CAPTURE-POLICY-v2.0.7',
+    version: 'TAI888-DOM-CAPTURE-POLICY-v2.0.8',
   });
 })();
