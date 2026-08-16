@@ -39,7 +39,9 @@ assert.match(page, /filter\(row => row\.sourceType === 'ACTUAL_TW_CREDIT' && has
 assert.doesNotMatch(page, /hasActualWater\(row\.water\) && row\.executable === true && actualLineFreshNow\(row, clockNow\)/);
 assert.match(page, /const eligible = readerExecutable && formalBetEligibility\(row, 7\.2, clockNow\)\.passed/);
 assert.match(page, /readerExecutable=\{readerExecutable\}/);
-assert.match(page, /acknowledgedReaderKey\.startsWith\(`\$\{currentReaderHashKey\}:`\)/);
+assert.match(page, /acknowledgedReaderKey === currentReaderHashKey \|\| acknowledgedReaderKey\.startsWith\(`\$\{currentReaderHashKey\}:`\)/);
+assert.doesNotMatch(page, /hashEligible && creditRevision && await confirmLiveReaderHash/, '手機端不得因缺少 Reader 活動時間而失去下注按鈕');
+assert.match(page, /setAcknowledgedReaderKey\(completedKey\)/);
 assert.match(page, /confirmLiveReaderHash/);
 assert.match(page, /readerRevisionKey/);
 assert.match(page, /creditRevisionRef/);

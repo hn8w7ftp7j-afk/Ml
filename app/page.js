@@ -377,7 +377,7 @@ export default function Home() {
     && readerStatus?.fresh === true
     && readerStatus?.boardDate === date
     && Boolean(currentReaderHashKey)
-    && acknowledgedReaderKey.startsWith(`${currentReaderHashKey}:`);
+    && (acknowledgedReaderKey === currentReaderHashKey || acknowledgedReaderKey.startsWith(`${currentReaderHashKey}:`));
 
   const ranked = useMemo(() => board.flatMap(item => {
     if (!gameIsPrestartNow(item.game, clockNow)) return [];
@@ -544,11 +544,11 @@ export default function Home() {
       });
       let readerHashAcknowledged = !readerHashRequired;
       const creditRevision = readerRevisionKey(targetDate, credit.payloadHash, credit.pageActivityAt);
-      if (hashEligible && creditRevision && await confirmLiveReaderHash(targetDate, credit.payloadHash, generation)) {
+      if (hashEligible && await confirmLiveReaderHash(targetDate, credit.payloadHash, generation)) {
         creditRevisionRef.current = creditRevision;
         const completedKey = readerHashKey(targetDate, credit.payloadHash);
         autoAnalyzeHashRef.current = completedKey;
-        setAcknowledgedReaderKey(creditRevision);
+        setAcknowledgedReaderKey(completedKey);
         if (requestedAutoKey && requestedAutoKey !== completedKey) autoAnalyzeHashRef.current = completedKey;
         readerHashAcknowledged = true;
       }
@@ -654,7 +654,7 @@ export default function Home() {
         creditRevisionRef.current = creditRevision;
         const completedKey = readerHashKey(targetDate, credit.payloadHash);
         autoAnalyzeHashRef.current = completedKey;
-        setAcknowledgedReaderKey(creditRevision);
+        setAcknowledgedReaderKey(completedKey);
       }
       if (updated || removed) {
         setNotice(`Tai888盤口已自動更新：${updated}場快速重算${removed ? '｜' + removed + '場已下架清除' : ''}${failed ? '｜' + failed + '場改走完整分析' : ''}。`);
