@@ -64,6 +64,7 @@ assert.match(page, /betMatches\(bet, date, item\.game\.gamePk, row, league\)/);
 assert.match(page, /identity, league, date, gamePk/);
 assert.match(page, /已下注 ✓/);
 assert.match(page, /取消「已下注」標記/);
+assert.match(page, /\{row\.pick\}｜\{matchup\(row\.game\)\}｜\{row\.market\}<\/span><small>信用盤/, '排名主列應直接顯示盤口、對戰與市場，避免上下行對錯');
 const recordBetSource = page.slice(page.indexOf('function recordBet('), page.indexOf('function selectLeague('));
 assert.doesNotMatch(recordBetSource, /operationBusyRef\.current|readerPollBusyRef\.current/, '下注標記不得被後台同步或重算作業擋住');
 assert.match(recordBetSource, /setBets\(current => current\.some\(value => betMatches/);
