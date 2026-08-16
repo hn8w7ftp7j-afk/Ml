@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requestIsAuthenticated, siteAuthConfigured } from './lib/security.js';
 
-const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health', '/api/reader/pair', '/api/reader/ingest', '/api/reader/status']);
+const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health', '/api/reader/pair', '/api/reader/ingest', '/api/reader/capture', '/api/reader/status']);
 
 export async function middleware(request) {
   const { pathname, search } = request.nextUrl;
