@@ -678,9 +678,7 @@ export default function Home() {
       setNotice(`已取消下注標記：${row.pick}`);
       return;
     }
-    if (operationBusyRef.current
-      || readerPollBusyRef.current
-      || !gameIsPrestartNow(item.game, Date.now())
+    if (!gameIsPrestartNow(item.game, Date.now())
       || (item.actualSource?.provider === 'TAI888_READER_AUTO' && !readerExecutable)
       || !formalBetEligibility(row, 7.2, Date.now()).passed) {
       setError('此方向已達開打時間，或未通過最新盤口、雙EV與三層QA完整門檻，不能記錄為正式下注');
@@ -700,6 +698,7 @@ export default function Home() {
       stake: settings.unitValue, placedAt: new Date().toISOString(), status: 'pending',
     };
     setBets(current => current.some(value => betMatches(value, date, item.game.gamePk, row, league)) ? current : [bet, ...current].slice(0, 500));
+    setError('');
     setNotice(`已記錄：${row.pick}｜${Number(row.water).toFixed(3)}`);
   }
 
