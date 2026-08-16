@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { betIdentity, betMatches, canonicalBetPick } from '../lib/bet-ledger.js';
+import { betIdentity, betMatches, betPositionIdentity, canonicalBetPick, canonicalBetPosition } from '../lib/bet-ledger.js';
 
 const base = { market: '全場大小', pick: '大8平', water: 0.94 };
 const identity = betIdentity('2026-08-15', 777001, base);
@@ -10,9 +10,11 @@ assert.equal(canonicalBetPick('大8'), canonicalBetPick(' 大 8 平 '), '平尾�
 assert.equal(canonicalBetPick('大8'), canonicalBetPick('大8.0'), '整數與等值小數盤線應視為相同合約');
 assert.notEqual(canonicalBetPick('大8+10'), canonicalBetPick('大8-10'), '+/-尾碼不可混用');
 assert.equal(betMatches(stored, '2026-08-15', 777001, { ...base, water: 0.82 }), true, '水位更新不應移除已下注標記');
-assert.equal(betMatches(stored, '2026-08-15', 777001, { ...base, pick: '大8+10' }), false, '尾碼變化必須視為不同盤口');
+assert.equal(betMatches(stored, '2026-08-15', 777001, { ...base, pick: '大8+10' }), true, '尾碼變化後仍須保留已下注方向');
 assert.equal(betMatches(stored, '2026-08-15', 777001, { ...base, pick: '小8平' }), false, '方向變化必須視為不同盤口');
-assert.equal(betMatches(stored, '2026-08-15', 777001, { ...base, pick: '大8.5平' }), false, '盤線變化必須視為不同盤口');
+assert.equal(betMatches(stored, '2026-08-15', 777001, { ...base, pick: '大8.5平' }), true, '盤線變化後仍須保留已下注方向');
+assert.equal(canonicalBetPosition('大8+10'), canonicalBetPosition('大9-30'));
+assert.notEqual(betPositionIdentity('2026-08-15', 777001, base), betPositionIdentity('2026-08-15', 777001, { ...base, pick: '小8平' }));
 assert.equal(betMatches(stored, '2026-08-15', 777002, base), false, '雙重賽不同gamePk不可互相標記');
 assert.equal(betMatches(stored, '2026-08-16', 777001, base), false, '不同日期不可互相標記');
 assert.equal(betMatches(stored, '2026-08-15', 777001, base, 'NPB'), false, '不同聯盟不可共用下注標記');
@@ -33,4 +35,4 @@ const legacyIdentity = identity.split('|||').slice(1).join('|||');
 assert.equal(betMatches({ ...stored, identity: legacyIdentity }, '2026-08-15', 777001, base, 'MLB'), true, '舊版 MLB identity 必須相容');
 assert.equal(betMatches({ ...stored, identity: legacyIdentity }, '2026-08-15', 777001, base, 'KBO'), false, '舊版 identity 不得流入其他聯盟');
 
-console.log('Bet ledger identity: canonical line, water-stable matching, direction/tail/doubleheader isolation and legacy compatibility PASS');
+console.log('Bet ledger identity: cloud position matching preserves moved lines while direction/doubleheader/league isolation remains PASS');

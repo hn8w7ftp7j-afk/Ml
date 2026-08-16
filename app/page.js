@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
-import { betIdentity, betMatches } from '../lib/bet-ledger.js';
+import { betIdentity, betMatches, betPositionIdentity, canonicalBetPick } from '../lib/bet-ledger.js';
 import { translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueCanAnalyze, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
@@ -143,7 +143,7 @@ function LoadingLine({ progress }) {
   return <div className="progressBox"><div className="progressTop"><strong>{progress.label}</strong><span>{progress.done}/{progress.total}</span></div><div className="progressTrack"><i style={{ width: `${ratio}%` }}/></div></div>;
 }
 
-function ResultRow({ row, onBet, betRecorded = false, now, verificationPending = false }) {
+function ResultRow({ row, onBet, betRecord = null, now, verificationPending = false }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const formal = actualLine && row.executable === true && actualLineFreshNow(row, now);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
@@ -160,12 +160,12 @@ function ResultRow({ row, onBet, betRecorded = false, now, verificationPending =
         : `QA：${eligibility.passed ? 'PASS｜合約✓ 水碼✓ 鏡像✓ 機率100%✓ EV雙算✓ 分數上限✓' : 'BLOCK｜未通過完整正式下注門檻'}`}</div>}
     </div>
     <div className="rowActions">
-      {(eligibility.passed || betRecorded) && <button className={`mini ${betRecorded ? 'recorded' : 'green'}`} title={betRecorded ? '再按一次可取消標記' : '標記這個盤口已下注'} onClick={() => onBet(row)}>{betRecorded ? '已下注 ✓' : '記錄下注'}</button>}
+      {(eligibility.passed || betRecord) && <div><button className={`mini ${betRecord ? 'recorded' : 'green'}`} title={betRecord ? '再按一次可取消標記' : '標記這個盤口已下注'} onClick={() => onBet(row)}>{betRecord ? '已下注 ✓' : '記錄下注'}</button>{betRecord && canonicalBetPick(betRecord.pick) !== canonicalBetPick(row.pick) && <div style={{ marginTop: 5, color: '#f1c477', fontSize: 10, lineHeight: 1.4 }}>下注時：{betRecord.pick}<br/>目前：{row.pick}</div>}</div>}
     </div>
   </div>;
 }
 
-function GameCard({ item, onBet, isBetRecorded, readerExecutable, now, analysisInProgress = false }) {
+function GameCard({ item, onBet, getBetRecord, readerExecutable, now, analysisInProgress = false }) {
   const readerBacked = item.actualSource?.provider === 'TAI888_READER_AUTO';
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT').map(row => {
@@ -193,7 +193,7 @@ function GameCard({ item, onBet, isBetRecorded, readerExecutable, now, analysisI
         {MARKET_ORDER.map(market => {
           const rows = actualRows.filter(row => row.market === market);
           if (!rows.length) return null;
-          return <div className="marketBlock actualMarket" key={market}><div className="marketTitle"><h3>{market}</h3></div>{rows.map(row => <ResultRow key={rowKey(row)} row={row} betRecorded={isBetRecorded(item, row)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)}</div>;
+          return <div className="marketBlock actualMarket" key={market}><div className="marketTitle"><h3>{market}</h3></div>{rows.map(row => <ResultRow key={rowKey(row)} row={row} betRecord={getBetRecord(item, row)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)}</div>;
         })}
       </div>}
       <details className="details"><summary>查看模型與QA明細</summary><div className="detailGrid">
@@ -249,6 +249,7 @@ export default function Home() {
   const analysisGenerationRef = useRef(0);
   const readerStatusRef = useRef(null);
   const readerStatusHighWaterRef = useRef(null);
+  const cloudSyncBusyRef = useRef(false);
   const activeLeague = leagueConfig(league);
   const analysisEnabled = leagueCanAnalyze(league);
 
@@ -285,10 +286,29 @@ export default function Home() {
     setSettings(initial.settings);
     setBets(initial.bets);
     setStorageReady(true);
+    cloudSyncBusyRef.current = true;
+    requestJSON('/api/bets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: initial.bets }),
+    }, 30000).then(data => setBets(Array.isArray(data.bets) ? data.bets : initial.bets)).catch(() => {}).finally(() => { cloudSyncBusyRef.current = false; });
   }, []);
   useEffect(() => {
     if (storageReady) saveCompactStore({ settings, bets, activeLeague: league });
   }, [settings, bets, league, storageReady]);
+  useEffect(() => {
+    if (!storageReady) return undefined;
+    const syncCloudBets = () => {
+      if (cloudSyncBusyRef.current) return;
+      cloudSyncBusyRef.current = true;
+      requestJSON(`/api/bets?t=${Date.now()}`, {}, 20000)
+        .then(data => { if (Array.isArray(data.bets)) setBets(data.bets); })
+        .catch(() => {})
+        .finally(() => { cloudSyncBusyRef.current = false; });
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') syncCloudBets(); };
+    const timer = window.setInterval(syncCloudBets, 15000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [storageReady]);
   useEffect(() => {
     currentDateRef.current = date;
     currentLeagueRef.current = league;
@@ -396,8 +416,8 @@ export default function Home() {
     [bets, league],
   );
 
-  function isBetRecorded(item, row) {
-    return bets.some(bet => betMatches(bet, date, item.game.gamePk, row, league));
+  function getBetRecord(item, row) {
+    return bets.find(bet => betMatches(bet, date, item.game.gamePk, row, league)) || null;
   }
 
   function updateBoard(gamePk, updater) {
@@ -676,13 +696,17 @@ export default function Home() {
     }
   }
 
-  function recordBet(item, row) {
+  async function recordBet(item, row) {
     const identity = betIdentity(date, item.game.gamePk, row, league);
-    const existing = bets.find(bet => betMatches(bet, date, item.game.gamePk, row, league));
+    const positionIdentity = betPositionIdentity(date, item.game.gamePk, row, league);
+    const existing = getBetRecord(item, row);
     if (existing) {
       if (!window.confirm(`取消「已下注」標記？\n${row.pick}`)) return;
-      setBets(current => current.filter(bet => !betMatches(bet, date, item.game.gamePk, row, league)));
-      setNotice(`已取消下注標記：${row.pick}`);
+      try {
+        const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', positionIdentity }) }, 30000);
+        setBets(Array.isArray(data.bets) ? data.bets : []);
+        setNotice(`已取消下注標記：${existing.pick}`);
+      } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
       return;
     }
     if (!gameIsPrestartNow(item.game, Date.now())
@@ -692,7 +716,7 @@ export default function Home() {
       return;
     }
     const bet = {
-      id: uid(), identity, league, date, gamePk: item.game.gamePk, matchup: matchup(item.game), gameDate: item.game.gameDate,
+      id: uid(), identity, positionIdentity, league, date, gamePk: item.game.gamePk, matchup: matchup(item.game), gameDate: item.game.gameDate,
       market: row.market, pick: row.pick, water: row.water, score: row.score, weightedEV: row.weightedEV, robustEV: row.robustEV,
       lineAsOf: row.lineAsOf || null,
       readerPayloadHash: readerStatus?.payloadHash || null,
@@ -704,9 +728,21 @@ export default function Home() {
       qa: { scoreAudit: row.scoreAudit || null, pairAudit: row.pairAudit || null, thirdAudit: row.thirdAudit || null },
       stake: settings.unitValue, placedAt: new Date().toISOString(), status: 'pending',
     };
-    setBets(current => current.some(value => betMatches(value, date, item.game.gamePk, row, league)) ? current : [bet, ...current].slice(0, 500));
-    setError('');
-    setNotice(`已記錄：${row.pick}｜${Number(row.water).toFixed(3)}`);
+    try {
+      const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', bet }) }, 30000);
+      setBets(Array.isArray(data.bets) ? data.bets : [bet, ...bets].slice(0, 500));
+      setError('');
+      setNotice(`已雲端記錄：${row.pick}｜${Number(row.water).toFixed(3)}`);
+    } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
+  }
+
+  async function clearLeagueBets() {
+    if (!visibleBets.length || !window.confirm(`確定清空全部${activeLeague.shortLabel}下注紀錄？`)) return;
+    try {
+      const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clearLeague', league }) }, 30000);
+      setBets(Array.isArray(data.bets) ? data.bets : []);
+      setNotice(`已清空${activeLeague.shortLabel}雲端下注紀錄`);
+    } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
   }
 
   function selectLeague(value) {
@@ -757,16 +793,17 @@ export default function Home() {
       </section>
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && !board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日分析</h2><p>按上方按鈕後，今天 Reader 已同步的 Tai888 信用盤會一次列出並完成分析。</p></section>}
-      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} isBetRecorded={isBetRecorded} readerExecutable={itemReaderExecutable(item)} analysisInProgress={progress.active} now={clockNow}/>) }
+      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} getBetRecord={getBetRecord} readerExecutable={itemReaderExecutable(item)} analysisInProgress={progress.active} now={clockNow}/>) }
     </>}
 
     {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜Tai888 信用盤排名</h2><span className="leagueBadge">{league}</span></div>{analysisEnabled && ranked.length ? ranked.map((row, index) => {
-      const recorded = isBetRecorded(row.item, row);
+      const recorded = getBetRecord(row.item, row);
       const eligible = itemReaderExecutable(row.item) && formalBetEligibility(row, 7.2, clockNow).passed;
-      return <div className={`rankRow ${recorded ? 'betRecorded' : ''}`} key={`${league}-${row.game.gamePk}-${rowKey(row)}`}><b>{index + 1}</b><strong>{scoreText(row.score)}</strong><div><span>{row.pick}｜{matchup(row.game)}｜{row.market}</span><small>信用盤 {waterText(row.water)}｜校準等值勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEvenProbability(row.water, 0.015))}｜正式EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}</small></div>{(eligible || recorded) && <button className={`mini ${recorded ? 'recorded' : 'green'}`} title={recorded ? '再按一次可取消標記' : '標記這個盤口已下注'} onClick={() => recordBet(row.item, row)}>{recorded ? '已下注 ✓' : '記錄下注'}</button>}</div>;
+      const moved = recorded && canonicalBetPick(recorded.pick) !== canonicalBetPick(row.pick);
+      return <div className={`rankRow ${recorded ? 'betRecorded' : ''}`} key={`${league}-${row.game.gamePk}-${rowKey(row)}`}><b>{index + 1}</b><strong>{scoreText(row.score)}</strong><div><span>{row.pick}｜{matchup(row.game)}｜{row.market}</span><small>信用盤 {waterText(row.water)}｜校準等值勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEvenProbability(row.water, 0.015))}｜正式EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}</small></div>{(eligible || recorded) && <div><button className={`mini ${recorded ? 'recorded' : 'green'}`} title={recorded ? '再按一次可取消標記' : '標記這個盤口已下注'} onClick={() => recordBet(row.item, row)}>{recorded ? '已下注 ✓' : '記錄下注'}</button>{moved && <div style={{ marginTop: 5, color: '#f1c477', fontSize: 10, lineHeight: 1.4 }}>下注時：{recorded.pick}<br/>目前：{row.pick}</div>}</div>}</div>;
     }) : <div className="emptySmall">{analysisEnabled ? `完成今日 ${activeLeague.shortLabel} Tai888 信用盤分析後顯示排名。` : `${activeLeague.shortLabel}正式模型尚未啟用，不顯示推估或跨聯盟替代排名。`}</div>}</section>}
 
-    {tab === 'bets' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜下注紀錄</h2><button className="textButton" disabled={!visibleBets.length} onClick={() => { if (visibleBets.length && window.confirm(`確定清空全部${activeLeague.shortLabel}下注紀錄？`)) setBets(current => current.filter(bet => normalizeLeagueId(bet?.league) !== league)); }}>清空本聯盟</button></div>{visibleBets.length ? visibleBets.map(bet => <div className="betRow" key={bet.id}><div><strong><span className="leagueBadge inline">{league}</span>{scoreText(bet.score)}｜{bet.pick}｜{Number(bet.water).toFixed(3)}</strong><span>{bet.matchup}｜{bet.market}</span></div><small>{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元</small></div>) : <div className="emptySmall">尚未記錄{activeLeague.shortLabel}下注。</div>}</section>}
+    {tab === 'bets' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜雲端下注紀錄</h2><button className="textButton" disabled={!visibleBets.length} onClick={clearLeagueBets}>清空本聯盟</button></div>{visibleBets.length ? visibleBets.map(bet => <div className="betRow" key={bet.id}><div><strong><span className="leagueBadge inline">{league}</span>{scoreText(bet.score)}｜{bet.pick}｜{Number(bet.water).toFixed(3)}</strong><span>{bet.matchup}｜{bet.market}</span></div><small>{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元</small></div>) : <div className="emptySmall">尚未記錄{activeLeague.shortLabel}下注。</div>}</section>}
 
     {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${analysisEnabled ? 'done' : 'setup'}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="1000">1000</option><option value="1800">1800</option><option value="2500">2500</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>{analysisEnabled ? '評分固定使用雙EV短板公式；GPT不得調分。模型核心資料改變才完整重算，盤口／尾碼／水位改變只走凍結分布快速重算。' : `${activeLeague.shortLabel}資料與 MLB 完全隔離；正式賽程、Tai888 實盤與專屬模型未通過 QA 前，分析與下注資格保持關閉。`} Unit 金額為同一帳號共用設定。</div></section>}
 
