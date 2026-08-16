@@ -19,6 +19,7 @@ import {
 
 const VERSION = '9.5.0';
 const STORAGE = 'sports-positive-ev-v9-5-0';
+const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v1';
 const LEGACY_KEYS = ['mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
@@ -57,9 +58,10 @@ function loadCompactStore() {
   try {
     const own = safeParse(window.localStorage.getItem(STORAGE) || 'null');
     if (own && typeof own === 'object') {
+      const backup = safeParse(window.localStorage.getItem(BET_BACKUP_STORAGE) || 'null');
       return {
         settings: { ...DEFAULT_SETTINGS, ...(own.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(own.settings?.fallbackWater || {}) } },
-        bets: Array.isArray(own.bets) ? own.bets.slice(0, 500) : [],
+        bets: Array.isArray(own.bets) && own.bets.length ? own.bets.slice(0, 500) : Array.isArray(backup) ? backup.slice(0, 500) : [],
         activeLeague: normalizeLeagueId(own.activeLeague),
       };
     }
@@ -81,11 +83,24 @@ function loadCompactStore() {
 function saveCompactStore(value) {
   try {
     window.localStorage.setItem(STORAGE, JSON.stringify({ settings: value.settings, bets: value.bets.slice(0, 500), activeLeague: normalizeLeagueId(value.activeLeague) }));
+    if (value.bets.length) window.localStorage.setItem(BET_BACKUP_STORAGE, JSON.stringify(value.bets.slice(0, 500)));
     return true;
   } catch {
     try { window.localStorage.removeItem(STORAGE); } catch {}
     return false;
   }
+}
+
+function mergeBetCollections(first, second) {
+  const merged = [];
+  const positions = new Set();
+  for (const bet of [...(Array.isArray(first) ? first : []), ...(Array.isArray(second) ? second : [])]) {
+    const position = bet?.positionIdentity || betPositionIdentity(bet?.date, bet?.gamePk, bet, bet?.league || 'MLB');
+    if (!position || positions.has(position)) continue;
+    positions.add(position);
+    merged.push({ ...bet, positionIdentity: position });
+  }
+  return merged.sort((a, b) => Date.parse(b.placedAt || 0) - Date.parse(a.placedAt || 0)).slice(0, 500);
 }
 
 async function requestJSON(url, options = {}, timeoutMs = 180000) {
@@ -289,7 +304,7 @@ export default function Home() {
     cloudSyncBusyRef.current = true;
     requestJSON('/api/bets', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: initial.bets }),
-    }, 30000).then(data => setBets(Array.isArray(data.bets) ? data.bets : initial.bets)).catch(() => {}).finally(() => { cloudSyncBusyRef.current = false; });
+    }, 30000).then(data => setBets(current => mergeBetCollections(data.bets, current))).catch(() => {}).finally(() => { cloudSyncBusyRef.current = false; });
   }, []);
   useEffect(() => {
     if (storageReady) saveCompactStore({ settings, bets, activeLeague: league });
@@ -300,7 +315,7 @@ export default function Home() {
       if (cloudSyncBusyRef.current) return;
       cloudSyncBusyRef.current = true;
       requestJSON(`/api/bets?t=${Date.now()}`, {}, 20000)
-        .then(data => { if (Array.isArray(data.bets)) setBets(data.bets); })
+        .then(data => { if (Array.isArray(data.bets)) setBets(current => mergeBetCollections(data.bets, current)); })
         .catch(() => {})
         .finally(() => { cloudSyncBusyRef.current = false; });
     };
@@ -730,7 +745,7 @@ export default function Home() {
     };
     try {
       const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', bet }) }, 30000);
-      setBets(Array.isArray(data.bets) ? data.bets : [bet, ...bets].slice(0, 500));
+      setBets(current => mergeBetCollections(data.bets, [bet, ...current]));
       setError('');
       setNotice(`已雲端記錄：${row.pick}｜${Number(row.water).toFixed(3)}`);
     } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
