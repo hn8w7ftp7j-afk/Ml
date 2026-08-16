@@ -270,7 +270,7 @@
 
     const bodyText = clean(document.body?.innerText || '');
     const league = globalThis.Tai888LeagueRegistry.identify(bodyText);
-    const documentLooksStandardLeague = Boolean(league && globalThis.Tai888LeagueRegistry.standardMarker(bodyText, league))
+    const documentLooksStandardLeague = Boolean(league)
       && /(?:時間|时间)/.test(bodyText)
       && /(?:主客隊伍|主客队伍)/.test(bodyText)
       && /(?:讓球|让球)/.test(bodyText)

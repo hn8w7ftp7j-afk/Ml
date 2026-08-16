@@ -9,12 +9,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const CODE = /^[A-Z]{2,4}$/;
 const TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const LINE = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
 const LEAGUE_READY = new Set(['NPB', 'KBO', 'CPBL']);
 
 function validMarket(value, total = false) {
   if (!value || typeof value !== 'object') return false;
   const waters = total ? [value.overWater, value.underWater] : [value.awayWater, value.homeWater];
-  return typeof value.line === 'string' && value.line.length <= 20
+  return typeof value.line === 'string' && LINE.test(value.line)
     && waters.every(item => typeof item === 'number' && Number.isFinite(item) && item >= 0.01 && item <= 3)
     && (total || ['away', 'home'].includes(value.lineSide));
 }
@@ -25,18 +26,24 @@ function normalize(body, league, token, receivedAt) {
   const observedAt = new Date(cleanText(body?.observedAt, 40)).toISOString();
   const pageActivityAt = new Date(cleanText(body?.pageActivityAt, 40)).toISOString();
   const received = Date.parse(receivedAt);
-  if (Math.abs(received - Date.parse(observedAt)) > 600_000 || received - Date.parse(pageActivityAt) > 180_000) throw new Error('盤口頁面已過期');
+  const observedTime = Date.parse(observedAt);
+  const activityTime = Date.parse(pageActivityAt);
+  if (observedTime > received + 90_000 || received - observedTime > 600_000
+    || activityTime > observedTime + 5_000 || activityTime > received + 5_000
+    || received - activityTime > 180_000) throw new Error('盤口頁面已過期');
   const games = (Array.isArray(body?.games) ? body.games : []).slice(0, 40).map(game => {
     if (!CODE.test(game?.awayCode) || !CODE.test(game?.homeCode) || game.awayCode === game.homeCode
       || game?.boardDate !== boardDate || !TIME.test(game?.boardTime)) throw new Error('場次辨識資料錯誤');
     const locked = game.marketStatus === 'locked';
     if (!locked && (!validMarket(game.fullRunline) || !validMarket(game.fullTotal, true)
       || !validMarket(game.first5Runline) || !validMarket(game.first5Total, true))) throw new Error('盤口市場不完整');
+    const runline = market => market ? { lineSide: market.lineSide, line: market.line, awayWater: market.awayWater, homeWater: market.homeWater } : null;
+    const total = market => market ? { line: market.line, overWater: market.overWater, underWater: market.underWater } : null;
     return {
       awayCode: game.awayCode, homeCode: game.homeCode, boardDate, boardTime: game.boardTime,
       marketStatus: locked ? 'locked' : 'open',
-      fullRunline: locked ? null : game.fullRunline, fullTotal: locked ? null : game.fullTotal,
-      first5Runline: locked ? null : game.first5Runline, first5Total: locked ? null : game.first5Total,
+      fullRunline: locked ? null : runline(game.fullRunline), fullTotal: locked ? null : total(game.fullTotal),
+      first5Runline: locked ? null : runline(game.first5Runline), first5Total: locked ? null : total(game.first5Total),
     };
   });
   if (!games.length) throw new Error('未找到可安全儲存的場次');

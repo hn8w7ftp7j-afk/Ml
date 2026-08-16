@@ -27,4 +27,7 @@ assert.match(middleware, /'\/api\/reader\/capture'/, 'signed Reader capture endp
 const captureRoute = fs.readFileSync('app/api/reader/capture/route.js', 'utf8');
 assert.match(captureRoute, /verifyReaderToken\(bearerToken\(request\)\)/, 'capture must enforce the Reader bearer token itself');
 assert.match(captureRoute, /X-Device-Id|x-device-id/i, 'capture must bind the token to the device id');
+assert.match(captureRoute, /const runline = market => market \? \{ lineSide:/, 'capture must allow-list runline fields');
+assert.match(captureRoute, /const total = market => market \? \{ line:/, 'capture must allow-list total fields');
+assert.match(captureRoute, /activityTime > received \+ 5_000/, 'capture must reject future page activity');
 process.stdout.write('Reader 2.1.0 four-league exact markers, isolated sync and fail-closed routing PASS\n');
