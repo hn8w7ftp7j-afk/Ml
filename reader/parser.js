@@ -309,7 +309,8 @@ export function parseTai888Capture(capture, now = new Date()) {
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
   const pageUrl = sanitizeTai888PageUrl(capture?.pageUrl);
   return {
-    version: 'TAI888-READER-DOM-v2.0.10',
+    version: 'TAI888-READER-DOM-v2.1.0',
+    league: ['MLB', 'NPB', 'KBO', 'CPBL'].includes(capture?.league) ? capture.league : 'MLB',
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
     pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),
@@ -327,6 +328,7 @@ export function canonicalReaderPayload(payload) {
   });
   return JSON.stringify({
     version: payload?.version || '',
+    league: payload?.league || 'MLB',
     sourceHost: payload?.sourceHost || '',
     boardDate: payload?.boardDate || '',
     games: orderedGames.map(game => ({

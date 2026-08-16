@@ -16,11 +16,14 @@
   ]);
 
   const TEAM_CODE = /(?:^|\s)([A-Z]{2,4})\s*-/g;
-  const STANDARD_MLB = /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i;
+  const leagueRegistry = globalThis.Tai888LeagueRegistry || Object.freeze({
+    ids: ['MLB'],
+    standardMarker: text => /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i.test(String(text || ''))
+      && !/(?:走地|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊)/i.test(String(text || '')),
+  });
   // In-play rows can share the exact same MLB columns as the pre-game board.
   // They are a different contract and must never be merged into the official
   // pre-game slate merely because both league markers say MLB.
-  const SPECIAL_MARKET = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
   const HOME_MARKER = /[\[［【(（]\s*主\s*[\]］】)）]/u;
 
   function number(value, fallback = 0) {
@@ -222,9 +225,8 @@
     };
   }
 
-  function isStandardLeagueRow(text) {
-    const value = clean(text);
-    return STANDARD_MLB.test(value) && !SPECIAL_MARKET.test(value);
+  function isStandardLeagueRow(text, expectedLeague = 'MLB') {
+    return leagueRegistry.standardMarker(clean(text), expectedLeague);
   }
 
   function isLeagueMarker(text) {
@@ -242,7 +244,8 @@
     }
 
     let currentProfile = null;
-    let insideStandardMlb = false;
+    const expectedLeague = leagueRegistry.ids.includes(options.expectedLeague) ? options.expectedLeague : 'MLB';
+    let insideStandardLeague = false;
     let sawLeagueMarker = false;
     let pendingAway = null;
     let expectedGameCount = null;
@@ -261,8 +264,8 @@
 
       if (isLeagueMarker(record.text)) {
         sawLeagueMarker = true;
-        insideStandardMlb = isStandardLeagueRow(record.text);
-        if (insideStandardMlb) {
+        insideStandardLeague = isStandardLeagueRow(record.text, expectedLeague);
+        if (insideStandardLeague) {
           const count = clean(record.text).match(/[（(]\s*(\d{1,2})\s*[）)]/);
           if (count) expectedGameCount = Math.max(Number(expectedGameCount || 0), Number(count[1]));
         }
@@ -274,7 +277,7 @@
         currentProfile = [...headers].reverse().find(item => item.order <= number(record.order)) || headers[0] || null;
       }
       if (!currentProfile) continue;
-      const permitted = sawLeagueMarker ? insideStandardMlb : options.documentLooksStandardMlb === true;
+      const permitted = sawLeagueMarker ? insideStandardLeague : options.documentLooksStandardLeague === true || options.documentLooksStandardMlb === true;
       if (!permitted) continue;
 
       const mapped = mapRecord(record, currentProfile);
@@ -343,6 +346,7 @@
         pairedRows,
         singleRows,
         sawLeagueMarker,
+        league: expectedLeague,
         expectedGameCount,
         conflictingGameKeys,
       },
@@ -352,6 +356,6 @@
   globalThis.Tai888RowNormalizer = Object.freeze({
     normalizeRowRecords,
     isStandardLeagueRow,
-    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.10',
+    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.1.0',
   });
 })();

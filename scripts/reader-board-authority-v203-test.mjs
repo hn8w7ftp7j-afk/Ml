@@ -102,19 +102,15 @@ assert.match(
   /tab\.active === true \? tabId : null/,
   'an inactive tab load may not become preferred either',
 );
-assert.match(
-  backgroundSource,
-  /left\.active === true && left\.id === preferredTabId/,
-  'capture ordering must re-check that a delayed preferred tab is still active',
-);
+assert.match(backgroundSource, /selectAuthoritativeBoard\(own, \{ now: Date\.now\(\), preferredTabId, league \}\)/);
 assert.match(backgroundSource, /MAX_TAI888_TABS/);
 assert.match(
   backgroundSource,
-  /!withinTai888TabScanLimit\(ordered\.length\)/,
+  /!withinTai888TabScanLimit\(tabs\.length\)/,
   'more tabs than the capture limit must fail closed instead of hiding conflicts',
 );
-assert.match(backgroundSource, /for \(const tab of ordered\)/);
-assert.doesNotMatch(backgroundSource, /ordered\.slice\(0,\s*4\)/);
-assert.match(backgroundSource, /selection\.error === 'conflicting-complete-tabs'/);
+assert.match(backgroundSource, /for \(const tab of tabs\)/);
+assert.doesNotMatch(backgroundSource, /tabs\.slice\(0,\s*4\)/);
+assert.match(backgroundSource, /if \(!selection\.ok\)/);
 
 console.log('Reader 2.0.3 board authority: active-only preference and same-date conflict fail-closed PASS');

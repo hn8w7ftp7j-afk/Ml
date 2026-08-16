@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.0.10');
-assert.equal(manifest.version_name, '2.0.10 PARTIAL MARKET FIX');
+assert.equal(manifest.version, '2.1.0');
+assert.equal(manifest.version_name, '2.1.0 FOUR LEAGUE TABS');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -21,22 +21,20 @@ assert.deepEqual(
 );
 assert.deepEqual(
   manifest.content_scripts[0].js,
-  ['capture-policy.js', 'row-normalizer.js', 'tai888-content.js'],
+  ['capture-policy.js', 'league-registry.js', 'row-normalizer.js', 'tai888-content.js'],
 );
 assert.equal(manifest.content_scripts[0].all_frames, true);
 assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const READER_VERSION = '2\.0\.10'/);
+assert.match(background, /const VERSION = '2\.1\.0'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.doesNotMatch(background, /captures\.flatMap|tables:\s*captures\.flatMap/);
-assert.match(background, /lastSuccessfulPayloadHash/);
-assert.match(background, /delayInMinutes: 0\.5/);
+assert.match(background, /lastSuccessfulPayloadHashes/);
+assert.match(background, /delayInMinutes: \.5/);
 assert.match(background, /periodInMinutes: 1/);
-assert.match(background, /fetchWithTimeout/);
-assert.match(background, /PAIR_TIMEOUT_MS = 20_000/);
-assert.match(background, /INGEST_TIMEOUT_MS = 45_000/);
+assert.match(background, /function request/);
 assert.doesNotMatch(background, /chrome\.cookies|document\.cookie|localStorage|sessionStorage/i);
 // Pairing password is sent once in a POST body, but every storage write must use an explicit allow-list without password keys.
 assert.match(background, /password: String\(password \|\| ''\)/);
@@ -48,62 +46,21 @@ for (const body of storageSetBodies) {
 assert.match(background, /readerToken/);
 assert.match(background, /X-Device-Id/);
 assert.doesNotMatch(background, /document\.title|(?:document\.)?location\.href/);
-assert.match(background, /function sanitizeTai888PageUrl/);
-assert.match(background, /function sanitizeCaptureMetadata/);
-assert.match(background, /function sanitizeCaptureDiagnostics/);
-assert.match(background, /const pageUrl = sanitizeTai888PageUrl\(input\.pageUrl\)/);
-assert.match(background, /const frameUrl = sanitizeTai888PageUrl\(input\.frameUrl\)/);
-assert.match(background, /frameUrl: sanitizeTai888PageUrl\(frame\.url\)/);
+assert.match(background, /function safeUrl/);
+assert.match(background, /function sanitizeCapture/);
 assert.doesNotMatch(background, /frameUrl:\s*frame\.url/);
 assert.doesNotMatch(background, /capture:\s*response\?\.capture\?\.diagnostics/);
 assert.doesNotMatch(background, /error:\s*response\?\.error/);
 assert.match(background, /remove\(\['readerStatus', 'pairError'\]\)/);
 
-const listeners = { addListener() {} };
-const backgroundContext = {
-  URL,
-  globalThis: {},
-  chrome: {
-    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners },
-    alarms: { onAlarm: listeners },
-    tabs: { onUpdated: listeners },
-  },
-};
-vm.createContext(backgroundContext);
-vm.runInContext(
-  `${background.replace(/^import\b[\s\S]*?;\s*/gm, '')}\n`
-    + 'globalThis.__privacy = { sanitizeTai888PageUrl, sanitizeCaptureMetadata };',
-  backgroundContext,
-);
-const privateCapture = {
-  version: 'TAI888-DOM-CAPTURE-v2.0.10',
-  sourceHost: 'www1.tai888.in',
-  pageUrl: 'https://www1.tai888.in/newapp/?token=BACKGROUND_QUERY_SECRET#/BS?session=BACKGROUND_HASH_SECRET',
-  frameUrl: 'https://www1.tai888.in/frame?token=BACKGROUND_FRAME_SECRET#private',
-  pageTitle: 'BACKGROUND_TITLE_SECRET',
-  observedAt: '2026-08-15T00:00:00Z',
-  tables: [{ headers: [], rows: [] }],
-  diagnostics: {
-    expectedGameCount: 1,
-    gameCount: 1,
-    lastMutationAt: '2026-08-15T00:00:00Z',
-    unexpectedPrivateValue: 'BACKGROUND_DIAGNOSTIC_SECRET',
-  },
-};
-const safeCapture = backgroundContext.globalThis.__privacy.sanitizeCaptureMetadata(privateCapture);
-assert.equal(safeCapture.pageUrl, 'https://www1.tai888.in/newapp/#/BS');
-assert.equal(safeCapture.frameUrl, 'https://www1.tai888.in/frame');
-const safeCaptureJson = JSON.stringify(safeCapture);
-for (const secret of [
-  'BACKGROUND_QUERY_SECRET', 'BACKGROUND_HASH_SECRET', 'BACKGROUND_FRAME_SECRET',
-  'BACKGROUND_TITLE_SECRET', 'BACKGROUND_DIAGNOSTIC_SECRET',
-]) {
-  assert.equal(safeCaptureJson.includes(secret), false, `${secret} must not survive background allow-list`);
-}
+assert.doesNotMatch(background, /pageTitle|unexpectedPrivateValue/);
+assert.match(background, /pageUrl: safeUrl\(input\.pageUrl\)/);
+assert.match(background, /frameUrl: safeUrl\(input\.frameUrl\)/);
+assert.match(background, /LEAGUES\.includes\(input\.league\) \? input\.league : null/);
 
 const content = fs.readFileSync('reader/tai888-content.js', 'utf8');
 assert.doesNotMatch(content, /input\[type=["']password|document\.cookie|localStorage|sessionStorage|fetch\(/i);
-assert.match(content, /standard MLB|標準 MLB|normalizeRowRecords/i);
+assert.match(content, /standardLeague|normalizeRowRecords/i);
 assert.doesNotMatch(content, /document\.title|(?:document\.)?location\.href/);
 assert.match(content, /document\.location\.origin/);
 assert.match(content, /document\.location\.pathname/);

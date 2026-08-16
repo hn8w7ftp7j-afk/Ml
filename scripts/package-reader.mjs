@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const OUTPUT_DIR = path.resolve(ROOT, process.argv[2] || 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.0.10-PARTIAL-MARKET-FIX.zip';
+const ARCHIVE_NAME = 'Tai888-Reader-v2.1.0-FOUR-LEAGUE-TABS.zip';
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
 const FIXED_TIME = new Date('1980-01-01T00:00:00.000Z');
 const FILES = [
@@ -16,6 +16,7 @@ const FILES = [
   'background.js',
   'board-selector.js',
   'capture-policy.js',
+  'league-registry.js',
   'parser.js',
   'popup.css',
   'popup.html',
@@ -141,8 +142,8 @@ function buildArchive(workRoot, outputFile) {
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.0.10');
-assert.equal(manifest.version_name, '2.0.10 PARTIAL MARKET FIX');
+assert.equal(manifest.version, '2.1.0');
+assert.equal(manifest.version_name, '2.1.0 FOUR LEAGUE TABS');
 assert.deepEqual([...manifest.permissions].sort(), ['alarms', 'storage', 'webNavigation'].sort());
 assert.deepEqual([...manifest.host_permissions].sort(), [
   'https://*.tai888.in/*',
@@ -154,7 +155,7 @@ assert.deepEqual([...manifest.content_scripts[0].matches].sort(), [
   'https://*.tai888.in/*',
   'https://tai888.in/*',
 ].sort());
-assert.deepEqual(manifest.content_scripts[0].js, ['capture-policy.js', 'row-normalizer.js', 'tai888-content.js']);
+assert.deepEqual(manifest.content_scripts[0].js, ['capture-policy.js', 'league-registry.js', 'row-normalizer.js', 'tai888-content.js']);
 assert.equal(manifest.content_scripts[0].run_at, 'document_idle');
 assert.equal(manifest.content_scripts[0].all_frames, true);
 assert.equal(manifest.content_scripts[0].match_about_blank, true);

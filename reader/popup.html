@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Tai888 Reader</title>
   <link rel="stylesheet" href="popup.css">
+  <style>.leagueGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.league{min-height:62px;padding:9px;border-radius:10px;background:#071522;border:1px solid #263e52}.league b,.league span{display:block}.league b{font-size:12px}.league span{font-size:9px;line-height:1.35;color:#9fb4c8;margin-top:5px}.league.good{border-color:#237b5a}.league.good b{color:#7de0ad}.league.bad{border-color:#8b3a49}.league.bad b{color:#ff9aaa}.league.waiting{border-color:#66552e}.league.waiting b{color:#e5bd60}</style>
 </head>
 <body>
   <main>
-    <div class="eyebrow">MLB POSITIVE EV</div>
-    <div class="titleRow"><h1>Tai888 Reader</h1><span>v2.0.10 PARTIAL MARKET FIX</span></div>
-    <p class="intro">只讀你已正常登入後、畫面上可見的 MLB 標準盤口。支援分列表格、子框架與特殊盤排除；不讀密碼、Cookie、Session、帳戶或下注按鈕。</p>
+    <div class="eyebrow">BASEBALL POSITIVE EV</div>
+    <div class="titleRow"><h1>Tai888 Reader</h1><span>v2.1.0 FOUR TABS</span></div>
+    <p class="intro">同時只讀四個 Tai888 分頁上可見的美棒、日棒、韓棒、中職標準盤口；不讀密碼、Cookie、Session、帳戶或下注按鈕。</p>
 
     <section id="pairPanel" class="panel hidden">
       <h2>第一次配對</h2>
@@ -21,18 +22,15 @@
     </section>
 
     <section id="statusPanel" class="panel hidden">
-      <div class="statusHead"><div><span class="label">目前狀態</span><strong id="state">檢查中…</strong></div><i id="dot"></i></div>
-      <div class="metrics">
-        <div><span>最後同步</span><b id="lastSync">—</b></div>
-        <div><span>配對場次</span><b id="matched">—</b></div>
-      </div>
+      <div class="statusHead"><div><span class="label">四個分頁</span><strong id="state">檢查中…</strong></div><i id="dot"></i></div>
+      <div id="leagueGrid" class="leagueGrid"></div>
       <label class="toggle"><span><b>自動同步</b><small>頁面變動＋每60秒心跳</small></span><input id="auto" type="checkbox"><i></i></label>
       <button id="sync" class="primary">立即同步一次</button>
       <button id="unpair" class="secondary">重新配對</button>
     </section>
 
     <div id="message" class="message">正在讀取 Reader 狀態…</div>
-    <p class="foot">電腦需保持開機、Chrome 不睡眠，Tai888 MLB「讓分＆大小」頁保持登入並開著。更新擴充功能後需按一次 F5。</p>
+    <p class="foot">開 4 個 Tai888 分頁，分別停在美棒／日棒／韓棒／中職的「讓分＆大小」。更新 Reader 後，4 頁都按一次 F5。</p>
   </main>
   <script src="popup.js"></script>
 </body>

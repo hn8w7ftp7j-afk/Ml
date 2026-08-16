@@ -11,6 +11,7 @@ const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/
 const DATE_TOKEN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_TOKEN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const TEAM_CODE = /^[A-Z]{2,4}$/;
+const LEAGUES = new Set(['MLB', 'NPB', 'KBO', 'CPBL']);
 
 const finiteInteger = value => {
   const number = Number(value);
@@ -217,9 +218,11 @@ function framePriority(left, right) {
  * combines tables or games across frames.  If two complete frames in that tab
  * disagree, it fails closed instead of guessing which contract is current.
  */
-export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferredTabId = null } = {}) {
+export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferredTabId = null, league = '' } = {}) {
+  if (league && !LEAGUES.has(league)) return { ok: false, error: 'unknown-league', assessed: [] };
   const boardCandidates = (Array.isArray(candidates) ? candidates : [])
-    .filter(candidate => Array.isArray(candidate?.capture?.tables) && candidate.capture.tables.length > 0);
+    .filter(candidate => (!league || candidate?.parsed?.league === league)
+      && Array.isArray(candidate?.capture?.tables) && candidate.capture.tables.length > 0);
   if (!boardCandidates.length) {
     return { ok: false, error: 'no-board-candidates', assessed: [] };
   }

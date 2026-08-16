@@ -9,7 +9,7 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const normalizer = context.globalThis.Tai888RowNormalizer;
 assert.ok(normalizer?.normalizeRowRecords, 'row normalizer missing');
-assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.0.10');
+assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.1.0');
 
 const spans = {
   time: [0, 80], teams: [80, 260], runline: [260, 380], total: [380, 500],
@@ -105,7 +105,7 @@ const capture = {
   tables: normalized.tables,
 };
 const parsed = parseTai888Capture(capture, new Date('2026-08-12T12:12:00Z'));
-assert.equal(parsed.version, 'TAI888-READER-DOM-v2.0.10');
+assert.equal(parsed.version, 'TAI888-READER-DOM-v2.1.0');
 assert.equal(parsed.boardDate, '2026-08-13');
 assert.equal(parsed.games.length, 8);
 assert.equal(parsed.games[0].awayCode, 'BAL');

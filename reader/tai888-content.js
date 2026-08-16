@@ -269,15 +269,19 @@
     }
 
     const bodyText = clean(document.body?.innerText || '');
-    const documentLooksStandardMlb = /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i.test(bodyText)
+    const league = globalThis.Tai888LeagueRegistry.identify(bodyText);
+    const documentLooksStandardLeague = Boolean(league && globalThis.Tai888LeagueRegistry.standardMarker(bodyText, league))
       && /(?:時間|时间)/.test(bodyText)
       && /(?:主客隊伍|主客队伍)/.test(bodyText)
       && /(?:讓球|让球)/.test(bodyText)
       && /(?:大小盤|大小盘)/.test(bodyText);
-    const normalized = normalizer.normalizeRowRecords(records, { documentLooksStandardMlb });
+    const normalized = league
+      ? normalizer.normalizeRowRecords(records, { expectedLeague: league, documentLooksStandardLeague })
+      : { tables: [], diagnostics: { recordCount: records.length, gameCount: 0, sawLeagueMarker: false } };
 
     return {
-      version: 'TAI888-DOM-CAPTURE-v2.0.10',
+      version: 'TAI888-DOM-CAPTURE-v2.1.0',
+      league,
       sourceHost: tai888SourceHost(),
       pageUrl: currentTai888PageUrl(),
       observedAt: new Date().toISOString(),
@@ -288,7 +292,8 @@
         rootCount: openRoots().length,
         candidateElementCount: elements.length,
         acceptedRecordCount: records.length,
-        documentLooksStandardMlb,
+        documentLooksStandardLeague,
+        league,
         frameHost: location.hostname,
         sourceHost: tai888SourceHost(),
         lastMutationAt: new Date(lastMutationAt).toISOString(),
@@ -298,7 +303,7 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.type !== 'TAI888_CAPTURE_MLB_TABLE') return;
+    if (!['TAI888_CAPTURE_BASEBALL_TABLE', 'TAI888_CAPTURE_MLB_TABLE'].includes(message?.type)) return;
     try { sendResponse({ ok: true, capture: capture() }); }
     catch {
       sendResponse({

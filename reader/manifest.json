@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.0.10",
-  "version_name": "2.0.10 PARTIAL MARKET FIX",
-  "description": "只讀已登入瀏覽器中可見的 Tai888 MLB 標準盤，支援分列、子框架與自動同步。",
+  "version": "2.1.0",
+  "version_name": "2.1.0 FOUR LEAGUE TABS",
+  "description": "一個 Reader 獨立讀取 Tai888 美棒、日棒、韓棒與中職四個標準盤分頁。",
   "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [
     "https://*.tai888.in/*",
@@ -22,6 +22,7 @@
       ],
       "js": [
         "capture-policy.js",
+        "league-registry.js",
         "row-normalizer.js",
         "tai888-content.js"
       ],

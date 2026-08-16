@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { selectAuthoritativeBoard } from '../reader/board-selector.js';
+
+const context = { globalThis: {} };
+vm.createContext(context);
+vm.runInContext(fs.readFileSync('reader/league-registry.js', 'utf8'), context);
+const registry = context.globalThis.Tai888LeagueRegistry;
+assert.deepEqual([...registry.ids], ['MLB', 'NPB', 'KBO', 'CPBL']);
+assert.equal(registry.identify('聯盟：MLB 美國職棒（5）'), 'MLB');
+assert.equal(registry.identify('聯盟：NPB 日本職棒（6）'), 'NPB');
+assert.equal(registry.identify('聯盟：KBO 韓國職棒（5）'), 'KBO');
+assert.equal(registry.identify('聯盟：CPBL 中華職棒（3）'), 'CPBL');
+assert.equal(registry.identify('日棒'), null);
+assert.equal(registry.standardMarker('聯盟：NPB 日本職棒 走地', 'NPB'), false);
+
+const source = fs.readFileSync('reader/background.js', 'utf8');
+assert.match(source, /for \(const league of LEAGUES\)/);
+assert.match(source, /candidates\.filter\(item => item\.parsed\.league === league\)/);
+assert.match(source, /lastSuccessfulPayloadHashes/);
+assert.match(source, /league === 'MLB' \? '\/api\/reader\/ingest' : '\/api\/reader\/capture'/);
+assert.doesNotMatch(source, /chrome\.cookies|document\.cookie|localStorage|sessionStorage/i);
+assert.equal(selectAuthoritativeBoard([], { league: 'NFL' }).error, 'unknown-league');
+process.stdout.write('Reader 2.1.0 four-league exact markers, isolated sync and fail-closed routing PASS\n');
