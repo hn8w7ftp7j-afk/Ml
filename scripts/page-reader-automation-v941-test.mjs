@@ -32,12 +32,14 @@ assert.match(page, /actualSource: null, readerPayloadHash: null, customMarkets: 
 assert.match(page, /if \(!acknowledged\) window\.setTimeout\(\(\) => \{/);
 assert.match(page, /row\.executable === true/);
 assert.match(page, /actualLineFreshNow\(row, now\)/);
-assert.match(page, /gameIsPrestartNow\(item\.game, Date\.now\(\)\)/);
+assert.match(page, /function betRecordable\(item, row, now = Date\.now\(\)\)/);
+assert.match(page, /gameIsPrestartNow\(item\?\.game, now\)/);
 assert.match(page, /!snapshot \|\| !item\.referenceData/);
 assert.match(page, /formalBetEligibility/);
 assert.match(page, /filter\(row => row\.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater\(row\.water\)\)/);
 assert.doesNotMatch(page, /hasActualWater\(row\.water\) && row\.executable === true && actualLineFreshNow\(row, clockNow\)/);
-assert.match(page, /const eligible = itemReaderExecutable\(row\.item\) && formalBetEligibility\(row, 7\.2, clockNow\)\.passed/);
+assert.match(page, /const recordable = betRecordable\(row\.item, row, clockNow\)/);
+assert.match(page, /recordable=\{betRecordable\(item, row, now\)\}/);
 assert.match(page, /readerExecutable=\{itemReaderExecutable\(item\)\}/);
 assert.match(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash/);
 assert.match(page, /readerPayloadHash: available \? credit\.payloadHash : null/);
@@ -79,6 +81,8 @@ assert.match(page, /\{row\.pick\}｜\{matchup\(row\.game\)\}｜\{row\.market\}<\
 const recordBetSource = page.slice(page.indexOf('function recordBet('), page.indexOf('function selectLeague('));
 assert.doesNotMatch(recordBetSource, /operationBusyRef\.current|readerPollBusyRef\.current/, '下注標記不得被後台同步或重算作業擋住');
 assert.match(recordBetSource, /betPositionIdentity\(date, item\.game\.gamePk, row, league\)/);
+assert.match(recordBetSource, /if \(!betRecordable\(item, row, Date\.now\(\)\)\)/);
+assert.doesNotMatch(recordBetSource, /formalBetEligibility|itemReaderExecutable/, '記錄下注是帳務標記，不得被正式推薦 QA 或 Reader 驗證狀態隱藏');
 assert.match(recordBetSource, /已雲端記錄/);
 assert.match(page, /readerPayloadHash/);
 assert.match(page, /scoreFormulaVersion/);
