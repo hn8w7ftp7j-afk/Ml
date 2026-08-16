@@ -378,6 +378,11 @@ export default function Home() {
     && readerStatus?.boardDate === date
     && Boolean(currentReaderHashKey)
     && (acknowledgedReaderKey === currentReaderHashKey || acknowledgedReaderKey.startsWith(`${currentReaderHashKey}:`));
+  const itemReaderExecutable = item => league === 'MLB'
+    && readerStatus?.fresh === true
+    && readerStatus?.boardDate === date
+    && Boolean(item?.readerPayloadHash)
+    && item.readerPayloadHash === readerStatus?.payloadHash;
 
   const ranked = useMemo(() => board.flatMap(item => {
     if (!gameIsPrestartNow(item.game, clockNow)) return [];
@@ -499,6 +504,7 @@ export default function Home() {
           game,
           mode: 'actual',
           actualSource: foundCredit?.source || null,
+          readerPayloadHash: available ? credit.payloadHash : null,
           customMarkets: foundCredit?.markets || [],
           status: available ? 'queued' : 'unopened',
           statusLabel: available ? '等待分析' : '目前尚無可配對盤口',
@@ -610,7 +616,7 @@ export default function Home() {
         const actual = creditByPk.get(Number(item.game.gamePk));
         if (!actual?.markets?.length) {
           if (item.actualSource?.provider === 'TAI888_READER_AUTO') {
-            updateBoard(item.game.gamePk, current => ({ ...current, actualSource: null, customMarkets: [], customData: null, referenceData: null, status: 'unopened', statusLabel: 'Tai888實際盤已下架' }));
+            updateBoard(item.game.gamePk, current => ({ ...current, actualSource: null, readerPayloadHash: null, customMarkets: [], customData: null, referenceData: null, status: 'unopened', statusLabel: 'Tai888實際盤已下架' }));
             if (item.customMarkets?.length) removed += 1;
             completed += 1;
           }
@@ -636,6 +642,7 @@ export default function Home() {
           updateBoard(item.game.gamePk, current => ({
             ...current,
             actualSource: actual.source,
+            readerPayloadHash: credit.payloadHash,
             customMarkets: actual.markets,
             customData: compactAnalysisData(data),
             status: 'done',
@@ -679,7 +686,7 @@ export default function Home() {
       return;
     }
     if (!gameIsPrestartNow(item.game, Date.now())
-      || (item.actualSource?.provider === 'TAI888_READER_AUTO' && !readerExecutable)
+      || (item.actualSource?.provider === 'TAI888_READER_AUTO' && !itemReaderExecutable(item))
       || !formalBetEligibility(row, 7.2, Date.now()).passed) {
       setError('此方向已達開打時間，或未通過最新盤口、雙EV與三層QA完整門檻，不能記錄為正式下注');
       return;
@@ -750,12 +757,12 @@ export default function Home() {
       </section>
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && !board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日分析</h2><p>按上方按鈕後，今天 Reader 已同步的 Tai888 信用盤會一次列出並完成分析。</p></section>}
-      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} isBetRecorded={isBetRecorded} readerExecutable={readerExecutable} analysisInProgress={progress.active} now={clockNow}/>) }
+      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} isBetRecorded={isBetRecorded} readerExecutable={itemReaderExecutable(item)} analysisInProgress={progress.active} now={clockNow}/>) }
     </>}
 
     {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜Tai888 信用盤排名</h2><span className="leagueBadge">{league}</span></div>{analysisEnabled && ranked.length ? ranked.map((row, index) => {
       const recorded = isBetRecorded(row.item, row);
-      const eligible = readerExecutable && formalBetEligibility(row, 7.2, clockNow).passed;
+      const eligible = itemReaderExecutable(row.item) && formalBetEligibility(row, 7.2, clockNow).passed;
       return <div className={`rankRow ${recorded ? 'betRecorded' : ''}`} key={`${league}-${row.game.gamePk}-${rowKey(row)}`}><b>{index + 1}</b><strong>{scoreText(row.score)}</strong><div><span>{row.pick}｜{matchup(row.game)}｜{row.market}</span><small>信用盤 {waterText(row.water)}｜校準等值勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEvenProbability(row.water, 0.015))}｜正式EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}</small></div>{(eligible || recorded) && <button className={`mini ${recorded ? 'recorded' : 'green'}`} title={recorded ? '再按一次可取消標記' : '標記這個盤口已下注'} onClick={() => recordBet(row.item, row)}>{recorded ? '已下注 ✓' : '記錄下注'}</button>}</div>;
     }) : <div className="emptySmall">{analysisEnabled ? `完成今日 ${activeLeague.shortLabel} Tai888 信用盤分析後顯示排名。` : `${activeLeague.shortLabel}正式模型尚未啟用，不顯示推估或跨聯盟替代排名。`}</div>}</section>}
 
