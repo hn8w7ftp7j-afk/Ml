@@ -15,6 +15,7 @@ const failingCache = {
   },
 };
 const failedSnapshot = {
+  league: 'MLB',
   boardDate: '2026-08-11',
   observedAt: '2026-08-11T00:00:10.000Z',
   receivedAt: '2026-08-11T00:00:11.000Z',
@@ -32,8 +33,9 @@ assert.equal(failed.memory, false);
 assert.equal(failed.allRequiredWritesSucceeded, false);
 
 process.env.READER_STORE_MEMORY_ONLY = 'true';
-assert.equal(await loadReaderSnapshot('2026-08-11'), null);
+assert.equal(await loadReaderSnapshot('MLB', '2026-08-11'), null);
 const snapshot = {
+  league: 'MLB',
   boardDate: '2026-08-12',
   observedAt: '2026-08-12T00:00:10.000Z',
   receivedAt: '2026-08-12T00:00:11.000Z',
@@ -43,10 +45,10 @@ const snapshot = {
 };
 const stored = await storeReaderSnapshot(snapshot);
 assert.equal(stored.allRequiredWritesSucceeded, true);
-assert.equal((await loadReaderSnapshot('2026-08-12')).matchedGameCount, 15);
-assert.equal(await loadReaderSnapshot('2026-08-13'), null, 'exact-date lookup must never fall back to latest');
-assert.equal(readerSnapshotStatus(await loadReaderSnapshot(), Date.parse('2026-08-12T00:00:30Z')).fresh, true);
-assert.equal(readerSnapshotStatus({ ...snapshot, pageActivityAt: '2020-01-01T00:00:00Z' }).stale, true);
+assert.equal((await loadReaderSnapshot('MLB', '2026-08-12')).matchedGameCount, 15);
+assert.equal(await loadReaderSnapshot('MLB', '2026-08-13'), null, 'exact-date lookup must never fall back to latest');
+assert.equal(readerSnapshotStatus(await loadReaderSnapshot('MLB'), Date.parse('2026-08-12T00:00:30Z'), 'MLB').fresh, true);
+assert.equal(readerSnapshotStatus({ ...snapshot, pageActivityAt: '2020-01-01T00:00:00Z' }, Date.now(), 'MLB').stale, true);
 
 const staleAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 const market = (name, pick) => ({
@@ -59,6 +61,7 @@ const market = (name, pick) => ({
   lineAsOf: staleAt,
 });
 const staleComplete = {
+  league: 'MLB',
   boardDate: '2099-01-01',
   observedAt: staleAt,
   receivedAt: staleAt,
@@ -73,7 +76,10 @@ const staleComplete = {
   scheduleGameCount: 1,
   unmatched: [],
   games: [{
+    league: 'MLB',
     gamePk: 20990101,
+    game: { gamePk: 20990101, league: 'MLB' },
+    source: { league: 'MLB' },
     markets: [
       market('全場讓分', '客隊讓1平'), market('全場讓分', '主隊受讓1平'),
       market('全場大小', '大8平'), market('全場大小', '小8平'),
@@ -83,7 +89,7 @@ const staleComplete = {
   }],
 };
 await storeReaderSnapshot(staleComplete);
-const statusPayload = readerSnapshotPublicView(await loadReaderSnapshot('2099-01-01'), { complete: true });
+const statusPayload = readerSnapshotPublicView(await loadReaderSnapshot('MLB', '2099-01-01'), { complete: true, league: 'MLB' });
 assert.equal(statusPayload.stale, true);
 assert.equal(statusPayload.executable, false);
 assert.equal(statusPayload.payloadHash, null);
@@ -93,6 +99,7 @@ assert.equal(statusPayload.sourceHost, null);
 const freshPayload = readerSnapshotPublicView(staleComplete, {
   complete: true,
   now: Date.parse(staleAt) + 30_000,
+  league: 'MLB',
 });
 assert.equal(freshPayload.executable, true);
 assert.equal(freshPayload.payloadHash, staleComplete.payloadHash);

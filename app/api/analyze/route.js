@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { buildGameContext } from '../../../lib/mlb.js';
-import { analyzeMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
+import { analyzeMarkets, enforceAnalysisModeSafety, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
@@ -14,7 +13,14 @@ import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/mar
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
 import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
-import { assertGameHasNotStarted, resolveOfficialGame, withClearedTimeout } from '../../../lib/official-schedule-v1.js';
+import {
+  assertLeagueGamePrestart,
+  buildLeagueGameContext,
+  getLeagueProvider,
+  leagueAnalysisContract,
+  resolveLeagueGame,
+  withLeagueProviderTimeout,
+} from '../../../lib/league-provider.js';
 import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import {
   checkRateLimit,
@@ -32,8 +38,8 @@ export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // A new namespace intentionally discards the poisoned v9.1-v9.3 runtime cache.
-const responseCache = globalThis.__MLB_V933_ANALYSIS_CACHE__ || new Map();
-globalThis.__MLB_V933_ANALYSIS_CACHE__ = responseCache;
+const responseCache = globalThis.__BASEBALL_V960_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V960_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -43,7 +49,9 @@ function optionalNumber(value) {
 
 function sanitizeGame(game) {
   const safe = {
-    gamePk: positiveInteger(game?.gamePk), gameDate: cleanText(game?.gameDate, 40), officialDate: cleanText(game?.officialDate, 20),
+    league: cleanText(game?.league || game?.leagueId, 10),
+    leagueId: cleanText(game?.leagueId || game?.league, 10),
+    gamePk: positiveInteger(game?.gamePk, Number.MAX_SAFE_INTEGER), gameDate: cleanText(game?.gameDate, 40), officialDate: cleanText(game?.officialDate, 20),
     status: cleanText(game?.status, 60), statusEnglish: cleanText(game?.statusEnglish, 60), statusCode: cleanText(game?.statusCode, 10),
     doubleHeader: cleanText(game?.doubleHeader, 10), gameNumber: positiveInteger(game?.gameNumber) || 1,
     scheduledInnings: positiveInteger(game?.scheduledInnings) || 9, away: cleanText(game?.away, 80), home: cleanText(game?.home, 80),
@@ -71,8 +79,8 @@ function sanitizeMarketRows(rows, maximum = 16) {
   })).filter(row => row.market);
 }
 
-async function prepareMarketRows(game, rows, maximum) {
-  const attested = await attestIncomingMarketRows(game, sanitizeMarketRows(rows, maximum));
+async function prepareMarketRows(league, game, rows, maximum) {
+  const attested = await attestIncomingMarketRows(league, game, sanitizeMarketRows(rows, maximum));
   const now = Date.now();
   return attested.map(row => applyMarketFreshness(row, now));
 }
@@ -104,13 +112,13 @@ export async function POST(request) {
     }
     const requestedGame = sanitizeGame(body.game);
     if (!requestedGame || !Array.isArray(body.markets)) return NextResponse.json({ ok: false, error: '缺少或無效的賽事／盤口資料' }, { status: 400 });
-    const { game } = await resolveOfficialGame(requestedGame);
-    assertGameHasNotStarted(game);
+    const { game } = await resolveLeagueGame(league, requestedGame);
+    assertLeagueGamePrestart(league, game);
 
-    const suppliedMarkets = await prepareMarketRows(game, body.markets, 12);
-    const verificationMarkets = await prepareMarketRows(game, body.verificationMarkets, 16);
+    const suppliedMarkets = await prepareMarketRows(league, game, body.markets, 12);
+    const verificationMarkets = await prepareMarketRows(league, game, body.verificationMarkets, 16);
     const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
-    const previousMarkets = await prepareMarketRows(game, body.previousMarkets, 24);
+    const previousMarkets = await prepareMarketRows(league, game, body.previousMarkets, 24);
     const errors = [];
     for (const name of MARKET_ORDER) {
       const pair = markets.filter(row => row.market === name);
@@ -129,34 +137,42 @@ export async function POST(request) {
       simulationsPerScenario: Math.max(500, Math.min(4000, Math.round(Number(body.settings?.simulationsPerScenario) || 1800))),
       expertMode: 'off',
     };
-    const versions = {
-      modelVersion: MODEL_VERSION, rulesVersion: RULES_VERSION, dataVersion: DATA_VERSION,
-      scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
-    };
-    const context = await withClearedTimeout(buildGameContext(game), 30000, 'MLB資料取得逾時，請稍後重試');
+    const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
     if (!context?.coreModelable) {
       return NextResponse.json({ ok: false, error: '資料不足｜不評分', warnings: context?.warnings || [] }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
     }
+    const contract = leagueAnalysisContract(league);
+    const versions = {
+      modelVersion: context.modelVersion || contract.modelVersion || MODEL_VERSION,
+      rulesVersion: context.rulesVersion || contract.rulesVersion || RULES_VERSION,
+      dataVersion: DATA_VERSION,
+      scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
+    };
 
-    const coreOnly = buildSnapshotFingerprints({ context, markets: [], versions });
+    const coreOnly = buildSnapshotFingerprints({ league, context, markets: [], versions });
     const frozenContext = { ...context, coreFingerprint: coreOnly.coreFingerprint };
     const fingerprints = buildSnapshotFingerprints({
+      league,
       context: frozenContext,
       markets: activeMarkets,
       versions,
       calculationSettings: settings,
       auxiliaryInput: { previousMarkets },
     });
-    const signature = analysisContractSignature(game, activeMarkets);
-    const cacheKey = analysisCacheKey(game.gamePk, fingerprints.inputHash);
+    const signature = analysisContractSignature(league, game, activeMarkets);
+    const cacheKey = analysisCacheKey(league, game.gamePk, fingerprints.inputHash);
     const cached = responseCache.get(cacheKey);
-    if (analysisCachePayloadMatches(cached, { game, fingerprints, signature })) {
-      return NextResponse.json(cached.payload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT' } });
+    if (analysisCachePayloadMatches(cached, { league, game, fingerprints, signature })) {
+      const safePayload = enforceAnalysisModeSafety(cached.payload, cached.payload.context || frozenContext);
+      return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT' } });
     }
     if (cached) responseCache.delete(cacheKey);
 
     const preliminary = analyzeMarkets({ context: frozenContext, markets: activeMarkets, previousMarkets, settings });
-    const deterministic = finalizeDeterministicAnalysis({ analysis: preliminary, game, settings });
+    const deterministic = enforceAnalysisModeSafety(
+      finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }),
+      frozenContext,
+    );
     const distributionSnapshot = deterministic.distributionSnapshot;
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
     const analysisAsOf = new Date().toISOString();
@@ -174,10 +190,20 @@ export async function POST(request) {
       distributionId: finalized.distributionId, distributionHash: finalized.distributionHash,
       dataAsOf: finalized.dataAsOf, simulationsPerScenario: finalized.scenarioSummary?.simulationsPerScenario, versions,
     };
-    const repriceSnapshot = await signRepriceSnapshot(game, unsignedRepriceSnapshot);
-    const payload = { ok: true, league, game, context: frozenContext, analysis: finalized, repriceSnapshot, openMarkets: [...new Set(activeMarkets.map(row => row.market))] };
-    cacheSet(cacheKey, signature, payload);
-    return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS' } });
+    const repriceSnapshot = await signRepriceSnapshot(
+      league,
+      game,
+      enforceAnalysisModeSafety(unsignedRepriceSnapshot, frozenContext),
+    );
+    const provider = getLeagueProvider(league);
+    const payload = {
+      ok: true, league, game, context: frozenContext, analysis: finalized, repriceSnapshot,
+      analysisMode: provider.analysisMode, betEligible: provider.betEligible,
+      openMarkets: [...new Set(activeMarkets.map(row => row.market))],
+    };
+    const safePayload = enforceAnalysisModeSafety(payload, frozenContext);
+    cacheSet(cacheKey, signature, safePayload);
+    return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS' } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
   }

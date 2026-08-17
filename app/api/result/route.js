@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { fetchFinalResult } from '../../../lib/mlb.js';
+import { fetchLeagueFinalResult, getLeagueProvider, withLeagueProviderTimeout } from '../../../lib/league-provider.js';
 import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
-import { checkRateLimit, positiveInteger, rateLimitResponse, requireApiAuth } from '../../../lib/security.js';
+import { checkRateLimit, positiveInteger, rateLimitResponse, requireApiAuth, validDateString } from '../../../lib/security.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,14 +24,30 @@ export async function GET(request) {
         error: `${config.label}賽果來源尚未完成正式驗證`,
       }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
-    const gamePk = positiveInteger(searchParams.get('gamePk'));
+    const gamePk = positiveInteger(searchParams.get('gamePk'), Number.MAX_SAFE_INTEGER);
     if (!gamePk) return NextResponse.json({ ok: false, error: '缺少或無效的 gamePk' }, { status: 400 });
-    const result = await Promise.race([
-      fetchFinalResult(gamePk),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('賽果資料取得逾時')), 15000)),
-    ]);
-    return NextResponse.json({ ok: true, league, ...result }, { headers: { 'Cache-Control': 'no-store' } });
+    const date = searchParams.get('date') || '';
+    if (league !== 'MLB' && !validDateString(date)) {
+      return NextResponse.json({
+        ok: false, code: 'RESULT_DATE_REQUIRED',
+        error: `${league} 賽果查詢必須提供 YYYY-MM-DD 日期`,
+      }, { status: 400 });
+    }
+    if (date && !validDateString(date)) {
+      return NextResponse.json({ ok: false, error: '日期格式錯誤' }, { status: 400 });
+    }
+    const result = await withLeagueProviderTimeout(
+      league,
+      fetchLeagueFinalResult(league, gamePk, { date }),
+      15_000,
+      '賽果資料取得逾時',
+    );
+    const provider = getLeagueProvider(league);
+    return NextResponse.json({ ok: true, league, betEligible: provider.betEligible, ...result }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ok: false, error: String(error?.message || error), code: error?.code || undefined }, {
+      status: Number(error?.status) || 500,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 }

@@ -21,6 +21,7 @@ assert.equal(marketIntegrityConfigured({ APP_PASSWORD: 'login-only', TAI888_PASS
 assert.equal(marketIntegrityConfigured({ SESSION_SECRET: 'session-is-an-allowed-hmac-key' }), true);
 
 const game = {
+  league: 'MLB',
   gamePk: 990001,
   gameDate: '2099-08-11T23:00:00.000Z',
   taipeiDate: '2099-08-12',
@@ -44,16 +45,16 @@ const market = {
   lineAsOf: '2099-08-11T22:59:00.000Z',
   executable: true,
 };
-const signedMarket = await signMarketRow(game, market, signingEnv);
-assert.equal(await verifyMarketRow(game, signedMarket, signingEnv), true);
-assert.equal(await verifyMarketRow(game, { ...signedMarket, water: 1.05 }, signingEnv), false);
-assert.equal(await verifyMarketRow({ ...game, gameNumber: 2 }, signedMarket, signingEnv), false);
+const signedMarket = await signMarketRow('MLB', game, market, signingEnv);
+assert.equal(await verifyMarketRow('MLB', game, signedMarket, signingEnv), true);
+assert.equal(await verifyMarketRow('MLB', game, { ...signedMarket, water: 1.05 }, signingEnv), false);
+assert.equal(await verifyMarketRow('MLB', { ...game, gameNumber: 2 }, signedMarket, signingEnv), false);
 
 await assert.rejects(
-  () => attestIncomingMarketRows(game, [market], signingEnv),
+  () => attestIncomingMarketRows('MLB', game, [market], signingEnv),
   error => error?.status === 409 && /缺少伺服器簽章/.test(error.message),
 );
-const [manual] = await attestIncomingMarketRows(game, [{
+const [manual] = await attestIncomingMarketRows('MLB', game, [{
   ...market,
   provider: 'USER_MANUAL_ENTRY',
   sourceLabel: 'Tai888 Reader 自動信用盤',
@@ -62,7 +63,7 @@ const [manual] = await attestIncomingMarketRows(game, [{
 assert.equal(manual.provider, 'USER_MANUAL_ENTRY');
 assert.equal(manual.sourceLabel, '使用者手動輸入盤口');
 assert.equal(manual.authorizationStatus, 'USER_CONFIRMED_MANUAL');
-assert.equal(await verifyMarketRow(game, manual, signingEnv), true);
+assert.equal(await verifyMarketRow('MLB', game, manual, signingEnv), true);
 
 const snapshot = {
   frozenContext: { game, fetchedAt: '2099-08-11T22:00:00.000Z' },
@@ -71,9 +72,9 @@ const snapshot = {
   distributionId: 'distribution-1',
   distributionHash: 'hash-1',
 };
-const signedSnapshot = await signRepriceSnapshot(game, snapshot, signingEnv);
-assert.equal(await verifyRepriceSnapshot(game, signedSnapshot, signingEnv), true);
-assert.equal(await verifyRepriceSnapshot(game, {
+const signedSnapshot = await signRepriceSnapshot('MLB', game, snapshot, signingEnv);
+assert.equal(await verifyRepriceSnapshot('MLB', game, signedSnapshot, signingEnv), true);
+assert.equal(await verifyRepriceSnapshot('MLB', game, {
   ...signedSnapshot,
   distributionSnapshot: { ...signedSnapshot.distributionSnapshot, values: [0.3, 0.7] },
 }, signingEnv), false);

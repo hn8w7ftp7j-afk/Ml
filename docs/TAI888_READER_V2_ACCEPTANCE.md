@@ -1,20 +1,24 @@
 # Tai888 Reader v2 acceptance checklist
 
-- [x] Reader reads visible Tai888 MLB DOM only.
+- [x] Reader reads visible Tai888 MLB, NPB, KBO and CPBL standard-market DOM only.
 - [x] Correct production host: `www1.tai888.in`.
 - [x] Full-game run line and total parsing.
 - [x] First-five run line and total parsing.
 - [x] Home marker and team-code normalization.
+- [x] League-specific aliases, official schedule identity and doubleheader matching.
 - [x] Split line/tail/water fields retained separately.
 - [x] Reader pairing and expiring device token.
 - [x] Rate limit, payload size, idempotency and replay controls.
-- [x] Runtime Cache-backed latest snapshot with memory fallback for local tests.
+- [x] League/date-namespaced Runtime Cache snapshot with MLB-only legacy read migration and memory fallback for local tests.
 - [x] Fresh/stale/offline status.
-- [x] `/api/credit-lines` prefers fresh Reader snapshot.
+- [x] `/api/credit-lines` uses the fresh Reader snapshot for the explicitly requested league and never falls back across leagues.
 - [x] Initial analysis uses the full deterministic model.
 - [x] Price-only update uses frozen-distribution `/api/reprice`.
 - [x] Core-data changes continue through full-analysis versioning.
 - [x] Existing Taiwan-credit settlement, rebate and mirror QA preserved.
+- [x] HMAC, snapshot, analysis-cache and input-hash domains include the league.
+- [x] NPB/KBO/CPBL analyses are forced to shadow, non-executable, non-bet-eligible output with an empty portfolio at every response/cache layer.
+- [x] Any visible open partial game rejects the whole ingest batch; absent or fully locked official games remain non-executable.
 - [x] Permanent parser/auth/store/DOM tests.
 - [x] Full existing test suite and optimized Production build pass.
 - [x] No credentials, cookies, sessions, balances or betting actions are collected.

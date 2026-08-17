@@ -23,6 +23,7 @@ const calculationSettings = {
 
 const baseContext = {
   game: {
+    league: 'MLB',
     gamePk: 1001,
     officialDate: '2026-08-11',
     gameNumber: 1,
@@ -51,6 +52,7 @@ const previousMarkets = [
 ];
 
 const input = {
+  league: 'MLB',
   context: baseContext,
   markets,
   versions,
@@ -112,29 +114,102 @@ const otherPreviousPrice = buildSnapshotFingerprints({
 assert.notEqual(first.auxiliaryFingerprint, otherPreviousPrice.auxiliaryFingerprint, 'previous-market evidence must change auxiliary fingerprint');
 assert.notEqual(first.inputHash, otherPreviousPrice.inputHash, 'previous-market evidence must change inputHash');
 
-const signature = analysisContractSignature(baseContext.game, markets);
-const otherSignature = analysisContractSignature(otherGame.corePayload.game, markets);
+const shadowContext = {
+  ...baseContext,
+  game: { ...baseContext.game, league: 'NPB' },
+  leagueId: 'NPB',
+  analysisMode: 'EXPERIMENTAL_SHADOW',
+  modelVersion: 'npb-model-v1',
+  rulesVersion: 'npb-rules-v1',
+  modelConfig: { shrink: { full: 0.70, first5: 0.68 }, allowDraw: true },
+};
+const shadowInput = { ...input, league: 'NPB', context: shadowContext };
+const shadowPrints = buildSnapshotFingerprints(shadowInput);
+for (const [label, context] of [
+  ['analysisMode', { ...shadowContext, analysisMode: 'FORMAL' }],
+  ['modelConfig', { ...shadowContext, modelConfig: { ...shadowContext.modelConfig, shrink: { full: 0.74, first5: 0.68 } } }],
+  ['modelVersion', { ...shadowContext, modelVersion: 'npb-model-v2' }],
+  ['rulesVersion', { ...shadowContext, rulesVersion: 'npb-rules-v2' }],
+]) {
+  const changed = buildSnapshotFingerprints({ ...shadowInput, context });
+  assert.notEqual(shadowPrints.coreFingerprint, changed.coreFingerprint, `${label} must change the core fingerprint`);
+  assert.notEqual(shadowPrints.inputHash, changed.inputHash, `${label} must change the input hash`);
+}
+const defaultMlbBytes = buildSnapshotFingerprints({ ...input, context: baseContext });
+const undefinedContractMlbBytes = buildSnapshotFingerprints({
+  ...input,
+  context: { ...baseContext, analysisMode: undefined, modelConfig: undefined, modelVersion: undefined, rulesVersion: undefined },
+});
+assert.equal(defaultMlbBytes.coreFingerprint, undefinedContractMlbBytes.coreFingerprint, 'default MLB core bytes must not gain empty model-contract keys');
+
+const signature = analysisContractSignature('MLB', baseContext.game, markets);
+const otherSignature = analysisContractSignature('MLB', otherGame.corePayload.game, markets);
 assert.notEqual(signature, otherSignature, 'contract signature must include game identity');
-const cacheKey = analysisCacheKey(baseContext.game.gamePk, first.inputHash);
-const otherCacheKey = analysisCacheKey(otherGame.corePayload.game.gamePk, otherGame.inputHash);
+const cacheKey = analysisCacheKey('MLB', baseContext.game.gamePk, first.inputHash);
+const otherCacheKey = analysisCacheKey('MLB', otherGame.corePayload.game.gamePk, otherGame.inputHash);
 assert.notEqual(cacheKey, otherCacheKey, 'cache key must be game isolated');
 
 const payload = {
+  league: 'MLB',
   game: baseContext.game,
   context: { game: baseContext.game },
   analysis: { inputHash: first.inputHash },
   repriceSnapshot: { inputHash: first.inputHash },
 };
 assert.equal(analysisCachePayloadMatches({ signature, payload }, {
+  league: 'MLB',
   game: baseContext.game,
   fingerprints: first,
   signature,
 }), true);
 assert.equal(analysisCachePayloadMatches({ signature, payload }, {
+  league: 'MLB',
   game: otherGame.corePayload.game,
   fingerprints: otherGame,
   signature: otherSignature,
 }), false, 'cached payload from another game must be rejected');
+
+const shadowGame = shadowContext.game;
+const shadowSignature = analysisContractSignature('NPB', shadowGame, markets);
+const lockedContext = { ...shadowContext, executable: false, betEligible: false };
+const lockedResult = {
+  analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+  scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注',
+  unitSuggestion: null, recommendedUnit: null, portfolioRole: '', portfolioUnit: null,
+};
+const shadowPayload = {
+  league: 'NPB',
+  game: shadowGame,
+  context: { ...lockedContext, game: shadowGame },
+  analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+  scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注', unitSuggestion: null,
+  portfolio: [], results: [lockedResult],
+  analysis: {
+    inputHash: shadowPrints.inputHash,
+    analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+    scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注', unitSuggestion: null,
+    portfolio: [], results: [lockedResult],
+  },
+  repriceSnapshot: {
+    inputHash: shadowPrints.inputHash,
+    analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+    portfolio: [], frozenContext: { ...lockedContext, game: shadowGame },
+  },
+};
+const shadowEntry = { signature: shadowSignature, payload: shadowPayload };
+const shadowMatch = candidate => analysisCachePayloadMatches({ ...shadowEntry, payload: candidate }, {
+  league: 'NPB', game: shadowGame, fingerprints: shadowPrints, signature: shadowSignature,
+});
+assert.equal(shadowMatch(shadowPayload), true);
+for (const [label, candidate] of [
+  ['top executable', { ...shadowPayload, executable: true }],
+  ['top portfolio', { ...shadowPayload, portfolio: [{ pick: 'unsafe' }] }],
+  ['top tag', { ...shadowPayload, tag: '主推' }],
+  ['context', { ...shadowPayload, context: { ...shadowPayload.context, betEligible: true } }],
+  ['analysis result', { ...shadowPayload, analysis: { ...shadowPayload.analysis, results: [{ ...lockedResult, tag: '主推' }] } }],
+  ['reprice snapshot', { ...shadowPayload, repriceSnapshot: { ...shadowPayload.repriceSnapshot, portfolio: [{ pick: 'unsafe' }] } }],
+  ['frozen context', { ...shadowPayload, repriceSnapshot: { ...shadowPayload.repriceSnapshot, frozenContext: { ...shadowPayload.repriceSnapshot.frozenContext, analysisMode: 'FORMAL' } } }],
+]) assert.equal(shadowMatch(candidate), false, `unsafe shadow cache layer must miss: ${label}`);
 
 console.log(JSON.stringify({
   ok: true,

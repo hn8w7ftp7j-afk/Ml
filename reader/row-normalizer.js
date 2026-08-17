@@ -15,7 +15,7 @@
     { key: 'first5Total', label: '上半大小', patterns: [/上半大小/, /前5.*大小/, /前五.*大小/] },
   ]);
 
-  const TEAM_CODE = /(?:^|\s)([A-Z]{2,4})\s*-/g;
+  const TEAM_CODE = /(?:^|\s)([A-Z][A-Z0-9]{0,11})\s*-/g;
   const leagueRegistry = globalThis.Tai888LeagueRegistry || Object.freeze({
     ids: ['MLB'],
     standardMarker: text => /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i.test(String(text || ''))

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { repriceMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
+import { enforceAnalysisModeSafety, repriceMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
@@ -8,7 +8,12 @@ import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/mar
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
 import { attestIncomingMarketRows, signRepriceSnapshot, verifyRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
-import { assertGameHasNotStarted, resolveOfficialGame } from '../../../lib/official-schedule-v1.js';
+import {
+  assertLeagueGamePrestart,
+  getLeagueProvider,
+  leagueAnalysisContract,
+  resolveLeagueGame,
+} from '../../../lib/league-provider.js';
 import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import { checkRateLimit, cleanText, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
 
@@ -36,8 +41,8 @@ function sanitizeMarkets(rows, maximum = 16) {
   })).filter(row => row.market);
 }
 
-async function prepareMarkets(game, rows, maximum) {
-  const attested = await attestIncomingMarketRows(game, sanitizeMarkets(rows, maximum));
+async function prepareMarkets(league, game, rows, maximum) {
+  const attested = await attestIncomingMarketRows(league, game, sanitizeMarkets(rows, maximum));
   const now = Date.now();
   return attested.map(row => applyMarketFreshness(row, now));
 }
@@ -68,18 +73,18 @@ export async function POST(request) {
     if (!context?.game?.gamePk || !snapshot?.coreFingerprint || !distributionSnapshot?.distributionHash) {
       return NextResponse.json({ ok: false, error: '缺少已保存的凍結比分分布，不能快速重算' }, { status: 400 });
     }
-    const { game } = await resolveOfficialGame(context.game);
-    assertGameHasNotStarted(game);
-    if (!(await verifyRepriceSnapshot(game, snapshot))) {
+    const { game } = await resolveLeagueGame(league, context.game);
+    assertLeagueGamePrestart(league, game);
+    if (!(await verifyRepriceSnapshot(league, game, snapshot))) {
       return NextResponse.json({ ok: false, error: '凍結快照簽章無效或內容已被修改，必須完整重算' }, { status: 409 });
     }
     if (distributionSnapshot.distributionId !== snapshot.distributionId || distributionSnapshot.distributionHash !== snapshot.distributionHash) {
       return NextResponse.json({ ok: false, error: '凍結比分分布識別不一致，已停止快速重算' }, { status: 409 });
     }
-    const suppliedMarkets = await prepareMarkets(game, body.markets, 12);
-    const verificationMarkets = await prepareMarkets(game, body.verificationMarkets, 16);
+    const suppliedMarkets = await prepareMarkets(league, game, body.markets, 12);
+    const verificationMarkets = await prepareMarkets(league, game, body.verificationMarkets, 16);
     const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
-    const previousMarkets = await prepareMarkets(game, body.previousMarkets, 24);
+    const previousMarkets = await prepareMarkets(league, game, body.previousMarkets, 24);
     const errors = [];
     for (const name of MARKET_ORDER) {
       const pair = markets.filter(row => row.market === name);
@@ -98,10 +103,21 @@ export async function POST(request) {
       expertMode: 'off',
     };
     const preliminary = repriceMarkets({ context, markets, previousMarkets, settings, distributionSnapshot });
-    const deterministic = finalizeDeterministicAnalysis({ analysis: preliminary, game, settings });
+    const deterministic = enforceAnalysisModeSafety(
+      finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }),
+      context,
+    );
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
-    const versions = { modelVersion: MODEL_VERSION, rulesVersion: RULES_VERSION, dataVersion: DATA_VERSION, scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION, repriceVersion: REPRICE_VERSION };
+    const contract = leagueAnalysisContract(league);
+    const versions = {
+      modelVersion: context.modelVersion || contract.modelVersion || MODEL_VERSION,
+      rulesVersion: context.rulesVersion || contract.rulesVersion || RULES_VERSION,
+      dataVersion: DATA_VERSION, scoreFormulaVersion: SCORE_FORMULA_VERSION,
+      settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
+      repriceVersion: REPRICE_VERSION,
+    };
     const fingerprints = buildSnapshotFingerprints({
+      league,
       context,
       markets,
       versions,
@@ -132,12 +148,19 @@ export async function POST(request) {
       distributionHash: snapshot.distributionHash,
       versions,
     };
-    const repriceSnapshot = await signRepriceSnapshot(game, unsignedRepriceSnapshot);
-    return NextResponse.json({
+    const repriceSnapshot = await signRepriceSnapshot(
+      league,
+      game,
+      enforceAnalysisModeSafety(unsignedRepriceSnapshot, context),
+    );
+    const provider = getLeagueProvider(league);
+    const payload = {
       ok: true, league, game, context, analysis: finalized, repriceSnapshot,
+      analysisMode: provider.analysisMode, betEligible: provider.betEligible,
       openMarkets: [...new Set(markets.map(row => row.market))],
       reprice: { distributionReused: true, noCoreDataFetch: true, noSimulation: true, noGpt: true, distributionId: snapshot.distributionId, distributionHash: snapshot.distributionHash, coreFingerprint: snapshot.coreFingerprint, previousInputHash: snapshot.inputHash || null, newInputHash: fingerprints.inputHash },
-    }, { headers: { 'Cache-Control': 'no-store' } });
+    };
+    return NextResponse.json(enforceAnalysisModeSafety(payload, context), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
   }

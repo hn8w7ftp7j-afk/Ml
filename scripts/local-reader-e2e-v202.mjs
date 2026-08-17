@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { sha256 } from '../lib/snapshot-v9.js';
+import { canonicalReaderPayload } from '../reader/parser.js';
 
 const BASE = String(process.env.LOCAL_E2E_URL || 'http://localhost:3000').replace(/\/$/, '');
 const APP_PASSWORD = process.env.APP_PASSWORD || 'local-app-password';
 const PAIR_PASSWORD = process.env.READER_PAIR_SECRET || 'local-reader-password';
 const EXTENSION_ORIGIN = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const READER_VERSION = '2.0.3';
+const LEAGUE = 'MLB';
+const READER_VERSION = '2.1.0';
 
 const TEAM_CODE_BY_ID = Object.freeze({
   108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC', 113: 'CIN',
@@ -51,7 +54,7 @@ async function waitUntilReady() {
   for (let index = 0; index < 60; index += 1) {
     try {
       const { value } = await json('/api/health?t=' + Date.now(), {}, 20000);
-      if (value.ok && value.version === '9.5.0') return value;
+      if (value.ok && value.version === '9.6.0') return value;
       last = JSON.stringify(value);
     } catch (error) { last = String(error?.message || error); }
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -60,9 +63,10 @@ async function waitUntilReady() {
 }
 
 async function officialTaipeiSlate(boardDate, cookie) {
-  const { value } = await json(`/api/mlb?date=${boardDate}&t=${Date.now()}`, {
+  const { value } = await json(`/api/schedule?league=${LEAGUE}&date=${boardDate}&t=${Date.now()}`, {
     headers: { Cookie: cookie },
   }, 30000);
+  assert.equal(value.league, LEAGUE);
   assert.equal(value.date, boardDate, 'production schedule route must preserve the requested Taipei board date');
   const games = Array.isArray(value.games) ? value.games : [];
   assert.equal(
@@ -93,6 +97,25 @@ function readerGame(game, index, boardDate) {
     fullTotal: { line: `8+${modifier}`, overWater: 0.94, underWater: 0.94, rawRows: [`8+${modifier} 大 0.940`, '小 0.940'] },
     first5Runline: { lineSide: 'home', line: `0-${modifier}`, awayWater: 0.94, homeWater: 0.94, rawRows: ['0.940', `0-${modifier} 0.940`] },
     first5Total: { line: `4-${modifier}`, overWater: 0.93, underWater: 0.93, rawRows: [`4-${modifier} 大 0.930`, '小 0.930'] },
+  };
+}
+
+function withClientPayloadHash(payload) {
+  const value = { ...payload };
+  delete value.payloadHash;
+  return { ...value, payloadHash: sha256(canonicalReaderPayload(value)) };
+}
+
+function nextReaderTimes(previousObservedAt, previousPageActivityAt) {
+  const now = Date.now();
+  const observedTime = Math.max(now, Date.parse(previousObservedAt) + 1);
+  const pageActivityTime = Math.max(
+    Date.parse(previousPageActivityAt),
+    Math.min(now, observedTime),
+  );
+  return {
+    observedAt: new Date(observedTime).toISOString(),
+    pageActivityAt: new Date(pageActivityTime).toISOString(),
   };
 }
 
@@ -133,8 +156,9 @@ assert.match(pair.value.token, /^reader-v2\./);
 const observedAt = new Date().toISOString();
 const pageActivityAt = new Date(Date.parse(observedAt) - 1000).toISOString();
 const rawGames = schedule.map((row, index) => readerGame(row, index, selectedDate)).reverse();
-const readerPayload = {
-  version: 'TAI888-READER-DOM-v2.0.3',
+const readerPayload = withClientPayloadHash({
+  version: 'TAI888-READER-DOM-v2.1.0',
+  league: LEAGUE,
   readerVersion: READER_VERSION,
   sourceHost: 'www1.tai888.in',
   pageUrl: 'https://www1.tai888.in/newapp/#/BS',
@@ -143,9 +167,8 @@ const readerPayload = {
   pageActivityAt,
   expectedGameCount: rawGames.length,
   detectedGameCount: rawGames.length,
-  payloadHash: 'b'.repeat(64),
   games: rawGames,
-};
+});
 const readerHeaders = {
   Origin: EXTENSION_ORIGIN,
   Authorization: `Bearer ${pair.value.token}`,
@@ -166,23 +189,30 @@ assert.match(ingest.value.payloadHash, /^[a-f0-9]{64}$/);
 assert.match(ingest.value.rawBoardHash, /^[a-f0-9]{64}$/);
 assert.notEqual(ingest.value.rawBoardHash, readerPayload.payloadHash);
 
-const heartbeatObservedAt = new Date(Math.max(Date.now(), Date.parse(observedAt) + 1000)).toISOString();
-const heartbeatPageActivityAt = new Date(Date.parse(heartbeatObservedAt) - 250).toISOString();
+const heartbeatTimes = nextReaderTimes(observedAt, pageActivityAt);
+const heartbeatObservedAt = heartbeatTimes.observedAt;
+const heartbeatPageActivityAt = heartbeatTimes.pageActivityAt;
+const heartbeatPayload = withClientPayloadHash({
+  ...readerPayload,
+  observedAt: heartbeatObservedAt,
+  pageActivityAt: heartbeatPageActivityAt,
+});
+assert.equal(heartbeatPayload.payloadHash, readerPayload.payloadHash, 'same board must retain its client payloadHash');
 const heartbeat = await json('/api/reader/ingest', {
   method: 'POST',
   headers: readerHeaders,
-  body: JSON.stringify({ ...readerPayload, observedAt: heartbeatObservedAt, pageActivityAt: heartbeatPageActivityAt, payloadHash: 'c'.repeat(64) }),
+  body: JSON.stringify(heartbeatPayload),
 }, 30000);
-assert.equal(heartbeat.value.heartbeat, true, 'client hash spoof must not defeat server raw-board heartbeat');
+assert.equal(heartbeat.value.heartbeat, true, 'same client board hash must use the server heartbeat path');
 assert.equal(heartbeat.value.rawBoardHash, ingest.value.rawBoardHash);
 assert.equal(heartbeat.value.payloadHash, ingest.value.payloadHash);
 assert.equal(heartbeat.value.matchedGameCount, schedule.length);
 
-const status = await json(`/api/reader/status?date=${selectedDate}&t=${Date.now()}`, {
+const status = await json(`/api/reader/status?league=${LEAGUE}&date=${selectedDate}&t=${Date.now()}`, {
   headers: { Origin: EXTENSION_ORIGIN },
 }, 20000);
-assert.equal(status.value.fresh, true);
-assert.equal(status.value.executable, true);
+assert.equal(status.value.fresh, true, `Reader status must be fresh: ${JSON.stringify(status.value)}`);
+assert.equal(status.value.executable, true, `Reader status must be executable: ${JSON.stringify(status.value)}`);
 assert.equal(status.value.matchedGameCount, schedule.length);
 assert.equal(status.value.readerVersion, READER_VERSION);
 assert.equal(status.value.rawBoardHash, ingest.value.rawBoardHash);
@@ -191,7 +221,7 @@ assert.equal(status.value.pageActivityAt, heartbeatPageActivityAt);
 const credit = await json('/api/credit-lines', {
   method: 'POST',
   headers: { Origin: BASE, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json', Cookie: cookie },
-  body: JSON.stringify({ date: selectedDate, schedule }),
+  body: JSON.stringify({ league: LEAGUE, date: selectedDate, schedule }),
 }, 60000);
 assert.equal(credit.value.provider, 'TAI888_READER_AUTO');
 assert.equal(credit.value.readerFresh, true);
@@ -208,6 +238,7 @@ const analysis = await json('/api/analyze', {
   method: 'POST',
   headers: { Origin: BASE, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json', Cookie: cookie },
   body: JSON.stringify({
+    league: LEAGUE,
     game,
     markets,
     previousMarkets: [],
@@ -234,18 +265,20 @@ const changedRawGames = rawGames.map(row => (
     }
     : row
 ));
-const changedObservedAt = new Date(Math.max(Date.now(), Date.parse(heartbeatObservedAt) + 1000)).toISOString();
-const changedPageActivityAt = new Date(Date.parse(changedObservedAt) - 250).toISOString();
+const changedTimes = nextReaderTimes(heartbeatObservedAt, heartbeatPageActivityAt);
+const changedObservedAt = changedTimes.observedAt;
+const changedPageActivityAt = changedTimes.pageActivityAt;
+const changedPayload = withClientPayloadHash({
+  ...readerPayload,
+  observedAt: changedObservedAt,
+  pageActivityAt: changedPageActivityAt,
+  games: changedRawGames,
+});
+assert.notEqual(changedPayload.payloadHash, readerPayload.payloadHash, 'changed board must receive a new client payloadHash');
 const changedIngest = await json('/api/reader/ingest', {
   method: 'POST',
   headers: readerHeaders,
-  body: JSON.stringify({
-    ...readerPayload,
-    observedAt: changedObservedAt,
-    pageActivityAt: changedPageActivityAt,
-    payloadHash: 'd'.repeat(64),
-    games: changedRawGames,
-  }),
+  body: JSON.stringify(changedPayload),
 }, 60000);
 assert.equal(changedIngest.value.heartbeat, false);
 assert.notEqual(changedIngest.value.rawBoardHash, ingest.value.rawBoardHash);
@@ -254,7 +287,7 @@ assert.notEqual(changedIngest.value.payloadHash, ingest.value.payloadHash);
 const changedCredit = await json('/api/credit-lines', {
   method: 'POST',
   headers: { Origin: BASE, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json', Cookie: cookie },
-  body: JSON.stringify({ date: selectedDate, schedule }),
+  body: JSON.stringify({ league: LEAGUE, date: selectedDate, schedule }),
 }, 60000);
 assert.equal(changedCredit.value.payloadHash, changedIngest.value.payloadHash);
 const changedCreditGame = changedCredit.value.games.find(row => Number(row.gamePk) === Number(game.gamePk));
@@ -265,6 +298,7 @@ const repriced = await json('/api/reprice', {
   method: 'POST',
   headers: { Origin: BASE, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json', Cookie: cookie },
   body: JSON.stringify({
+    league: LEAGUE,
     snapshot: analysis.value.repriceSnapshot,
     markets: changedMarkets,
     previousMarkets: markets,
@@ -279,6 +313,7 @@ assert.equal(repriced.value.analysis.analysisType, 'PRICE_ONLY_REPRICE');
 
 console.log(JSON.stringify({
   ok: true,
+  league: LEAGUE,
   selectedDate,
   fullSlateGames: schedule.length,
   gamePk: game.gamePk,

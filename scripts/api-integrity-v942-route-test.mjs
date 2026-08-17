@@ -40,6 +40,7 @@ function statsGame({ gamePk = 880001, gameDate = '2099-08-11T23:00:00Z', gameNum
 
 function clientGame({ gamePk = 880001, gameDate = '2099-08-11T23:00:00Z', gameNumber = 1 } = {}) {
   return {
+    league: 'MLB',
     gamePk,
     gameDate,
     officialDate: gameDate.slice(0, 10),
@@ -235,7 +236,7 @@ try {
   assert.equal(signedCreditPayload.games.length, 1);
   assert.equal(signedCreditPayload.provider, 'TAI888_READER_AUTO');
   assert.equal(signedCreditPayload.pageActivityAt, readerObservedAt);
-  assert.ok(await Promise.all(signedCreditPayload.games[0].markets.map(row => verifyMarketRow(signedCreditPayload.games[0].game, row))).then(results => results.every(Boolean)));
+  assert.ok(await Promise.all(signedCreditPayload.games[0].markets.map(row => verifyMarketRow('MLB', signedCreditPayload.games[0].game, row))).then(results => results.every(Boolean)));
 
   const analyzeRoute = await import('../app/api/analyze/route.js');
   const fullAnalysisResponse = await analyzeRoute.POST(request('/api/analyze', token, {
@@ -297,7 +298,7 @@ try {
   assert.equal(subsetPayload.games.length, 1);
   assert.equal(subsetPayload.games[0].gamePk, 880001);
   assert.ok(subsetPayload.games[0].markets.every(row => row.providerEventId === 'official-game-one'));
-  assert.ok(await Promise.all(subsetPayload.games[0].markets.map(row => verifyMarketRow(subsetPayload.games[0].game, row))).then(results => results.every(Boolean)));
+  assert.ok(await Promise.all(subsetPayload.games[0].markets.map(row => verifyMarketRow('MLB', subsetPayload.games[0].game, row))).then(results => results.every(Boolean)));
 
   const mixedScheduleResponse = await referenceRoute.POST(request('/api/reference-lines', token, {
     date: '2099-08-12',
@@ -336,7 +337,7 @@ try {
 
   officialPayload = { dates: [{ games: [statsGame()] }] };
   const futureGame = clientGame();
-  const signedSnapshot = await signRepriceSnapshot(futureGame, {
+  const signedSnapshot = await signRepriceSnapshot('MLB', futureGame, {
     frozenContext: { game: futureGame, fetchedAt: '2099-08-11T22:00:00Z' },
     coreFingerprint: 'core-fingerprint',
     distributionSnapshot: { distributionId: 'distribution-1', distributionHash: 'distribution-hash' },

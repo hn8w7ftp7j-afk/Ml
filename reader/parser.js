@@ -1,6 +1,8 @@
 const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
 const WATER_TOKEN = /^\d(?:\.\d{3})$/;
 const HOME_MARKER = /[\[［【(（]\s*主\s*[\]］】)）]/u;
+const TEAM_CODE = /(?:^|\s)([A-Z][A-Z0-9]{0,11})\s*-/g;
+const LEAGUES = Object.freeze(['MLB', 'NPB', 'KBO', 'CPBL']);
 
 const clean = value => String(value || '')
   .replace(/[\u0000-\u001F\u007F]/g, ' ')
@@ -156,7 +158,7 @@ function teamCodes(cell) {
   const lines = pair || cellLines(cell);
   const found = new Map();
   for (const [index, line] of lines.entries()) {
-    for (const match of line.matchAll(/(?:^|\s)([A-Z]{2,4})\s*-/g)) {
+    for (const match of line.matchAll(TEAM_CODE)) {
       const code = match[1].toUpperCase();
       const candidate = {
         code,
@@ -216,6 +218,26 @@ function parseDateTime(cell, now = new Date()) {
   };
 }
 
+function fallbackDateTime(row, cells, timeIndex, now) {
+  const primary = parseDateTime(cells[timeIndex], now);
+  if (primary.boardDate && primary.time) return primary;
+  // Tai888 occasionally splits the month/day and clock into separate visual
+  // fragments inside the same time column.  Only inspect that column plus the
+  // row's non-market prefix; never scan runline/total cells where `1-20`
+  // could be a price token mistaken for January 20.
+  const source = cells[timeIndex];
+  const rowText = clean(row?.text || '');
+  const firstTeam = rowText.match(/(?:^|\s)[A-Z][A-Z0-9]{0,11}\s*-/);
+  const prefix = firstTeam?.index > 0 ? rowText.slice(0, firstTeam.index) : '';
+  const fallback = parseDateTime({
+    lines: [...cellLines(source), prefix].filter(Boolean),
+  }, now);
+  return {
+    boardDate: primary.boardDate || fallback.boardDate,
+    time: primary.time || fallback.time,
+  };
+}
+
 function marketFingerprint(game) {
   return JSON.stringify({
     fullRunline: canonicalRunline(game?.fullRunline),
@@ -266,7 +288,7 @@ export function parseTai888Capture(capture, now = new Date()) {
       const away = teams[awayIndex];
       const home = teams[homeIndex];
       if (!away || !home || away.code === home.code) continue;
-      const timing = parseDateTime(cells[map.time], now);
+      const timing = fallbackDateTime(row, cells, map.time, now);
       if (!timing.boardDate || !timing.time) continue;
       const game = {
         awayCode: away.code,
@@ -310,7 +332,7 @@ export function parseTai888Capture(capture, now = new Date()) {
   const pageUrl = sanitizeTai888PageUrl(capture?.pageUrl);
   return {
     version: 'TAI888-READER-DOM-v2.1.0',
-    league: ['MLB', 'NPB', 'KBO', 'CPBL'].includes(capture?.league) ? capture.league : 'MLB',
+    league: LEAGUES.includes(capture?.league) ? capture.league : '',
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
     pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),
@@ -328,7 +350,7 @@ export function canonicalReaderPayload(payload) {
   });
   return JSON.stringify({
     version: payload?.version || '',
-    league: payload?.league || 'MLB',
+    league: LEAGUES.includes(payload?.league) ? payload.league : '',
     sourceHost: payload?.sourceHost || '',
     boardDate: payload?.boardDate || '',
     games: orderedGames.map(game => ({

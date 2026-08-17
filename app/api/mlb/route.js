@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { taipeiDate } from '../../../lib/mlb.js';
-import { fetchOfficialTaipeiSlate, officialPrestartSlate } from '../../../lib/official-schedule-v1.js';
+import { fetchLeagueTaipeiSlate, filterLeaguePrestartGames, getLeagueProvider } from '../../../lib/league-provider.js';
 import { checkRateLimit, rateLimitResponse, requireApiAuth, validDateString } from '../../../lib/security.js';
 
 export const dynamic = 'force-dynamic';
@@ -15,8 +15,15 @@ export async function GET(request) {
     // The UI date is a Taipei board date, while MLB's `date` query is an
     // official/local-calendar date. Resolve the same strict +/-1-day Taipei
     // slate used by Reader ingest, credit lines, reference lines and analyze.
-    const games = officialPrestartSlate(await fetchOfficialTaipeiSlate(date));
-    return NextResponse.json({ ok: true, date, games }, { headers: { 'Cache-Control': 'no-store' } });
+    const provider = getLeagueProvider('MLB');
+    const games = filterLeaguePrestartGames('MLB', await fetchLeagueTaipeiSlate('MLB', date));
+    return NextResponse.json({
+      ok: true, league: 'MLB', date, games,
+      provider: provider.scheduleProvider,
+      analysisMode: provider.analysisMode,
+      betEligible: provider.betEligible,
+      providerVersion: provider.version,
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, {
       status: Number(error?.status) || 500,

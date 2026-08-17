@@ -52,9 +52,9 @@ export async function GET(request) {
   if (date && !validDateString(date)) {
     return NextResponse.json({ ok: false, error: 'Reader 查詢日期格式錯誤' }, { status: 400, headers });
   }
-  const snapshot = await loadReaderSnapshot(date);
+  const snapshot = await loadReaderSnapshot(league, date);
   const complete = readerSnapshotIsComplete(snapshot);
-  const publicView = readerSnapshotPublicView(snapshot, { complete });
+  const publicView = readerSnapshotPublicView(snapshot, { complete, now: Date.now(), league });
   return NextResponse.json({
     ok: true,
     league,

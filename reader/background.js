@@ -98,11 +98,10 @@ async function performSync(reason, preferredTabId) {
     const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
     if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[league], lastSuccessfulSyncAt: times[league] })) { results.push({ league, ok: true, skipped: true }); continue; }
     try {
-      const endpoint = league === 'MLB' ? '/api/reader/ingest' : '/api/reader/capture';
-      const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(payload) });
+      const response = await request(`${ORIGIN}/api/reader/ingest`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(payload) });
       const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
       const now = Date.now(); hashes[league] = payloadHash; times[league] = now;
-      statuses[league] = { ok: true, state: 'synced', league, executable: data.executable !== false, captureOnly: data.executable === false, message: data.message, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount: data.matchedGameCount, boardDate: data.boardDate, readerVersion: VERSION };
+      statuses[league] = { ok: true, state: 'synced', league, executable: data.executable !== false, captureOnly: false, message: data.message, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount: data.matchedGameCount, boardDate: data.boardDate, readerVersion: VERSION };
       results.push({ league, ok: true, message: data.message });
     } catch (error) { statuses[league] = { ok: false, state: 'error', league, message: error.message, lastAttemptAt: Date.now(), readerVersion: VERSION }; results.push({ league, ok: false, error: error.message }); }
   }

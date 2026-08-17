@@ -10,7 +10,7 @@ export function withinTai888TabScanLimit(value) {
 const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
 const DATE_TOKEN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_TOKEN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
-const TEAM_CODE = /^[A-Z]{2,4}$/;
+const TEAM_CODE = /^[A-Z][A-Z0-9]{0,11}$/;
 const LEAGUES = new Set(['MLB', 'NPB', 'KBO', 'CPBL']);
 
 const finiteInteger = value => {

@@ -1,18 +1,19 @@
-# 多聯盟長期正期望值分析｜9.5.0 / Tai888 Reader 2.0.10
+# 多聯盟長期正期望值分析｜9.6.0 / Tai888 Reader 2.1.0
 
-目前整合基線為網站 `9.5.0`、Next.js `15.5.23` 與 Reader `2.0.10 PARTIAL MARKET FIX`。同一網站已建立 MLB、NPB、KBO、CPBL 四個彼此隔離的聯盟模組；MLB 維持正式使用，NPB／KBO／CPBL 僅進入接資料前的設定階段，正式賽程、Tai888 Reader 盤面與獨立模型尚未完成驗證前，API 會拒絕分析，絕不回落到 MLB 資料或產生假分數。
+目前整合基線為網站 `9.6.0`、Next.js `15.5.23` 與 Reader `2.1.0 FOUR LEAGUE TABS`。同一網站已建立 MLB、NPB、KBO、CPBL 四個彼此隔離的聯盟模組；MLB 維持正式使用，NPB／KBO／CPBL 接收各自官方賽程與 Tai888 實盤後執行完整診斷分析，但固定為 `EXPERIMENTAL_SHADOW`：可顯示四市場／八方向、EV、風險與排名，不可下注、不產生 portfolio，也不能回落到 MLB 的球隊、賽程或模型快照。
 
-MLB Reader 已完整讀到的開盤賽事仍須逐場具備 4 市場／8 方向；若 Tai888 僅開出單場部分市場，該場會整場標成不可執行，絕不補造缺少的盤口或水位，其餘完整場次仍可安全同步。Production 評分只使用固定雙 EV 短板公式，GPT 不得調分；正式 EV 會用 Tai888 同市場雙邊水位去水基準有限校準。網站只顯示 Reader 實際信用盤，並在比賽卡與總排名保留同瀏覽器、同聯盟隔離的「已下注」標記。下方 6.x～8.x 段落保留為歷史變更紀錄，不是目前發布規格。
+Reader 對 Tai888 已呈現且開盤的賽事要求逐場具備 4 市場／8 方向；只要任一可見開盤場僅有部分市場，整批 ingest 就會停止並保留上一個可信快照。官方賽程中尚未呈現或整場全鎖的賽事可保留為不可執行項目，系統絕不補造缺少的盤口或水位。Production 評分只使用固定雙 EV 短板公式，GPT 不得調分；正式 EV 會用 Tai888 同市場雙邊水位去水基準有限校準。網站只顯示 Reader 實際信用盤，並在比賽卡與總排名保留同瀏覽器、同聯盟隔離的「已下注」標記。下方 6.x～8.x 段落保留為歷史變更紀錄，不是目前發布規格。
 
-## 9.5.0 多聯盟 Stage 1
+## 9.6.0 四聯盟隔離分析
 
-- 單一網站提供 MLB／NPB／KBO／CPBL 聯盟切換與公開能力登錄表。
-- 排程來源、Reader 來源、模型族、分析結果、排名與下注識別均以聯盟為邊界；未知聯盟直接拒絕。
+- 單一網站提供 MLB／NPB／KBO／CPBL 聯盟切換、官方賽程、Reader 同步、分析與排名。
+- 排程來源、Reader 來源、模型族、分析結果、排名、快取、HMAC 與下注識別均以聯盟為邊界；未知聯盟直接拒絕。
 - 舊版沒有 `league` 欄位的 Reader 請求與下注紀錄只視為 MLB，不能流入其他聯盟。
-- NPB／KBO／CPBL 在真實盤面範例、正式賽程介接與專屬模型完成逐項 QA 前維持鎖定，不借用 MLB 模型、不補造資料。
+- NPB／KBO／CPBL 使用聯盟專屬隊名登錄、官方賽程 adapter、模型參數與版本；在獨立樣本外校準完成前一律保持 shadow，不開放下注資格。
+- 亞洲三聯盟即使 Reader 盤面完整，分析回應仍強制 `executable=false`、`betEligible=false`、`portfolio=[]`；畫面與 API 都不可繞過。
 - 完整架構與啟用門檻見 `docs/MULTI_LEAGUE_ARCHITECTURE.md`。
 
-Reader 只接受單一權威 tab/frame 的完整官方台北盤日：每場四市場、八方向、含雙重賽唯一配對；同盤日完整分頁若互相衝突或開啟超過四個 Tai888 分頁會直接停止上傳。盤口與 reprice snapshot 由伺服器簽章；畫面只有在最新 Reader hash 與 `pageActivityAt` 版本的全部分析成功後才允許正式下注。URL 中繼資料不含 query、任意 hash、頁面標題或原始 frame URL。Vercel Runtime Cache 沒有原子 compare-and-swap，目前務必只運行一台 Reader。
+Reader 只接受單一權威 tab/frame 的完整官方台北盤日：官方場次與雙重賽須唯一配對；已呈現且開盤的賽事須每場四市場、八方向完整，未呈現或全鎖場則維持不可執行。同盤日完整分頁若互相衝突、任何可見開盤場僅有部分市場，或開啟超過四個 Tai888 分頁，都會整批停止上傳。盤口與 reprice snapshot 由伺服器簽章；畫面只有在最新 Reader hash 與 `pageActivityAt` 版本的全部分析成功後才允許正式下注。URL 中繼資料不含 query、任意 hash、頁面標題或原始 frame URL。Vercel Runtime Cache 沒有原子 compare-and-swap，目前務必只運行一台 Reader。
 
 私人使用的 MLB 台灣信用盤分析系統。第 6 版把目前的 GPT MLB 長期正 EV 規格程式化成同一套可重算、可追蹤的分析流程，不再使用獨立的「網站 EV 直接換分」模型。
 
@@ -269,6 +270,6 @@ OpenAI GPT 研究模型現在只使用有上限的首段時間，系統會預留
 
 ## Tai888 Reader v2
 
-Chrome Reader 只讀使用者已登入後可見的 MLB 盤口表格，自動同步至 `/api/reader/ingest`。Production 使用 Vercel Runtime Cache 保存最新盤口；網站偵測價格指紋變動後只走 `/api/reprice`，不重建比分分布。
+Chrome Reader 只讀使用者已登入後可見的 MLB／NPB／KBO／CPBL 標準盤口表格，依聯盟隔離後自動同步至 `/api/reader/ingest`。Production 使用 Vercel Runtime Cache 保存各聯盟最新盤口；網站偵測價格指紋變動後只走 `/api/reprice`，不重建比分分布。
 
-目前唯一發布版本是 `2.0.10 PARTIAL MARKET FIX`；安裝前應移除所有舊版，完整解壓後再從 Chrome 擴充功能頁載入 `Tai888-Reader` 資料夾。iPhone 可保存或轉傳 ZIP，但不能安裝未封裝 Chrome 擴充功能。
+目前唯一發布版本是 `2.1.0 FOUR LEAGUE TABS`；安裝前應移除所有舊版，完整解壓後再從 Chrome 擴充功能頁載入 `Tai888-Reader` 資料夾。iPhone 可保存或轉傳 ZIP，但不能安裝未封裝 Chrome 擴充功能。
