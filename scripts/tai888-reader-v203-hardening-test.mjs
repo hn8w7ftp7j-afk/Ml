@@ -223,7 +223,8 @@ assert.equal(assessBoardCandidate(stale, now).issues.includes('stale-page-activi
 
 const captureConflict = candidate();
 captureConflict.capture.diagnostics.conflictingGameKeys = ['BAL|MIN|08-15|01:10'];
-assert.equal(assessBoardCandidate(captureConflict, now).ok, false);
+assert.equal(assessBoardCandidate(captureConflict, now).ok, true, 'duplicate DOM prices select one canonical game instead of blocking the board');
+assert.equal(assessBoardCandidate(captureConflict, now).ignoredDuplicateGameCount, 1);
 
 const missingMarket = candidate();
 missingMarket.parsed.games[0].first5Total = null;

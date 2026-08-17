@@ -140,11 +140,13 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   if (rawDetectedGameCount != null && rawDetectedGameCount < games.length) {
     issues.push(`raw-detected-${rawDetectedGameCount}-parsed-${games.length}`);
   }
-  if (Array.isArray(diagnostics.conflictingGameKeys) && diagnostics.conflictingGameKeys.length) {
-    issues.push(...diagnostics.conflictingGameKeys.map(key => `capture-conflict:${key}`));
-  }
+  const ignoredDuplicateGameCount = Array.isArray(diagnostics.conflictingGameKeys)
+    ? diagnostics.conflictingGameKeys.length
+    : 0;
   if (Array.isArray(parsed.parseIssues) && parsed.parseIssues.length) {
-    issues.push(...parsed.parseIssues.map(issue => `parser:${issue}`));
+    issues.push(...parsed.parseIssues
+      .filter(issue => !String(issue).startsWith('conflicting-duplicate:'))
+      .map(issue => `parser:${issue}`));
   }
 
   const identities = new Set();
@@ -181,6 +183,7 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
     expectedGameCount,
     detectedGameCount,
     rawDetectedGameCount,
+    ignoredDuplicateGameCount,
     pageActivityAt,
     pageActivityTime,
     // Host/frame metadata identifies the source but must not make two frames

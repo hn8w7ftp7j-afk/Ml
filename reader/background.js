@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { MAX_TAI888_TABS, selectAuthoritativeBoard, shouldSkipSuccessfulPayload, withinTai888TabScanLimit } from './board-selector.js';
 
-const VERSION = '2.1.2';
+const VERSION = '2.1.3';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];
@@ -92,7 +92,11 @@ async function performSync(reason, preferredTabId) {
     const own = candidates.filter(item => item.parsed.league === league);
     if (!own.length) { statuses[league] = { ok: false, state: 'missing', league, message: `找不到${LABELS[league]}標準盤分頁`, readerVersion: VERSION }; continue; }
     const selection = selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
-    if (!selection.ok) { statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}盤口尚未完整，未上傳`, readerVersion: VERSION }; continue; }
+    if (!selection.ok) {
+      const detail = selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
+      statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
+      continue;
+    }
     const selected = selection.selected; const payload = selected.candidate.parsed;
     Object.assign(payload, { league, readerVersion: VERSION, deviceId: stored.deviceId, pageActivityAt: selected.pageActivityAt, expectedGameCount: selected.expectedGameCount, detectedGameCount: selected.detectedGameCount });
     const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
