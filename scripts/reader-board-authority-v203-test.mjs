@@ -66,23 +66,22 @@ assert.equal(hiddenPreferred.ok, true);
 assert.equal(hiddenPreferred.authorityTabId, 1, 'an inactive preferred tab must not outrank the active tab');
 
 const activeIncomplete = candidate({ tabId: 1, active: true, complete: false, lastAccessed: 200 });
-const inactiveCannotRescue = selectAuthoritativeBoard(
+const inactiveCanRescue = selectAuthoritativeBoard(
   [activeIncomplete, hiddenSameBoard],
   { now: NOW, preferredTabId: 2 },
 );
-assert.equal(inactiveCannotRescue.ok, false);
-assert.equal(inactiveCannotRescue.error, 'authoritative-tab-incomplete');
-assert.equal(inactiveCannotRescue.authorityTabId, 1);
+assert.equal(inactiveCanRescue.ok, true, 'an incomplete active duplicate must not block a complete league tab');
+assert.equal(inactiveCanRescue.authorityTabId, 2);
 
 const hiddenDifferentBoard = candidate({ tabId: 2, active: false, overWater: 0.95, lastAccessed: 300 });
 const conflictingTabs = selectAuthoritativeBoard(
   [activeComplete, hiddenDifferentBoard],
   { now: NOW },
 );
-assert.equal(conflictingTabs.ok, false);
-assert.equal(conflictingTabs.error, 'conflicting-complete-tabs');
+assert.equal(conflictingTabs.ok, true, 'price movement between duplicate tabs must not block the league');
 assert.equal(conflictingTabs.authorityTabId, 1);
-assert.equal(conflictingTabs.boardDate, '2026-08-15');
+assert.equal(conflictingTabs.selected.candidate.parsed.games[0].fullTotal.overWater, 0.94);
+assert.equal(conflictingTabs.ignoredDuplicateTabCount, 1);
 
 const otherDate = candidate({ tabId: 3, active: false, overWater: 0.95 });
 otherDate.parsed.boardDate = '2026-08-16';
@@ -113,4 +112,4 @@ assert.match(backgroundSource, /for \(const tab of tabs\)/);
 assert.doesNotMatch(backgroundSource, /tabs\.slice\(0,\s*4\)/);
 assert.match(backgroundSource, /if \(!selection\.ok\)/);
 
-console.log('Reader 2.0.3 board authority: active-only preference and same-date conflict fail-closed PASS');
+console.log('Reader board authority: duplicate tabs deduplicated, selected-tab frame conflicts fail closed PASS');
