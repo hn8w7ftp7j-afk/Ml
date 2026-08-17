@@ -16,11 +16,11 @@ import { LEAGUE_REGISTRY_VERSION, publicLeagueRegistry } from '../../../lib/leag
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const readerSnapshot = await loadReaderSnapshot();
-  const readerStatus = readerSnapshotStatus(readerSnapshot);
+  const readerSnapshot = await loadReaderSnapshot('MLB');
+  const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   return NextResponse.json({
     ok: true,
-    version: '9.5.0',
+    version: '9.6.0',
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,

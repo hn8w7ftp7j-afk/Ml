@@ -18,7 +18,7 @@
 
   function isDataRowText(text) {
     const value = clean(text);
-    const teamCodes = value.match(/(?:^|\s)[A-Z]{2,4}\s*-/g) || [];
+    const teamCodes = value.match(/(?:^|\s)[A-Z][A-Z0-9]{0,11}\s*-/g) || [];
     return teamCodes.length >= 1
       || (/\b\d{1,2}-\d{1,2}\b/.test(value) && /(?:0|1)\.\d{3}/.test(value));
   }
@@ -45,6 +45,6 @@
     isDataRowText,
     shouldKeepRecord,
     shouldInspectFallback,
-    version: 'TAI888-DOM-CAPTURE-POLICY-v2.0.10',
+    version: 'TAI888-DOM-CAPTURE-POLICY-v2.1.0',
   });
 })();

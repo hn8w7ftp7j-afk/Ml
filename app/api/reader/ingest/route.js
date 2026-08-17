@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchOfficialTaipeiSlate, officialPrestartSlate } from '../../../../lib/official-schedule-v1.js';
+import { fetchLeagueTaipeiSlate, filterLeaguePrestartGames } from '../../../../lib/league-provider.js';
 import {
   bearerToken,
   readerCorsHeaders,
@@ -47,8 +47,9 @@ function assertMonotonic(previous, envelope, boardChanged) {
   }
 }
 
-function snapshotMatchesSchedule(snapshot, schedule) {
+function snapshotMatchesSchedule(snapshot, schedule, league) {
   if (!readerSnapshotIsComplete(snapshot)) return false;
+  if (snapshot?.league !== league) return false;
   const expected = schedule.map(game => Number(game.gamePk)).sort((left, right) => left - right);
   const actual = [...snapshot.games, ...(snapshot.unopenedGames || [])]
     .map(game => Number(game.gamePk)).sort((left, right) => left - right);
@@ -102,18 +103,18 @@ export async function POST(request) {
     }
 
     const receivedAt = new Date().toISOString();
-    const envelope = validateTai888ReaderEnvelope(body, { receivedAt });
-    const previous = await loadReaderSnapshot(boardDate);
+    const envelope = validateTai888ReaderEnvelope(body, { receivedAt, league });
+    const previous = await loadReaderSnapshot(league, boardDate);
     let schedule;
     let fullSchedule;
     try {
-      fullSchedule = await fetchOfficialTaipeiSlate(boardDate);
-      schedule = officialPrestartSlate(fullSchedule, Date.parse(envelope.pageActivityAt));
+      fullSchedule = await fetchLeagueTaipeiSlate(league, boardDate);
+      schedule = filterLeaguePrestartGames(league, fullSchedule, Date.parse(envelope.pageActivityAt));
     } catch {
-      return NextResponse.json({ ok: false, error: '無法取得完整 MLB 官方賽程，Reader 本次未寫入' }, { status: 502, headers });
+      return NextResponse.json({ ok: false, error: `無法取得完整 ${config.shortLabel} 官方賽程，Reader 本次未寫入` }, { status: 502, headers });
     }
     if (!schedule.length) {
-      return NextResponse.json({ ok: false, error: '官方台北盤日已無未開賽 MLB 場次，Reader 本次未寫入' }, { status: 409, headers });
+      return NextResponse.json({ ok: false, error: `${config.shortLabel} 官方台北盤日已無未開賽場次，Reader 本次未寫入` }, { status: 409, headers });
     }
 
     const unchangedBoard = previous?.rawBoardHash === envelope.rawBoardHash;
@@ -122,8 +123,10 @@ export async function POST(request) {
       && previous?.deviceId === token.deviceId
       && previous?.sourceHost === envelope.sourceHost
       && previous?.boardDate === envelope.boardDate
-      && snapshotMatchesSchedule(previous, schedule)) {
+      && previous?.league === league
+      && snapshotMatchesSchedule(previous, schedule, league)) {
       const refreshedResult = await refreshReaderSnapshot(previous, {
+        league,
         observedAt: envelope.observedAt,
         receivedAt: envelope.receivedAt,
         pageActivityAt: envelope.pageActivityAt,
@@ -152,11 +155,12 @@ export async function POST(request) {
         pageActivityAt: refreshed.pageActivityAt,
         runtimeCache: Boolean(storage?.runtimeCache),
         allRequiredWritesSucceeded: true,
-        freshness: readerSnapshotStatus(refreshed),
+        freshness: readerSnapshotStatus(refreshed, Date.now(), league),
       }, { headers });
     }
 
     const normalized = normalizeTai888ReaderPayload(body, schedule, {
+      league,
       deviceId: token.deviceId,
       receivedAt: envelope.receivedAt,
       envelope,
@@ -167,7 +171,7 @@ export async function POST(request) {
     if (!storage.allRequiredWritesSucceeded) {
       return NextResponse.json({ ok: false, error: 'Reader 快照未完成所有必要儲存寫入' }, { status: 503, headers });
     }
-    const status = readerSnapshotStatus(normalized);
+    const status = readerSnapshotStatus(normalized, Date.now(), league);
     return NextResponse.json({
       ok: true,
       league,

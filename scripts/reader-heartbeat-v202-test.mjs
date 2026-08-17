@@ -14,6 +14,7 @@ const newObservedAt = '2026-08-12T00:01:00.000Z';
 const newPageActivityAt = '2026-08-12T00:00:30.000Z';
 const receivedAt = '2026-08-12T00:01:01.000Z';
 const snapshot = {
+  league: 'MLB',
   boardDate: '2026-08-12',
   observedAt: oldObservedAt,
   receivedAt: oldObservedAt,
@@ -26,8 +27,10 @@ const snapshot = {
   rawGameCount: 1,
   matchedGameCount: 1,
   games: [{
+    league: 'MLB',
     gamePk: 1001,
-    source: { observedAt: oldObservedAt, receivedAt: oldObservedAt, pageActivityAt: oldPageActivityAt },
+    game: { gamePk: 1001, league: 'MLB' },
+    source: { league: 'MLB', observedAt: oldObservedAt, receivedAt: oldObservedAt, pageActivityAt: oldPageActivityAt },
     markets: [
       { market: '全場大小', pick: '大8平', water: 0.94, lineAsOf: oldPageActivityAt },
       { market: '全場大小', pick: '小8平', water: 0.94, lineAsOf: oldPageActivityAt },
@@ -36,10 +39,11 @@ const snapshot = {
 };
 
 await storeReaderSnapshot(snapshot);
-const before = await loadReaderSnapshot('2026-08-12');
+const before = await loadReaderSnapshot('MLB', '2026-08-12');
 assert.equal(before.games[0].markets[0].lineAsOf, oldPageActivityAt);
 
 const refreshedResult = await refreshReaderSnapshot(before, {
+  league: 'MLB',
   observedAt: newObservedAt,
   receivedAt,
   pageActivityAt: newPageActivityAt,
@@ -57,24 +61,27 @@ assert.equal(refreshed.games[0].source.receivedAt, receivedAt);
 assert.equal(refreshed.games[0].source.pageActivityAt, newPageActivityAt);
 assert.equal(refreshed.games[0].markets[0].lineAsOf, newPageActivityAt);
 assert.equal(refreshed.games[0].markets[1].lineAsOf, newPageActivityAt);
-assert.equal(readerSnapshotStatus(refreshed, Date.parse('2026-08-12T00:01:30Z')).fresh, true);
+assert.equal(readerSnapshotStatus(refreshed, Date.parse('2026-08-12T00:01:30Z'), 'MLB').fresh, true);
 
-const persisted = await loadReaderSnapshot('2026-08-12');
+const persisted = await loadReaderSnapshot('MLB', '2026-08-12');
 assert.equal(persisted.games[0].markets[0].lineAsOf, newPageActivityAt);
 
 await assert.rejects(() => refreshReaderSnapshot(refreshed, {
+  league: 'MLB',
   observedAt: newObservedAt,
   receivedAt: '2026-08-12T00:01:02.000Z',
   pageActivityAt: newPageActivityAt,
 }), error => error?.status === 409 && /重播/.test(error.message));
 
 await assert.rejects(() => refreshReaderSnapshot(refreshed, {
+  league: 'MLB',
   observedAt: '2026-08-12T00:01:10.000Z',
   receivedAt: '2026-08-12T00:01:11.000Z',
   pageActivityAt: '2026-08-12T00:00:20.000Z',
 }), error => error?.status === 409);
 
 await assert.rejects(() => refreshReaderSnapshot(refreshed, {
+  league: 'MLB',
   observedAt: '2026-08-12T00:10:00.000Z',
   receivedAt: '2026-08-12T00:10:01.000Z',
   pageActivityAt: '2026-08-12T00:00:31.000Z',
@@ -85,6 +92,6 @@ assert.equal(readerSnapshotStatus({
   observedAt: '2026-08-12T00:10:00.000Z',
   receivedAt: '2026-08-12T00:10:01.000Z',
   pageActivityAt: '2026-08-12T00:00:30.000Z',
-}, Date.parse('2026-08-12T00:10:01.000Z')).fresh, false);
+}, Date.parse('2026-08-12T00:10:01.000Z'), 'MLB').fresh, false);
 
 console.log('Reader 2.0.3 heartbeat: page activity controls lineAsOf/freshness; replay, rollback and stale activity rejected');

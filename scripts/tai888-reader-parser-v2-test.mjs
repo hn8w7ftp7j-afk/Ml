@@ -47,7 +47,8 @@ const payload = {
 };
 const options = { deviceId: 'device-12345678', receivedAt: '2026-08-11T22:30:30Z' };
 const result = normalizeTai888ReaderPayload(payload, schedule, options);
-assert.equal(result.version, 'TAI888-READER-PARSER-v2.0.3');
+assert.equal(result.version, 'TAI888-READER-PARSER-v2.1.0');
+assert.equal(result.league, 'MLB');
 assert.equal(result.matchedGameCount, 2);
 assert.equal(result.scheduleGameCount, 2);
 assert.equal(result.unmatched.length, 0);
@@ -59,6 +60,7 @@ for (const secret of [querySecret, hashSecret, titleSecret, frameSecret]) {
   assert.equal(serialized.includes(secret), false, `${secret} must not survive normalized storage`);
 }
 assert.equal(result.games.every(game => readerMarketsComplete(game.markets)), true);
+assert.equal(result.games.every(game => game.league === 'MLB' && game.game.league === 'MLB' && game.source.league === 'MLB'), true);
 assert.equal(result.games.every(game => game.markets.length === 8), true);
 assert.equal(result.games.every(game => game.markets.every(row => row.lineAsOf === '2026-08-11T22:29:45.000Z')), true);
 assert.equal(result.games[0].markets.some(row => row.pick === '匹茲堡海盜讓1+85'), true);
@@ -193,4 +195,4 @@ assert.throws(
   error => error?.status === 409,
 );
 
-console.log('tai888 reader server parser v2.0.3: deterministic 4/8 board, server hash, freshness and minimum version ok');
+console.log('tai888 reader server parser v2.1.0: deterministic 4/8 board, server hash, freshness and minimum version ok');

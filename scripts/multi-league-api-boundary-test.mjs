@@ -1,41 +1,90 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const routeSpecs = [
-  ['app/api/analyze/route.js', 'const context = await withClearedTimeout(buildGameContext'],
-  ['app/api/reprice/route.js', 'if (!(await verifyRepriceSnapshot'],
-  ['app/api/credit-lines/route.js', 'const snapshot = await loadReaderSnapshot'],
-  ['app/api/reader/status/route.js', 'const snapshot = await loadReaderSnapshot'],
-  ['app/api/reader/ingest/route.js', 'const envelope = validateTai888ReaderEnvelope'],
-  ['app/api/result/route.js', 'fetchFinalResult(gamePk)'],
+const read = file => fs.readFileSync(file, 'utf8');
+const routes = [
+  'app/api/analyze/route.js',
+  'app/api/reprice/route.js',
+  'app/api/credit-lines/route.js',
+  'app/api/reader/status/route.js',
+  'app/api/reader/ingest/route.js',
+  'app/api/reference-lines/route.js',
+  'app/api/result/route.js',
+  'app/api/schedule/route.js',
 ];
-
-for (const [file, mlbWorkMarker] of routeSpecs) {
-  const source = fs.readFileSync(file, 'utf8');
-  assert.match(source, /from ['"](?:\.\.\/)+lib\/leagues\.js['"]/, `${file} 必須使用共同聯盟 registry`);
-  assert.match(source, /requestedLeagueId\(/, `${file} 必須以不回落未知值的 helper 解析 league`);
-  assert.doesNotMatch(source, /normalizeLeagueId\(/, `${file} 不得將未知聯盟正規化成 MLB`);
-  assert.match(source, /code: 'UNKNOWN_LEAGUE'/, `${file} 必須拒絕未知聯盟`);
-  assert.match(source, /code: 'LEAGUE_NOT_READY'/, `${file} 必須拒絕尚未啟用的聯盟`);
-
-  const notReadyIndex = source.indexOf("code: 'LEAGUE_NOT_READY'");
-  const mlbWorkIndex = source.indexOf(mlbWorkMarker);
-  assert.ok(mlbWorkIndex >= 0, `${file} 缺少預期 MLB 工作標記：${mlbWorkMarker}`);
-  assert.ok(notReadyIndex >= 0 && notReadyIndex < mlbWorkIndex, `${file} 必須在進入 MLB 實作前拒絕未就緒聯盟`);
+for (const file of routes) {
+  const source = read(file);
+  assert.match(source, /requestedLeagueId\(/, `${file} 必須嚴格解析 league`);
+  assert.doesNotMatch(source, /normalizeLeagueId\(/, `${file} 不得將未知 league 回落 MLB`);
+  assert.match(source, /code: 'UNKNOWN_LEAGUE'/, `${file} 必須拒絕未知 league`);
 }
 
-const credit = fs.readFileSync('app/api/credit-lines/route.js', 'utf8');
-assert.match(credit, /requestedLeagueId\(new URL\(request\.url\)\.searchParams\.get\('league'\)\)/, 'credit-lines GET 必須隔離聯盟');
-assert.match(credit, /requestedLeagueId\(body\?\.league\)/, 'credit-lines POST 必須隔離聯盟');
+const analyze = read('app/api/analyze/route.js');
+assert.match(analyze, /resolveLeagueGame\(league, requestedGame\)/);
+assert.match(analyze, /assertLeagueGamePrestart\(league, game\)/);
+assert.match(analyze, /buildLeagueGameContext\(league, game\)/);
+assert.match(analyze, /positiveInteger\(game\?\.gamePk, Number\.MAX_SAFE_INTEGER\)/);
+assert.match(analyze, /attestIncomingMarketRows\(league, game,/);
+assert.match(analyze, /buildSnapshotFingerprints\(\{ league,/);
+assert.match(analyze, /analysisContractSignature\(league, game, activeMarkets\)/);
+assert.match(analyze, /analysisCacheKey\(league, game\.gamePk,/);
+assert.match(analyze, /analysisCachePayloadMatches\(cached, \{ league, game,/);
+assert.match(analyze, /signRepriceSnapshot\(\s*league,\s*game,/s);
+assert.match(analyze, /enforceAnalysisModeSafety\(\s*finalizeDeterministicAnalysis/s, 'finalizer 後必須重套 shadow safety');
+assert.match(analyze, /const safePayload = enforceAnalysisModeSafety\(cached\.payload, cached\.payload\.context \|\| frozenContext\)/, 'cache HIT 必須對整體 payload 重套 shadow safety');
+assert.match(analyze, /const safePayload = enforceAnalysisModeSafety\(payload, frozenContext\)/, 'cache MISS payload 也必須整體鎖定');
+assert.match(analyze, /cacheSet\(cacheKey, signature, safePayload\)/, '快取只能儲存已鎖定 payload');
 
-const readerStatus = fs.readFileSync('app/api/reader/status/route.js', 'utf8');
-assert.match(readerStatus, /requestedLeagueId\(searchParams\.get\('league'\)\)/, 'Reader status 必須從 query 明確解析聯盟');
+const reprice = read('app/api/reprice/route.js');
+assert.match(reprice, /resolveLeagueGame\(league, context\.game\)/);
+assert.match(reprice, /verifyRepriceSnapshot\(league, game, snapshot\)/);
+assert.match(reprice, /attestIncomingMarketRows\(league, game,/);
+assert.match(reprice, /buildSnapshotFingerprints\(\{\s*league,/s);
+assert.match(reprice, /signRepriceSnapshot\(\s*league,\s*game,/s);
+assert.match(reprice, /enforceAnalysisModeSafety\(\s*finalizeDeterministicAnalysis/s);
 
-const readerIngest = fs.readFileSync('app/api/reader/ingest/route.js', 'utf8');
-assert.match(readerIngest, /requestedLeagueId\(body\?\.league\)/, '舊 Reader 無 league 時只能由 registry 相容為 MLB');
+const credit = read('app/api/credit-lines/route.js');
+assert.match(credit, /fetchLeagueTaipeiSlate\(league, date\)/);
+assert.match(credit, /validateLeagueScheduleSubset\(league,/);
+assert.match(credit, /loadReaderSnapshot\(league, date\)/);
+assert.match(credit, /readerSnapshotStatus\(readerSnapshot, Date\.now\(\), league\)/);
+assert.match(credit, /signMarketGames\(league, verifiedReaderGames\)/);
 
-const leagueRoute = fs.readFileSync('app/api/leagues/route.js', 'utf8');
+const readerIngest = read('app/api/reader/ingest/route.js');
+assert.match(readerIngest, /fetchLeagueTaipeiSlate\(league, boardDate\)/);
+assert.match(readerIngest, /filterLeaguePrestartGames\(league,/);
+assert.match(readerIngest, /loadReaderSnapshot\(league, boardDate\)/);
+assert.match(readerIngest, /normalizeTai888ReaderPayload\(body, schedule, \{\s*league,/s);
+
+const readerStatus = read('app/api/reader/status/route.js');
+assert.match(readerStatus, /loadReaderSnapshot\(league, date\)/);
+assert.match(readerStatus, /readerSnapshotPublicView\(snapshot, \{ complete, (?:now: Date\.now\(\), )?league \}\)/);
+
+const reference = read('app/api/reference-lines/route.js');
+assert.match(reference, /fetchLeagueTaipeiSlate\(league, date\)/);
+assert.match(reference, /referencePolicy: 'NO_MLB_FALLBACK'/);
+assert.match(reference, /if \(league !== 'MLB'\)/);
+assert.match(reference, /signMarketGames\(league, filteredGames\)/);
+const asianBlock = reference.indexOf("if (league !== 'MLB')", reference.indexOf('export async function POST'));
+assert.ok(asianBlock >= 0 && asianBlock < reference.indexOf('loadJbot(date', asianBlock), 'Asian 必須在任何 MLB 參考盤讀取前返回');
+
+const result = read('app/api/result/route.js');
+assert.match(result, /positiveInteger\(searchParams\.get\('gamePk'\), Number\.MAX_SAFE_INTEGER\)/);
+assert.match(result, /league !== 'MLB' && !validDateString\(date\)/);
+assert.match(result, /fetchLeagueFinalResult\(league, gamePk, \{ date \}\)/);
+
+const schedule = read('app/api/schedule/route.js');
+assert.match(schedule, /fetchLeagueTaipeiSlate\(league, date\)/);
+assert.match(schedule, /filterLeaguePrestartGames\(league, slate\)/);
+assert.match(schedule, /analysisMode: provider\.analysisMode/);
+assert.match(schedule, /betEligible: provider\.betEligible/);
+
+const legacy = read('app/api/mlb/route.js');
+assert.match(legacy, /fetchLeagueTaipeiSlate\('MLB', date\)/);
+assert.doesNotMatch(legacy, /fetchOfficialTaipeiSlate/);
+
+const leagueRoute = read('app/api/leagues/route.js');
 assert.match(leagueRoute, /publicLeagueRegistry\(\)/);
 assert.match(leagueRoute, /'Cache-Control': 'no-store'/);
 
-console.log('multi-league API boundaries: unknown/not-ready rejection occurs before every legacy MLB implementation PASS');
+console.log('Multi-league provider API boundaries, league signatures and shadow fail-closed gates PASS');

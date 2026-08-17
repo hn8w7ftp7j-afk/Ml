@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 import { readerSnapshotIsComplete, TAI888_READER_PARSER_VERSION } from '../../../lib/tai888-reader-parser-v2.js';
 import { signMarketGames } from '../../../lib/market-integrity-v1.js';
-import { fetchOfficialTaipeiSlate, officialPrestartSlate, validateOfficialScheduleSubset } from '../../../lib/official-schedule-v1.js';
+import {
+  fetchLeagueTaipeiSlate,
+  filterLeaguePrestartGames,
+  validateLeagueScheduleSubset,
+} from '../../../lib/league-provider.js';
 import { leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import {
   checkRateLimit,
@@ -19,9 +23,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-function sanitizeSchedule(rows) {
+function sanitizeSchedule(rows, league) {
   return (Array.isArray(rows) ? rows : []).slice(0, 40).map(game => ({
-    gamePk: Number(game?.gamePk) || null,
+    league,
+    leagueId: league,
+    gamePk: Number.isSafeInteger(Number(game?.gamePk)) && Number(game?.gamePk) > 0 ? Number(game.gamePk) : null,
     gameDate: cleanText(game?.gameDate, 40),
     officialDate: cleanText(game?.officialDate, 20),
     status: cleanText(game?.status, 60),
@@ -43,16 +49,17 @@ function sanitizeSchedule(rows) {
   })).filter(game => game.gamePk && game.away && game.home);
 }
 
-function readerSnapshotMatchesFullOfficialSlate(snapshot, officialSlate, boardDate) {
+function readerSnapshotMatchesFullOfficialSlate(league, snapshot, officialSlate, boardDate) {
   const slate = Array.isArray(officialSlate) ? officialSlate : [];
-  if (!readerSnapshotIsComplete(snapshot)
+  if (!readerSnapshotIsComplete(snapshot, league)
+    || snapshot?.league !== league
     || snapshot?.boardDate !== boardDate
     || !slate.length
     || Number(snapshot.scheduleGameCount) !== slate.length) return false;
   try {
     const snapshotRows = [...snapshot.games, ...(snapshot.unopenedGames || [])];
     if (snapshotRows.length !== slate.length) return false;
-    const verified = validateOfficialScheduleSubset(snapshotRows.map(row => row.game), slate, boardDate);
+    const verified = validateLeagueScheduleSubset(league, snapshotRows.map(row => row.game), slate, boardDate);
     const expected = slate.map(game => Number(game.gamePk)).sort((left, right) => left - right);
     const actual = verified.map(game => Number(game.gamePk)).sort((left, right) => left - right);
     return expected.every((gamePk, index) => gamePk === actual[index]);
@@ -77,8 +84,8 @@ export async function GET(request) {
       error: `${config.label} Reader 尚未完成正式盤面驗證，已停止讀取信用盤`,
     }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
   }
-  const snapshot = await loadReaderSnapshot();
-  const reader = readerSnapshotStatus(snapshot);
+  const snapshot = await loadReaderSnapshot(league);
+  const reader = readerSnapshotStatus(snapshot, Date.now(), league);
   return NextResponse.json({
     ok: true,
     league,
@@ -103,7 +110,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   let readerSnapshot = null;
-  let readerState = readerSnapshotStatus(null);
+  let readerState = null;
   try {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
@@ -115,6 +122,7 @@ export async function POST(request) {
     if (!league) {
       return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
     }
+    readerState = readerSnapshotStatus(null, Date.now(), league);
     const config = leagueConfig(league);
     if (!config.capabilities.reader) {
       return NextResponse.json({
@@ -124,28 +132,29 @@ export async function POST(request) {
         error: `${config.label} Reader 尚未完成正式盤面驗證，已停止配對信用盤`,
       }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
-    const requestedSchedule = sanitizeSchedule(body?.schedule);
+    const requestedSchedule = sanitizeSchedule(body?.schedule, league);
     const date = cleanText(body?.date, 20);
     if (!validDateString(date)) return NextResponse.json({ ok: false, error: '日期格式必須為 YYYY-MM-DD' }, { status: 400 });
     if (!requestedSchedule.length) return NextResponse.json({ ok: false, error: '今日賽事清單為空，無法配對信用盤' }, { status: 400 });
-    const fullOfficialSlate = await fetchOfficialTaipeiSlate(date);
-    const schedule = validateOfficialScheduleSubset(requestedSchedule, fullOfficialSlate, date);
+    const fullOfficialSlate = await fetchLeagueTaipeiSlate(league, date);
+    const schedule = validateLeagueScheduleSubset(league, requestedSchedule, fullOfficialSlate, date);
     const requestedGamePks = new Set(schedule.map(game => Number(game.gamePk)));
     const officialByPk = new Map(fullOfficialSlate.map(game => [Number(game.gamePk), game]));
 
-    readerSnapshot = await loadReaderSnapshot(date);
-    readerState = readerSnapshotStatus(readerSnapshot);
-    const executableOfficialSlate = officialPrestartSlate(
+    readerSnapshot = await loadReaderSnapshot(league, date);
+    readerState = readerSnapshotStatus(readerSnapshot, Date.now(), league);
+    const executableOfficialSlate = filterLeaguePrestartGames(
+      league,
       fullOfficialSlate,
       Date.parse(readerSnapshot?.pageActivityAt || ''),
     );
-    const completeReaderSlate = readerSnapshotMatchesFullOfficialSlate(readerSnapshot, executableOfficialSlate, date);
+    const completeReaderSlate = readerSnapshotMatchesFullOfficialSlate(league, readerSnapshot, executableOfficialSlate, date);
     if (readerState.fresh && completeReaderSlate) {
       const verifiedReaderGames = readerSnapshot.games.filter(row => {
         const official = officialByPk.get(Number(row.gamePk));
         if (!official || !Array.isArray(row.markets) || !row.markets.length) return false;
         try {
-          validateOfficialScheduleSubset([row.game], fullOfficialSlate, date);
+          validateLeagueScheduleSubset(league, [row.game], fullOfficialSlate, date);
           return requestedGamePks.has(Number(row.gamePk));
         } catch { return false; }
       }).map(row => ({
@@ -157,7 +166,7 @@ export async function POST(request) {
         !new Set((readerSnapshot.unopenedGames || []).map(row => Number(row.gamePk))).has(Number(game.gamePk))
       )).length;
       const games = verifiedReaderGames.length === requestedOpenCount
-        ? await signMarketGames(verifiedReaderGames)
+        ? await signMarketGames(league, verifiedReaderGames)
         : [];
       if (games.length === requestedOpenCount) {
         return NextResponse.json({
@@ -189,7 +198,7 @@ export async function POST(request) {
       label: 'Tai888 Reader 自動信用盤',
       games: [],
       message: readerState.fresh
-        ? 'Tai888 Reader 盤面不是目前官方完整賽前場次，已停止分析。請刷新 Tai888 MLB 盤面後重新同步。'
+        ? `Tai888 Reader 盤面不是目前官方完整賽前場次，已停止分析。請刷新 Tai888 ${config.shortLabel}盤面後重新同步。`
         : readerState.message || 'Tai888 Reader 尚未同步新鮮完整盤面，已停止分析。',
       payloadHash: readerSnapshot?.payloadHash || null,
       boardDate: readerSnapshot?.boardDate || date,

@@ -7,7 +7,8 @@ import {
 } from '../../../lib/reference-lines.js';
 import { oddsApiWindow } from '../../../lib/reference-time.js';
 import { signMarketGames } from '../../../lib/market-integrity-v1.js';
-import { fetchOfficialTaipeiSlate, validateOfficialScheduleSubset } from '../../../lib/official-schedule-v1.js';
+import { fetchLeagueTaipeiSlate, validateLeagueScheduleSubset } from '../../../lib/league-provider.js';
+import { requestedLeagueId } from '../../../lib/leagues.js';
 import {
   checkRateLimit,
   cleanText,
@@ -29,9 +30,11 @@ let lastJbotRequestAt = globalThis.__MLB_LAST_JBOT_REQUEST_AT__ || 0;
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-function sanitizeSchedule(rows) {
+function sanitizeSchedule(rows, league) {
   return (Array.isArray(rows) ? rows : []).slice(0, 40).map(game => ({
-    gamePk: Number(game?.gamePk) || null,
+    league,
+    leagueId: league,
+    gamePk: Number.isSafeInteger(Number(game?.gamePk)) && Number(game?.gamePk) > 0 ? Number(game.gamePk) : null,
     gameDate: cleanText(game?.gameDate, 40),
     officialDate: cleanText(game?.officialDate, 20),
     status: cleanText(game?.status, 60),
@@ -119,7 +122,18 @@ async function loadOddsApi(date, schedule) {
 export async function GET(request) {
   const auth = await requireApiAuth(request);
   if (auth) return auth;
-  return NextResponse.json({ ok: true, version: REFERENCE_LINES_VERSION, ...referenceProviderStatus() }, { headers: { 'Cache-Control': 'no-store' } });
+  const league = requestedLeagueId(new URL(request.url).searchParams.get('league'));
+  if (!league) {
+    return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
+  }
+  if (league !== 'MLB') {
+    return NextResponse.json({
+      ok: true, league, configured: false, version: REFERENCE_LINES_VERSION,
+      providers: [], referencePolicy: 'NO_MLB_FALLBACK',
+      message: `${league} 尚未設定同聯盟合法參考盤源，禁止回落 MLB 盤源`,
+    }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+  return NextResponse.json({ ok: true, league, version: REFERENCE_LINES_VERSION, ...referenceProviderStatus() }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request) {
@@ -130,12 +144,31 @@ export async function POST(request) {
     const rate = checkRateLimit(request, { id: 'reference-lines-v9-3', limit: 12, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500_000);
+    const league = requestedLeagueId(body?.league);
+    if (!league) {
+      return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
+    }
     const date = cleanText(body?.date, 20);
-    const requestedSchedule = sanitizeSchedule(body?.schedule);
+    const requestedSchedule = sanitizeSchedule(body?.schedule, league);
     if (!validDateString(date)) return NextResponse.json({ ok: false, error: '日期格式必須為 YYYY-MM-DD' }, { status: 400 });
     if (!requestedSchedule.length) return NextResponse.json({ ok: false, error: '今日賽事清單為空，無法配對參考盤' }, { status: 400 });
-    const fullOfficialSlate = await fetchOfficialTaipeiSlate(date);
-    const schedule = validateOfficialScheduleSubset(requestedSchedule, fullOfficialSlate, date);
+    const fullOfficialSlate = await fetchLeagueTaipeiSlate(league, date);
+    const schedule = validateLeagueScheduleSubset(league, requestedSchedule, fullOfficialSlate, date);
+
+    if (league !== 'MLB') {
+      return NextResponse.json({
+        ok: true,
+        league,
+        configured: false,
+        blocked: true,
+        version: REFERENCE_LINES_VERSION,
+        providers: [],
+        games: [],
+        unmatched: [],
+        referencePolicy: 'NO_MLB_FALLBACK',
+        message: `${league} 尚未設定同聯盟合法參考盤源；已禁止使用 MLB JBot 或 The Odds API 替代`,
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
 
     const status = referenceProviderStatus();
     if (!status.configured) {
@@ -151,7 +184,7 @@ export async function POST(request) {
     }
 
     const fullSlateIdentity = fullOfficialSlate.map(game => `${game.gamePk}:${game.awayTeamId}:${game.homeTeamId}:${game.gameNumber}:${game.gameDate}`).join('|');
-    const key = `${status.primary}:${date}:${fullSlateIdentity}:${schedule.map(game => game.gamePk).join(',')}`;
+    const key = `${league}:${status.primary}:${date}:${fullSlateIdentity}:${schedule.map(game => game.gamePk).join(',')}`;
     const cached = cache.get(key);
     if (cached && cached.expiresAt > Date.now()) return NextResponse.json({ ...cached.payload, cache: 'HIT' }, { headers: { 'Cache-Control': 'no-store' } });
 
@@ -167,9 +200,10 @@ export async function POST(request) {
 
     const requestedGamePks = new Set(schedule.map(game => Number(game.gamePk)));
     const filteredGames = (Array.isArray(result.games) ? result.games : []).filter(row => requestedGamePks.has(Number(row.gamePk)));
-    const signedGames = await signMarketGames(filteredGames);
+    const signedGames = await signMarketGames(league, filteredGames);
     const payload = {
       ok: true,
+      league,
       configured: true,
       version: REFERENCE_LINES_VERSION,
       provider: result.provider,
