@@ -7,6 +7,7 @@ import {
   liveReaderRevisionMatches,
   mergeReaderStatusHighWater,
   mergeRecognizedGameInputs,
+  readerCoverageCounts,
   readerHashKey,
   readerRevisionKey,
   shouldAcceptReaderStatus,
@@ -39,6 +40,14 @@ assert.equal(readerHashKey('2026-08-15', 'abc'), '2026-08-15:abc');
 assert.equal(shouldAcknowledgeReaderHash({ payloadHash: 'abc', expectedCount: 2, completedCount: 2 }), true);
 assert.equal(shouldAcknowledgeReaderHash({ payloadHash: 'abc', expectedCount: 2, completedCount: 1 }), false);
 assert.equal(shouldAcknowledgeReaderHash({ payloadHash: 'abc', expectedCount: 2, completedCount: 2, failedCount: 1 }), false);
+assert.deepEqual(
+  readerCoverageCounts({ rawGameCount: 11, matchedGameCount: 8, unopenedGameCount: 3, scheduleGameCount: 11 }),
+  { total: 11, captured: 11, open: 8, waiting: 3, locked: 3, notRendered: 0 },
+);
+assert.deepEqual(
+  readerCoverageCounts({ matchedGameCount: 8, scheduleGameCount: 11 }),
+  { total: 11, captured: 8, open: 8, waiting: 3, locked: 0, notRendered: 3 },
+);
 
 const h1 = { fresh: true, boardDate: '2026-08-15', payloadHash: 'h1', receivedAt: '2026-08-15T08:00:00.000Z' };
 const h2 = { fresh: true, boardDate: '2026-08-15', payloadHash: 'h2', receivedAt: '2026-08-15T08:00:01.000Z' };

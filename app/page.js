@@ -11,6 +11,7 @@ import {
   gameIsPrestartNow,
   liveReaderHashMatches,
   mergeReaderStatusHighWater,
+  readerCoverageCounts,
   readerHashKey,
   readerRevisionKey,
   shouldAcceptReaderStatus,
@@ -33,6 +34,13 @@ const pct = value => value == null || !Number.isFinite(Number(value)) ? '—' : 
 const scoreText = value => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toFixed(1);
 const waterText = value => hasActualWater(value) ? Number(value).toFixed(3) : '水位未提供';
 const matchup = game => `${translateTeamText(game?.away || '')} 對 ${translateTeamText(game?.home || '')}`;
+
+function coveragePendingText(coverage) {
+  return [
+    coverage?.locked ? `鎖盤等待 ${coverage.locked} 場` : '',
+    coverage?.notRendered ? `Reader未呈現 ${coverage.notRendered} 場` : '',
+  ].filter(Boolean).join('｜') || '等待開盤 0 場';
+}
 
 function taipeiDate(offset = 0) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -293,6 +301,8 @@ export default function Home() {
   const rankingEnabled = activeLeague.capabilities.ranking === true;
   const bettingEnabled = activeLeague.capabilities.bets === true;
   const shadowMode = activeLeague.status === 'shadow';
+  const readerCoverage = readerCoverageCounts(readerStatus);
+  const readerPendingText = coveragePendingText(readerCoverage);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -554,7 +564,18 @@ export default function Home() {
       }, 60000);
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
 
-      if (credit?.readerStatus) commitReaderStatus({ ...credit.readerStatus, boardDate: credit.boardDate, payloadHash: credit.payloadHash, matchedGameCount: credit.matchedGameCount, observedAt: credit.observedAt, receivedAt: credit.receivedAt, pageActivityAt: credit.pageActivityAt });
+      if (credit?.readerStatus) commitReaderStatus({
+        ...credit.readerStatus,
+        boardDate: credit.boardDate,
+        payloadHash: credit.payloadHash,
+        rawGameCount: credit.rawGameCount,
+        matchedGameCount: credit.matchedGameCount,
+        unopenedGameCount: credit.unopenedGameCount,
+        scheduleGameCount: credit.scheduleGameCount,
+        observedAt: credit.observedAt,
+        receivedAt: credit.receivedAt,
+        pageActivityAt: credit.pageActivityAt,
+      });
 
       const readerCreditReady = credit?.provider === 'TAI888_READER_AUTO' && credit?.readerFresh === true;
       const creditByPk = new Map((readerCreditReady ? credit.games || [] : []).map(row => [Number(row.gamePk), row]));
@@ -581,6 +602,12 @@ export default function Home() {
         actualMarkets: item.customMarkets,
         generation,
       }));
+      const coverage = readerCoverageCounts({
+        rawGameCount: credit.rawGameCount,
+        matchedGameCount: credit.matchedGameCount ?? tasks.length,
+        unopenedGameCount: credit.unopenedGameCount,
+        scheduleGameCount: credit.scheduleGameCount || games.length,
+      });
       const sourceWarnings = [
         credit.error ? `Tai888信用盤：${credit.error}` : '',
         credit.blocked && credit.message ? `Tai888信用盤：${credit.message}` : '',
@@ -626,15 +653,15 @@ export default function Home() {
       const failedCount = tasks.length - completedCount;
       if (allSucceeded) lastFullAnalysisAtRef.current = Date.now();
       if (allSucceeded) {
-        setNotice(`完成 ${tasks.length} 場Tai888信用盤分析${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
+        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${tasks.length} 場Tai888信用盤分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
       } else if (analysisSucceeded && !readerHashAcknowledged) {
-        setNotice(`已完成 ${tasks.length} 場分析，但 Reader 在分析期間出現更新；舊盤結果維持不可下注。`);
+        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${tasks.length} 場分析｜${coveragePendingText(coverage)}，但 Reader 在分析期間出現更新；舊盤結果維持不可下注。`);
         setError('Reader 最新盤面版本尚未完成驗證，系統將自動重新分析。');
         window.setTimeout(() => {
           if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) oneClickAnalyze();
         }, 800);
       } else {
-        setNotice(`已完成 ${completedCount}/${tasks.length} 場分析${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
+        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${completedCount}/${tasks.length} 場分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
         const readerHashPending = Boolean(credit?.readerFresh && creditCount > 0 && failedCreditCount > 0);
         setError(`${failedCount} 場分析失敗${readerHashPending ? '，Reader 最新盤面版本尚未承認' : ''}；請查看各場錯誤後重試。`);
       }
@@ -831,7 +858,7 @@ export default function Home() {
         <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `一鍵分析今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}正式 Reader 尚未驗證｜不可分析` : shadowMode && readerExecutable ? 'Tai888 Reader 自動同步正常｜影子評分不可下注' : readerExecutable ? 'Tai888 Reader 自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader 新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader 盤口已過期' : 'Tai888 Reader 等待同步'}</strong>
-          <span>{!analysisEnabled ? '資料、盤口、排名與下注資格皆獨立鎖定。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜${readerStatus?.matchedGameCount || 0}場｜每30秒複核${shadowMode ? '｜不可下注' : ''}` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome 與 Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
+          <span>{!analysisEnabled ? '資料、盤口、排名與下注資格皆獨立鎖定。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每30秒複核${shadowMode ? '｜不可下注' : ''}` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome 與 Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
         </div>
       </section>
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
