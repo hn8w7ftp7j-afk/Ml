@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { MAX_TAI888_TABS, selectAuthoritativeBoard, shouldSkipSuccessfulPayload, withinTai888TabScanLimit } from './board-selector.js';
 
-const VERSION = '2.1.1';
+const VERSION = '2.1.2';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];

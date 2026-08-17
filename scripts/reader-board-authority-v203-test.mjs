@@ -112,4 +112,4 @@ assert.match(backgroundSource, /for \(const tab of tabs\)/);
 assert.doesNotMatch(backgroundSource, /tabs\.slice\(0,\s*4\)/);
 assert.match(backgroundSource, /if \(!selection\.ok\)/);
 
-console.log('Reader board authority: duplicate tabs deduplicated, selected-tab frame conflicts fail closed PASS');
+console.log('Reader board authority: duplicate tabs and host/iframe boards deduplicated PASS');

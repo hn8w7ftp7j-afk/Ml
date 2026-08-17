@@ -6,9 +6,9 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const RELEASE = path.join(ROOT, 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.1.1-DUPLICATE-SAFE-FOUR-TABS.zip';
+const ARCHIVE_NAME = 'Tai888-Reader-v2.1.2-FRAME-SAFE-FOUR-TABS.zip';
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
-const REPORT_NAME = 'Tai888-Reader-v2.1.1-VERIFICATION.md';
+const REPORT_NAME = 'Tai888-Reader-v2.1.2-VERIFICATION.md';
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
 const flags = new Map(process.argv.slice(2).map(argument => {
   const [name, ...rest] = argument.replace(/^--/, '').split('=');
@@ -38,7 +38,7 @@ const dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: ROOT
 const sourceRef = process.env.GITHUB_SHA || `${commit}${dirty ? '+working-tree' : ''}`;
 const generatedAt = new Date().toISOString();
 
-const report = `# Tai888 Reader 2.1.1 / Baseball EV 9.6.0 驗證報告
+const report = `# Tai888 Reader 2.1.2 / Baseball EV 9.6.0 驗證報告
 
 - 產生時間：${generatedAt}
 - 原始碼基線：\`${sourceRef}\`
@@ -63,13 +63,13 @@ const report = `# Tai888 Reader 2.1.1 / Baseball EV 9.6.0 驗證報告
 
 ## 整合與來源判定
 
-- Reader 2.1.1 以 MLB／NPB／KBO／CPBL 四個權威分頁獨立辨識、雜湊、同步與顯示狀態；同聯盟重複分頁會自動擇一，未知聯盟不得默認成 MLB。
+- Reader 2.1.2 以 MLB／NPB／KBO／CPBL 四個權威分頁獨立辨識、雜湊、同步與顯示狀態；同聯盟重複分頁及單頁 host/iframe 重複盤面會自動擇一，未知聯盟不得默認成 MLB。
 - 本 ZIP 只取自目前 \`reader/\` 的固定 12 檔白名單；封裝器會把交付目錄內不同內容的舊 Tai888 ZIP 移至相鄰的 ignored quarantine 目錄。
 - MLB 保留正式分析相容性；NPB／KBO／CPBL 即使完整 ingest，網站分析仍由 server 強制鎖為 shadow、不可下注。
 
 ## 主要安全邊界
 
-- 每聯盟單一權威 tab/frame；不合併不同聯盟、頁籤或 iframe 的盤面；同聯盟重複 tab 自動選擇優先且可用的一頁，選定頁內 frame 衝突或超過四個 Tai888 分頁時仍 fail-closed。
+- 每聯盟單一權威 tab/frame；不合併不同聯盟、頁籤或 iframe 的盤面；同聯盟重複 tab 與同頁 host/iframe 盤面自動選擇優先且可用的一份，超過四個 Tai888 分頁時仍 fail-closed。
 - 所有提交場次都須與該聯盟官方台北盤日一對一配對，雙重賽身分必須唯一；Tai888 已呈現且開盤的賽事須逐場 4 市場／8 方向完整，任何可見開盤場 partial 都會整批停止，未呈現或全鎖場只保留為不可執行。
 - URL 中繼資料只保留 Tai888 origin/path 與固定 \`#/BS\`；query、任意 hash、頁面標題與原始 frame URL 不保存也不上傳。
 - Server 自算盤面雜湊；精確 \`boardDate + hash + pageActivityAt\` 版本只在全部分析成功後才被畫面承認，同 hash 心跳仍會重簽並快速重算。

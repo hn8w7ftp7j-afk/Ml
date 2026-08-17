@@ -1,4 +1,4 @@
-# Tai888 Reader 2.1.1 / Baseball EV 9.6.0
+# Tai888 Reader 2.1.2 / Baseball EV 9.6.0
 
 ## Goal
 
@@ -33,7 +33,7 @@ A user-authenticated desktop Chrome session displays the Tai888 MLB, NPB, KBO an
 
 - Website: 9.6.0
 - Next.js: 15.5.23
-- Extension: 2.1.1 (`2.1.1 DUPLICATE-SAFE FOUR TABS`)
+- Extension: 2.1.2 (`2.1.2 FRAME-SAFE FOUR TABS`)
 - Reader API/parser/store versions are returned by health/status endpoints and included in stored snapshots.
 
 MLB retains compatibility with Reader 2.0.3+ during migration. NPB, KBO and CPBL require Reader 2.1.0+ and fail closed on older clients.
