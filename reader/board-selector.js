@@ -232,58 +232,43 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     active: candidate.active,
     lastAccessed: candidate.lastAccessed,
   }])).values()].sort((left, right) => tabPriority(left, right, preferredTabId));
-  const authorityTabId = tabs[0]?.tabId;
   const assessed = boardCandidates.map(candidate => assessBoardCandidate(candidate, now));
-  const authorityFrames = assessed.filter(row => row.candidate.tabId === authorityTabId);
-  const validAuthorityFrames = authorityFrames.filter(row => row.ok);
-  const bestAuthorityCoverage = Math.max(0, ...validAuthorityFrames.map(row => row.detectedGameCount || 0));
-  const complete = validAuthorityFrames.filter(row => row.detectedGameCount === bestAuthorityCoverage);
-  if (!complete.length) {
+  // A user can legitimately have the same league open in more than one tab
+  // while preparing the four league boards. Pick the highest-priority usable
+  // tab and ignore the other tabs instead of treating normal price movement
+  // between duplicate tabs as a league-wide conflict. We still fail closed
+  // when frames inside the selected tab disagree with each other.
+  for (const tab of tabs) {
+    const tabFrames = assessed.filter(row => row.candidate.tabId === tab.tabId);
+    const validTabFrames = tabFrames.filter(row => row.ok);
+    const bestCoverage = Math.max(0, ...validTabFrames.map(row => row.detectedGameCount || 0));
+    const complete = validTabFrames.filter(row => row.detectedGameCount === bestCoverage);
+    if (!complete.length) continue;
+
+    const fingerprints = new Set(complete.map(row => row.payloadFingerprint));
+    if (fingerprints.size !== 1) {
+      return {
+        ok: false,
+        error: 'conflicting-complete-frames',
+        authorityTabId: tab.tabId,
+        assessed,
+      };
+    }
+
+    const selected = [...complete].sort(framePriority)[0];
     return {
-      ok: false,
-      error: 'authoritative-tab-incomplete',
-      authorityTabId,
+      ok: true,
+      authorityTabId: tab.tabId,
+      selected,
+      ignoredDuplicateTabCount: Math.max(0, tabs.length - 1),
       assessed,
     };
   }
 
-  const fingerprints = new Set(complete.map(row => row.payloadFingerprint));
-  if (fingerprints.size !== 1) {
-    return {
-      ok: false,
-      error: 'conflicting-complete-frames',
-      authorityTabId,
-      assessed,
-    };
-  }
-
-  // Do not let a complete but older/background tab silently choose a
-  // different price board for the same slate date.  We still use exactly one
-  // frame from one authoritative tab, but conflicting complete observations
-  // for that same board date make the authority ambiguous and must fail closed.
-  const authorityBoardDate = String(complete[0]?.candidate?.parsed?.boardDate || '');
-  const sameDateValid = assessed.filter(row => (
-    row.ok
-    && String(row.candidate?.parsed?.boardDate || '') === authorityBoardDate
-  ));
-  const bestSameDateCoverage = Math.max(0, ...sameDateValid.map(row => row.detectedGameCount || 0));
-  const sameDateComplete = sameDateValid.filter(row => row.detectedGameCount === bestSameDateCoverage);
-  const sameDateFingerprints = new Set(sameDateComplete.map(row => row.payloadFingerprint));
-  if (sameDateFingerprints.size !== 1) {
-    return {
-      ok: false,
-      error: 'conflicting-complete-tabs',
-      authorityTabId,
-      boardDate: authorityBoardDate,
-      assessed,
-    };
-  }
-
-  const selected = [...complete].sort(framePriority)[0];
   return {
-    ok: true,
-    authorityTabId,
-    selected,
+    ok: false,
+    error: 'no-complete-tab',
+    authorityTabId: tabs[0]?.tabId,
     assessed,
   };
 }
