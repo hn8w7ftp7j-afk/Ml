@@ -73,7 +73,8 @@ const staleComplete = {
   rawBoardHash: '2'.repeat(64),
   rawGameCount: 1,
   matchedGameCount: 1,
-  scheduleGameCount: 1,
+  unopenedGameCount: 2,
+  scheduleGameCount: 3,
   unmatched: [],
   games: [{
     league: 'MLB',
@@ -104,4 +105,9 @@ const freshPayload = readerSnapshotPublicView(staleComplete, {
 assert.equal(freshPayload.executable, true);
 assert.equal(freshPayload.payloadHash, staleComplete.payloadHash);
 assert.equal(freshPayload.matchedGameCount, 1);
+assert.equal(freshPayload.unopenedGameCount, 2);
+assert.equal(freshPayload.scheduleGameCount, 3);
+assert.equal(freshPayload.lockedGameCount, 0);
+assert.equal(freshPayload.notRenderedGameCount, 2);
+assert.match(freshPayload.message, /已讀取 1\/3 場｜已開盤 1 場｜Reader 未呈現 2 場/);
 console.log('reader store v2: exact-date isolation and fail-closed write ordering ok');
