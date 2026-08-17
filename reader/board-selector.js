@@ -236,8 +236,10 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
   // A user can legitimately have the same league open in more than one tab
   // while preparing the four league boards. Pick the highest-priority usable
   // tab and ignore the other tabs instead of treating normal price movement
-  // between duplicate tabs as a league-wide conflict. We still fail closed
-  // when frames inside the selected tab disagree with each other.
+  // between duplicate tabs as a league-wide conflict. Tai888 can also expose
+  // the same board through a host frame and a hidden/measurement iframe; pick
+  // one authoritative frame by URL/activity priority instead of letting that
+  // implementation detail block the whole league.
   for (const tab of tabs) {
     const tabFrames = assessed.filter(row => row.candidate.tabId === tab.tabId);
     const validTabFrames = tabFrames.filter(row => row.ok);
@@ -245,22 +247,13 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     const complete = validTabFrames.filter(row => row.detectedGameCount === bestCoverage);
     if (!complete.length) continue;
 
-    const fingerprints = new Set(complete.map(row => row.payloadFingerprint));
-    if (fingerprints.size !== 1) {
-      return {
-        ok: false,
-        error: 'conflicting-complete-frames',
-        authorityTabId: tab.tabId,
-        assessed,
-      };
-    }
-
     const selected = [...complete].sort(framePriority)[0];
     return {
       ok: true,
       authorityTabId: tab.tabId,
       selected,
       ignoredDuplicateTabCount: Math.max(0, tabs.length - 1),
+      ignoredDuplicateFrameCount: Math.max(0, complete.length - 1),
       assessed,
     };
   }

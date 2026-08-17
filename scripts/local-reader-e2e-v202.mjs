@@ -7,7 +7,7 @@ const APP_PASSWORD = process.env.APP_PASSWORD || 'local-app-password';
 const PAIR_PASSWORD = process.env.READER_PAIR_SECRET || 'local-reader-password';
 const EXTENSION_ORIGIN = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const LEAGUE = 'MLB';
-const READER_VERSION = '2.1.1';
+const READER_VERSION = '2.1.2';
 
 const TEAM_CODE_BY_ID = Object.freeze({
   108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC', 113: 'CIN',

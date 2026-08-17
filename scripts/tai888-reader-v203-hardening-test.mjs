@@ -203,7 +203,8 @@ assert.equal(duplicatedAssessment.detectedGameCount, 2);
 const partialFrameA = candidate({ frameId: 1, games: [payloadA.games[0]], expected: 2 });
 const partialFrameB = candidate({ frameId: 2, games: [payloadA.games[1]], expected: 2 });
 const noFlatMap = selectAuthoritativeBoard([partialFrameA, partialFrameB], { now });
-assert.equal(noFlatMap.ok, false, 'two partial frames must never be flat-mapped into one board');
+assert.equal(noFlatMap.ok, true, 'duplicate partial frames select one board and must never be flat-mapped');
+assert.equal(noFlatMap.selected.candidate.parsed.games.length, 1);
 
 const selected = selectAuthoritativeBoard([partialFrameA, completeFrame], { now });
 assert.equal(selected.ok, true);
@@ -258,8 +259,9 @@ assert.equal(assessBoardCandidate(invalidWater, now).ok, false, 'all eight direc
 const conflictingFrame = candidate({ frameId: 10 });
 conflictingFrame.parsed.games[0].fullTotal.overWater = 0.95;
 const conflict = selectAuthoritativeBoard([completeFrame, conflictingFrame], { now });
-assert.equal(conflict.ok, false);
-assert.equal(conflict.error, 'conflicting-complete-frames');
+assert.equal(conflict.ok, true, 'duplicate host/iframe observations must resolve to one authoritative frame');
+assert.equal(conflict.selected.candidate.frameId, 9);
+assert.equal(conflict.ignoredDuplicateFrameCount, 1);
 
 assert.equal(shouldSkipSuccessfulPayload({
   reason: 'alarm', payloadHash: 'new', lastSuccessfulPayloadHash: 'old', lastSuccessfulSyncAt: now, now,
