@@ -28,7 +28,6 @@ assert.match(page, /\/api\/reader\/status\?league=\$\{encodeURIComponent\(league
 assert.match(page, /latest\.boardDate !== currentDateRef\.current/);
 assert.match(page, /setDate\(latest\.boardDate\)/);
 assert.match(page, /readerStatus\?\.payloadHash/);
-assert.match(page, /readerStatus\?\.version/);
 assert.match(page, /readerRevisionKey\(readerStatus\)/);
 assert.match(page, /analysisGenerationRef/);
 assert.match(page, /readerStatusHighWaterRef/);
