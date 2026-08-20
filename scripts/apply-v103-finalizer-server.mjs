@@ -20,11 +20,25 @@ function replaceCount(source, before, after, expected, label) {
   let source = read(path);
   source = replaceExact(source, "export const FINAL_ENGINE_VERSION = 'BASEBALL-DETERMINISTIC-SHADOW-2026-08-v10.2.0';", "export const FINAL_ENGINE_VERSION = 'BASEBALL-DETERMINISTIC-SHADOW-2026-08-v10.3.0';", 'finalizer version');
   source = replaceExact(source, "export const UNCERTAINTY_SET_VERSION = 'BASEBALL-GH27-Q10-DATA-MARGIN-DIAGNOSTIC-UNCALIBRATED-v1.1.0';", "export const UNCERTAINTY_SET_VERSION = 'BASEBALL-GH27-Q10-DATA-MARGIN-INDEPENDENT-PRIOR-v1.2.0';", 'uncertainty version');
+  source = replaceExact(source, "  if (!Number.isFinite(Number(row.weightedEV))) failures.push('Weighted EV不是有限數值');", "  if (row.weightedEV == null || !Number.isFinite(Number(row.weightedEV))) failures.push('Weighted EV不是有限數值');", 'null-safe weighted QA');
+  source = replaceExact(source, "  if (!Number.isFinite(Number(row.robustEV))) failures.push('Robust EV不是有限數值');", "  if (row.robustEV == null || !Number.isFinite(Number(row.robustEV))) failures.push('Robust EV不是有限數值');", 'null-safe robust QA');
+  source = replaceExact(
+    source,
+    "  if (Number.isFinite(Number(row.weightedEV)) && Number.isFinite(Number(row.robustEV))\n    && Number(row.robustEV) > Number(row.weightedEV) + 1e-12) failures.push('Robust EV高於Weighted EV');",
+    "  if (row.weightedEV != null && row.robustEV != null\n    && Number.isFinite(Number(row.weightedEV)) && Number.isFinite(Number(row.robustEV))\n    && Number(row.robustEV) > Number(row.weightedEV) + 1e-12) failures.push('Robust EV高於Weighted EV');",
+    'null-safe robust comparison',
+  );
   source = replaceExact(
     source,
     "  if (Number.isFinite(Number(row.rawMarketProbabilityGap)) && Number(row.rawMarketProbabilityGap) >= 0.20) {\n    failures.push('棒球模型與Tai888去水市場差距達20%以上，需BLOCK而非調低分數');\n  }",
     "  if (row.evCalibration?.qualified === false) {\n    failures.push(`EV校準未通過：${(row.evCalibration?.reasons || []).join('；') || '極端EV或獨立市場先驗未通過'}`);\n  }",
     'replace false Tai888 probability gate',
+  );
+  source = replaceExact(
+    source,
+    "    const weightedCalculable = Number.isFinite(Number(row.weightedEV));\n    const robustCalculable = Number.isFinite(Number(row.robustEV));",
+    "    const weightedCalculable = row.weightedEV != null && Number.isFinite(Number(row.weightedEV));\n    const robustCalculable = row.robustEV != null && Number.isFinite(Number(row.robustEV));",
+    'null-safe calculability',
   );
   source = replaceExact(
     source,
