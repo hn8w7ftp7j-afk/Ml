@@ -122,7 +122,8 @@ for (const source of [analyze, reprice]) {
 
 const finalizer = fs.readFileSync('lib/deterministic-finalizer.js', 'utf8');
 assert.match(finalizer, /FORMAL_SCORING_ENABLED = false/);
-assert.match(finalizer, /scoreStatus = 'LEGACY_INVALID'/);
+assert.match(finalizer, /SCORE_RELEASE_STATUS = 'LEGACY_INVALID'/);
+assert.match(finalizer, /row\.scoreStatus = SCORE_RELEASE_STATUS/);
 assert.match(finalizer, /row\.score = null/);
 assert.match(finalizer, /formalRecommendationsEnabled: false/);
 
