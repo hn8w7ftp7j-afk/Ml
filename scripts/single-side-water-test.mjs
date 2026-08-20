@@ -44,18 +44,28 @@ const finalized = finalizeDeterministicAnalysis({
 });
 
 const [provided, missing] = finalized.results;
-assert.ok(provided.score >= 1 && provided.score <= 6.6);
+assert.equal(provided.score, null);
+assert.ok(provided.shadowDiagnosticScore >= 1 && provided.shadowDiagnosticScore <= 6.6);
+assert.equal(provided.scoreStatus, 'LEGACY_INVALID');
 assert.equal(provided.betEligible, false);
-assert.equal(provided.tag, 'PASS');
+assert.match(String(provided.tag), /SHADOW/);
 assert.equal(provided.scoreAudit?.ok, true);
 assert.equal(provided.pairAudit?.passed, true);
 assert.equal(missing.score, null);
+assert.equal(missing.scoreStatus, 'UNSCORED');
 assert.match(String(missing.tag), /水位未提供/);
 assert.equal(missing.pairAudit?.passed, true);
 
 console.log(JSON.stringify({
   ok: true,
-  provided: { pick: provided.pick, water: provided.water, score: provided.score, tag: provided.tag },
-  missing: { pick: missing.pick, water: missing.water, score: missing.score, tag: missing.tag },
+  provided: {
+    pick: provided.pick,
+    water: provided.water,
+    formalScore: provided.score,
+    shadowDiagnosticScore: provided.shadowDiagnosticScore,
+    scoreStatus: provided.scoreStatus,
+    tag: provided.tag,
+  },
+  missing: { pick: missing.pick, water: missing.water, score: missing.score, scoreStatus: missing.scoreStatus, tag: missing.tag },
   pairAudit: provided.pairAudit,
 }, null, 2));
