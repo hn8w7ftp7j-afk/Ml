@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const page = fs.readFileSync('app/page.js', 'utf8');
+assert.match(page, /error\.code = data\.code \|\| ''/);
+assert.match(page, /error\.blocking = Array\.isArray\(data\.blocking\)/);
+assert.match(page, /const analyzeRequest = \(\) => requestJSON\('\/api\/analyze'/);
+assert.match(page, /const retryable = !Number\(firstError\?\.status\)/);
+assert.match(page, /baseData = await analyzeRequest\(\)/);
+assert.match(page, /\[CLIENT_ANALYZE_FAILED\]/);
+assert.match(page, /cause\?\.code === 'CORE_DATA_MISSING'/);
+console.log('Analysis retry and per-game diagnostics PASS');
