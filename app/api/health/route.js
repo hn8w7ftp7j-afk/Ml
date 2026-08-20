@@ -3,6 +3,7 @@ import { appPasswordConfigured, sessionSecretConfigured, siteAuthConfigured } fr
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
 import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
+import { EV_CALIBRATION_V103_VERSION } from '../../../lib/ev-calibration-v103.js';
 import { BATCH_VERSION } from '../../../lib/batch.js';
 import {
   FINAL_ENGINE_VERSION,
@@ -33,6 +34,7 @@ export async function GET() {
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
     rulesVersion: RULES_VERSION,
+    evCalibrationVersion: EV_CALIBRATION_V103_VERSION,
     dataVersion: DATA_VERSION,
     visionImportEnabled: false,
     batchVersion: BATCH_VERSION,
