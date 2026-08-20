@@ -20,3 +20,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/live-score-model-audit.mjs 2026-08-21
+      - run: node scripts/savant-park-html-audit.mjs
