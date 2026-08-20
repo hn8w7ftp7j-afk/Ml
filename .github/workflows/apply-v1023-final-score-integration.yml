@@ -3,6 +3,8 @@ name: Apply v10.2.3 final score integration
 on:
   push:
     branches: [fix/v1023-final-score-integration]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -13,7 +15,7 @@ concurrency:
 
 jobs:
   apply:
-    if: ${{ !contains(github.event.head_commit.message, '[v1023-final-score-applied]') }}
+    if: ${{ github.event_name == 'pull_request' || !contains(github.event.head_commit.message, '[v1023-final-score-applied]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
