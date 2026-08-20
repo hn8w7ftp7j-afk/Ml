@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { appPasswordConfigured, sessionSecretConfigured, siteAuthConfigured } from '../../../lib/security.js';
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
-import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v10.js';
+import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
 import { BATCH_VERSION } from '../../../lib/batch.js';
 import {
   FINAL_ENGINE_VERSION,
@@ -28,7 +28,7 @@ export async function GET() {
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   return NextResponse.json({
     ok: true,
-    version: '10.0.0',
+    version: '10.1.0',
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
