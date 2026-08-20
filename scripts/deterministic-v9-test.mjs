@@ -18,7 +18,7 @@ const score = (weightedEV, robustEV, options = {}) => deterministicScore({
   ...options,
 });
 
-assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.2.0');
+assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.3.0');
 assert.equal(score(0, 0).score, 6.6);
 assert.equal(score(-0.001, 0.02).score, 6.5);
 assert.equal(score(-0.01, -0.02).score, 6.0);
@@ -27,34 +27,34 @@ assert.equal(score(0.01, 0).score, 7.1);
 assert.equal(score(0.01, -0.001).score, 7.0);
 assert.equal(score(0.01, -0.02).score, 6.7);
 
-// 7.2-7.4 uses the next 7.5 threshold (2.0% / 0.8%) as mathematical upper bound.
 assert.equal(score(0.005, 0.004).score, 7.2);
 assert.equal(score(0.012, 0.004).score, 7.3);
 assert.equal(score(0.018, 0.006).score, 7.4);
-assert.equal(score(0.020, 0.008).score, 7.5); // exact boundary belongs to next band
-
-// 7.5-7.9 uses 8.0 as the mathematical upper score.
+assert.equal(score(0.020, 0.008).score, 7.5);
 assert.equal(score(0.024, 0.0104).score, 7.6);
 assert.equal(score(0.030, 0.014).score, 7.7);
 assert.equal(score(0.038, 0.0176).score, 7.9);
 assert.equal(score(0.040, 0.020).score, 8.0);
-
-// 8.0-8.4 uses 8.5 as mathematical upper score.
 assert.equal(score(0.046, 0.024).score, 8.1);
 assert.equal(score(0.055, 0.030).score, 8.2);
 assert.equal(score(0.067, 0.038).score, 8.4);
-
-// High weighted EV cannot pull a weak robust EV into the next band.
 assert.equal(score(0.080, 0.019).score, 7.9);
 
-// 8.5-8.9 requires two independent same-contract markets.
 assert.equal(score(0.080, 0.048, { crossMarketVerified: true }).score, 8.6);
 assert.equal(score(0.095, 0.060, { crossMarketVerified: true }).score, 8.7);
 assert.equal(score(0.115, 0.076, { crossMarketVerified: true }).score, 8.9);
 assert.equal(score(0.115, 0.076, { crossMarketVerified: false }).score, 8.4);
-assert.equal(score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: 0.12 }).score, 7.9);
-assert.equal(score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: 0.18 }).score, 7.4);
-assert.ok(score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: 0.18 }).caps.includes('RAW_MARKET_PROBABILITY_GAP_GTE_18_PERCENT'));
+
+// Model/market disagreement remains a QA diagnostic. It must never rewrite a
+// score that is determined only by Weighted EV, Robust EV and the independent
+// same-contract requirement.
+for (const gap of [0.12, 0.18, 0.30]) {
+  const result = score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: gap });
+  assert.equal(result.score, 8.6);
+  assert.equal(result.rawMarketProbabilityGap, gap);
+  assert.equal(result.caps.some(value => value.startsWith('RAW_MARKET_PROBABILITY_GAP')), false);
+}
+
 const saturated = score(0.120, 0.080, { crossMarketVerified: true });
 assert.equal(saturated.score, 8.9);
 assert.equal(saturated.rawScore, 9);
@@ -109,7 +109,6 @@ for (const [fraction, expected] of profitTruth) {
   assert.ok(Math.abs(result.profit - expected) < 1e-9);
 }
 
-// Critical regression: split tickets must settle each leg before rebate, never net first.
 const mixed = settleTaiwanContract(`${away}讓1/1.5+50`, 4, 3, away, home);
 assert.equal(mixed.legs.length, 2);
 assert.equal(mixed.legs[0].fraction, 0.5);
@@ -132,8 +131,3 @@ console.log(JSON.stringify({
   settlementRuleVersion: SETTLEMENT_RULE_VERSION,
   mixedSplitProfit: mixedProfit,
 }, null, 2));
-
-
-// Source/eligibility and score boundaries remain deterministic.
-assert.equal(score(0.08, 0.048, { crossMarketVerified: false }).score, 8.4);
-assert.equal(score(0.08, 0.048, { crossMarketVerified: true }).score, 8.6);
