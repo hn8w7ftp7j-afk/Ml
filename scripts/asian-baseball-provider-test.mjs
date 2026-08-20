@@ -26,13 +26,31 @@ const npbDay = `
 const npb = parseNpbScheduleHtml(npbDay, '2099-08-18');
 assert.equal(npb.length, 1);
 assert.equal(npb[0].league, 'NPB');
-assert.equal(npb[0].awayTeamId, 503);
-assert.equal(npb[0].homeTeamId, 501);
+assert.equal(npb[0].awayTeamId, 501);
+assert.equal(npb[0].homeTeamId, 503);
 assert.equal(npb[0].awayScore, null, '未賽空白比分不得正規化為 0');
 assert.equal(npb[0].statusCode, 'S');
 assert.equal(npb[0].gameDate, '2099-08-18T08:45:00.000Z');
 assert.equal(Number.isSafeInteger(npb[0].gamePk), true);
 assert.ok(npb[0].gamePk > 999_999_999, 'Asian gamePk 必須覆蓋舊 security 上限回歸');
+
+const npbRealBoardShape = `
+<div class="unit"><a href="/bis/eng/2026/games/s2026082000001.html">
+  <div class="team_name">DeNA</div><div class="score_text score_left">&nbsp;</div>
+  <div class="round">Yokohama<br>17:45</div>
+  <div class="score_text score_right">&nbsp;</div><div class="team_name">Yomiuri</div>
+</a></div>
+<div class="unit"><a href="/bis/eng/2026/games/s2026082000002.html">
+  <div class="team_name">Hanshin</div><div class="score_text score_left">&nbsp;</div>
+  <div class="round">Kyocera Dome<br>18:00</div>
+  <div class="score_text score_right">&nbsp;</div><div class="team_name">Yakult</div>
+</a></div>`;
+const npbRealBoard = parseNpbScheduleHtml(npbRealBoardShape, '2026-08-20');
+assert.deepEqual(
+  npbRealBoard.map(game => [game.awayCode, game.homeCode]),
+  [['YOM', 'YDB'], ['YAK', 'HAN']],
+  'NPB 官方日程卡左側是主隊、右側是客隊，不得反向配對 Tai888',
+);
 
 const npbMonth = `<table class="tetblmain"><tr><td class="stschedule">
   <div class="teschedate"><a>17</a></div><div class="stvsteam">
