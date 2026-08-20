@@ -90,6 +90,17 @@ assert.equal(officialKbo.length, 2);
 assert.deepEqual(new Set(officialKbo.map(game => game.providerGameId)), new Set(['20990818LGOB0', '20990818LGOB1']));
 assert.notEqual(officialKbo[0].gamePk, officialKbo[1].gamePk, '官方 gameId 必須隔離 KBO 雙重賽');
 
+const scheduledKbo = parseKboOfficialSchedulePayload({ rows: [{ row: [
+  { Text: '08.20(목)', Class: 'day' }, { Text: '<b>19:00</b>', Class: 'time' },
+  { Text: '<span>KT</span><em><span class="same">0</span><span>vs</span><span class="same">0</span></em><span>LG</span>', Class: 'play' },
+  { Text: '', Class: 'relay' }, { Text: '' }, { Text: 'SPO-T' }, { Text: '' }, { Text: '잠실' }, { Text: '-' },
+] }] }, 2099, 8);
+assert.equal(scheduledKbo.length, 1);
+assert.equal(scheduledKbo[0].statusCode, 'S', 'KBO 賽前 same 0:0 是 placeholder，不得誤判終場');
+assert.equal(scheduledKbo[0].awayScore, null);
+assert.equal(scheduledKbo[0].homeScore, null);
+assert.equal(filterLeaguePrestartGames('KBO', scheduledKbo, Date.parse('2099-08-20T00:00:00Z')).length, 1);
+
 const cpbl = parseCpblSchedulePayload({ Data: { Games: [
   {
     GameId: '2099-A-101', KindCode: 'A', GameStatus: 'SCHEDULED', PreExeDate: '2099-08-18T18:35:00', GameSno: 101, InningSeq: 0,
