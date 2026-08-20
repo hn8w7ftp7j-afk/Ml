@@ -76,7 +76,7 @@ assert.match(page, /'紀錄實際下注'/);
 assert.match(page, /comparison\.lineLabel/);
 assert.match(page, /comparison\.waterLabel/);
 assert.match(page, /下注時：\{latest\.pick\}/);
-assert.match(page, /目前：\{row\.pick\}/);
+assert.match(page, /現在：\{row\.pick\}/);
 assert.match(page, /state\.exact/);
 assert.match(page, /目前盤口與水位已經記錄/);
 
