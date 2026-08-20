@@ -73,7 +73,18 @@ function lineTokenIn(value) {
 
 function pairLines(cell) {
   const pair = explicitPair(cell);
-  if (pair) return pair;
+  if (pair) {
+    const nonempty = pair.filter(Boolean);
+    if (nonempty.length === 1) {
+      const combined = nonempty[0];
+      const waters = [...combined.matchAll(/(?:^|\s)(\d\.\d{3})(?=\s|$)/g)];
+      if (waters.length === 2) {
+        const firstEnd = Number(waters[0].index) + waters[0][0].length;
+        return [clean(combined.slice(0, firstEnd)), clean(combined.slice(firstEnd))];
+      }
+    }
+    return pair;
+  }
   const lines = cellLines(cell);
   if (lines.length <= 2) return [lines[0] || '', lines[1] || ''];
 
@@ -101,11 +112,14 @@ function parseRunline(cell) {
   // a line token, ownership cannot be proven and guessing would invert the bet.
   if ((!awayLine && !homeLine) || (awayLine && homeLine)) return null;
   const line = awayLine || homeLine;
+  const awayWater = waterIn(awayRow);
+  const homeWater = waterIn(homeRow);
+  if (awayWater == null || homeWater == null) return null;
   return {
     lineSide: awayLine ? 'away' : 'home',
     line,
-    awayWater: waterIn(awayRow),
-    homeWater: waterIn(homeRow),
+    awayWater,
+    homeWater,
     confidence: 1,
     rawRows: [awayRow, homeRow],
   };
@@ -120,6 +134,7 @@ function parseTotal(cell) {
   if (!line) return null;
   const topWater = waterIn(topRow);
   const bottomWater = waterIn(bottomRow);
+  if (topWater == null || bottomWater == null) return null;
   const topOver = /大/u.test(topRow);
   const topUnder = /小/u.test(topRow);
   const bottomOver = /大/u.test(bottomRow);
@@ -158,12 +173,15 @@ function teamCodes(cell) {
   const lines = pair || cellLines(cell);
   const found = new Map();
   for (const [index, line] of lines.entries()) {
-    for (const match of line.matchAll(TEAM_CODE)) {
+    const matches = [...line.matchAll(TEAM_CODE)];
+    for (const [matchIndex, match] of matches.entries()) {
       const code = match[1].toUpperCase();
+      const nextIndex = matches[matchIndex + 1]?.index ?? line.length;
+      const teamText = clean(line.slice(match.index, nextIndex));
       const candidate = {
         code,
-        text: line,
-        homeMarked: HOME_MARKER.test(line),
+        text: teamText,
+        homeMarked: HOME_MARKER.test(teamText),
         order: index,
       };
       const previous = found.get(code);
@@ -247,6 +265,11 @@ function marketFingerprint(game) {
   });
 }
 
+function marketRichness(game) {
+  return [game?.fullRunline, game?.fullTotal, game?.first5Runline, game?.first5Total]
+    .reduce((count, market) => count + (market ? 1 : 0), 0);
+}
+
 function canonicalRunline(market) {
   if (!market) return null;
   return {
@@ -264,6 +287,20 @@ function canonicalTotal(market) {
     overWater: typeof market.overWater === 'number' && Number.isFinite(market.overWater) ? market.overWater : null,
     underWater: typeof market.underWater === 'number' && Number.isFinite(market.underWater) ? market.underWater : null,
   };
+}
+
+const MARKET_FIELDS = Object.freeze([
+  ['FULL_HANDICAP', 'fullRunline', 'runline', parseRunline],
+  ['FULL_TOTAL', 'fullTotal', 'total', parseTotal],
+  ['FIRST_HALF_HANDICAP', 'first5Runline', 'first5Runline', parseRunline],
+  ['FIRST_HALF_TOTAL', 'first5Total', 'first5Total', parseTotal],
+]);
+
+function marketCellState(cell, parsed, explicitLock = false) {
+  if (parsed) return 'AVAILABLE';
+  const content = cellLines(cell).join(' ').trim();
+  if (!content || explicitLock) return 'UNAVAILABLE';
+  return 'BLOCKED';
 }
 
 export function parseTai888Capture(capture, now = new Date()) {
@@ -290,6 +327,15 @@ export function parseTai888Capture(capture, now = new Date()) {
       if (!away || !home || away.code === home.code) continue;
       const timing = fallbackDateTime(row, cells, map.time, now);
       if (!timing.boardDate || !timing.time) continue;
+      const parsedMarkets = {};
+      const marketStates = {};
+      for (const [marketName, property, headerKey, parser] of MARKET_FIELDS) {
+        const index = map[headerKey];
+        const cell = index >= 0 ? cells[index] : null;
+        const parsed = index >= 0 ? parser(cell) : null;
+        parsedMarkets[property] = parsed;
+        marketStates[marketName] = marketCellState(cell, parsed, row?.marketLocked === true);
+      }
       const game = {
         awayCode: away.code,
         homeCode: home.code,
@@ -297,10 +343,8 @@ export function parseTai888Capture(capture, now = new Date()) {
         homeRaw: home.text,
         boardDate: timing.boardDate,
         boardTime: timing.time,
-        fullRunline: map.runline >= 0 ? parseRunline(cells[map.runline]) : null,
-        fullTotal: map.total >= 0 ? parseTotal(cells[map.total]) : null,
-        first5Runline: map.first5Runline >= 0 ? parseRunline(cells[map.first5Runline]) : null,
-        first5Total: map.first5Total >= 0 ? parseTotal(cells[map.first5Total]) : null,
+        ...parsedMarkets,
+        marketStates,
         rawRowText: clean(row?.text || ''),
         marketStatus: row?.marketLocked === true ? 'locked' : 'open',
       };
@@ -322,15 +366,26 @@ export function parseTai888Capture(capture, now = new Date()) {
     const key = `${game.boardDate}|${game.awayCode}|${game.homeCode}|${game.boardTime}`;
     const fingerprint = marketFingerprint(game);
     if (seen.has(key)) {
-      if (seen.get(key) !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
+      const previous = seen.get(key);
+      const richness = marketRichness(game);
+      if (richness > previous.richness) {
+        unique[previous.index] = game;
+        seen.set(key, { fingerprint, richness, index: previous.index });
+        continue;
+      }
+      if (richness < previous.richness) continue;
+      if (previous.fingerprint !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
       continue;
     }
-    seen.set(key, fingerprint);
+    seen.set(key, { fingerprint, richness: marketRichness(game), index: unique.length });
     unique.push(game);
   }
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
   const pageUrl = sanitizeTai888PageUrl(capture?.pageUrl);
   return {
+    // Keep the wire contract at v2.1.0 until every deployed backend has been
+    // upgraded. Capture internals are v2.2.0, but the v2.1 payload shape is a
+    // strict compatible subset and avoids rejecting Reader 2.1.9 during rollout.
     version: 'TAI888-READER-DOM-v2.1.0',
     league: LEAGUES.includes(capture?.league) ? capture.league : '',
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
@@ -359,6 +414,8 @@ export function canonicalReaderPayload(payload) {
       boardDate: game.boardDate,
       boardTime: game.boardTime,
       marketStatus: game.marketStatus === 'locked' ? 'locked' : 'open',
+      ...(payload?.version === 'TAI888-READER-DOM-v2.2.0'
+        && game.marketStates && Object.keys(game.marketStates).length ? { marketStates: game.marketStates } : {}),
       fullRunline: canonicalRunline(game.fullRunline),
       fullTotal: canonicalTotal(game.fullTotal),
       first5Runline: canonicalRunline(game.first5Runline),

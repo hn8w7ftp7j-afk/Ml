@@ -250,6 +250,12 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
 function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInProgress = false, betsEnabled = true, shadowMode = false }) {
   const readerBacked = item.actualSource?.provider === 'TAI888_READER_AUTO';
   const gamePrestart = gameIsPrestartNow(item.game, now);
+  const coverage = item.marketCoverage || {};
+  const availableMarkets = new Set(coverage.availableMarkets || []);
+  const blockedMarkets = new Set(coverage.blockedMarkets || []);
+  const openMarketCount = Number.isInteger(Number(coverage.openMarkets))
+    ? Number(coverage.openMarkets)
+    : new Set((item.customMarkets || []).map(row => row.market)).size;
   const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT').map(row => {
     if (!gamePrestart) return { ...row, executable: false, lineFresh: false, betEligible: false, tag: '已達官方預定開打時間｜停止記錄新下注' };
     if (readerBacked && !readerExecutable) return {
@@ -271,12 +277,14 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
     {item.referenceData && <>
-      {actualRows.length > 0 && <div className="actualBox">
-        <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>Reader同步、下注盤保存與後續盤口比較</span></div>
+      {(item.actualSource || item.marketCoverage || actualRows.length > 0) && <div className="actualBox">
+        <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>已開 {openMarketCount}/4 市場</span></div>
         {MARKET_ORDER.map(market => {
           const rows = actualRows.filter(row => row.market === market);
-          if (!rows.length) return null;
-          return <div className="marketBlock actualMarket" key={market}><div className="marketTitle"><h3>{market}</h3></div>{rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)}</div>;
+          const blocked = blockedMarkets.has(market);
+          return <div className={`marketBlock actualMarket ${blocked ? 'blockedMarket' : rows.length ? 'availableMarket' : 'unavailableMarket'}`} key={market}><div className="marketTitle"><h3>{market}</h3><span>{rows.length || availableMarkets.has(market) ? 'AVAILABLE' : blocked ? 'BLOCKED' : 'UNAVAILABLE'}</span></div>{rows.length
+            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)
+            : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
       </div>}
       <details className="details"><summary>查看模型與QA明細</summary><div className="detailGrid">
@@ -650,6 +658,7 @@ export default function Home() {
           game,
           mode: 'actual',
           actualSource: foundCredit?.source || null,
+          marketCoverage: foundCredit?.marketCoverage || null,
           readerPayloadHash: available ? credit.payloadHash : null,
           customMarkets: foundCredit?.markets || [],
           status: available ? 'queued' : 'unopened',

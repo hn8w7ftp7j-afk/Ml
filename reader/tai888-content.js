@@ -8,7 +8,8 @@
   const clean = policy.clean;
   // This timestamp is deliberately independent from capture().observedAt.
   // A capture request must not make a frozen page look newly active.
-  let lastMutationAt = Date.now();
+  const activityByLeague = Object.fromEntries((globalThis.Tai888LeagueRegistry?.ids || []).map(league => [league, 0]));
+  const fingerprintByLeague = {};
 
   // Never read or forward the full document URL.  The Reader only needs a
   // route hint, so retain the Tai888 origin/pathname and one fixed board marker.
@@ -255,7 +256,7 @@
     });
   }
 
-  function capture() {
+  function collectRecords() {
     const elements = collectCandidateElements();
     const records = [];
     const seen = new Set();
@@ -268,37 +269,59 @@
       records.push({ ...record, order: records.length });
     }
 
-    const bodyText = clean(document.body?.innerText || '');
-    const league = globalThis.Tai888LeagueRegistry.identify(bodyText);
-    const documentLooksStandardLeague = Boolean(league)
-      && /(?:時間|时间)/.test(bodyText)
-      && /(?:主客隊伍|主客队伍)/.test(bodyText)
-      && /(?:讓球|让球)/.test(bodyText)
-      && /(?:大小盤|大小盘)/.test(bodyText);
-    const normalized = league
-      ? normalizer.normalizeRowRecords(records, { expectedLeague: league, documentLooksStandardLeague })
-      : { tables: [], diagnostics: { recordCount: records.length, gameCount: 0, sawLeagueMarker: false } };
+    return { elements, records };
+  }
 
-    return {
-      version: 'TAI888-DOM-CAPTURE-v2.1.0',
-      league,
-      sourceHost: tai888SourceHost(),
-      pageUrl: currentTai888PageUrl(),
-      observedAt: new Date().toISOString(),
-      frameUrl: currentTai888PageUrl(),
-      tables: normalized.tables,
-      diagnostics: {
-        ...normalized.diagnostics,
-        rootCount: openRoots().length,
-        candidateElementCount: elements.length,
-        acceptedRecordCount: records.length,
-        documentLooksStandardLeague,
+  function stableMarketFingerprint(normalized) {
+    return JSON.stringify((normalized?.tables || []).map(table => (table.rows || []).map(row =>
+      (row.cells || []).map(cell => Array.isArray(cell?.pair) ? cell.pair : cell?.lines || []))));
+  }
+
+  function captureAll({ updateActivity = true } = {}) {
+    const { elements, records } = collectRecords();
+    const captures = [];
+    for (const league of globalThis.Tai888LeagueRegistry.ids) {
+      const normalized = normalizer.normalizeRowRecords(records, { expectedLeague: league });
+      if (!normalized.tables.length && !normalized.diagnostics?.sawLeagueMarker) continue;
+      const fingerprint = stableMarketFingerprint(normalized);
+      if (updateActivity && fingerprint && fingerprint !== fingerprintByLeague[league]) {
+        fingerprintByLeague[league] = fingerprint;
+        activityByLeague[league] = Date.now();
+      }
+      const activityAt = activityByLeague[league] || Date.now();
+      if (!activityByLeague[league]) activityByLeague[league] = activityAt;
+      captures.push({
+        version: 'TAI888-DOM-CAPTURE-v2.2.0',
         league,
-        frameHost: location.hostname,
         sourceHost: tai888SourceHost(),
-        lastMutationAt: new Date(lastMutationAt).toISOString(),
-        mutationAgeSeconds: Math.max(0, Math.floor((Date.now() - lastMutationAt) / 1000)),
-      },
+        pageUrl: currentTai888PageUrl(),
+        observedAt: new Date().toISOString(),
+        frameUrl: currentTai888PageUrl(),
+        activityAt: new Date(activityAt).toISOString(),
+        marketHash: fingerprint,
+        tables: normalized.tables,
+        diagnostics: {
+          ...normalized.diagnostics,
+          rootCount: openRoots().length,
+          candidateElementCount: elements.length,
+          acceptedRecordCount: records.length,
+          league,
+          frameHost: location.hostname,
+          sourceHost: tai888SourceHost(),
+          lastMutationAt: new Date(activityAt).toISOString(),
+          activityAt: new Date(activityAt).toISOString(),
+          mutationAgeSeconds: Math.max(0, Math.floor((Date.now() - activityAt) / 1000)),
+        },
+      });
+    }
+    return captures;
+  }
+
+  function capture() {
+    const captures = captureAll();
+    return {
+      version: 'TAI888-MULTI-LEAGUE-CAPTURE-v2.2.0',
+      captures,
     };
   }
 
@@ -316,10 +339,14 @@
 
   let mutationTimer = null;
   const observer = new MutationObserver(() => {
-    lastMutationAt = Date.now();
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(() => {
-      chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED' }).catch(() => {});
+      const before = { ...fingerprintByLeague };
+      const captures = captureAll();
+      const changedLeagues = captures
+        .map(item => item.league)
+        .filter(league => before[league] !== fingerprintByLeague[league]);
+      if (changedLeagues.length) chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', leagues: changedLeagues }).catch(() => {});
     }, 2500);
   });
   if (document.documentElement) {

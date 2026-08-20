@@ -177,6 +177,9 @@ export async function POST(request) {
           observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt,
           pageActivityAt: readerSnapshot.pageActivityAt,
           rawGameCount: readerSnapshot.rawGameCount, matchedGameCount: games.length,
+          marketCount: readerSnapshot.marketCount || 0,
+          directionCount: readerSnapshot.directionCount || 0,
+          partialGameCount: readerSnapshot.partialGameCount || 0,
           unopenedGameCount: schedule.length - games.length,
           unopenedGames: (readerSnapshot.unopenedGames || [])
             .filter(row => requestedGamePks.has(Number(row.gamePk)))

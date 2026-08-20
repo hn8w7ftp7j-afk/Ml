@@ -83,6 +83,20 @@ for (const [league, definition] of Object.entries(leagues)) {
 assert.equal(new Set([...normalizedByLeague.values()].map(row => row.payloadHash)).size, 4, 'normalized hash must bind league');
 assert.equal(new Set(Object.entries(leagues).map(([league, definition]) => rawTai888ReaderPayloadHash(signedPayload(league, definition)))).size, 4, 'raw hash must bind league');
 
+// Live Tai888 uses short/legacy MLB aliases such as ATH, WAS, SF, TB and KC.
+// The Reader hashes those exact wire codes, while the server maps them to the
+// official team ID only after the claimed payload hash has been authenticated.
+const liveAliasDefinition = {
+  awayCode: 'ATH', homeCode: 'KC', awayTeamId: 133, homeTeamId: 118,
+  away: '運動家', home: '堪薩斯市皇家',
+};
+const liveAliasPayload = signedPayload('MLB', liveAliasDefinition);
+const liveAliasResult = normalizeTai888ReaderPayload(liveAliasPayload, [{
+  league: 'MLB', gamePk: 133118, gameDate, gameNumber: 1, ...liveAliasDefinition,
+}], { league: 'MLB', deviceId: 'live-alias-reader-test', receivedAt });
+assert.equal(liveAliasResult.games.length, 1, 'Tai888 ATH/KC wire aliases must pass the Reader payload hash gate');
+assert.equal(liveAliasResult.games[0].gamePk, 133118);
+
 const downgradedNpb = signedPayload('NPB', leagues.NPB, {
   version: 'TAI888-READER-DOM-v2.0.3',
   readerVersion: '2.0.3',
@@ -102,9 +116,16 @@ delete legacyMlb.league;
 assert.equal(validateTai888ReaderEnvelope(legacyMlb, { league: 'MLB', receivedAt }).league, 'MLB');
 
 const badHash = { ...signedPayload('KBO', leagues.KBO), payloadHash: 'f'.repeat(64) };
-assert.throws(
-  () => validateTai888ReaderEnvelope(badHash, { league: 'KBO', receivedAt }),
-  error => error?.status === 409 && /payloadHash/.test(error.message),
+assert.equal(
+  validateTai888ReaderEnvelope(badHash, { league: 'KBO', receivedAt }).league,
+  'KBO',
+  'an unkeyed browser hash mismatch must not discard an otherwise valid board',
+);
+const validKboHash = rawTai888ReaderPayloadHash(signedPayload('KBO', leagues.KBO));
+assert.equal(
+  rawTai888ReaderPayloadHash(badHash),
+  validKboHash,
+  'the client-claimed hash must never control the server-owned board identity',
 );
 
 const unknownAlias = signedPayload('CPBL', { ...leagues.CPBL, awayCode: 'ZZZ999' });

@@ -7,7 +7,7 @@ const APP_PASSWORD = process.env.APP_PASSWORD || 'local-app-password';
 const PAIR_PASSWORD = process.env.READER_PAIR_SECRET || 'local-reader-password';
 const EXTENSION_ORIGIN = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const LEAGUE = 'MLB';
-const READER_VERSION = '2.1.3';
+const READER_VERSION = '2.1.9';
 
 const TEAM_CODE_BY_ID = Object.freeze({
   108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC', 113: 'CIN',
@@ -54,7 +54,7 @@ async function waitUntilReady() {
   for (let index = 0; index < 60; index += 1) {
     try {
       const { value } = await json('/api/health?t=' + Date.now(), {}, 20000);
-      if (value.ok && value.version === '9.6.0') return value;
+      if (value.ok && value.version === '9.6.2') return value;
       last = JSON.stringify(value);
     } catch (error) { last = String(error?.message || error); }
     await new Promise(resolve => setTimeout(resolve, 1000));

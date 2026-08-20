@@ -8,9 +8,15 @@
   const ids = Object.freeze(Object.keys(leagues));
   const special = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
 
-  function identify(text) {
+  function identifyAll(text) {
     const value = String(text || '').replace(/\s+/g, ' ').trim();
-    const found = ids.filter(id => leagues[id].marker.test(value));
+    return ids.filter(id => leagues[id].marker.test(value));
+  }
+
+  // `identify` is intentionally marker-scoped. Callers must pass one league
+  // heading/section label, never document.body.innerText.
+  function identify(text) {
+    const found = identifyAll(text);
     return found.length === 1 ? found[0] : null;
   }
 
@@ -19,5 +25,5 @@
     return Boolean(league && (!expectedLeague || league === expectedLeague) && !special.test(String(text || '')));
   }
 
-  globalThis.Tai888LeagueRegistry = Object.freeze({ ids, leagues, identify, standardMarker, version: 'TAI888-LEAGUES-v2.1.0' });
+  globalThis.Tai888LeagueRegistry = Object.freeze({ ids, leagues, identify, identifyAll, standardMarker, version: 'TAI888-LEAGUES-v2.2.0' });
 })();

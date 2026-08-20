@@ -9,7 +9,7 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const normalizer = context.globalThis.Tai888RowNormalizer;
 assert.ok(normalizer?.normalizeRowRecords, 'row normalizer missing');
-assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.1.0');
+assert.equal(normalizer.version, 'TAI888-SPLIT-ROW-NORMALIZER-v2.2.0');
 
 const spans = {
   time: [0, 80], teams: [80, 260], runline: [260, 380], total: [380, 500],
