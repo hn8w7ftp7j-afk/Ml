@@ -33,6 +33,18 @@ for (const league of Object.keys(leagueLabels)) {
   assert.equal(result.diagnostics.sectionCount, 1);
 }
 
+{
+  const actualNpbMarker = marker(1, 30, 'NPB', '日本職業棒球');
+  const actualNpbRecords = [
+    header(0, 0), actualNpbMarker,
+    record(2, 60, ['08-20', '讀賣巨人 馬場[右]', '0.950', '8+50 大 0.930', '', '', '0.930', '']),
+    record(3, 82, ['16:45', '橫濱DeNA灣星[主] 藤浪晋太郎', '1+95 0.950', '小 0.930', '', '', '0-40 0.930', '']),
+  ];
+  const actualNpb = normalizer.normalizeRowRecords(actualNpbRecords, { expectedLeague: 'NPB' });
+  assert.equal(actualNpb.diagnostics.sawLeagueMarker, true, 'Tai888 NPB 日本職業棒球 marker must be accepted');
+  assert.equal(actualNpb.diagnostics.gameCount, 1);
+}
+
 for (const fixture of [
   { league: 'NPB', away: '讀賣巨人 馬場[右]', home: '橫濱DeNA灣星[主] 下村[右]', codes: ['YOM', 'YDB'] },
   { league: 'KBO', away: '起亞老虎 姜載[右]', home: '韓華鷹[主] 柳賢振[左]', codes: ['KIA', 'HAN'] },
@@ -94,4 +106,4 @@ assert.match(backgroundSource, /if \(pendingRerun\)/);
 assert.match(backgroundSource, /answer\?\.capture\?\.captures/);
 assert.equal(withinTai888TabScanLimit(5), true);
 assert.doesNotMatch(backgroundSource, /最多檢查/);
-console.log('Reader 2.1.10 integrated partial-safe TEST A-J PASS');
+console.log('Reader 2.1.11 NPB marker-safe plus integrated partial-safe TEST A-J PASS');

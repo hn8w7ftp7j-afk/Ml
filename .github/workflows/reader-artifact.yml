@@ -40,10 +40,10 @@ jobs:
       - run: npm run report:release
       - uses: actions/upload-artifact@v4
         with:
-          name: Tai888-Reader-v2.1.10-INTEGRATED-PARTIAL-SAFE-${{ github.sha }}
+          name: Tai888-Reader-v2.1.11-NPB-MARKER-SAFE-${{ github.sha }}
           path: |
-            release/Tai888-Reader-v2.1.10-INTEGRATED-PARTIAL-SAFE.zip
-            release/Tai888-Reader-v2.1.10-INTEGRATED-PARTIAL-SAFE.zip.sha256
-            release/Tai888-Reader-v2.1.10-VERIFICATION.md
+            release/Tai888-Reader-v2.1.11-NPB-MARKER-SAFE.zip
+            release/Tai888-Reader-v2.1.11-NPB-MARKER-SAFE.zip.sha256
+            release/Tai888-Reader-v2.1.11-VERIFICATION.md
           if-no-files-found: error
           retention-days: 14

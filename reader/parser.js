@@ -385,7 +385,7 @@ export function parseTai888Capture(capture, now = new Date()) {
   return {
     // Keep the wire contract at v2.1.0 until every deployed backend has been
     // upgraded. Capture internals are v2.2.0, but the v2.1 payload shape is a
-    // strict compatible subset and avoids rejecting Reader 2.1.10 during rollout.
+    // strict compatible subset and avoids rejecting Reader 2.1.11 during rollout.
     version: 'TAI888-READER-DOM-v2.1.0',
     league: LEAGUES.includes(capture?.league) ? capture.league : '',
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
