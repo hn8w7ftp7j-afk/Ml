@@ -287,7 +287,10 @@ assert.equal(activeFailClosed.authorityTabId, 1, 'a hidden old tab must not repl
 assert.equal(activeFailClosed.selected.candidate.parsed.games.length, 1);
 
 const stale = candidate({ activity: '2026-08-14T16:56:00.000Z' });
-assert.equal(assessBoardCandidate(stale, now).issues.includes('stale-page-activity'), true);
+const backgroundAssessment = assessBoardCandidate(stale, now);
+assert.equal(backgroundAssessment.ok, true, 'a freshly captured background tab must not fail only because its odds did not mutate');
+assert.equal(backgroundAssessment.pageActivityAt, stale.capture.observedAt, 'capture time is the per-tab liveness heartbeat');
+assert.equal(backgroundAssessment.marketActivityAt, '2026-08-14T16:56:00.000Z', 'market mutation time remains available for audit');
 
 const captureConflict = candidate();
 captureConflict.capture.diagnostics.conflictingGameKeys = ['BAL|MIN|08-15|01:10'];

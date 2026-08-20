@@ -6,9 +6,9 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const RELEASE = path.join(ROOT, 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.1.11-NPB-MARKER-SAFE.zip';
+const ARCHIVE_NAME = 'Tai888-Reader-v2.1.12-BACKGROUND-TAB-LIVE.zip';
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
-const REPORT_NAME = 'Tai888-Reader-v2.1.11-VERIFICATION.md';
+const REPORT_NAME = 'Tai888-Reader-v2.1.12-VERIFICATION.md';
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
 const flags = new Map(process.argv.slice(2).map(argument => {
   const [name, ...rest] = argument.replace(/^--/, '').split('=');
@@ -38,7 +38,7 @@ const dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: ROOT
 const sourceRef = process.env.GITHUB_SHA || `${commit}${dirty ? '+working-tree' : ''}`;
 const generatedAt = new Date().toISOString();
 
-const report = `# Tai888 Reader 2.1.11 / Baseball EV 9.7.0 驗證報告
+const report = `# Tai888 Reader 2.1.12 / Baseball EV 9.7.0 驗證報告
 
 - 產生時間：${generatedAt}
 - 原始碼基線：\`${sourceRef}\`
@@ -54,7 +54,7 @@ const report = `# Tai888 Reader 2.1.11 / Baseball EV 9.7.0 驗證報告
 
 | Gate | 結果 | 範圍 |
 |---|---:|---|
-| 專案測試 | PASS | ${testCount} 支既有 script + Reader 2.1.11 A–J 專項，包含 NPB 真實標題、亞洲聯盟隊名、跨聯盟 DOM、partial market、freshness isolation、trailing rerun、server/auth/integrity 與 UI 回歸 |
+| 專案測試 | PASS | ${testCount} 支既有 script + Reader 2.1.12 A–J 專項，包含背景分頁存活、NPB 真實標題、亞洲聯盟隊名、跨聯盟 DOM、partial market、freshness isolation、trailing rerun、server/auth/integrity 與 UI 回歸 |
 | Production build | PASS | Next.js ${packageJson.dependencies.next} 正式建置 |
 | Production dependency audit | PASS | \`npm audit --omit=dev --audit-level=high\`，0 high/critical vulnerabilities |
 | Reader full-flow | PASS | Production route handlers + live MLB official slate：Pair → ingest → signed credit → FULL analyze → 同 hash heartbeat → signed PRICE_ONLY_REPRICE；四聯盟另由 deterministic fixture/unit gates 驗證 |
@@ -63,7 +63,7 @@ const report = `# Tai888 Reader 2.1.11 / Baseball EV 9.7.0 驗證報告
 
 ## 整合與來源判定
 
-- Reader 2.1.11 接受 Tai888 實際使用的 NPB「日本職業棒球」標題，並以 MLB／NPB／KBO／CPBL 四個權威分頁獨立辨識、雜湊、同步與顯示狀態。
+- Reader 2.1.12 以每次實際 capture 作為各分頁獨立存活證明；背景分頁不再因盤口三分鐘未變而被誤判過期，並保留 market mutation 時間供稽核。
 - 本 ZIP 只取自目前 \`reader/\` 的固定 12 檔白名單；封裝器會把交付目錄內不同內容的舊 Tai888 ZIP 移至相鄰的 ignored quarantine 目錄。
 - MLB 保留正式分析相容性；NPB／KBO／CPBL 即使完整 ingest，網站分析仍由 server 強制鎖為 shadow、不可下注。
 

@@ -165,17 +165,23 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   if (dates.size !== 1) issues.push(`board-date-count:${dates.size}`);
   if (dates.size === 1 && parsed.boardDate !== [...dates][0]) issues.push('board-date-mismatch');
 
-  const pageActivityAt = String(diagnostics.lastMutationAt || '');
-  const pageActivityTime = Date.parse(pageActivityAt);
-  const ageMs = Number(now) - pageActivityTime;
-  if (!Number.isFinite(pageActivityTime)) issues.push('missing-page-activity');
-  else if (ageMs < -30_000) issues.push('future-page-activity');
-  else if (ageMs > BOARD_ACTIVITY_TTL_MS) issues.push('stale-page-activity');
-
   const observedTime = Date.parse(capture.observedAt || '');
   const observedAgeMs = Number(now) - observedTime;
   if (!Number.isFinite(observedTime)) issues.push('missing-observed-time');
   else if (observedAgeMs < -30_000 || observedAgeMs > 60_000) issues.push('stale-observation');
+
+  // A background Tai888 tab can remain perfectly readable while Chrome
+  // throttles DOM mutations.  `lastMutationAt` is therefore audit metadata
+  // about when the price content changed, not proof that the tab is dead.
+  // The explicit capture response (`observedAt`) is the per-tab liveness proof
+  // used by the server heartbeat.  This keeps all four league tabs usable
+  // without requiring the user to foreground each one.
+  const marketActivityAt = String(diagnostics.lastMutationAt || '');
+  const marketActivityTime = Date.parse(marketActivityAt);
+  if (!Number.isFinite(marketActivityTime)) issues.push('missing-market-activity');
+  else if (marketActivityTime > Number(now) + 30_000) issues.push('future-market-activity');
+  const pageActivityAt = Number.isFinite(observedTime) ? new Date(observedTime).toISOString() : '';
+  const pageActivityTime = observedTime;
 
   return {
     ok: issues.length === 0,
@@ -187,6 +193,8 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
     ignoredDuplicateGameCount,
     pageActivityAt,
     pageActivityTime,
+    marketActivityAt,
+    marketActivityTime,
     // Host/frame metadata identifies the source but must not make two frames
     // with the exact same contracts appear to disagree.
     payloadFingerprint: games.length ? canonicalReaderPayload({ ...parsed, games, sourceHost: '' }) : '',

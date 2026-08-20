@@ -106,4 +106,4 @@ assert.match(backgroundSource, /if \(pendingRerun\)/);
 assert.match(backgroundSource, /answer\?\.capture\?\.captures/);
 assert.equal(withinTai888TabScanLimit(5), true);
 assert.doesNotMatch(backgroundSource, /最多檢查/);
-console.log('Reader 2.1.11 NPB marker-safe plus integrated partial-safe TEST A-J PASS');
+console.log('Reader 2.1.12 background-tab-live plus integrated partial-safe TEST A-J PASS');
