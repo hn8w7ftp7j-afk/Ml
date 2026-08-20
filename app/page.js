@@ -150,6 +150,9 @@ async function requestJSON(url, options = {}, timeoutMs = 180000) {
     if (!response.ok || data.ok === false) {
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
+      error.code = data.code || '';
+      error.blocking = Array.isArray(data.blocking) ? data.blocking : [];
+      error.warnings = Array.isArray(data.warnings) ? data.warnings : [];
       throw error;
     }
     return data;
@@ -600,7 +603,7 @@ export default function Home() {
     const actualMarkets = task.actualMarkets || [];
     updateBoard(game.gamePk, item => ({ ...item, status: 'running', statusLabel: '建立Shadow比分分布中…' }));
     try {
-      const baseData = await requestJSON('/api/analyze', {
+      const analyzeRequest = () => requestJSON('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
         body: JSON.stringify({
@@ -611,6 +614,15 @@ export default function Home() {
           settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
         }),
       }, 180000);
+      let baseData;
+      try {
+        baseData = await analyzeRequest();
+      } catch (firstError) {
+        const retryable = !Number(firstError?.status) || Number(firstError.status) >= 500 || /逾時|timeout|fetch|network/i.test(String(firstError?.message || ''));
+        if (!retryable) throw firstError;
+        await new Promise(resolve => window.setTimeout(resolve, 900));
+        baseData = await analyzeRequest();
+      }
       if (task.generation !== analysisGenerationRef.current) return false;
       snapshots.current.set(game.gamePk, baseData.repriceSnapshot);
       updateBoard(game.gamePk, item => ({
@@ -627,12 +639,15 @@ export default function Home() {
     } catch (cause) {
       if (task.generation !== analysisGenerationRef.current) return false;
       const message = String(cause?.message || cause);
-      const blocked = /資料不足｜不評分|比賽已開打或結束/.test(message);
+      const blocked = /資料不足｜不評分|比賽已開打或結束/.test(message) || cause?.code === 'CORE_DATA_MISSING';
+      const blocking = Array.isArray(cause?.blocking) && cause.blocking.length ? `｜缺少：${cause.blocking.join('、')}` : '';
+      const diagnostic = `${message}${blocking}`;
+      console.error('[CLIENT_ANALYZE_FAILED]', { league, gamePk: game?.gamePk, matchup: matchup(game), status: cause?.status || null, code: cause?.code || null, blocking: cause?.blocking || [], message });
       updateBoard(game.gamePk, item => ({
         ...item,
         status: blocked ? 'blocked' : 'failed',
         statusLabel: blocked ? '資料不足｜不評分' : '分析失敗',
-        error: message,
+        error: diagnostic,
       }));
       return false;
     } finally {
