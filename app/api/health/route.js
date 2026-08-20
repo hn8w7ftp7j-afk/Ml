@@ -21,15 +21,17 @@ import { ANALYSIS_CACHE_VERSION } from '../../../lib/analysis-cache-v9.js';
 import { readerPairingConfigured } from '../../../lib/reader-auth-v2.js';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 import { LEAGUE_REGISTRY_VERSION, publicLeagueRegistry } from '../../../lib/leagues.js';
+import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/reference-lines.js';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const readerSnapshot = await loadReaderSnapshot('MLB');
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
+  const referenceStatus = referenceProviderStatus();
   return NextResponse.json({
     ok: true,
-    version: '10.3.1',
+    version: '10.4.0',
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
@@ -48,7 +50,12 @@ export async function GET() {
     uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
     repriceVersion: REPRICE_VERSION,
     analysisCacheVersion: ANALYSIS_CACHE_VERSION,
-    referenceLinesEnabled: false,
+    referenceLinesEnabled: referenceStatus.consensusReady,
+    referenceConsensusReady: referenceStatus.consensusReady,
+    anyReferenceProviderConfigured: referenceStatus.anyConfigured,
+    referenceLinesVersion: REFERENCE_LINES_VERSION,
+    referenceProviders: referenceStatus.providers,
+    referenceConsensusPolicy: 'THREE_UNIQUE_BOOKS_5M_FRESH_3M_SYNCHRONIZED_EXACT_CONTRACT',
     creditLinesProvider: 'TAI888_READER_AUTO',
     readerPairingConfigured: readerPairingConfigured(),
     readerStoreVersion: READER_STORE_VERSION,

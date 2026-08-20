@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import { estimateRunProfileV103, MLB_RUN_MODEL_V103_VERSION } from '../lib/mlb-run-model-v103.js';
-import { qualifyEvV103, UNVERIFIED_EXTREME_EV_LIMIT } from '../lib/ev-calibration-v103.js';
-import { applyIndependentMarketVerification, MARKET_VERIFICATION_V2_VERSION } from '../lib/market-verification-v2.js';
+import {
+  qualifyEvV103,
+  EV_CALIBRATION_V103_VERSION,
+  MAX_RAW_SCENARIO_EV_SPREAD,
+  MAX_WEIGHTED_ROBUST_EV_GAP,
+  UNVERIFIED_EXTREME_EV_LIMIT,
+} from '../lib/ev-calibration-v103.js';
+import {
+  applyIndependentMarketVerification,
+  MAX_ACTUAL_REFERENCE_DISTANCE_MS,
+  MARKET_VERIFICATION_V2_VERSION,
+  MINIMUM_CONSENSUS_BOOKS,
+} from '../lib/market-verification-v2.js';
 
 function team({ starterEra = 4.2, starterWhip = 1.30, starterK9 = 8.6, starterBB9 = 3.2, starterHR9 = 1.15, starterIp = 110, starterStarts = 21 } = {}) {
   return {
@@ -47,6 +58,17 @@ assert.ok(strongLongStarter.components.homeStarterExpectedInnings > strongShortS
 assert.ok(strongLongStarter.components.homeStarter >= 0.84, 'correlated ERA/FIP/WHIP inputs must not create an unbounded pitching multiplier');
 
 const gate = { passedForShadowScore: true, quality: 0.90 };
+const eligibleVerification = (overrides = {}) => ({
+  referencePriorEligible: true,
+  referenceNoVigProbability: 0.52,
+  referenceRobustProbability: 0.515,
+  referenceConsensusBookCount: MINIMUM_CONSENSUS_BOOKS,
+  referenceConsensusTimeSpanMs: 2 * 60 * 1000,
+  referenceConsensusFreshnessMaxMs: 4 * 60 * 1000,
+  referenceProbabilitySpread: 0.02,
+  referenceProbabilityMad: 0.005,
+  ...overrides,
+});
 const noPriorExtreme = qualifyEvV103({
   row: { water: 0.94, marketVerification: { referencePriorEligible: false } },
   rawWeightedEV: 0.22,
@@ -62,18 +84,76 @@ assert.equal(noPriorExtreme.status, 'EXTREME_EV_HELD_FOR_LOCKED_OOS');
 assert.match(noPriorExtreme.reasons.join('｜'), /locked OOS/);
 
 const moderateNoPrior = qualifyEvV103({
-  row: { water: 0.94, marketVerification: { referencePriorEligible: false } },
+  row: {
+    water: 0.94,
+    marketVerification: {
+      referencePriorEligible: false,
+      priorIneligibleReason: '缺少至少3家獨立國際市場的同合約去水機率',
+    },
+  },
   rawWeightedEV: 0.08,
   rawRobustEV: 0.025,
   modelProbability: 0.55,
   rebateRate: 0.015,
   gate,
 });
-assert.equal(moderateNoPrior.qualified, true);
-assert.equal(moderateNoPrior.weightedEV, 0.08);
+assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.0/);
+assert.equal(moderateNoPrior.qualified, false, 'V10.4 must fail closed when no independent consensus prior exists');
+assert.equal(moderateNoPrior.weightedEV, null);
+assert.equal(moderateNoPrior.robustEV, null);
+assert.equal(moderateNoPrior.status, 'CALIBRATION_BLOCK');
+assert.match(moderateNoPrior.reasons.join('｜'), /3家獨立國際市場/);
+
+const qualifiedConsensus = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification(),
+  },
+  rawWeightedEV: 0.045,
+  rawRobustEV: 0.012,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(qualifiedConsensus.qualified, true);
+assert.equal(qualifiedConsensus.status, 'QUALIFIED_WITH_INDEPENDENT_EXACT_CONTRACT_CONSENSUS');
+assert.ok(Math.abs(qualifiedConsensus.weightedEV - qualifiedConsensus.referenceEV) < 1e-12);
+assert.ok(Math.abs(qualifiedConsensus.robustEV - qualifiedConsensus.referenceRobustEV) < 1e-12);
+assert.notEqual(qualifiedConsensus.weightedEV, qualifiedConsensus.rawWeightedEV, 'usable W must come from independent price consensus, not raw model EV');
+assert.ok(qualifiedConsensus.robustEV <= qualifiedConsensus.weightedEV);
+
+const unstableRawScenario = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification(),
+  },
+  rawWeightedEV: 0.08,
+  rawRobustEV: -0.01,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(unstableRawScenario.qualified, false);
+assert.ok(unstableRawScenario.rawScenarioSpread > MAX_RAW_SCENARIO_EV_SPREAD);
+assert.match(unstableRawScenario.reasons.join('｜'), /中央與壓力情境EV差距/);
+
+const unstableConsensus = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification({ referenceNoVigProbability: 0.54 }),
+  },
+  rawWeightedEV: 0.04,
+  rawRobustEV: 0.01,
+  modelProbability: 0.54,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(unstableConsensus.qualified, false);
+assert.ok(unstableConsensus.weightedRobustGap > MAX_WEIGHTED_ROBUST_EV_GAP);
+assert.match(unstableConsensus.reasons.join('｜'), /獨立市場加權與保守EV差距/);
 
 const confirmedExtreme = qualifyEvV103({
-  row: { water: 0.94, marketVerification: { referencePriorEligible: true, referenceNoVigProbability: 0.55 } },
+  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.55, referenceRobustProbability: 0.545 }) },
   rawWeightedEV: 0.20,
   rawRobustEV: 0.12,
   modelProbability: 0.56,
@@ -87,7 +167,7 @@ assert.equal(confirmedExtreme.status, 'EXTREME_EV_HELD_FOR_LOCKED_OOS');
 assert.match(confirmedExtreme.reasons.join('｜'), /只供稽核/);
 
 const disagreement = qualifyEvV103({
-  row: { water: 0.94, marketVerification: { referencePriorEligible: true, referenceNoVigProbability: 0.51 } },
+  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.51, referenceRobustProbability: 0.505 }) },
   rawWeightedEV: 0.20,
   rawRobustEV: 0.12,
   modelProbability: 0.63,
@@ -102,23 +182,71 @@ const actual = [
   { market: '全場大小', pick: '大8.5', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineAsOf: observedAt },
   { market: '全場大小', pick: '小8.5', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineAsOf: observedAt },
 ];
+const consensusBookKeys = ['book-a', 'book-b', 'book-c'];
+const consensusEvidence = {
+  referenceProbabilitySpread: 0.02,
+  referenceProbabilityMad: 0.005,
+  referenceEvidenceEligible: true,
+  consensusBookCount: MINIMUM_CONSENSUS_BOOKS,
+  consensusBookKeys,
+  consensusOldestObservedAt: observedAt,
+  consensusNewestObservedAt: observedAt,
+  consensusTimeSpanMs: 0,
+  consensusFreshnessMaxMs: 0,
+  consensusSnapshotId: 'THE_ODDS_API:event-1:TOTAL:8.50:snapshot-1',
+};
 const references = [
-  { market: '全場大小', pick: '大8.5', water: 0.91, sourceType: 'INTERNATIONAL', provider: 'THE_ODDS_API_CONSENSUS', providerEventId: 'event-1', lineAsOf: observedAt },
-  { market: '全場大小', pick: '小8.5', water: 0.95, sourceType: 'INTERNATIONAL', provider: 'THE_ODDS_API_CONSENSUS', providerEventId: 'event-1', lineAsOf: observedAt },
+  {
+    market: '全場大小', pick: '大8.5', water: 0.91, sourceType: 'INTERNATIONAL', provider: 'THE_ODDS_API_CONSENSUS', providerEventId: 'event-1', lineAsOf: observedAt,
+    referenceNoVigProbability: 0.51, referenceRobustProbability: 0.5025,
+    referenceProbabilityMinimum: 0.50, referenceProbabilityMaximum: 0.52,
+    ...consensusEvidence,
+  },
+  {
+    market: '全場大小', pick: '小8.5', water: 0.95, sourceType: 'INTERNATIONAL', provider: 'THE_ODDS_API_CONSENSUS', providerEventId: 'event-1', lineAsOf: observedAt,
+    referenceNoVigProbability: 0.49, referenceRobustProbability: 0.4825,
+    referenceProbabilityMinimum: 0.48, referenceProbabilityMaximum: 0.50,
+    ...consensusEvidence,
+  },
 ];
-const verified = applyIndependentMarketVerification(actual, references);
+const verificationNow = Date.parse(observedAt) + 4 * 60 * 1000;
+const verified = applyIndependentMarketVerification(
+  actual,
+  references,
+  MAX_ACTUAL_REFERENCE_DISTANCE_MS,
+  verificationNow,
+);
 assert.equal(verified[0].marketVerification.version, MARKET_VERIFICATION_V2_VERSION);
 assert.equal(verified[0].marketVerification.referencePriorEligible, true);
 assert.equal(verified[1].marketVerification.referencePriorEligible, true);
+assert.equal(verified[0].marketVerification.referenceConsensusBookCount, MINIMUM_CONSENSUS_BOOKS);
+assert.ok(verified[0].marketVerification.referenceRobustProbability <= verified[0].marketVerification.referenceNoVigProbability);
 assert.ok(Math.abs(
   verified[0].marketVerification.referenceNoVigProbability
     + verified[1].marketVerification.referenceNoVigProbability
     - 1
 ) < 1e-12);
 
+const insufficientBooks = applyIndependentMarketVerification(
+  actual,
+  references.map(row => ({
+    ...row,
+    consensusBookCount: MINIMUM_CONSENSUS_BOOKS - 1,
+    consensusBookKeys: consensusBookKeys.slice(0, MINIMUM_CONSENSUS_BOOKS - 1),
+    referenceEvidenceEligible: false,
+  })),
+  MAX_ACTUAL_REFERENCE_DISTANCE_MS,
+  verificationNow,
+);
+assert.equal(insufficientBooks[0].marketVerification.referencePriorEligible, false);
+assert.equal(insufficientBooks[0].marketVerification.referenceNoVigProbability, null);
+assert.match(insufficientBooks[0].marketVerification.priorIneligibleReason, /至少需要3家/);
+
 const integerVerified = applyIndependentMarketVerification(
   [{ ...actual[0], pick: '大8平' }, { ...actual[1], pick: '小8平' }],
   [{ ...references[0], pick: '大8平' }, { ...references[1], pick: '小8平' }],
+  MAX_ACTUAL_REFERENCE_DISTANCE_MS,
+  verificationNow,
 );
 assert.equal(integerVerified[0].marketVerification.referencePriorEligible, false);
 assert.match(integerVerified[0].marketVerification.priorIneligibleReason, /走水|部分輸贏/);

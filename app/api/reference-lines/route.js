@@ -24,11 +24,36 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const cache = globalThis.__MLB_REFERENCE_LINES_CACHE_V93__ || new Map();
-globalThis.__MLB_REFERENCE_LINES_CACHE_V93__ = cache;
+const cache = globalThis.__MLB_REFERENCE_LINES_CACHE_V104__ || new Map();
+globalThis.__MLB_REFERENCE_LINES_CACHE_V104__ = cache;
 let lastJbotRequestAt = globalThis.__MLB_LAST_JBOT_REQUEST_AT__ || 0;
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+function mergeReferenceResults(results) {
+  const byGame = new Map();
+  const unmatched = [];
+  for (const result of results.filter(Boolean)) {
+    unmatched.push(...(Array.isArray(result.unmatched) ? result.unmatched : []));
+    for (const row of Array.isArray(result.games) ? result.games : []) {
+      const gamePk = Number(row?.gamePk || row?.game?.gamePk);
+      if (!gamePk) continue;
+      const current = byGame.get(gamePk) || { ...row, gamePk, markets: [], sources: [] };
+      current.markets.push(...(Array.isArray(row.markets) ? row.markets : []));
+      if (row.source) current.sources.push(row.source);
+      current.source = current.sources.length === 1
+        ? current.sources[0]
+        : {
+          provider: 'MULTI_REFERENCE_CONSENSUS',
+          label: '獨立參考盤｜多來源',
+          sourceType: 'INTERNATIONAL',
+          observedAt: current.sources.map(source => source.observedAt).filter(Boolean).sort().at(-1) || null,
+        };
+      byGame.set(gamePk, current);
+    }
+  }
+  return { games: [...byGame.values()], unmatched };
+}
 
 function sanitizeSchedule(rows, league) {
   return (Array.isArray(rows) ? rows : []).slice(0, 40).map(game => ({
@@ -141,7 +166,7 @@ export async function POST(request) {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'reference-lines-v9-3', limit: 12, windowMs: 10 * 60 * 1000 });
+    const rate = checkRateLimit(request, { id: 'reference-lines-v10-4', limit: 60, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500_000);
     const league = requestedLeagueId(body?.league);
@@ -184,19 +209,25 @@ export async function POST(request) {
     }
 
     const fullSlateIdentity = fullOfficialSlate.map(game => `${game.gamePk}:${game.awayTeamId}:${game.homeTeamId}:${game.gameNumber}:${game.gameDate}`).join('|');
-    const key = `${league}:${status.primary}:${date}:${fullSlateIdentity}:${schedule.map(game => game.gamePk).join(',')}`;
+    const configuredProviders = status.providers.filter(provider => provider.configured).map(provider => provider.id).sort();
+    const key = `${league}:${configuredProviders.join('+')}:${date}:${fullSlateIdentity}:${schedule.map(game => game.gamePk).join(',')}`;
     const cached = cache.get(key);
     if (cached && cached.expiresAt > Date.now()) return NextResponse.json({ ...cached.payload, cache: 'HIT' }, { headers: { 'Cache-Control': 'no-store' } });
 
     const failures = [];
-    let result = null;
-    try { result = await loadJbot(date, fullOfficialSlate); }
-    catch (error) { failures.push(`JBot：${String(error?.message || error)}`); }
-    if (!result) {
-      try { result = await loadOddsApi(date, fullOfficialSlate); }
+    const results = [];
+    if (status.providers.find(provider => provider.id === 'JBOT_TAIWAN_SPORTS_LOTTERY')?.configured) {
+      try { results.push(await loadJbot(date, fullOfficialSlate)); }
+      catch (error) { failures.push(`JBot：${String(error?.message || error)}`); }
+    }
+    if (status.providers.find(provider => provider.id === 'THE_ODDS_API_CONSENSUS')?.configured) {
+      try { results.push(await loadOddsApi(date, fullOfficialSlate)); }
       catch (error) { failures.push(`The Odds API：${String(error?.message || error)}`); }
     }
-    if (!result) return NextResponse.json({ ok: false, error: failures.join('；') || '沒有可用的合法參考盤來源' }, { status: 502 });
+    const result = mergeReferenceResults(results);
+    if (!result.games.length && failures.length) {
+      return NextResponse.json({ ok: false, error: failures.join('；') || '沒有可用的合法參考盤來源' }, { status: 502 });
+    }
 
     const requestedGamePks = new Set(schedule.map(game => Number(game.gamePk)));
     const filteredGames = (Array.isArray(result.games) ? result.games : []).filter(row => requestedGamePks.has(Number(row.gamePk)));
@@ -205,14 +236,16 @@ export async function POST(request) {
       ok: true,
       league,
       configured: true,
+      consensusReady: status.consensusReady,
       version: REFERENCE_LINES_VERSION,
-      provider: result.provider,
+      provider: configuredProviders.join('+') || null,
       providers: status.providers,
       games: signedGames,
       unmatched: result.unmatched,
-      requestWindow: result.requestWindow || null,
+      requestWindow: results.find(row => row?.requestWindow)?.requestWindow || null,
       fetchedAt: new Date().toISOString(),
       failures,
+      message: status.consensusReady ? '' : '已設定一般參考盤，但尚未設定 The Odds API 三莊同合約共識；V10.4 將安全阻擋所有 W/R 與排名。',
       cache: 'MISS',
     };
     cache.set(key, { payload, expiresAt: Date.now() + 3 * 60 * 1000 });

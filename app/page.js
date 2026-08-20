@@ -24,9 +24,11 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.3.1';
+const VERSION = '10.4.0';
+const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
+const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
 const ANALYSIS_REQUEST_TIMEOUT_MS = 65_000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
@@ -92,12 +94,14 @@ function safeParse(value) {
 function loadCompactStore() {
   if (typeof window === 'undefined') return { settings: DEFAULT_SETTINGS, bets: [], activeLeague: 'MLB' };
   try {
+    const backup = safeParse(window.localStorage.getItem(BET_BACKUP_STORAGE) || 'null');
+    const backupBets = Array.isArray(backup) ? backup.slice(0, 5000) : [];
     const own = safeParse(window.localStorage.getItem(STORAGE) || 'null');
     if (own && typeof own === 'object') {
-      const backup = safeParse(window.localStorage.getItem(BET_BACKUP_STORAGE) || 'null');
+      const primaryBets = Array.isArray(own.bets) ? own.bets.slice(0, 5000) : [];
       return {
         settings: { ...DEFAULT_SETTINGS, ...(own.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(own.settings?.fallbackWater || {}) } },
-        bets: Array.isArray(own.bets) && own.bets.length ? own.bets.slice(0, 5000) : Array.isArray(backup) ? backup.slice(0, 5000) : [],
+        bets: cloudBetMigrationComplete() ? primaryBets : recoverLocalBetCopies(primaryBets, backupBets),
         activeLeague: normalizeLeagueId(own.activeLeague),
       };
     }
@@ -106,9 +110,14 @@ function loadCompactStore() {
       if (!legacy || typeof legacy !== 'object') continue;
       return {
         settings: { ...DEFAULT_SETTINGS, ...(legacy.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(legacy.settings?.fallbackWater || {}) } },
-        bets: Array.isArray(legacy.bets) ? legacy.bets.slice(0, 5000) : [],
+        bets: cloudBetMigrationComplete()
+          ? (Array.isArray(legacy.bets) ? legacy.bets.slice(0, 5000) : [])
+          : recoverLocalBetCopies(Array.isArray(legacy.bets) ? legacy.bets.slice(0, 5000) : [], backupBets),
         activeLeague: normalizeLeagueId(legacy.activeLeague || 'MLB'),
       };
+    }
+    if (!cloudBetMigrationComplete() && backupBets.length) {
+      return { settings: DEFAULT_SETTINGS, bets: backupBets, activeLeague: 'MLB' };
     }
   } catch {
     // Safari private mode, quota failures and corrupted legacy storage must never crash the app.
@@ -120,6 +129,7 @@ function saveCompactStore(value) {
   try {
     window.localStorage.setItem(STORAGE, JSON.stringify({ settings: value.settings, bets: value.bets.slice(0, 5000), activeLeague: normalizeLeagueId(value.activeLeague) }));
     if (value.bets.length) window.localStorage.setItem(BET_BACKUP_STORAGE, JSON.stringify(value.bets.slice(0, 5000)));
+    else if (cloudBetMigrationComplete()) window.localStorage.removeItem(BET_BACKUP_STORAGE);
     return true;
   } catch {
     try { window.localStorage.removeItem(STORAGE); } catch {}
@@ -127,16 +137,34 @@ function saveCompactStore(value) {
   }
 }
 
-function mergeBetCollections(first, second) {
-  const merged = [];
+function recoverLocalBetCopies(primary, backup) {
+  const result = [];
   const known = new Set();
-  for (const bet of [...(Array.isArray(first) ? first : []), ...(Array.isArray(second) ? second : [])]) {
+  for (const bet of [...(Array.isArray(primary) ? primary : []), ...(Array.isArray(backup) ? backup : [])]) {
     const key = String(bet?.id || `${bet?.league || 'MLB'}|||${bet?.date || ''}|||${bet?.gamePk || ''}|||${bet?.market || ''}|||${bet?.pick || ''}|||${bet?.water || ''}|||${bet?.placedAt || ''}`);
     if (!key || known.has(key)) continue;
     known.add(key);
-    merged.push(bet);
+    result.push(bet);
   }
-  return merged.sort((a, b) => Date.parse(b.placedAt || 0) - Date.parse(a.placedAt || 0)).slice(0, 5000);
+  return result.sort((left, right) => Date.parse(right?.placedAt || 0) - Date.parse(left?.placedAt || 0)).slice(0, 5000);
+}
+
+function migrateLegacyLocalBets(values) {
+  return (Array.isArray(values) ? values : []).slice(0, 5000).map(bet => (
+    bet && typeof bet === 'object' && !Array.isArray(bet) && !bet.league
+      ? { ...bet, league: 'MLB' }
+      : bet
+  ));
+}
+
+function cloudBetMigrationComplete() {
+  try { return window.localStorage.getItem(BET_CLOUD_MIGRATION_STORAGE) === '1'; }
+  catch { return false; }
+}
+
+function markCloudBetMigrationComplete() {
+  try { window.localStorage.setItem(BET_CLOUD_MIGRATION_STORAGE, '1'); }
+  catch {}
 }
 
 async function requestJSON(url, options = {}, timeoutMs = 180000) {
@@ -227,12 +255,12 @@ function SummaryCards({ summary }) {
 function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   const weightedEV = Number(row?.weightedEV);
   const robustEV = Number(row?.robustEV);
-  if (row?.evCalibration?.qualified === false) return { icon: '⚠️', label: 'EV校準阻擋', ranking: false, reason: '極端EV或獨立市場先驗未通過' };
+  if (row?.evCalibration?.qualified !== true) return { icon: '⚠️', label: '市場校準阻擋', ranking: false, reason: row?.evCalibration?.reasons?.[0] || '缺少合格獨立市場同合約共識' };
   if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
   if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
   if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
-  if (!Number.isFinite(weightedEV) || weightedEV <= 0) return { icon: '⚪', label: 'PASS', ranking: false, reason: '加權EV未大於0' };
-  if (!Number.isFinite(robustEV) || robustEV <= 0) return { icon: '🟡', label: '觀察', ranking: false, reason: '穩健EV未大於0' };
+  if (!Number.isFinite(weightedEV) || weightedEV <= 0) return { icon: '⚪', label: 'PASS', ranking: false, reason: '市場價差W未大於0' };
+  if (!Number.isFinite(robustEV) || robustEV <= 0) return { icon: '🟡', label: '觀察', ranking: false, reason: '跨莊保守R未大於0' };
   if (formulaScore < 7.2) return { icon: '⚪', label: 'PASS', ranking: false, reason: '公式分數未達7.2' };
   if (formulaScore >= 8.5) return { icon: '🔥', label: '8.5級分析候選', ranking: true, reason: '雙EV為正且達8.5' };
   if (formulaScore >= 8.0) return { icon: '🟢', label: '8.0級分析候選', ranking: true, reason: '雙EV為正且達8.0' };
@@ -247,27 +275,28 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? Number(row.formulaDiagnosticScore) : null;
   const qaPassed = row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false;
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
-  const calibrationBlocked = row?.evCalibration?.qualified === false;
+  const calibrationBlocked = row?.evCalibration?.qualified !== true;
+  const calibrationReason = row?.evCalibration?.reasons?.[0] || '缺少至少3家新鮮、同步且同合約的獨立國際市場共識';
   const qaFailures = scoreQaFailures(row);
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
-  const scoreClass = formulaScore == null ? 'pass'
+  const scoreClass = calibrationBlocked ? 'warning' : formulaScore == null ? 'pass'
     : !qaPassed || !leagueValidated ? 'warning'
       : formulaScore >= 8.5 ? 'strongest' : formulaScore >= 7.2 ? 'candidate' : 'pass';
   const scoreTitle = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? 'EV未通過安全校準｜不顯示EV、不建立S分數、不列排名'
+      ? '市場共識未通過安全校準｜不顯示W/R、不建立S分數、不列排名'
       : formulaScore == null
         ? '缺少合法水位或雙EV，不能補造分數'
         : !qaPassed
           ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-          : `V10.3.1固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+          : `V10.4.0市場價差影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
   const scoreMetaText = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? `V10.3.1安全阻擋｜原始極端值僅保留於伺服器稽核資料，不作有效EV、不評分、不列排名`
-      : `V10.3.1棒球分布勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜加權EV ${pct(row.weightedEV)}｜穩健EV ${pct(row.robustEV)}`;
+      ? `V10.4.0市場校準阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
+      : `獨立市場共識勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜市場價差W ${pct(row.weightedEV)}｜跨莊保守R ${pct(row.robustEV)}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
@@ -338,7 +367,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.3.1 極端EV安全評估</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；15%以上原始EV一律等待外樣本驗證</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.4.0 獨立同合約市場校準</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；只有3家以上不同莊家、5分鐘內且同步的同合約共識才建立影子W/R</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
@@ -379,8 +408,8 @@ function LeagueSetupPanel({ config }) {
 
 function LeagueShadowPanel({ config }) {
   return <section className="leagueSetup panel">
-    <div className="setupHead"><div><span className="kicker">V10 分數驗證</span><h2>{config.label}目前顯示完整分析分數（驗證中）</h2></div><span className="state shadow">尚未啟用正式推薦</span></div>
-    <p className="muted">目前分數正在驗證準確度，可查看完整分析與排名；尚未啟用正式下注建議、正式Unit或以模型分數計算的正式績效。</p>
+    <div className="setupHead"><div><span className="kicker">V10.4 安全校準</span><h2>{config.label}只顯示合格的獨立市場價差影子分析</h2></div><span className="state shadow">尚未啟用正式推薦</span></div>
+    <p className="muted">原始棒球模型只能阻擋結果，不能自行產生EV。沒有至少3家不同莊家、5分鐘內、同一賽事同一合約且分散合格的共識時，一律不評分；正式推薦與Unit仍等待locked OOS與forward驗證。</p>
   </section>;
 }
 
@@ -413,6 +442,7 @@ export default function Home() {
   const analysisGenerationRef = useRef(0);
   const readerStatusRef = useRef(null);
   const readerStatusHighWaterRef = useRef(null);
+  const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
   const settlementBusyRef = useRef(false);
   const activeLeague = leagueConfig(league);
@@ -423,8 +453,11 @@ export default function Home() {
   const shadowMode = activeLeague.status === 'shadow';
   const readerCoverage = readerCoverageCounts(readerStatus);
   const readerPendingText = coveragePendingText(readerCoverage);
+  const consensusReady = health?.referenceConsensusReady === true;
   const shadowRanking = useMemo(() => board.flatMap(item => (item.customData?.analysis?.results || [])
     .filter(row => row.sourceType === 'ACTUAL_TW_CREDIT'
+      && row.evCalibration?.qualified === true
+      && row.marketVerification?.referencePriorEligible === true
       && row.shadowDiagnosticScore != null
       && Number.isFinite(Number(row.shadowDiagnosticScore))
       && row.scoreAudit?.ok === true
@@ -433,7 +466,7 @@ export default function Home() {
       && Number(row.weightedEV) > 0
       && Number(row.robustEV) > 0
       && Number(row.shadowDiagnosticScore) >= 7.2)
-    .map(row => ({ gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
+    .map(row => ({ item, row, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
       water: row.water, score: Number(row.shadowDiagnosticScore), weightedEV: row.weightedEV, robustEV: row.robustEV })))
     .sort((left, right) => right.score - left.score || Number(right.robustEV || 0) - Number(left.robustEV || 0)), [board]);
 
@@ -471,7 +504,10 @@ export default function Home() {
       const data = await requestJSON('/api/bets', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settleOpen', league: targetLeague, limit: 500 }),
       }, 120000);
-      if (Array.isArray(data.bets)) setBets(current => mergeBetCollections(data.bets, current));
+      if (Array.isArray(data.bets)) {
+        betsRef.current = data.bets;
+        setBets(data.bets);
+      }
     } catch {
       // A temporary result-provider failure must not erase or rewrite the ledger.
     } finally {
@@ -481,16 +517,25 @@ export default function Home() {
 
   useEffect(() => {
     const initial = loadCompactStore();
+    const migratedBets = migrateLegacyLocalBets(initial.bets);
     setLeague(initial.activeLeague);
     setSettings(initial.settings);
-    setBets(initial.bets);
+    betsRef.current = migratedBets;
+    setBets(migratedBets);
     setStorageReady(true);
     cloudSyncBusyRef.current = true;
-    requestJSON('/api/bets', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: initial.bets }),
-    }, 30000).then(data => setBets(current => mergeBetCollections(data.bets, current))).catch(() => {}).finally(() => { cloudSyncBusyRef.current = false; });
+    const migrationComplete = cloudBetMigrationComplete();
+    requestJSON('/api/bets', migrationComplete ? {} : {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: migratedBets }),
+    }, 30000).then(data => {
+      if (!Array.isArray(data.bets)) return;
+      if (!migrationComplete) markCloudBetMigrationComplete();
+      betsRef.current = data.bets;
+      setBets(data.bets);
+    }).catch(() => {}).finally(() => { cloudSyncBusyRef.current = false; });
   }, []);
   useEffect(() => {
+    betsRef.current = bets;
     if (storageReady) saveCompactStore({ settings, bets, activeLeague: league });
   }, [settings, bets, league, storageReady]);
   useEffect(() => {
@@ -498,8 +543,16 @@ export default function Home() {
     const syncCloudBets = () => {
       if (cloudSyncBusyRef.current) return;
       cloudSyncBusyRef.current = true;
-      requestJSON(`/api/bets?t=${Date.now()}`, {}, 20000)
-        .then(data => { if (Array.isArray(data.bets)) setBets(current => mergeBetCollections(data.bets, current)); })
+      const migrationComplete = cloudBetMigrationComplete();
+      requestJSON(`/api/bets${migrationComplete ? `?t=${Date.now()}` : ''}`, migrationComplete ? {} : {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: migrateLegacyLocalBets(betsRef.current) }),
+      }, 20000)
+        .then(data => {
+          if (!Array.isArray(data.bets)) return;
+          if (!migrationComplete) markCloudBetMigrationComplete();
+          betsRef.current = data.bets;
+          setBets(data.bets);
+        })
         .catch(() => {})
         .finally(() => { cloudSyncBusyRef.current = false; });
     };
@@ -646,6 +699,21 @@ export default function Home() {
     return rows;
   }
 
+  async function fetchReferenceLines(games, targetDate = date) {
+    if (!Array.isArray(games) || !games.length) {
+      return { ok: true, configured: false, games: [], message: `${league}尚無獨立同聯盟參考盤源` };
+    }
+    try {
+      return await requestJSON('/api/reference-lines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ league, date: targetDate, schedule: games }),
+      }, 60000);
+    } catch (cause) {
+      return { ok: false, configured: false, games: [], message: `獨立參考盤取得失敗：${String(cause?.message || cause)}` };
+    }
+  }
+
   async function confirmLiveReaderHash(targetDate, payloadHash, generation) {
     const live = await requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`, {}, 20000);
     if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
@@ -668,7 +736,7 @@ export default function Home() {
           league,
           game,
           markets: actualMarkets,
-          verificationMarkets: [],
+          verificationMarkets: task.verificationMarkets || [],
           settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
         }),
       }, ANALYSIS_REQUEST_TIMEOUT_MS);
@@ -748,10 +816,16 @@ export default function Home() {
         pageActivityAt: credit.pageActivityAt,
       });
 
+      setProgress({ active: true, done: 0, running: 1, total: 1, label: '取得獨立國際市場同合約參考盤' });
+      const references = await fetchReferenceLines(games, targetDate);
+      if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
+      const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
+
       const readerCreditReady = credit?.provider === 'TAI888_READER_AUTO' && credit?.readerFresh === true;
       const creditByPk = new Map((readerCreditReady ? credit.games || [] : []).map(row => [Number(row.gamePk), row]));
       const items = games.map(game => {
         const foundCredit = creditByPk.get(Number(game.gamePk));
+        const foundReference = referenceByPk.get(Number(game.gamePk));
         const available = Boolean(foundCredit?.markets?.length);
         return {
           game,
@@ -760,6 +834,8 @@ export default function Home() {
           marketCoverage: foundCredit?.marketCoverage || null,
           readerPayloadHash: available ? credit.payloadHash : null,
           customMarkets: foundCredit?.markets || [],
+          verificationMarkets: foundReference?.markets || [],
+          referenceSource: foundReference?.source || null,
           status: available ? 'queued' : 'unopened',
           statusLabel: available ? '等待分析' : '目前尚無可配對盤口',
           referenceData: null,
@@ -772,6 +848,7 @@ export default function Home() {
       const tasks = items.filter(item => item.customMarkets.length).map(item => ({
         game: item.game,
         actualMarkets: item.customMarkets,
+        verificationMarkets: item.verificationMarkets || [],
         generation,
       }));
       const coverage = readerCoverageCounts({
@@ -783,6 +860,8 @@ export default function Home() {
       const sourceWarnings = [
         credit.error ? `Tai888信用盤：${credit.error}` : '',
         credit.blocked && credit.message ? `Tai888信用盤：${credit.message}` : '',
+        references.message ? `獨立參考盤：${references.message}` : '',
+        ...(references.failures || []).map(message => `獨立參考盤：${message}`),
         ...(credit.warnings || []),
       ].filter(Boolean);
 
@@ -872,6 +951,9 @@ export default function Home() {
       const creditRevision = readerRevisionKey(targetDate, credit.payloadHash, credit.pageActivityAt);
       if (credit.provider !== 'TAI888_READER_AUTO' || !credit.readerFresh || !creditRevision || creditRevision === creditRevisionRef.current) return;
       const creditByPk = new Map((credit.games || []).map(row => [Number(row.gamePk), row]));
+      const references = await fetchReferenceLines(games, targetDate);
+      if (!stillCurrent()) return;
+      const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
       const boardPks = new Set(board.map(item => Number(item.game.gamePk)));
       const expectedItems = board.filter(item => creditByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO');
       let failed = [...creditByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
@@ -900,7 +982,7 @@ export default function Home() {
               snapshot,
               markets: actual.markets,
               previousMarkets: item.customMarkets || [],
-              verificationMarkets: [],
+              verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
               settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
             }),
           }, 120000);
@@ -911,6 +993,8 @@ export default function Home() {
             actualSource: actual.source,
             readerPayloadHash: credit.payloadHash,
             customMarkets: actual.markets,
+            verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
+            referenceSource: referenceByPk.get(Number(item.game.gamePk))?.source || item.referenceSource || null,
             customData: compactAnalysisData(data),
             status: 'done',
             statusLabel: 'Tai888最新盤快速重算完成',
@@ -1010,26 +1094,38 @@ export default function Home() {
     };
     try {
       const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', bet }) }, 30000);
-      setBets(current => mergeBetCollections(data.bets, [bet, ...current]));
+      if (!Array.isArray(data.bets)) throw new Error('雲端下注紀錄回傳格式錯誤');
+      betsRef.current = data.bets;
+      setBets(data.bets);
       setError('');
       setNotice(`已雲端記錄實際下注：${row.pick}｜${Number(row.water).toFixed(3)}｜${Number(settings.unitValue).toLocaleString()}元`);
     } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
   }
 
   async function deleteBet(bet) {
+    if (!cloudBetMigrationComplete() || cloudSyncBusyRef.current) {
+      setError('首次雲端下注紀錄同步尚未完成，請稍候再刪除，避免舊紀錄被重新匯入');
+      return;
+    }
     if (!bet?.id || !window.confirm(`確定刪除這筆下注紀錄？\n${bet.pick}｜${waterText(bet.water)}`)) return;
     try {
       const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', betId: bet.id }) }, 30000);
-      setBets(Array.isArray(data.bets) ? data.bets : []);
+      betsRef.current = Array.isArray(data.bets) ? data.bets : [];
+      setBets(betsRef.current);
       setNotice(`已刪除下注紀錄：${bet.pick}`);
     } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
   }
 
   async function clearLeagueBets() {
+    if (!cloudBetMigrationComplete() || cloudSyncBusyRef.current) {
+      setError('首次雲端下注紀錄同步尚未完成，請稍候再清空，避免舊紀錄被重新匯入');
+      return;
+    }
     if (!visibleBets.length || !window.confirm(`確定清空全部${activeLeague.shortLabel}下注紀錄？`)) return;
     try {
       const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clearLeague', league }) }, 30000);
-      setBets(Array.isArray(data.bets) ? data.bets : []);
+      betsRef.current = Array.isArray(data.bets) ? data.bets : [];
+      setBets(betsRef.current);
       setNotice(`已清空${activeLeague.shortLabel}雲端下注紀錄`);
     } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
   }
@@ -1047,8 +1143,8 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10 S 分數來自原始聯合比分分布，目前正在驗證準確度，尚未啟用正式下注建議。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
-      <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{health?.ok ? '系統正常' : '系統檢查中'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
+      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10.4只在獨立國際市場同合約共識通過嚴格時效與分散檢查時顯示影子價差分析。原始模型不能單獨產生EV，正式下注建議仍停用。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
+      <div className="headerBadges"><span className={health?.ok && consensusReady ? 'health ok' : 'health warn'}>{!health?.ok ? '系統檢查中' : consensusReady ? '三莊共識已設定' : '市場共識未設定｜安全阻擋'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
     </header>
 
     <nav className="leagueTabs" aria-label="聯盟切換">
@@ -1062,7 +1158,7 @@ export default function Home() {
 
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>
-      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>分析排名（驗證中）</button>
+      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>市場價差影子排名</button>
       <button className={tab === 'bets' ? 'active' : ''} onClick={() => setTab('bets')}>下注紀錄</button>
       <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>績效統計</button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
@@ -1074,11 +1170,11 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。模型分數目前驗證中，可查看完整分析與排名，尚未啟用正式下注建議；按下「紀錄實際下注」會永久保存當下盤口、水位、Reader版本與金額。</p></div>
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。符合獨立三莊同合約門檻時才顯示市場價差影子分析，其餘一律不評分；按下「紀錄實際下注」仍會永久保存當下盤口、水位、Reader版本與金額。</p></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載 Tai888 Reader v2.1.13</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label} Reader尚未驗證` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
-          <span>{!analysisEnabled ? '資料與盤口保持鎖定。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每30秒複核｜固定 S 分數啟用｜正式推薦停用` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
+          <span>{!analysisEnabled ? '資料與盤口保持鎖定。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每30秒複核｜合格市場價差影子分數啟用｜正式推薦停用` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
         </div>
       </section>
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
@@ -1087,9 +1183,16 @@ export default function Home() {
       {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} analysisInProgress={progress.active} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode}/>) }
     </>}
 
-    {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>分析排名（驗證中）</h2><span className="state shadow">驗證中</span></div>
-      <div className="emptySmall">目前分數正在驗證準確度，可查看完整分析與排名；此處只列雙EV為正、分數達7.2且資料QA通過的方向。🟡觀察、⚪PASS、QA BLOCK與未驗證聯盟仍保留分數與原因，但不進排名。尚未啟用正式下注建議、正式Unit或以模型分數計算的正式績效。</div>
-      {shadowRanking.length ? shadowRanking.map((entry, index) => <div className="rankRow" key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{entry.pick}｜{waterText(entry.water)}</span><small>加權EV {pct(entry.weightedEV)}｜穩健EV {pct(entry.robustEV)}｜資料QA PASS｜分析候選、驗證中且非正式推薦</small></div></div>) : <div className="emptySmall">目前沒有同時符合「雙EV為正＋7.2以上＋資料QA通過」的方向。</div>}
+    {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>市場價差影子排名</h2><span className="state shadow">非正式推薦</span></div>
+      <div className="emptySmall">此處只列「至少3家不同莊家同合約共識＋5分鐘時效＋報價同步與分散合格＋W/R皆正＋7.2以上＋資料QA通過」的方向。這是獨立市場價格差異的影子診斷，不是已完成樣本外校準的棒球模型EV，也不是下注建議。</div>
+      {shadowRanking.length ? shadowRanking.map((entry, index) => {
+        const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
+        const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
+        const buttonText = betState.exact
+          ? `已下注${betState.records?.length > 1 ? ` ${betState.records.length}筆` : ''} ✓`
+          : betState.latest ? '加注目前盤' : '紀錄實際下注';
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{entry.pick}｜{waterText(entry.water)}</span><small>市場價差W {pct(entry.weightedEV)}｜跨莊保守R {pct(entry.robustEV)}｜資料QA PASS｜影子診斷、非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.exact ? 'recorded' : 'green'}`} disabled={Boolean(betState.exact)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+      }) : <div className="emptySmall">目前沒有通過完整三莊同合約校準與影子排名門檻的方向；顯示空白是安全阻擋，不代表系統故障。</div>}
     </section>}
 
     {tab === 'bets' && <section className="panel">
@@ -1110,7 +1213,7 @@ export default function Home() {
       }) : <div className="emptySmall">完成第一筆賽果結算後，這裡會依聯盟與全場讓分、全場大小、上半讓分、上半大小分開統計。</div>}
     </section>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>V10模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="4000">4000（固定）</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>目前全部聯盟的分析分數均在驗證中，可查看完整分數與排名，但尚未形成正式推薦或Unit；實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。localStorage只作裝置快取，不是正式資料真值。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>V10模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="4000">4000（固定）</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.4的公開W/R是合格獨立市場共識相對Tai888成交價的影子價差，不是已驗證棒球預測EV。正式推薦與Unit等待locked OOS及forward驗證；實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。localStorage只作裝置快取，不是正式資料真值。</div></section>}
 
   </main>;
 }

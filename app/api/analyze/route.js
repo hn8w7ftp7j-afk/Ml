@@ -37,9 +37,9 @@ export const runtime = 'nodejs';
 export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
-// v10.3 namespace invalidates every pre-calibration model response.
-const responseCache = globalThis.__BASEBALL_V1031_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V1031_ANALYSIS_CACHE__ = responseCache;
+// v10.4 namespace invalidates every pre-independent-consensus response.
+const responseCache = globalThis.__BASEBALL_V1040_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1040_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -72,6 +72,20 @@ function sanitizeMarketRows(rows, maximum = 16) {
     sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
     lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: null,
     rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
+    referenceNoVigProbability: optionalNumber(row?.referenceNoVigProbability),
+    referenceRobustProbability: optionalNumber(row?.referenceRobustProbability),
+    referenceProbabilityMinimum: optionalNumber(row?.referenceProbabilityMinimum),
+    referenceProbabilityMaximum: optionalNumber(row?.referenceProbabilityMaximum),
+    referenceProbabilitySpread: optionalNumber(row?.referenceProbabilitySpread),
+    referenceProbabilityMad: optionalNumber(row?.referenceProbabilityMad),
+    referenceEvidenceEligible: row?.referenceEvidenceEligible === true,
+    consensusBookCount: optionalNumber(row?.consensusBookCount),
+    consensusBookKeys: (Array.isArray(row?.consensusBookKeys) ? row.consensusBookKeys : []).slice(0, 100).map(value => cleanText(value, 80)).filter(Boolean),
+    consensusOldestObservedAt: cleanText(row?.consensusOldestObservedAt, 40),
+    consensusNewestObservedAt: cleanText(row?.consensusNewestObservedAt, 40),
+    consensusTimeSpanMs: optionalNumber(row?.consensusTimeSpanMs),
+    consensusFreshnessMaxMs: optionalNumber(row?.consensusFreshnessMaxMs),
+    consensusSnapshotId: cleanText(row?.consensusSnapshotId, 4000),
     referenceSide: cleanText(row?.referenceSide, 40), rawText: cleanText(row?.rawText, 300),
     sourceTemplateVersion: cleanText(row?.sourceTemplateVersion, 80), authorizationStatus: cleanText(row?.authorizationStatus, 80),
     integrityOrigin: cleanText(row?.integrityOrigin, 80),

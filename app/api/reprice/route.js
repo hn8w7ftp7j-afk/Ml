@@ -6,7 +6,7 @@ import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { buildSnapshotFingerprints, DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
-import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
+import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
 import { attestIncomingMarketRows, signRepriceSnapshot, verifyRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
 import {
   assertLeagueGamePrestart,
@@ -34,6 +34,20 @@ function sanitizeMarkets(rows, maximum = 16) {
     sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
     lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: null,
     rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
+    referenceNoVigProbability: optionalNumber(row?.referenceNoVigProbability),
+    referenceRobustProbability: optionalNumber(row?.referenceRobustProbability),
+    referenceProbabilityMinimum: optionalNumber(row?.referenceProbabilityMinimum),
+    referenceProbabilityMaximum: optionalNumber(row?.referenceProbabilityMaximum),
+    referenceProbabilitySpread: optionalNumber(row?.referenceProbabilitySpread),
+    referenceProbabilityMad: optionalNumber(row?.referenceProbabilityMad),
+    referenceEvidenceEligible: row?.referenceEvidenceEligible === true,
+    consensusBookCount: optionalNumber(row?.consensusBookCount),
+    consensusBookKeys: (Array.isArray(row?.consensusBookKeys) ? row.consensusBookKeys : []).slice(0, 100).map(value => cleanText(value, 80)).filter(Boolean),
+    consensusOldestObservedAt: cleanText(row?.consensusOldestObservedAt, 40),
+    consensusNewestObservedAt: cleanText(row?.consensusNewestObservedAt, 40),
+    consensusTimeSpanMs: optionalNumber(row?.consensusTimeSpanMs),
+    consensusFreshnessMaxMs: optionalNumber(row?.consensusFreshnessMaxMs),
+    consensusSnapshotId: cleanText(row?.consensusSnapshotId, 4000),
     referenceSide: cleanText(row?.referenceSide, 40), rawText: cleanText(row?.rawText, 300),
     sourceTemplateVersion: cleanText(row?.sourceTemplateVersion, 80), authorizationStatus: cleanText(row?.authorizationStatus, 80),
     integrityOrigin: cleanText(row?.integrityOrigin, 80),

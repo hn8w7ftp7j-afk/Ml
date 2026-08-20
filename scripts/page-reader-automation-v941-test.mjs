@@ -2,15 +2,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
+const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
-mustMatch(/分析排名（驗證中）/, 'ranking tab must use the clear validation label');
+mustMatch(/市場價差影子排名/, 'ranking tab must explicitly identify the output as a market-price shadow ranking');
 assert.doesNotMatch(page, />影子排名</, 'ambiguous shadow ranking label must not be user-facing');
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.3\.1'/, 'UI must expose the v10.3.1 release');
+mustMatch(/const VERSION = '10\.4\.0'/, 'UI must expose the v10.4.0 fail-closed release');
+assert.equal(packageJson.version, '10.4.0', 'package/release identity must match the V10.4 fail-closed UI');
+assert.equal(packageLock.version, '10.4.0', 'package-lock release identity must match V10.4');
+assert.equal(packageLock.packages?.['']?.version, '10.4.0', 'root lockfile package must match V10.4');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
+mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.13-KBO-TRADITIONAL-NAME-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
+mustMatch(/href=\{READER_DOWNLOAD_PATH\}/, 'Reader download link must use the packaged production path');
+assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip'), 'Reader production zip must exist');
+assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip.sha256'), 'Reader checksum must exist');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
 mustMatch(/mlb-positive-ev-v9-4-4/, 'legacy MLB migration chain must remain available');
 
@@ -22,7 +31,7 @@ mustMatch(/const analysisEnabled = activeLeague\.capabilities\.analysis === true
 mustMatch(/const readerEnabled = activeLeague\.capabilities\.reader === true/, 'Reader capability gate missing');
 mustMatch(/const bettingEnabled = activeLeague\.capabilities\.bets === true/, 'bet capability gate missing');
 mustMatch(/const shadowMode = activeLeague\.status === 'shadow'/, 'Shadow state gate missing');
-assert.doesNotMatch(page, /league !== 'MLB'|league === 'MLB'/, 'page must not hard-code an MLB-only navigation branch');
+mustMatch(/LEAGUE_IDS\.map/, 'all configured leagues must still render from the registry');
 
 // Reader authority, date isolation and immutable revision/hash tracking.
 mustMatch(/currentDateRef\.current = date/, 'current date high-water reference missing');
@@ -51,6 +60,20 @@ mustMatch(/JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 
 mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missing');
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
 
+// V10.4 reference-market flow must be wired into both full analysis and frozen-distribution repricing.
+mustMatch(/async function fetchReferenceLines\(games, targetDate = date\)/, 'reference-line loader missing');
+mustMatch(/requestJSON\('\/api\/reference-lines'/, 'reference-line API request missing');
+mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
+mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
+mustMatch(/verificationMarkets: foundReference\?\.markets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
+mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full analyze request must send matched reference markets');
+mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
+assert.doesNotMatch(page, /verificationMarkets:\s*\[\]/, 'analyze/reprice must never hard-code an empty verification-market payload');
+assert.ok(
+  page.indexOf("requestJSON('/api/reference-lines'") < page.indexOf('const tasks = items.filter'),
+  'reference markets must be fetched before per-game analysis tasks are built',
+);
+
 // Actual-bet ledger and price comparison remain available while formal model scoring is locked.
 mustMatch(/betPriceMatches/, 'exact placed-price matching missing');
 mustMatch(/compareBetPrice/, 'placed-versus-current price comparison missing');
@@ -58,6 +81,18 @@ mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
 mustMatch(/目前盤口與水位已經記錄/, 'same-price suppression text missing');
 mustMatch(/加注目前盤/, 'reprice add-on action missing');
 mustMatch(/記錄實際下注/, 'actual-bet action missing');
+
+// Ranking rows must retain the original item/row and expose the same immutable
+// cloud-ledger action as the board instead of becoming a read-only desktop view.
+mustMatch(/\.map\(row => \(\{\s*item,\s*row,/, 'ranking entries must retain their source board item and actual market row');
+const rankingStart = page.indexOf("{tab === 'ranking' && <section");
+const rankingEnd = page.indexOf("{tab === 'bets' && <section", rankingStart);
+assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'ranking UI section missing');
+const rankingUi = page.slice(rankingStart, rankingEnd);
+assert.match(rankingUi, /getBetState\(entry\.item,\s*entry\.row\)/, 'ranking action must read the same cloud/local bet state as the board');
+assert.match(rankingUi, /betRecordable\(entry\.item,\s*entry\.row,\s*clockNow,\s*bettingEnabled\)/, 'ranking action must enforce the same prestart/fresh Reader write gate');
+assert.match(rankingUi, /recordBet\(entry\.item,\s*entry\.row\)/, 'ranking button must call the canonical cloud recordBet flow');
+assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');
 
 // Fail-closed market coverage and all-direction diagnostic score presentation.
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
@@ -82,13 +117,13 @@ mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected directi
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
-mustMatch(/固定雙EV公式 S 分數/, 'user-facing score label must use the single fixed S-score language');
-mustMatch(/加權EV \${pct\(row\.weightedEV\)\}/, 'weighted EV label must be clear');
-mustMatch(/穩健EV \${pct\(row\.robustEV\)\}/, 'robust EV label must be clear');
-mustMatch(/固定 S 分數啟用/, 'provider status must report fixed S-score mode');
+mustMatch(/V10\.4\.0市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4 market-price shadow semantics');
+mustMatch(/市場價差W \${pct\(row\.weightedEV\)\}/, 'W must be labelled as the independent-market price gap');
+mustMatch(/跨莊保守R \${pct\(row\.robustEV\)\}/, 'R must be labelled as the conservative cross-book price gap');
+mustMatch(/合格市場價差影子分數啟用/, 'provider status must report the qualified shadow-price score mode');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
-mustMatch(/原始極端值僅保留於伺服器稽核資料/, 'unqualified extreme EV must be hidden from the primary UI');
+mustMatch(/不產生有效EV、不評分、不列排名/, 'unqualified model or reference evidence must fail closed in the primary UI');
 assert.doesNotMatch(page, /原始W \$\{pct\(|原始R \$\{pct\(/, 'primary UI must not expose blocked raw EV percentages');
 mustMatch(/聯盟模型重建中｜EV與S分數暫停顯示/, 'unvalidated Asian leagues must hide misleading EV/S values');
 

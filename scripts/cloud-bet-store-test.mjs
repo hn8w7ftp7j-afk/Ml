@@ -26,6 +26,8 @@ assert.match(bet.priceIdentity, /under:9:positive:60\|\|\|0\.940000$/);
 assert.equal(bet.score, null, '舊版或Shadow分數不得混入正式下注績效');
 assert.equal(bet.status, 'OPEN');
 assert.equal(bet.rebateRate, 0.015);
+const legacyMlbBet = sanitizeCloudBet({ ...bet, id: 'legacy-mlb-no-league', league: undefined });
+assert.equal(legacyMlbBet?.league, 'MLB', 'legacy records created before multi-league support must migrate as MLB');
 assert.equal(sanitizeCloudBet({ ...bet, league: 'NFL' }), null);
 assert.equal(sanitizeCloudBet({ ...bet, placedAt: 'invalid' }), null);
 assert.equal(sanitizeCloudBet({ ...bet, stake: 0 }), null);
@@ -43,6 +45,7 @@ assert.equal(formal.score, 8.2);
 
 const route = fs.readFileSync(new URL('../app/api/bets/route.js', import.meta.url), 'utf8');
 const store = fs.readFileSync(new URL('../lib/cloud-bet-store.js', import.meta.url), 'utf8');
+const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 assert.match(store, /baseball_private_bets_v2/);
 assert.match(store, /LEGACY_CACHE_KEY/);
 assert.match(store, /if \(!databaseConfigured\(\)\) return readCachedBets\(\)/, '未設定資料庫時必須使用Vercel雲端快取');
@@ -66,5 +69,32 @@ assert.match(route, /action === 'upsert'/);
 assert.match(route, /action === 'delete'/);
 assert.match(route, /action === 'clearLeague'/);
 assert.match(route, /action === 'settleOpen'/);
+
+const mergeFunction = store.match(/export async function mergeCloudBets\(values\) \{([\s\S]*?)\n\}\n\nexport async function deleteCloudBet/)?.[1] || '';
+assert.ok(mergeFunction, 'mergeCloudBets implementation missing');
+const legacyDefaultIndex = mergeFunction.indexOf("? { ...value, league: 'MLB' }");
+const candidateGateIndex = mergeFunction.indexOf('.filter(cloudBetCandidateCanWrite)');
+const sanitizeIndex = mergeFunction.indexOf('.map(sanitizeCloudBet)');
+assert.ok(legacyDefaultIndex >= 0, 'cloud merge must explicitly default pre-multi-league records to MLB');
+assert.ok(
+  legacyDefaultIndex < candidateGateIndex && candidateGateIndex < sanitizeIndex,
+  'legacy MLB defaulting must occur before the strict new-write league gate and final sanitization',
+);
+assert.match(mergeFunction, /\.filter\(bet => bet && cloudBetLeagueCanWrite\(bet\.league\)\)/, 'migrated bets must still pass the normal league capability gate');
+
+assert.match(page, /const migratedBets = migrateLegacyLocalBets\(initial\.bets\)/, 'initial local ledger must normalize missing league before cloud migration');
+assert.match(page, /bets: cloudBetMigrationComplete\(\) \? primaryBets : recoverLocalBetCopies\(primaryBets, backupBets\)/, 'before cloud migration succeeds, primary and emergency backup ledgers must both be recovered');
+assert.match(page, /if \(!cloudBetMigrationComplete\(\) && backupBets\.length\)/, 'an intact emergency backup must recover even when the primary compact store is missing or corrupt');
+assert.match(page, /else if \(cloudBetMigrationComplete\(\)\) window\.localStorage\.removeItem\(BET_BACKUP_STORAGE\)/, 'an empty local state must not delete the emergency backup until cloud migration is confirmed');
+const deleteFlow = page.match(/async function deleteBet\(bet\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+const clearFlow = page.match(/async function clearLeagueBets\(\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+assert.match(deleteFlow, /!cloudBetMigrationComplete\(\) \|\| cloudSyncBusyRef\.current/, 'delete must be blocked while the one-time legacy merge can still be in flight');
+assert.match(clearFlow, /!cloudBetMigrationComplete\(\) \|\| cloudSyncBusyRef\.current/, 'clearLeague must be blocked while the one-time legacy merge can still be in flight');
+const initialMergeStart = page.indexOf("body: JSON.stringify({ action: 'merge', bets: migratedBets })");
+const initialMergeEnd = page.indexOf('}, []);', initialMergeStart);
+assert.ok(initialMergeStart >= 0 && initialMergeEnd > initialMergeStart, 'initial cloud merge flow missing');
+const initialMergeFlow = page.slice(initialMergeStart, initialMergeEnd);
+assert.match(initialMergeFlow, /setBets\((?:data\.bets|Array\.isArray\(data\.bets\)\s*\?\s*data\.bets\s*:\s*\[\])\)/, 'the normalized server merge response must replace local state as the ledger truth');
+assert.doesNotMatch(initialMergeFlow, /mergeBetCollections/, 'initial server response must not be re-merged with rejected or stale local records');
 
 console.log('Immutable multi-league actual bet ledger, non-starving settlement backfill and authenticated API boundary PASS');

@@ -8,3 +8,4 @@
 .mini.recorded{border-color:#79d9aa;background:#1b5a43;color:#e8fff4}.rankRow{grid-template-columns:35px 50px minmax(0,1fr) auto}.rankRow.betRecorded{background:rgba(27,90,67,.16)}
 @media(max-width:720px){.rankRow{grid-template-columns:32px 44px minmax(0,1fr)}.rankRow .mini{grid-column:3}}
 .score.warning{color:#ff8f9e}.qaLine.pending{color:#f1c477}
+.readerDownload{display:block;text-align:center;text-decoration:none}
