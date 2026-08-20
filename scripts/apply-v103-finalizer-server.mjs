@@ -38,8 +38,8 @@ function replaceCount(source, before, after, expected, label) {
   source = replaceExact(source, "row.scoreSource = 'V10 Raw Weighted/Robust EV固定雙EV短板公式｜影子模式';", "row.scoreSource = 'V10.3 Qualified Weighted/Robust EV固定雙EV短板公式｜影子模式';", 'qualified score source');
   source = replaceExact(
     source,
-    '      weightedEV: row.weightedEV,\n      robustEV: row.robustEV,',
-    '      weightedEV: row.weightedEV,\n      robustEV: row.robustEV,\n      rawWeightedEV: row.rawWeightedEV,\n      rawRobustEV: row.rawRobustEV,\n      evCalibration: row.evCalibration || null,',
+    '    row.scoreBreakdown = {\n      formulaVersion: SCORE_FORMULA_VERSION,\n      policyVersion: SCORE_POLICY_VERSION,\n      weightedEV: row.weightedEV,\n      robustEV: row.robustEV,\n      band: scoreResult.band,',
+    '    row.scoreBreakdown = {\n      formulaVersion: SCORE_FORMULA_VERSION,\n      policyVersion: SCORE_POLICY_VERSION,\n      weightedEV: row.weightedEV,\n      robustEV: row.robustEV,\n      rawWeightedEV: row.rawWeightedEV,\n      rawRobustEV: row.rawRobustEV,\n      evCalibration: row.evCalibration || null,\n      band: scoreResult.band,',
     'score breakdown calibration',
   );
   source = replaceExact(source, "row.unitStatus = 'V10 Shadow｜正式Unit停用';", "row.unitStatus = 'V10.3 Shadow｜正式Unit停用';", 'unit status');
