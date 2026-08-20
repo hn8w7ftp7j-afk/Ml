@@ -24,14 +24,14 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '9.7.0';
-const STORAGE = 'sports-positive-ev-v9-7-0';
+const VERSION = '10.0.0';
+const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
-const LEGACY_KEYS = ['sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
+const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
-  simulationsPerScenario: 1800,
+  simulationsPerScenario: 4000,
   fallbackWater: { 全場讓分: 0.95, 全場大小: 0.94, 上半讓分: 0.94, 上半大小: 0.93 },
 };
 
@@ -212,6 +212,12 @@ function SummaryCards({ summary }) {
 function ResultRow({ row, game, onBet, betState = null, recordable = false, now, verificationPending = false }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
+  const shadowScore = row?.scoreAudit?.ok !== false && Number.isFinite(Number(row?.shadowDiagnosticScore))
+    ? Number(row.shadowDiagnosticScore) : null;
+  const scoreClass = shadowScore == null ? 'pass' : shadowScore >= 8.5 ? 'strongest' : shadowScore >= 7.2 ? 'candidate' : 'pass';
+  const scoreTitle = shadowScore == null
+    ? 'V10資料、數學或數值QA未通過，不顯示分數'
+    : `V10影子分數 ${shadowScore.toFixed(1)}｜不可視為正式下注建議`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
@@ -222,16 +228,16 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? `已下注${betState?.records?.length > 1 ? ` ${betState.records.length}筆` : ''} ✓`
     : latest ? '加注目前盤' : '紀錄實際下注';
   return <div className="scoreRow">
-    <div className="score pass" title="v9.4.4資料鏈已作廢，正式分數停用">—</div>
+    <div className={`score ${scoreClass}`} title={scoreTitle}>{shadowScore == null ? '—' : shadowScore.toFixed(1)}</div>
     <div className="scoreBody">
       <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
-      <div className="scoreMeta">舊模型方向機率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜診斷W EV {pct(row.weightedEV)}｜診斷R EV {pct(row.robustEV)}｜正式分數停用</div>
+      <div className="scoreMeta">V10棒球分布勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜Raw W EV {pct(row.weightedEV)}｜保守 R EV {pct(row.robustEV)}｜影子分數不可下注</div>
       {actualLine && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
         ? '驗證中｜等待今日整批盤口完成'
         : row.scoreAudit?.ok === false
-          ? 'BLOCK｜資料或數學QA未通過｜不評分；仍可記錄使用者自行下注'
-          : 'SHADOW｜舊模型資料鏈作廢｜正式分數停用｜可記錄實際下注'}</div>}
+          ? 'BLOCK｜資料、數學或數值QA未通過｜不評分；仍可記錄使用者自行下注'
+          : 'V10 SHADOW｜Tai888只作成交價｜正式推薦尚未啟用｜可記錄實際下注'}</div>}
     </div>
     <div className="rowActions">
       {(recordable || latest) && <div>
@@ -272,7 +278,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>Shadow Mode｜正式分數停用</strong><span>Reader與實際下注帳本可使用；模型完成外樣本驗證前不產生正式推薦</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10 Shadow｜影子分數可見</strong><span>Raw Weighted／Robust EV已重建；完成locked OOS與forward驗證前不產生正式推薦</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
@@ -313,8 +319,8 @@ function LeagueSetupPanel({ config }) {
 
 function LeagueShadowPanel({ config }) {
   return <section className="leagueSetup panel">
-    <div className="setupHead"><div><span className="kicker">FORMAL SCORE OFF</span><h2>{config.label}目前為模型重建影子模式</h2></div><span className="state shadow">可記錄實際下注</span></div>
-    <p className="muted">v9.4.4舊分數已作廢。Reader繼續同步實際信用盤，使用者可記錄真實下注、追蹤後續盤口並自動結算；模型數字只作診斷，不進入正式績效。</p>
+    <div className="setupHead"><div><span className="kicker">V10 SHADOW SCORE</span><h2>{config.label}目前顯示可稽核影子分數</h2></div><span className="state shadow">不可視為正式推薦</span></div>
+    <p className="muted">V10已改為point-in-time資料、同一上半／全場聯合比分分布與Tai888純payoff EV。畫面分數只作Shadow驗證；正式排名、Unit與模型推薦績效仍停用。</p>
   </section>;
 }
 
@@ -357,6 +363,11 @@ export default function Home() {
   const shadowMode = activeLeague.status === 'shadow';
   const readerCoverage = readerCoverageCounts(readerStatus);
   const readerPendingText = coveragePendingText(readerCoverage);
+  const shadowRanking = useMemo(() => board.flatMap(item => (item.customData?.analysis?.results || [])
+    .filter(row => row.sourceType === 'ACTUAL_TW_CREDIT' && Number.isFinite(Number(row.shadowDiagnosticScore)))
+    .map(row => ({ gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
+      water: row.water, score: Number(row.shadowDiagnosticScore), weightedEV: row.weightedEV, robustEV: row.robustEV })))
+    .sort((left, right) => right.score - left.score || Number(right.robustEV || 0) - Number(left.robustEV || 0)), [board]);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -390,7 +401,7 @@ export default function Home() {
     settlementBusyRef.current = true;
     try {
       const data = await requestJSON('/api/bets', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settleOpen', league: targetLeague, limit: 40 }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settleOpen', league: targetLeague, limit: 500 }),
       }, 120000);
       if (Array.isArray(data.bets)) setBets(current => mergeBetCollections(data.bets, current));
     } catch {
@@ -875,8 +886,9 @@ export default function Home() {
       betSource: 'MANUAL',
       analysisMode: 'SHADOW',
       score: null,
-      scoreStatus: 'LEGACY_INVALID',
-      legacyDiagnosticScore: row.shadowDiagnosticScore ?? row.legacyDiagnosticScore ?? row.score ?? null,
+      scoreStatus: 'SHADOW_DIAGNOSTIC_NOT_FORMAL',
+      shadowDiagnosticScore: row.shadowDiagnosticScore ?? null,
+      legacyDiagnosticScore: row.legacyDiagnosticScore ?? null,
       weightedEV: row.weightedEV,
       robustEV: row.robustEV,
       qaStatus: row.scoreAudit?.ok === false ? 'BLOCK' : 'SHADOW_DIAGNOSTIC',
@@ -939,7 +951,7 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；正式模型分數已停用，實際下注、盤口比較、賽果結算與績效統計獨立運作。</p></div>
+      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10影子分數來自原始聯合比分分布，正式推薦仍停用，下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
       <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{health?.ok ? '系統正常' : '系統檢查中'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
     </header>
 
@@ -954,7 +966,7 @@ export default function Home() {
 
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>
-      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>正式排名</button>
+      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>影子排名</button>
       <button className={tab === 'bets' ? 'active' : ''} onClick={() => setTab('bets')}>下注紀錄</button>
       <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>績效統計</button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
@@ -966,7 +978,7 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。模型結果維持Shadow；按下「紀錄實際下注」會永久保存當下盤口、水位、Reader版本與金額。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。模型結果維持Shadow；V10影子分數只供驗證，不是正式下注建議；按下「紀錄實際下注」會永久保存當下盤口、水位、Reader版本與金額。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label} Reader尚未驗證` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
@@ -979,7 +991,10 @@ export default function Home() {
       {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} analysisInProgress={progress.active} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode}/>) }
     </>}
 
-    {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>正式下注排名已停用</h2><span className="state shadow">SHADOW</span></div><div className="emptySmall">v9.4.4上游資料、機率校準與歷史驗證尚未完成重建。現在不顯示任何看似精確的正式7.x或8.x分數，也不產生正式推薦績效。</div></section>}
+    {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>V10影子排名｜不可下注</h2><span className="state shadow">SHADOW</span></div>
+      <div className="emptySmall">只列QA通過的影子分數；正式推薦、Unit與模型績效維持停用，直到locked OOS與forward Gate通過。</div>
+      {shadowRanking.length ? shadowRanking.map((entry, index) => <div className="rankRow" key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.matchup}｜{entry.market}｜{entry.pick}｜{waterText(entry.water)}</span><small>W EV {pct(entry.weightedEV)}｜R EV {pct(entry.robustEV)}｜影子分數不可下注</small></div></div>) : <div className="emptySmall">完成今日V10分析後，QA通過方向會出現在這裡。</div>}
+    </section>}
 
     {tab === 'bets' && <section className="panel">
       <div className="panelHead"><h2>{activeLeague.label}｜雲端實際下注帳本</h2><div>{bettingEnabled && <button className="textButton" onClick={() => refreshSettlements(league)}>更新賽果</button>}{bettingEnabled && <button className="textButton" disabled={!visibleBets.length} onClick={clearLeagueBets}>清空本聯盟</button>}</div></div>
@@ -999,7 +1014,7 @@ export default function Home() {
       }) : <div className="emptySmall">完成第一筆賽果結算後，這裡會依聯盟與全場讓分、全場大小、上半讓分、上半大小分開統計。</div>}
     </section>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>診斷模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="1000">1000</option><option value="1800">1800</option><option value="2500">2500</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>目前全部聯盟均為Shadow。模型數字不形成正式分數、推薦或Unit；實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。localStorage只作裝置快取，不是正式資料真值。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>V10模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="4000">4000（固定）</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>目前全部聯盟均為V10 Shadow。影子分數可見，但不形成正式推薦或Unit；實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。localStorage只作裝置快取，不是正式資料真值。</div></section>}
 
   </main>;
 }

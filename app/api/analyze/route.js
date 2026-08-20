@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { analyzeMarkets, enforceAnalysisModeSafety, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
-import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
+import { analyzeMarkets, enforceAnalysisModeSafety, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v10.js';
+import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { buildSnapshotFingerprints, DATA_VERSION } from '../../../lib/snapshot-v9.js';
@@ -134,7 +134,7 @@ export async function POST(request) {
       rebateRate: Number.isFinite(requestedRebateRate) ? Math.max(0, Math.min(0.1, requestedRebateRate)) : 0.015,
       candidateThreshold: 7.2,
       strongestThreshold: 8.5,
-      simulationsPerScenario: Math.max(500, Math.min(4000, Math.round(Number(body.settings?.simulationsPerScenario) || 1800))),
+      simulationsPerScenario: 4000,
       expertMode: 'off',
     };
     const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
