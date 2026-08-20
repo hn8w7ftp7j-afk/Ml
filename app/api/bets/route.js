@@ -29,7 +29,7 @@ export async function POST(request) {
     if (body.action === 'upsert') return response(await upsertCloudBet(body.bet));
     if (body.action === 'delete') return response(await deleteCloudBet(body.betId || body.positionIdentity));
     if (body.action === 'clearLeague') return response(await clearCloudLeague(body.league));
-    if (body.action === 'settleOpen') return response(await settleOpenCloudBets({ league: body.league, limit: body.limit }));
+    if (body.action === 'settleOpen') return response(await settleOpenCloudBets({ league: body.league, limit: 500 }));
     return NextResponse.json({ ok: false, error: '不支援的下注紀錄操作' }, { status: 400 });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error?.message || '雲端下注紀錄更新失敗' }, { status: 400 });

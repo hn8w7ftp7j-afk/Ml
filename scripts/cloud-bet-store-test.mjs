@@ -52,6 +52,10 @@ const v2Schema = store.match(/CREATE TABLE IF NOT EXISTS baseball_private_bets_v
 assert.ok(v2Schema, '必須找到v2正式帳本schema');
 assert.match(v2Schema, /position_key TEXT NOT NULL/);
 assert.doesNotMatch(v2Schema, /position_key TEXT NOT NULL UNIQUE/, 'v2正式帳本不得把同方向限制成只能一筆');
+assert.match(store, /bet\.status === 'OPEN'/, '只重試真正待賽果的OPEN下注，人工確認不得阻塞舊單');
+assert.match(store, /Date\.parse\(left\?\.placedAt/, '待結算必須由最舊下注開始補，避免新賽事餓死歷史下注');
+assert.match(store, /Math\.min\(500/, '單次補結算上限必須足以涵蓋歷史帳本');
+assert.match(route, /limit: 500/, '前端舊版即使送limit=40，伺服器也必須完整補結算');
 assert.match(store, /settleOpenCloudBets/);
 assert.match(store, /summarizeBetLedger/);
 assert.match(route, /requireApiAuth/);
@@ -63,4 +67,4 @@ assert.match(route, /action === 'delete'/);
 assert.match(route, /action === 'clearLeague'/);
 assert.match(route, /action === 'settleOpen'/);
 
-console.log('Immutable multi-league actual bet ledger, settlement action and authenticated API boundary PASS');
+console.log('Immutable multi-league actual bet ledger, non-starving settlement backfill and authenticated API boundary PASS');
