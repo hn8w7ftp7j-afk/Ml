@@ -111,6 +111,7 @@ assert.ok(finalized.results.some(row => Number.isFinite(Number(row.shadowDiagnos
 for (const row of finalized.results) {
   assert.equal(row.score, null, '正式分數仍須為null');
   assert.equal(row.betEligible, false);
+  assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true, '每個可計算方向須保留固定公式診斷分');
   assert.ok(['SHADOW_DIAGNOSTIC_UNCALIBRATED', 'BLOCKED'].includes(row.scoreStatus));
   if (row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED') assert.ok(Number.isFinite(Number(row.shadowDiagnosticScore)));
 }

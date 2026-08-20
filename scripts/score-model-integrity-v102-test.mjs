@@ -19,7 +19,10 @@ assert.ok(Math.abs(weightedAwayF5 / injured.first5.away - 1) < .006, 'scenario s
 
 const fakeAnalysis = { leagueId: 'KBO', results: [{ market: '全場大小', pick: '大8平', water: .94, weightedEV: .10, robustEV: .05, distributionCoverage: 1, sourceType: 'ACTUAL_TW_CREDIT', scoreAudit: { ok: true } }] };
 const blocked = finalizeDeterministicAnalysis({ analysis: fakeAnalysis, game: { leagueId: 'KBO', away: 'A', home: 'H' } });
-assert.equal(blocked.results[0].shadowDiagnosticScore, null, 'non-MLB legacy numeric score must be suppressed');
+assert.equal(Number.isFinite(Number(blocked.results[0].formulaDiagnosticScore)), true, 'non-MLB fixed-formula diagnostic must remain visible');
+assert.equal(blocked.results[0].shadowDiagnosticScore, null, 'non-MLB unvalidated model must not receive a ranking-qualified score');
 assert.equal(blocked.results[0].scoreStatus, 'LEAGUE_MODEL_NOT_VALIDATED');
+assert.equal(blocked.results[0].score, null);
+assert.equal(blocked.results[0].betEligible, false);
 
 console.log('score-model-integrity-v102-test: PASS');

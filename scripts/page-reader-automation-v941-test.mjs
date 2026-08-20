@@ -6,7 +6,7 @@ const mustMatch = (pattern, label) => assert.match(page, pattern, label);
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.2\.0'/, 'UI must expose the v10.2.0 release');
+mustMatch(/const VERSION = '10\.2\.1'/, 'UI must expose the v10.2.1 release');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
@@ -57,16 +57,28 @@ mustMatch(/目前盤口與水位已經記錄/, 'same-price suppression text miss
 mustMatch(/加注目前盤/, 'reprice add-on action missing');
 mustMatch(/記錄實際下注/, 'actual-bet action missing');
 
-// Fail-closed market coverage and v10.2 diagnostic score presentation.
+// Fail-closed market coverage and all-direction diagnostic score presentation.
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
 mustMatch(/資料異常｜不評分/, 'blocked market must fail closed');
 mustMatch(/尚未開盤/, 'unopened market state missing');
 mustMatch(/AVAILABLE/, 'available market state missing');
 mustMatch(/BLOCKED/, 'blocked market state missing');
 mustMatch(/UNAVAILABLE/, 'unavailable market state missing');
-mustMatch(/Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative Weighted EV must display PASS');
-mustMatch(/Number\(row\?\.robustEV\) <= 0 \? '觀察'/, 'non-positive Robust EV must display observation');
-mustMatch(/rawShadowScore != null && rawShadowScore >= 7\.2/, 'numeric score must start at the fixed 7.2 gate');
-mustMatch(/V10\.2影子診斷分數/, 'v10.2 diagnostic label missing');
+mustMatch(/row\?\.formulaDiagnosticScore != null/, 'every calculable direction must expose its fixed-formula score');
+mustMatch(/formulaScore\.toFixed\(1\)/, 'diagnostic score must always render as a number');
+mustMatch(/QA BLOCK/, 'QA-blocked directions must remain visibly identified');
+mustMatch(/不列排名、不作推薦/, 'QA block must remain isolated from ranking and recommendation');
+assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'display must not hide scores below 7.2');
+assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must display its numeric diagnostic score');
+mustMatch(/row\.shadowDiagnosticScore != null/, 'ranking must explicitly reject null qualification scores');
+mustMatch(/row\.scoreAudit\?\.ok === true/, 'ranking must require QA PASS');
+mustMatch(/row\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
 
-console.log('Page Reader automation, four-league navigation, storage continuity, board authority and v10.2 score presentation PASS');
+// Batch analysis cannot be held indefinitely by the first slow games.
+mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 65_000/, 'bounded per-game deadline missing');
+mustMatch(/runPool\(tasks, 3/, 'three-worker bounded analysis pool missing');
+mustMatch(/重試 \$\{retryIndexes\.length\} 場未完成分析/, 'trailing retry pass missing');
+mustMatch(/tasks\[index\]\?\.retryable === false/, 'permanent failures must not be retried');
+mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');
+
+console.log('Page Reader automation, four-league navigation, storage continuity, board authority and all-score presentation PASS');

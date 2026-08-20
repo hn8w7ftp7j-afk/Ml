@@ -107,6 +107,22 @@ const fetchImpl = async () => new Response(JSON.stringify(statsPayload), {
   headers: { 'Content-Type': 'application/json' },
 });
 const fullSlate = await fetchOfficialTaipeiSlate('2099-08-12', { fetchImpl });
+let concurrentScheduleFetches = 0;
+const dedupedFetchImpl = async () => {
+  concurrentScheduleFetches += 1;
+  await new Promise(resolve => setTimeout(resolve, 5));
+  return new Response(JSON.stringify(statsPayload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
+const concurrentSlates = await Promise.all([
+  fetchOfficialTaipeiSlate('2099-08-12', { fetchImpl: dedupedFetchImpl }),
+  fetchOfficialTaipeiSlate('2099-08-12', { fetchImpl: dedupedFetchImpl }),
+  fetchOfficialTaipeiSlate('2099-08-12', { fetchImpl: dedupedFetchImpl }),
+]);
+assert.equal(concurrentScheduleFetches, 3, '同一台北盤日的併發驗證只可抓前中後三個官方日期一次');
+assert.ok(concurrentSlates.every(slate => slate.length === fullSlate.length));
 assert.deepEqual(officialPrestartSlate([
   { ...fullSlate[0], gameDate: '2099-08-11T22:59:00Z' },
   { ...fullSlate[1], gameDate: '2099-08-11T23:01:00Z' },

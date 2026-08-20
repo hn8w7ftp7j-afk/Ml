@@ -65,6 +65,7 @@ const finalized = finalizeDeterministicAnalysis({ analysis, game: context.game, 
 for (const row of finalized.results) {
   assert.equal(row.score, null);
   assert.equal(row.betEligible, false);
+  assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true, '每個可計算方向須保留固定公式診斷分');
 }
 
 const analysisSource = fs.readFileSync(new URL('../lib/analysis-v11.js', import.meta.url), 'utf8');
