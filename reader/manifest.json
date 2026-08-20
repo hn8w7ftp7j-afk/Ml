@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.1.9",
-  "version_name": "2.1.9 ASIAN-NAME-SAFE",
+  "version": "2.1.10",
+  "version_name": "2.1.10 INTEGRATED-PARTIAL-SAFE",
   "description": "一個 Reader 獨立讀取 Tai888 美棒、日棒、韓棒與中職四個標準盤分頁。",
   "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [
