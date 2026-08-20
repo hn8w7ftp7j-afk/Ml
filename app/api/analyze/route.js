@@ -139,7 +139,10 @@ export async function POST(request) {
     };
     const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
     if (!context?.coreModelable) {
-      return NextResponse.json({ ok: false, error: '資料不足｜不評分', warnings: context?.warnings || [] }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
+      const blocking = Array.isArray(context?.dataGateV10?.blocking) ? context.dataGateV10.blocking : [];
+      const detail = blocking.length ? blocking.join('、') : '未知核心欄位';
+      console.error('[ANALYZE_CORE_BLOCK]', { league, gamePk: game?.gamePk, blocking, warnings: context?.warnings || [] });
+      return NextResponse.json({ ok: false, code: 'CORE_DATA_MISSING', error: `資料不足｜不評分｜缺少：${detail}`, blocking, warnings: context?.warnings || [] }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
     }
     const contract = leagueAnalysisContract(league);
     const versions = {
