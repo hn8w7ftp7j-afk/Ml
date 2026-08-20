@@ -1,0 +1,34 @@
+name: Patch V10 API test mocks
+
+on:
+  push:
+    branches: [agent/v10-model-rebuild]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[v10-api-mocks-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/v10-model-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Patch integration-test fetch fixtures
+        run: node scripts/patch-v10-api-test-mocks.mjs
+      - name: Commit patched fixture
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/api-integrity-v942-route-test.mjs
+          if git diff --cached --quiet; then
+            echo "No fixture changes"
+          else
+            git commit -m "test: add V10 point-in-time API fixtures [v10-api-mocks-applied]"
+            git push origin HEAD:agent/v10-model-rebuild
+          fi
