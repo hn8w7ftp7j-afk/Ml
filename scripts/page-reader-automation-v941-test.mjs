@@ -6,7 +6,7 @@ const mustMatch = (pattern, label) => assert.match(page, pattern, label);
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.2\.2'/, 'UI must expose the v10.2.2 release');
+mustMatch(/const VERSION = '10\.2\.3'/, 'UI must expose the v10.2.3 release');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
@@ -65,11 +65,11 @@ mustMatch(/AVAILABLE/, 'available market state missing');
 mustMatch(/BLOCKED/, 'blocked market state missing');
 mustMatch(/UNAVAILABLE/, 'unavailable market state missing');
 mustMatch(/row\?\.formulaDiagnosticScore != null/, 'every calculable direction must expose its fixed-formula score');
-mustMatch(/formulaScore\.toFixed\(1\)/, 'diagnostic score must always render as a number');
+mustMatch(/formulaScore\.toFixed\(1\)/, 'fixed S score must always render as a number');
 mustMatch(/QA BLOCK/, 'QA-blocked directions must remain visibly identified');
 mustMatch(/不列排名、不作推薦/, 'QA block must remain isolated from ranking and recommendation');
 assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'display must not hide scores below 7.2');
-assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must display its numeric diagnostic score');
+assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must still display the fixed numeric S score');
 mustMatch(/row\.shadowDiagnosticScore != null/, 'ranking must explicitly reject null qualification scores');
 mustMatch(/row\.scoreAudit\?\.ok === true/, 'ranking must require QA PASS');
 mustMatch(/row\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
@@ -80,6 +80,12 @@ mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected directi
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
+mustMatch(/固定雙EV公式 S 分數/, 'user-facing score label must use the single fixed S-score language');
+mustMatch(/加權EV \{pct\(row\.weightedEV\)\}/, 'weighted EV label must be clear');
+mustMatch(/穩健EV \{pct\(row\.robustEV\)\}/, 'robust EV label must be clear');
+mustMatch(/固定 S 分數啟用/, 'provider status must report fixed S-score mode');
+assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
+assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
 
 // Batch analysis cannot be held indefinitely by the first slow games.
 mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 65_000/, 'bounded per-game deadline missing');
