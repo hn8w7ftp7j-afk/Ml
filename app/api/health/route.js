@@ -28,7 +28,7 @@ export async function GET() {
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   return NextResponse.json({
     ok: true,
-    version: '10.1.1',
+    version: '10.2.0',
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
