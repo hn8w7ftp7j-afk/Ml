@@ -72,8 +72,22 @@ function replaceCount(source, before, after, expected, label) {
 
 write('DEPLOYMENT_VERSION', 'v10.2.3 FIXED-S-SCORE-SHADOW-INTEGRATED\n');
 
-// 4) Regression test: the website may keep internal diagnostic field names,
-// but must not present a second user-facing "diagnostic score" language.
+// 4) Align the full deterministic regression suite with the already-approved
+// fixed 6.6/7.1 policy. This also repairs the stale main-branch CI assertion.
+{
+  const path = 'scripts/deterministic-v9-test.mjs';
+  let source = read(path);
+  source = replaceExact(source, "assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.3.0');", "assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.4.0');", 'formula version regression');
+  source = replaceExact(source, "assert.equal(score(-0.001, 0.02).score, 6.5);", "assert.equal(score(-0.001, 0.02).score, 6.6);", 'small negative W score');
+  source = replaceExact(source, "assert.equal(score(-0.01, -0.02).score, 6.0);", "assert.equal(score(-0.01, -0.02).score, 6.6);", 'negative dual EV score');
+  source = replaceExact(source, "assert.equal(score(-0.05, -0.08).score, 4.2);", "assert.equal(score(-0.05, -0.08).score, 6.6);", 'large negative dual EV score');
+  source = replaceExact(source, "assert.equal(score(0.01, -0.001).score, 7.0);", "assert.equal(score(0.01, -0.001).score, 7.1);", 'small negative R score');
+  source = replaceExact(source, "assert.equal(score(0.01, -0.02).score, 6.7);", "assert.equal(score(0.01, -0.02).score, 7.1);", 'large negative R score');
+  write(path, source);
+}
+
+// 5) Website regression test: internal diagnostic field names may remain for
+// stored-snapshot compatibility, but the UI must expose one fixed S-score language.
 {
   const path = 'scripts/page-reader-automation-v941-test.mjs';
   let source = read(path);
