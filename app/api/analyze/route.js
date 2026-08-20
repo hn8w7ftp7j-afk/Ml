@@ -38,8 +38,8 @@ export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // v10.3 namespace invalidates every pre-calibration model response.
-const responseCache = globalThis.__BASEBALL_V1030_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V1030_ANALYSIS_CACHE__ = responseCache;
+const responseCache = globalThis.__BASEBALL_V1031_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1031_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
