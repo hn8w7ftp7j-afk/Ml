@@ -1,0 +1,32 @@
+name: Patch V10.1 shadow safety
+
+on:
+  push:
+    branches: [agent/v10-full-joint-model-rebuild]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[v1011-safety-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/v10-full-joint-model-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/patch-v1011-shadow-safety.mjs
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/analysis-v11.js
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "fix: enforce fail-closed shadow safety v10.1.1 [v1011-safety-applied]"
+            git push origin HEAD:agent/v10-full-joint-model-rebuild
+          fi
