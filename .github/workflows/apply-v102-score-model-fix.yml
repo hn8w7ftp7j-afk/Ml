@@ -3,13 +3,15 @@ name: Apply v10.2 score-model integrity fix
 on:
   push:
     branches: [fix/v102-score-model-integrity]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   patch-and-test:
-    if: github.event.head_commit.message != 'fix: apply v10.2 score model integrity repairs'
+    if: github.event_name == 'pull_request' || github.event.head_commit.message != 'fix: apply v10.2 score model integrity repairs'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -30,5 +32,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/mlb-context-v11.js lib/joint-score-v11.js lib/joint-score-v12.js lib/analysis-v11.js lib/deterministic-finalizer-v10.js app/page.js scripts/score-model-integrity-v102-test.mjs
+          git diff --cached --quiet && exit 0
           git commit -m "fix: apply v10.2 score model integrity repairs"
           git push origin HEAD:fix/v102-score-model-integrity
