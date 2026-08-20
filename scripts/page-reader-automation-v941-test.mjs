@@ -8,7 +8,7 @@ assert.doesNotMatch(page, />影子排名</, 'ambiguous shadow ranking label must
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.2\.3'/, 'UI must expose the v10.2.3 release');
+mustMatch(/const VERSION = '10\.3\.0'/, 'UI must expose the v10.3.0 release');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
@@ -83,11 +83,13 @@ mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-ga
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
 mustMatch(/固定雙EV公式 S 分數/, 'user-facing score label must use the single fixed S-score language');
-mustMatch(/加權EV \{pct\(row\.weightedEV\)\}/, 'weighted EV label must be clear');
-mustMatch(/穩健EV \{pct\(row\.robustEV\)\}/, 'robust EV label must be clear');
+mustMatch(/加權EV \${pct\(row\.weightedEV\)\}/, 'weighted EV label must be clear');
+mustMatch(/穩健EV \${pct\(row\.robustEV\)\}/, 'robust EV label must be clear');
 mustMatch(/固定 S 分數啟用/, 'provider status must report fixed S-score mode');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
+mustMatch(/EV校準未通過，不建立加權EV／穩健EV/, 'unqualified extreme EV must not be presented as valid W/R');
+mustMatch(/聯盟模型重建中｜EV與S分數暫停顯示/, 'unvalidated Asian leagues must hide misleading EV/S values');
 
 // Batch analysis cannot be held indefinitely by the first slow games.
 mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 65_000/, 'bounded per-game deadline missing');
