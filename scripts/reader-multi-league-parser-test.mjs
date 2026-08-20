@@ -116,9 +116,16 @@ delete legacyMlb.league;
 assert.equal(validateTai888ReaderEnvelope(legacyMlb, { league: 'MLB', receivedAt }).league, 'MLB');
 
 const badHash = { ...signedPayload('KBO', leagues.KBO), payloadHash: 'f'.repeat(64) };
-assert.throws(
-  () => validateTai888ReaderEnvelope(badHash, { league: 'KBO', receivedAt }),
-  error => error?.status === 409 && /payloadHash/.test(error.message),
+assert.equal(
+  validateTai888ReaderEnvelope(badHash, { league: 'KBO', receivedAt }).league,
+  'KBO',
+  'an unkeyed browser hash mismatch must not discard an otherwise valid board',
+);
+const validKboHash = rawTai888ReaderPayloadHash(signedPayload('KBO', leagues.KBO));
+assert.equal(
+  rawTai888ReaderPayloadHash(badHash),
+  validKboHash,
+  'the client-claimed hash must never control the server-owned board identity',
 );
 
 const unknownAlias = signedPayload('CPBL', { ...leagues.CPBL, awayCode: 'ZZZ999' });
