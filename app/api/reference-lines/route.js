@@ -27,8 +27,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const cache = globalThis.__MLB_REFERENCE_LINES_CACHE_V1042__ || new Map();
-globalThis.__MLB_REFERENCE_LINES_CACHE_V1042__ = cache;
+const cache = globalThis.__MLB_REFERENCE_LINES_CACHE_V1043__ || new Map();
+globalThis.__MLB_REFERENCE_LINES_CACHE_V1043__ = cache;
 let lastJbotRequestAt = globalThis.__MLB_LAST_JBOT_REQUEST_AT__ || 0;
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -108,6 +108,9 @@ function sanitizeTargets(rows, schedule) {
       if (!keys.length) continue;
       current.markets.push({ market, pick });
       for (const key of keys) if (allowedEventMarkets.has(key)) current.marketKeys.add(key);
+      if (market === '全場讓分' && /(?:讓|受讓)0(?:平|[+-]\d+|$)/.test(pick) && allowedEventMarkets.has('h2h')) {
+        current.marketKeys.add('h2h');
+      }
     }
     if (current.marketKeys.size) targets.set(gamePk, current);
   }

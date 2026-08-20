@@ -4,12 +4,14 @@ import {
   aggregatePayoffVectorEV,
   evFromPayoffVector,
   minimumWaterFromPayoffVector,
-  qualifyEvV103,
+  qualifyEvV103 as qualifyEvV103Core,
+  ABSOLUTE_MARKET_EDGE_LIMIT,
   EV_CALIBRATION_V103_VERSION,
   MAX_RAW_SCENARIO_EV_SPREAD,
   MAX_WEIGHTED_ROBUST_EV_GAP,
   MINIMUM_DATA_QUALITY,
   UNVERIFIED_EXTREME_EV_LIMIT,
+  UNVERIFIED_MARKET_EDGE_LIMIT,
 } from '../lib/ev-calibration-v103.js';
 import {
   applyIndependentMarketVerification,
@@ -73,6 +75,14 @@ const eligibleVerification = (overrides = {}) => ({
   referenceProbabilityMad: 0.005,
   ...overrides,
 });
+const readerRow = (row = {}) => ({
+  sourceType: 'ACTUAL_TW_CREDIT',
+  provider: 'TAI888_READER_AUTO',
+  lineFresh: true,
+  executable: true,
+  ...row,
+});
+const qualifyEvV103 = input => qualifyEvV103Core({ ...input, row: readerRow(input?.row) });
 const noPriorExtreme = qualifyEvV103({
   row: { water: 0.94, marketVerification: { referencePriorEligible: false } },
   rawWeightedEV: 0.22,
@@ -84,8 +94,9 @@ const noPriorExtreme = qualifyEvV103({
 assert.equal(UNVERIFIED_EXTREME_EV_LIMIT, 0.15);
 assert.equal(noPriorExtreme.qualified, false);
 assert.equal(noPriorExtreme.weightedEV, null);
-assert.equal(noPriorExtreme.status, 'EXTREME_EV_HELD_FOR_LOCKED_OOS');
-assert.match(noPriorExtreme.reasons.join('｜'), /locked OOS/);
+assert.equal(noPriorExtreme.status, 'CALIBRATION_BLOCK');
+assert.match(noPriorExtreme.reasons.join('｜'), /3家獨立國際市場/);
+assert.match(noPriorExtreme.auditWarnings.join('｜'), /僅供稽核/);
 
 const moderateNoPrior = qualifyEvV103({
   row: {
@@ -101,7 +112,7 @@ const moderateNoPrior = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.2/);
+assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.3/);
 assert.equal(moderateNoPrior.qualified, false, 'V10.4 must fail closed when no independent consensus prior exists');
 assert.equal(moderateNoPrior.weightedEV, null);
 assert.equal(moderateNoPrior.robustEV, null);
@@ -125,6 +136,43 @@ assert.ok(Math.abs(qualifiedConsensus.weightedEV - qualifiedConsensus.referenceE
 assert.ok(Math.abs(qualifiedConsensus.robustEV - qualifiedConsensus.referenceRobustEV) < 1e-12);
 assert.notEqual(qualifiedConsensus.weightedEV, qualifiedConsensus.rawWeightedEV, 'usable W must come from independent price consensus, not raw model EV');
 assert.ok(qualifiedConsensus.robustEV <= qualifiedConsensus.weightedEV);
+assert.equal(qualifiedConsensus.actualReaderEligible, true);
+
+const staleReader = qualifyEvV103({
+  row: {
+    water: 0.94,
+    lineFresh: false,
+    executable: false,
+    marketVerification: eligibleVerification(),
+  },
+  rawWeightedEV: 0.045,
+  rawRobustEV: 0.012,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(staleReader.qualified, false, 'expired Reader prices must never retain W/R or a score');
+assert.equal(staleReader.actualReaderEligible, false);
+assert.equal(staleReader.weightedEV, null);
+assert.match(staleReader.reasons.join('｜'), /Reader 實際盤已過期/);
+
+const manualEntry = qualifyEvV103({
+  row: {
+    water: 0.94,
+    sourceType: 'USER_MANUAL_ENTRY',
+    provider: 'USER_MANUAL_ENTRY',
+    marketVerification: eligibleVerification(),
+  },
+  rawWeightedEV: 0.045,
+  rawRobustEV: 0.012,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(manualEntry.qualified, false, 'manual entries may be recorded but must never create W/R or ranking');
+assert.equal(manualEntry.actualReaderSource, false);
+assert.equal(manualEntry.weightedEV, null);
+assert.match(manualEntry.reasons.join('｜'), /只允許 Tai888 Reader/);
 
 const overEightPlusEightyVector = ({ below, exact, above, bookmakerKey = '' }) => ({
   bookmakerKey,
@@ -222,9 +270,10 @@ const projectedCoreStillBlocks = qualifyEvV103({
     ],
   },
 });
-assert.equal(projectedCoreStillBlocks.qualified, false, 'the 0.85 hard gate must remain enforced for core data');
+assert.equal(projectedCoreStillBlocks.qualified, true, 'raw baseball core-data quality is audit-only for independent market-price W/R');
 assert.ok(Math.abs(projectedCoreStillBlocks.qualificationDataQuality - 0.81) < 1e-12);
-assert.match(projectedCoreStillBlocks.reasons.join('｜'), /核心資料品質0\.81低於0\.85/);
+assert.equal(projectedCoreStillBlocks.reasons.length, 0);
+assert.match(projectedCoreStillBlocks.auditWarnings.join('｜'), /核心資料品質0\.81低於0\.85/);
 
 const unstableRawScenario = qualifyEvV103({
   row: {
@@ -237,9 +286,10 @@ const unstableRawScenario = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(unstableRawScenario.qualified, false);
+assert.equal(unstableRawScenario.qualified, true, 'unvalidated raw-model scenario spread must not veto independent market W/R');
 assert.ok(unstableRawScenario.rawScenarioSpread > MAX_RAW_SCENARIO_EV_SPREAD);
-assert.match(unstableRawScenario.reasons.join('｜'), /中央與壓力情境EV差距/);
+assert.equal(unstableRawScenario.reasons.length, 0);
+assert.match(unstableRawScenario.auditWarnings.join('｜'), /中央與壓力情境EV差距/);
 
 const unstableConsensus = qualifyEvV103({
   row: {
@@ -257,29 +307,109 @@ assert.ok(unstableConsensus.weightedRobustGap > MAX_WEIGHTED_ROBUST_EV_GAP);
 assert.match(unstableConsensus.reasons.join('｜'), /獨立市場加權與保守EV差距/);
 
 const confirmedExtreme = qualifyEvV103({
-  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.55, referenceRobustProbability: 0.545 }) },
+  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.53, referenceRobustProbability: 0.525 }) },
   rawWeightedEV: 0.20,
   rawRobustEV: 0.12,
   modelProbability: 0.56,
   rebateRate: 0.015,
   gate,
 });
-assert.equal(confirmedExtreme.qualified, false, '15%+ raw EV must remain blocked even when an independent prior agrees');
-assert.equal(confirmedExtreme.weightedEV, null);
-assert.equal(confirmedExtreme.robustEV, null);
-assert.equal(confirmedExtreme.status, 'EXTREME_EV_HELD_FOR_LOCKED_OOS');
-assert.match(confirmedExtreme.reasons.join('｜'), /只供稽核/);
+assert.equal(confirmedExtreme.qualified, true, '15%+ raw model EV is audit-only when independent market W/R is valid');
+assert.ok(Number.isFinite(confirmedExtreme.weightedEV));
+assert.ok(Number.isFinite(confirmedExtreme.robustEV));
+assert.equal(confirmedExtreme.status, 'QUALIFIED_WITH_INDEPENDENT_EXACT_CONTRACT_CONSENSUS');
+assert.equal(confirmedExtreme.reasons.length, 0);
+assert.match(confirmedExtreme.auditWarnings.join('｜'), /僅供稽核/);
 
 const disagreement = qualifyEvV103({
-  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.51, referenceRobustProbability: 0.505 }) },
+  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.50, referenceRobustProbability: 0.495 }) },
   rawWeightedEV: 0.20,
   rawRobustEV: 0.12,
   modelProbability: 0.63,
   rebateRate: 0.015,
   gate,
 });
-assert.equal(disagreement.qualified, false);
-assert.match(disagreement.reasons.join('｜'), /差距/);
+assert.equal(disagreement.qualified, true, 'raw-model disagreement must remain visible without overriding independent market W/R');
+assert.equal(disagreement.reasons.length, 0);
+assert.match(disagreement.auditWarnings.join('｜'), /機率差距/);
+assert.match(disagreement.auditWarnings.join('｜'), /方向相反/);
+
+const extremeIndependentMarketGap = qualifyEvV103({
+  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.65, referenceRobustProbability: 0.645 }) },
+  rawWeightedEV: 0.04,
+  rawRobustEV: 0.01,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(UNVERIFIED_MARKET_EDGE_LIMIT, 0.05);
+assert.equal(ABSOLUTE_MARKET_EDGE_LIMIT, 0.15);
+assert.equal(extremeIndependentMarketGap.qualified, false, 'the independent market edge itself must fail closed above the absolute 15% ceiling');
+assert.equal(extremeIndependentMarketGap.status, 'EXTREME_MARKET_EDGE_HELD_FOR_REVIEW');
+assert.match(extremeIndependentMarketGap.reasons.join('｜'), /價格EV達/);
+
+const unverifiedLargeMarketGap = qualifyEvV103({
+  row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.55, referenceRobustProbability: 0.545 }) },
+  rawWeightedEV: 0.04,
+  rawRobustEV: 0.01,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(unverifiedLargeMarketGap.qualified, false, '5%+ price gaps need a genuinely separate external validation');
+assert.match(unverifiedLargeMarketGap.reasons.join('｜'), /5%單一三莊快照安全線/);
+
+const secondMarketValidatedGap = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification({
+      referenceNoVigProbability: 0.55,
+      referenceRobustProbability: 0.545,
+      secondaryIndependentMarketVerified: true,
+    }),
+  },
+  rawWeightedEV: 0.04,
+  rawRobustEV: 0.01,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(secondMarketValidatedGap.qualified, true, 'a second independent external validation may lift only the 5% review gate');
+
+const exactFivePercentProbability = (0.985 + UNVERIFIED_MARKET_EDGE_LIMIT) / 1.94;
+const exactFivePercentBoundary = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification({
+      referenceNoVigProbability: exactFivePercentProbability,
+      referenceRobustProbability: exactFivePercentProbability - 0.005,
+    }),
+  },
+  rawWeightedEV: 0.04,
+  rawRobustEV: 0.01,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(exactFivePercentBoundary.qualified, false, 'floating-point rounding must not let an exact 5% gap bypass the review gate');
+
+const exactFifteenPercentProbability = (0.985 + ABSOLUTE_MARKET_EDGE_LIMIT) / 1.94;
+const exactFifteenPercentBoundary = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification({
+      referenceNoVigProbability: exactFifteenPercentProbability,
+      referenceRobustProbability: exactFifteenPercentProbability - 0.005,
+      secondaryIndependentMarketVerified: true,
+    }),
+  },
+  rawWeightedEV: 0.04,
+  rawRobustEV: 0.01,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(exactFifteenPercentBoundary.qualified, false, 'floating-point rounding must not let an exact 15% gap bypass the absolute gate');
 
 const observedAt = '2026-08-21T00:00:00.000Z';
 const actual = [

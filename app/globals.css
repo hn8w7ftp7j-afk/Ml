@@ -8,4 +8,5 @@
 .mini.recorded{border-color:#79d9aa;background:#1b5a43;color:#e8fff4}.rankRow{grid-template-columns:35px 50px minmax(0,1fr) auto}.rankRow.betRecorded{background:rgba(27,90,67,.16)}
 @media(max-width:720px){.rankRow{grid-template-columns:32px 44px minmax(0,1fr)}.rankRow .mini{grid-column:3}}
 .score.warning{color:#ff8f9e}.qaLine.pending{color:#f1c477}
+.auditWarnings{margin-top:5px;color:#9aaabd;font-size:10px;line-height:1.45}.auditWarnings summary{cursor:pointer;color:#d0a96a}.auditWarnings div{margin-top:4px;padding:6px 8px;border-left:2px solid #6f5830;background:rgba(111,88,48,.12);border-radius:4px}
 .readerDownload{display:block;text-align:center;text-decoration:none}

@@ -24,12 +24,13 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.4.2';
+const VERSION = '10.4.3';
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
 const ANALYSIS_REQUEST_TIMEOUT_MS = 65_000;
+const REFERENCE_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
@@ -43,6 +44,38 @@ const pct = value => value == null || !Number.isFinite(Number(value)) ? '—' : 
 const waterText = value => hasActualWater(value) ? Number(value).toFixed(3) : '水位未提供';
 const moneyText = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value) >= 0 ? '+' : ''}${Math.round(Number(value)).toLocaleString()}元`;
 const matchup = game => `${translateTeamText(game?.away || '')} 對 ${translateTeamText(game?.home || '')}`;
+const referenceEvidenceFreshNow = (row, now = Date.now()) => {
+  const expiresAt = Date.parse(row?.marketVerification?.referenceConsensusExpiresAt || '');
+  return Number.isFinite(expiresAt) && expiresAt > Number(now);
+};
+const invalidateShadowScoreRow = (row, reason, tag = reason) => ({
+  ...row,
+  weightedEV: null,
+  robustEV: null,
+  formulaDiagnosticScore: null,
+  shadowDiagnosticScore: null,
+  rankingQualified: false,
+  betEligible: false,
+  scoreStatus: 'UNSCORED',
+  tag,
+  scoreAudit: { ...(row?.scoreAudit || {}), ok: false, reason },
+  evCalibration: {
+    ...(row?.evCalibration || {}),
+    qualified: false,
+    reasons: [reason],
+  },
+});
+const invalidateReaderPriceRow = (row, reason, tag = reason) => ({
+  ...invalidateShadowScoreRow(row, reason, tag),
+  executable: false,
+  lineFresh: false,
+  evCalibration: {
+    ...(row?.evCalibration || {}),
+    qualified: false,
+    actualReaderEligible: false,
+    reasons: [reason],
+  },
+});
 
 function outcomeText(value) {
   const outcome = String(value || '').toUpperCase();
@@ -278,6 +311,8 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const calibrationBlocked = row?.evCalibration?.qualified !== true;
   const calibrationReason = row?.evCalibration?.reasons?.[0] || '缺少至少3家新鮮、同步且同合約的獨立國際市場共識';
   const qaFailures = scoreQaFailures(row);
+  const auditWarnings = Array.isArray(row?.evCalibration?.auditWarnings)
+    ? row.evCalibration.auditWarnings.filter(Boolean) : [];
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
   const scoreClass = calibrationBlocked ? 'warning' : formulaScore == null ? 'pass'
@@ -291,11 +326,11 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
         ? '缺少合法水位或雙EV，不能補造分數'
         : !qaPassed
           ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-          : `V10.4.2逐莊結算市場價差影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+          : `V10.4.3逐莊結算市場價差影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
   const scoreMetaText = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? `V10.4.2市場校準阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
+      ? `V10.4.3市場校準阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
       : `獨立市場共識勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜市場價差W ${pct(row.weightedEV)}｜跨莊保守R ${pct(row.robustEV)}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
@@ -319,6 +354,10 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
           : !qaPassed
             ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否｜資料QA：BLOCK（${qaFailures.join('；') || '資料、數學或數值檢查未通過'}）｜不列排名、不作推薦｜正式推薦停用`
             : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜正式推薦與Unit停用`}</div>}
+      {!calibrationBlocked && auditWarnings.length > 0 && <details className="auditWarnings">
+        <summary>原始模型稽核警告 {auditWarnings.length} 項（不影響市場價差 W/R）</summary>
+        <div>{auditWarnings.join('；')}</div>
+      </details>}
     </div>
     <div className="rowActions">
       {(recordable || latest) && <div>
@@ -344,14 +383,21 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
     ? Number(coverage.openMarkets)
     : new Set((item.customMarkets || []).map(row => row.market)).size;
   const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT').map(row => {
-    if (!gamePrestart) return { ...row, executable: false, lineFresh: false, betEligible: false, tag: '已達官方預定開打時間｜停止記錄新下注' };
-    if (readerBacked && !readerExecutable) return {
-      ...row,
-      executable: false,
-      lineFresh: false,
-      betEligible: false,
-      tag: analysisInProgress ? '今日整批分析進行中｜完成前暫停記錄' : '盤口尚未完成最新版本驗證',
-    };
+    if (!gamePrestart) {
+      return invalidateReaderPriceRow(row, '已達官方預定開打時間', '已達官方預定開打時間｜停止記錄新下注');
+    }
+    const currentReaderPrice = readerBacked
+      && readerExecutable
+      && row?.provider === 'TAI888_READER_AUTO'
+      && row?.evCalibration?.actualReaderEligible === true
+      && actualLineFreshNow(row, now);
+    if (!currentReaderPrice) {
+      const reason = analysisInProgress ? '今日整批分析進行中｜完成前暫停記錄' : 'Tai888 Reader 實際盤已過期或尚未完成最新版本驗證';
+      return invalidateReaderPriceRow(row, reason, reason);
+    }
+    if (row?.evCalibration?.qualified === true && !referenceEvidenceFreshNow(row, now)) {
+      return invalidateShadowScoreRow(row, '獨立國際市場報價已超過5分鐘，等待自動刷新');
+    }
     return row;
   });
   const expectedDirectionCount = openMarketCount * 2;
@@ -367,7 +413,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.4.2 三莊逐腿 payoff 校準</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；整數、尾數與拆分盤以同莊相鄰半分盤重建勝／走／負後逐腿結算；全部所需盤線仍須3家以上不同莊家、5分鐘內同步才建立影子W/R</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.4.3 三莊逐腿 payoff 校準</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；整數、尾數與拆分盤以同莊相鄰半分盤逐腿結算；合格三莊市場價格決定影子W/R，未完成驗證的原始模型只列稽核警告、不能否決或改寫分數</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
@@ -409,7 +455,7 @@ function LeagueSetupPanel({ config }) {
 function LeagueShadowPanel({ config }) {
   return <section className="leagueSetup panel">
     <div className="setupHead"><div><span className="kicker">V10.4 安全校準</span><h2>{config.label}只顯示合格的獨立市場價差影子分析</h2></div><span className="state shadow">尚未啟用正式推薦</span></div>
-    <p className="muted">原始棒球模型只能阻擋結果，不能自行產生EV。沒有至少3家不同莊家、5分鐘內、同一賽事同一合約且分散合格的共識時，一律不評分；正式推薦與Unit仍等待locked OOS與forward驗證。</p>
+    <p className="muted">影子W/R只由至少3家不同莊家、5分鐘內、同一賽事同一合約且分散合格的市場價格建立；原始棒球模型與球隊資料只供稽核，不能產生、改寫或否決影子EV。正式推薦與Unit仍等待locked OOS與forward驗證。</p>
   </section>;
 }
 
@@ -437,6 +483,7 @@ export default function Home() {
   const autoAnalyzeHashRef = useRef('');
   const autoAnalyzePendingRef = useRef('');
   const lastFullAnalysisAtRef = useRef(0);
+  const lastReferenceRefreshAtRef = useRef(0);
   const currentDateRef = useRef(date);
   const currentLeagueRef = useRef(league);
   const analysisGenerationRef = useRef(0);
@@ -455,9 +502,19 @@ export default function Home() {
   const readerPendingText = coveragePendingText(readerCoverage);
   const consensusReady = health?.referenceConsensusReady === true;
   const shadowRanking = useMemo(() => board.flatMap(item => (item.customData?.analysis?.results || [])
-    .filter(row => row.sourceType === 'ACTUAL_TW_CREDIT'
+    .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
+      && row.sourceType === 'ACTUAL_TW_CREDIT'
+      && row.provider === 'TAI888_READER_AUTO'
+      && row.evCalibration?.actualReaderEligible === true
+      && readerStatus?.fresh === true
+      && readerStatus?.boardDate === date
+      && Boolean(item.readerPayloadHash)
+      && item.readerPayloadHash === readerStatus?.payloadHash
+      && actualLineFreshNow(row, clockNow)
+      && gameIsPrestartNow(item.game, clockNow)
       && row.evCalibration?.qualified === true
       && row.marketVerification?.referencePriorEligible === true
+      && referenceEvidenceFreshNow(row, clockNow)
       && row.shadowDiagnosticScore != null
       && Number.isFinite(Number(row.shadowDiagnosticScore))
       && row.scoreAudit?.ok === true
@@ -468,7 +525,7 @@ export default function Home() {
       && Number(row.shadowDiagnosticScore) >= 7.2)
     .map(row => ({ item, row, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
       water: row.water, score: Number(row.shadowDiagnosticScore), weightedEV: row.weightedEV, robustEV: row.robustEV })))
-    .sort((left, right) => right.score - left.score || Number(right.robustEV || 0) - Number(left.robustEV || 0)), [board]);
+    .sort((left, right) => right.score - left.score || Number(right.robustEV || 0) - Number(left.robustEV || 0)), [board, clockNow, date, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash]);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -576,6 +633,7 @@ export default function Home() {
     autoAnalyzeHashRef.current = '';
     autoAnalyzePendingRef.current = '';
     lastFullAnalysisAtRef.current = 0;
+    lastReferenceRefreshAtRef.current = 0;
     setAcknowledgedReaderKey('');
     setSchedule([]);
     setBoard([]);
@@ -825,6 +883,7 @@ export default function Home() {
 
       setProgress({ active: true, done: 0, running: 1, total: 1, label: '取得獨立國際市場同合約參考盤' });
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
+      lastReferenceRefreshAtRef.current = Date.now();
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
 
@@ -947,7 +1006,9 @@ export default function Home() {
       commitReaderStatus(status);
       const currentStatus = readerStatusRef.current;
       const statusRevision = readerRevisionKey(targetDate, currentStatus?.payloadHash, currentStatus?.pageActivityAt);
-      if (!currentStatus?.fresh || !statusRevision || statusRevision === creditRevisionRef.current) return;
+      const referenceRefreshDue = Date.now() - Number(lastReferenceRefreshAtRef.current || 0) >= REFERENCE_REFRESH_INTERVAL_MS;
+      if (!currentStatus?.fresh || !statusRevision
+        || (statusRevision === creditRevisionRef.current && !referenceRefreshDue)) return;
       const games = schedule.length ? schedule : board.map(item => item.game);
       const credit = await requestJSON('/api/credit-lines', {
         method: 'POST',
@@ -956,9 +1017,11 @@ export default function Home() {
       }, 60000);
       if (!stillCurrent()) return;
       const creditRevision = readerRevisionKey(targetDate, credit.payloadHash, credit.pageActivityAt);
-      if (credit.provider !== 'TAI888_READER_AUTO' || !credit.readerFresh || !creditRevision || creditRevision === creditRevisionRef.current) return;
+      if (credit.provider !== 'TAI888_READER_AUTO' || !credit.readerFresh || !creditRevision
+        || (creditRevision === creditRevisionRef.current && !referenceRefreshDue)) return;
       const creditByPk = new Map((credit.games || []).map(row => [Number(row.gamePk), row]));
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
+      lastReferenceRefreshAtRef.current = Date.now();
       if (!stillCurrent()) return;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
       const boardPks = new Set(board.map(item => Number(item.game.gamePk)));
@@ -1150,7 +1213,7 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10.4只在獨立國際市場同合約共識通過嚴格時效與分散檢查時顯示影子價差分析。原始模型不能單獨產生EV，正式下注建議仍停用。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
+      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10.4只在獨立國際市場同合約共識通過嚴格時效與分散檢查時顯示影子價差分析。原始模型只供稽核，不能產生、改寫或否決市場價差W/R；正式下注建議仍停用。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
       <div className="headerBadges"><span className={health?.ok && consensusReady ? 'health ok' : 'health warn'}>{!health?.ok ? '系統檢查中' : consensusReady ? '三莊共識已設定' : '市場共識未設定｜安全阻擋'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
     </header>
 
@@ -1177,7 +1240,7 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。符合獨立三莊同合約門檻時才顯示市場價差影子分析，其餘一律不評分；按下「紀錄實際下注」仍會永久保存當下盤口、水位、Reader版本與金額。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。符合獨立三莊同合約門檻時才顯示市場價差影子分析；單一三莊快照價差達5%先安全阻擋。第二個獨立外部來源尚未接入，因此5%以上與8.5+目前暫停；15%以上一律阻擋。其餘不評分；按下「紀錄實際下注」仍會永久保存當下盤口、水位、Reader版本與金額。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載 Tai888 Reader v2.1.13</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label} Reader尚未驗證` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>

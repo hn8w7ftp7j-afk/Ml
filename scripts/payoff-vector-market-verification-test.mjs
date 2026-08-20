@@ -53,7 +53,7 @@ const verified = applyIndependentMarketVerification(
   undefined,
   Date.parse(observedAt) + 60_000,
 );
-assert.match(MARKET_VERIFICATION_V2_VERSION, /v2\.3\.0/);
+assert.match(MARKET_VERIFICATION_V2_VERSION, /v2\.4\.0/);
 assert.ok(verified.every(row => row.marketVerification.referencePriorEligible));
 const over = verified[0].marketVerification.referencePayoffVector;
 assert.ok(Math.abs(over.equivalentWin - 0.53) < 1e-12);
@@ -64,6 +64,39 @@ const under = verified[1].marketVerification.referencePayoffVector;
 assert.ok(Math.abs(under.equivalentWin - 0.45) < 1e-12);
 assert.ok(Math.abs(under.equivalentLoss - 0.53) < 1e-12);
 assert.ok(Math.abs(under.equivalentPush - 0.02) < 1e-12);
+
+const fourBooks = ['book-a', 'book-b', 'book-c', 'book-d'];
+const fourEvidence = (pick, probabilities) => ({
+  ...evidence('全場大小', pick, probabilities),
+  consensusBookCount: fourBooks.length,
+  consensusBookKeys: fourBooks,
+  referenceProbabilityMad: 0.0095,
+  referenceBookProbabilities: fourBooks.map((bookmakerKey, index) => ({
+    bookmakerKey,
+    observedAt,
+    probability: probabilities[index],
+  })),
+});
+const fourBookProbabilities = [0.470, 0.476, 0.490, 0.495];
+const fourBookLattice = [
+  fourEvidence('大7.5', fourBookProbabilities),
+  fourEvidence('小7.5', fourBookProbabilities.map(value => 1 - value)),
+  fourEvidence('大8.5', fourBookProbabilities),
+  fourEvidence('小8.5', fourBookProbabilities.map(value => 1 - value)),
+];
+const fourBookPair = applyIndependentMarketVerification(
+  [actual('大8平'), actual('小8平')],
+  fourBookLattice,
+  undefined,
+  Date.parse(observedAt) + 60_000,
+);
+assert.ok(fourBookPair.every(row => row.marketVerification.referencePriorEligible));
+const fourBookOver = fourBookPair[0].marketVerification.referencePayoffVector;
+const fourBookUnder = fourBookPair[1].marketVerification.referencePayoffVector;
+assert.ok(Math.abs(fourBookOver.effectiveWinProbability + fourBookUnder.effectiveWinProbability - 1) < 1e-12,
+  '偶數莊家必須平均中間兩個完整payoff向量，正反方向中心機率仍須互補');
+assert.ok(Math.abs(fourBookOver.equivalentWin - fourBookUnder.equivalentLoss) < 1e-12);
+assert.ok(Math.abs(fourBookOver.equivalentLoss - fourBookUnder.equivalentWin) < 1e-12);
 
 const split = applyIndependentMarketVerification(
   [actual('大8/8.5平')],

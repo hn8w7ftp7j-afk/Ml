@@ -8,6 +8,7 @@ import {
   REFERENCE_LINES_VERSION,
   referenceProviderStatus,
 } from '../lib/reference-lines.js';
+import { applyIndependentMarketVerification } from '../lib/market-verification-v2.js';
 
 const schedule = [{
   gamePk: 123,
@@ -66,7 +67,7 @@ const odds = normalizeOddsApiReference([{
     bookmaker('book-c', '2026-08-11T20:02:00Z', 1.93, 1.85, 1.92, 1.86),
   ],
 }], schedule, { fetchedAt: '2026-08-11T20:02:30.000Z' });
-assert.match(REFERENCE_LINES_VERSION, /v1\.3\.0/);
+assert.match(REFERENCE_LINES_VERSION, /v1\.4\.0/);
 assert.equal(odds.games.length, 1);
 assert.deepEqual(odds.games[0].markets.map(row => row.pick), [
   '波士頓紅襪受讓1.5', '多倫多藍鳥讓1.5', '大8.5', '小8.5',
@@ -94,6 +95,13 @@ const eventBookmaker = (key, lastUpdate) => ({
   key,
   last_update: lastUpdate,
   markets: [
+    {
+      key: 'h2h',
+      outcomes: [
+        { name: 'Boston Red Sox', price: 1.91 },
+        { name: 'Toronto Blue Jays', price: 1.87 },
+      ],
+    },
     {
       key: 'spreads',
       outcomes: [
@@ -173,12 +181,14 @@ const eventOdds = normalizeOddsApiReference([{
   ],
 }], schedule, { fetchedAt: '2026-08-11T20:02:30.000Z' });
 const eventMarkets = eventOdds.games[0].markets;
-assert.equal(eventMarkets.length, 20, 'all valid full-game/F5 main and alternate line groups must survive normalization');
+assert.equal(eventMarkets.length, 22, 'all valid h2h/full-game/F5 main and alternate line groups must survive normalization');
 assert.equal(new Set(eventMarkets.map(row => `${row.market}/${row.pick}`)).size, eventMarkets.length, 'main and alternate feeds must not duplicate an identical contract');
 assert.deepEqual(new Set(eventMarkets.map(row => row.market)), new Set(['全場讓分', '全場大小', '上半讓分', '上半大小']));
 for (const contract of [
   '全場讓分/波士頓紅襪受讓2.5',
   '全場讓分/多倫多藍鳥讓0.5',
+  '全場讓分/波士頓紅襪受讓0平',
+  '全場讓分/多倫多藍鳥讓0平',
   '全場大小/大8',
   '全場大小/小9',
   '上半讓分/波士頓紅襪受讓1.5',
@@ -190,6 +200,29 @@ for (const contract of [
 assert.ok(!eventMarkets.some(row => row.pick === '大7.5' || row.pick === '小7.5'), 'unsafe paired overround must be rejected');
 assert.ok(eventMarkets.some(row => row.rawDecimalOdds === 6 && row.water === 5), 'safe alternate prices outside the old 1.50-2.50 range must be retained');
 assert.ok(eventMarkets.every(row => row.referenceEvidenceEligible === true && row.referenceBookProbabilities.length === 3));
+const zeroActual = pick => ({
+  market: '全場讓分',
+  pick,
+  water: 0.95,
+  sourceType: 'ACTUAL_TW_CREDIT',
+  provider: 'TAI888_READER_AUTO',
+  lineAsOf: '2026-08-11T20:02:30.000Z',
+});
+const zeroVerified = applyIndependentMarketVerification(
+  [zeroActual('波士頓紅襪受讓0-20'), zeroActual('多倫多藍鳥讓0+70')],
+  eventMarkets,
+  undefined,
+  Date.parse('2026-08-11T20:02:30.000Z'),
+);
+assert.ok(zeroVerified.every(row => row.marketVerification.referencePriorEligible),
+  'MLB full-game zero run lines must side-match h2h by team even when Tai888 uses give/receive tail modifiers');
+const f5Zero = applyIndependentMarketVerification(
+  [{ ...zeroActual('波士頓紅襪受讓0-20'), market: '上半讓分' }],
+  eventMarkets,
+  undefined,
+  Date.parse('2026-08-11T20:02:30.000Z'),
+)[0];
+assert.equal(f5Zero.marketVerification.referencePriorEligible, false, 'F5 zero can push and must never reuse full-game h2h');
 const overEight = eventMarkets.find(row => row.market === '全場大小' && row.pick === '大8');
 const underEight = eventMarkets.find(row => row.market === '全場大小' && row.pick === '小8');
 for (let index = 0; index < overEight.referenceBookProbabilities.length; index += 1) {
@@ -199,6 +232,7 @@ for (let index = 0; index < overEight.referenceBookProbabilities.length; index +
   'each bookmaker probability pair must complement before cross-book aggregation');
 }
 assert.deepEqual(ODDS_API_EVENT_MARKETS, [
+  'h2h',
   'spreads',
   'alternate_spreads',
   'totals',

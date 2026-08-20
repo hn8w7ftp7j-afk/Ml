@@ -31,7 +31,7 @@ export async function GET() {
   const referenceStatus = referenceProviderStatus();
   return NextResponse.json({
     ok: true,
-    version: '10.4.2',
+    version: '10.4.3',
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,

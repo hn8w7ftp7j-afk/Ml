@@ -10,10 +10,10 @@ assert.doesNotMatch(page, />影子排名</, 'ambiguous shadow ranking label must
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.4\.2'/, 'UI must expose the v10.4.2 payoff-vector correction');
-assert.equal(packageJson.version, '10.4.2', 'package/release identity must match the V10.4.2 UI');
-assert.equal(packageLock.version, '10.4.2', 'package-lock release identity must match V10.4.2');
-assert.equal(packageLock.packages?.['']?.version, '10.4.2', 'root lockfile package must match V10.4.2');
+mustMatch(/const VERSION = '10\.4\.3'/, 'UI must expose the v10.4.3 independent-market qualification correction');
+assert.equal(packageJson.version, '10.4.3', 'package/release identity must match the V10.4.3 UI');
+assert.equal(packageLock.version, '10.4.3', 'package-lock release identity must match V10.4.3');
+assert.equal(packageLock.packages?.['']?.version, '10.4.3', 'root lockfile package must match V10.4.3');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.13-KBO-TRADITIONAL-NAME-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
@@ -63,6 +63,8 @@ mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing'
 // V10.4 reference-market flow must be wired into both full analysis and frozen-distribution repricing.
 mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetGames = \[\]\)/, 'target-aware reference-line loader missing');
 mustMatch(/requestJSON\('\/api\/reference-lines'/, 'reference-line API request missing');
+mustMatch(/REFERENCE_REFRESH_INTERVAL_MS = 2 \* 60 \* 1000/, 'independent references must refresh before five-minute evidence expiry even when Reader hash is unchanged');
+mustMatch(/referenceRefreshDue/, 'same-hash Reader polling must not leave expired reference evidence on screen');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
 mustMatch(/verificationMarkets: foundReference\?\.markets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
@@ -108,6 +110,28 @@ mustMatch(/不列排名、不作推薦/, 'QA block must remain isolated from ran
 assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'display must not hide scores below 7.2');
 assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must still display the fixed numeric S score');
 mustMatch(/row\.shadowDiagnosticScore != null/, 'ranking must explicitly reject null qualification scores');
+mustMatch(/row\.provider === 'TAI888_READER_AUTO'/, 'ranking must accept only Reader-signed actual rows');
+mustMatch(/row\.evCalibration\?\.actualReaderEligible === true/, 'ranking must require the server-preserved fresh Reader qualification');
+mustMatch(/actualLineFreshNow\(row, clockNow\)/, 'ranking must expire stale Reader prices immediately on the client clock');
+mustMatch(/gameIsPrestartNow\(item\.game, clockNow\)/, 'ranking must remove games that have reached scheduled start');
+mustMatch(/invalidateShadowScoreRow\(row, '獨立國際市場報價已超過5分鐘/, 'expired external consensus must clear W, R and score from the board');
+mustMatch(/return invalidateReaderPriceRow\(row, reason, reason\)/, 'expired or unverified Reader prices must clear W, R and score from the board');
+const scoreOnlyInvalidation = page.slice(
+  page.indexOf('const invalidateShadowScoreRow'),
+  page.indexOf('const invalidateReaderPriceRow'),
+);
+assert.doesNotMatch(scoreOnlyInvalidation, /lineFresh:\s*false|actualReaderEligible:\s*false|executable:\s*false/, 'external-reference expiry must not invalidate a still-fresh Reader price or hide actual-bet recording');
+const readerPriceInvalidation = page.slice(
+  page.indexOf('const invalidateReaderPriceRow'),
+  page.indexOf('function outcomeText'),
+);
+assert.match(readerPriceInvalidation, /lineFresh:\s*false/, 'Reader-price invalidation must clear actual-line freshness');
+assert.match(readerPriceInvalidation, /actualReaderEligible:\s*false/, 'Reader-price invalidation must clear the server-preserved Reader qualification');
+const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
+assert.ok(
+  gameCardGuard.indexOf('const currentReaderPrice') < gameCardGuard.indexOf("invalidateShadowScoreRow(row, '獨立國際市場報價已超過5分鐘"),
+  'Reader hash/source/freshness must be checked before reference-expiry score-only handling',
+);
 mustMatch(/row\.scoreAudit\?\.ok === true/, 'ranking must require QA PASS');
 mustMatch(/row\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
 mustMatch(/Number\(row\.weightedEV\) > 0/, 'ranking must require positive Raw W EV');
@@ -117,10 +141,15 @@ mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected directi
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
-mustMatch(/V10\.4\.2逐莊結算市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4.2 payoff-vector shadow semantics');
+mustMatch(/V10\.4\.3逐莊結算市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4.3 payoff-vector shadow semantics');
+mustMatch(/不能產生、改寫或否決影子EV/, 'the UI must disclose that the raw baseball model is audit-only');
 mustMatch(/市場價差W \${pct\(row\.weightedEV\)\}/, 'W must be labelled as the independent-market price gap');
 mustMatch(/跨莊保守R \${pct\(row\.robustEV\)\}/, 'R must be labelled as the conservative cross-book price gap');
 mustMatch(/合格市場價差影子分數啟用/, 'provider status must report the qualified shadow-price score mode');
+mustMatch(/單一三莊快照價差達5%先安全阻擋/, 'the 5% single-snapshot review gate must be visible');
+mustMatch(/第二個獨立外部來源尚未接入/, 'the unavailable second-source validation must be disclosed');
+mustMatch(/5%以上與8\.5\+目前暫停/, '5%+ and 8.5+ must be visibly paused until a second source exists');
+mustMatch(/15%以上一律阻擋/, 'the absolute 15% market-gap ceiling must be visible');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
 mustMatch(/不產生有效EV、不評分、不列排名/, 'unqualified model or reference evidence must fail closed in the primary UI');
