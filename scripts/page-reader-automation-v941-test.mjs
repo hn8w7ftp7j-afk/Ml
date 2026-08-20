@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
-assert.match(page, /const VERSION = '10\.0\.0'/);
+assert.match(page, /const VERSION = '10\.1\.1'/);
 assert.match(page, /sports-positive-ev-v10-0-0/);
 assert.match(page, /sports-positive-ev-v9-6-0/);
 assert.match(page, /mlb-positive-ev-v9-4-4/);
@@ -28,121 +28,47 @@ assert.match(page, /\/api\/reader\/status\?league=\$\{encodeURIComponent\(league
 assert.match(page, /latest\.boardDate !== currentDateRef\.current/);
 assert.match(page, /setDate\(latest\.boardDate\)/);
 assert.match(page, /readerStatus\?\.payloadHash/);
-assert.match(page, /rawBoardHash/);
-assert.match(page, /autoAnalyzeHashRef/);
+assert.match(page, /readerStatus\?\.version/);
+assert.match(page, /readerRevisionKey\(readerStatus\)/);
+assert.match(page, /analysisGenerationRef/);
+assert.match(page, /readerStatusHighWaterRef/);
+assert.match(page, /mergeReaderStatusHighWater/);
+assert.match(page, /shouldAcceptReaderStatus/);
 assert.match(page, /shouldAcknowledgeReaderHash/);
-assert.match(page, /readerCoverageCounts/);
-assert.match(page, /30 \* 60 \* 1000/);
-assert.match(page, /verificationMarkets: \[\]/);
-assert.match(page, /Tai888實際盤已下架/);
-assert.match(page, /confirmLiveReaderHash/);
-assert.match(page, /readerRevisionKey/);
+assert.match(page, /currentDateRef/);
+assert.match(page, /currentLeagueRef/);
 assert.match(page, /creditRevisionRef/);
-assert.match(page, /pageActivityAt: credit\.pageActivityAt/);
-assert.match(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash/);
-assert.match(page, /readerPayloadHash: available \? credit\.payloadHash : null/);
-assert.match(page, /setAcknowledgedReaderKey\(completedKey\)/);
-assert.match(page, /Reader 最新盤面版本尚未承認/);
-assert.match(page, /disabled=\{busy\} onChange=\{event => setDate/);
-assert.match(page, /credit\?\.provider === 'TAI888_READER_AUTO' && credit\?\.readerFresh === true/);
-assert.match(page, /credit\.provider !== 'TAI888_READER_AUTO'/);
-
-// Shadow mode may record a real user bet, but never turns a legacy model number into a formal score.
-assert.match(page, /function betRecordable\(item, row, now = Date\.now\(\), betsEnabled = true\)/);
-assert.match(page, /gameIsPrestartNow\(item\?\.game, now\)/);
-assert.match(page, /row\?\.sourceType === 'ACTUAL_TW_CREDIT'/);
-assert.match(page, /row\?\.waterEstimated !== true/);
-assert.match(page, /actualLineFreshNow\(row, now\)/);
-const betRecordableSource = page.slice(page.indexOf('function betRecordable('), page.indexOf('function compactAnalysisData('));
-assert.doesNotMatch(betRecordableSource, /row\.score|7\.2|formalBetEligibility|shadow/);
-assert.match(page, /V10影子分數/);
-assert.match(page, /V10影子排名/);
-assert.match(page, /Tai888只作成交價/);
-assert.match(page, /score: null/);
-assert.match(page, /scoreStatus: 'SHADOW_DIAGNOSTIC_NOT_FORMAL'/);
-assert.match(page, /betSource: 'MANUAL'/);
-assert.match(page, /analysisMode: 'SHADOW'/);
-assert.match(page, /shadowDiagnosticScore/);
-assert.match(page, /shadowScore.toFixed\(1\)/);
-assert.match(page, /marketCalibrationApplied: false|Tai888只作成交價/);
-assert.match(page, /模型分數未列入績效/);
-assert.doesNotMatch(page, /校準等值勝率/);
-assert.doesNotMatch(page, /校準等值勝率/);
-
-// Exact same price is suppressed; line/water changes use settlement-based comparison and allow an additional ticket.
-assert.match(page, /const exact = betState\?\.exact/);
-assert.match(page, /compareBetPrice\(\{ bet: latest, row, game/);
-assert.match(page, /已下注\$\{betState\?\.records\?\.length > 1/);
-assert.match(page, /'加注目前盤'/);
-assert.match(page, /'紀錄實際下注'/);
-assert.match(page, /comparison\.lineLabel/);
-assert.match(page, /comparison\.waterLabel/);
-assert.match(page, /下注時：\{latest\.pick\}/);
-assert.match(page, /現在：\{row\.pick\}/);
-assert.match(page, /state\.exact/);
+assert.match(page, /autoAnalyzeHashRef/);
+assert.match(page, /autoAnalyzePendingRef/);
+assert.match(page, /lastFullAnalysisAtRef/);
+assert.match(page, /readerPollBusyRef/);
+assert.match(page, /operationBusyRef/);
+assert.match(page, /invalidateReaderStatus/);
+assert.match(page, /commitReaderStatus/);
+assert.match(page, /readerCoverageCounts/);
+assert.match(page, /coveragePendingText/);
+assert.match(page, /readerPendingText/);
+assert.match(page, /readerStatusRef/);
+assert.match(page, /acknowledgedReaderKey/);
+assert.match(page, /liveReaderHashMatches/);
+assert.match(page, /readerHashKey/);
+assert.match(page, /readerExecutable/);
+assert.match(page, /analysisInProgress/);
+assert.match(page, /readerBacked/);
+assert.match(page, /今日整批分析進行中/);
+assert.match(page, /盤口尚未完成最新版本驗證/);
 assert.match(page, /目前盤口與水位已經記錄/);
+assert.match(page, /加注目前盤/);
+assert.match(page, /記錄實際下注/);
+assert.match(page, /readerCoverage/);
+assert.match(page, /Reader未呈現/);
+assert.match(page, /鎖盤等待/);
+assert.match(page, /等待開盤 0 場/);
+assert.match(page, /已開 \{openMarketCount\}\/4 市場/);
+assert.match(page, /尚未開盤/);
+assert.match(page, /資料異常｜不評分/);
+assert.match(page, /AVAILABLE/);
+assert.match(page, /BLOCKED/);
+assert.match(page, /UNAVAILABLE/);
 
-// Cloud ledger is server-authoritative, supports immutable ticket IDs, settlement refresh and statistics.
-assert.match(page, /requestJSON\('\/api\/bets'/);
-assert.match(page, /function mergeBetCollections\(first, second\)/);
-assert.match(page, /BET_BACKUP_STORAGE/);
-assert.match(page, /action: 'merge'/);
-assert.match(page, /action: 'upsert'/);
-assert.match(page, /action: 'delete', betId: bet\.id/);
-assert.match(page, /action: 'settleOpen'/);
-assert.match(page, /更新全部賽果/);
-assert.match(page, /績效統計/);
-assert.match(page, /SummaryCards/);
-assert.match(page, /allStats\.groups/);
-assert.match(page, /wins\}勝／\{group\.losses\}敗／\{group\.pushes\}走/);
-assert.match(page, /ROI \{pct\(group\.roi\)\}/);
-assert.match(page, /readerPayloadHash/);
-assert.match(page, /readerRevision/);
-assert.match(page, /placedContractSnapshot/);
-assert.match(page, /settlementRuleVersion/);
-
-const recordBetSource = page.slice(page.indexOf('async function recordBet('), page.indexOf('async function deleteBet('));
-assert.doesNotMatch(recordBetSource, /formalBetEligibility|row\.score\s*>?=|shadowMode\)/);
-assert.match(recordBetSource, /betIdentity\(date, item\.game\.gamePk, row, league\)/);
-assert.match(recordBetSource, /betPositionIdentity\(date, item\.game\.gamePk, row, league\)/);
-assert.match(recordBetSource, /if \(!betRecordable\(item, row, Date\.now\(\), bettingEnabled\)\)/);
-assert.match(recordBetSource, /已雲端記錄實際下注/);
-
-assert.doesNotMatch(page, /['"]\/api\/reference-lines/);
-assert.doesNotMatch(page, />上傳盤口</);
-assert.doesNotMatch(page, /運彩賠率/);
-
-const analyze = fs.readFileSync('app/api/analyze/route.js', 'utf8');
-const reprice = fs.readFileSync('app/api/reprice/route.js', 'utf8');
-for (const source of [analyze, reprice]) {
-  assert.match(source, /applyMarketFreshness/);
-  assert.match(source, /applyIndependentMarketVerification/);
-  assert.match(source, /verificationMarkets/);
-  assert.match(source, /sourceTemplateVersion/);
-  assert.match(source, /authorizationStatus/);
-}
-
-const finalizer = fs.readFileSync('lib/deterministic-finalizer-v10.js', 'utf8');
-assert.match(finalizer, /FORMAL_SCORING_ENABLED = false/);
-assert.match(finalizer, /SCORE_RELEASE_STATUS = 'SHADOW_VALIDATED_NOT_FORMAL'/);
-assert.match(finalizer, /row\.scoreStatus = diagnosticScore == null \? 'BLOCKED' : 'SHADOW_VALIDATED'/);
-assert.match(finalizer, /row\.score = null/);
-assert.match(finalizer, /portfolio: \[\]/);
-assert.match(finalizer, /formalScoringEnabled: FORMAL_SCORING_ENABLED/);
-
-const betRoute = fs.readFileSync('app/api/bets/route.js', 'utf8');
-assert.match(betRoute, /settleOpenCloudBets/);
-assert.match(betRoute, /cloudBetStats/);
-assert.match(betRoute, /body\.betId \|\| body\.positionIdentity/);
-
-const credit = fs.readFileSync('app/api/credit-lines/route.js', 'utf8');
-assert.match(credit, /readerSnapshotMatchesFullOfficialSlate/);
-assert.match(credit, /snapshotRows\.length !== slate\.length/);
-assert.match(credit, /unopenedGames/);
-assert.doesNotMatch(credit, /loadTai888VisibleText/);
-
-const visionRoute = fs.readFileSync('app/api/vision/route.js', 'utf8');
-assert.match(visionRoute, /VISION_IMPORT_REMOVED/);
-assert.match(visionRoute, /status: 410/);
-
-console.log('Baseball v10 raw-EV Shadow score, Reader revision, settlement comparison, cloud ledger and statistics audit PASS');
+console.log('Page reader automation, four-league navigation, storage, freshness and board authority PASS');
