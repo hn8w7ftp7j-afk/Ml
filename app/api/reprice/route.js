@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { enforceAnalysisModeSafety, repriceMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
-import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
+import { enforceAnalysisModeSafety, repriceMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v10.js';
+import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { buildSnapshotFingerprints, DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';

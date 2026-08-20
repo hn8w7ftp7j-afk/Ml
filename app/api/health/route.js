@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import { appPasswordConfigured, sessionSecretConfigured, siteAuthConfigured } from '../../../lib/security.js';
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
-import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
+import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v10.js';
 import { BATCH_VERSION } from '../../../lib/batch.js';
 import {
   FINAL_ENGINE_VERSION,
   FORMAL_SCORING_ENABLED,
   SCORE_RELEASE_STATUS,
   UNCERTAINTY_SET_VERSION,
-} from '../../../lib/deterministic-finalizer.js';
+} from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION, SCORE_POLICY_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
 import { BET_PRICE_COMPARISON_VERSION } from '../../../lib/bet-price-comparison.js';
@@ -28,7 +28,7 @@ export async function GET() {
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   return NextResponse.json({
     ok: true,
-    version: '9.7.0',
+    version: '10.0.0',
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,

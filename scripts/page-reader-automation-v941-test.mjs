@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
-assert.match(page, /const VERSION = '9\.7\.0'/);
-assert.match(page, /sports-positive-ev-v9-7-0/);
+assert.match(page, /const VERSION = '10\.0\.0'/);
+assert.match(page, /sports-positive-ev-v10-0-0/);
 assert.match(page, /sports-positive-ev-v9-6-0/);
 assert.match(page, /mlb-positive-ev-v9-4-4/);
 assert.match(page, /betPriceMatches/);
@@ -55,17 +55,19 @@ assert.match(page, /row\?\.waterEstimated !== true/);
 assert.match(page, /actualLineFreshNow\(row, now\)/);
 const betRecordableSource = page.slice(page.indexOf('function betRecordable('), page.indexOf('function compactAnalysisData('));
 assert.doesNotMatch(betRecordableSource, /row\.score|7\.2|formalBetEligibility|shadow/);
-assert.match(page, /正式模型分數已停用/);
-assert.match(page, /正式下注排名已停用/);
-assert.match(page, /v9\.4\.4資料鏈已作廢/);
+assert.match(page, /V10影子分數/);
+assert.match(page, /V10影子排名/);
+assert.match(page, /Tai888只作成交價/);
 assert.match(page, /score: null/);
-assert.match(page, /scoreStatus: 'LEGACY_INVALID'/);
+assert.match(page, /scoreStatus: 'SHADOW_DIAGNOSTIC_NOT_FORMAL'/);
 assert.match(page, /betSource: 'MANUAL'/);
 assert.match(page, /analysisMode: 'SHADOW'/);
-assert.match(page, /legacyDiagnosticScore/);
+assert.match(page, /shadowDiagnosticScore/);
+assert.match(page, /shadowScore.toFixed\(1\)/);
+assert.match(page, /marketCalibrationApplied: false|Tai888只作成交價/);
 assert.match(page, /模型分數未列入績效/);
 assert.doesNotMatch(page, /校準等值勝率/);
-assert.doesNotMatch(page, /正式EV/);
+assert.doesNotMatch(page, /校準等值勝率/);
 
 // Exact same price is suppressed; line/water changes use settlement-based comparison and allow an additional ticket.
 assert.match(page, /const exact = betState\?\.exact/);
@@ -120,10 +122,10 @@ for (const source of [analyze, reprice]) {
   assert.match(source, /authorizationStatus/);
 }
 
-const finalizer = fs.readFileSync('lib/deterministic-finalizer.js', 'utf8');
+const finalizer = fs.readFileSync('lib/deterministic-finalizer-v10.js', 'utf8');
 assert.match(finalizer, /FORMAL_SCORING_ENABLED = false/);
-assert.match(finalizer, /SCORE_RELEASE_STATUS = 'LEGACY_INVALID'/);
-assert.match(finalizer, /row\.scoreStatus = SCORE_RELEASE_STATUS/);
+assert.match(finalizer, /SCORE_RELEASE_STATUS = 'SHADOW_VALIDATED_NOT_FORMAL'/);
+assert.match(finalizer, /row\.scoreStatus = diagnosticScore == null \? 'BLOCKED' : 'SHADOW_VALIDATED'/);
 assert.match(finalizer, /row\.score = null/);
 assert.match(finalizer, /portfolio: \[\]/);
 assert.match(finalizer, /formalScoringEnabled: FORMAL_SCORING_ENABLED/);
@@ -143,4 +145,4 @@ const visionRoute = fs.readFileSync('app/api/vision/route.js', 'utf8');
 assert.match(visionRoute, /VISION_IMPORT_REMOVED/);
 assert.match(visionRoute, /status: 410/);
 
-console.log('Baseball v9.7 Shadow safety, Reader revision, settlement-based price comparison, cloud ledger and statistics audit PASS');
+console.log('Baseball v10 raw-EV Shadow score, Reader revision, settlement comparison, cloud ledger and statistics audit PASS');
