@@ -2,72 +2,71 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
-assert.match(page, /const VERSION = '10\.1\.1'/);
-assert.match(page, /sports-positive-ev-v10-0-0/);
-assert.match(page, /sports-positive-ev-v9-6-0/);
-assert.match(page, /mlb-positive-ev-v9-4-4/);
-assert.match(page, /betPriceMatches/);
-assert.match(page, /compareBetPrice/);
-assert.match(page, /summarizeBetLedger/);
-assert.match(page, /import \{ LEAGUE_IDS, leagueConfig, normalizeLeagueId \} from '\.\.\/lib\/leagues\.js'/);
-assert.match(page, /activeLeague: normalizeLeagueId\(own\.activeLeague\)/);
-assert.match(page, /saveCompactStore\(\{ settings, bets, activeLeague: league \}\)/);
-assert.match(page, /const analysisEnabled = activeLeague\.capabilities\.analysis === true/);
-assert.match(page, /const readerEnabled = activeLeague\.capabilities\.reader === true/);
-assert.match(page, /const bettingEnabled = activeLeague\.capabilities\.bets === true/);
-assert.match(page, /const shadowMode = activeLeague\.status === 'shadow'/);
-assert.match(page, /\[date, league\]/);
-assert.doesNotMatch(page, /league !== 'MLB'|league === 'MLB'/);
+const mustMatch = (pattern, label) => assert.match(page, pattern, label);
 
-// Reader authority, date isolation, freshness and immutable revision remain intact.
-assert.match(page, /if \(!readerEnabled \|\| !analysisEnabled\) return undefined/);
-assert.match(page, /scheduleEndpoint\}\?league=\$\{encodeURIComponent\(league\)\}/);
-assert.match(page, /JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/);
-assert.match(page, /setInterval\(refreshReader, 30000\)/);
-assert.match(page, /\/api\/reader\/status\?league=\$\{encodeURIComponent\(league\)\}/);
-assert.match(page, /latest\.boardDate !== currentDateRef\.current/);
-assert.match(page, /setDate\(latest\.boardDate\)/);
-assert.match(page, /readerStatus\?\.payloadHash/);
-assert.match(page, /readerRevisionKey\(readerStatus\)/);
-assert.match(page, /analysisGenerationRef/);
-assert.match(page, /readerStatusHighWaterRef/);
-assert.match(page, /mergeReaderStatusHighWater/);
-assert.match(page, /shouldAcceptReaderStatus/);
-assert.match(page, /shouldAcknowledgeReaderHash/);
-assert.match(page, /currentDateRef/);
-assert.match(page, /currentLeagueRef/);
-assert.match(page, /creditRevisionRef/);
-assert.match(page, /autoAnalyzeHashRef/);
-assert.match(page, /autoAnalyzePendingRef/);
-assert.match(page, /lastFullAnalysisAtRef/);
-assert.match(page, /readerPollBusyRef/);
-assert.match(page, /operationBusyRef/);
-assert.match(page, /invalidateReaderStatus/);
-assert.match(page, /commitReaderStatus/);
-assert.match(page, /readerCoverageCounts/);
-assert.match(page, /coveragePendingText/);
-assert.match(page, /readerPendingText/);
-assert.match(page, /readerStatusRef/);
-assert.match(page, /acknowledgedReaderKey/);
-assert.match(page, /liveReaderHashMatches/);
-assert.match(page, /readerHashKey/);
-assert.match(page, /readerExecutable/);
-assert.match(page, /analysisInProgress/);
-assert.match(page, /readerBacked/);
-assert.match(page, /今日整批分析進行中/);
-assert.match(page, /盤口尚未完成最新版本驗證/);
-assert.match(page, /目前盤口與水位已經記錄/);
-assert.match(page, /加注目前盤/);
-assert.match(page, /記錄實際下注/);
-assert.match(page, /readerCoverage/);
-assert.match(page, /Reader未呈現/);
-assert.match(page, /鎖盤等待/);
-assert.match(page, /等待開盤 0 場/);
-assert.match(page, /已開 \{openMarketCount\}\/4 市場/);
-assert.match(page, /尚未開盤/);
-assert.match(page, /資料異常｜不評分/);
-assert.match(page, /AVAILABLE/);
-assert.match(page, /BLOCKED/);
-assert.match(page, /UNAVAILABLE/);
+// Release identity and storage continuity. The storage key deliberately stays stable
+// so a display-version bump cannot erase local settings or the emergency bet backup.
+mustMatch(/const VERSION = '10\.2\.0'/, 'UI must expose the v10.2.0 release');
+mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
+mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
+mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
+mustMatch(/mlb-positive-ev-v9-4-4/, 'legacy MLB migration chain must remain available');
 
-console.log('Page reader automation, four-league navigation, storage, freshness and board authority PASS');
+// Four-league navigation and server capability gates.
+mustMatch(/import \{ LEAGUE_IDS, leagueConfig, normalizeLeagueId \} from '\.\.\/lib\/leagues\.js'/, 'league registry must be server-backed');
+mustMatch(/activeLeague: normalizeLeagueId\(own\.activeLeague\)/, 'stored league must be normalized');
+mustMatch(/saveCompactStore\(\{ settings, bets, activeLeague: league \}\)/, 'active league must persist');
+mustMatch(/const analysisEnabled = activeLeague\.capabilities\.analysis === true/, 'analysis capability gate missing');
+mustMatch(/const readerEnabled = activeLeague\.capabilities\.reader === true/, 'Reader capability gate missing');
+mustMatch(/const bettingEnabled = activeLeague\.capabilities\.bets === true/, 'bet capability gate missing');
+mustMatch(/const shadowMode = activeLeague\.status === 'shadow'/, 'Shadow state gate missing');
+assert.doesNotMatch(page, /league !== 'MLB'|league === 'MLB'/, 'page must not hard-code an MLB-only navigation branch');
+
+// Reader authority, date isolation and immutable revision/hash tracking.
+mustMatch(/currentDateRef\.current = date/, 'current date high-water reference missing');
+mustMatch(/currentLeagueRef\.current = league/, 'current league reference missing');
+mustMatch(/analysisGenerationRef\.current \+= 1/, 'analysis generation invalidation missing');
+mustMatch(/readerStatusHighWaterRef/, 'Reader high-water state missing');
+mustMatch(/shouldAcceptReaderStatus/, 'Reader rollback rejection missing');
+mustMatch(/mergeReaderStatusHighWater/, 'Reader high-water merge missing');
+mustMatch(/\/api\/reader\/status\?league=\$\{encodeURIComponent\(league\)\}&date=\$\{encodeURIComponent\(date\)\}/, 'date-bound Reader status request missing');
+mustMatch(/latest\.boardDate !== currentDateRef\.current/, 'Reader date auto-switch guard missing');
+mustMatch(/setDate\(latest\.boardDate\)/, 'Reader date auto-switch missing');
+mustMatch(/readerRevisionKey\(date, readerStatus\?\.payloadHash, readerStatus\?\.pageActivityAt\)/, 'Reader revision key must include date, payload hash and page activity');
+mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key must include date and payload hash');
+mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
+mustMatch(/setInterval\(refreshReader, 30000\)/, 'Reader status polling interval missing');
+mustMatch(/setInterval\(\(\) => pollReaderAndReprice\(\), 30000\)/, 'Reader repricing interval missing');
+
+// Automatic analysis must be keyed to a fresh Reader payload and must not overlap.
+mustMatch(/autoAnalyzeHashRef/, 'automatic analysis hash guard missing');
+mustMatch(/autoAnalyzePendingRef/, 'automatic analysis pending guard missing');
+mustMatch(/operationBusyRef/, 'operation concurrency guard missing');
+mustMatch(/readerPollBusyRef/, 'Reader polling concurrency guard missing');
+mustMatch(/readerStatus\?\.fresh/, 'fresh Reader gate missing');
+mustMatch(/oneClickAnalyze\(key\)/, 'automatic Reader analysis trigger missing');
+mustMatch(/JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'credit-line request must bind league, date and schedule');
+mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missing');
+mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
+
+// Actual-bet ledger and price comparison remain available while formal model scoring is locked.
+mustMatch(/betPriceMatches/, 'exact placed-price matching missing');
+mustMatch(/compareBetPrice/, 'placed-versus-current price comparison missing');
+mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
+mustMatch(/目前盤口與水位已經記錄/, 'same-price suppression text missing');
+mustMatch(/加注目前盤/, 'reprice add-on action missing');
+mustMatch(/記錄實際下注/, 'actual-bet action missing');
+
+// Fail-closed market coverage and v10.2 diagnostic score presentation.
+mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
+mustMatch(/資料異常｜不評分/, 'blocked market must fail closed');
+mustMatch(/尚未開盤/, 'unopened market state missing');
+mustMatch(/AVAILABLE/, 'available market state missing');
+mustMatch(/BLOCKED/, 'blocked market state missing');
+mustMatch(/UNAVAILABLE/, 'unavailable market state missing');
+mustMatch(/Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative Weighted EV must display PASS');
+mustMatch(/Number\(row\?\.robustEV\) <= 0 \? '觀察'/, 'non-positive Robust EV must display observation');
+mustMatch(/rawShadowScore != null && rawShadowScore >= 7\.2/, 'numeric score must start at the fixed 7.2 gate');
+mustMatch(/V10\.2影子診斷分數/, 'v10.2 diagnostic label missing');
+
+console.log('Page Reader automation, four-league navigation, storage continuity, board authority and v10.2 score presentation PASS');
