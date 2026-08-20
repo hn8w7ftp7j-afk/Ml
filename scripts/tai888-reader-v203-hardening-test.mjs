@@ -115,6 +115,74 @@ assert.equal(parsed.games[0].fullTotal.underWater, 1.83);
 assert.equal(validateStandardReaderGame(parsed.games[0]).directionCount, 8);
 assert.equal(validateStandardReaderGame(parsed.games[0]).ok, true);
 
+// Tai888 can keep a hidden responsive/other-league measurement copy before
+// the visible MLB odds row. DOM order must never let that identity-only copy
+// turn a genuinely open game into a locked game.
+const identityOnlyRow = structuredClone(normalized.tables[0].rows[0]);
+for (const index of [2, 3, 6, 7]) identityOnlyRow.cells[index].pair = ['', ''];
+const visibleAfterHidden = parseTai888Capture({
+  ...capture,
+  tables: [{
+    headers: normalized.tables[0].headers,
+    rows: [identityOnlyRow, normalized.tables[0].rows[0]],
+  }],
+}, new Date('2026-08-14T17:00:00Z'));
+assert.equal(visibleAfterHidden.games.length, 1);
+assert.equal(visibleAfterHidden.games[0].marketStatus, 'open', 'visible odds must outrank an earlier hidden identity-only duplicate');
+assert.equal(validateStandardReaderGame(visibleAfterHidden.games[0]).directionCount, 8);
+assert.deepEqual(visibleAfterHidden.parseIssues, [], 'blank responsive duplicate must not become a price conflict');
+
+const hiddenAfterVisible = parseTai888Capture({
+  ...capture,
+  tables: [{
+    headers: normalized.tables[0].headers,
+    rows: [normalized.tables[0].rows[0], identityOnlyRow],
+  }],
+}, new Date('2026-08-14T17:00:00Z'));
+assert.equal(hiddenAfterVisible.games[0].marketStatus, 'open', 'duplicate selection must not depend on DOM order');
+assert.equal(validateStandardReaderGame(hiddenAfterVisible.games[0]).directionCount, 8);
+
+const sameBandCells = [
+  cell('08-20 01:10', ...spans.time, 50, [
+    { text: '08-20 01:10', top: 50, left: spans.time[0] },
+    { text: '08-20 01:10', top: 50, left: spans.time[0] + 2 },
+  ]),
+  cell('BAL-巴爾的摩金鶯 MIN-明尼蘇達雙城［ 主 ］', ...spans.teams, 50, [
+    { text: 'BAL-巴爾的摩金鶯', top: 50, left: spans.teams[0] },
+    { text: 'MIN-明尼蘇達雙城［ 主 ］', top: 50, left: spans.teams[0] + 90 },
+  ]),
+  cell('0.950 1+95 0.950', ...spans.runline, 50, [
+    { text: '0.950', top: 50, left: spans.runline[0] },
+    { text: '1+95 0.950', top: 50, left: spans.runline[0] + 50 },
+  ]),
+  cell('9+30 大 0.940 小 0.940', ...spans.total, 50, [
+    { text: '9+30 大 0.940', top: 50, left: spans.total[0] },
+    { text: '小 0.940', top: 50, left: spans.total[0] + 55 },
+  ]),
+  cell('0.990 0.760', ...spans.moneyline, 50, [
+    { text: '0.990', top: 50, left: spans.moneyline[0] },
+    { text: '0.760', top: 50, left: spans.moneyline[0] + 35 },
+  ]),
+  cell('1.5 0.530 1.5 1.660', ...spans.oneLoseTwoWin, 50, [
+    { text: '1.5 0.530', top: 50, left: spans.oneLoseTwoWin[0] },
+    { text: '1.5 1.660', top: 50, left: spans.oneLoseTwoWin[0] + 55 },
+  ]),
+  cell('0.940 0-20 0.940', ...spans.first5Runline, 50, [
+    { text: '0.940', top: 50, left: spans.first5Runline[0] },
+    { text: '0-20 0.940', top: 50, left: spans.first5Runline[0] + 45 },
+  ]),
+  cell('4+50 大 0.930 小 0.930', ...spans.first5Total, 50, [
+    { text: '4+50 大 0.930', top: 50, left: spans.first5Total[0] },
+    { text: '小 0.930', top: 50, left: spans.first5Total[0] + 55 },
+  ]),
+];
+const sameBand = record(2, 50, sameBandCells);
+const sameBandNormalized = normalizer.normalizeRowRecords([header, league, sameBand], { documentLooksStandardMlb: true });
+const sameBandParsed = parseTai888Capture({ ...capture, tables: sameBandNormalized.tables }, new Date('2026-08-14T17:00:00Z'));
+assert.equal(sameBandParsed.games.length, 1, 'same-Y responsive team rows must remain one game');
+assert.equal(validateStandardReaderGame(sameBandParsed.games[0]).directionCount, 8, 'same-Y responsive odds must map to distinct sides');
+assert.equal(sameBandParsed.games[0].marketStatus, 'open');
+
 const ambiguousRunlineTables = structuredClone(normalized.tables);
 ambiguousRunlineTables[0].rows[0].cells[2].pair = ['1+95 0.950', '1+95 0.950'];
 const ambiguousRunline = parseTai888Capture({ ...capture, tables: ambiguousRunlineTables }, new Date('2026-08-14T17:00:00Z'));
@@ -230,8 +298,9 @@ const missingMarket = candidate();
 missingMarket.parsed.games[0].first5Total = null;
 const partialMarketAssessment = assessBoardCandidate(missingMarket, now);
 assert.equal(partialMarketAssessment.ok, true, 'a half-open event must not block complete games');
-assert.equal(partialMarketAssessment.candidate.parsed.games[0].marketStatus, 'locked');
-assert.equal(partialMarketAssessment.candidate.parsed.games[0].fullRunline, null, 'partial odds must be discarded, not uploaded');
+assert.equal(partialMarketAssessment.candidate.parsed.games[0].marketStatus, 'open');
+assert.ok(partialMarketAssessment.candidate.parsed.games[0].fullRunline, 'available full-game odds must remain executable');
+assert.equal(partialMarketAssessment.candidate.parsed.games[0].first5Total, null, 'a missing market must remain missing and must not be fabricated');
 
 const explicitlyLocked = candidate();
 explicitlyLocked.parsed.games[0] = {
@@ -275,9 +344,10 @@ assert.equal(shouldSkipSuccessfulPayload({
 }), false, 'manual sync always reaches ingest');
 
 const contentSource = fs.readFileSync(new URL('../reader/tai888-content.js', import.meta.url), 'utf8');
-assert.match(contentSource, /let lastMutationAt = Date\.now\(\)/);
-assert.match(contentSource, /lastMutationAt = Date\.now\(\)/);
-assert.match(contentSource, /lastMutationAt: new Date\(lastMutationAt\)\.toISOString\(\)/);
+assert.match(contentSource, /activityByLeague/);
+assert.match(contentSource, /fingerprintByLeague/);
+assert.match(contentSource, /lastMutationAt: new Date\(activityAt\)\.toISOString\(\)/);
+assert.doesNotMatch(contentSource, /document\.body\?\.innerText/);
 assert.match(contentSource, /hasExplicitMarketLock/);
 assert.match(contentSource, /img\[src\*="lock" i\]/);
 assert.match(contentSource, /marketLocked: hasExplicitMarketLock\(element\)/);

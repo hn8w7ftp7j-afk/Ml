@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
-assert.match(page, /const VERSION = '9\.6\.0'/);
+assert.match(page, /const VERSION = '9.6.2'/);
 assert.match(page, /sports-positive-ev-v9-6-0/);
 assert.match(page, /sports-positive-ev-v9-5-0/);
 assert.match(page, /mlb-positive-ev-v9-4-3/);

@@ -9,9 +9,9 @@ import {
 
 const NOW = Date.parse('2026-08-14T17:00:00.000Z');
 
-assert.equal(MAX_TAI888_TABS, 4);
+assert.equal(MAX_TAI888_TABS, Number.POSITIVE_INFINITY);
 assert.equal(withinTai888TabScanLimit(4), true);
-assert.equal(withinTai888TabScanLimit(5), false, 'a fifth tab must fail closed instead of going unscanned');
+assert.equal(withinTai888TabScanLimit(5), true, 'a fifth non-board tab must not stop four league captures');
 assert.equal(withinTai888TabScanLimit(-1), false);
 assert.equal(withinTai888TabScanLimit('4'), false);
 
@@ -102,12 +102,7 @@ assert.match(
   'an inactive tab load may not become preferred either',
 );
 assert.match(backgroundSource, /selectAuthoritativeBoard\(own, \{ now: Date\.now\(\), preferredTabId, league \}\)/);
-assert.match(backgroundSource, /MAX_TAI888_TABS/);
-assert.match(
-  backgroundSource,
-  /!withinTai888TabScanLimit\(tabs\.length\)/,
-  'more tabs than the capture limit must fail closed instead of hiding conflicts',
-);
+assert.doesNotMatch(backgroundSource, /!withinTai888TabScanLimit\(tabs\.length\)/);
 assert.match(backgroundSource, /for \(const tab of tabs\)/);
 assert.doesNotMatch(backgroundSource, /tabs\.slice\(0,\s*4\)/);
 assert.match(backgroundSource, /if \(!selection\.ok\)/);

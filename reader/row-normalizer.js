@@ -18,6 +18,8 @@
   const TEAM_CODE = /(?:^|\s)([A-Z][A-Z0-9]{0,11})\s*-/g;
   const leagueRegistry = globalThis.Tai888LeagueRegistry || Object.freeze({
     ids: ['MLB'],
+    identify: text => /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i.test(String(text || ''))
+      && !/(?:走地|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊)/i.test(String(text || '')) ? 'MLB' : null,
     standardMarker: text => /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i.test(String(text || ''))
       && !/(?:走地|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊)/i.test(String(text || '')),
   });
@@ -59,8 +61,9 @@
       if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) continue;
       columns[definition.key] = { left, right, label: definition.label };
     }
-    const minimum = ['time', 'teams', 'runline', 'total', 'first5Runline', 'first5Total'];
-    if (!minimum.every(key => columns[key])) return null;
+    if (!columns.time || !columns.teams) return null;
+    const marketKeys = ['runline', 'total', 'first5Runline', 'first5Total'];
+    if (!marketKeys.some(key => columns[key])) return null;
     return {
       order: number(record?.order),
       top: number(record?.top),
@@ -133,13 +136,17 @@
       : (mappedRow?.mapped?.teams?.lines || []).map((text, index) => ({ text, top: index * 20 }));
     const found = new Map();
     for (const row of sourceRows) {
-      for (const match of clean(row.text).matchAll(TEAM_CODE)) {
+      const rowText = clean(row.text);
+      const matches = [...rowText.matchAll(TEAM_CODE)];
+      for (const [matchIndex, match] of matches.entries()) {
         const code = match[1].toUpperCase();
+        const nextIndex = matches[matchIndex + 1]?.index ?? rowText.length;
+        const teamText = clean(rowText.slice(match.index, nextIndex));
         const candidate = {
           code,
-          text: clean(row.text),
+          text: teamText,
           top: number(row.top),
-          homeMarked: HOME_MARKER.test(row.text),
+          homeMarked: HOME_MARKER.test(teamText),
         };
         const previous = found.get(code);
         if (!previous || candidate.homeMarked || candidate.text.length > previous.text.length) {
@@ -172,6 +179,51 @@
     return clean(cell?.lines?.[fallbackIndex] || '');
   }
 
+  function pairedValues(cell, away, home, awayIndex, homeIndex) {
+    const rows = (Array.isArray(cell?.rows) ? cell.rows : [])
+      .map((row, index) => ({ text: clean(row?.text), top: number(row?.top), index }))
+      .filter(row => row.text)
+      .sort((left, right) => left.top - right.top || left.index - right.index);
+
+    // Some Tai888 responsive layouts report both team labels at effectively
+    // the same Y coordinate.  Calling valueNear twice then selects the same
+    // odds row for both sides, which makes every market look empty/locked.
+    // When two visual rows exist, assign two distinct rows together instead
+    // of resolving each side independently.
+    const sameTeamBand = Math.abs(number(away?.top) - number(home?.top)) <= 6;
+    if (rows.length === 1 && sameTeamBand) {
+      // Preserve the combined visual market row only once.  The parser can
+      // then split its two direction/water groups deterministically.
+      return [clean(rows[0].text), ''];
+    }
+    if (rows.length >= 2) {
+      if (sameTeamBand) {
+        return [
+          clean(rows[Math.min(awayIndex, rows.length - 1)]?.text),
+          clean(rows[Math.min(homeIndex, rows.length - 1)]?.text),
+        ];
+      }
+
+      let best = null;
+      for (let awayRow = 0; awayRow < rows.length; awayRow += 1) {
+        for (let homeRow = 0; homeRow < rows.length; homeRow += 1) {
+          if (awayRow === homeRow) continue;
+          const score = Math.abs(rows[awayRow].top - number(away?.top))
+            + Math.abs(rows[homeRow].top - number(home?.top));
+          if (!best || score < best.score) best = { awayRow, homeRow, score };
+        }
+      }
+      if (best && best.score <= 56) {
+        return [clean(rows[best.awayRow].text), clean(rows[best.homeRow].text)];
+      }
+    }
+
+    return [
+      valueNear(cell, away?.top, awayIndex),
+      valueNear(cell, home?.top, homeIndex),
+    ];
+  }
+
   function pairedCell(awayValue, homeValue) {
     const pair = [clean(awayValue), clean(homeValue)];
     return { pair, lines: pair.filter(Boolean) };
@@ -191,10 +243,8 @@
 
     const cells = DEFINITIONS.map(definition => {
       const cell = mappedRow.mapped[definition.key];
-      return pairedCell(
-        valueNear(cell, away.top, awayIndex),
-        valueNear(cell, home.top, homeIndex),
-      );
+      const [awayValue, homeValue] = pairedValues(cell, away, home, awayIndex, homeIndex);
+      return pairedCell(awayValue, homeValue);
     });
     return { cells, text: mappedRow.rawText, awayCode: away.code, homeCode: home.code, marketLocked: mappedRow.marketLocked };
   }
@@ -233,10 +283,27 @@
     return /(?:聯盟|联盟)\s*[:：]?/i.test(clean(text));
   }
 
-  function normalizeRowRecords(records, options = {}) {
-    const sorted = (Array.isArray(records) ? records : [])
-      .filter(record => record && Array.isArray(record.cells))
-      .sort((left, right) => number(left.order) - number(right.order));
+  function partitionLeagueSections(sorted) {
+    const sections = [];
+    let current = null;
+    let latestHeader = null;
+    for (const record of sorted) {
+      const profile = buildHeaderProfile(record);
+      if (profile) latestHeader = record;
+      if (isLeagueMarker(record.text)) {
+        const league = leagueRegistry.identify?.(clean(record.text));
+        current = league ? { league, records: latestHeader ? [latestHeader, record] : [record] } : null;
+        if (current) sections.push(current);
+        continue;
+      }
+      if (current && record !== latestHeader) current.records.push(record);
+    }
+    return sections;
+  }
+
+  function normalizeSection(sorted, expectedLeague, options = {}) {
+
+    const originalRecordCount = number(options.originalRecordCount, sorted.length);
     const headers = [];
     for (const record of sorted) {
       const profile = buildHeaderProfile(record);
@@ -244,9 +311,7 @@
     }
 
     let currentProfile = null;
-    const expectedLeague = leagueRegistry.ids.includes(options.expectedLeague) ? options.expectedLeague : 'MLB';
-    let insideStandardLeague = false;
-    let sawLeagueMarker = false;
+    const sawLeagueMarker = true;
     let pendingAway = null;
     let expectedGameCount = null;
     const games = [];
@@ -263,9 +328,7 @@
       }
 
       if (isLeagueMarker(record.text)) {
-        sawLeagueMarker = true;
-        insideStandardLeague = isStandardLeagueRow(record.text, expectedLeague);
-        if (insideStandardLeague) {
+        if (isStandardLeagueRow(record.text, expectedLeague)) {
           const count = clean(record.text).match(/[（(]\s*(\d{1,2})\s*[）)]/);
           if (count) expectedGameCount = Math.max(Number(expectedGameCount || 0), Number(count[1]));
         }
@@ -277,9 +340,6 @@
         currentProfile = [...headers].reverse().find(item => item.order <= number(record.order)) || headers[0] || null;
       }
       if (!currentProfile) continue;
-      const permitted = sawLeagueMarker ? insideStandardLeague : options.documentLooksStandardLeague === true || options.documentLooksStandardMlb === true;
-      if (!permitted) continue;
-
       const mapped = mapRecord(record, currentProfile);
       const teams = teamRows(mapped);
       if (!teams.length) continue;
@@ -318,6 +378,10 @@
     const unique = [];
     const seen = new Map();
     const conflictingGameKeys = [];
+    const marketRichness = game => [2, 3, 6, 7].reduce((score, index) => {
+      const pair = Array.isArray(game?.cells?.[index]?.pair) ? game.cells[index].pair : [];
+      return score + pair.filter(value => clean(value)).length;
+    }, 0);
     for (const game of games) {
       const timeText = game.cells[0]?.pair?.join('|') || '';
       const key = `${game.awayCode}|${game.homeCode}|${timeText}`;
@@ -326,10 +390,18 @@
         marketLocked: game.marketLocked === true,
       });
       if (seen.has(key)) {
-        if (seen.get(key) !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
+        const previous = seen.get(key);
+        const richness = marketRichness(game);
+        if (richness > previous.richness) {
+          unique[previous.index] = game;
+          seen.set(key, { fingerprint, richness, index: previous.index });
+          continue;
+        }
+        if (richness < previous.richness) continue;
+        if (previous.fingerprint !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
         continue;
       }
-      seen.set(key, fingerprint);
+      seen.set(key, { fingerprint, richness: marketRichness(game), index: unique.length });
       unique.push(game);
     }
 
@@ -339,7 +411,7 @@
         rows: unique.map(game => ({ cells: game.cells, text: game.text, marketLocked: game.marketLocked === true })),
       }] : [],
       diagnostics: {
-        recordCount: sorted.length,
+        recordCount: originalRecordCount,
         headerCount: headers.length,
         candidateRows,
         gameCount: unique.length,
@@ -353,9 +425,41 @@
     };
   }
 
+  function normalizeRowRecords(records, options = {}) {
+    const sorted = (Array.isArray(records) ? records : [])
+      .filter(record => record && Array.isArray(record.cells))
+      .sort((left, right) => number(left.order) - number(right.order));
+    const expectedLeague = leagueRegistry.ids.includes(options.expectedLeague) ? options.expectedLeague : '';
+    const sections = partitionLeagueSections(sorted).filter(section => !expectedLeague || section.league === expectedLeague);
+    if (!sections.length) {
+      return { tables: [], diagnostics: { recordCount: sorted.length, headerCount: 0, candidateRows: 0, gameCount: 0, pairedRows: 0, singleRows: 0, sawLeagueMarker: false, league: expectedLeague, expectedGameCount: null, conflictingGameKeys: [], sectionCount: 0 } };
+    }
+    const normalized = sections.map(section => normalizeSection(section.records, section.league, { originalRecordCount: sorted.length }));
+    const games = normalized.flatMap(value => value.tables?.[0]?.rows || []);
+    const conflicts = normalized.flatMap(value => value.diagnostics?.conflictingGameKeys || []);
+    const expectedGameCount = normalized.reduce((count, value) => Math.max(count, number(value.diagnostics?.expectedGameCount)), 0) || null;
+    return {
+      tables: games.length ? [{ headers: DEFINITIONS.map(definition => definition.label), rows: games }] : [],
+      diagnostics: {
+        recordCount: sorted.length,
+        headerCount: normalized.reduce((count, value) => count + number(value.diagnostics?.headerCount), 0),
+        candidateRows: normalized.reduce((count, value) => count + number(value.diagnostics?.candidateRows), 0),
+        gameCount: games.length,
+        pairedRows: normalized.reduce((count, value) => count + number(value.diagnostics?.pairedRows), 0),
+        singleRows: normalized.reduce((count, value) => count + number(value.diagnostics?.singleRows), 0),
+        sawLeagueMarker: true,
+        league: expectedLeague || sections[0].league,
+        expectedGameCount,
+        conflictingGameKeys: [...new Set(conflicts)],
+        sectionCount: sections.length,
+      },
+    };
+  }
+
   globalThis.Tai888RowNormalizer = Object.freeze({
     normalizeRowRecords,
     isStandardLeagueRow,
-    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.1.0',
+    partitionLeagueSections,
+    version: 'TAI888-SPLIT-ROW-NORMALIZER-v2.2.0',
   });
 })();

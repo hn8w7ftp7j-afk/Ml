@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const OUTPUT_DIR = path.resolve(ROOT, process.argv[2] || 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.1.3-DOM-DUPLICATE-SAFE.zip';
+const ARCHIVE_NAME = 'Tai888-Reader-v2.1.8-LEAGUE-SCOPED-PARTIAL-SAFE.zip';
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
 const FIXED_TIME = new Date('1980-01-01T00:00:00.000Z');
 const FILES = [
@@ -142,8 +142,8 @@ function buildArchive(workRoot, outputFile) {
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.3');
-assert.equal(manifest.version_name, '2.1.3 DOM-DUPLICATE-SAFE');
+assert.equal(manifest.version, '2.1.8');
+assert.equal(manifest.version_name, '2.1.8 LEAGUE-SCOPED-PARTIAL-SAFE');
 assert.deepEqual([...manifest.permissions].sort(), ['alarms', 'storage', 'webNavigation'].sort());
 assert.deepEqual([...manifest.host_permissions].sort(), [
   'https://*.tai888.in/*',

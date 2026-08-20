@@ -18,7 +18,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '9.6.0';
+const VERSION = '9.6.2';
 const STORAGE = 'sports-positive-ev-v9-6-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v1';
 const LEGACY_KEYS = ['sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
@@ -216,6 +216,10 @@ function GameCard({ item, onBet, getBetRecord, readerExecutable, now, analysisIn
     };
     return row;
   });
+  const coverage = item.marketCoverage || item.actualSource?.marketCoverage || {};
+  const availableMarkets = new Set(coverage.availableMarkets || actualRows.map(row => row.market));
+  const blockedMarkets = new Set(coverage.blockedMarkets || []);
+  const openMarketCount = Number.isFinite(Number(coverage.openMarkets)) ? Number(coverage.openMarkets) : availableMarkets.size;
   return <section className="gameCard">
     <div className="gameHead">
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
@@ -226,12 +230,14 @@ function GameCard({ item, onBet, getBetRecord, readerExecutable, now, analysisIn
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
     {item.referenceData && <>
-      {actualRows.length > 0 && <div className="actualBox">
-        <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>Reader 同步後自動分析與重算</span></div>
+      {(item.actualSource || item.marketCoverage || actualRows.length > 0) && <div className="actualBox">
+        <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>已開 {openMarketCount}/4 市場</span></div>
         {MARKET_ORDER.map(market => {
           const rows = actualRows.filter(row => row.market === market);
-          if (!rows.length) return null;
-          return <div className="marketBlock actualMarket" key={market}><div className="marketTitle"><h3>{market}</h3></div>{rows.map(row => <ResultRow key={rowKey(row)} row={row} betRecord={betsEnabled ? getBetRecord(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)}</div>;
+          const blocked = blockedMarkets.has(market);
+          return <div className={`marketBlock actualMarket ${blocked ? 'blockedMarket' : rows.length ? 'availableMarket' : 'unavailableMarket'}`} key={market}><div className="marketTitle"><h3>{market}</h3><span>{rows.length || availableMarkets.has(market) ? 'AVAILABLE' : blocked ? 'BLOCKED' : 'UNAVAILABLE'}</span></div>{rows.length
+            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} betRecord={betsEnabled ? getBetRecord(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)
+            : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
       </div>}
       <details className="details"><summary>查看模型與QA明細</summary><div className="detailGrid">
@@ -588,8 +594,11 @@ export default function Home() {
           actualSource: foundCredit?.source || null,
           readerPayloadHash: available ? credit.payloadHash : null,
           customMarkets: foundCredit?.markets || [],
+          marketCoverage: foundCredit?.marketCoverage || null,
           status: available ? 'queued' : 'unopened',
-          statusLabel: available ? '等待分析' : '目前尚無可配對盤口',
+          statusLabel: available
+            ? `等待分析｜已開 ${foundCredit?.marketCoverage?.openMarkets || ((foundCredit?.markets?.length || 0) / 2)}/4 市場`
+            : '目前尚無可配對盤口',
           referenceData: null,
           customData: null,
           error: '',
@@ -653,7 +662,7 @@ export default function Home() {
       const failedCount = tasks.length - completedCount;
       if (allSucceeded) lastFullAnalysisAtRef.current = Date.now();
       if (allSucceeded) {
-        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${tasks.length} 場Tai888信用盤分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
+        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${tasks.length} 場Tai888信用盤分析｜已開 ${credit.marketCount || 0} 個市場${credit.partialGameCount ? `（${credit.partialGameCount}場部分開盤）` : ''}｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
       } else if (analysisSucceeded && !readerHashAcknowledged) {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${tasks.length} 場分析｜${coveragePendingText(coverage)}，但 Reader 在分析期間出現更新；舊盤結果維持不可下注。`);
         setError('Reader 最新盤面版本尚未完成驗證，系統將自動重新分析。');
@@ -732,6 +741,7 @@ export default function Home() {
             actualSource: actual.source,
             readerPayloadHash: credit.payloadHash,
             customMarkets: actual.markets,
+            marketCoverage: actual.marketCoverage || null,
             customData: compactAnalysisData(data),
             status: 'done',
             statusLabel: 'Tai888最新盤快速重算完成',

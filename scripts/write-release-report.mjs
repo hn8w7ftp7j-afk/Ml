@@ -6,9 +6,9 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const RELEASE = path.join(ROOT, 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.1.3-DOM-DUPLICATE-SAFE.zip';
+const ARCHIVE_NAME = 'Tai888-Reader-v2.1.8-LEAGUE-SCOPED-PARTIAL-SAFE.zip';
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
-const REPORT_NAME = 'Tai888-Reader-v2.1.3-VERIFICATION.md';
+const REPORT_NAME = 'Tai888-Reader-v2.1.8-VERIFICATION.md';
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
 const flags = new Map(process.argv.slice(2).map(argument => {
   const [name, ...rest] = argument.replace(/^--/, '').split('=');
@@ -38,7 +38,7 @@ const dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: ROOT
 const sourceRef = process.env.GITHUB_SHA || `${commit}${dirty ? '+working-tree' : ''}`;
 const generatedAt = new Date().toISOString();
 
-const report = `# Tai888 Reader 2.1.3 / Baseball EV 9.6.0 驗證報告
+const report = `# Tai888 Reader 2.1.8 / Baseball EV 9.6.2 驗證報告
 
 - 產生時間：${generatedAt}
 - 原始碼基線：\`${sourceRef}\`
@@ -54,7 +54,7 @@ const report = `# Tai888 Reader 2.1.3 / Baseball EV 9.6.0 驗證報告
 
 | Gate | 結果 | 範圍 |
 |---|---:|---|
-| 專案測試 | PASS | ${testCount} 支 script，包含 Reader DOM/parser/frame/tab authority、server/auth/integrity、UI stale/hash/activity/date 與攻擊回歸 |
+| 專案測試 | PASS | ${testCount} 支既有 script + Reader 2.1.8 A–J 專項，包含跨聯盟 DOM、partial market、freshness isolation、trailing rerun、server/auth/integrity 與 UI 回歸 |
 | Production build | PASS | Next.js ${packageJson.dependencies.next} 正式建置 |
 | Production dependency audit | PASS | \`npm audit --omit=dev --audit-level=high\`，0 high/critical vulnerabilities |
 | Reader full-flow | PASS | Production route handlers + live MLB official slate：Pair → ingest → signed credit → FULL analyze → 同 hash heartbeat → signed PRICE_ONLY_REPRICE；四聯盟另由 deterministic fixture/unit gates 驗證 |
@@ -63,14 +63,16 @@ const report = `# Tai888 Reader 2.1.3 / Baseball EV 9.6.0 驗證報告
 
 ## 整合與來源判定
 
-- Reader 2.1.3 以 MLB／NPB／KBO／CPBL 四個權威分頁獨立辨識、雜湊、同步與顯示狀態；同聯盟重複分頁、單頁 host/iframe 與響應式賽事 DOM 重複盤面會自動擇一，未知聯盟不得默認成 MLB。
+- Reader 2.1.8 以 MLB／NPB／KBO／CPBL 四個權威分頁獨立辨識、雜湊、同步與顯示狀態；每個已開市場仍須雙方向完整，但未開出的市場不再使整場盤口失效，未知聯盟不得默認成 MLB。
 - 本 ZIP 只取自目前 \`reader/\` 的固定 12 檔白名單；封裝器會把交付目錄內不同內容的舊 Tai888 ZIP 移至相鄰的 ignored quarantine 目錄。
 - MLB 保留正式分析相容性；NPB／KBO／CPBL 即使完整 ingest，網站分析仍由 server 強制鎖為 shadow、不可下注。
 
 ## 主要安全邊界
 
-- 每聯盟單一權威 tab/frame；不合併不同聯盟、頁籤、iframe 或重複賽事 DOM 的市場；重複觀察自動選擇一份，真正格式錯誤會顯示具體拒絕原因，超過四個 Tai888 分頁時仍 fail-closed。
-- 所有提交場次都須與該聯盟官方台北盤日一對一配對，雙重賽身分必須唯一；Tai888 已呈現且開盤的賽事須逐場 4 市場／8 方向完整，任何可見開盤場 partial 都會整批停止，未呈現或全鎖場只保留為不可執行。
+- 每聯盟選一個最可信的權威 tab/frame；同頁與多頁均可同時存在四聯盟，第五個非盤口 Tai888 頁面不會中止同步，不同聯盟不互相覆蓋。
+- 所有提交場次都須與該聯盟官方台北盤日一對一配對，雙重賽身分必須唯一；1/4～4/4 市場均可合法寫入，每個 AVAILABLE 市場仍須兩方向完整，BLOCKED 只封鎖該市場。
+- activityAt、market hash 與 lineAsOf 以聯盟實際盤面內容隔離；其他聯盟、導覽、時鐘或無關 DOM mutation 不刷新舊盤時間。
+- 最新 snapshot 完整取代前版市場狀態；4/4 退回 2/4 或 0/4 時，不會 merge 殘留已消失的舊水位。
 - URL 中繼資料只保留 Tai888 origin/path 與固定 \`#/BS\`；query、任意 hash、頁面標題與原始 frame URL 不保存也不上傳。
 - Server 自算盤面雜湊；精確 \`boardDate + hash + pageActivityAt\` 版本只在全部分析成功後才被畫面承認，同 hash 心跳仍會重簽並快速重算。
 - 盤口、快照與官方賽事身分均由 Server HMAC 綁定；偽造／竄改 fail-closed。

@@ -26,7 +26,12 @@ function render(statuses) {
     const ok = item.ok === true && item.state === 'synced' && !stale; if (ok) healthy += 1;
     const card = document.createElement('div'); card.className = `league ${ok ? 'good' : item.state === 'missing' ? 'waiting' : 'bad'}`;
     const title = document.createElement('b'); title.textContent = `${label} ${id}`;
-    const detail = document.createElement('span'); detail.textContent = ok ? `${item.captureOnly ? '已抓取・待模型' : '可分析'}｜${item.rawGameCount ?? '—'}場｜${age(last)}` : (item.message || '尚未偵測');
+    const local = item.localDiagnostic || {};
+    const serverOpen = Number(item.matchedGameCount || 0), serverLocked = Number(item.unopenedGameCount || 0);
+    const detail = document.createElement('span');
+    detail.textContent = ok
+      ? `${serverOpen > 0 ? '可分析' : '尚無可分析盤'}｜本機開${local.openCount ?? '—'} 鎖${local.lockedCount ?? '—'} 市場${local.marketCount ?? '—'}｜後端開${serverOpen} 未開${serverLocked} 市場${item.marketCount ?? 0}${item.partialGameCount ? ` 部分開${item.partialGameCount}場` : ''}｜${age(last)}${serverOpen === 0 && local.sample ? `｜樣本：${local.sample}` : ''}`
+      : (item.message || '尚未偵測');
     card.append(title, detail); leagueGrid.append(card);
   }
   state.textContent = `${healthy}/4 個分頁正常`; dot.className = healthy === 4 ? 'ok' : healthy ? '' : 'error';

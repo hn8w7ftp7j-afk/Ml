@@ -1,6 +1,6 @@
-# 多聯盟長期正期望值分析｜9.6.0 / Tai888 Reader 2.1.3
+# 多聯盟長期正期望值分析｜9.6.0 / Tai888 Reader 2.1.4
 
-目前整合基線為網站 `9.6.0`、Next.js `15.5.23` 與 Reader `2.1.3 DOM-DUPLICATE-SAFE`。同一網站已建立 MLB、NPB、KBO、CPBL 四個彼此隔離的聯盟模組；MLB 維持正式使用，NPB／KBO／CPBL 接收各自官方賽程與 Tai888 實盤後執行完整診斷分析，但固定為 `EXPERIMENTAL_SHADOW`：可顯示四市場／八方向、EV、風險與排名，不可下注、不產生 portfolio，也不能回落到 MLB 的球隊、賽程或模型快照。
+目前整合基線為網站 `9.6.0`、Next.js `15.5.23` 與 Reader `2.1.4 RESPONSIVE-ROW-SAFE`。同一網站已建立 MLB、NPB、KBO、CPBL 四個彼此隔離的聯盟模組；MLB 維持正式使用，NPB／KBO／CPBL 接收各自官方賽程與 Tai888 實盤後執行完整診斷分析，但固定為 `EXPERIMENTAL_SHADOW`：可顯示四市場／八方向、EV、風險與排名，不可下注、不產生 portfolio，也不能回落到 MLB 的球隊、賽程或模型快照。
 
 Reader 對 Tai888 已呈現且開盤的賽事要求逐場具備 4 市場／8 方向；只要任一可見開盤場僅有部分市場，整批 ingest 就會停止並保留上一個可信快照。官方賽程中尚未呈現或整場全鎖的賽事可保留為不可執行項目，系統絕不補造缺少的盤口或水位。Production 評分只使用固定雙 EV 短板公式，GPT 不得調分；正式 EV 會用 Tai888 同市場雙邊水位去水基準有限校準。網站只顯示 Reader 實際信用盤，並在比賽卡與總排名保留同瀏覽器、同聯盟隔離的「已下注」標記。下方 6.x～8.x 段落保留為歷史變更紀錄，不是目前發布規格。
 
@@ -272,4 +272,4 @@ OpenAI GPT 研究模型現在只使用有上限的首段時間，系統會預留
 
 Chrome Reader 只讀使用者已登入後可見的 MLB／NPB／KBO／CPBL 標準盤口表格，依聯盟隔離後自動同步至 `/api/reader/ingest`。Production 使用 Vercel Runtime Cache 保存各聯盟最新盤口；網站偵測價格指紋變動後只走 `/api/reprice`，不重建比分分布。
 
-目前唯一發布版本是 `2.1.3 DOM-DUPLICATE-SAFE`；同一聯盟多分頁、單頁 host/iframe，以及 Tai888 響應式畫面產生的重複賽事 DOM 都會自動擇一，不再因正常盤口跳動停止整個聯盟。若仍有真正格式錯誤，Reader 會直接顯示實際拒絕原因。安裝前應移除所有舊版，完整解壓後再從 Chrome 擴充功能頁載入 `Tai888-Reader` 資料夾。iPhone 可保存或轉傳 ZIP，但不能安裝未封裝 Chrome 擴充功能。
+目前唯一發布版本是 `2.1.4 RESPONSIVE-ROW-SAFE`；同一聯盟多分頁、單頁 host/iframe、重複賽事 DOM，以及同高度排列的兩隊與雙向賠率都會安全拆分，不再把可見盤口誤判為整場鎖盤。若仍有真正格式錯誤，Reader 會直接顯示實際拒絕原因。安裝前應移除所有舊版，完整解壓後再從 Chrome 擴充功能頁載入 `Tai888-Reader` 資料夾。iPhone 可保存或轉傳 ZIP，但不能安裝未封裝 Chrome 擴充功能。

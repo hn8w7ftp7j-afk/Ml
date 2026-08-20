@@ -47,7 +47,7 @@ const payload = {
 };
 const options = { deviceId: 'device-12345678', receivedAt: '2026-08-11T22:30:30Z' };
 const result = normalizeTai888ReaderPayload(payload, schedule, options);
-assert.equal(result.version, 'TAI888-READER-PARSER-v2.1.0');
+assert.equal(result.version, 'TAI888-READER-PARSER-v2.2.0');
 assert.equal(result.league, 'MLB');
 assert.equal(result.matchedGameCount, 2);
 assert.equal(result.scheduleGameCount, 2);
@@ -98,8 +98,17 @@ const fakeLockedPayload = structuredClone(lockedPayload);
 fakeLockedPayload.games[1].marketStatus = 'open';
 assert.throws(
   () => normalizeTai888ReaderPayload(fakeLockedPayload, schedule, options),
-  /四個市場與八個可執行方向/,
+  /已開市場必須各自完整提供兩個方向/,
 );
+
+const partialPayload = structuredClone(payload);
+partialPayload.games[0].first5Runline = null;
+partialPayload.games[0].first5Total = null;
+const partialResult = normalizeTai888ReaderPayload(partialPayload, schedule, options);
+assert.equal(partialResult.matchedGameCount, 2, 'a game with two complete open markets remains an open game');
+assert.equal(partialResult.games[0].markets.length, 4, 'only the two available market pairs are emitted');
+assert.deepEqual([...new Set(partialResult.games[0].markets.map(row => row.market))], ['全場讓分', '全場大小']);
+assert.equal(readerSnapshotIsComplete(partialResult), true, 'a partially opened but internally valid slate remains a complete snapshot');
 
 const contaminatedLockedPayload = structuredClone(lockedPayload);
 contaminatedLockedPayload.games[1].fullTotal = { line: '8+30', overWater: .94, underWater: .94 };
@@ -137,10 +146,8 @@ assert.deepEqual(reorderedResult.games.map(game => game.gamePk), [1, 2]);
 
 const incomplete = structuredClone(payload);
 delete incomplete.games[0].first5Total;
-assert.throws(
-  () => normalizeTai888ReaderPayload(incomplete, schedule, options),
-  /四個市場與八個可執行方向/,
-);
+const incompleteResult = normalizeTai888ReaderPayload(incomplete, schedule, options);
+assert.equal(incompleteResult.games[0].markets.length, 6, 'three complete market pairs remain available');
 
 assert.throws(
   () => normalizeTai888ReaderPayload({ ...payload, readerVersion: '2.0.2' }, schedule, options),

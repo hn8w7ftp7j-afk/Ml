@@ -1,10 +1,12 @@
 import { canonicalReaderPayload } from './parser.js';
 
 export const BOARD_ACTIVITY_TTL_MS = 3 * 60 * 1000;
-export const MAX_TAI888_TABS = 4;
+// Kept for diagnostic compatibility only. Candidate selection is board-based,
+// never blocked merely because the user opened a fifth Tai888 page.
+export const MAX_TAI888_TABS = Number.POSITIVE_INFINITY;
 
 export function withinTai888TabScanLimit(value) {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_TAI888_TABS;
+  return Number.isInteger(value) && value >= 0;
 }
 
 const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
@@ -81,26 +83,27 @@ function validateLockedReaderGame(game) {
   return { ok: issues.length === 0, issues, directionCount: 0 };
 }
 
-function normalizePartialGameAsUnavailable(game) {
-  if (game?.marketStatus === 'locked') return game;
-  const validation = validateStandardReaderGame(game);
-  if (validation.ok || validation.directionCount <= 0 || validation.directionCount >= 8) return game;
-  const nonMissingIssues = validation.issues.filter(issue => (
-    !/:missing$/.test(issue) && !/^direction-count:\d+$/.test(issue)
-  ));
-  if (nonMissingIssues.length) return game;
-  // Tai888 may open only the full-game or first-five pair for an event. Never
-  // upload that half-board as executable and never fabricate the missing
-  // directions. Preserve only its identity as an unavailable event so the
-  // remaining complete games can still sync safely.
-  return {
-    ...game,
-    marketStatus: 'locked',
-    fullRunline: null,
-    fullTotal: null,
-    first5Runline: null,
-    first5Total: null,
-  };
+function validateAvailableReaderGame(game) {
+  const identity = [];
+  if (!TEAM_CODE.test(String(game?.awayCode || ''))) identity.push('invalid-away-code');
+  if (!TEAM_CODE.test(String(game?.homeCode || ''))) identity.push('invalid-home-code');
+  if (game?.awayCode === game?.homeCode) identity.push('same-team');
+  if (!DATE_TOKEN.test(String(game?.boardDate || ''))) identity.push('invalid-date');
+  if (!TIME_TOKEN.test(String(game?.boardTime || ''))) identity.push('invalid-time');
+  const issues = [...identity];
+  let directionCount = 0;
+  const definitions = [
+    ['full-runline', game?.fullRunline, validateRunline],
+    ['full-total', game?.fullTotal, validateTotal],
+    ['first5-runline', game?.first5Runline, validateRunline],
+    ['first5-total', game?.first5Total, validateTotal],
+  ];
+  for (const [name, value, validate] of definitions) {
+    if (value == null) continue;
+    directionCount += validate(value, name, issues);
+  }
+  if (directionCount < 2) issues.push(`direction-count:${directionCount}`);
+  return { ok: issues.length === 0, issues, directionCount };
 }
 
 export function assessBoardCandidate(candidate, now = Date.now()) {
@@ -108,10 +111,8 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   const parsed = candidate?.parsed || {};
   const diagnostics = capture?.diagnostics || {};
   const issues = [];
-  const games = (Array.isArray(parsed.games) ? parsed.games : []).map(normalizePartialGameAsUnavailable);
-  const normalizedCandidate = games === parsed.games
-    ? candidate
-    : { ...candidate, parsed: { ...parsed, games } };
+  const games = Array.isArray(parsed.games) ? parsed.games : [];
+  const normalizedCandidate = candidate;
   const expectedGameCount = finiteInteger(diagnostics.expectedGameCount);
   const rawDetectedGameCount = finiteInteger(diagnostics.gameCount);
   // Tai888 renders duplicate responsive/measurement nodes for the same event.
@@ -154,7 +155,7 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   for (const [index, game] of games.entries()) {
     const validation = game?.marketStatus === 'locked'
       ? validateLockedReaderGame(game)
-      : validateStandardReaderGame(game);
+      : validateAvailableReaderGame(game);
     issues.push(...validation.issues.map(issue => `game-${index + 1}:${issue}`));
     const identity = `${game?.boardDate || ''}|${game?.boardTime || ''}|${game?.awayCode || ''}|${game?.homeCode || ''}`;
     if (identities.has(identity)) issues.push(`duplicate-game:${identity}`);
