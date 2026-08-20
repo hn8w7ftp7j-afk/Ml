@@ -3,6 +3,7 @@ name: Live score model audit
 on:
   push:
     branches: [audit/v1011-live-score-model]
+  pull_request:
 
 permissions:
   contents: read
