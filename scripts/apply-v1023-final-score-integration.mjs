@@ -28,6 +28,9 @@ function replaceCount(source, before, after, expected, label) {
   source = replaceExact(source, "const VERSION = '10.2.2';", "const VERSION = '10.2.3';", 'app version');
   source = replaceCount(source, '固定雙EV公式診斷分', '固定雙EV公式 S 分數', 3, 'score tooltip wording');
   source = replaceExact(source, '｜Raw W EV {pct(row.weightedEV)}｜保守 R EV {pct(row.robustEV)}', '｜加權EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}', 'EV labels');
+  source = replaceExact(source, 'Raw W EV未大於0', '加權EV未大於0', 'weighted EV verdict reason');
+  source = replaceExact(source, '保守 R EV未大於0', '穩健EV未大於0', 'robust EV verdict reason');
+  source = replaceExact(source, '<small>W EV {pct(entry.weightedEV)}｜R EV {pct(entry.robustEV)}｜資料QA PASS｜影子候選、非正式推薦</small>', '<small>加權EV {pct(entry.weightedEV)}｜穩健EV {pct(entry.robustEV)}｜資料QA PASS｜影子候選、非正式推薦</small>', 'ranking EV labels');
   source = replaceExact(source, '公式診斷分啟用', '固定 S 分數啟用', 'provider status wording');
   source = replaceCount(source, 'V10影子分數', 'V10影子 S 分數', 2, 'header and hero shadow wording');
   source = replaceExact(source, '影子分數可見', '影子 S 分數可見', 'settings wording');
