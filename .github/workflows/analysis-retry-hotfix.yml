@@ -2,11 +2,13 @@ name: Analysis retry hotfix
 on:
   push:
     branches: [fix/v102-analysis-retry-diagnostics]
+  pull_request:
+    branches: [main]
 permissions:
   contents: write
 jobs:
   patch-test:
-    if: ${{ !contains(github.event.head_commit.message, '[analysis-retry-applied]') }}
+    if: ${{ github.event_name == 'pull_request' || !contains(github.event.head_commit.message, '[analysis-retry-applied]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
