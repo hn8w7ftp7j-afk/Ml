@@ -1,0 +1,34 @@
+name: Apply v10.2 score-model integrity fix
+
+on:
+  push:
+    branches: [fix/v102-score-model-integrity]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    if: github.event.head_commit.message != 'fix: apply v10.2 score model integrity repairs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/v102-score-model-integrity
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-v102-score-model-fix.mjs
+      - run: node scripts/score-model-integrity-v102-test.mjs
+      - run: npm test
+      - name: Commit repairs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/mlb-context-v11.js lib/joint-score-v11.js lib/joint-score-v12.js lib/analysis-v11.js lib/deterministic-finalizer-v10.js app/page.js scripts/score-model-integrity-v102-test.mjs
+          git commit -m "fix: apply v10.2 score model integrity repairs"
+          git push origin HEAD:fix/v102-score-model-integrity
