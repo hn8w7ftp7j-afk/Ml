@@ -24,7 +24,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.0.0';
+const VERSION = '10.1.1';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
