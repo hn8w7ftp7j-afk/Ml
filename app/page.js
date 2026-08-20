@@ -24,7 +24,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.3.0';
+const VERSION = '10.3.1';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const ANALYSIS_REQUEST_TIMEOUT_MS = 65_000;
@@ -248,8 +248,6 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const qaPassed = row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false;
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
   const calibrationBlocked = row?.evCalibration?.qualified === false;
-  const rawWeightedEV = Number.isFinite(Number(row?.rawWeightedEV)) ? Number(row.rawWeightedEV) : null;
-  const rawRobustEV = Number.isFinite(Number(row?.rawRobustEV)) ? Number(row.rawRobustEV) : null;
   const qaFailures = scoreQaFailures(row);
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
@@ -259,17 +257,17 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const scoreTitle = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? `原始模型EV未通過校準｜W ${pct(rawWeightedEV)}｜R ${pct(rawRobustEV)}｜不建立S分數`
+      ? 'EV未通過安全校準｜不顯示EV、不建立S分數、不列排名'
       : formulaScore == null
         ? '缺少合法水位或雙EV，不能補造分數'
         : !qaPassed
           ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-          : `V10.3固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+          : `V10.3.1固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
   const scoreMetaText = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? `V10.3原始模型勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜原始W ${pct(rawWeightedEV)}｜原始R ${pct(rawRobustEV)}｜EV校準未通過，不建立加權EV／穩健EV`
-      : `V10.3棒球分布勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜加權EV ${pct(row.weightedEV)}｜穩健EV ${pct(row.robustEV)}`;
+      ? `V10.3.1安全阻擋｜原始極端值僅保留於伺服器稽核資料，不作有效EV、不評分、不列排名`
+      : `V10.3.1棒球分布勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜加權EV ${pct(row.weightedEV)}｜穩健EV ${pct(row.robustEV)}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
@@ -340,7 +338,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.3 EV校準安全評估</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；資料QA與排名資格分開判定</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.3.1 極端EV安全評估</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；15%以上原始EV一律等待外樣本驗證</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
