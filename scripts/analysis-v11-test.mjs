@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { analyzeMarkets, buildDistributionSnapshot, MODEL_VERSION, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
+import { analyzeMarkets, buildDistributionSnapshot, independentMinimumWater, MODEL_VERSION, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 
 const team = (runsPerGame, ops, era, scoringMean, scoringVariance) => ({
@@ -88,5 +88,19 @@ const analysisSource = fs.readFileSync(new URL('../lib/analysis-v11.js', import.
 const contextSource = fs.readFileSync(new URL('../lib/mlb-context-v11.js', import.meta.url), 'utf8');
 assert.equal(/buildLegacy|LegacyGameContext|LegacyDistribution/.test(analysisSource), false, 'V10.3分析核心不得引用Legacy builder');
 assert.equal(/buildLegacy|LegacyGameContext|LegacyDistribution/.test(contextSource), false, 'V10.3資料核心不得引用Legacy builder');
+
+const unreachableRobustTarget = independentMinimumWater({
+  qualified: true,
+  referencePriorType: 'PAYOFF_VECTOR',
+  referenceBookPayoffVectors: ['book-a', 'book-b', 'book-c'].map(bookmakerKey => ({
+    bookmakerKey,
+    equivalentWin: 0.248,
+    equivalentLoss: 0.752,
+    equivalentPush: 0,
+  })),
+}, 0.015, true);
+assert.ok(Number.isFinite(unreachableRobustTarget.score7_2.weightedWater), 'W=0 must be reachable before the water search ceiling');
+assert.equal(unreachableRobustTarget.score7_2.robustWater, null, 'R=0 must remain unreachable after the explicit 1.5pp haircut');
+assert.equal(unreachableRobustTarget.score7_2.requiredWater, null, 'combined threshold guidance must not claim success when either W or R is unreachable');
 
 console.log(JSON.stringify({ ok: true, modelVersion: MODEL_VERSION, distributionHash: snapshot.distributionHash, scenarios: snapshot.scenarios.length }, null, 2));

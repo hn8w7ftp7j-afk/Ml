@@ -48,6 +48,13 @@ function sanitizeMarkets(rows, maximum = 16) {
     consensusTimeSpanMs: optionalNumber(row?.consensusTimeSpanMs),
     consensusFreshnessMaxMs: optionalNumber(row?.consensusFreshnessMaxMs),
     consensusSnapshotId: cleanText(row?.consensusSnapshotId, 4000),
+    ...(Array.isArray(row?.referenceBookProbabilities) ? {
+      referenceBookProbabilities: row.referenceBookProbabilities.slice(0, 100).map(item => ({
+        bookmakerKey: cleanText(item?.bookmakerKey, 80),
+        observedAt: cleanText(item?.observedAt, 40),
+        probability: optionalNumber(item?.probability),
+      })).filter(item => item.bookmakerKey && item.observedAt && item.probability != null),
+    } : {}),
     referenceSide: cleanText(row?.referenceSide, 40), rawText: cleanText(row?.rawText, 300),
     sourceTemplateVersion: cleanText(row?.sourceTemplateVersion, 80), authorizationStatus: cleanText(row?.authorizationStatus, 80),
     integrityOrigin: cleanText(row?.integrityOrigin, 80),
@@ -96,7 +103,7 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: '凍結比分分布識別不一致，已停止快速重算' }, { status: 409 });
     }
     const suppliedMarkets = await prepareMarkets(league, game, body.markets, 12);
-    const verificationMarkets = await prepareMarkets(league, game, body.verificationMarkets, 16);
+    const verificationMarkets = await prepareMarkets(league, game, body.verificationMarkets, 120);
     const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
     const previousMarkets = await prepareMarkets(league, game, body.previousMarkets, 24);
     const errors = [];

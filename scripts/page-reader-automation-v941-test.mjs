@@ -10,10 +10,10 @@ assert.doesNotMatch(page, />影子排名</, 'ambiguous shadow ranking label must
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.4\.1'/, 'UI must expose the v10.4.1 core-quality correction');
-assert.equal(packageJson.version, '10.4.1', 'package/release identity must match the V10.4.1 UI');
-assert.equal(packageLock.version, '10.4.1', 'package-lock release identity must match V10.4.1');
-assert.equal(packageLock.packages?.['']?.version, '10.4.1', 'root lockfile package must match V10.4.1');
+mustMatch(/const VERSION = '10\.4\.2'/, 'UI must expose the v10.4.2 payoff-vector correction');
+assert.equal(packageJson.version, '10.4.2', 'package/release identity must match the V10.4.2 UI');
+assert.equal(packageLock.version, '10.4.2', 'package-lock release identity must match V10.4.2');
+assert.equal(packageLock.packages?.['']?.version, '10.4.2', 'root lockfile package must match V10.4.2');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.13-KBO-TRADITIONAL-NAME-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
@@ -61,7 +61,7 @@ mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missin
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
 
 // V10.4 reference-market flow must be wired into both full analysis and frozen-distribution repricing.
-mustMatch(/async function fetchReferenceLines\(games, targetDate = date\)/, 'reference-line loader missing');
+mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetGames = \[\]\)/, 'target-aware reference-line loader missing');
 mustMatch(/requestJSON\('\/api\/reference-lines'/, 'reference-line API request missing');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
@@ -117,7 +117,7 @@ mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected directi
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
-mustMatch(/V10\.4\.1市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4.1 market-price shadow semantics');
+mustMatch(/V10\.4\.2逐莊結算市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4.2 payoff-vector shadow semantics');
 mustMatch(/市場價差W \${pct\(row\.weightedEV\)\}/, 'W must be labelled as the independent-market price gap');
 mustMatch(/跨莊保守R \${pct\(row\.robustEV\)\}/, 'R must be labelled as the conservative cross-book price gap');
 mustMatch(/合格市場價差影子分數啟用/, 'provider status must report the qualified shadow-price score mode');

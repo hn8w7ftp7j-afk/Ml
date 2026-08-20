@@ -96,7 +96,7 @@ try {
   assert.equal(secondResponse.headers.get('X-Analysis-Cache'), 'HIT');
   assertLockedPayload(second);
 
-  const cache = globalThis.__BASEBALL_V1041_ANALYSIS_CACHE__;
+  const cache = globalThis.__BASEBALL_V1042_ANALYSIS_CACHE__;
   assert.ok(cache instanceof Map, 'V10.4 must use a fresh analysis-cache namespace');
   assert.equal(cache.size, 1);
   const [key, entry] = [...cache.entries()][0];

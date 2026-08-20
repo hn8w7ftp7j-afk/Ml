@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { estimateRunProfileV103, MLB_RUN_MODEL_V103_VERSION } from '../lib/mlb-run-model-v103.js';
 import {
+  aggregatePayoffVectorEV,
+  evFromPayoffVector,
+  minimumWaterFromPayoffVector,
   qualifyEvV103,
   EV_CALIBRATION_V103_VERSION,
   MAX_RAW_SCENARIO_EV_SPREAD,
@@ -98,7 +101,7 @@ const moderateNoPrior = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.1/);
+assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.2/);
 assert.equal(moderateNoPrior.qualified, false, 'V10.4 must fail closed when no independent consensus prior exists');
 assert.equal(moderateNoPrior.weightedEV, null);
 assert.equal(moderateNoPrior.robustEV, null);
@@ -122,6 +125,56 @@ assert.ok(Math.abs(qualifiedConsensus.weightedEV - qualifiedConsensus.referenceE
 assert.ok(Math.abs(qualifiedConsensus.robustEV - qualifiedConsensus.referenceRobustEV) < 1e-12);
 assert.notEqual(qualifiedConsensus.weightedEV, qualifiedConsensus.rawWeightedEV, 'usable W must come from independent price consensus, not raw model EV');
 assert.ok(qualifiedConsensus.robustEV <= qualifiedConsensus.weightedEV);
+
+const overEightPlusEightyVector = ({ below, exact, above, bookmakerKey = '' }) => ({
+  bookmakerKey,
+  equivalentWin: above + 0.8 * exact,
+  equivalentLoss: below,
+  equivalentPush: 0.2 * exact,
+});
+const payoffVector = overEightPlusEightyVector({ below: 0.47, exact: 0.10, above: 0.43 });
+const referenceBookPayoffVectors = [
+  overEightPlusEightyVector({ bookmakerKey: 'book-a', below: 0.47, exact: 0.10, above: 0.43 }),
+  overEightPlusEightyVector({ bookmakerKey: 'book-b', below: 0.475, exact: 0.09, above: 0.435 }),
+  overEightPlusEightyVector({ bookmakerKey: 'book-c', below: 0.465, exact: 0.11, above: 0.425 }),
+];
+const payoffAggregate = aggregatePayoffVectorEV(referenceBookPayoffVectors, 0.94, 0.015);
+assert.ok(Math.abs(payoffVector.equivalentWin - 0.51) < 1e-12, '大8+80 exact bucket must settle 80% as a partial win');
+assert.ok(Math.abs(payoffVector.equivalentLoss - 0.47) < 1e-12);
+assert.ok(Math.abs(payoffVector.equivalentPush - 0.02) < 1e-12, 'the unsettled 20% of the exact bucket must remain push');
+assert.ok(Math.abs(evFromPayoffVector(payoffVector, 0.94, 0.015) - (0.51 * 0.955 - 0.47 * 0.985)) < 1e-12);
+assert.ok(Math.abs(payoffAggregate.weightedEV - 0.0241) < 1e-12, 'W must be the median of the three bookmaker payoff EVs');
+assert.ok(Math.abs(payoffAggregate.robustEV - 0.0091) < 1e-12, 'R must be min(q10, W-0.015)');
+assert.ok(payoffAggregate.robustEV <= payoffAggregate.weightedEV, 'R must never exceed W');
+
+const payoffConsensus = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification({
+      // The payoff path must use A/(A+B), not this legacy binary field.
+      referenceNoVigProbability: 0.90,
+      referenceRobustProbability: 0.89,
+      referencePayoffVector: payoffVector,
+      referenceBookPayoffVectors,
+    }),
+  },
+  rawWeightedEV: 0.03,
+  rawRobustEV: 0.005,
+  modelProbability: 0.52,
+  rebateRate: 0.015,
+  gate,
+});
+assert.equal(payoffConsensus.qualified, true);
+assert.equal(payoffConsensus.status, 'QUALIFIED_WITH_INDEPENDENT_PAYOFF_VECTOR_CONSENSUS');
+assert.equal(payoffConsensus.referencePriorType, 'PAYOFF_VECTOR');
+assert.ok(Math.abs(payoffConsensus.referenceProbability - (0.51 / 0.98)) < 1e-12, 'model consistency must compare effective win probability A/(A+B)');
+assert.ok(Math.abs(payoffConsensus.weightedEV - payoffAggregate.weightedEV) < 1e-12);
+assert.ok(Math.abs(payoffConsensus.robustEV - payoffAggregate.robustEV) < 1e-12);
+assert.ok(payoffConsensus.robustEV <= payoffConsensus.weightedEV);
+
+const payoffBreakEvenWater = minimumWaterFromPayoffVector(payoffVector, 0, 0.015);
+assert.ok(Math.abs(payoffBreakEvenWater - ((0.47 * 0.985) / 0.51 - 0.015)) < 1e-12, 'minimum water must use payoff A/B rather than a binary probability shortcut');
+assert.ok(Math.abs(evFromPayoffVector(payoffVector, payoffBreakEvenWater, 0.015)) < 1e-12);
 
 const optionalMissingDoesNotBlock = qualifyEvV103({
   row: {

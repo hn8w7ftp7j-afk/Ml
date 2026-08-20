@@ -38,8 +38,8 @@ export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // v10.4 namespace invalidates every pre-independent-consensus response.
-const responseCache = globalThis.__BASEBALL_V1041_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V1041_ANALYSIS_CACHE__ = responseCache;
+const responseCache = globalThis.__BASEBALL_V1042_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1042_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -86,6 +86,13 @@ function sanitizeMarketRows(rows, maximum = 16) {
     consensusTimeSpanMs: optionalNumber(row?.consensusTimeSpanMs),
     consensusFreshnessMaxMs: optionalNumber(row?.consensusFreshnessMaxMs),
     consensusSnapshotId: cleanText(row?.consensusSnapshotId, 4000),
+    ...(Array.isArray(row?.referenceBookProbabilities) ? {
+      referenceBookProbabilities: row.referenceBookProbabilities.slice(0, 100).map(item => ({
+        bookmakerKey: cleanText(item?.bookmakerKey, 80),
+        observedAt: cleanText(item?.observedAt, 40),
+        probability: optionalNumber(item?.probability),
+      })).filter(item => item.bookmakerKey && item.observedAt && item.probability != null),
+    } : {}),
     referenceSide: cleanText(row?.referenceSide, 40), rawText: cleanText(row?.rawText, 300),
     sourceTemplateVersion: cleanText(row?.sourceTemplateVersion, 80), authorizationStatus: cleanText(row?.authorizationStatus, 80),
     integrityOrigin: cleanText(row?.integrityOrigin, 80),
@@ -130,7 +137,7 @@ export async function POST(request) {
     assertLeagueGamePrestart(league, game);
 
     const suppliedMarkets = await prepareMarketRows(league, game, body.markets, 12);
-    const verificationMarkets = await prepareMarketRows(league, game, body.verificationMarkets, 16);
+    const verificationMarkets = await prepareMarketRows(league, game, body.verificationMarkets, 120);
     const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
     const previousMarkets = await prepareMarketRows(league, game, body.previousMarkets, 24);
     const errors = [];
