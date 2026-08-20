@@ -6,9 +6,9 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const RELEASE = path.join(ROOT, 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.1.8-LEAGUE-SCOPED-PARTIAL-SAFE.zip';
+const ARCHIVE_NAME = 'Tai888-Reader-v2.1.9-ASIAN-NAME-SAFE.zip';
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
-const REPORT_NAME = 'Tai888-Reader-v2.1.8-VERIFICATION.md';
+const REPORT_NAME = 'Tai888-Reader-v2.1.9-VERIFICATION.md';
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
 const flags = new Map(process.argv.slice(2).map(argument => {
   const [name, ...rest] = argument.replace(/^--/, '').split('=');
@@ -38,7 +38,7 @@ const dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: ROOT
 const sourceRef = process.env.GITHUB_SHA || `${commit}${dirty ? '+working-tree' : ''}`;
 const generatedAt = new Date().toISOString();
 
-const report = `# Tai888 Reader 2.1.8 / Baseball EV 9.6.2 驗證報告
+const report = `# Tai888 Reader 2.1.9 / Baseball EV 9.6.2 驗證報告
 
 - 產生時間：${generatedAt}
 - 原始碼基線：\`${sourceRef}\`
@@ -54,7 +54,7 @@ const report = `# Tai888 Reader 2.1.8 / Baseball EV 9.6.2 驗證報告
 
 | Gate | 結果 | 範圍 |
 |---|---:|---|
-| 專案測試 | PASS | ${testCount} 支既有 script + Reader 2.1.8 A–J 專項，包含跨聯盟 DOM、partial market、freshness isolation、trailing rerun、server/auth/integrity 與 UI 回歸 |
+| 專案測試 | PASS | ${testCount} 支既有 script + Reader 2.1.9 A–J 專項，包含亞洲聯盟隊名、跨聯盟 DOM、partial market、freshness isolation、trailing rerun、server/auth/integrity 與 UI 回歸 |
 | Production build | PASS | Next.js ${packageJson.dependencies.next} 正式建置 |
 | Production dependency audit | PASS | \`npm audit --omit=dev --audit-level=high\`，0 high/critical vulnerabilities |
 | Reader full-flow | PASS | Production route handlers + live MLB official slate：Pair → ingest → signed credit → FULL analyze → 同 hash heartbeat → signed PRICE_ONLY_REPRICE；四聯盟另由 deterministic fixture/unit gates 驗證 |
@@ -63,7 +63,7 @@ const report = `# Tai888 Reader 2.1.8 / Baseball EV 9.6.2 驗證報告
 
 ## 整合與來源判定
 
-- Reader 2.1.8 以 MLB／NPB／KBO／CPBL 四個權威分頁獨立辨識、雜湊、同步與顯示狀態；每個已開市場仍須雙方向完整，但未開出的市場不再使整場盤口失效，未知聯盟不得默認成 MLB。
+- Reader 2.1.9 以 MLB／NPB／KBO／CPBL 四個權威分頁獨立辨識、雜湊、同步與顯示狀態；日／韓／台可從 Tai888 可見隊名建立正式代碼，每個已開市場仍須雙方向完整。
 - 本 ZIP 只取自目前 \`reader/\` 的固定 12 檔白名單；封裝器會把交付目錄內不同內容的舊 Tai888 ZIP 移至相鄰的 ignored quarantine 目錄。
 - MLB 保留正式分析相容性；NPB／KBO／CPBL 即使完整 ingest，網站分析仍由 server 強制鎖為 shadow、不可下注。
 

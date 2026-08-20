@@ -1,4 +1,4 @@
-# Tai888 Reader v2.1.8 LEAGUE-SCOPED-PARTIAL-SAFE
+# Tai888 Reader v2.1.9 ASIAN-NAME-SAFE
 
 ## 功能
 
@@ -21,6 +21,6 @@
 5. 按「載入未封裝項目」，選擇解壓後的 `Tai888-Reader` 資料夾。
 6. 點 Reader 圖示，第一次輸入一次配對密碼。
 7. 開四個 Tai888 分頁，分別停在美棒／日棒／韓棒／中職的「讓分＆大小」，然後四頁各按一次 F5。
-8. 在擴充功能頁確認顯示 `2.1.8 LEAGUE-SCOPED-PARTIAL-SAFE`。
+8. 在擴充功能頁確認顯示 `2.1.9 ASIAN-NAME-SAFE`。
 
 四個聯盟都會透過各自的官方賽程、隊伍別名與獨立 Reader 命名空間完成正式盤面驗證。MLB 維持正式分析與下注流程；NPB／KBO／CPBL 會產生完整的影子分析與評分，但在模型實績校準完成前仍標示為不可下注，不會混用 MLB 的盤口或快照。

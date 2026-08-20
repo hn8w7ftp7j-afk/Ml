@@ -16,6 +16,31 @@
   ]);
 
   const TEAM_CODE = /(?:^|\s)([A-Z][A-Z0-9]{0,11})\s*-/g;
+  const TEAM_NAME_ALIASES = Object.freeze({
+    NPB: Object.freeze([
+      ['YOM', ['讀賣巨人', '读卖巨人', '巨人']], ['HAN', ['阪神虎', '阪神']],
+      ['YDB', ['橫濱DeNA海星', '横滨DeNA海星', '橫濱海星', '横滨海星']],
+      ['HIR', ['廣島東洋鯉魚', '广岛东洋鲤鱼', '廣島鯉魚', '广岛鲤鱼']],
+      ['YAK', ['養樂多燕子', '养乐多燕子', '養樂多', '养乐多']], ['CHU', ['中日龍', '中日龙']],
+      ['SOF', ['軟銀鷹', '软银鹰', '福岡軟銀鷹', '福冈软银鹰']],
+      ['NIP', ['日本火腿鬥士', '日本火腿斗士', '日本火腿']],
+      ['LOM', ['羅德海洋', '罗德海洋', '千葉羅德', '千叶罗德']],
+      ['RAK', ['樂天金鷲', '乐天金鹫', '東北樂天', '东北乐天']],
+      ['ORI', ['歐力士猛牛', '欧力士猛牛', '歐力士', '欧力士']], ['SEI', ['西武獅', '西武狮']],
+    ]),
+    KBO: Object.freeze([
+      ['KIA', ['起亞老虎', '起亚老虎', '起亞虎', '起亚虎']], ['SAM', ['三星獅子', '三星狮子', '三星獅', '三星狮']],
+      ['LGT', ['LG雙子', 'LG双子', '雙子', '双子']], ['DOO', ['斗山熊']],
+      ['KTW', ['KT巫師', 'KT巫师', '巫師', '巫师']], ['SSG', ['SSG登陸者', 'SSG登陆者', '登陸者', '登陆者']],
+      ['LOG', ['樂天巨人', '乐天巨人']], ['HAN', ['韓華鷹', '韩华鹰']],
+      ['NCD', ['NC恐龍', 'NC恐龙', '恐龍', '恐龙']], ['KIW', ['培證英雄', '培证英雄', 'Kiwoom英雄', '英雄']],
+    ]),
+    CPBL: Object.freeze([
+      ['CTB', ['中信兄弟', '兄弟象']], ['UNI', ['統一7-ELEVEn獅', '统一7-ELEVEn狮', '統一獅', '统一狮']],
+      ['RKM', ['樂天桃猿', '乐天桃猿']], ['FUB', ['富邦悍將', '富邦悍将']],
+      ['WCD', ['味全龍', '味全龙']], ['TSG', ['台鋼雄鷹', '台钢雄鹰']],
+    ]),
+  });
   const leagueRegistry = globalThis.Tai888LeagueRegistry || Object.freeze({
     ids: ['MLB'],
     identify: text => /(?:聯盟|联盟)\s*[:：]?\s*MLB\s*(?:美國職棒|美国职棒)/i.test(String(text || ''))
@@ -130,7 +155,22 @@
     };
   }
 
-  function teamRows(mappedRow) {
+  function namedTeamMatches(text, league) {
+    const value = clean(text);
+    const matches = [];
+    for (const [code, aliases] of TEAM_NAME_ALIASES[league] || []) {
+      let best = null;
+      for (const alias of aliases) {
+        const index = value.indexOf(alias);
+        if (index < 0) continue;
+        if (!best || index < best.index || (index === best.index && alias.length > best.alias.length)) best = { code, alias, index };
+      }
+      if (best) matches.push(best);
+    }
+    return matches.sort((left, right) => left.index - right.index || right.alias.length - left.alias.length);
+  }
+
+  function teamRows(mappedRow, expectedLeague = '') {
     const sourceRows = mappedRow?.mapped?.teams?.rows?.length
       ? mappedRow.mapped.teams.rows
       : (mappedRow?.mapped?.teams?.lines || []).map((text, index) => ({ text, top: index * 20 }));
@@ -153,6 +193,16 @@
           found.set(code, candidate);
         }
       }
+      if (!matches.length) {
+        const named = namedTeamMatches(rowText, expectedLeague);
+        for (const [matchIndex, match] of named.entries()) {
+          const nextIndex = named[matchIndex + 1]?.index ?? rowText.length;
+          const teamText = clean(rowText.slice(match.index, nextIndex));
+          const candidate = { code: match.code, text: teamText, top: number(row.top), homeMarked: HOME_MARKER.test(teamText) };
+          const previous = found.get(match.code);
+          if (!previous || candidate.homeMarked || candidate.text.length > previous.text.length) found.set(match.code, candidate);
+        }
+      }
     }
     if (!found.size) {
       for (const match of clean(mappedRow?.rawText).matchAll(TEAM_CODE)) {
@@ -168,6 +218,11 @@
       }
     }
     return [...found.values()].sort((left, right) => left.top - right.top).slice(0, 2);
+  }
+
+  function codedTeamText(team) {
+    const value = clean(team?.text);
+    return /(?:^|\s)[A-Z][A-Z0-9]{0,11}\s*-/.test(value) ? value : `${team?.code || ''}-${value}`;
   }
 
   function valueNear(cell, targetTop, fallbackIndex = 0) {
@@ -246,12 +301,13 @@
       const [awayValue, homeValue] = pairedValues(cell, away, home, awayIndex, homeIndex);
       return pairedCell(awayValue, homeValue);
     });
+    cells[1] = pairedCell(codedTeamText(away), codedTeamText(home));
     return { cells, text: mappedRow.rawText, awayCode: away.code, homeCode: home.code, marketLocked: mappedRow.marketLocked };
   }
 
-  function buildFromSplit(awayRow, homeRow) {
-    const awayTeams = teamRows(awayRow);
-    const homeTeams = teamRows(homeRow);
+  function buildFromSplit(awayRow, homeRow, expectedLeague = '') {
+    const awayTeams = teamRows(awayRow, expectedLeague);
+    const homeTeams = teamRows(homeRow, expectedLeague);
     if (awayTeams.length !== 1 || homeTeams.length !== 1) return null;
     const away = awayTeams[0];
     const home = homeTeams[0];
@@ -266,6 +322,7 @@
       awayRow.mapped[definition.key]?.text,
       homeRow.mapped[definition.key]?.text,
     ));
+    cells[1] = pairedCell(codedTeamText(away), codedTeamText(home));
     return {
       cells,
       text: clean(`${awayRow.rawText} | ${homeRow.rawText}`),
@@ -341,7 +398,7 @@
       }
       if (!currentProfile) continue;
       const mapped = mapRecord(record, currentProfile);
-      const teams = teamRows(mapped);
+      const teams = teamRows(mapped, expectedLeague);
       if (!teams.length) continue;
       candidateRows += 1;
 
@@ -367,7 +424,7 @@
         pendingAway = null;
         continue;
       }
-      const game = buildFromSplit(pendingAway, mapped);
+      const game = buildFromSplit(pendingAway, mapped, expectedLeague);
       if (game) {
         games.push(game);
         pairedRows += 1;

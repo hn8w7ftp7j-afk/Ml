@@ -33,6 +33,23 @@ for (const league of Object.keys(leagueLabels)) {
   assert.equal(result.diagnostics.sectionCount, 1);
 }
 
+for (const fixture of [
+  { league: 'NPB', away: '讀賣巨人 馬場[右]', home: '阪神虎[主] 下村[右]', codes: ['YOM', 'HAN'] },
+  { league: 'KBO', away: '起亞老虎 姜載[右]', home: '韓華鷹[主] 柳賢振[左]', codes: ['KIA', 'HAN'] },
+  { league: 'CPBL', away: '中信兄弟 投手[右]', home: '統一獅[主] 投手[右]', codes: ['CTB', 'UNI'] },
+]) {
+  const asianRecords = [
+    header(0, 0), marker(1, 30, fixture.league, leagueLabels[fixture.league]),
+    record(2, 60, ['08-20', fixture.away, '0.950', '8平 大 0.940', '', '', '0.940', '4平 大 0.930']),
+    record(3, 82, ['18:00', fixture.home, '1平 0.950', '小 0.940', '', '', '0.5 0.940', '小 0.930']),
+  ];
+  const normalized = normalizer.normalizeRowRecords(asianRecords, { expectedLeague: fixture.league });
+  assert.equal(normalized.diagnostics.gameCount, 1, `${fixture.league} name-only board must normalize`);
+  const parsed = parseTai888Capture({ ...capture(), league: fixture.league, tables: normalized.tables }, new Date('2026-08-19T16:00:00.000Z'));
+  assert.equal(parsed.games.length, 1);
+  assert.deepEqual([parsed.games[0].awayCode, parsed.games[0].homeCode], fixture.codes);
+}
+
 function capture(markets = [2, 3, 6, 7]) {
   const values = [
     { pair: ['08-20', '00:35'] }, { pair: ['DET-老虎 投手[右]', 'PIT-海盜［主］ 投手[右]'] },
@@ -77,4 +94,4 @@ assert.match(backgroundSource, /if \(pendingRerun\)/);
 assert.match(backgroundSource, /answer\?\.capture\?\.captures/);
 assert.equal(withinTai888TabScanLimit(5), true);
 assert.doesNotMatch(backgroundSource, /最多檢查/);
-console.log('Reader 2.1.8 league-scoped partial-safe TEST A-J PASS');
+console.log('Reader 2.1.9 Asian name-safe plus league-scoped partial-safe TEST A-J PASS');
