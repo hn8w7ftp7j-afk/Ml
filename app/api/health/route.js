@@ -4,9 +4,17 @@ import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
 import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis.js';
 import { BATCH_VERSION } from '../../../lib/batch.js';
-import { FINAL_ENGINE_VERSION, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer.js';
+import {
+  FINAL_ENGINE_VERSION,
+  FORMAL_SCORING_ENABLED,
+  SCORE_RELEASE_STATUS,
+  UNCERTAINTY_SET_VERSION,
+} from '../../../lib/deterministic-finalizer.js';
 import { SCORE_FORMULA_VERSION, SCORE_POLICY_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
+import { BET_PRICE_COMPARISON_VERSION } from '../../../lib/bet-price-comparison.js';
+import { BET_STATS_VERSION } from '../../../lib/bet-stats.js';
+import { BET_SETTLEMENT_SERVICE_VERSION } from '../../../lib/bet-settlement-service.js';
 import { DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { ANALYSIS_CACHE_VERSION } from '../../../lib/analysis-cache-v9.js';
 import { readerPairingConfigured } from '../../../lib/reader-auth-v2.js';
@@ -20,7 +28,7 @@ export async function GET() {
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   return NextResponse.json({
     ok: true,
-    version: '9.6.0',
+    version: '9.7.0',
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
@@ -32,6 +40,9 @@ export async function GET() {
     scoreFormulaVersion: SCORE_FORMULA_VERSION,
     scorePolicyVersion: SCORE_POLICY_VERSION,
     settlementRuleVersion: SETTLEMENT_RULE_VERSION,
+    betPriceComparisonVersion: BET_PRICE_COMPARISON_VERSION,
+    betStatsVersion: BET_STATS_VERSION,
+    betSettlementServiceVersion: BET_SETTLEMENT_SERVICE_VERSION,
     uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
     repriceVersion: REPRICE_VERSION,
     analysisCacheVersion: ANALYSIS_CACHE_VERSION,
@@ -48,7 +59,12 @@ export async function GET() {
     readerScheduleGameCount: readerSnapshot?.scheduleGameCount || 0,
     readerPayloadHash: readerSnapshot?.payloadHash || null,
     deterministicScoring: true,
+    formalScoringEnabled: FORMAL_SCORING_ENABLED,
+    scoreReleaseStatus: SCORE_RELEASE_STATUS,
     gptScoringEnabled: false,
+    actualBetLedgerEnabled: true,
+    currentPriceComparisonEnabled: true,
+    automaticSettlementEnabled: true,
     databaseConfigured: Boolean(process.env.DATABASE_URL),
     authConfigured: siteAuthConfigured(),
     appPasswordConfigured: appPasswordConfigured(),
