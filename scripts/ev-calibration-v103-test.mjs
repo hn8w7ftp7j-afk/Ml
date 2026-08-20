@@ -58,7 +58,8 @@ const noPriorExtreme = qualifyEvV103({
 assert.equal(UNVERIFIED_EXTREME_EV_LIMIT, 0.15);
 assert.equal(noPriorExtreme.qualified, false);
 assert.equal(noPriorExtreme.weightedEV, null);
-assert.match(noPriorExtreme.reasons.join('｜'), /缺少可去水/);
+assert.equal(noPriorExtreme.status, 'EXTREME_EV_HELD_FOR_LOCKED_OOS');
+assert.match(noPriorExtreme.reasons.join('｜'), /locked OOS/);
 
 const moderateNoPrior = qualifyEvV103({
   row: { water: 0.94, marketVerification: { referencePriorEligible: false } },
@@ -79,9 +80,11 @@ const confirmedExtreme = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(confirmedExtreme.qualified, true);
-assert.ok(confirmedExtreme.robustEV < 0.09, 'independent reference EV must enter the robust short side');
-assert.ok(confirmedExtreme.robustEV <= confirmedExtreme.rawRobustEV);
+assert.equal(confirmedExtreme.qualified, false, '15%+ raw EV must remain blocked even when an independent prior agrees');
+assert.equal(confirmedExtreme.weightedEV, null);
+assert.equal(confirmedExtreme.robustEV, null);
+assert.equal(confirmedExtreme.status, 'EXTREME_EV_HELD_FOR_LOCKED_OOS');
+assert.match(confirmedExtreme.reasons.join('｜'), /只供稽核/);
 
 const disagreement = qualifyEvV103({
   row: { water: 0.94, marketVerification: { referencePriorEligible: true, referenceNoVigProbability: 0.51 } },
