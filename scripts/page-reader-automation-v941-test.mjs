@@ -125,7 +125,8 @@ assert.match(finalizer, /FORMAL_SCORING_ENABLED = false/);
 assert.match(finalizer, /SCORE_RELEASE_STATUS = 'LEGACY_INVALID'/);
 assert.match(finalizer, /row\.scoreStatus = SCORE_RELEASE_STATUS/);
 assert.match(finalizer, /row\.score = null/);
-assert.match(finalizer, /formalRecommendationsEnabled: false/);
+assert.match(finalizer, /portfolio: \[\]/);
+assert.match(finalizer, /formalScoringEnabled: FORMAL_SCORING_ENABLED/);
 
 const betRoute = fs.readFileSync('app/api/bets/route.js', 'utf8');
 assert.match(betRoute, /settleOpenCloudBets/);
