@@ -19,24 +19,24 @@ const context = {
   rulesVersion: RULES_VERSION,
   modelConfig: {},
   game: { gamePk: 990001, leagueId: 'MLB', away: 'A', home: 'H' },
-  league: { runsPerTeamGame: 4.42, era: 4.15, whip: 1.29, ops: 0.724 },
+  league: { runsPerTeamGame: 4.42, era: 4.15, whip: 1.29, kPer9: 8.6, bbPer9: 3.2, hrPer9: 1.15, ops: 0.724 },
   away: {
     hitting: { available: true, status: 'CONFIRMED', games: 120, runsPerGame: 4.7, ops: 0.745 },
     recentHitting: { available: true, status: 'PROJECTED', games: 14, runsPerGame: 4.5, ops: 0.730 },
-    pitching: { available: true, status: 'CONFIRMED', inningsPitched: 1050, era: 4.05, fip: 4.10, whip: 1.27 },
-    recentPitching: { available: true, status: 'PROJECTED', inningsPitched: 120, era: 3.90, fip: 4.00, whip: 1.25 },
-    starter: { available: true, status: 'CONFIRMED', inningsPitched: 130, era: 3.65, fip: 3.78, whip: 1.19 },
-    scoring: { meanRuns: 4.6, varianceRuns: 10.0 },
+    pitching: { available: true, status: 'CONFIRMED', inningsPitched: 1050, gamesStarted: 120, era: 4.05, fip: 4.10, whip: 1.27 },
+    recentPitching: { available: true, status: 'PROJECTED', inningsPitched: 120, gamesStarted: 14, era: 3.90, fip: 4.00, whip: 1.25 },
+    starter: { available: true, status: 'CONFIRMED', inningsPitched: 130, gamesStarted: 22, era: 3.65, fip: 3.78, whip: 1.19 },
+    scoring: { games: 60, meanRuns: 4.6, varianceRuns: 10.0 },
     injuriesAvailable: true,
     injuries: [],
   },
   home: {
     hitting: { available: true, status: 'CONFIRMED', games: 120, runsPerGame: 4.4, ops: 0.718 },
     recentHitting: { available: true, status: 'PROJECTED', games: 14, runsPerGame: 4.3, ops: 0.710 },
-    pitching: { available: true, status: 'CONFIRMED', inningsPitched: 1050, era: 4.25, fip: 4.22, whip: 1.31 },
-    recentPitching: { available: true, status: 'PROJECTED', inningsPitched: 120, era: 4.30, fip: 4.25, whip: 1.32 },
-    starter: { available: true, status: 'CONFIRMED', inningsPitched: 125, era: 4.10, fip: 4.05, whip: 1.28 },
-    scoring: { meanRuns: 4.4, varianceRuns: 9.2 },
+    pitching: { available: true, status: 'CONFIRMED', inningsPitched: 1050, gamesStarted: 120, era: 4.25, fip: 4.22, whip: 1.31 },
+    recentPitching: { available: true, status: 'PROJECTED', inningsPitched: 120, gamesStarted: 14, era: 4.30, fip: 4.25, whip: 1.32 },
+    starter: { available: true, status: 'CONFIRMED', inningsPitched: 125, gamesStarted: 22, era: 4.10, fip: 4.05, whip: 1.28 },
+    scoring: { games: 60, meanRuns: 4.4, varianceRuns: 9.2 },
     injuriesAvailable: true,
     injuries: [],
   },
@@ -48,28 +48,28 @@ const context = {
     awayStarter: 'CONFIRMED', homeStarter: 'CONFIRMED', awayRecentHitting: 'PROJECTED',
     homeRecentHitting: 'PROJECTED', awayRecentPitching: 'PROJECTED', homeRecentPitching: 'PROJECTED',
     parkFactor: 'PROJECTED', weather: 'PROJECTED', awayInjuries: 'CONFIRMED', homeInjuries: 'CONFIRMED',
-    lineups: 'PROJECTED', umpire: 'MISSING', catcherFraming: 'MISSING', defenseOAA: 'MISSING',
+    lineups: 'MISSING', umpire: 'MISSING', catcherFraming: 'MISSING', defenseOAA: 'MISSING',
   },
   dataGateV10: {
     passedForShadowScore: true,
     passedForFormalScore: false,
-    quality: 0.82,
-    modelErrorMarginEV: 0.018,
-    missing: ['umpire','catcherFraming','defenseOAA'],
-    projected: ['awayRecentHitting','homeRecentHitting','awayRecentPitching','homeRecentPitching','parkFactor','weather','lineups'],
+    quality: 0.78,
+    modelErrorMarginEV: 0.022,
+    missing: ['lineups','umpire','catcherFraming','defenseOAA'],
+    projected: ['awayRecentHitting','homeRecentHitting','awayRecentPitching','homeRecentPitching','parkFactor','weather'],
     blocking: [],
   },
 };
 
 const markets = [
-  { market: '全場讓分', pick: 'A受讓1平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
-  { market: '全場讓分', pick: 'H讓1平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
-  { market: '全場大小', pick: '大9平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
-  { market: '全場大小', pick: '小9平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
-  { market: '上半讓分', pick: 'A受讓0平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
-  { market: '上半讓分', pick: 'H讓0平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
-  { market: '上半大小', pick: '大5平', water: 0.93, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
-  { market: '上半大小', pick: '小5平', water: 0.93, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false } },
+  { market: '全場讓分', pick: 'A受讓1平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
+  { market: '全場讓分', pick: 'H讓1平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
+  { market: '全場大小', pick: '大9平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
+  { market: '全場大小', pick: '小9平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
+  { market: '上半讓分', pick: 'A受讓0平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
+  { market: '上半讓分', pick: 'H讓0平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
+  { market: '上半大小', pick: '大5平', water: 0.93, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
+  { market: '上半大小', pick: '小5平', water: 0.93, sourceType: 'ACTUAL_TW_CREDIT', executable: true, waterEstimated: false, marketVerification: { verified: false, referencePriorEligible: false } },
 ];
 const settings = { rebateRate: 0.015, candidateThreshold: 7.2 };
 
@@ -88,9 +88,19 @@ assert.equal(preliminary.results.length, markets.length);
 for (const row of preliminary.results) {
   assert.equal(row.marketCalibrationApplied, false);
   assert.equal(row.targetPriceCalibratesDistribution, false);
-  assert.ok(row.robustEV <= row.weightedEV + 1e-12);
+  assert.ok(Number.isFinite(row.rawWeightedEV));
+  assert.ok(Number.isFinite(row.rawRobustEV));
+  assert.ok(row.rawRobustEV <= row.rawWeightedEV + 1e-12);
   assert.equal(row.evDoubleCheck.passed, true);
   assert.ok(Math.abs(row.distributionCoverage - 1) < 1e-9);
+  if (row.evCalibration.qualified) {
+    assert.ok(Number.isFinite(row.weightedEV));
+    assert.ok(Number.isFinite(row.robustEV));
+    assert.ok(row.robustEV <= row.weightedEV + 1e-12);
+  } else {
+    assert.equal(row.weightedEV, null);
+    assert.equal(row.robustEV, null);
+  }
 }
 
 const repricedMarkets = markets.map(row => row.pick === '小9平' ? { ...row, water: 0.90 } : row);
@@ -100,7 +110,7 @@ const repricedUnder = repriced.results.find(row => row.pick === '小9平');
 assert.equal(repriced.distributionHash, preliminary.distributionHash);
 assert.ok(Math.abs(originalUnder.modelProbability - repricedUnder.modelProbability) < 1e-12,
   'Tai888水位改變不得反向改寫棒球模型勝率');
-assert.notEqual(originalUnder.weightedEV, repricedUnder.weightedEV, '成交水位改變必須重算payoff EV');
+assert.notEqual(originalUnder.rawWeightedEV, repricedUnder.rawWeightedEV, '成交水位改變必須重算payoff EV');
 
 const finalized = finalizeDeterministicAnalysis({ analysis: preliminary, game: context.game, settings });
 assert.equal(FORMAL_SCORING_ENABLED, false);
@@ -111,9 +121,15 @@ assert.ok(finalized.results.some(row => Number.isFinite(Number(row.shadowDiagnos
 for (const row of finalized.results) {
   assert.equal(row.score, null, '正式分數仍須為null');
   assert.equal(row.betEligible, false);
-  assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true, '每個可計算方向須保留固定公式診斷分');
-  assert.ok(['SHADOW_DIAGNOSTIC_UNCALIBRATED', 'BLOCKED'].includes(row.scoreStatus));
-  if (row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED') assert.ok(Number.isFinite(Number(row.shadowDiagnosticScore)));
+  if (row.evCalibration?.qualified === false) {
+    assert.equal(row.formulaDiagnosticScore, null);
+    assert.equal(row.scoreStatus, 'UNSCORED');
+    assert.match(row.tag, /EV校準未通過/);
+  } else {
+    assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true, '校準合格方向須保留固定公式診斷分');
+    assert.ok(['SHADOW_DIAGNOSTIC_UNCALIBRATED', 'BLOCKED'].includes(row.scoreStatus));
+    if (row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED') assert.ok(Number.isFinite(Number(row.shadowDiagnosticScore)));
+  }
 }
 
 console.log(JSON.stringify({

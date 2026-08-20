@@ -96,7 +96,7 @@ try {
   assert.equal(secondResponse.headers.get('X-Analysis-Cache'), 'HIT');
   assertLockedPayload(second);
 
-  const cache = globalThis.__BASEBALL_V960_ANALYSIS_CACHE__;
+  const cache = globalThis.__BASEBALL_V1030_ANALYSIS_CACHE__;
   assert.equal(cache.size, 1);
   const [key, entry] = [...cache.entries()][0];
   cache.set(key, {

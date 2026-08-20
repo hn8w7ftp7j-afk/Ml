@@ -11,7 +11,7 @@ import {
 } from '../../../lib/analysis-cache-v9.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
-import { applyIndependentMarketVerification } from '../../../lib/market-verification-v1.js';
+import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
 import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
 import {
   assertLeagueGamePrestart,
@@ -37,9 +37,9 @@ export const runtime = 'nodejs';
 export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
-// A new namespace intentionally discards the poisoned v9.1-v9.3 runtime cache.
-const responseCache = globalThis.__BASEBALL_V960_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V960_ANALYSIS_CACHE__ = responseCache;
+// v10.3 namespace invalidates every pre-calibration model response.
+const responseCache = globalThis.__BASEBALL_V1030_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1030_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;

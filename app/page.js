@@ -24,7 +24,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.2.3';
+const VERSION = '10.3.0';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const ANALYSIS_REQUEST_TIMEOUT_MS = 65_000;
@@ -227,6 +227,7 @@ function SummaryCards({ summary }) {
 function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   const weightedEV = Number(row?.weightedEV);
   const robustEV = Number(row?.robustEV);
+  if (row?.evCalibration?.qualified === false) return { icon: '⚠️', label: 'EV校準阻擋', ranking: false, reason: '極端EV或獨立市場先驗未通過' };
   if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
   if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
   if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
@@ -246,19 +247,29 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? Number(row.formulaDiagnosticScore) : null;
   const qaPassed = row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false;
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
+  const calibrationBlocked = row?.evCalibration?.qualified === false;
+  const rawWeightedEV = Number.isFinite(Number(row?.rawWeightedEV)) ? Number(row.rawWeightedEV) : null;
+  const rawRobustEV = Number.isFinite(Number(row?.rawRobustEV)) ? Number(row.rawRobustEV) : null;
   const qaFailures = scoreQaFailures(row);
-  const scoreLabel = formulaScore == null ? '—' : formulaScore.toFixed(1);
+  const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
   const scoreClass = formulaScore == null ? 'pass'
     : !qaPassed || !leagueValidated ? 'warning'
       : formulaScore >= 8.5 ? 'strongest' : formulaScore >= 7.2 ? 'candidate' : 'pass';
-  const scoreTitle = formulaScore == null
-    ? '缺少合法水位或雙EV，不能補造分數'
-    : !leagueValidated
-      ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜聯盟模型尚未獨立驗證｜不列排名、不可視為推薦`
-      : !qaPassed
-        ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-        : `V10.2固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+  const scoreTitle = !leagueValidated
+    ? '聯盟模型重建中｜EV與S分數暫停顯示'
+    : calibrationBlocked
+      ? `原始模型EV未通過校準｜W ${pct(rawWeightedEV)}｜R ${pct(rawRobustEV)}｜不建立S分數`
+      : formulaScore == null
+        ? '缺少合法水位或雙EV，不能補造分數'
+        : !qaPassed
+          ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
+          : `V10.3固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+  const scoreMetaText = !leagueValidated
+    ? '聯盟模型重建中｜EV與S分數暫停顯示'
+    : calibrationBlocked
+      ? `V10.3原始模型勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜原始W ${pct(rawWeightedEV)}｜原始R ${pct(rawRobustEV)}｜EV校準未通過，不建立加權EV／穩健EV`
+      : `V10.3棒球分布勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜加權EV ${pct(row.weightedEV)}｜穩健EV ${pct(row.robustEV)}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
@@ -273,7 +284,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     <div className="scoreBody">
       <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
-      <div className="scoreMeta">V10.2棒球分布勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜加權EV {pct(row.weightedEV)}｜穩健EV {pct(row.robustEV)}</div>
+      <div className="scoreMeta">{scoreMetaText}</div>
       {actualLine && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
         ? '驗證中｜等待今日整批盤口完成'
         : !leagueValidated
@@ -329,7 +340,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.2 完整方向評估</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；資料QA與排名資格分開判定</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.3 EV校準安全評估</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；資料QA與排名資格分開判定</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
