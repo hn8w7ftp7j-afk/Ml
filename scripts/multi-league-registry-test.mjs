@@ -33,7 +33,7 @@ assert.equal(leagueCanAnalyze(['MLB']), false);
 for (const id of LEAGUE_IDS) {
   const item = leagueConfig(id);
   assert.equal(item.status, 'shadow');
-  assert.match(item.statusLabel, /影子|模型重建/);
+  assert.match(item.statusLabel, /驗證中/);
   assert.deepEqual(item.capabilities, {
     schedule: true,
     reader: true,

@@ -3,6 +3,8 @@ import fs from 'node:fs';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
+mustMatch(/分析排名（驗證中）/, 'ranking tab must use the clear validation label');
+assert.doesNotMatch(page, />影子排名</, 'ambiguous shadow ranking label must not be user-facing');
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
