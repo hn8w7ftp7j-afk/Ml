@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   repair:
-    if: ${{ !contains(github.event.head_commit.message, '[v102-score-model-applied]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[v102-score-model-applied]') && !contains(github.event.head_commit.message, '[v102-debug-log]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -22,14 +22,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: node scripts/apply-v102-score-model-fix.mjs
-      - run: node scripts/score-model-integrity-v102-test.mjs
-      - run: npm test
-      - run: npm run build
-      - name: Commit repaired main
+      - name: Apply patch and capture diagnostics
         run: |
+          set +e
+          node scripts/apply-v102-score-model-fix.mjs > /tmp/v102-patch.log 2>&1
+          PATCH_EXIT=$?
+          echo "patch_exit=$PATCH_EXIT" >> /tmp/v102-patch.log
+          if [ "$PATCH_EXIT" -eq 0 ]; then
+            node scripts/score-model-integrity-v102-test.mjs >> /tmp/v102-patch.log 2>&1
+            TARGET_EXIT=$?
+            echo "target_test_exit=$TARGET_EXIT" >> /tmp/v102-patch.log
+          else
+            TARGET_EXIT=99
+          fi
+          printf '\n--- git diff --stat ---\n' >> /tmp/v102-patch.log
+          git diff --stat >> /tmp/v102-patch.log 2>&1
+          cp /tmp/v102-patch.log scripts/v102-patch-diagnostic.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/mlb-context-v11.js lib/joint-score-v11.js lib/joint-score-v12.js lib/analysis-v11.js lib/deterministic-finalizer-v10.js app/page.js scripts/score-model-integrity-v102-test.mjs
-          git commit -m "fix: apply v10.2 score model integrity repairs [v102-score-model-applied]"
+          git add scripts/v102-patch-diagnostic.log
+          git commit -m "chore: capture v10.2 patch diagnostics [v102-debug-log]"
           git push origin HEAD:main
