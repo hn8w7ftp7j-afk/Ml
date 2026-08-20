@@ -1,21 +1,20 @@
 name: Apply v10.3 EV calibration safety
 
-# Registered on branch; this follow-up commit triggers the one-time verified apply job.
 on:
-  push:
-    branches: [fix/v103-ev-calibration-safety]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: apply-v103-ev-calibration-safety
+  group: apply-v103-ev-calibration-safety-pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   apply:
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[v103-applied]') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.pull_request.head.sha || '', '[v103-applied]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
