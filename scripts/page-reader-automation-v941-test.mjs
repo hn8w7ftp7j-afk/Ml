@@ -6,7 +6,7 @@ const mustMatch = (pattern, label) => assert.match(page, pattern, label);
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.2\.1'/, 'UI must expose the v10.2.1 release');
+mustMatch(/const VERSION = '10\.2\.2'/, 'UI must expose the v10.2.2 release');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
@@ -73,6 +73,13 @@ assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negativ
 mustMatch(/row\.shadowDiagnosticScore != null/, 'ranking must explicitly reject null qualification scores');
 mustMatch(/row\.scoreAudit\?\.ok === true/, 'ranking must require QA PASS');
 mustMatch(/row\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
+mustMatch(/Number\(row\.weightedEV\) > 0/, 'ranking must require positive Raw W EV');
+mustMatch(/Number\(row\.robustEV\) > 0/, 'ranking must require positive Robust R EV');
+mustMatch(/Number\(row\.shadowDiagnosticScore\) >= 7\.2/, 'ranking must require the 7.2 qualification threshold');
+mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected direction coverage missing');
+mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
+mustMatch(/排名資格：/, 'score qualification reason must be visible');
+mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
 
 // Batch analysis cannot be held indefinitely by the first slow games.
 mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 65_000/, 'bounded per-game deadline missing');

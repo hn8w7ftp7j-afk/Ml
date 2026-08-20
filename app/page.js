@@ -24,7 +24,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.2.1';
+const VERSION = '10.2.2';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const ANALYSIS_REQUEST_TIMEOUT_MS = 65_000;
@@ -224,6 +224,21 @@ function SummaryCards({ summary }) {
   </div>;
 }
 
+function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
+  const weightedEV = Number(row?.weightedEV);
+  const robustEV = Number(row?.robustEV);
+  if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
+  if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
+  if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
+  if (!Number.isFinite(weightedEV) || weightedEV <= 0) return { icon: '⚪', label: 'PASS', ranking: false, reason: 'Raw W EV未大於0' };
+  if (!Number.isFinite(robustEV) || robustEV <= 0) return { icon: '🟡', label: '觀察', ranking: false, reason: '保守 R EV未大於0' };
+  if (formulaScore < 7.2) return { icon: '⚪', label: 'PASS', ranking: false, reason: '公式分數未達7.2' };
+  if (formulaScore >= 8.5) return { icon: '🔥', label: '最強影子候選', ranking: true, reason: '雙EV為正且達8.5' };
+  if (formulaScore >= 8.0) return { icon: '🟢', label: '主推級影子候選', ranking: true, reason: '雙EV為正且達8.0' };
+  if (formulaScore >= 7.5) return { icon: '🟢', label: '正常影子候選', ranking: true, reason: '雙EV為正且達7.5' };
+  return { icon: '🟢', label: '小注級影子候選', ranking: true, reason: '雙EV為正且達7.2' };
+}
+
 function ResultRow({ row, game, onBet, betState = null, recordable = false, now, verificationPending = false }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
@@ -233,6 +248,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
   const qaFailures = scoreQaFailures(row);
   const scoreLabel = formulaScore == null ? '—' : formulaScore.toFixed(1);
+  const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
   const scoreClass = formulaScore == null ? 'pass'
     : !qaPassed || !leagueValidated ? 'warning'
       : formulaScore >= 8.5 ? 'strongest' : formulaScore >= 7.2 ? 'candidate' : 'pass';
@@ -257,14 +273,14 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     <div className="scoreBody">
       <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
-      <div className="scoreMeta">V10.2棒球分布勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜Raw W EV {pct(row.weightedEV)}｜保守 R EV {pct(row.robustEV)}｜影子分數不可下注</div>
+      <div className="scoreMeta">V10.2棒球分布勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜Raw W EV {pct(row.weightedEV)}｜保守 R EV {pct(row.robustEV)}</div>
       {actualLine && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
         ? '驗證中｜等待今日整批盤口完成'
         : !leagueValidated
-          ? `公式診斷分 ${scoreLabel}｜聯盟模型未驗證｜不列排名、不作推薦；仍可記錄使用者自行下注`
+          ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否（${verdict.reason}）｜資料QA：${qaPassed ? 'PASS' : 'BLOCK'}｜正式推薦停用`
           : !qaPassed
-            ? `公式診斷分 ${scoreLabel}｜QA BLOCK｜${qaFailures.join('；') || '資料、數學或數值檢查未通過'}｜不列排名、不作推薦`
-            : `公式診斷分 ${scoreLabel}｜QA PASS｜V10.2 SHADOW DIAGNOSTIC｜正式推薦與Unit停用`}</div>}
+            ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否｜資料QA：BLOCK（${qaFailures.join('；') || '資料、數學或數值檢查未通過'}）｜不列排名、不作推薦｜正式推薦停用`
+            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜正式推薦與Unit停用`}</div>}
     </div>
     <div className="rowActions">
       {(recordable || latest) && <div>
@@ -300,12 +316,20 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
     };
     return row;
   });
+  const expectedDirectionCount = openMarketCount * 2;
+  const scoredDirectionCount = actualRows.filter(row => row.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))).length;
+  const rankingDirectionCount = actualRows.filter(row => diagnosticVerdict(
+    row,
+    row.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore)) ? Number(row.formulaDiagnosticScore) : null,
+    row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false,
+    row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED',
+  ).ranking).length;
   return <section className="gameCard">
     <div className="gameHead">
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.2 Shadow Diagnostic</strong><span>所有已開且可計算方向都顯示固定公式診斷分；QA只控制排名資格，正式推薦與Unit仍停用</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.2 完整方向評估</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；資料QA與排名資格分開判定</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
@@ -396,7 +420,10 @@ export default function Home() {
       && Number.isFinite(Number(row.shadowDiagnosticScore))
       && row.scoreAudit?.ok === true
       && row.pairAudit?.passed !== false
-      && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED')
+      && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
+      && Number(row.weightedEV) > 0
+      && Number(row.robustEV) > 0
+      && Number(row.shadowDiagnosticScore) >= 7.2)
     .map(row => ({ gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
       water: row.water, score: Number(row.shadowDiagnosticScore), weightedEV: row.weightedEV, robustEV: row.robustEV })))
     .sort((left, right) => right.score - left.score || Number(right.robustEV || 0) - Number(left.robustEV || 0)), [board]);
@@ -1052,8 +1079,8 @@ export default function Home() {
     </>}
 
     {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>V10影子排名｜不可下注</h2><span className="state shadow">SHADOW</span></div>
-      <div className="emptySmall">各場所有可計算方向都會顯示公式診斷分；此處只列QA通過的資格分。QA BLOCK與未驗證聯盟仍保留數字，但不進排名。正式推薦、Unit與模型績效維持停用。</div>
-      {shadowRanking.length ? shadowRanking.map((entry, index) => <div className="rankRow" key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.matchup}｜{entry.market}｜{entry.pick}｜{waterText(entry.water)}</span><small>W EV {pct(entry.weightedEV)}｜R EV {pct(entry.robustEV)}｜影子分數不可下注</small></div></div>) : <div className="emptySmall">完成今日V10分析後，QA通過方向會出現在這裡。</div>}
+      <div className="emptySmall">每場已開盤方向全部顯示公式分數；此處只列雙EV為正、分數達7.2且資料QA通過的方向。🟡觀察、⚪PASS、QA BLOCK與未驗證聯盟仍保留分數與原因，但不進排名。正式推薦、Unit與模型績效維持停用。</div>
+      {shadowRanking.length ? shadowRanking.map((entry, index) => <div className="rankRow" key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{entry.pick}｜{waterText(entry.water)}</span><small>W EV {pct(entry.weightedEV)}｜R EV {pct(entry.robustEV)}｜資料QA PASS｜影子候選、非正式推薦</small></div></div>) : <div className="emptySmall">目前沒有同時符合「雙EV為正＋7.2以上＋資料QA通過」的方向。</div>}
     </section>}
 
     {tab === 'bets' && <section className="panel">
