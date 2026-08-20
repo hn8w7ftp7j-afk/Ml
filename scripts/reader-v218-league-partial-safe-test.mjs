@@ -62,6 +62,34 @@ for (const fixture of [
   assert.deepEqual([parsed.games[0].awayCode, parsed.games[0].homeCode], fixture.codes);
 }
 
+{
+  const realKboGames = [
+    ['英雄 朴峻賢[右]', '樂天巨人[主] 羅鸞雁[右]', ['KIW', 'LOG']],
+    ['鬥山熊 潘洛[左]', '恐龍[主] 具昌模[左]', ['DOO', 'NCD']],
+    ['巫師 高永表[右]', '雙子[主] 朴穎元[右]', ['KTW', 'LGT']],
+    ['登陸者 崔珉準[右]', '三星獅子[主] 崔原態[右]', ['SSG', 'SAM']],
+    ['起亞老虎 黃東河[右]', '韓華鷹[主] 柳賢振[左]', ['KIA', 'HAN']],
+  ];
+  const realKboRecords = [header(0, 0), {
+    order: 1, top: 30, bottom: 50, text: '聯盟：KBO 韓國職棒（5）',
+    cells: [cell('聯盟：KBO 韓國職棒（5）', [0, 880], 30)],
+  }];
+  let nextOrder = 2;
+  let nextTop = 60;
+  for (const [away, home] of realKboGames) {
+    realKboRecords.push(
+      record(nextOrder++, nextTop, ['08-20', away, '0.950', '8平 大 0.940', '', '', '0.940', '4平 大 0.930']),
+      record(nextOrder++, nextTop + 22, ['18:00', home, '1平 0.950', '小 0.940', '', '', '0.5 0.940', '小 0.930']),
+    );
+    nextTop += 70;
+  }
+  const normalized = normalizer.normalizeRowRecords(realKboRecords, { expectedLeague: 'KBO' });
+  assert.equal(normalized.diagnostics.expectedGameCount, 5);
+  assert.equal(normalized.diagnostics.gameCount, 5, 'Tai888 實際 KBO 五場不得因「鬥山熊」繁體字漏場');
+  const parsed = parseTai888Capture({ ...capture(), league: 'KBO', tables: normalized.tables }, new Date('2026-08-19T16:00:00.000Z'));
+  assert.deepEqual(parsed.games.map(game => [game.awayCode, game.homeCode]), realKboGames.map(game => game[2]));
+}
+
 function capture(markets = [2, 3, 6, 7]) {
   const values = [
     { pair: ['08-20', '00:35'] }, { pair: ['DET-老虎 投手[右]', 'PIT-海盜［主］ 投手[右]'] },
@@ -106,4 +134,4 @@ assert.match(backgroundSource, /if \(pendingRerun\)/);
 assert.match(backgroundSource, /answer\?\.capture\?\.captures/);
 assert.equal(withinTai888TabScanLimit(5), true);
 assert.doesNotMatch(backgroundSource, /最多檢查/);
-console.log('Reader 2.1.12 background-tab-live plus integrated partial-safe TEST A-J PASS');
+console.log('Reader 2.1.13 KBO traditional-name-safe plus integrated partial-safe TEST A-J PASS');
