@@ -24,7 +24,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.4.0';
+const VERSION = '10.4.1';
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
@@ -291,11 +291,11 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
         ? '缺少合法水位或雙EV，不能補造分數'
         : !qaPassed
           ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-          : `V10.4.0市場價差影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+          : `V10.4.1市場價差影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
   const scoreMetaText = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? `V10.4.0市場校準阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
+      ? `V10.4.1市場校準阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
       : `獨立市場共識勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜市場價差W ${pct(row.weightedEV)}｜跨莊保守R ${pct(row.robustEV)}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
@@ -367,7 +367,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.4.0 獨立同合約市場校準</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；只有3家以上不同莊家、5分鐘內且同步的同合約共識才建立影子W/R</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.4.1 獨立同合約市場校準</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；硬門檻只檢查核心資料，非核心缺值納入情境不確定性；另須3家以上不同莊家、5分鐘內且同步的同合約共識才建立影子W/R</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}

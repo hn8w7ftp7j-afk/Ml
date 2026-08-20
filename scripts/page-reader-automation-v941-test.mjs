@@ -10,10 +10,10 @@ assert.doesNotMatch(page, />影子排名</, 'ambiguous shadow ranking label must
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.4\.0'/, 'UI must expose the v10.4.0 fail-closed release');
-assert.equal(packageJson.version, '10.4.0', 'package/release identity must match the V10.4 fail-closed UI');
-assert.equal(packageLock.version, '10.4.0', 'package-lock release identity must match V10.4');
-assert.equal(packageLock.packages?.['']?.version, '10.4.0', 'root lockfile package must match V10.4');
+mustMatch(/const VERSION = '10\.4\.1'/, 'UI must expose the v10.4.1 core-quality correction');
+assert.equal(packageJson.version, '10.4.1', 'package/release identity must match the V10.4.1 UI');
+assert.equal(packageLock.version, '10.4.1', 'package-lock release identity must match V10.4.1');
+assert.equal(packageLock.packages?.['']?.version, '10.4.1', 'root lockfile package must match V10.4.1');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.13-KBO-TRADITIONAL-NAME-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
@@ -117,7 +117,7 @@ mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected directi
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
-mustMatch(/V10\.4\.0市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4 market-price shadow semantics');
+mustMatch(/V10\.4\.1市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4.1 market-price shadow semantics');
 mustMatch(/市場價差W \${pct\(row\.weightedEV\)\}/, 'W must be labelled as the independent-market price gap');
 mustMatch(/跨莊保守R \${pct\(row\.robustEV\)\}/, 'R must be labelled as the conservative cross-book price gap');
 mustMatch(/合格市場價差影子分數啟用/, 'provider status must report the qualified shadow-price score mode');

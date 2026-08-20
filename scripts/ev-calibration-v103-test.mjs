@@ -5,6 +5,7 @@ import {
   EV_CALIBRATION_V103_VERSION,
   MAX_RAW_SCENARIO_EV_SPREAD,
   MAX_WEIGHTED_ROBUST_EV_GAP,
+  MINIMUM_DATA_QUALITY,
   UNVERIFIED_EXTREME_EV_LIMIT,
 } from '../lib/ev-calibration-v103.js';
 import {
@@ -97,7 +98,7 @@ const moderateNoPrior = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.0/);
+assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.1/);
 assert.equal(moderateNoPrior.qualified, false, 'V10.4 must fail closed when no independent consensus prior exists');
 assert.equal(moderateNoPrior.weightedEV, null);
 assert.equal(moderateNoPrior.robustEV, null);
@@ -121,6 +122,56 @@ assert.ok(Math.abs(qualifiedConsensus.weightedEV - qualifiedConsensus.referenceE
 assert.ok(Math.abs(qualifiedConsensus.robustEV - qualifiedConsensus.referenceRobustEV) < 1e-12);
 assert.notEqual(qualifiedConsensus.weightedEV, qualifiedConsensus.rawWeightedEV, 'usable W must come from independent price consensus, not raw model EV');
 assert.ok(qualifiedConsensus.robustEV <= qualifiedConsensus.weightedEV);
+
+const optionalMissingDoesNotBlock = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification(),
+  },
+  rawWeightedEV: 0.045,
+  rawRobustEV: 0.012,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate: {
+    passedForShadowScore: true,
+    quality: 0.71,
+    rows: [
+      { id: 'starter', core: true, status: 'CONFIRMED' },
+      { id: 'team-season', core: true, status: 'CONFIRMED' },
+      { id: 'lineups', core: false, status: 'MISSING' },
+      { id: 'umpire', core: false, status: 'MISSING' },
+      { id: 'weather', core: false, status: 'PROJECTED' },
+    ],
+  },
+});
+assert.equal(MINIMUM_DATA_QUALITY, 0.85);
+assert.equal(optionalMissingDoesNotBlock.qualified, true, 'optional missing inputs must increase uncertainty, not trip the core hard gate');
+assert.equal(optionalMissingDoesNotBlock.qualificationDataQuality, 0.97);
+assert.equal(optionalMissingDoesNotBlock.overallDataQuality, 0.71);
+
+const projectedCoreStillBlocks = qualifyEvV103({
+  row: {
+    water: 0.94,
+    marketVerification: eligibleVerification(),
+  },
+  rawWeightedEV: 0.045,
+  rawRobustEV: 0.012,
+  modelProbability: 0.53,
+  rebateRate: 0.015,
+  gate: {
+    passedForShadowScore: true,
+    quality: 0.90,
+    rows: [
+      { id: 'starter', core: true, status: 'PROJECTED' },
+      { id: 'team-season', core: true, status: 'PROJECTED' },
+      { id: 'market-contract', core: true, status: 'PROJECTED' },
+      { id: 'market-water', core: true, status: 'PROJECTED' },
+    ],
+  },
+});
+assert.equal(projectedCoreStillBlocks.qualified, false, 'the 0.85 hard gate must remain enforced for core data');
+assert.ok(Math.abs(projectedCoreStillBlocks.qualificationDataQuality - 0.81) < 1e-12);
+assert.match(projectedCoreStillBlocks.reasons.join('｜'), /核心資料品質0\.81低於0\.85/);
 
 const unstableRawScenario = qualifyEvV103({
   row: {
