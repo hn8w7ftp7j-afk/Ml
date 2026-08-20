@@ -212,12 +212,18 @@ function SummaryCards({ summary }) {
 function ResultRow({ row, game, onBet, betState = null, recordable = false, now, verificationPending = false }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
-  const shadowScore = row?.scoreAudit?.ok !== false && Number.isFinite(Number(row?.shadowDiagnosticScore))
+  const rawShadowScore = row?.scoreAudit?.ok !== false && Number.isFinite(Number(row?.shadowDiagnosticScore))
     ? Number(row.shadowDiagnosticScore) : null;
-  const scoreClass = shadowScore == null ? 'pass' : shadowScore >= 8.5 ? 'strongest' : shadowScore >= 7.2 ? 'candidate' : 'pass';
-  const scoreTitle = shadowScore == null
-    ? 'V10資料、數學或數值QA未通過，不顯示分數'
-    : `V10影子分數 ${shadowScore.toFixed(1)}｜不可視為正式下注建議`;
+  const shadowScore = rawShadowScore != null && rawShadowScore >= 7.2 ? rawShadowScore : null;
+  const scoreLabel = row?.scoreStatus === 'LEAGUE_MODEL_NOT_VALIDATED' ? '—'
+    : Number(row?.weightedEV) <= 0 ? 'PASS'
+      : Number(row?.robustEV) <= 0 ? '觀察'
+        : shadowScore == null ? '—' : shadowScore.toFixed(1);
+  const scoreClass = shadowScore == null ? 'pass' : shadowScore >= 8.5 ? 'strongest' : 'candidate';
+  const scoreTitle = row?.scoreStatus === 'LEAGUE_MODEL_NOT_VALIDATED'
+    ? '該聯盟獨立point-in-time比分模型尚未驗證，不顯示數字分數'
+    : shadowScore == null ? 'W≤0顯示PASS；W>0且R≤0顯示觀察；只有W>0且R>0且達7.2門檻才顯示數字分數'
+      : `V10.2影子診斷分數 ${shadowScore.toFixed(1)}｜不可視為正式下注建議`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
@@ -228,16 +234,18 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? `已下注${betState?.records?.length > 1 ? ` ${betState.records.length}筆` : ''} ✓`
     : latest ? '加注目前盤' : '紀錄實際下注';
   return <div className="scoreRow">
-    <div className={`score ${scoreClass}`} title={scoreTitle}>{shadowScore == null ? '—' : shadowScore.toFixed(1)}</div>
+    <div className={`score ${scoreClass}`} title={scoreTitle}>{scoreLabel}</div>
     <div className="scoreBody">
       <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
-      <div className="scoreMeta">V10棒球分布勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜Raw W EV {pct(row.weightedEV)}｜保守 R EV {pct(row.robustEV)}｜影子分數不可下注</div>
+      <div className="scoreMeta">V10.2棒球分布勝率 {pct(row.modelProbability)}｜損益兩平 {pct(breakEven)}｜Raw W EV {pct(row.weightedEV)}｜保守 R EV {pct(row.robustEV)}｜影子分數不可下注</div>
       {actualLine && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
         ? '驗證中｜等待今日整批盤口完成'
         : row.scoreAudit?.ok === false
           ? 'BLOCK｜資料、數學或數值QA未通過｜不評分；仍可記錄使用者自行下注'
-          : 'V10 SHADOW｜Tai888只作成交價｜正式推薦尚未啟用｜可記錄實際下注'}</div>}
+          : row.scoreStatus === 'LEAGUE_MODEL_NOT_VALIDATED'
+            ? '獨立聯盟模型尚未驗證｜不顯示數字評分｜仍可記錄實際下注'
+            : 'V10.2 SHADOW DIAGNOSTIC｜Tai888只作成交價｜Robust區間尚未OOS校準｜可記錄實際下注'}</div>}
     </div>
     <div className="rowActions">
       {(recordable || latest) && <div>
@@ -278,7 +286,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10 Shadow｜影子分數可見</strong><span>Raw Weighted／Robust EV已重建；完成locked OOS與forward驗證前不產生正式推薦</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.2 Shadow Diagnostic</strong><span>MLB數字只在雙EV達門檻時顯示；Robust情境尚未locked OOS校準，完成forward驗證前不產生正式推薦</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
