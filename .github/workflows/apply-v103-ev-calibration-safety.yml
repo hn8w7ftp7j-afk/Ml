@@ -1,5 +1,6 @@
 name: Apply v10.3 EV calibration safety
 
+# Registered on branch; this follow-up commit triggers the one-time verified apply job.
 on:
   push:
     branches: [fix/v103-ev-calibration-safety]
