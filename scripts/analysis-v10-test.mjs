@@ -14,7 +14,7 @@ import {
 
 const context = {
   leagueId: 'MLB',
-  analysisMode: 'SHADOW',
+  analysisMode: 'EXPERIMENTAL_SHADOW',
   modelVersion: MODEL_VERSION,
   rulesVersion: RULES_VERSION,
   modelConfig: {},
