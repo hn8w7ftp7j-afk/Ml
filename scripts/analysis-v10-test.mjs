@@ -138,7 +138,7 @@ assert.notEqual(originalUnder.weightedEV, repricedUnder.weightedEV, '成交水�
 
 const finalized = finalizeDeterministicAnalysis({ analysis: preliminary, game: context.game, settings });
 assert.equal(FORMAL_SCORING_ENABLED, false);
-assert.equal(SCORE_RELEASE_STATUS, 'SHADOW_VALIDATED_NOT_FORMAL');
+assert.equal(SCORE_RELEASE_STATUS, 'SHADOW_EXACT_MODEL_NOT_FORMAL');
 assert.equal(finalized.formalScoringEnabled, false);
 assert.equal(finalized.formalRecommendationsEnabled, false);
 assert.ok(finalized.results.some(row => Number.isFinite(Number(row.shadowDiagnosticScore))), '至少應保留可稽核影子分數');
