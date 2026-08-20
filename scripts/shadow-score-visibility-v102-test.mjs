@@ -25,10 +25,22 @@ assert.ok(allDirections.results.some(row => row.formulaDiagnosticScore >= 7.2));
 const observation = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [direction('全場大小', '大9平', 0.01, -0.01)] }, game });
 assert.equal(observation.results[0].formulaDiagnosticScore, 7.1, 'W>0且R≤0固定觀察7.1');
 
-const qaBlocked = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), rawMarketProbabilityGap: 0.25 }] }, game });
-assert.equal(Number.isFinite(Number(qaBlocked.results[0].formulaDiagnosticScore)), true);
-assert.equal(qaBlocked.results[0].shadowDiagnosticScore, null);
-assert.equal(qaBlocked.results[0].scoreAudit.ok, false);
+const calibrationBlocked = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'MLB',
+    results: [{
+      ...direction('全場大小', '大9平', null, null),
+      rawWeightedEV: 0.20,
+      rawRobustEV: 0.12,
+      evCalibration: { qualified: false, reasons: ['極端EV缺少獨立市場先驗'] },
+    }],
+  },
+  game,
+});
+assert.equal(calibrationBlocked.results[0].formulaDiagnosticScore, null);
+assert.equal(calibrationBlocked.results[0].shadowDiagnosticScore, null);
+assert.equal(calibrationBlocked.results[0].scoreAudit.ok, false);
+assert.match(calibrationBlocked.results[0].tag, /EV校準未通過/);
 
 const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), water: null }] }, game });
 assert.equal(missingWater.results[0].formulaDiagnosticScore, null);
