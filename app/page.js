@@ -474,11 +474,24 @@ export default function Home() {
     let active = true;
     const refreshReader = async () => {
       try {
-        const value = await requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(date)}&t=${Date.now()}`, {}, 20000);
+        const stamp = Date.now();
+        const [value, latest] = await Promise.all([
+          requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(date)}&t=${stamp}`, {}, 20000),
+          requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&t=${stamp}`, {}, 20000),
+        ]);
         if (!active) return;
+        if (latest?.fresh
+          && /^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))
+          && latest.boardDate !== currentDateRef.current
+          && !board.length
+          && !operationBusyRef.current
+          && !readerPollBusyRef.current) {
+          setNotice(`已依 ${league} Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
+          setDate(latest.boardDate);
+          return;
+        }
         commitReaderStatus(value);
         if (value?.fresh || board.length || operationBusyRef.current || readerPollBusyRef.current) return;
-        const latest = await requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&t=${Date.now()}`, {}, 20000);
         if (!active || !latest?.fresh || !/^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))) return;
         if (latest.boardDate !== currentDateRef.current) {
           setNotice(`已依 Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
