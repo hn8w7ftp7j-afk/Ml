@@ -1,0 +1,21 @@
+name: Live score model audit
+
+on:
+  push:
+    branches: [audit/v1011-live-score-model]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/live-score-model-audit.mjs 2026-08-21
