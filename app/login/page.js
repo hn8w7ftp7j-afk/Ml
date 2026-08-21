@@ -22,5 +22,5 @@ export default function LoginPage() {
     }
   }
 
-  return <main className="shell loginShell"><section className="card loginCard"><div className="eyebrow">PRIVATE ANALYTICS</div><h1>⚾ Baseball Positive EV</h1><p className="muted">MLB／NPB／KBO／CPBL 共用同一個私人入口；輸入密碼後，這台裝置會維持登入 30 天。</p><form onSubmit={submit}><label>私人密碼<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} maxLength={256} required autoFocus/></label><button className="primary full" disabled={busy}>{busy?'登入中…':'登入'}</button></form>{status&&<div className="status">{status}</div>}</section></main>;
+  return <main className="shell loginShell"><section className="card loginCard"><div className="eyebrow">PRIVATE ANALYTICS</div><h1>⚾ Baseball Positive EV</h1><p className="muted">MLB／NPB／KBO／CPBL 共用同一個私人入口；輸入密碼後，這台裝置會維持登入 7 天。</p><form onSubmit={submit}><label>私人密碼<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} maxLength={256} required autoFocus/></label><button className="primary full" disabled={busy}>{busy?'登入中…':'登入'}</button></form>{status&&<div className="status">{status}</div>}</section></main>;
 }
