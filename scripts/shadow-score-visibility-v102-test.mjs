@@ -11,7 +11,7 @@ const rows = [
   direction('上半讓分', '客隊讓0.5', 0.015, 0.004), direction('上半讓分', '主隊受讓0.5', -0.08, -0.12),
   direction('上半大小', '大5平', 0.015, 0.004), direction('上半大小', '小5平', -0.02, -0.03),
 ];
-const allDirections = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: rows }, game });
+const allDirections = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, results: rows }, game });
 assert.equal(allDirections.results.length, 8);
 for (const row of allDirections.results) {
   assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true);
@@ -22,7 +22,7 @@ for (const row of allDirections.results) {
 for (const row of allDirections.results.filter(row => row.weightedEV <= 0)) assert.equal(row.formulaDiagnosticScore, 6.6, 'W≤0一律固定PASS 6.6，不得產生1.x/2.x/3.x診斷分');
 assert.ok(allDirections.results.some(row => row.formulaDiagnosticScore >= 7.2));
 
-const observation = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [direction('全場大小', '大9平', 0.01, -0.01)] }, game });
+const observation = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, results: [direction('全場大小', '大9平', 0.01, -0.01)] }, game });
 assert.equal(observation.results[0].formulaDiagnosticScore, 7.1, 'W>0且R≤0固定觀察7.1');
 
 const qualifiedObservation = finalizeDeterministicAnalysis({
@@ -113,7 +113,7 @@ assert.equal(staleReaderMustNotScore.results[0].shadowDiagnosticScore, null);
 assert.equal(staleReaderMustNotScore.results[0].rankingQualified, undefined);
 assert.match(staleReaderMustNotScore.results[0].scoreAudit.reason, /Reader 實際盤已過期/);
 
-const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), water: null }] }, game });
+const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), water: null }] }, game });
 assert.equal(missingWater.results[0].formulaDiagnosticScore, null);
 
 const nonMlb = finalizeDeterministicAnalysis({ analysis: { leagueId: 'KBO', results: [direction('全場大小', '大9平', 0.015, 0.004)] }, game: { ...game, leagueId: 'KBO' } });
