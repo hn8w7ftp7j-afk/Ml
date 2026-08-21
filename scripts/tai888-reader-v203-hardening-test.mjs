@@ -271,8 +271,8 @@ assert.equal(duplicatedAssessment.detectedGameCount, 2);
 const partialFrameA = candidate({ frameId: 1, games: [payloadA.games[0]], expected: 2 });
 const partialFrameB = candidate({ frameId: 2, games: [payloadA.games[1]], expected: 2 });
 const noFlatMap = selectAuthoritativeBoard([partialFrameA, partialFrameB], { now });
-assert.equal(noFlatMap.ok, false, '內容不同的重複 partial frames 必須停止，且不得 flat-map 合併');
-assert.equal(noFlatMap.reason, 'conflicting-duplicate-tabs');
+assert.equal(noFlatMap.ok, true, '同一分頁的重複 partial frames 選一個權威 frame，且不得 flat-map 合併');
+assert.equal(noFlatMap.selected.candidate.parsed.games.length, 1);
 
 const selected = selectAuthoritativeBoard([partialFrameA, completeFrame], { now });
 assert.equal(selected.ok, true);
