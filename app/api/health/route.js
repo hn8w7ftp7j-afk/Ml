@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { appPasswordConfigured, sessionSecretConfigured, siteAuthConfigured } from '../../../lib/security.js';
+import { appPasswordConfigured, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured } from '../../../lib/security.js';
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
 import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
@@ -25,13 +25,17 @@ import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/r
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request) {
+  const version = '10.5.0';
+  if (!(await requestIsAuthenticated(request))) {
+    return NextResponse.json({ ok: true, version }, { headers: { 'Cache-Control': 'no-store' } });
+  }
   const readerSnapshot = await loadReaderSnapshot('MLB');
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   const referenceStatus = referenceProviderStatus();
   return NextResponse.json({
     ok: true,
-    version: '10.4.3',
+    version,
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import {
+  bearerToken,
   readerCorsHeaders,
   readerOriginAllowed,
   readerPairingConfigured,
+  verifyReaderToken,
 } from '../../../../lib/reader-auth-v2.js';
 import {
   loadReaderSnapshot,
@@ -12,7 +14,7 @@ import {
 } from '../../../../lib/reader-store-v2.js';
 import { readerSnapshotIsComplete } from '../../../../lib/tai888-reader-parser-v2.js';
 import { leagueConfig, requestedLeagueId } from '../../../../lib/leagues.js';
-import { checkRateLimit, rateLimitResponse, validDateString } from '../../../../lib/security.js';
+import { checkRateLimit, rateLimitResponse, requestIsAuthenticated, validDateString } from '../../../../lib/security.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,6 +29,14 @@ export async function GET(request) {
   const headers = readerCorsHeaders(request);
   if (!readerOriginAllowed(request)) {
     return NextResponse.json({ ok: false, error: '不允許的 Reader 請求來源' }, { status: 403, headers });
+  }
+  const readerIdentity = await verifyReaderToken(bearerToken(request));
+  const siteIdentity = readerIdentity ? false : await requestIsAuthenticated(request);
+  if (!readerIdentity && !siteIdentity) {
+    return NextResponse.json({ ok: false, error: 'Reader 狀態需要網站登入或有效 Reader token' }, {
+      status: 401,
+      headers: { ...headers, 'Cache-Control': 'no-store' },
+    });
   }
   const rate = checkRateLimit(request, { id: 'reader-status-v2', limit: 240, windowMs: 10 * 60 * 1000 });
   if (!rate.allowed) {

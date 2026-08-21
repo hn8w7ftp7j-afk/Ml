@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 
-const common = { water: 0.94, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true, distributionCoverage: 1, evDoubleCheck: { passed: true }, dataGateV10: { passedForShadowScore: true, blocking: [] }, numericalQA: { passed: true, signStable: true }, marketCalibrationApplied: false, marketVerification: { verified: false }, rawMarketProbabilityGap: 0.01 };
+const common = { evCalibration: { qualified: true, referencePriorEligible: true, actualReaderEligible: true, reasons: [], auditWarnings: [] }, marketVerification: { verified: true, referencePriorEligible: true }, water: 0.94, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true, distributionCoverage: 1, evDoubleCheck: { passed: true }, dataGateV10: { passedForShadowScore: true, blocking: [] }, numericalQA: { passed: true, signStable: true }, marketCalibrationApplied: false, rawMarketProbabilityGap: 0.01 };
 const direction = (market, pick, weightedEV, robustEV, modelProbability = 0.5) => ({ ...common, market, pick, weightedEV, robustEV, modelProbability });
 const game = { leagueId: 'MLB', away: '客隊', home: '主隊' };
 
@@ -11,7 +11,7 @@ const rows = [
   direction('上半讓分', '客隊讓0.5', 0.015, 0.004), direction('上半讓分', '主隊受讓0.5', -0.08, -0.12),
   direction('上半大小', '大5平', 0.015, 0.004), direction('上半大小', '小5平', -0.02, -0.03),
 ];
-const allDirections = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: rows }, game });
+const allDirections = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true }, results: rows }, game });
 assert.equal(allDirections.results.length, 8);
 for (const row of allDirections.results) {
   assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true);
@@ -22,13 +22,13 @@ for (const row of allDirections.results) {
 for (const row of allDirections.results.filter(row => row.weightedEV <= 0)) assert.equal(row.formulaDiagnosticScore, 6.6, 'W≤0一律固定PASS 6.6，不得產生1.x/2.x/3.x診斷分');
 assert.ok(allDirections.results.some(row => row.formulaDiagnosticScore >= 7.2));
 
-const observation = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [direction('全場大小', '大9平', 0.01, -0.01)] }, game });
+const observation = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true }, results: [direction('全場大小', '大9平', 0.01, -0.01)] }, game });
 assert.equal(observation.results[0].formulaDiagnosticScore, 7.1, 'W>0且R≤0固定觀察7.1');
 
 const qualifiedObservation = finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
     results: [{
       ...direction('全場大小', '大9平', 0.01, -0.01),
       numericalQA: { passed: true, signStable: false },
@@ -46,7 +46,7 @@ assert.equal(qualifiedObservation.results[0].rankingQualified, false);
 const strongestInput = secondaryIndependentMarketVerified => finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
     results: [{
       ...direction('全場大小', '大9平', 0.082, 0.072),
       marketVerification: { verified: true, referencePriorEligible: true, secondaryIndependentMarketVerified },
@@ -78,7 +78,7 @@ assert.match(calibrationBlocked.results[0].tag, /EV校準未通過/);
 const rawModelAuditOnly = finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
     results: [{
       ...direction('全場大小', '大9平', 0.03, 0.015),
       distributionCoverage: 0.7,
@@ -92,13 +92,13 @@ const rawModelAuditOnly = finalizeDeterministicAnalysis({
   },
   game,
 });
-assert.equal(rawModelAuditOnly.results[0].scoreAudit.ok, true, 'raw model and baseball data-gate warnings must not veto independently qualified market W/R');
-assert.ok(Number.isFinite(Number(rawModelAuditOnly.results[0].shadowDiagnosticScore)));
+assert.equal(rawModelAuditOnly.results[0].scoreAudit.ok, false, '核心模型或資料閘門失敗時必須拒絕評分');
+assert.equal(rawModelAuditOnly.results[0].shadowDiagnosticScore, null);
 
 const staleReaderMustNotScore = finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
     results: [{
       ...direction('全場大小', '大9平', 0.03, 0.015),
       lineFresh: false,
@@ -113,11 +113,11 @@ assert.equal(staleReaderMustNotScore.results[0].shadowDiagnosticScore, null);
 assert.equal(staleReaderMustNotScore.results[0].rankingQualified, undefined);
 assert.match(staleReaderMustNotScore.results[0].scoreAudit.reason, /Reader 實際盤已過期/);
 
-const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), water: null }] }, game });
+const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true }, results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), water: null }] }, game });
 assert.equal(missingWater.results[0].formulaDiagnosticScore, null);
 
 const nonMlb = finalizeDeterministicAnalysis({ analysis: { leagueId: 'KBO', results: [direction('全場大小', '大9平', 0.015, 0.004)] }, game: { ...game, leagueId: 'KBO' } });
-assert.equal(Number.isFinite(Number(nonMlb.results[0].formulaDiagnosticScore)), true);
+assert.equal(nonMlb.results[0].formulaDiagnosticScore, null);
 assert.equal(nonMlb.results[0].shadowDiagnosticScore, null);
 assert.equal(nonMlb.results[0].scoreStatus, 'LEAGUE_MODEL_NOT_VALIDATED');
 assert.equal(nonMlb.results[0].betEligible, false);

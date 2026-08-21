@@ -1,6 +1,6 @@
 import { canonicalReaderPayload } from './parser.js';
 
-export const BOARD_ACTIVITY_TTL_MS = 3 * 60 * 1000;
+export const BOARD_ACTIVITY_TTL_MS = 5 * 60 * 1000;
 // Kept for diagnostic compatibility only. Candidate selection is board-based,
 // never blocked merely because the user opened a fifth Tai888 page.
 export const MAX_TAI888_TABS = Number.POSITIVE_INFINITY;
@@ -170,18 +170,17 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   if (!Number.isFinite(observedTime)) issues.push('missing-observed-time');
   else if (observedAgeMs < -30_000 || observedAgeMs > 60_000) issues.push('stale-observation');
 
-  // A background Tai888 tab can remain perfectly readable while Chrome
-  // throttles DOM mutations.  `lastMutationAt` is therefore audit metadata
-  // about when the price content changed, not proof that the tab is dead.
-  // The explicit capture response (`observedAt`) is the per-tab liveness proof
-  // used by the server heartbeat.  This keeps all four league tabs usable
-  // without requiring the user to foreground each one.
+  // A successful content-script response proves only that the DOM is readable.
+  // It must not renew the executable price time on a disconnected/frozen page.
+  // Only an actual market fingerprint mutation can advance pageActivityAt.
   const marketActivityAt = String(diagnostics.lastMutationAt || '');
   const marketActivityTime = Date.parse(marketActivityAt);
+  const marketActivityAgeMs = Number(now) - marketActivityTime;
   if (!Number.isFinite(marketActivityTime)) issues.push('missing-market-activity');
-  else if (marketActivityTime > Number(now) + 30_000) issues.push('future-market-activity');
-  const pageActivityAt = Number.isFinite(observedTime) ? new Date(observedTime).toISOString() : '';
-  const pageActivityTime = observedTime;
+  else if (marketActivityAgeMs < -30_000) issues.push('future-market-activity');
+  else if (marketActivityAgeMs > BOARD_ACTIVITY_TTL_MS) issues.push('stale-market-activity');
+  const pageActivityAt = Number.isFinite(marketActivityTime) ? new Date(marketActivityTime).toISOString() : '';
+  const pageActivityTime = marketActivityTime;
 
   return {
     ok: issues.length === 0,
@@ -245,27 +244,43 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     lastAccessed: candidate.lastAccessed,
   }])).values()].sort((left, right) => tabPriority(left, right, preferredTabId));
   const assessed = boardCandidates.map(candidate => assessBoardCandidate(candidate, now));
-  // A user can legitimately have the same league open in more than one tab
-  // while preparing the four league boards. Pick the highest-priority usable
-  // tab and ignore the other tabs instead of treating normal price movement
-  // between duplicate tabs as a league-wide conflict. Tai888 can also expose
-  // the same board through a host frame and a hidden/measurement iframe; pick
-  // one authoritative frame by URL/activity priority instead of letting that
-  // implementation detail block the whole league.
+  const usableTabs = [];
   for (const tab of tabs) {
     const tabFrames = assessed.filter(row => row.candidate.tabId === tab.tabId);
     const validTabFrames = tabFrames.filter(row => row.ok);
     const bestCoverage = Math.max(0, ...validTabFrames.map(row => row.detectedGameCount || 0));
     const complete = validTabFrames.filter(row => row.detectedGameCount === bestCoverage);
     if (!complete.length) continue;
+    usableTabs.push({
+      tab,
+      selected: [...complete].sort(framePriority)[0],
+      duplicateFrameCount: Math.max(0, complete.length - 1),
+    });
+  }
 
-    const selected = [...complete].sort(framePriority)[0];
+  // Multiple tabs for the same league are safe only when they expose the exact
+  // same canonical contracts. Never select a stale duplicate by focus/access
+  // order when another usable tab shows a different price.
+  const fingerprints = new Set(usableTabs.map(row => row.selected.payloadFingerprint).filter(Boolean));
+  if (fingerprints.size > 1) {
+    return {
+      ok: false,
+      error: 'conflicting-duplicate-tabs',
+      authorityTabId: null,
+      conflictingTabIds: usableTabs.map(row => row.tab.tabId),
+      assessed,
+    };
+  }
+
+  if (usableTabs.length) {
+    const authority = [...usableTabs].sort((left, right) =>
+      tabPriority(left.tab, right.tab, preferredTabId))[0];
     return {
       ok: true,
-      authorityTabId: tab.tabId,
-      selected,
-      ignoredDuplicateTabCount: Math.max(0, tabs.length - 1),
-      ignoredDuplicateFrameCount: Math.max(0, complete.length - 1),
+      authorityTabId: authority.tab.tabId,
+      selected: authority.selected,
+      ignoredDuplicateTabCount: Math.max(0, usableTabs.length - 1),
+      ignoredDuplicateFrameCount: authority.duplicateFrameCount,
       assessed,
     };
   }

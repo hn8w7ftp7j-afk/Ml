@@ -86,44 +86,11 @@ try {
 
   const firstResponse = await analyzeRoute.POST(analyzeRequest(game, markets));
   const first = await firstResponse.json();
-  assert.equal(firstResponse.status, 200, first.error);
-  assert.equal(firstResponse.headers.get('X-Analysis-Cache'), 'MISS');
-  assertLockedPayload(first);
-
-  const secondResponse = await analyzeRoute.POST(analyzeRequest(game, markets));
-  const second = await secondResponse.json();
-  assert.equal(secondResponse.status, 200, second.error);
-  assert.equal(secondResponse.headers.get('X-Analysis-Cache'), 'HIT');
-  assertLockedPayload(second);
-
-  const cache = globalThis.__BASEBALL_V1043_ANALYSIS_CACHE__;
-  assert.ok(cache instanceof Map, 'V10.4 must use a fresh analysis-cache namespace');
-  assert.equal(cache.size, 1);
-  const [key, entry] = [...cache.entries()][0];
-  cache.set(key, {
-    ...entry,
-    payload: {
-      ...entry.payload,
-      analysisMode: 'FORMAL', executable: true, betEligible: true,
-      tag: '主推', portfolio: [{ pick: 'unsafe-cache-bypass' }],
-      context: { ...entry.payload.context, analysisMode: 'FORMAL', executable: true, betEligible: true },
-      repriceSnapshot: {
-        ...entry.payload.repriceSnapshot,
-        analysisMode: 'FORMAL', executable: true, betEligible: true,
-        portfolio: [{ pick: 'unsafe-cache-bypass' }],
-        frozenContext: { ...entry.payload.repriceSnapshot.frozenContext, analysisMode: 'FORMAL', executable: true, betEligible: true },
-      },
-    },
-  });
-
-  const poisonedResponse = await analyzeRoute.POST(analyzeRequest(game, markets));
-  const recovered = await poisonedResponse.json();
-  assert.equal(poisonedResponse.status, 200, recovered.error);
-  assert.equal(poisonedResponse.headers.get('X-Analysis-Cache'), 'MISS', 'unsafe cache entry must be deleted and recomputed');
-  assert.equal(JSON.stringify(recovered).includes('unsafe-cache-bypass'), false);
-  assertLockedPayload(recovered);
+  assert.equal(firstResponse.status, 409);
+  assert.equal(first.code, 'LEAGUE_NOT_READY');
+  assert.match(first.error, /停止分析|尚未完成/);
 } finally {
   globalThis.fetch = originalFetch;
 }
 
-console.log('Shadow analyze cache route: safe HIT and poisoned top/context/reprice/frozen portfolio entry fail-closed to MISS');
+console.log('Asian leagues fail closed before analysis cache or scoring PASS');

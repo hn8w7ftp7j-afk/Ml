@@ -78,17 +78,21 @@ const conflictingTabs = selectAuthoritativeBoard(
   [activeComplete, hiddenDifferentBoard],
   { now: NOW },
 );
-assert.equal(conflictingTabs.ok, true, 'price movement between duplicate tabs must not block the league');
-assert.equal(conflictingTabs.authorityTabId, 1);
-assert.equal(conflictingTabs.selected.candidate.parsed.games[0].fullTotal.overWater, 0.94);
-assert.equal(conflictingTabs.ignoredDuplicateTabCount, 1);
+assert.equal(conflictingTabs.ok, false, '內容不一致的同聯盟可用分頁必須整批停止');
+assert.equal(conflictingTabs.error, 'conflicting-duplicate-tabs');
+
+const staleBoard = candidate({ tabId: 9, active: true });
+staleBoard.capture.diagnostics.lastMutationAt = '2026-08-14T16:54:59.000Z';
+const staleSelection = selectAuthoritativeBoard([staleBoard], { now: NOW });
+assert.equal(staleSelection.ok, false, '盤口內容超過五分鐘沒有變動時不得繼續執行');
+assert.match(staleSelection.assessed.flatMap(row => row.issues || []).join('｜'), /stale-market-activity/);
 
 const otherDate = candidate({ tabId: 3, active: false, overWater: 0.95 });
 otherDate.parsed.boardDate = '2026-08-16';
 otherDate.parsed.games[0].boardDate = '2026-08-16';
 const separateDates = selectAuthoritativeBoard([activeComplete, otherDate], { now: NOW });
-assert.equal(separateDates.ok, true, 'different complete board dates do not create same-slate ambiguity');
-assert.equal(separateDates.authorityTabId, 1);
+assert.equal(separateDates.ok, false, '同聯盟不同盤日的可用分頁仍屬衝突，必須要求只保留正確盤日');
+assert.equal(separateDates.error, 'conflicting-duplicate-tabs');
 
 const backgroundSource = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(

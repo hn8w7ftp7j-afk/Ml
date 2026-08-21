@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.13');
-assert.equal(manifest.version_name, '2.1.13 KBO-TRADITIONAL-NAME-SAFE');
+assert.equal(manifest.version, '2.1.14');
+assert.equal(manifest.version_name, '2.1.14 MARKET-ACTIVITY-CONFLICT-SAFE');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -28,7 +28,7 @@ assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const VERSION = '2\.1\.13'/);
+assert.match(background, /const VERSION = '2\.1\.14'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.doesNotMatch(background, /captures\.flatMap|tables:\s*captures\.flatMap/);
 assert.match(background, /lastSuccessfulPayloadHashes/);
@@ -100,6 +100,9 @@ for (const source of [pair, ingest, status]) {
 }
 assert.match(ingest, /X-Device-Id|x-device-id/i);
 assert.match(ingest, /readerSnapshotIsComplete|部分解析/);
+assert.match(status, /verifyReaderToken\(bearerToken\(request\)\)/, 'Reader status must accept a valid Reader token');
+assert.match(status, /requestIsAuthenticated\(request\)/, 'Reader status must accept an authenticated site session');
+assert.match(auth, /60 \* 60 \* 24 \* 30/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
 
-console.log('Reader 2.0.3 static security audit: minimal permissions, single-frame board selection, no credential storage, signed device token and strict origins PASS');
+console.log('Reader 2.1.14 static security audit: minimal permissions, single-frame board selection, no credential storage, signed device token and strict origins PASS');

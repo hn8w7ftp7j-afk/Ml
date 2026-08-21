@@ -48,8 +48,10 @@ const store = fs.readFileSync(new URL('../lib/cloud-bet-store.js', import.meta.u
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 assert.match(store, /baseball_private_bets_v2/);
 assert.match(store, /LEGACY_CACHE_KEY/);
-assert.match(store, /if \(!databaseConfigured\(\)\) return readCachedBets\(\)/, '未設定資料庫時必須使用Vercel雲端快取');
-assert.match(store, /cache\.set\(CACHE_KEY/);
+assert.match(store, /function requireDurableDatabase\(\)[\s\S]*DATABASE_URL/, '未設定資料庫時正式寫入必須失敗關閉');
+assert.doesNotMatch(store, /await cache\.set\(CACHE_KEY/, 'Runtime Cache不得作為正式帳本寫入真值');
+assert.match(store, /crypto\.randomUUID\(\)/, '下注ID必須由伺服器產生');
+assert.match(store, /status: 'OPEN'/, '新下注初始狀態必須由伺服器鎖定');
 assert.match(store, /ON CONFLICT \(id\) DO NOTHING/, '每張下注單以不可變id去重，不得以方向覆蓋');
 const v2Schema = store.match(/CREATE TABLE IF NOT EXISTS baseball_private_bets_v2\s*\(([\s\S]*?)\n\s*\)\n\s*`;/)?.[1] || '';
 assert.ok(v2Schema, '必須找到v2正式帳本schema');
@@ -66,8 +68,8 @@ assert.match(route, /validateSameOrigin/);
 assert.match(route, /checkRateLimit/);
 assert.match(route, /action === 'merge'/);
 assert.match(route, /action === 'upsert'/);
-assert.match(route, /action === 'delete'/);
-assert.match(route, /action === 'clearLeague'/);
+assert.doesNotMatch(route, /action === 'delete'/);
+assert.doesNotMatch(route, /action === 'clearLeague'/);
 assert.match(route, /action === 'settleOpen'/);
 
 const mergeFunction = store.match(/export async function mergeCloudBets\(values\) \{([\s\S]*?)\n\}\n\nexport async function deleteCloudBet/)?.[1] || '';

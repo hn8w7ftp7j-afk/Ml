@@ -271,7 +271,7 @@ assert.equal(duplicatedAssessment.detectedGameCount, 2);
 const partialFrameA = candidate({ frameId: 1, games: [payloadA.games[0]], expected: 2 });
 const partialFrameB = candidate({ frameId: 2, games: [payloadA.games[1]], expected: 2 });
 const noFlatMap = selectAuthoritativeBoard([partialFrameA, partialFrameB], { now });
-assert.equal(noFlatMap.ok, true, 'duplicate partial frames select one board and must never be flat-mapped');
+assert.equal(noFlatMap.ok, true, '同一分頁的重複 partial frames 選一個權威 frame，且不得 flat-map 合併');
 assert.equal(noFlatMap.selected.candidate.parsed.games.length, 1);
 
 const selected = selectAuthoritativeBoard([partialFrameA, completeFrame], { now });
@@ -282,14 +282,13 @@ assert.equal(selected.selected.candidate.parsed.games.length, 2);
 const hiddenComplete = candidate({ tabId: 2, active: false, frameId: 3, lastAccessed: 50 });
 const activeIncomplete = candidate({ tabId: 1, active: true, games: [payloadA.games[0]], expected: 2 });
 const activeFailClosed = selectAuthoritativeBoard([hiddenComplete, activeIncomplete], { now });
-assert.equal(activeFailClosed.ok, true, 'a complete open-market subset may represent DOM-hidden locked events');
-assert.equal(activeFailClosed.authorityTabId, 1, 'a hidden old tab must not replace the active incomplete board');
-assert.equal(activeFailClosed.selected.candidate.parsed.games.length, 1);
+assert.equal(activeFailClosed.ok, false, '可用分頁內容不一致時不得由 active tab 靜默覆蓋');
+assert.equal(activeFailClosed.error, 'conflicting-duplicate-tabs');
 
 const stale = candidate({ activity: '2026-08-14T16:56:00.000Z' });
 const backgroundAssessment = assessBoardCandidate(stale, now);
 assert.equal(backgroundAssessment.ok, true, 'a freshly captured background tab must not fail only because its odds did not mutate');
-assert.equal(backgroundAssessment.pageActivityAt, stale.capture.observedAt, 'capture time is the per-tab liveness heartbeat');
+assert.equal(backgroundAssessment.pageActivityAt, '2026-08-14T16:56:00.000Z', '只有市場內容變動時間可作為可執行新鮮度');
 assert.equal(backgroundAssessment.marketActivityAt, '2026-08-14T16:56:00.000Z', 'market mutation time remains available for audit');
 
 const captureConflict = candidate();

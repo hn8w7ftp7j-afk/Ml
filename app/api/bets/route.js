@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
-  clearCloudLeague,
   cloudBetStats,
-  deleteCloudBet,
   listCloudBets,
   mergeCloudBets,
   settleOpenCloudBets,
@@ -27,8 +25,6 @@ export async function POST(request) {
     const body = await readJsonBody(request, 500_000);
     if (body.action === 'merge') return response(await mergeCloudBets(body.bets));
     if (body.action === 'upsert') return response(await upsertCloudBet(body.bet));
-    if (body.action === 'delete') return response(await deleteCloudBet(body.betId || body.positionIdentity));
-    if (body.action === 'clearLeague') return response(await clearCloudLeague(body.league));
     if (body.action === 'settleOpen') return response(await settleOpenCloudBets({ league: body.league, limit: 500 }));
     return NextResponse.json({ ok: false, error: '不支援的下注紀錄操作' }, { status: 400 });
   } catch (error) {

@@ -1,17 +1,21 @@
-# 多聯盟長期正期望值分析｜9.6.0 / Tai888 Reader 2.1.4
+# 多聯盟棒球影子分析｜10.5.0 / Tai888 Reader 2.1.14
 
-目前整合基線為網站 `9.6.0`、Next.js `15.5.23` 與 Reader `2.1.4 RESPONSIVE-ROW-SAFE`。同一網站已建立 MLB、NPB、KBO、CPBL 四個彼此隔離的聯盟模組；MLB 維持正式使用，NPB／KBO／CPBL 接收各自官方賽程與 Tai888 實盤後執行完整診斷分析，但固定為 `EXPERIMENTAL_SHADOW`：可顯示四市場／八方向、EV、風險與排名，不可下注、不產生 portfolio，也不能回落到 MLB 的球隊、賽程或模型快照。
+目前發布基線為網站 `10.5.0` 與 Reader `2.1.14 MARKET-ACTIVITY-CONFLICT-SAFE`。
 
-Reader 對 Tai888 已呈現且開盤的賽事要求逐場具備 4 市場／8 方向；只要任一可見開盤場僅有部分市場，整批 ingest 就會停止並保留上一個可信快照。官方賽程中尚未呈現或整場全鎖的賽事可保留為不可執行項目，系統絕不補造缺少的盤口或水位。Production 評分只使用固定雙 EV 短板公式，GPT 不得調分；正式 EV 會用 Tai888 同市場雙邊水位去水基準有限校準。網站只顯示 Reader 實際信用盤，並在比賽卡與總排名保留同瀏覽器、同聯盟隔離的「已下注」標記。下方 6.x～8.x 段落保留為歷史變更紀錄，不是目前發布規格。
+- MLB：啟用資料蒐集、影子分析與影子排名；正式推薦與 Unit 仍停用。
+- NPB／KBO／CPBL：保留官方賽程、Reader 與下注帳本，但在各聯盟獨立模型完成前停止分析與排名，不得套用 MLB 參數。
+- 固定計算鏈：PIT 聯盟／球隊／先發／牛棚／打線／球場／天氣 → 單一聯合比分分布 → Tai888 逐腿結算 → 模型 Weighted EV → 模型 Robust EV → QA → 固定雙 EV 分數 → Shadow。
+- Tai888 只提供可執行成交價，不能反向校準模型；至少三家同合約的獨立市場只作外部稽核，不能取代模型 EV。
+- 核心資料、數值 QA、Reader 時效或外部市場稽核任一未通過，結果即為 `QA BLOCK｜不評分`，不回傳數字分數。
+- 正式推薦、正式下注資格與 Unit 必須等待 locked OOS／forward 驗證，不會因 QA PASS 自動開啟。
 
-## 9.6.0 四聯盟隔離分析
+## 10.5.0 安全修正
 
-- 單一網站提供 MLB／NPB／KBO／CPBL 聯盟切換、官方賽程、Reader 同步、分析與排名。
-- 排程來源、Reader 來源、模型族、分析結果、排名、快取、HMAC 與下注識別均以聯盟為邊界；未知聯盟直接拒絕。
-- 舊版沒有 `league` 欄位的 Reader 請求與下注紀錄只視為 MLB，不能流入其他聯盟。
-- NPB／KBO／CPBL 使用聯盟專屬隊名登錄、官方賽程 adapter、模型參數與版本；在獨立樣本外校準完成前一律保持 shadow，不開放下注資格。
-- 亞洲三聯盟即使 Reader 盤面完整，分析回應仍強制 `executable=false`、`betEligible=false`、`portfolio=[]`；畫面與 API 都不可繞過。
-- 完整架構與啟用門檻見 `docs/MULTI_LEAGUE_ARCHITECTURE.md`。
+- Reader 只把實際盤口內容變動視為新鮮活動；內容超過 5 分鐘未變即停止執行。
+- 同聯盟若有多個內容不一致的可用分頁，整批停止並要求關閉衝突分頁；內容完全一致才可選取。
+- Reader 狀態明細與完整 health 資訊須登入或持有效 Reader token；匿名 health 只回傳存活狀態與版本。
+- 正式下注帳本寫入與結算必須使用持久資料庫；伺服器產生下注 ID、時間與初始狀態，禁止硬刪除。
+- 取消、延期、暫停、沒收、提前結束等非標準終場狀態一律進人工複核，不自動結算。
 
 Reader 只接受單一權威 tab/frame 的完整官方台北盤日：官方場次與雙重賽須唯一配對；已呈現且開盤的賽事須每場四市場、八方向完整，未呈現或全鎖場則維持不可執行。同盤日完整分頁若互相衝突、任何可見開盤場僅有部分市場，或開啟超過四個 Tai888 分頁，都會整批停止上傳。盤口與 reprice snapshot 由伺服器簽章；畫面只有在最新 Reader hash 與 `pageActivityAt` 版本的全部分析成功後才允許正式下注。URL 中繼資料不含 query、任意 hash、頁面標題或原始 frame URL。Vercel Runtime Cache 沒有原子 compare-and-swap，目前務必只運行一台 Reader。
 

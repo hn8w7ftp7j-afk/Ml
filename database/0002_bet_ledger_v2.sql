@@ -1,4 +1,4 @@
--- Immutable actual-bet ledger. Additive only; legacy rows remain available for audit.
+-- Permanent actual-bet ledger. User-facing APIs are additive; legacy rows remain available for audit.
 
 create table if not exists baseball_private_bets_v2 (
   id text primary key,

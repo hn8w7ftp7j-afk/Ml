@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { analyzeMarkets, enforceAnalysisModeSafety, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
-import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
+import { SETTLEMENT_RULE_VERSION, TAIWAN_CREDIT_REBATE_RATE } from '../../../lib/taiwan-settlement-v9.js';
 import { buildSnapshotFingerprints, DATA_VERSION } from '../../../lib/snapshot-v9.js';
 import {
   analysisCacheKey,
@@ -38,8 +38,8 @@ export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // v10.4 namespace invalidates every pre-independent-consensus response.
-const responseCache = globalThis.__BASEBALL_V1043_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V1043_ANALYSIS_CACHE__ = responseCache;
+const responseCache = globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -150,24 +150,25 @@ export async function POST(request) {
     const activeMarkets = markets.filter(row => row.pick);
     if (!activeMarkets.length) return NextResponse.json({ ok: false, error: '目前沒有任何已開盤市場可分析' }, { status: 400 });
 
-    const requestedRebateRate = Number(body.settings?.rebateRate);
     const settings = {
-      rebateRate: Number.isFinite(requestedRebateRate) ? Math.max(0, Math.min(0.1, requestedRebateRate)) : 0.015,
+      rebateRate: TAIWAN_CREDIT_REBATE_RATE,
       candidateThreshold: 7.2,
       strongestThreshold: 8.5,
       simulationsPerScenario: 4000,
       expertMode: 'off',
     };
     const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
-    if (!context?.coreModelable) {
+    if (!context?.coreModelable || context?.dataGateV10?.passedForShadowScore !== true) {
       const blocking = Array.isArray(context?.dataGateV10?.blocking) ? context.dataGateV10.blocking : [];
-      console.warn('[ANALYZE_RAW_MODEL_AUDIT]', {
-        league,
-        gamePk: game?.gamePk,
+      const detail = blocking.length ? blocking.join('、') : '核心資料Gate未通過';
+      console.error('[ANALYZE_CORE_BLOCK]', { league, gamePk: game?.gamePk, blocking, warnings: context?.warnings || [] });
+      return NextResponse.json({
+        ok: false,
+        code: 'CORE_DATA_MISSING',
+        error: `資料不足｜QA BLOCK｜不評分｜缺少：${detail}`,
         blocking,
         warnings: context?.warnings || [],
-        effect: 'RAW_MODEL_AUDIT_ONLY_MARKET_PRICE_SHADOW_CONTINUES',
-      });
+      }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
     }
     const contract = leagueAnalysisContract(league);
     const versions = {
