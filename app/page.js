@@ -10,6 +10,7 @@ import {
 } from '../lib/bet-ledger.js';
 import { compareBetPrice } from '../lib/bet-price-comparison.js';
 import { summarizeBetLedger } from '../lib/bet-stats.js';
+import { auditModelDirection } from '../lib/model-qa-v2.js';
 import { translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
@@ -351,6 +352,15 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
       <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
       <div className="scoreMeta">{scoreMetaText}</div>
+      {(() => {
+        const qa2 = auditModelDirection(row);
+        if (qa2.status === 'PASS') return <div className="qaLine">QA 2.0：PASS｜未發現額外合理性異常</div>;
+        return <details className="auditWarnings" open={qa2.status === 'ERROR'}>
+          <summary>QA 2.0：{qa2.status === 'ERROR' ? 'ERROR' : 'WARN'}｜{qa2.issues.length} 項診斷</summary>
+          <div>{qa2.issues.map(item => (item.level === 'ERROR' ? '⛔ ' : '⚠️ ') + item.message).join('；')}</div>
+          <small>僅診斷：不修改W、R、S或影子排名。</small>
+        </details>;
+      })()}
       {actualLine && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
         ? '驗證中｜等待今日整批盤口完成'
         : !leagueValidated
