@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchLeagueFinalResult, getLeagueProvider, withLeagueProviderTimeout } from '../../../lib/league-provider.js';
-import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
+import { requestedLeagueId } from '../../../lib/leagues.js';
 import { checkRateLimit, positiveInteger, rateLimitResponse, requireApiAuth, validDateString } from '../../../lib/security.js';
 
 export const dynamic = 'force-dynamic';
@@ -14,15 +14,6 @@ export async function GET(request) {
     const league = requestedLeagueId(searchParams.get('league'));
     if (!league) {
       return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
-    }
-    if (!leagueCanAnalyze(league)) {
-      const config = leagueConfig(league);
-      return NextResponse.json({
-        ok: false,
-        code: 'LEAGUE_NOT_READY',
-        league,
-        error: `${config.label}賽果來源尚未完成正式驗證`,
-      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
     const gamePk = positiveInteger(searchParams.get('gamePk'), Number.MAX_SAFE_INTEGER);
     if (!gamePk) return NextResponse.json({ ok: false, error: '缺少或無效的 gamePk' }, { status: 400 });
