@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { analyzeMarkets, enforceAnalysisModeSafety, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
-import { SETTLEMENT_RULE_VERSION } from '../../../lib/taiwan-settlement-v9.js';
+import { SETTLEMENT_RULE_VERSION, TAIWAN_CREDIT_REBATE_RATE } from '../../../lib/taiwan-settlement-v9.js';
 import { buildSnapshotFingerprints, DATA_VERSION } from '../../../lib/snapshot-v9.js';
 import {
   analysisCacheKey,
@@ -150,9 +150,8 @@ export async function POST(request) {
     const activeMarkets = markets.filter(row => row.pick);
     if (!activeMarkets.length) return NextResponse.json({ ok: false, error: '目前沒有任何已開盤市場可分析' }, { status: 400 });
 
-    const requestedRebateRate = Number(body.settings?.rebateRate);
     const settings = {
-      rebateRate: Number.isFinite(requestedRebateRate) ? Math.max(0, Math.min(0.1, requestedRebateRate)) : 0.015,
+      rebateRate: TAIWAN_CREDIT_REBATE_RATE,
       candidateThreshold: 7.2,
       strongestThreshold: 8.5,
       simulationsPerScenario: 4000,
