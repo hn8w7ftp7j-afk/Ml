@@ -1,0 +1,55 @@
+name: Apply 5-minute Reader cadence
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[reader-5m-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Patch Reader cadence
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/page.js')
+          s = p.read_text()
+          anchor = "const REFERENCE_REFRESH_INTERVAL_MS = 2 * 60 * 1000;"
+          if "const READER_RECHECK_INTERVAL_MS" not in s:
+              assert anchor in s
+              s = s.replace(anchor, anchor + "\nconst READER_RECHECK_INTERVAL_MS = 5 * 60 * 1000;", 1)
+          old1 = "window.setInterval(refreshReader, 30000)"
+          old2 = "window.setInterval(() => pollReaderAndReprice(), 30000)"
+          assert old1 in s
+          assert old2 in s
+          s = s.replace(old1, "window.setInterval(refreshReader, READER_RECHECK_INTERVAL_MS)", 1)
+          s = s.replace(old2, "window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS)", 1)
+          assert "每30秒複核" in s
+          s = s.replace("每30秒複核", "每5分鐘複核")
+          p.write_text(s)
+          PY
+      - name: Verify cadence patch
+        run: |
+          grep -q "READER_RECHECK_INTERVAL_MS = 5 \* 60 \* 1000" app/page.js
+          grep -q "每5分鐘複核" app/page.js
+          ! grep -q "每30秒複核" app/page.js
+          npm run build
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.js
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: change Reader recheck cadence to 5 minutes [reader-5m-applied]"
+          git push origin HEAD:main
