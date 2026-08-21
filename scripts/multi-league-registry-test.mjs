@@ -32,13 +32,12 @@ assert.equal(leagueCanAnalyze(['MLB']), false);
 
 for (const id of LEAGUE_IDS) {
   const item = leagueConfig(id);
-  assert.equal(item.status, 'shadow');
-  assert.match(item.statusLabel, /驗證中/);
+  assert.equal(item.status, id === 'MLB' ? 'shadow' : 'setup');
   assert.deepEqual(item.capabilities, {
     schedule: true,
     reader: true,
-    analysis: true,
-    ranking: true,
+    analysis: id === 'MLB',
+    ranking: id === 'MLB',
     bets: true,
     formalRecommendations: false,
   });
@@ -58,8 +57,9 @@ const publicRows = publicLeagueRegistry();
 assert.equal(publicRows.length, 4);
 assert.equal(publicRows.every(row => row.capabilities && typeof row.capabilities === 'object'), true);
 assert.deepEqual(publicRows.map(row => row.id), LEAGUE_IDS);
-assert.equal(publicRows.every(row => row.capabilities.analysis === true), true);
+assert.equal(publicRows.find(row => row.id === 'MLB').capabilities.analysis, true);
+assert.equal(publicRows.filter(row => row.id !== 'MLB').every(row => row.capabilities.analysis === false && row.capabilities.ranking === false), true);
 assert.equal(publicRows.every(row => row.capabilities.bets === true), true, 'Shadow只停用模型推薦，不得停用使用者真實下注帳本');
 assert.equal(publicRows.every(row => row.capabilities.formalRecommendations === false), true);
 
-console.log('multi-league registry: all leagues server-enforced Shadow with actual bet ledger and formal recommendations off PASS');
+console.log('multi-league registry: MLB Shadow, Asian model setup, ledgers available and formal recommendations off PASS');
