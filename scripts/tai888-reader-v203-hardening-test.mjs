@@ -355,6 +355,12 @@ assert.match(contentSource, /record\.cells\.length < 4 \|\| record\.cells\.lengt
 assert.match(contentSource, /waterToken\.test\(cell\.text\)/, 'refresh evidence must contain visible odds-water cells');
 assert.match(contentSource, /captureAll\(\{ verifiedBoardRefreshAt \}\)/, 'verified board refresh must renew activity without requiring a price change');
 assert.match(contentSource, /verifiedBoardRefreshAt > 0 \|\| before\[league\] !== fingerprintByLeague\[league\]/, 'verified same-price board refresh must notify the background heartbeat');
+assert.match(contentSource, /function latestTai888NetworkRefreshAt\(\)/, 'same-price liveness may use recent same-origin Tai888 network evidence');
+assert.match(contentSource, /\['fetch', 'xmlhttprequest'\]/, 'only fetch/XHR resource activity may renew a static board');
+assert.match(contentSource, /url\.origin !== location\.origin/, 'cross-origin resources must not renew Tai888 board activity');
+assert.match(contentSource, /now - completedAt <= 120000/, 'network evidence must itself remain recent');
+assert.match(contentSource, /function mutationTouchesRefreshIndicator\(mutation\)/, 'Tai888 refresh countdown mutations may prove a live board');
+assert.match(contentSource, /每\\s\*60\\s\*秒更新/, 'refresh evidence must target the visible Tai888 60-second refresh indicator');
 assert.doesNotMatch(contentSource, /capture\(\)[\s\S]{0,200}verifiedBoardRefreshAt/, 'popup capture must not manufacture board refresh evidence');
 assert.doesNotMatch(contentSource, /document\.body\?\.innerText/);
 assert.match(contentSource, /hasExplicitMarketLock/);
