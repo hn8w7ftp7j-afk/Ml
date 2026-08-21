@@ -79,7 +79,7 @@ const conflictingTabs = selectAuthoritativeBoard(
   { now: NOW },
 );
 assert.equal(conflictingTabs.ok, false, '內容不一致的同聯盟可用分頁必須整批停止');
-assert.equal(conflictingTabs.reason, 'conflicting-duplicate-tabs');
+assert.equal(conflictingTabs.error, 'conflicting-duplicate-tabs');
 
 const staleBoard = candidate({ tabId: 9, active: true });
 staleBoard.capture.diagnostics.lastMutationAt = '2026-08-14T16:54:59.000Z';
