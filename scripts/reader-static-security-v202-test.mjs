@@ -100,7 +100,8 @@ for (const source of [pair, ingest, status]) {
 }
 assert.match(ingest, /X-Device-Id|x-device-id/i);
 assert.match(ingest, /readerSnapshotIsComplete|部分解析/);
-assert.match(status, /verifyReaderRequest|requireApiAuth/, 'Reader status detail must require Reader token or site session');
+assert.match(status, /verifyReaderToken\(bearerToken\(request\)\)/, 'Reader status must accept a valid Reader token');
+assert.match(status, /requestIsAuthenticated\(request\)/, 'Reader status must accept an authenticated site session');
 assert.match(auth, /30 \* 24 \* 60 \* 60/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
 
