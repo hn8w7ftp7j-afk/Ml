@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.13');
-assert.equal(manifest.version_name, '2.1.13 KBO-TRADITIONAL-NAME-SAFE');
+assert.equal(manifest.version, '2.1.14');
+assert.equal(manifest.version_name, '2.1.14 MARKET-ACTIVITY-CONFLICT-SAFE');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
