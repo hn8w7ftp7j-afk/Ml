@@ -96,7 +96,7 @@ assert.equal(noPriorExtreme.qualified, false);
 assert.equal(noPriorExtreme.weightedEV, null);
 assert.equal(noPriorExtreme.status, 'CALIBRATION_BLOCK');
 assert.match(noPriorExtreme.reasons.join('｜'), /3家獨立國際市場/);
-assert.match(noPriorExtreme.auditWarnings.join('｜'), /僅供稽核/);
+assert.match(noPriorExtreme.reasons.join('｜'), /15%極端值安全線/);
 
 const moderateNoPrior = qualifyEvV103({
   row: {
@@ -112,7 +112,7 @@ const moderateNoPrior = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.match(EV_CALIBRATION_V103_VERSION, /v10\.4\.3/);
+assert.match(EV_CALIBRATION_V103_VERSION, /v10\.5\.0/);
 assert.equal(moderateNoPrior.qualified, false, 'V10.4 must fail closed when no independent consensus prior exists');
 assert.equal(moderateNoPrior.weightedEV, null);
 assert.equal(moderateNoPrior.robustEV, null);
@@ -131,10 +131,10 @@ const qualifiedConsensus = qualifyEvV103({
   gate,
 });
 assert.equal(qualifiedConsensus.qualified, true);
-assert.equal(qualifiedConsensus.status, 'QUALIFIED_WITH_INDEPENDENT_EXACT_CONTRACT_CONSENSUS');
-assert.ok(Math.abs(qualifiedConsensus.weightedEV - qualifiedConsensus.referenceEV) < 1e-12);
-assert.ok(Math.abs(qualifiedConsensus.robustEV - qualifiedConsensus.referenceRobustEV) < 1e-12);
-assert.notEqual(qualifiedConsensus.weightedEV, qualifiedConsensus.rawWeightedEV, 'usable W must come from independent price consensus, not raw model EV');
+assert.equal(qualifiedConsensus.status, 'QUALIFIED_MODEL_EV_WITH_INDEPENDENT_MARKET_AUDIT');
+assert.ok(Math.abs(qualifiedConsensus.weightedEV - qualifiedConsensus.rawWeightedEV) < 1e-12);
+assert.ok(Math.abs(qualifiedConsensus.robustEV - qualifiedConsensus.rawRobustEV) < 1e-12);
+assert.notEqual(qualifiedConsensus.weightedEV, qualifiedConsensus.referenceEV, 'independent market price must not replace model W');
 assert.ok(qualifiedConsensus.robustEV <= qualifiedConsensus.weightedEV);
 assert.equal(qualifiedConsensus.actualReaderEligible, true);
 
@@ -213,11 +213,12 @@ const payoffConsensus = qualifyEvV103({
   gate,
 });
 assert.equal(payoffConsensus.qualified, true);
-assert.equal(payoffConsensus.status, 'QUALIFIED_WITH_INDEPENDENT_PAYOFF_VECTOR_CONSENSUS');
+assert.equal(payoffConsensus.status, 'QUALIFIED_MODEL_EV_WITH_INDEPENDENT_MARKET_AUDIT');
 assert.equal(payoffConsensus.referencePriorType, 'PAYOFF_VECTOR');
 assert.ok(Math.abs(payoffConsensus.referenceProbability - (0.51 / 0.98)) < 1e-12, 'model consistency must compare effective win probability A/(A+B)');
-assert.ok(Math.abs(payoffConsensus.weightedEV - payoffAggregate.weightedEV) < 1e-12);
-assert.ok(Math.abs(payoffConsensus.robustEV - payoffAggregate.robustEV) < 1e-12);
+assert.ok(Math.abs(payoffConsensus.weightedEV - payoffConsensus.rawWeightedEV) < 1e-12);
+assert.ok(Math.abs(payoffConsensus.robustEV - payoffConsensus.rawRobustEV) < 1e-12);
+assert.ok(Math.abs(payoffConsensus.marketPriceWeightedEV - payoffAggregate.weightedEV) < 1e-12);
 assert.ok(payoffConsensus.robustEV <= payoffConsensus.weightedEV);
 
 const payoffBreakEvenWater = minimumWaterFromPayoffVector(payoffVector, 0, 0.015);
@@ -270,10 +271,9 @@ const projectedCoreStillBlocks = qualifyEvV103({
     ],
   },
 });
-assert.equal(projectedCoreStillBlocks.qualified, true, 'raw baseball core-data quality is audit-only for independent market-price W/R');
+assert.equal(projectedCoreStillBlocks.qualified, false, 'core baseball data quality must fail closed');
 assert.ok(Math.abs(projectedCoreStillBlocks.qualificationDataQuality - 0.81) < 1e-12);
-assert.equal(projectedCoreStillBlocks.reasons.length, 0);
-assert.match(projectedCoreStillBlocks.auditWarnings.join('｜'), /核心資料品質0\.81低於0\.85/);
+assert.match(projectedCoreStillBlocks.reasons.join('｜'), /核心棒球資料品質0\.81低於0\.85/);
 
 const unstableRawScenario = qualifyEvV103({
   row: {
@@ -286,10 +286,9 @@ const unstableRawScenario = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(unstableRawScenario.qualified, true, 'unvalidated raw-model scenario spread must not veto independent market W/R');
+assert.equal(unstableRawScenario.qualified, false, 'unstable model scenarios must fail closed');
 assert.ok(unstableRawScenario.rawScenarioSpread > MAX_RAW_SCENARIO_EV_SPREAD);
-assert.equal(unstableRawScenario.reasons.length, 0);
-assert.match(unstableRawScenario.auditWarnings.join('｜'), /中央與壓力情境EV差距/);
+assert.match(unstableRawScenario.reasons.join('｜'), /中央與壓力情境EV差距/);
 
 const unstableConsensus = qualifyEvV103({
   row: {
@@ -314,12 +313,10 @@ const confirmedExtreme = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(confirmedExtreme.qualified, true, '15%+ raw model EV is audit-only when independent market W/R is valid');
-assert.ok(Number.isFinite(confirmedExtreme.weightedEV));
-assert.ok(Number.isFinite(confirmedExtreme.robustEV));
-assert.equal(confirmedExtreme.status, 'QUALIFIED_WITH_INDEPENDENT_EXACT_CONTRACT_CONSENSUS');
-assert.equal(confirmedExtreme.reasons.length, 0);
-assert.match(confirmedExtreme.auditWarnings.join('｜'), /僅供稽核/);
+assert.equal(confirmedExtreme.qualified, false, '15%+ model EV must fail closed before locked OOS validation');
+assert.equal(confirmedExtreme.weightedEV, null);
+assert.equal(confirmedExtreme.robustEV, null);
+assert.match(confirmedExtreme.reasons.join('｜'), /15%極端值安全線/);
 
 const disagreement = qualifyEvV103({
   row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.50, referenceRobustProbability: 0.495 }) },
@@ -329,10 +326,9 @@ const disagreement = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(disagreement.qualified, true, 'raw-model disagreement must remain visible without overriding independent market W/R');
-assert.equal(disagreement.reasons.length, 0);
-assert.match(disagreement.auditWarnings.join('｜'), /機率差距/);
-assert.match(disagreement.auditWarnings.join('｜'), /方向相反/);
+assert.equal(disagreement.qualified, false, 'model and independent-market disagreement must fail closed');
+assert.match(disagreement.reasons.join('｜'), /機率差距/);
+assert.match(disagreement.reasons.join('｜'), /方向相反/);
 
 const extremeIndependentMarketGap = qualifyEvV103({
   row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.65, referenceRobustProbability: 0.645 }) },
