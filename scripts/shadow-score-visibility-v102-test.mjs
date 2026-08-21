@@ -85,7 +85,8 @@ const implausibleDistribution = finalizeDeterministicAnalysis({
   },
   game,
 }).results[0];
-assert.ok(implausibleDistribution.formulaDiagnosticScore > 7.1, '分布合理性QA不得改寫固定公式S');
+assert.equal(implausibleDistribution.formulaDiagnosticScore, null, '比分分布合理性未通過時不得顯示精確公式分數');
+assert.equal(implausibleDistribution.shadowDiagnosticScore, null);
 assert.equal(implausibleDistribution.scoreAudit.ok, false, '模型與Tai888去水機率極端背離時不得標示QA PASS');
 assert.equal(implausibleDistribution.rankingQualified, false);
 assert.match(implausibleDistribution.tag, /QA BLOCK/);
