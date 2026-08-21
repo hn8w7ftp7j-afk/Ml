@@ -119,7 +119,6 @@ export async function POST(request) {
       rebateRate: TAIWAN_CREDIT_REBATE_RATE,
       candidateThreshold: 7.2,
       strongestThreshold: 8.5,
-      simulationsPerScenario: distributionSnapshot.simulationsPerScenario,
       expertMode: 'off',
     };
     const preliminary = repriceMarkets({ context, markets, previousMarkets, settings, distributionSnapshot });

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { APP_VERSION } from '../../../lib/app-version.js';
 import { appPasswordConfigured, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured } from '../../../lib/security.js';
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
@@ -19,6 +20,7 @@ import { BET_STATS_VERSION } from '../../../lib/bet-stats.js';
 import { BET_SETTLEMENT_SERVICE_VERSION } from '../../../lib/bet-settlement-service.js';
 import { DATA_VERSION, REPRICE_VERSION } from '../../../lib/snapshot-v9.js';
 import { ANALYSIS_CACHE_VERSION } from '../../../lib/analysis-cache-v9.js';
+import { GAME_DISTRIBUTION_CACHE_VERSION } from '../../../lib/game-distribution-cache-v1.js';
 import { readerPairingConfigured } from '../../../lib/reader-auth-v2.js';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 import { LEAGUE_REGISTRY_VERSION, publicLeagueRegistry } from '../../../lib/leagues.js';
@@ -27,7 +29,7 @@ import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/r
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
-  const version = '10.6.0';
+  const version = APP_VERSION;
   if (!(await requestIsAuthenticated(request))) {
     return NextResponse.json({ ok: true, version }, { headers: { 'Cache-Control': 'no-store' } });
   }
@@ -56,6 +58,7 @@ export async function GET(request) {
     uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
     repriceVersion: REPRICE_VERSION,
     analysisCacheVersion: ANALYSIS_CACHE_VERSION,
+    gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION,
     referenceLinesEnabled: referenceStatus.consensusReady,
     referenceConsensusReady: referenceStatus.consensusReady,
     anyReferenceProviderConfigured: referenceStatus.anyConfigured,

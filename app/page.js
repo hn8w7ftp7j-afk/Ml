@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { APP_VERSION } from '../lib/app-version.js';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
 import {
   betIdentity,
@@ -24,7 +25,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.6.1';
+const VERSION = APP_VERSION;
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
@@ -36,9 +37,18 @@ const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', '
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
   rebateRate: 0.015,
-  simulationsPerScenario: 4000,
   fallbackWater: { 全場讓分: 0.95, 全場大小: 0.94, 上半讓分: 0.94, 上半大小: 0.93 },
 };
+
+function normalizeSettings(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const { simulationsPerScenario: ignoredLegacySimulationSetting, ...current } = source;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...current,
+    fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(current.fallbackWater || {}) },
+  };
+}
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const pct = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
@@ -134,7 +144,7 @@ function loadCompactStore() {
     if (own && typeof own === 'object') {
       const primaryBets = Array.isArray(own.bets) ? own.bets.slice(0, 5000) : [];
       return {
-        settings: { ...DEFAULT_SETTINGS, ...(own.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(own.settings?.fallbackWater || {}) } },
+        settings: normalizeSettings(own.settings),
         bets: cloudBetMigrationComplete() ? primaryBets : recoverLocalBetCopies(primaryBets, backupBets),
         activeLeague: normalizeLeagueId(own.activeLeague),
       };
@@ -143,7 +153,7 @@ function loadCompactStore() {
       const legacy = safeParse(window.localStorage.getItem(key) || 'null');
       if (!legacy || typeof legacy !== 'object') continue;
       return {
-        settings: { ...DEFAULT_SETTINGS, ...(legacy.settings || {}), fallbackWater: { ...DEFAULT_SETTINGS.fallbackWater, ...(legacy.settings?.fallbackWater || {}) } },
+        settings: normalizeSettings(legacy.settings),
         bets: cloudBetMigrationComplete()
           ? (Array.isArray(legacy.bets) ? legacy.bets.slice(0, 5000) : [])
           : recoverLocalBetCopies(Array.isArray(legacy.bets) ? legacy.bets.slice(0, 5000) : [], backupBets),
@@ -949,7 +959,7 @@ export default function Home() {
 
       setProgress({ active: true, done: 0, running: 0, total: tasks.length, label: '分析今日全部盤口' });
       const outcomes = new Array(tasks.length).fill(false);
-      await runPool(tasks, 3, async (task, index) => {
+      await runPool(tasks, 4, async (task, index) => {
         outcomes[index] = await analyzeBoardItem(task, index, tasks.length);
       });
       const retryIndexes = outcomes.map((ok, index) => ok || tasks[index]?.retryable === false ? -1 : index).filter(index => index >= 0);
@@ -1291,7 +1301,7 @@ export default function Home() {
       }) : <div className="emptySmall">完成第一筆賽果結算後，這裡會依聯盟與全場讓分、全場大小、上半讓分、上半大小分開統計。</div>}
     </section>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>V10模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="4000">4000（固定）</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.6的公開W/R來自狀態感知聯合比分分布對Tai888成交價的逐腿結算；獨立市場只作可選外部稽核。W/R差距超過5%仍顯示分數但不列排名；尚未完成樣本外驗證，正式推薦與Unit繼續停用。實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.6使用精確狀態感知聯合比分分布，不使用虛構的模擬次數；同場正反方向共用同一份比分分布。獨立市場只作外部稽核，缺失時最高列為8.4，但不阻擋7.2～8.4排名。W/R差距超過5%仍顯示分數但不列排名；尚未完成樣本外驗證，正式推薦與Unit繼續停用。實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
   </main>;
 }

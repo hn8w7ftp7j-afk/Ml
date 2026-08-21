@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { APP_VERSION } from '../lib/app-version.js';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
+const healthRoute = fs.readFileSync('app/api/health/route.js', 'utf8');
+const analyzeRoute = fs.readFileSync('app/api/analyze/route.js', 'utf8');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
@@ -10,10 +13,16 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.6\.1'/, 'UI must expose the V10.6.1 continuous-calibration MLB model');
-assert.equal(packageJson.version, '10.6.1', 'package/release identity must match the V10.6.1 UI');
-assert.equal(packageLock.version, '10.6.1', 'package-lock release identity must match V10.6.1');
-assert.equal(packageLock.packages?.['']?.version, '10.6.1', 'root lockfile package must match V10.6.1');
+mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
+mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
+assert.equal(packageJson.version, '10.6.2', 'package/release identity must match the V10.6.2 UI');
+assert.equal(packageLock.version, '10.6.2', 'package-lock release identity must match V10.6.2');
+assert.equal(packageLock.packages?.['']?.version, '10.6.2', 'root lockfile package must match V10.6.2');
+assert.equal(APP_VERSION, '10.6.2');
+assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
+assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
+assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
+assert.match(analyzeRoute, /getOrBuildGameDistribution/, 'analyze API must reuse the same-game core distribution');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.13-KBO-TRADITIONAL-NAME-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
@@ -60,6 +69,8 @@ mustMatch(/oneClickAnalyze\(key\)/, 'automatic Reader analysis trigger missing')
 mustMatch(/JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'credit-line request must bind league, date and schedule');
 mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missing');
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
+mustMatch(/runPool\(tasks, 4,/, 'full-board analysis must process four games concurrently');
+assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation setting must be removed from the UI');
 
 // V10.4 reference-market flow must be wired into both full analysis and frozen-distribution repricing.
 mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetGames = \[\]\)/, 'target-aware reference-line loader missing');
@@ -166,7 +177,7 @@ mustMatch(/聯盟模型重建中｜EV與S分數暫停顯示/, 'unvalidated Asian
 
 // Batch analysis cannot be held indefinitely by the first slow games.
 mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 65_000/, 'bounded per-game deadline missing');
-mustMatch(/runPool\(tasks, 3/, 'three-worker bounded analysis pool missing');
+mustMatch(/runPool\(tasks, 4/, 'four-worker bounded analysis pool missing');
 mustMatch(/重試 \$\{retryIndexes\.length\} 場未完成分析/, 'trailing retry pass missing');
 mustMatch(/tasks\[index\]\?\.retryable === false/, 'permanent failures must not be retried');
 mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');

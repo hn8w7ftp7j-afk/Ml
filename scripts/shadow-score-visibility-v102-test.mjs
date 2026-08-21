@@ -108,7 +108,8 @@ const strongestInput = secondaryIndependentMarketVerified => finalizeDeterminist
   },
   game,
 }).results[0];
-assert.ok(strongestInput(false).formulaDiagnosticScore >= 8.5, '外部市場缺失不得壓低或移除分析排名');
+assert.equal(strongestInput(false).formulaDiagnosticScore, 8.4, '外部市場缺失只限制8.5以上，仍保留8.4分析排名');
+assert.equal(strongestInput(false).rankingQualified, true, '外部市場缺失不得阻擋7.2～8.4分析排名');
 assert.ok(strongestInput(false).scoreBreakdown.caps.includes('INDEPENDENT_MARKET_AUDIT_UNAVAILABLE'));
 assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '外部市場驗證可保留稽核狀態，但不決定分析排名分數');
 
