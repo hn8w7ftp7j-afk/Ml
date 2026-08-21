@@ -15,15 +15,17 @@ const allDirections = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB
 assert.equal(allDirections.results.length, 8);
 for (const row of allDirections.results) {
   assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true);
-  assert.ok(row.formulaDiagnosticScore >= 6.6 && row.formulaDiagnosticScore <= 8.9);
+  assert.ok(row.formulaDiagnosticScore >= 1.0 && row.formulaDiagnosticScore <= 8.9);
   assert.equal(row.score, null);
   assert.equal(row.betEligible, false);
 }
-for (const row of allDirections.results.filter(row => row.weightedEV <= 0)) assert.equal(row.formulaDiagnosticScore, 6.6, 'W≤0一律固定PASS 6.6，不得產生1.x/2.x/3.x診斷分');
+const negativeScores = allDirections.results.filter(row => row.weightedEV <= 0).map(row => row.formulaDiagnosticScore);
+assert.ok(new Set(negativeScores).size > 1, '不同負W/R必須產生可比較的1.0～6.6連續分數');
+assert.ok(negativeScores.every(value => value >= 1.0 && value <= 6.6));
 assert.ok(allDirections.results.some(row => row.formulaDiagnosticScore >= 7.2));
 
 const observation = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true }, results: [direction('全場大小', '大9平', 0.01, -0.01)] }, game });
-assert.equal(observation.results[0].formulaDiagnosticScore, 7.1, 'W>0且R≤0固定觀察7.1');
+assert.equal(observation.results[0].formulaDiagnosticScore, 6.9, 'W>0且R≤0必須依實際W/R落在6.7～7.1');
 
 const qualifiedObservation = finalizeDeterministicAnalysis({
   analysis: {
@@ -38,8 +40,8 @@ const qualifiedObservation = finalizeDeterministicAnalysis({
   },
   game,
 });
-assert.equal(qualifiedObservation.results[0].formulaDiagnosticScore, 7.1);
-assert.equal(qualifiedObservation.results[0].shadowDiagnosticScore, 7.1, '合格W>0/R≤0必須顯示7.1觀察，不得被signStable誤擋');
+assert.equal(qualifiedObservation.results[0].formulaDiagnosticScore, 6.9);
+assert.equal(qualifiedObservation.results[0].shadowDiagnosticScore, 6.9, '合格W>0/R≤0必須顯示連續觀察分數，不得被signStable誤擋');
 assert.equal(qualifiedObservation.results[0].scoreAudit.ok, true);
 assert.equal(qualifiedObservation.results[0].rankingQualified, false);
 
