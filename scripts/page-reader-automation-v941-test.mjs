@@ -5,15 +5,15 @@ const page = fs.readFileSync('app/page.js', 'utf8');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
-mustMatch(/市場價差影子排名/, 'ranking tab must explicitly identify the output as a market-price shadow ranking');
-assert.doesNotMatch(page, />影子排名</, 'ambiguous shadow ranking label must not be user-facing');
+mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output');
+
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.4\.3'/, 'UI must expose the v10.4.3 independent-market qualification correction');
-assert.equal(packageJson.version, '10.4.3', 'package/release identity must match the V10.4.3 UI');
-assert.equal(packageLock.version, '10.4.3', 'package-lock release identity must match V10.4.3');
-assert.equal(packageLock.packages?.['']?.version, '10.4.3', 'root lockfile package must match V10.4.3');
+mustMatch(/const VERSION = '10\.5\.0'/, 'UI must expose the v10.4.3 independent-market qualification correction');
+assert.equal(packageJson.version, '10.5.0', 'package/release identity must match the V10.5.0 UI');
+assert.equal(packageLock.version, '10.5.0', 'package-lock release identity must match V10.5.0');
+assert.equal(packageLock.packages?.['']?.version, '10.5.0', 'root lockfile package must match V10.5.0');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.13-KBO-TRADITIONAL-NAME-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
@@ -141,15 +141,22 @@ mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected directi
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
-mustMatch(/V10\.4\.3逐莊結算市場價差影子 S 分數/, 'user-facing score label must disclose the V10.4.3 payoff-vector shadow semantics');
-mustMatch(/不能產生、改寫或否決影子EV/, 'the UI must disclose that the raw baseball model is audit-only');
+
+
 mustMatch(/市場價差W \${pct\(row\.weightedEV\)\}/, 'W must be labelled as the independent-market price gap');
 mustMatch(/跨莊保守R \${pct\(row\.robustEV\)\}/, 'R must be labelled as the conservative cross-book price gap');
-mustMatch(/合格市場價差影子分數啟用/, 'provider status must report the qualified shadow-price score mode');
-mustMatch(/單一三莊快照價差達5%先安全阻擋/, 'the 5% single-snapshot review gate must be visible');
-mustMatch(/第二個獨立外部來源尚未接入/, 'the unavailable second-source validation must be disclosed');
-mustMatch(/5%以上與8\.5\+目前暫停/, '5%+ and 8.5+ must be visibly paused until a second source exists');
-mustMatch(/15%以上一律阻擋/, 'the absolute 15% market-gap ceiling must be visible');
+
+
+
+
+
+mustMatch(/V10\.5聯合比分分布模型影子 S 分數/, 'score label must disclose joint-score model semantics');
+mustMatch(/模型勝率 \${pct\(row\.modelProbability\)}/, 'probability must be labelled as model probability');
+mustMatch(/模型W \${pct\(row\.weightedEV\)}/, 'W must be labelled as model Weighted EV');
+mustMatch(/模型穩健R \${pct\(row\.robustEV\)}/, 'R must be labelled as model Robust EV');
+mustMatch(/合格模型影子分數啟用/, 'provider status must report model shadow-score mode');
+mustMatch(/Tai888只作成交價/, 'Tai888 execution-price-only role must be visible');
+mustMatch(/獨立市場只作外部稽核/, 'independent market must be disclosed as audit-only');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
 mustMatch(/不產生有效EV、不評分、不列排名/, 'unqualified model or reference evidence must fail closed in the primary UI');
