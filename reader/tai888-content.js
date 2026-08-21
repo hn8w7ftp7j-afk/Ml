@@ -277,8 +277,26 @@
       (row.cells || []).map(cell => Array.isArray(cell?.pair) ? cell.pair : cell?.lines || []))));
   }
 
-  function captureAll({ updateActivity = true } = {}) {
+  function latestTai888NetworkRefreshAt() {
+    const now = Date.now();
+    const timeOrigin = Number(performance.timeOrigin || (now - performance.now()));
+    let latest = 0;
+    for (const entry of performance.getEntriesByType('resource')) {
+      if (!['fetch', 'xmlhttprequest'].includes(String(entry.initiatorType || '').toLowerCase())) continue;
+      try {
+        const url = new URL(entry.name, location.origin);
+        if (url.origin !== location.origin || (url.hostname !== 'tai888.in' && !url.hostname.endsWith('.tai888.in'))) continue;
+        const completedAt = Math.round(timeOrigin + Number(entry.responseEnd || entry.startTime || 0));
+        if (completedAt <= now + 5000 && now - completedAt <= 120000) latest = Math.max(latest, completedAt);
+      } catch {}
+    }
+    return latest;
+  }
+
+  function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
     const { elements, records } = collectRecords();
+    const verifiedNetworkRefreshAt = latestTai888NetworkRefreshAt();
+    const verifiedRefreshAt = Math.max(Number(verifiedBoardRefreshAt) || 0, verifiedNetworkRefreshAt);
     const captures = [];
     for (const league of globalThis.Tai888LeagueRegistry.ids) {
       const normalized = normalizer.normalizeRowRecords(records, { expectedLeague: league });
@@ -287,6 +305,9 @@
       if (updateActivity && fingerprint && fingerprint !== fingerprintByLeague[league]) {
         fingerprintByLeague[league] = fingerprint;
         activityByLeague[league] = Date.now();
+      }
+      if (fingerprint && verifiedRefreshAt > 0) {
+        activityByLeague[league] = Math.max(activityByLeague[league] || 0, verifiedRefreshAt);
       }
       const activityAt = activityByLeague[league] || Date.now();
       if (!activityByLeague[league]) activityByLeague[league] = activityAt;
@@ -337,16 +358,53 @@
     }
   });
 
+  function mutationTouchesMarketBoard(mutation, marketElements) {
+    const target = mutation?.target?.nodeType === Node.ELEMENT_NODE
+      ? mutation.target
+      : mutation?.target?.parentElement;
+    if (!target) return false;
+    return marketElements.some(element => element === target
+      || element.contains?.(target)
+      || target.contains?.(element));
+  }
+
+  function mutationTouchesRefreshIndicator(mutation) {
+    const target = mutation?.target?.nodeType === Node.ELEMENT_NODE
+      ? mutation.target
+      : mutation?.target?.parentElement;
+    if (!target) return false;
+    const text = String(target.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    return /(?:每\s*60\s*秒更新|60\s*秒更新|更新倒數|更新倒计时)/i.test(text);
+  }
+
+  function marketMutationElements() {
+    const waterToken = /(?:^|\s)[0-3]\.\d{3}(?:\s|$)/;
+    return collectCandidateElements().filter((element, index) => {
+      const record = rowRecord(element, index);
+      if (!record || record.cells.length < 4 || record.cells.length > 16) return false;
+      return record.cells.filter(cell => waterToken.test(cell.text)).length >= 2;
+    });
+  }
+
   let mutationTimer = null;
-  const observer = new MutationObserver(() => {
+  let pendingMutations = [];
+  const observer = new MutationObserver(mutations => {
+    pendingMutations.push(...mutations);
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(() => {
+      const mutationsToAssess = pendingMutations;
+      pendingMutations = [];
+      const marketElements = marketMutationElements();
+      const verifiedBoardRefreshAt = mutationsToAssess.some(mutation => mutationTouchesMarketBoard(mutation, marketElements)
+        || mutationTouchesRefreshIndicator(mutation))
+        ? Date.now()
+        : 0;
       const before = { ...fingerprintByLeague };
-      const captures = captureAll();
-      const changedLeagues = captures
+      const captures = captureAll({ verifiedBoardRefreshAt });
+      const activeLeagues = captures
         .map(item => item.league)
-        .filter(league => before[league] !== fingerprintByLeague[league]);
-      if (changedLeagues.length) chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', leagues: changedLeagues }).catch(() => {});
+        .filter(league => verifiedBoardRefreshAt > 0 || before[league] !== fingerprintByLeague[league]);
+      if (activeLeagues.length) chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', leagues: activeLeagues }).catch(() => {});
     }, 2500);
   });
   if (document.documentElement) {

@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
-import { analyzeMarkets, enforceAnalysisModeSafety, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
+import {
+  buildDistributionSnapshot,
+  enforceAnalysisModeSafety,
+  evaluateMarketsFromDistribution,
+  MODEL_VERSION,
+  RULES_VERSION,
+} from '../../../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION, TAIWAN_CREDIT_REBATE_RATE } from '../../../lib/taiwan-settlement-v9.js';
@@ -9,6 +15,7 @@ import {
   analysisCachePayloadMatches,
   analysisContractSignature,
 } from '../../../lib/analysis-cache-v9.js';
+import { getOrBuildGameDistribution } from '../../../lib/game-distribution-cache-v1.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
@@ -154,7 +161,6 @@ export async function POST(request) {
       rebateRate: TAIWAN_CREDIT_REBATE_RATE,
       candidateThreshold: 7.2,
       strongestThreshold: 8.5,
-      simulationsPerScenario: 4000,
       expertMode: 'off',
     };
     const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
@@ -193,11 +199,25 @@ export async function POST(request) {
     const cached = responseCache.get(cacheKey);
     if (analysisCachePayloadMatches(cached, { league, game, fingerprints, signature })) {
       const safePayload = enforceAnalysisModeSafety(cached.payload, cached.payload.context || frozenContext);
-      return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT' } });
+      return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT', 'X-Distribution-Cache': 'RESPONSE-HIT' } });
     }
     if (cached) responseCache.delete(cacheKey);
 
-    const preliminary = analyzeMarkets({ context: frozenContext, markets: activeMarkets, previousMarkets, settings });
+    const cachedDistribution = getOrBuildGameDistribution({
+      league,
+      gamePk: game.gamePk,
+      coreFingerprint: fingerprints.coreFingerprint,
+      modelVersion: versions.modelVersion,
+      rulesVersion: versions.rulesVersion,
+      build: () => buildDistributionSnapshot({ context: frozenContext }),
+    });
+    const preliminary = evaluateMarketsFromDistribution({
+      context: frozenContext,
+      markets: activeMarkets,
+      previousMarkets,
+      settings,
+      distributionSnapshot: cachedDistribution.snapshot,
+    });
     const deterministic = enforceAnalysisModeSafety(
       finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }),
       frozenContext,
@@ -232,7 +252,7 @@ export async function POST(request) {
     };
     const safePayload = enforceAnalysisModeSafety(payload, frozenContext);
     cacheSet(cacheKey, signature, safePayload);
-    return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS' } });
+    return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS', 'X-Distribution-Cache': cachedDistribution.cacheStatus } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
   }

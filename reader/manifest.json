@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.1.14",
-  "version_name": "2.1.14 MARKET-ACTIVITY-CONFLICT-SAFE",
+  "version": "2.1.17",
+  "version_name": "2.1.17 VERIFIED-LIVE-HEARTBEAT",
   "description": "一個 Reader 獨立讀取 Tai888 美棒、日棒、韓棒與中職四個標準盤分頁。",
   "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [
