@@ -1,0 +1,36 @@
+name: Model QA 2.0 diagnostic
+on:
+  push:
+    branches: [feature/qa2-diagnostic-audit]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  test:
+    if: ${{ !contains(github.event.head_commit.message, '[qa2-ui-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/qa2-diagnostic-audit
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-qa2-ui.mjs
+      - run: node scripts/model-qa-v2-test.mjs
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Commit validated UI integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.js
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: show QA 2.0 diagnostics on website [qa2-ui-applied]"
+          git push origin HEAD:feature/qa2-diagnostic-audit
