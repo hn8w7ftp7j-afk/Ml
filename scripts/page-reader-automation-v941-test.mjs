@@ -148,7 +148,8 @@ mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking 
 
 
 mustMatch(/V10\.5\.1相關風險聯合比分模型影子 S 分數/, 'score label must disclose correlated joint-score model semantics');
-mustMatch(/模型勝率 \${pct\(row\.modelProbability\)}/, 'probability must be labelled as model probability');
+mustMatch(/模型條件勝率 \${pct\(row\.modelProbability\)}（排除走水）/, 'resolved-only probability must be labelled as conditional and exclude pushes');
+mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}｜走水 \${pct\(row\.pushProbability\)}｜全輸 \${pct\(row\.fullLossProbability\)}/, 'full win, push and full loss probabilities must be visible');
 mustMatch(/未校準模型W \${pct\(row\.weightedEV\)}/, 'W must be labelled as uncalibrated model Weighted EV');
 mustMatch(/情境保守R \${pct\(row\.robustEV\)}/, 'R must be labelled as scenario Robust EV');
 mustMatch(/情境差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
