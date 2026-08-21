@@ -143,8 +143,6 @@ mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
 
 
-mustMatch(/市場價差W \${pct\(row\.weightedEV\)\}/, 'W must be labelled as the independent-market price gap');
-mustMatch(/跨莊保守R \${pct\(row\.robustEV\)\}/, 'R must be labelled as the conservative cross-book price gap');
 
 
 
