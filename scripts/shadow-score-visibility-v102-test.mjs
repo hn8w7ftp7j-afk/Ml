@@ -73,6 +73,23 @@ assert.equal(extremeVisible.rankingQualified, false);
 assert.ok(extremeVisible.scoreBreakdown.rawScore >= extremeVisible.formulaDiagnosticScore);
 assert.ok(extremeVisible.scoreBreakdown.caps.includes('UNCALIBRATED_W_OVER_15_PERCENT'));
 
+const implausibleDistribution = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
+    results: [{
+      ...direction('全場大小', '大6平', 0.355, 0.3214, 0.708),
+      rawMarketProbabilityGap: 0.208,
+      evCalibration: { ...common.evCalibration, extreme: true, auditWarnings: ['未校準模型W達35.5%'] },
+    }],
+  },
+  game,
+}).results[0];
+assert.ok(implausibleDistribution.formulaDiagnosticScore > 7.1, '分布合理性QA不得改寫固定公式S');
+assert.equal(implausibleDistribution.scoreAudit.ok, false, '模型與Tai888去水機率極端背離時不得標示QA PASS');
+assert.equal(implausibleDistribution.rankingQualified, false);
+assert.match(implausibleDistribution.tag, /QA BLOCK/);
+assert.match(implausibleDistribution.scoreAudit.plausibility.failures.join('；'), /比分分布合理性未通過/);
+
 const strongestInput = secondaryIndependentMarketVerified => finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
