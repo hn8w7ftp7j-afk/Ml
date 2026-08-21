@@ -58,6 +58,8 @@ const scenarioGaps = analysis.results.map(row => ({ market: row.market, pick: ro
 assert.ok(scenarioGaps.every(row => Number(row.gap) <= 0.05), 'a normal complete-data board must naturally stay within the 5% scenario stability target');
 for (const row of analysis.results) {
   assert.equal(row.marketCalibrationApplied, false);
+  assert.equal(row.rawMarketProbabilityGap, row.tai888MarketProbabilityGap, 'raw QA gap must be the direct model-vs-Tai888 no-vig gap');
+  assert.ok(Math.abs(row.rawMarketProbabilityGap - Math.abs(row.rawModelProbability - row.marketAnchorProbability)) < 1e-12);
   assert.ok(Number.isFinite(row.rawWeightedEV));
   assert.ok(Number.isFinite(row.rawRobustEV));
   assert.ok(row.rawRobustEV <= row.rawWeightedEV + 1e-12);
