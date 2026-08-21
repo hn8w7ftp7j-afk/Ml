@@ -78,7 +78,8 @@ const implausibleDistribution = finalizeDeterministicAnalysis({
     leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
     results: [{
       ...direction('全場大小', '大6平', 0.355, 0.3214, 0.708),
-      rawMarketProbabilityGap: 0.208,
+      rawMarketProbabilityGap: null,
+      tai888MarketProbabilityGap: 0.208,
       evCalibration: { ...common.evCalibration, extreme: true, auditWarnings: ['未校準模型W達35.5%'] },
     }],
   },
@@ -89,6 +90,8 @@ assert.equal(implausibleDistribution.scoreAudit.ok, false, '模型與Tai888去�
 assert.equal(implausibleDistribution.rankingQualified, false);
 assert.match(implausibleDistribution.tag, /QA BLOCK/);
 assert.match(implausibleDistribution.scoreAudit.plausibility.failures.join('；'), /比分分布合理性未通過/);
+assert.equal(implausibleDistribution.scoreAudit.plausibility.targetMarketProbabilityGap, 0.208);
+assert.equal(implausibleDistribution.scoreAudit.plausibility.source, 'tai888MarketProbabilityGap');
 
 const strongestInput = secondaryIndependentMarketVerified => finalizeDeterministicAnalysis({
   analysis: {
