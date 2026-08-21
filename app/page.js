@@ -335,7 +335,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
       ? `V10.5.1模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
-      : `模型條件勝率 ${pct(row.modelProbability)}（排除走水）｜全贏 ${pct(row.fullWinProbability)}｜走水 ${pct(row.pushProbability)}｜全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜未校準模型W ${pct(row.weightedEV)}｜情境保守R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}`;
+      : `模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜未校準模型W ${pct(row.weightedEV)}｜情境保守R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
