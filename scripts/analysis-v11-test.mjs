@@ -45,7 +45,10 @@ assert.equal(snapshot.legacyDistributionUsed, false);
 assert.equal(snapshot.exactDistribution, true);
 assert.equal(snapshot.scenarios.length, 27);
 assert.ok(Math.abs(snapshot.scenarioWeight - 1) < 1e-12);
-assert.match(String(snapshot.runProfileVersion || ''), /v10\.5\.1/);
+assert.match(String(snapshot.runProfileVersion || ''), /v10\.6\.0/);
+assert.equal(snapshot.stateAwareBottomNinth, true);
+assert.equal(snapshot.stateAwareWalkoff, true);
+assert.equal(snapshot.linkedSegmentPath, true);
 for (const scenario of snapshot.scenarios) {
   for (const pmf of Object.values(scenario.pmf)) assert.ok(Math.abs(pmf.reduce((sum, row) => sum + row[1], 0) - 1) < 1e-12);
 }

@@ -4,6 +4,7 @@ import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
 import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
 import { EV_CALIBRATION_V103_VERSION } from '../../../lib/ev-calibration-v103.js';
+import { MLB_CONTEXT_V13_VERSION } from '../../../lib/mlb-context-v13.js';
 import { BATCH_VERSION } from '../../../lib/batch.js';
 import {
   FINAL_ENGINE_VERSION,
@@ -26,7 +27,7 @@ import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/r
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
-  const version = '10.5.0';
+  const version = '10.6.0';
   if (!(await requestIsAuthenticated(request))) {
     return NextResponse.json({ ok: true, version }, { headers: { 'Cache-Control': 'no-store' } });
   }
@@ -39,6 +40,7 @@ export async function GET(request) {
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
+    mlbContextVersion: MLB_CONTEXT_V13_VERSION,
     rulesVersion: RULES_VERSION,
     evCalibrationVersion: EV_CALIBRATION_V103_VERSION,
     dataVersion: DATA_VERSION,
