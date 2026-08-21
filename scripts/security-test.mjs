@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { appPasswordConfigured, checkRateLimit, cleanText, createSessionToken, passwordMatches, positiveInteger, readJsonBody, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured, validDateString, validateSameOrigin, verifySessionToken } from '../lib/security.js';
 import { marketIsOpen, validateMarketPair } from '../lib/markets.js';
 
 process.env.APP_PASSWORD = 'test-password';
 process.env.SESSION_SECRET = 'test-session-secret-with-sufficient-entropy';
+
+const loginPage = fs.readFileSync(new URL('../app/login/page.js', import.meta.url), 'utf8');
+assert.match(loginPage, /維持登入 7 天/, '登入頁必須顯示實際的7天session期限');
+assert.doesNotMatch(loginPage, /維持登入 30 天/, '登入頁不得保留舊的30天session說明');
 
 assert.equal(await passwordMatches('test-password'), true);
 assert.equal(await passwordMatches('wrong-password'), false);
