@@ -32,7 +32,7 @@ const context = {
   modelConfig: { exactDistribution: true },
 };
 
-const direction = (market, pick, water) => ({ market, pick, water, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', executable: true, marketVerification: { verified: false, referencePriorEligible: false } });
+const direction = (market, pick, water) => ({ market, pick, water, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true, marketVerification: { verified: false, referencePriorEligible: false } });
 const markets = [
   direction('全場讓分', '客隊讓1平', 0.95), direction('全場讓分', '主隊受讓1平', 0.95),
   direction('全場大小', '大9平', 0.94), direction('全場大小', '小9平', 0.94),
@@ -45,7 +45,7 @@ assert.equal(snapshot.legacyDistributionUsed, false);
 assert.equal(snapshot.exactDistribution, true);
 assert.equal(snapshot.scenarios.length, 27);
 assert.ok(Math.abs(snapshot.scenarioWeight - 1) < 1e-12);
-assert.match(String(snapshot.runProfileVersion || ''), /v10\.3\.0/);
+assert.match(String(snapshot.runProfileVersion || ''), /v10\.5\.1/);
 for (const scenario of snapshot.scenarios) {
   for (const pmf of Object.values(scenario.pmf)) assert.ok(Math.abs(pmf.reduce((sum, row) => sum + row[1], 0) - 1) < 1e-12);
 }
@@ -54,6 +54,8 @@ const analysis = analyzeMarkets({ context, markets, settings: { rebateRate: 0.01
 assert.equal(analysis.scenarioSummary.legacyDistributionUsed, false);
 assert.equal(analysis.scenarioSummary.exactDistribution, true);
 assert.equal(analysis.results.length, 8);
+const scenarioGaps = analysis.results.map(row => ({ market: row.market, pick: row.pick, gap: row.evCalibration?.rawScenarioSpread }));
+assert.ok(scenarioGaps.every(row => Number(row.gap) <= 0.05), 'a normal complete-data board must naturally stay within the 5% scenario stability target');
 for (const row of analysis.results) {
   assert.equal(row.marketCalibrationApplied, false);
   assert.ok(Number.isFinite(row.rawWeightedEV));
@@ -62,6 +64,7 @@ for (const row of analysis.results) {
   assert.equal(row.evDoubleCheck.passed, true);
   assert.ok(Math.abs(row.distributionCoverage - 1) < 1e-9);
   assert.equal(typeof row.evCalibration?.qualified, 'boolean');
+  assert.equal(row.evCalibration?.qualified, true, 'fresh Reader + valid model must score without an international same-contract market');
   if (row.evCalibration.qualified) {
     assert.ok(Number.isFinite(row.weightedEV));
     assert.ok(Number.isFinite(row.robustEV));
@@ -78,7 +81,7 @@ for (const row of finalized.results) {
   assert.equal(row.betEligible, false);
   if (row.evCalibration?.qualified === false) {
     assert.equal(row.formulaDiagnosticScore, null);
-    assert.match(row.tag, /EV校準未通過/);
+    assert.match(row.tag, /模型評分未通過/);
   } else {
     assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true, '校準合格方向須保留固定公式診斷分');
   }

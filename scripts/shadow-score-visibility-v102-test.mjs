@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 
-const common = { evCalibration: { qualified: true, referencePriorEligible: true, actualReaderEligible: true, reasons: [], auditWarnings: [] }, marketVerification: { verified: true, referencePriorEligible: true }, water: 0.94, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true, distributionCoverage: 1, evDoubleCheck: { passed: true }, dataGateV10: { passedForShadowScore: true, blocking: [] }, numericalQA: { passed: true, signStable: true }, marketCalibrationApplied: false, rawMarketProbabilityGap: 0.01 };
+const common = { evCalibration: { qualified: true, referencePriorEligible: true, actualReaderEligible: true, scenarioStable: true, extreme: false, reasons: [], auditWarnings: [] }, marketVerification: { verified: true, referencePriorEligible: true }, water: 0.94, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true, distributionCoverage: 1, evDoubleCheck: { passed: true }, dataGateV10: { passedForShadowScore: true, blocking: [] }, numericalQA: { passed: true, signStable: true }, marketCalibrationApplied: false, rawMarketProbabilityGap: 0.01 };
 const direction = (market, pick, weightedEV, robustEV, modelProbability = 0.5) => ({ ...common, market, pick, weightedEV, robustEV, modelProbability });
 const game = { leagueId: 'MLB', away: '客隊', home: '主隊' };
 
@@ -43,6 +43,36 @@ assert.equal(qualifiedObservation.results[0].shadowDiagnosticScore, 7.1, '合格
 assert.equal(qualifiedObservation.results[0].scoreAudit.ok, true);
 assert.equal(qualifiedObservation.results[0].rankingQualified, false);
 
+const unstableVisible = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
+    results: [{
+      ...direction('全場大小', '大9平', 0.08, 0.02),
+      evCalibration: { ...common.evCalibration, rawScenarioSpread: 0.06, scenarioStable: false, auditWarnings: ['模型W/R情境差距6.0個百分點'] },
+    }],
+  },
+  game,
+}).results[0];
+assert.ok(unstableVisible.formulaDiagnosticScore > 7.1, 'W/R差距超過5%仍須保留固定公式算出的原始S，不得人工封頂7.1');
+assert.equal(unstableVisible.rankingQualified, false);
+assert.ok(unstableVisible.scoreBreakdown.rawScore >= unstableVisible.formulaDiagnosticScore);
+assert.ok(unstableVisible.scoreBreakdown.caps.includes('SCENARIO_SPREAD_OVER_5_PERCENT'));
+
+const extremeVisible = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
+    results: [{
+      ...direction('全場大小', '大9平', 0.16, 0.08),
+      evCalibration: { ...common.evCalibration, extreme: true, auditWarnings: ['未校準模型W達16.0%'] },
+    }],
+  },
+  game,
+}).results[0];
+assert.ok(extremeVisible.formulaDiagnosticScore > 7.1, 'W達15%以上仍須保留固定公式原始S，不得人工封頂');
+assert.equal(extremeVisible.rankingQualified, false);
+assert.ok(extremeVisible.scoreBreakdown.rawScore >= extremeVisible.formulaDiagnosticScore);
+assert.ok(extremeVisible.scoreBreakdown.caps.includes('UNCALIBRATED_W_OVER_15_PERCENT'));
+
 const strongestInput = secondaryIndependentMarketVerified => finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
@@ -73,7 +103,7 @@ const calibrationBlocked = finalizeDeterministicAnalysis({
 assert.equal(calibrationBlocked.results[0].formulaDiagnosticScore, null);
 assert.equal(calibrationBlocked.results[0].shadowDiagnosticScore, null);
 assert.equal(calibrationBlocked.results[0].scoreAudit.ok, false);
-assert.match(calibrationBlocked.results[0].tag, /EV校準未通過/);
+assert.match(calibrationBlocked.results[0].tag, /模型評分未通過/);
 
 const rawModelAuditOnly = finalizeDeterministicAnalysis({
   analysis: {

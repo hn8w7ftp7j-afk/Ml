@@ -24,7 +24,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.5.0';
+const VERSION = '10.5.1';
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
@@ -288,10 +288,12 @@ function SummaryCards({ summary }) {
 function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   const weightedEV = Number(row?.weightedEV);
   const robustEV = Number(row?.robustEV);
-  if (row?.evCalibration?.qualified !== true) return { icon: '⚠️', label: '市場校準阻擋', ranking: false, reason: row?.evCalibration?.reasons?.[0] || '缺少合格獨立市場同合約共識' };
+  if (row?.evCalibration?.qualified !== true) return { icon: '⚠️', label: '模型評分阻擋', ranking: false, reason: row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過' };
   if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
   if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
   if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
+  if (row?.evCalibration?.extreme === true) return { icon: '🟡', label: '高EV待複核', ranking: false, reason: '未校準模型W達15%以上' };
+  if (row?.evCalibration?.scenarioStable !== true) return { icon: '🟡', label: '模型情境不穩定', ranking: false, reason: 'W/R情境差距超過5%' };
   if (!Number.isFinite(weightedEV) || weightedEV <= 0) return { icon: '⚪', label: 'PASS', ranking: false, reason: '模型W未大於0' };
   if (!Number.isFinite(robustEV) || robustEV <= 0) return { icon: '🟡', label: '觀察', ranking: false, reason: '模型穩健R未大於0' };
   if (formulaScore < 7.2) return { icon: '⚪', label: 'PASS', ranking: false, reason: '公式分數未達7.2' };
@@ -309,7 +311,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const qaPassed = row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false;
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
   const calibrationBlocked = row?.evCalibration?.qualified !== true;
-  const calibrationReason = row?.evCalibration?.reasons?.[0] || '缺少至少3家新鮮、同步且同合約的獨立國際市場共識';
+  const calibrationReason = row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過';
   const qaFailures = scoreQaFailures(row);
   const auditWarnings = Array.isArray(row?.evCalibration?.auditWarnings)
     ? row.evCalibration.auditWarnings.filter(Boolean) : [];
@@ -321,17 +323,17 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const scoreTitle = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? '市場共識未通過安全校準｜不顯示W/R、不建立S分數、不列排名'
+      ? 'Reader、核心資料或數學未通過｜不顯示W/R、不建立S分數、不列排名'
       : formulaScore == null
         ? '缺少合法水位或雙EV，不能補造分數'
         : !qaPassed
           ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-          : `V10.5聯合比分分布模型影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+          : `V10.5.1相關風險聯合比分模型影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
   const scoreMetaText = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? `V10.5模型／外部稽核阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
-      : `模型勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜模型W ${pct(row.weightedEV)}｜模型穩健R ${pct(row.robustEV)}`;
+      ? `V10.5.1模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
+      : `模型勝率 ${pct(row.modelProbability)}｜損益兩平 ${pct(breakEven)}｜未校準模型W ${pct(row.weightedEV)}｜情境保守R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
@@ -395,9 +397,6 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       const reason = analysisInProgress ? '今日整批分析進行中｜完成前暫停記錄' : 'Tai888 Reader 實際盤已過期或尚未完成最新版本驗證';
       return invalidateReaderPriceRow(row, reason, reason);
     }
-    if (row?.evCalibration?.qualified === true && !referenceEvidenceFreshNow(row, now)) {
-      return invalidateShadowScoreRow(row, '獨立國際市場報價已超過5分鐘，等待自動刷新');
-    }
     return row;
   });
   const expectedDirectionCount = openMarketCount * 2;
@@ -413,7 +412,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.5 聯合比分分布模型 EV</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；同一聯合比分分布完成所有盤型逐腿結算並產生模型W/R；Tai888只作成交價，獨立市場只作外部稽核</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>V10.5.1 相關風險聯合比分模型 EV</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；Tai888由同一聯合比分分布逐腿結算；獨立市場只作可選外部稽核，不再阻擋模型W/R</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
@@ -454,8 +453,8 @@ function LeagueSetupPanel({ config }) {
 
 function LeagueShadowPanel({ config }) {
   return <section className="leagueSetup panel">
-    <div className="setupHead"><div><span className="kicker">V10.5 模型與QA</span><h2>{config.label}只顯示通過資料閘門的模型影子分析</h2></div><span className="state shadow">尚未啟用正式推薦</span></div>
-    <p className="muted">影子W/R由該聯盟獨立模型的聯合比分分布建立，Tai888只作成交價；獨立市場只負責外部稽核。核心資料、數值QA或市場稽核未通過即不評分。正式推薦與Unit仍等待locked OOS與forward驗證。</p>
+    <div className="setupHead"><div><span className="kicker">V10.5.1 模型與QA</span><h2>{config.label}顯示通過核心資料閘門的未校準模型影子分析</h2></div><span className="state shadow">尚未啟用正式推薦</span></div>
+    <p className="muted">影子W/R由該聯盟聯合比分分布直接結算Tai888成交盤；獨立市場只作可選外部稽核，不再阻擋模型W/R。只有Reader、核心資料或數學未通過才不評分；W/R差距超過5%仍顯示，但不列排名。正式推薦與Unit仍等待locked OOS及forward驗證。</p>
   </section>;
 }
 
@@ -513,13 +512,13 @@ export default function Home() {
       && actualLineFreshNow(row, clockNow)
       && gameIsPrestartNow(item.game, clockNow)
       && row.evCalibration?.qualified === true
-      && row.marketVerification?.referencePriorEligible === true
-      && referenceEvidenceFreshNow(row, clockNow)
       && row.shadowDiagnosticScore != null
       && Number.isFinite(Number(row.shadowDiagnosticScore))
       && row.scoreAudit?.ok === true
       && row.pairAudit?.passed !== false
       && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
+      && row.evCalibration?.scenarioStable === true
+      && row.evCalibration?.extreme !== true
       && Number(row.weightedEV) > 0
       && Number(row.robustEV) > 0
       && Number(row.shadowDiagnosticScore) >= 7.2)
@@ -1213,8 +1212,8 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10.5以各聯盟獨立模型的聯合比分分布產生影子W/R，Tai888只作成交價，獨立市場只作外部稽核。核心資料或QA未通過即不評分；正式下注建議仍停用。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
-      <div className="headerBadges"><span className={health?.ok && consensusReady ? 'health ok' : 'health warn'}>{!health?.ok ? '系統檢查中' : consensusReady ? '三莊共識已設定' : '市場共識未設定｜安全阻擋'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
+      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10.5.1以相關風險聯合比分分布產生未校準影子W/R，Tai888只作成交價，獨立市場只作可選稽核。核心資料或數學未通過才不評分；正式下注建議仍停用。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
+      <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{!health?.ok ? '系統檢查中' : consensusReady ? '系統正常｜外部稽核可用' : '系統正常｜外部稽核未設定'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
     </header>
 
     <nav className="leagueTabs" aria-label="聯盟切換">
@@ -1262,7 +1261,7 @@ export default function Home() {
           ? `已下注${betState.records?.length > 1 ? ` ${betState.records.length}筆` : ''} ✓`
           : betState.latest ? '加注目前盤' : '紀錄實際下注';
         return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{entry.pick}｜{waterText(entry.water)}</span><small>模型W {pct(entry.weightedEV)}｜模型穩健R {pct(entry.robustEV)}｜資料QA PASS｜影子診斷、非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.exact ? 'recorded' : 'green'}`} disabled={Boolean(betState.exact)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
-      }) : <div className="emptySmall">目前沒有通過完整三莊同合約校準與影子排名門檻的方向；顯示空白是安全阻擋，不代表系統故障。</div>}
+      }) : <div className="emptySmall">目前沒有同時通過雙EV、5%情境穩定線與影子排名門檻的方向；所有有效盤口仍會在今日盤口顯示W/R與分數。</div>}
     </section>}
 
     {tab === 'bets' && <section className="panel">
@@ -1283,7 +1282,7 @@ export default function Home() {
       }) : <div className="emptySmall">完成第一筆賽果結算後，這裡會依聯盟與全場讓分、全場大小、上半讓分、上半大小分開統計。</div>}
     </section>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>V10模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="4000">4000（固定）</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.5的公開W/R來自同一聯合比分分布對Tai888成交價的逐腿結算；獨立市場只作外部稽核，仍不是已完成樣本外驗證的正式預測。正式推薦與Unit等待locked OOS及forward驗證；實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。localStorage只作裝置快取，不是正式資料真值。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label><label>V10模擬次數／情境<select value={settings.simulationsPerScenario} onChange={event => setSettings(value => ({ ...value, simulationsPerScenario: Number(event.target.value) }))}><option value="4000">4000（固定）</option></select></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.5.1的公開W/R來自相關風險聯合比分分布對Tai888成交價的逐腿結算；獨立市場只作可選外部稽核。W/R差距超過5%仍顯示分數但不列排名；尚未完成樣本外驗證，正式推薦與Unit繼續停用。實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
   </main>;
 }

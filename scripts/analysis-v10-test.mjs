@@ -124,7 +124,7 @@ for (const row of finalized.results) {
   if (row.evCalibration?.qualified === false) {
     assert.equal(row.formulaDiagnosticScore, null);
     assert.equal(row.scoreStatus, 'UNSCORED');
-    assert.match(row.tag, /EV校準未通過/);
+    assert.match(row.tag, /模型評分未通過/);
   } else {
     assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true, '校準合格方向須保留固定公式診斷分');
     assert.ok(['SHADOW_DIAGNOSTIC_UNCALIBRATED', 'BLOCKED'].includes(row.scoreStatus));

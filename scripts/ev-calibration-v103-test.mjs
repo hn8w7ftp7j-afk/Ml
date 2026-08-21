@@ -92,11 +92,11 @@ const noPriorExtreme = qualifyEvV103({
   gate,
 });
 assert.equal(UNVERIFIED_EXTREME_EV_LIMIT, 0.15);
-assert.equal(noPriorExtreme.qualified, false);
-assert.equal(noPriorExtreme.weightedEV, null);
-assert.equal(noPriorExtreme.status, 'CALIBRATION_BLOCK');
-assert.match(noPriorExtreme.reasons.join('｜'), /3家獨立國際市場/);
-assert.match(noPriorExtreme.reasons.join('｜'), /15%極端值安全線/);
+assert.equal(noPriorExtreme.qualified, true);
+assert.equal(noPriorExtreme.weightedEV, 0.22);
+assert.equal(noPriorExtreme.status, 'QUALIFIED_MODEL_EV_EXTERNAL_AUDIT_UNAVAILABLE');
+assert.equal(noPriorExtreme.extreme, true);
+assert.match(noPriorExtreme.auditWarnings.join('｜'), /待複核/);
 
 const moderateNoPrior = qualifyEvV103({
   row: {
@@ -112,12 +112,12 @@ const moderateNoPrior = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.match(EV_CALIBRATION_V103_VERSION, /v10\.5\.0/);
-assert.equal(moderateNoPrior.qualified, false, 'V10.4 must fail closed when no independent consensus prior exists');
-assert.equal(moderateNoPrior.weightedEV, null);
-assert.equal(moderateNoPrior.robustEV, null);
-assert.equal(moderateNoPrior.status, 'CALIBRATION_BLOCK');
-assert.match(moderateNoPrior.reasons.join('｜'), /3家獨立國際市場/);
+assert.match(EV_CALIBRATION_V103_VERSION, /v10\.5\.1/);
+assert.equal(moderateNoPrior.qualified, true, 'international markets are optional audit evidence');
+assert.equal(moderateNoPrior.weightedEV, 0.08);
+assert.equal(moderateNoPrior.robustEV, 0.025);
+assert.equal(moderateNoPrior.status, 'QUALIFIED_MODEL_EV_EXTERNAL_AUDIT_UNAVAILABLE');
+assert.match(moderateNoPrior.auditWarnings.join('｜'), /不影響模型W\/R/);
 
 const qualifiedConsensus = qualifyEvV103({
   row: {
@@ -286,9 +286,10 @@ const unstableRawScenario = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(unstableRawScenario.qualified, false, 'unstable model scenarios must fail closed');
+assert.equal(unstableRawScenario.qualified, true, 'unstable scenarios remain visible but cannot rank');
 assert.ok(unstableRawScenario.rawScenarioSpread > MAX_RAW_SCENARIO_EV_SPREAD);
-assert.match(unstableRawScenario.reasons.join('｜'), /中央與壓力情境EV差距/);
+assert.equal(unstableRawScenario.scenarioStable, false);
+assert.match(unstableRawScenario.auditWarnings.join('｜'), /情境差距/);
 
 const unstableConsensus = qualifyEvV103({
   row: {
@@ -301,9 +302,9 @@ const unstableConsensus = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(unstableConsensus.qualified, false);
+assert.equal(unstableConsensus.qualified, true);
 assert.ok(unstableConsensus.weightedRobustGap > MAX_WEIGHTED_ROBUST_EV_GAP);
-assert.match(unstableConsensus.reasons.join('｜'), /獨立市場加權與保守EV差距/);
+assert.match(unstableConsensus.auditWarnings.join('｜'), /獨立市場加權與保守價格差距/);
 
 const confirmedExtreme = qualifyEvV103({
   row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.53, referenceRobustProbability: 0.525 }) },
@@ -313,10 +314,10 @@ const confirmedExtreme = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(confirmedExtreme.qualified, false, '15%+ model EV must fail closed before locked OOS validation');
-assert.equal(confirmedExtreme.weightedEV, null);
-assert.equal(confirmedExtreme.robustEV, null);
-assert.match(confirmedExtreme.reasons.join('｜'), /15%極端值安全線/);
+assert.equal(confirmedExtreme.qualified, true, '15%+ raw model EV stays visible for review');
+assert.equal(confirmedExtreme.weightedEV, 0.20);
+assert.equal(confirmedExtreme.robustEV, 0.12);
+assert.match(confirmedExtreme.auditWarnings.join('｜'), /待複核/);
 
 const disagreement = qualifyEvV103({
   row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.50, referenceRobustProbability: 0.495 }) },
@@ -326,9 +327,9 @@ const disagreement = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(disagreement.qualified, false, 'model and independent-market disagreement must fail closed');
-assert.match(disagreement.reasons.join('｜'), /機率差距/);
-assert.match(disagreement.reasons.join('｜'), /方向相反/);
+assert.equal(disagreement.qualified, true, 'external disagreement is audit-only');
+assert.match(disagreement.auditWarnings.join('｜'), /機率差距/);
+assert.match(disagreement.auditWarnings.join('｜'), /方向相反/);
 
 const extremeIndependentMarketGap = qualifyEvV103({
   row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.65, referenceRobustProbability: 0.645 }) },
@@ -340,9 +341,9 @@ const extremeIndependentMarketGap = qualifyEvV103({
 });
 assert.equal(UNVERIFIED_MARKET_EDGE_LIMIT, 0.05);
 assert.equal(ABSOLUTE_MARKET_EDGE_LIMIT, 0.15);
-assert.equal(extremeIndependentMarketGap.qualified, false, 'the independent market edge itself must fail closed above the absolute 15% ceiling');
-assert.equal(extremeIndependentMarketGap.status, 'EXTREME_MARKET_EDGE_HELD_FOR_REVIEW');
-assert.match(extremeIndependentMarketGap.reasons.join('｜'), /價格EV達/);
+assert.equal(extremeIndependentMarketGap.qualified, true, 'external price anomalies must not hide model W/R');
+assert.equal(extremeIndependentMarketGap.status, 'QUALIFIED_MODEL_EV_WITH_INDEPENDENT_MARKET_AUDIT');
+assert.match(extremeIndependentMarketGap.auditWarnings.join('｜'), /價格差達/);
 
 const unverifiedLargeMarketGap = qualifyEvV103({
   row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.55, referenceRobustProbability: 0.545 }) },
@@ -352,8 +353,8 @@ const unverifiedLargeMarketGap = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(unverifiedLargeMarketGap.qualified, false, '5%+ price gaps need a genuinely separate external validation');
-assert.match(unverifiedLargeMarketGap.reasons.join('｜'), /5%單一三莊快照安全線/);
+assert.equal(unverifiedLargeMarketGap.qualified, true, 'external price gaps are audit-only');
+assert.match(unverifiedLargeMarketGap.auditWarnings.join('｜'), /第二個外部市場/);
 
 const secondMarketValidatedGap = qualifyEvV103({
   row: {
@@ -387,7 +388,7 @@ const exactFivePercentBoundary = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(exactFivePercentBoundary.qualified, false, 'floating-point rounding must not let an exact 5% gap bypass the review gate');
+assert.equal(exactFivePercentBoundary.qualified, true, 'external 5% boundary remains visible as audit-only');
 
 const exactFifteenPercentProbability = (0.985 + ABSOLUTE_MARKET_EDGE_LIMIT) / 1.94;
 const exactFifteenPercentBoundary = qualifyEvV103({
@@ -405,7 +406,7 @@ const exactFifteenPercentBoundary = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(exactFifteenPercentBoundary.qualified, false, 'floating-point rounding must not let an exact 15% gap bypass the absolute gate');
+assert.equal(exactFifteenPercentBoundary.qualified, true, 'external 15% boundary remains visible as audit-only');
 
 const observedAt = '2026-08-21T00:00:00.000Z';
 const actual = [
