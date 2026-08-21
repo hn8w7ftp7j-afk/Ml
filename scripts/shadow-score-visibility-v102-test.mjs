@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 
-const common = { water: 0.94, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true, distributionCoverage: 1, evDoubleCheck: { passed: true }, dataGateV10: { passedForShadowScore: true, blocking: [] }, numericalQA: { passed: true, signStable: true }, marketCalibrationApplied: false, marketVerification: { verified: false }, rawMarketProbabilityGap: 0.01 };
+const common = { evCalibration: { qualified: true, referencePriorEligible: true, actualReaderEligible: true, reasons: [], auditWarnings: [] }, marketVerification: { verified: true, referencePriorEligible: true }, water: 0.94, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true, distributionCoverage: 1, evDoubleCheck: { passed: true }, dataGateV10: { passedForShadowScore: true, blocking: [] }, numericalQA: { passed: true, signStable: true }, marketCalibrationApplied: false, rawMarketProbabilityGap: 0.01 };
 const direction = (market, pick, weightedEV, robustEV, modelProbability = 0.5) => ({ ...common, market, pick, weightedEV, robustEV, modelProbability });
 const game = { leagueId: 'MLB', away: '客隊', home: '主隊' };
 
@@ -28,7 +28,7 @@ assert.equal(observation.results[0].formulaDiagnosticScore, 7.1, 'W>0且R≤0固
 const qualifiedObservation = finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
     results: [{
       ...direction('全場大小', '大9平', 0.01, -0.01),
       numericalQA: { passed: true, signStable: false },
@@ -46,7 +46,7 @@ assert.equal(qualifiedObservation.results[0].rankingQualified, false);
 const strongestInput = secondaryIndependentMarketVerified => finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
     results: [{
       ...direction('全場大小', '大9平', 0.082, 0.072),
       marketVerification: { verified: true, referencePriorEligible: true, secondaryIndependentMarketVerified },
@@ -78,7 +78,7 @@ assert.match(calibrationBlocked.results[0].tag, /EV校準未通過/);
 const rawModelAuditOnly = finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
     results: [{
       ...direction('全場大小', '大9平', 0.03, 0.015),
       distributionCoverage: 0.7,
@@ -92,13 +92,13 @@ const rawModelAuditOnly = finalizeDeterministicAnalysis({
   },
   game,
 });
-assert.equal(rawModelAuditOnly.results[0].scoreAudit.ok, true, 'raw model and baseball data-gate warnings must not veto independently qualified market W/R');
-assert.ok(Number.isFinite(Number(rawModelAuditOnly.results[0].shadowDiagnosticScore)));
+assert.equal(rawModelAuditOnly.results[0].scoreAudit.ok, false, '核心模型或資料閘門失敗時必須拒絕評分');
+assert.equal(rawModelAuditOnly.results[0].shadowDiagnosticScore, null);
 
 const staleReaderMustNotScore = finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
-    alignmentAudit: { targetMarketCalibration: 'INDEPENDENT_EXACT_CONTRACT_ONLY' },
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
     results: [{
       ...direction('全場大小', '大9平', 0.03, 0.015),
       lineFresh: false,
@@ -117,7 +117,7 @@ const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB'
 assert.equal(missingWater.results[0].formulaDiagnosticScore, null);
 
 const nonMlb = finalizeDeterministicAnalysis({ analysis: { leagueId: 'KBO', results: [direction('全場大小', '大9平', 0.015, 0.004)] }, game: { ...game, leagueId: 'KBO' } });
-assert.equal(Number.isFinite(Number(nonMlb.results[0].formulaDiagnosticScore)), true);
+assert.equal(nonMlb.results[0].formulaDiagnosticScore, null);
 assert.equal(nonMlb.results[0].shadowDiagnosticScore, null);
 assert.equal(nonMlb.results[0].scoreStatus, 'LEAGUE_MODEL_NOT_VALIDATED');
 assert.equal(nonMlb.results[0].betEligible, false);
