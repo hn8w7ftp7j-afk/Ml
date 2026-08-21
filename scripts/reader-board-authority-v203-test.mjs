@@ -91,8 +91,8 @@ const otherDate = candidate({ tabId: 3, active: false, overWater: 0.95 });
 otherDate.parsed.boardDate = '2026-08-16';
 otherDate.parsed.games[0].boardDate = '2026-08-16';
 const separateDates = selectAuthoritativeBoard([activeComplete, otherDate], { now: NOW });
-assert.equal(separateDates.ok, true, 'different complete board dates do not create same-slate ambiguity');
-assert.equal(separateDates.authorityTabId, 1);
+assert.equal(separateDates.ok, false, '同聯盟不同盤日的可用分頁仍屬衝突，必須要求只保留正確盤日');
+assert.equal(separateDates.error, 'conflicting-duplicate-tabs');
 
 const backgroundSource = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(
