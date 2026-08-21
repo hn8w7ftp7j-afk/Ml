@@ -28,7 +28,7 @@ assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const VERSION = '2\.1\.13'/);
+assert.match(background, /const VERSION = '2\.1\.14'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.doesNotMatch(background, /captures\.flatMap|tables:\s*captures\.flatMap/);
 assert.match(background, /lastSuccessfulPayloadHashes/);
@@ -100,6 +100,8 @@ for (const source of [pair, ingest, status]) {
 }
 assert.match(ingest, /X-Device-Id|x-device-id/i);
 assert.match(ingest, /readerSnapshotIsComplete|部分解析/);
+assert.match(status, /verifyReaderRequest|requireApiAuth/, 'Reader status detail must require Reader token or site session');
+assert.match(auth, /30 \* 24 \* 60 \* 60/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
 
-console.log('Reader 2.0.3 static security audit: minimal permissions, single-frame board selection, no credential storage, signed device token and strict origins PASS');
+console.log('Reader 2.1.14 static security audit: minimal permissions, single-frame board selection, no credential storage, signed device token and strict origins PASS');
