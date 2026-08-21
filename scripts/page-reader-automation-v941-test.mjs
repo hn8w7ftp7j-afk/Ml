@@ -46,8 +46,9 @@ mustMatch(/setDate\(latest\.boardDate\)/, 'Reader date auto-switch missing');
 mustMatch(/readerRevisionKey\(date, readerStatus\?\.payloadHash, readerStatus\?\.pageActivityAt\)/, 'Reader revision key must include date, payload hash and page activity');
 mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key must include date and payload hash');
 mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
-mustMatch(/setInterval\(refreshReader, 30000\)/, 'Reader status polling interval missing');
-mustMatch(/setInterval\(\(\) => pollReaderAndReprice\(\), 30000\)/, 'Reader repricing interval missing');
+mustMatch(/const READER_RECHECK_INTERVAL_MS = 5 \* 60 \* 1000/, 'Reader five-minute recheck cadence missing');
+mustMatch(/setInterval\(refreshReader, READER_RECHECK_INTERVAL_MS\)/, 'Reader status polling interval missing');
+mustMatch(/setInterval\(\(\) => pollReaderAndReprice\(\), READER_RECHECK_INTERVAL_MS\)/, 'Reader repricing interval missing');
 
 // Automatic analysis must be keyed to a fresh Reader payload and must not overlap.
 mustMatch(/autoAnalyzeHashRef/, 'automatic analysis hash guard missing');
@@ -148,8 +149,9 @@ mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking 
 
 
 mustMatch(/V10\.5\.1相關風險聯合比分模型影子 S 分數/, 'score label must disclose correlated joint-score model semantics');
-mustMatch(/模型條件勝率 \${pct\(row\.modelProbability\)}（排除走水）/, 'resolved-only probability must be labelled as conditional and exclude pushes');
-mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}｜走水 \${pct\(row\.pushProbability\)}｜全輸 \${pct\(row\.fullLossProbability\)}/, 'full win, push and full loss probabilities must be visible');
+mustMatch(/模型等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must be labelled as equivalent conditional win probability');
+mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
+mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
 mustMatch(/未校準模型W \${pct\(row\.weightedEV\)}/, 'W must be labelled as uncalibrated model Weighted EV');
 mustMatch(/情境保守R \${pct\(row\.robustEV\)}/, 'R must be labelled as scenario Robust EV');
 mustMatch(/情境差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');

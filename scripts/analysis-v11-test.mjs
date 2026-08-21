@@ -64,6 +64,12 @@ for (const row of analysis.results) {
   assert.equal(row.evDoubleCheck.passed, true);
   assert.ok(Math.abs(row.distributionCoverage - 1) < 1e-9);
   assert.equal(typeof row.evCalibration?.qualified, 'boolean');
+  const visibleBucketCoverage = row.fullWinProbability + row.partialWinProbability + row.pushProbability
+    + row.partialLossProbability + row.fullLossProbability + row.mixedNeutralProbability;
+  assert.ok(Math.abs(visibleBucketCoverage - row.distributionCoverage) < 1e-9, 'all settlement buckets must cover the complete score distribution');
+  assert.ok(Math.abs(row.equivalentWinProbability + row.equivalentLossProbability + row.equivalentPushProbability - row.distributionCoverage) < 1e-9, 'equivalent win/loss/push probabilities must cover the complete score distribution');
+  assert.ok(row.settlementIdentityAudit.probabilityIdentityError < 1e-12, 'displayed model probability must match equivalent settlement probability');
+  assert.ok(row.settlementIdentityAudit.evIdentityError < 1e-9, 'raw W must match the equivalent settlement payoff identity');
   assert.equal(row.evCalibration?.qualified, true, 'fresh Reader + valid model must score without an international same-contract market');
   if (row.evCalibration.qualified) {
     assert.ok(Number.isFinite(row.weightedEV));
@@ -75,6 +81,21 @@ for (const row of analysis.results) {
     assert.ok((row.evCalibration.reasons || []).length > 0);
   }
 }
+
+const modifierAnalysis = analyzeMarkets({
+  context,
+  markets: [
+    direction('全場讓分', '客隊讓1-90', 0.95),
+    direction('全場讓分', '主隊受讓1-90', 0.95),
+  ],
+  settings: { rebateRate: 0.015 },
+});
+const givingModifier = modifierAnalysis.results.find(row => row.pick === '客隊讓1-90');
+const receivingModifier = modifierAnalysis.results.find(row => row.pick === '主隊受讓1-90');
+assert.ok(givingModifier.partialLossProbability > 0, '讓1-90在淨勝1分時必須顯示部分輸機率');
+assert.ok(receivingModifier.partialWinProbability > 0, '受讓1-90在淨輸1分時必須顯示部分贏機率');
+assert.ok(Math.abs(receivingModifier.pushProbability) < 1e-12, '受讓1-90的整數命中是部分結算，不是純走水');
+assert.ok(receivingModifier.settlementIdentityAudit.evIdentityError < 1e-9);
 const finalized = finalizeDeterministicAnalysis({ analysis, game: context.game, settings: { candidateThreshold: 7.2 } });
 for (const row of finalized.results) {
   assert.equal(row.score, null);
