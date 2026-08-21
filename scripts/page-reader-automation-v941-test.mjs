@@ -81,8 +81,8 @@ assert.ok(
 mustMatch(/betPriceMatches/, 'exact placed-price matching missing');
 mustMatch(/compareBetPrice/, 'placed-versus-current price comparison missing');
 mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
-mustMatch(/目前盤口與水位已經記錄/, 'same-price suppression text missing');
-mustMatch(/加注目前盤/, 'reprice add-on action missing');
+mustMatch(/此方向已經記錄；盤口或水位變動也不再新增/, 'single-position bet suppression text missing');
+assert.doesNotMatch(page, /加注目前盤/, 'same direction must never expose a reprice add-on action');
 mustMatch(/記錄實際下注/, 'actual-bet action missing');
 
 // Ranking rows must retain the original item/row and expose the same immutable
