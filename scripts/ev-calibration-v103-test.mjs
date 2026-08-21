@@ -366,7 +366,7 @@ const secondMarketValidatedGap = qualifyEvV103({
   },
   rawWeightedEV: 0.04,
   rawRobustEV: 0.01,
-  modelProbability: 0.53,
+  modelProbability: 0.55,
   rebateRate: 0.015,
   gate,
 });
