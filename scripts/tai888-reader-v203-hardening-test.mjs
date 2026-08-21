@@ -349,6 +349,13 @@ const contentSource = fs.readFileSync(new URL('../reader/tai888-content.js', imp
 assert.match(contentSource, /activityByLeague/);
 assert.match(contentSource, /fingerprintByLeague/);
 assert.match(contentSource, /lastMutationAt: new Date\(activityAt\)\.toISOString\(\)/);
+assert.match(contentSource, /function mutationTouchesMarketBoard\(mutation, marketElements\)/, 'same-price refresh must require mutation evidence inside a parsed market board');
+assert.match(contentSource, /function marketMutationElements\(\)/, 'refresh evidence must be restricted to actual odds rows');
+assert.match(contentSource, /record\.cells\.length < 4 \|\| record\.cells\.length > 16/, 'broad page containers and tiny status widgets must not renew market activity');
+assert.match(contentSource, /waterToken\.test\(cell\.text\)/, 'refresh evidence must contain visible odds-water cells');
+assert.match(contentSource, /captureAll\(\{ verifiedBoardRefreshAt \}\)/, 'verified board refresh must renew activity without requiring a price change');
+assert.match(contentSource, /verifiedBoardRefreshAt > 0 \|\| before\[league\] !== fingerprintByLeague\[league\]/, 'verified same-price board refresh must notify the background heartbeat');
+assert.doesNotMatch(contentSource, /capture\(\)[\s\S]{0,200}verifiedBoardRefreshAt/, 'popup capture must not manufacture board refresh evidence');
 assert.doesNotMatch(contentSource, /document\.body\?\.innerText/);
 assert.match(contentSource, /hasExplicitMarketLock/);
 assert.match(contentSource, /img\[src\*="lock" i\]/);

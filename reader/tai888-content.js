@@ -277,7 +277,7 @@
       (row.cells || []).map(cell => Array.isArray(cell?.pair) ? cell.pair : cell?.lines || []))));
   }
 
-  function captureAll({ updateActivity = true } = {}) {
+  function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
     const { elements, records } = collectRecords();
     const captures = [];
     for (const league of globalThis.Tai888LeagueRegistry.ids) {
@@ -287,6 +287,9 @@
       if (updateActivity && fingerprint && fingerprint !== fingerprintByLeague[league]) {
         fingerprintByLeague[league] = fingerprint;
         activityByLeague[league] = Date.now();
+      }
+      if (fingerprint && Number(verifiedBoardRefreshAt) > 0) {
+        activityByLeague[league] = Math.max(activityByLeague[league] || 0, Number(verifiedBoardRefreshAt));
       }
       const activityAt = activityByLeague[league] || Date.now();
       if (!activityByLeague[league]) activityByLeague[league] = activityAt;
@@ -337,16 +340,43 @@
     }
   });
 
+  function mutationTouchesMarketBoard(mutation, marketElements) {
+    const target = mutation?.target?.nodeType === Node.ELEMENT_NODE
+      ? mutation.target
+      : mutation?.target?.parentElement;
+    if (!target) return false;
+    return marketElements.some(element => element === target
+      || element.contains?.(target)
+      || target.contains?.(element));
+  }
+
+  function marketMutationElements() {
+    const waterToken = /(?:^|\s)[0-3]\.\d{3}(?:\s|$)/;
+    return collectCandidateElements().filter((element, index) => {
+      const record = rowRecord(element, index);
+      if (!record || record.cells.length < 4 || record.cells.length > 16) return false;
+      return record.cells.filter(cell => waterToken.test(cell.text)).length >= 2;
+    });
+  }
+
   let mutationTimer = null;
-  const observer = new MutationObserver(() => {
+  let pendingMutations = [];
+  const observer = new MutationObserver(mutations => {
+    pendingMutations.push(...mutations);
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(() => {
+      const mutationsToAssess = pendingMutations;
+      pendingMutations = [];
+      const marketElements = marketMutationElements();
+      const verifiedBoardRefreshAt = mutationsToAssess.some(mutation => mutationTouchesMarketBoard(mutation, marketElements))
+        ? Date.now()
+        : 0;
       const before = { ...fingerprintByLeague };
-      const captures = captureAll();
-      const changedLeagues = captures
+      const captures = captureAll({ verifiedBoardRefreshAt });
+      const activeLeagues = captures
         .map(item => item.league)
-        .filter(league => before[league] !== fingerprintByLeague[league]);
-      if (changedLeagues.length) chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', leagues: changedLeagues }).catch(() => {});
+        .filter(league => verifiedBoardRefreshAt > 0 || before[league] !== fingerprintByLeague[league]);
+      if (activeLeagues.length) chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', leagues: activeLeagues }).catch(() => {});
     }, 2500);
   });
   if (document.documentElement) {

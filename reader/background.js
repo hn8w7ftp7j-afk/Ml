@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from './board-selector.js';
 
-const VERSION = '2.1.14';
+const VERSION = '2.1.15';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];
