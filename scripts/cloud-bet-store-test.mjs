@@ -48,7 +48,7 @@ const store = fs.readFileSync(new URL('../lib/cloud-bet-store.js', import.meta.u
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 assert.match(store, /baseball_private_bets_v2/);
 assert.match(store, /LEGACY_CACHE_KEY/);
-assert.match(store, /throw new Error\('正式下注帳本需要持久資料庫'/, '未設定資料庫時正式寫入必須失敗關閉');
+assert.match(store, /function requireDurableDatabase\(\)[\s\S]*DATABASE_URL/, '未設定資料庫時正式寫入必須失敗關閉');
 assert.doesNotMatch(store, /await cache\.set\(CACHE_KEY/, 'Runtime Cache不得作為正式帳本寫入真值');
 assert.match(store, /crypto\.randomUUID\(\)/, '下注ID必須由伺服器產生');
 assert.match(store, /status: 'OPEN'/, '新下注初始狀態必須由伺服器鎖定');
