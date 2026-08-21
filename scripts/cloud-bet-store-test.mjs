@@ -52,11 +52,12 @@ assert.match(store, /function requireDurableDatabase\(\)[\s\S]*DATABASE_URL/, '�
 assert.doesNotMatch(store, /await cache\.set\(CACHE_KEY/, 'Runtime Cache不得作為正式帳本寫入真值');
 assert.match(store, /crypto\.randomUUID\(\)/, '下注ID必須由伺服器產生');
 assert.match(store, /status: 'OPEN'/, '新下注初始狀態必須由伺服器鎖定');
-assert.match(store, /ON CONFLICT \(id\) DO NOTHING/, '每張下注單以不可變id去重，不得以方向覆蓋');
+assert.match(store, /ON CONFLICT \(id\) DO NOTHING/, '每張下注單仍須保留不可變id');
+assert.match(store, /WHERE position_key = \$\{bet\.positionIdentity\} LIMIT 1/, '同場同市場同方向只允許一筆下注，盤口或水位變動不得加注');
 const v2Schema = store.match(/CREATE TABLE IF NOT EXISTS baseball_private_bets_v2\s*\(([\s\S]*?)\n\s*\)\n\s*`;/)?.[1] || '';
 assert.ok(v2Schema, '必須找到v2正式帳本schema');
 assert.match(v2Schema, /position_key TEXT NOT NULL/);
-assert.doesNotMatch(v2Schema, /position_key TEXT NOT NULL UNIQUE/, 'v2正式帳本不得把同方向限制成只能一筆');
+assert.doesNotMatch(v2Schema, /position_key TEXT NOT NULL UNIQUE/, '既有多筆歷史下注不得因新增唯一索引造成資料庫遷移失敗');
 assert.match(store, /bet\.status === 'OPEN'/, '只重試真正待賽果的OPEN下注，人工確認不得阻塞舊單');
 assert.match(store, /Date\.parse\(left\?\.placedAt/, '待結算必須由最舊下注開始補，避免新賽事餓死歷史下注');
 assert.match(store, /Math\.min\(500/, '單次補結算上限必須足以涵蓋歷史帳本');
