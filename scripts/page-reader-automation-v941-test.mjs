@@ -10,10 +10,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
-mustMatch(/const VERSION = '10\.6\.0'/, 'UI must expose the V10.6.0 state-aware MLB model');
-assert.equal(packageJson.version, '10.6.0', 'package/release identity must match the V10.6.0 UI');
-assert.equal(packageLock.version, '10.6.0', 'package-lock release identity must match V10.6.0');
-assert.equal(packageLock.packages?.['']?.version, '10.6.0', 'root lockfile package must match V10.6.0');
+mustMatch(/const VERSION = '10\.6\.1'/, 'UI must expose the V10.6.1 continuous-calibration MLB model');
+assert.equal(packageJson.version, '10.6.1', 'package/release identity must match the V10.6.1 UI');
+assert.equal(packageLock.version, '10.6.1', 'package-lock release identity must match V10.6.1');
+assert.equal(packageLock.packages?.['']?.version, '10.6.1', 'root lockfile package must match V10.6.1');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
 mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.13-KBO-TRADITIONAL-NAME-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
@@ -136,7 +136,7 @@ mustMatch(/Number\(row\.weightedEV\) > 0/, 'ranking must require positive Raw W 
 mustMatch(/Number\(row\.robustEV\) > 0/, 'ranking must require positive Robust R EV');
 mustMatch(/Number\(row\.shadowDiagnosticScore\) >= 7\.2/, 'ranking must require the 7.2 qualification threshold');
 mustMatch(/row\.evCalibration\?\.scenarioStable === true/, 'ranking must require the 5% model-scenario stability gate');
-mustMatch(/row\.evCalibration\?\.extreme !== true/, 'ranking must hold uncalibrated positive 15%+ W for review');
+assert.doesNotMatch(page, /row\.evCalibration\?\.extreme !== true/, 'ranking must not use a 15% cliff after continuous plausibility calibration');
 mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected direction coverage missing');
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
@@ -149,11 +149,11 @@ mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking 
 
 
 mustMatch(/V10\.6狀態感知相關風險聯合比分模型影子 S 分數/, 'score label must disclose state-aware correlated joint-score model semantics');
-mustMatch(/\$\{provisionalBaseline \? '市場基準暫行' : '狀態模型'\}等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must distinguish provisional market baseline from state-model probability');
+mustMatch(/\$\{provisionalBaseline \? '連續合理性校準' : '狀態模型'\}等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must distinguish continuous plausibility calibration from state-model probability');
 mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
 mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
-mustMatch(/\$\{provisionalBaseline \? '市場基準暫行W' : '未校準狀態模型W'\} \${pct\(row\.weightedEV\)}/, 'W must distinguish provisional market baseline from uncalibrated state-model Weighted EV');
-mustMatch(/情境保守R \${pct\(row\.robustEV\)}/, 'R must be labelled as scenario Robust EV');
+mustMatch(/模型診斷W \${pct\(row\.weightedEV\)}/, 'W must be labelled as an unvalidated model diagnostic');
+mustMatch(/保守診斷R \${pct\(row\.robustEV\)}/, 'R must be labelled as an unvalidated conservative diagnostic');
 mustMatch(/情境差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
 mustMatch(/合格模型影子分數啟用/, 'provider status must report model shadow-score mode');
 mustMatch(/Tai888只作成交價/, 'Tai888 execution-price-only role must be visible');

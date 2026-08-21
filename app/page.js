@@ -24,7 +24,7 @@ import {
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
 
-const VERSION = '10.6.0';
+const VERSION = '10.6.1';
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
@@ -294,7 +294,6 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
   if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
   if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
-  if (row?.evCalibration?.extreme === true) return { icon: '🟡', label: '高EV待複核', ranking: false, reason: '未校準模型W達15%以上' };
   if (row?.evCalibration?.scenarioStable !== true) return { icon: '🟡', label: '模型情境不穩定', ranking: false, reason: 'W/R情境差距超過5%' };
   if (!Number.isFinite(weightedEV) || weightedEV <= 0) return { icon: '⚪', label: 'PASS', ranking: false, reason: '模型W未大於0' };
   if (!Number.isFinite(robustEV) || robustEV <= 0) return { icon: '🟡', label: '觀察', ranking: false, reason: '模型穩健R未大於0' };
@@ -326,6 +325,8 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? `｜模型/Tai888去水差距 ${pct(tai888Gap)}`
     : '';
   const provisionalBaseline = row?.marketBaselineApplied === true;
+  const baselineWeight = Number(row?.marketCalibrationWeight || 0);
+  const externalAuditReady = row?.evCalibration?.referencePriorEligible === true;
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
   const scoreClass = calibrationBlocked ? 'warning' : formulaScore == null ? 'pass'
@@ -346,7 +347,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
       ? `V10.6模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
       : plausibilityBlocked
         ? `比分分布合理性未通過｜模型勝率、W、R與公式評分全部停用${marketGapText}｜不得用原始模型值下注`
-      : `${provisionalBaseline ? '市場基準暫行' : '狀態模型'}等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜${provisionalBaseline ? '市場基準暫行W' : '未校準狀態模型W'} ${pct(row.weightedEV)}｜情境保守R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${provisionalBaseline ? `｜原始模型/Tai888差距 ${pct(row.rawModelTai888ProbabilityGap)}` : marketGapText}`;
+      : `${provisionalBaseline ? '連續合理性校準' : '狀態模型'}等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${provisionalBaseline ? `｜原始模型/Tai888差距 ${pct(row.rawModelTai888ProbabilityGap)}｜連續校準權重 ${pct(baselineWeight)}` : marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
@@ -368,9 +369,9 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
           ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否（${verdict.reason}）｜資料QA：${qaPassed ? 'PASS' : 'BLOCK'}｜正式推薦停用`
           : !qaPassed
             ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否｜資料QA：BLOCK（${qaFailures.join('；') || '資料、數學或數值檢查未通過'}）｜不列排名、不作推薦｜正式推薦停用`
-            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜正式推薦與Unit停用`}</div>}
+            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜EV校準：${provisionalBaseline ? '連續暫行' : '未完成歷史驗證'}｜外部市場：${externalAuditReady ? '已稽核' : '未驗證、不影響排名'}｜正式推薦與Unit停用`}</div>}
       {!calibrationBlocked && auditWarnings.length > 0 && <details className="auditWarnings">
-        <summary>外部市場稽核提示 {auditWarnings.length} 項</summary>
+        <summary>模型與外部稽核提示 {auditWarnings.length} 項</summary>
         <div>{auditWarnings.join('；')}</div>
       </details>}
     </div>
@@ -531,7 +532,6 @@ export default function Home() {
       && row.pairAudit?.passed !== false
       && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
       && row.evCalibration?.scenarioStable === true
-      && row.evCalibration?.extreme !== true
       && Number(row.weightedEV) > 0
       && Number(row.robustEV) > 0
       && Number(row.shadowDiagnosticScore) >= 7.2)
@@ -1252,7 +1252,7 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。核心資料、聯合比分分布、Tai888逐腿結算、模型W/R與外部市場稽核全數通過時才顯示模型影子分析；任何一項缺漏即不評分。按下「紀錄實際下注」仍會永久保存當下盤口、水位、Reader版本與金額。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。核心資料、聯合比分分布、Tai888逐腿結算與數學QA通過即可顯示模型影子分析；外部市場只作稽核，缺少時仍可排名並清楚標示未驗證。按下「紀錄實際下注」仍會永久保存當下盤口、水位、Reader版本與金額。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.13</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label} Reader尚未驗證` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
@@ -1266,14 +1266,14 @@ export default function Home() {
     </>}
 
     {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>模型影子排名</h2><span className="state shadow">非正式推薦</span></div>
-      <div className="emptySmall">此處只列「至少3家不同莊家同合約共識＋5分鐘時效＋報價同步與分散合格＋W/R皆正＋7.2以上＋資料QA通過」的方向。這是尚未完成樣本外驗證的模型影子診斷，不是下注建議。</div>
+      <div className="emptySmall">此處列出「Reader實際盤＋W/R皆正＋情境穩定＋7.2以上＋資料QA通過」的方向。外部市場只作稽核，缺少時仍可排名並標示未驗證；這是尚未完成樣本外驗證的模型診斷，不是下注建議。</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
         const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
         const buttonText = betState.exact
           ? `已下注${betState.records?.length > 1 ? ` ${betState.records.length}筆` : ''} ✓`
           : betState.latest ? '加注目前盤' : '紀錄實際下注';
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型W {pct(entry.weightedEV)}｜模型穩健R {pct(entry.robustEV)}｜資料QA PASS｜影子診斷、非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.exact ? 'recorded' : 'green'}`} disabled={Boolean(betState.exact)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>診斷W {pct(entry.weightedEV)}｜保守診斷R {pct(entry.robustEV)}｜資料QA PASS｜外部市場{entry.row?.evCalibration?.referencePriorEligible === true ? '已稽核' : '未驗證'}｜非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.exact ? 'recorded' : 'green'}`} disabled={Boolean(betState.exact)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
       }) : <div className="emptySmall">目前沒有同時通過雙EV、5%情境穩定線與影子排名門檻的方向；所有有效盤口仍會在今日盤口顯示W/R與分數。</div>}
     </section>}
 

@@ -88,7 +88,10 @@ assert.equal(preliminary.results.length, markets.length);
 for (const row of preliminary.results) {
   assert.equal(row.marketCalibrationApplied, row.marketBaselineApplied === true);
   assert.equal(row.targetPriceCalibratesDistribution, row.marketBaselineApplied === true);
-  if (row.marketBaselineApplied) assert.ok(row.rawModelTai888ProbabilityGap > 0.10);
+  if (row.marketBaselineApplied) {
+    assert.ok(row.rawModelTai888ProbabilityGap > 0.05);
+    assert.ok(row.marketCalibrationWeight > 0 && row.marketCalibrationWeight <= 1);
+  }
   assert.ok(Number.isFinite(row.rawWeightedEV));
   assert.ok(Number.isFinite(row.rawRobustEV));
   assert.ok(row.rawRobustEV <= row.rawWeightedEV + 1e-12);

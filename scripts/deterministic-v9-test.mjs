@@ -18,7 +18,7 @@ const score = (weightedEV, robustEV, options = {}) => deterministicScore({
   ...options,
 });
 
-assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.5.0');
+assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.6.0');
 assert.equal(score(0, 0).score, 6.6);
 assert.equal(score(-0.001, 0.02).score, 6.6);
 assert.equal(score(-0.01, -0.02).score, 6.3);
@@ -46,11 +46,12 @@ assert.equal(score(0.080, 0.019).score, 7.9);
 assert.equal(score(0.080, 0.048, { crossMarketVerified: true }).score, 8.6);
 assert.equal(score(0.095, 0.060, { crossMarketVerified: true }).score, 8.7);
 assert.equal(score(0.115, 0.076, { crossMarketVerified: true }).score, 8.9);
-assert.equal(score(0.115, 0.076, { crossMarketVerified: false }).score, 8.4);
+assert.equal(score(0.115, 0.076, { crossMarketVerified: false }).score, 8.9);
+assert.ok(score(0.115, 0.076, { crossMarketVerified: false }).caps.includes('INDEPENDENT_MARKET_AUDIT_UNAVAILABLE'));
 
 // Model/market disagreement remains a QA diagnostic. It must never rewrite a
-// score that is determined only by Weighted EV, Robust EV and the independent
-// same-contract requirement.
+// score that is determined only by Weighted EV and Robust EV. Independent
+// markets remain audit-only in Shadow.
 for (const gap of [0.12, 0.18, 0.30]) {
   const result = score(0.080, 0.048, { crossMarketVerified: true, rawMarketProbabilityGap: gap });
   assert.equal(result.score, 8.6);

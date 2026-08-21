@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { analyzeMarkets, buildDistributionSnapshot, independentMinimumWater, MODEL_VERSION, PROVISIONAL_MARKET_BASELINE_GAP, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
+import { analyzeMarkets, buildDistributionSnapshot, continuousMarketBaselineWeight, independentMinimumWater, MODEL_VERSION, PROVISIONAL_MARKET_BASELINE_GAP, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 
 const team = (runsPerGame, ops, era, scoringMean, scoringVariance) => ({
@@ -59,8 +59,18 @@ assert.equal(analysis.scenarioSummary.exactDistribution, true);
 assert.equal(analysis.results.length, 8);
 const scenarioGaps = analysis.results.map(row => ({ market: row.market, pick: row.pick, gap: row.evCalibration?.rawScenarioSpread }));
 assert.ok(scenarioGaps.every(row => Number(row.gap) <= 0.05), 'a normal complete-data board must naturally stay within the 5% scenario stability target');
+assert.equal(continuousMarketBaselineWeight(0.05), 0);
+assert.ok(Math.abs(continuousMarketBaselineWeight(0.075) - 0.5) < 1e-12);
+assert.equal(continuousMarketBaselineWeight(0.10), 1);
 for (const row of analysis.results) {
-  assert.equal(row.marketCalibrationApplied, false);
+  const expectedWeight = continuousMarketBaselineWeight(row.rawModelTai888ProbabilityGap);
+  assert.ok(Math.abs(row.marketCalibrationWeight - expectedWeight) < 1e-12);
+  assert.equal(row.marketCalibrationApplied, expectedWeight > 0);
+  if (expectedWeight > 0) {
+    const expectedProbability = row.rawModelProbabilityBeforeBaseline
+      + expectedWeight * (row.marketAnchorProbability - row.rawModelProbabilityBeforeBaseline);
+    assert.ok(Math.abs(row.modelProbability - expectedProbability) < 1e-9, '5–10pp disagreement must shrink continuously instead of jumping at one threshold');
+  }
   assert.equal(row.rawMarketProbabilityGap, row.tai888MarketProbabilityGap, 'QA gap fields must share the evaluated model-vs-Tai888 no-vig gap');
   assert.ok(Math.abs(row.rawMarketProbabilityGap - Math.abs(row.rawModelProbability - row.marketAnchorProbability)) < 1e-12);
   assert.ok(Number.isFinite(row.rawWeightedEV));
@@ -108,7 +118,8 @@ const lowTotalAnalysis = analyzeMarkets({
   settings: { rebateRate: 0.015 },
 });
 for (const row of lowTotalAnalysis.results) {
-  assert.equal(row.marketBaselineApplied, true, '模型與雙邊去水市場差距超過10pp時必須啟用市場基準暫行版');
+  assert.equal(row.marketBaselineApplied, true, '模型與雙邊去水市場差距超過10pp時必須完成連續合理性校準');
+  assert.equal(row.marketCalibrationWeight, 1);
   assert.ok(Math.abs(row.modelProbability - 0.5) < 1e-9);
   assert.ok(row.weightedEV < 0 && row.weightedEV > -0.03, '同水雙邊市場基準W應只有水差造成的小幅負值');
   assert.ok(row.robustEV <= row.weightedEV + 1e-12);

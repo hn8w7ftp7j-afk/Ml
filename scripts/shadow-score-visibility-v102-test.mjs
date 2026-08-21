@@ -71,9 +71,9 @@ const extremeVisible = finalizeDeterministicAnalysis({
   game,
 }).results[0];
 assert.ok(extremeVisible.formulaDiagnosticScore > 7.1, 'W達15%以上仍須保留固定公式原始S，不得人工封頂');
-assert.equal(extremeVisible.rankingQualified, false);
+assert.equal(extremeVisible.rankingQualified, true, '不得再用15%單點斷層取消排名；連續合理性校準必須在分析層處理');
 assert.ok(extremeVisible.scoreBreakdown.rawScore >= extremeVisible.formulaDiagnosticScore);
-assert.ok(extremeVisible.scoreBreakdown.caps.includes('UNCALIBRATED_W_OVER_15_PERCENT'));
+assert.equal(extremeVisible.scoreBreakdown.caps.includes('UNCALIBRATED_W_OVER_15_PERCENT'), false);
 
 const implausibleDistribution = finalizeDeterministicAnalysis({
   analysis: {
@@ -108,8 +108,9 @@ const strongestInput = secondaryIndependentMarketVerified => finalizeDeterminist
   },
   game,
 }).results[0];
-assert.equal(strongestInput(false).formulaDiagnosticScore, 8.4, '單一三莊快照沒有第二外部市場時必須封頂8.4');
-assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '只有明確第二獨立外部市場驗證才能進8.5+');
+assert.ok(strongestInput(false).formulaDiagnosticScore >= 8.5, '外部市場缺失不得壓低或移除分析排名');
+assert.ok(strongestInput(false).scoreBreakdown.caps.includes('INDEPENDENT_MARKET_AUDIT_UNAVAILABLE'));
+assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '外部市場驗證可保留稽核狀態，但不決定分析排名分數');
 
 const calibrationBlocked = finalizeDeterministicAnalysis({
   analysis: {
