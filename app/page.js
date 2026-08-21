@@ -315,6 +315,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const calibrationBlocked = row?.evCalibration?.qualified !== true;
   const calibrationReason = row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過';
   const qaFailures = scoreQaFailures(row);
+  const plausibilityBlocked = row?.scoreAudit?.plausibility?.passed === false;
   const auditWarnings = Array.isArray(row?.evCalibration?.auditWarnings)
     ? row.evCalibration.auditWarnings.filter(Boolean) : [];
   const tai888Gap = row?.tai888MarketProbabilityGap == null
@@ -341,6 +342,8 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
       ? `V10.5.1模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
+      : plausibilityBlocked
+        ? `比分分布合理性未通過｜模型勝率、W、R與公式評分全部停用${marketGapText}｜不得用原始模型值下注`
       : `模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜未校準模型W ${pct(row.weightedEV)}｜情境保守R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
