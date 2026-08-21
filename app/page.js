@@ -10,7 +10,7 @@ import {
 } from '../lib/bet-ledger.js';
 import { compareBetPrice } from '../lib/bet-price-comparison.js';
 import { summarizeBetLedger } from '../lib/bet-stats.js';
-import { teamNameZh, translateTeamText } from '../lib/i18n.js';
+import { translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
   actualLineFreshNow,
@@ -353,13 +353,11 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const comparisonTone = comparison?.combinedStatus === 'BETTER' ? '#75d69c'
     : comparison?.combinedStatus === 'WORSE' ? '#ff8d8d'
       : comparison?.combinedStatus === 'MIXED' ? '#f1c477' : '#c7cedb';
-  const buttonText = exact
-    ? `已下注${betState?.records?.length > 1 ? ` ${betState.records.length}筆` : ''} ✓`
-    : latest ? '加注目前盤' : '紀錄實際下注';
+  const buttonText = latest ? '已下注 ✓' : '紀錄實際下注';
   return <div className="scoreRow">
     <div className={`score ${scoreClass}`} title={scoreTitle}>{scoreLabel}</div>
     <div className="scoreBody">
-      <div className="scorePick">{translateTeamText(row.pick) || '水位未提供｜不評分'}</div>
+      <div className="scorePick">{row.pick || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
       <div className="scoreMeta">{scoreMetaText}</div>
       {actualLine && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
@@ -376,11 +374,11 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     </div>
     <div className="rowActions">
       {(recordable || latest) && <div>
-        <button className={`mini ${exact ? 'recorded' : 'green'}`} disabled={Boolean(exact)} title={exact ? '目前盤口與水位已經記錄' : latest ? '以目前新盤再新增一筆實際下注' : '記錄目前實際下注盤口與水位'} onClick={() => onBet(row)}>{buttonText}</button>
+        <button className={`mini ${latest ? 'recorded' : 'green'}`} disabled={Boolean(latest)} title={latest ? '此方向已經記錄；盤口或水位變動也不再新增' : '記錄目前實際下注盤口與水位'} onClick={() => onBet(row)}>{buttonText}</button>
         {latest && !exact && <div style={{ marginTop: 6, color: comparisonTone, fontSize: 10, lineHeight: 1.45, maxWidth: 190 }}>
           <b>{comparison?.comparable ? `${comparison.label}｜${comparison.lineLabel}｜${comparison.waterLabel}` : '無法比較'}</b><br/>
-          下注時：{translateTeamText(latest.pick)}｜{waterText(latest.water)}<br/>
-          現在：{translateTeamText(row.pick)}｜{waterText(row.water)}
+          下注時：{latest.pick}｜{waterText(latest.water)}<br/>
+          現在：{row.pick}｜{waterText(row.water)}
           {comparison?.keyDifference?.text && <><br/>{comparison.keyDifference.text}</>}
         </div>}
       </div>}
@@ -1115,8 +1113,8 @@ export default function Home() {
       return;
     }
     const state = getBetState(item, row);
-    if (state.exact) {
-      setNotice(`目前盤口與水位已經記錄：${translateTeamText(row.pick)}｜${Number(row.water).toFixed(3)}`);
+    if (state.latest) {
+      setNotice(`此方向已經記錄；盤口或水位變動也不再新增：${row.pick}`);
       return;
     }
     if (!betRecordable(item, row, Date.now(), bettingEnabled)) {
@@ -1134,10 +1132,10 @@ export default function Home() {
       gamePk: item.game.gamePk,
       gameNumber: item.game.gameNumber || 1,
       officialDate: item.game.officialDate || date,
-      matchup: `${teamNameZh(item.game.away)} 對 ${teamNameZh(item.game.home)}`,
+      matchup: matchup(item.game),
       gameDate: item.game.gameDate,
-      away: teamNameZh(item.game.away),
-      home: teamNameZh(item.game.home),
+      away: translateTeamText(item.game.away || ''),
+      home: translateTeamText(item.game.home || ''),
       market: row.market,
       pick: row.pick,
       water: row.water,
@@ -1180,7 +1178,7 @@ export default function Home() {
       betsRef.current = data.bets;
       setBets(data.bets);
       setError('');
-      setNotice(`已雲端記錄實際下注：${translateTeamText(row.pick)}｜${Number(row.water).toFixed(3)}｜${Number(settings.unitValue).toLocaleString()}元`);
+      setNotice(`已雲端記錄實際下注：${row.pick}｜${Number(row.water).toFixed(3)}｜${Number(settings.unitValue).toLocaleString()}元`);
     } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
   }
 
@@ -1189,12 +1187,12 @@ export default function Home() {
       setError('首次雲端下注紀錄同步尚未完成，請稍候再刪除，避免舊紀錄被重新匯入');
       return;
     }
-    if (!bet?.id || !window.confirm(`確定刪除這筆下注紀錄？\n${translateTeamText(bet.pick)}｜${waterText(bet.water)}`)) return;
+    if (!bet?.id || !window.confirm(`確定刪除這筆下注紀錄？\n${bet.pick}｜${waterText(bet.water)}`)) return;
     try {
       const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', betId: bet.id }) }, 30000);
       betsRef.current = Array.isArray(data.bets) ? data.bets : [];
       setBets(betsRef.current);
-      setNotice(`已刪除下注紀錄：${translateTeamText(bet.pick)}`);
+      setNotice(`已刪除下注紀錄：${bet.pick}`);
     } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
   }
 
@@ -1270,10 +1268,8 @@ export default function Home() {
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
         const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
-        const buttonText = betState.exact
-          ? `已下注${betState.records?.length > 1 ? ` ${betState.records.length}筆` : ''} ✓`
-          : betState.latest ? '加注目前盤' : '紀錄實際下注';
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型W {pct(entry.weightedEV)}｜模型穩健R {pct(entry.robustEV)}｜資料QA PASS｜影子診斷、非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.exact ? 'recorded' : 'green'}`} disabled={Boolean(betState.exact)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+        const buttonText = betState.latest ? '已下注 ✓' : '紀錄實際下注';
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{entry.pick}｜{waterText(entry.water)}</span><small>模型W {pct(entry.weightedEV)}｜模型穩健R {pct(entry.robustEV)}｜資料QA PASS｜影子診斷、非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
       }) : <div className="emptySmall">目前沒有同時通過雙EV、5%情境穩定線與影子排名門檻的方向；所有有效盤口仍會在今日盤口顯示W/R與分數。</div>}
     </section>}
 
@@ -1281,7 +1277,7 @@ export default function Home() {
       <div className="panelHead"><h2>{activeLeague.label}｜雲端實際下注帳本</h2><div>{bettingEnabled && <button className="textButton" onClick={() => refreshSettlements(league)}>更新賽果</button>}{bettingEnabled && <button className="textButton" disabled={!visibleBets.length} onClick={clearLeagueBets}>清空本聯盟</button>}</div></div>
       <SummaryCards summary={visibleStats.overall}/>
       {bettingEnabled && visibleBets.length ? visibleBets.map(bet => <div className="betRow" key={bet.id}>
-        <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜模型分數未列入績效</small></div>
+        <div><strong><span className="leagueBadge inline">{bet.league}</span>{bet.pick}｜{waterText(bet.water)}</strong><span>{bet.matchup}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜模型分數未列入績效</small></div>
         <div style={{ textAlign: 'right' }}><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '待結算'}</strong><br/><button className="textButton" onClick={() => deleteBet(bet)}>刪除</button></div>
       </div>) : <div className="emptySmall">尚未記錄{activeLeague.shortLabel}實際下注。</div>}
     </section>}
