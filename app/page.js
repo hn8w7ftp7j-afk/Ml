@@ -308,7 +308,7 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
 function ResultRow({ row, game, onBet, betState = null, recordable = false, now, verificationPending = false }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
-  const formulaScore = row?.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))
+  const storedFormulaScore = row?.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))
     ? Number(row.formulaDiagnosticScore) : null;
   const qaPassed = row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false;
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
@@ -316,6 +316,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const calibrationReason = row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過';
   const qaFailures = scoreQaFailures(row);
   const plausibilityBlocked = row?.scoreAudit?.plausibility?.passed === false;
+  const formulaScore = plausibilityBlocked ? null : storedFormulaScore;
   const auditWarnings = Array.isArray(row?.evCalibration?.auditWarnings)
     ? row.evCalibration.auditWarnings.filter(Boolean) : [];
   const tai888Gap = row?.tai888MarketProbabilityGap == null
