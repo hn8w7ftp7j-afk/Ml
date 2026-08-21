@@ -283,7 +283,7 @@ const hiddenComplete = candidate({ tabId: 2, active: false, frameId: 3, lastAcce
 const activeIncomplete = candidate({ tabId: 1, active: true, games: [payloadA.games[0]], expected: 2 });
 const activeFailClosed = selectAuthoritativeBoard([hiddenComplete, activeIncomplete], { now });
 assert.equal(activeFailClosed.ok, false, '可用分頁內容不一致時不得由 active tab 靜默覆蓋');
-assert.equal(activeFailClosed.reason, 'conflicting-duplicate-tabs');
+assert.equal(activeFailClosed.error, 'conflicting-duplicate-tabs');
 
 const stale = candidate({ activity: '2026-08-14T16:56:00.000Z' });
 const backgroundAssessment = assessBoardCandidate(stale, now);
