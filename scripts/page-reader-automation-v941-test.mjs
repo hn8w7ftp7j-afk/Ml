@@ -149,10 +149,10 @@ mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking 
 
 
 mustMatch(/V10\.5\.1相關風險聯合比分模型影子 S 分數/, 'score label must disclose correlated joint-score model semantics');
-mustMatch(/模型等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must be labelled as equivalent conditional win probability');
+mustMatch(/\$\{provisionalBaseline \? '市場基準暫行' : '模型'\}等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must distinguish provisional market baseline from model probability');
 mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
 mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
-mustMatch(/未校準模型W \${pct\(row\.weightedEV\)}/, 'W must be labelled as uncalibrated model Weighted EV');
+mustMatch(/\$\{provisionalBaseline \? '市場基準暫行W' : '未校準模型W'\} \${pct\(row\.weightedEV\)}/, 'W must distinguish provisional market baseline from uncalibrated model Weighted EV');
 mustMatch(/情境保守R \${pct\(row\.robustEV\)}/, 'R must be labelled as scenario Robust EV');
 mustMatch(/情境差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
 mustMatch(/合格模型影子分數啟用/, 'provider status must report model shadow-score mode');

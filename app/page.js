@@ -325,6 +325,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const marketGapText = tai888Gap != null && Number.isFinite(Number(tai888Gap))
     ? `｜模型/Tai888去水差距 ${pct(tai888Gap)}`
     : '';
+  const provisionalBaseline = row?.marketBaselineApplied === true;
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
   const scoreClass = calibrationBlocked ? 'warning' : formulaScore == null ? 'pass'
@@ -345,7 +346,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
       ? `V10.5.1模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
       : plausibilityBlocked
         ? `比分分布合理性未通過｜模型勝率、W、R與公式評分全部停用${marketGapText}｜不得用原始模型值下注`
-      : `模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜未校準模型W ${pct(row.weightedEV)}｜情境保守R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
+      : `${provisionalBaseline ? '市場基準暫行' : '模型'}等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜${provisionalBaseline ? '市場基準暫行W' : '未校準模型W'} ${pct(row.weightedEV)}｜情境保守R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${provisionalBaseline ? `｜原始模型/Tai888差距 ${pct(row.rawModelTai888ProbabilityGap)}` : marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
