@@ -38,8 +38,8 @@ export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // v10.4 namespace invalidates every pre-independent-consensus response.
-const responseCache = globalThis.__BASEBALL_V1043_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V1043_ANALYSIS_CACHE__ = responseCache;
+const responseCache = globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ = responseCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -159,15 +159,17 @@ export async function POST(request) {
       expertMode: 'off',
     };
     const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
-    if (!context?.coreModelable) {
+    if (!context?.coreModelable || context?.dataGateV10?.passedForShadowScore !== true) {
       const blocking = Array.isArray(context?.dataGateV10?.blocking) ? context.dataGateV10.blocking : [];
-      console.warn('[ANALYZE_RAW_MODEL_AUDIT]', {
-        league,
-        gamePk: game?.gamePk,
+      const detail = blocking.length ? blocking.join('、') : '核心資料Gate未通過';
+      console.error('[ANALYZE_CORE_BLOCK]', { league, gamePk: game?.gamePk, blocking, warnings: context?.warnings || [] });
+      return NextResponse.json({
+        ok: false,
+        code: 'CORE_DATA_MISSING',
+        error: `資料不足｜QA BLOCK｜不評分｜缺少：${detail}`,
         blocking,
         warnings: context?.warnings || [],
-        effect: 'RAW_MODEL_AUDIT_ONLY_MARKET_PRICE_SHADOW_CONTINUES',
-      });
+      }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
     }
     const contract = leagueAnalysisContract(league);
     const versions = {
