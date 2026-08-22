@@ -24,7 +24,8 @@ function render(statuses) {
   for (const [id, label] of LEAGUES) {
     const item = statuses[id] || {}, last = Number(item.lastSyncAt || 0), stale = last && Date.now() - last > STALE_MS;
     const ok = item.ok === true && item.state === 'synced' && !stale; if (ok) healthy += 1;
-    const card = document.createElement('div'); card.className = `league ${ok ? 'good' : item.state === 'missing' ? 'waiting' : 'bad'}`;
+    const waiting = ['missing', 'idle'].includes(item.state);
+    const card = document.createElement('div'); card.className = `league ${ok ? 'good' : waiting ? 'waiting' : 'bad'}`;
     const title = document.createElement('b'); title.textContent = `${label} ${id}`;
     const local = item.localDiagnostic || {};
     const serverOpen = Number(item.matchedGameCount || 0), serverLocked = Number(item.unopenedGameCount || 0);
