@@ -434,7 +434,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
-    {shadowMode && <div className="sourceBanner"><strong>V10.6 MLB 狀態感知聯合比分模型 EV</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；納入打線／左右投／預計局數／純牛棚與九局終止狀態；Tai888逐腿結算，獨立市場只作可選外部稽核</span></div>}
+    {shadowMode && <div className="sourceBanner"><strong>{item.game.leagueId || item.game.league || 'MLB'} 驗證中聯合比分模型 EV</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；先發局數／左右投／打線／純牛棚依聯盟資料狀態納入，缺失時採中性擴大情境並清楚標示；九局終止、再見與和局規則納入，Tai888逐腿結算</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}

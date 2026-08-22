@@ -177,4 +177,19 @@ assert.equal(nonMlb.results[0].shadowDiagnosticScore, null);
 assert.equal(nonMlb.results[0].scoreStatus, 'LEAGUE_MODEL_NOT_VALIDATED');
 assert.equal(nonMlb.results[0].betEligible, false);
 
+for (const leagueId of ['NPB', 'CPBL']) {
+  const asian = finalizeDeterministicAnalysis({
+    analysis: {
+      leagueId,
+      alignmentAudit: { targetMarketCalibration: 'DISABLED' },
+      dataGateV10: { passedForShadowScore: true },
+      results: [direction('全場大小', '大8平', 0.025, 0.01)],
+    },
+    game: { ...game, leagueId },
+  });
+  assert.equal(Number.isFinite(asian.results[0].formulaDiagnosticScore), true, `${leagueId}應顯示驗證中公式分數`);
+  assert.equal(asian.results[0].scoreStatus, 'SHADOW_DIAGNOSTIC_UNCALIBRATED');
+  assert.equal(asian.results[0].betEligible, false);
+}
+
 console.log('shadow-score-visibility-v102-test: PASS');
