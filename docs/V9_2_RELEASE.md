@@ -30,6 +30,6 @@
 ## Authorized providers
 
 - `JBOT_API_TOKEN`: Taiwan Sports Lottery reference line API.
-- `THE_ODDS_API_KEY`: international market fallback.
+- The Odds API integration was removed in v10.7.1 and is not a scoring dependency.
 
 Provider keys stay server-side. Without a configured key, the website states that the authorized provider is not configured and keeps screenshot import available.

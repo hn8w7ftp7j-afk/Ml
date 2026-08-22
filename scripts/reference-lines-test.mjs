@@ -347,21 +347,22 @@ assert.equal(noProvider.configured, false);
 assert.equal(noProvider.consensusReady, false);
 assert.equal(jbotOnly.configured, true, 'JBot is still a configured reference provider');
 assert.equal(jbotOnly.primary, 'JBOT_TAIWAN_SPORTS_LOTTERY');
-assert.equal(jbotOnly.consensusReady, false, 'JBot alone cannot satisfy the international three-book EV prior');
-assert.equal(oddsOnly.primary, 'THE_ODDS_API_CONSENSUS');
-assert.equal(oddsOnly.consensusReady, true);
+assert.equal(jbotOnly.consensusReady, false, '外部國際市場稽核已停用');
+assert.equal(oddsOnly.configured, false, '未知來源的The Odds API key必須被忽略');
+assert.equal(oddsOnly.primary, null);
+assert.equal(oddsOnly.consensusReady, false);
 assert.equal(bothProviders.configured, true);
-assert.equal(bothProviders.consensusReady, true, 'The Odds API key makes consensus infrastructure ready even when JBot is also configured');
+assert.equal(bothProviders.primary, 'JBOT_TAIWAN_SPORTS_LOTTERY');
+assert.equal(bothProviders.consensusReady, false, 'The Odds API key不得重新啟用外部市場稽核');
 
 const healthRoute = fs.readFileSync(new URL('../app/api/health/route.js', import.meta.url), 'utf8');
-assert.match(healthRoute, /referenceLinesEnabled:\s*referenceStatus\.consensusReady/, 'health readiness must mean V10.4 The Odds API consensus is actually available');
-assert.match(healthRoute, /referenceConsensusReady:\s*referenceStatus\.consensusReady/, 'health must separately expose whether The Odds API consensus can be built');
+assert.match(healthRoute, /referenceLinesEnabled:\s*false/, 'health必須明確標示外部市場未使用');
+assert.match(healthRoute, /referenceConsensusReady:\s*false/, 'health不得把未知The Odds API key標示為可用');
+assert.match(healthRoute, /externalMarketAuditEnabled:\s*false/, 'health必須公開外部市場稽核停用狀態');
 assert.match(healthRoute, /anyReferenceProviderConfigured:\s*referenceStatus\.anyConfigured/, 'health must separately expose whether any non-qualifying reference provider is configured');
 
 const referenceRoute = fs.readFileSync(new URL('../app/api/reference-lines/route.js', import.meta.url), 'utf8');
-assert.match(referenceRoute, /events\/\$\{safeEventId\}\/odds/, 'targeted Reader contracts must use The Odds API per-event endpoint');
-assert.match(referenceRoute, /targetByGamePk\.size\s*\?\s*oddsApiEventsUrl\(key, selectedWindow\)\s*:\s*oddsApiUrl\(key, selectedWindow\)/, 'targeted discovery must use the free event list and reserve bulk odds for the no-target fallback');
-assert.match(referenceRoute, /targetByGamePk\.size\s*\?\s*targetedEvents/, 'a targeted event fetch must fail closed instead of falling back to featured main lines');
+assert.doesNotMatch(referenceRoute, /THE_ODDS_API_KEY|api\.the-odds-api\.com|loadOddsApi/, 'reference route不得再呼叫The Odds API');
 assert.match(referenceRoute, /filterReferenceGamesToTargets\(requestedGames, targets\)/, 'the route must bound alternate rows to Reader target contracts before signing');
 assert.match(referenceRoute, /body\.targets\.length\s*&&\s*!targets\.length/, 'malformed or unverified targets must not silently downgrade to the no-target featured fallback');
 

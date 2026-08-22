@@ -336,7 +336,6 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     : '';
   const provisionalBaseline = row?.marketBaselineApplied === true;
   const baselineWeight = Number(row?.marketCalibrationWeight || 0);
-  const externalAuditReady = row?.evCalibration?.referencePriorEligible === true;
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
   const scoreClass = calibrationBlocked ? 'warning' : formulaScore == null ? 'pass'
@@ -377,7 +376,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
           ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否（${verdict.reason}）｜資料QA：${qaPassed ? 'PASS' : 'BLOCK'}｜正式推薦停用`
           : !qaPassed
             ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否｜資料QA：BLOCK（${qaFailures.join('；') || '資料、數學或數值檢查未通過'}）｜不列排名、不作推薦｜正式推薦停用`
-            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜EV校準：${provisionalBaseline ? '連續暫行' : '未完成歷史驗證'}｜外部市場：${externalAuditReady ? '已稽核' : '未驗證、不影響排名'}｜正式推薦與Unit停用`}</div>}
+            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜EV校準：${provisionalBaseline ? '連續暫行' : '未完成歷史驗證'}｜外部市場：未使用｜正式推薦與Unit停用`}</div>}
       {!calibrationBlocked && auditWarnings.length > 0 && <details className="auditWarnings">
         <summary>模型與外部稽核提示 {auditWarnings.length} 項</summary>
         <div>{auditWarnings.join('；')}</div>
@@ -521,7 +520,6 @@ export default function Home() {
   const shadowMode = activeLeague.status === 'shadow';
   const readerCoverage = readerCoverageCounts(readerStatus);
   const readerPendingText = coveragePendingText(readerCoverage);
-  const consensusReady = health?.referenceConsensusReady === true;
   const shadowRanking = useMemo(() => board.flatMap(item => (item.customData?.analysis?.results || [])
     .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
       && row.sourceType === 'ACTUAL_TW_CREDIT'
@@ -778,25 +776,10 @@ export default function Home() {
   }
 
   async function fetchReferenceLines(games, targetDate = date, targetGames = []) {
-    if (!Array.isArray(games) || !games.length) {
-      return { ok: true, configured: false, games: [], message: `${league}尚無獨立同聯盟參考盤源` };
-    }
-    try {
-      const targets = (Array.isArray(targetGames) ? targetGames : []).map(row => ({
-        gamePk: Number(row?.gamePk || row?.game?.gamePk),
-        markets: (Array.isArray(row?.markets) ? row.markets : []).map(market => ({
-          market: String(market?.market || ''),
-          pick: String(market?.pick || ''),
-        })).filter(market => market.market && market.pick),
-      })).filter(row => row.gamePk && row.markets.length);
-      return await requestJSON('/api/reference-lines', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
-        body: JSON.stringify({ league, date: targetDate, schedule: games, targets }),
-      }, 60000);
-    } catch (cause) {
-      return { ok: false, configured: false, games: [], message: `獨立參考盤取得失敗：${String(cause?.message || cause)}` };
-    }
+    void games;
+    void targetDate;
+    void targetGames;
+    return { ok: true, configured: false, games: [], failures: [], message: '外部市場稽核未使用；不影響模型評分與排名。' };
   }
 
   async function confirmLiveReaderHash(targetDate, payloadHash, generation) {
@@ -1234,7 +1217,7 @@ export default function Home() {
   return <main className="appShell">
     <header className="appHeader">
       <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10.6納入打線、左右投、先發局數、純牛棚與九局終止狀態，產生未校準影子W/R。Tai888只作成交價，獨立市場只作可選稽核；正式下注建議仍停用。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
-      <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{!health?.ok ? '系統檢查中' : consensusReady ? '系統正常｜外部稽核可用' : '系統正常｜外部稽核未設定'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
+      <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{!health?.ok ? '系統檢查中' : '系統正常｜外部市場未使用'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
     </header>
 
     <nav className="leagueTabs" aria-label="聯盟切換">
@@ -1260,7 +1243,7 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。核心資料、聯合比分分布、Tai888逐腿結算與數學QA通過即可顯示模型影子分析；外部市場只作稽核，缺少時仍可排名並清楚標示未驗證。按下「紀錄實際下注」仍會永久保存當下盤口、水位、Reader版本與金額。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。核心資料、聯合比分分布、Tai888逐腿結算與數學QA通過即可顯示模型影子分析；外部市場不參與評分或排名。按下「紀錄實際下注」仍會永久保存當下盤口、水位、Reader版本與金額。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.18</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label} Reader尚未驗證` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
@@ -1274,12 +1257,12 @@ export default function Home() {
     </>}
 
     {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>模型影子排名</h2><span className="state shadow">非正式推薦</span></div>
-      <div className="emptySmall">此處列出「Reader實際盤＋W/R皆正＋情境穩定＋7.2以上＋資料QA通過」的方向。外部市場只作稽核，缺少時仍可排名並標示未驗證；這是尚未完成樣本外驗證的模型診斷，不是下注建議。</div>
+      <div className="emptySmall">此處列出「Reader實際盤＋W/R皆正＋情境穩定＋7.2以上＋資料QA通過」的方向。外部市場不參與評分或排名；這是尚未完成樣本外驗證的模型診斷，不是下注建議。</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
         const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
         const buttonText = betState.latest ? '已下注 ✓' : '紀錄實際下注';
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>診斷W {pct(entry.weightedEV)}｜保守診斷R {pct(entry.robustEV)}｜資料QA PASS｜外部市場{entry.row?.evCalibration?.referencePriorEligible === true ? '已稽核' : '未驗證'}｜非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{entry.score.toFixed(1)}</strong><div><span>{entry.score >= 8.5 ? '🔥' : '🟢'} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>診斷W {pct(entry.weightedEV)}｜保守診斷R {pct(entry.robustEV)}｜資料QA PASS｜外部市場未使用｜非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
       }) : <div className="emptySmall">目前沒有同時通過雙EV、5%情境穩定線與影子排名門檻的方向；所有有效盤口仍會在今日盤口顯示W/R與分數。</div>}
     </section>}
 
