@@ -346,7 +346,35 @@
     };
   }
 
+  let observerRoot = null;
+  let observer = null;
+
+  function attachObserver() {
+    const root = document.documentElement;
+    if (!root || (observerRoot === root && observerRoot.isConnected)) return false;
+    observer?.disconnect();
+    observerRoot = root;
+    observer = new MutationObserver(handleMutations);
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return true;
+  }
+
+  function announceFrameReady(reason) {
+    attachObserver();
+    chrome.runtime.sendMessage({ type: 'TAI888_FRAME_READY', reason }).catch(() => {});
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'TAI888_READER_PING') {
+      sendResponse({ ok: true, readyState: document.readyState, visible: document.visibilityState === 'visible', frameUrl: currentTai888PageUrl() });
+      return;
+    }
+    if (message?.type === 'TAI888_READER_RECOVER') {
+      const reattached = attachObserver();
+      try { sendResponse({ ok: true, reattached, capture: capture() }); }
+      catch { sendResponse({ ok: false, error: 'recovery-capture-failed' }); }
+      return;
+    }
     if (!['TAI888_CAPTURE_BASEBALL_TABLE', 'TAI888_CAPTURE_MLB_TABLE'].includes(message?.type)) return;
     try { sendResponse({ ok: true, capture: capture() }); }
     catch {
@@ -388,7 +416,7 @@
 
   let mutationTimer = null;
   let pendingMutations = [];
-  const observer = new MutationObserver(mutations => {
+  function handleMutations(mutations) {
     pendingMutations.push(...mutations);
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(() => {
@@ -406,8 +434,16 @@
         .filter(league => verifiedBoardRefreshAt > 0 || before[league] !== fingerprintByLeague[league]);
       if (activeLeagues.length) chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', leagues: activeLeagues }).catch(() => {});
     }, 2500);
-  });
-  if (document.documentElement) {
-    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   }
+
+  attachObserver();
+  addEventListener('pageshow', () => announceFrameReady('pageshow'));
+  addEventListener('focus', () => announceFrameReady('focus'));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') announceFrameReady('visible');
+  });
+  setInterval(() => {
+    if (attachObserver()) announceFrameReady('root-replaced');
+  }, 15000);
+  announceFrameReady('content-ready');
 })();

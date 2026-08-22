@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from './board-selector.js';
 
-const VERSION = '2.1.17';
+const VERSION = '2.1.18';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];
@@ -12,6 +12,8 @@ let pendingRerun = false;
 let pendingReason = 'mutation';
 let pendingPreferredTabId = null;
 let mutationTimer;
+const recoveryCooldownByTab = new Map();
+const RECOVERY_COOLDOWN_MS = 90_000;
 
 chrome.runtime.onInstalled.addListener(async () => {
   const old = await chrome.storage.local.get(['deviceId', 'autoEnabled', 'readerStatus', 'lastSuccessfulPayloadHash', 'lastSuccessfulSyncAt']);
@@ -38,6 +40,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (message?.type === 'GET_READER_STATUS') { readerStatus().then(reply); return true; }
   if (message?.type === 'SET_AUTO_ENABLED') { chrome.storage.local.set({ autoEnabled: Boolean(message.enabled) }).then(async () => { await ensureAlarm(); reply({ ok: true, enabled: Boolean(message.enabled) }); }); return true; }
   if (message?.type === 'TAI888_BOARD_MUTATED') { const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null; clearTimeout(mutationTimer); mutationTimer = setTimeout(() => syncNow('mutation', preferredTabId).catch(() => {}), 3500); }
+  if (message?.type === 'TAI888_FRAME_READY') { const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null; clearTimeout(mutationTimer); mutationTimer = setTimeout(() => syncNow('frame-ready', preferredTabId).catch(() => {}), 1800); }
 });
 
 async function ensureAlarm() {
@@ -74,6 +77,45 @@ function sanitizeCapture(raw) {
 async function request(url, options, timeout = 45000) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeout); try { return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' }); } finally { clearTimeout(timer); } }
 async function json(response) { const text = await response.text(); try { return JSON.parse(text); } catch { throw new Error(`主系統回傳格式錯誤（${response.status}）`); } }
 async function sha(value) { const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value))); return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join(''); }
+function wait(milliseconds) { return new Promise(resolve => setTimeout(resolve, milliseconds)); }
+
+async function collectCandidates(tabs) {
+  const candidates = [];
+  const silentTabIds = [];
+  for (const tab of tabs) {
+    let responded = false;
+    const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0, url: tab.url }]);
+    for (const frame of frames || []) try {
+      const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, { frameId: frame.frameId });
+      responded = responded || answer?.ok === true;
+      const rawCaptures = Array.isArray(answer?.capture?.captures) ? answer.capture.captures : answer?.capture ? [answer.capture] : [];
+      for (const rawCapture of rawCaptures) {
+        const capture = sanitizeCapture(rawCapture);
+        if (answer?.ok && capture.league && capture.tables.length) candidates.push({ tabId: tab.id, frameId: frame.frameId, active: Boolean(tab.active), lastAccessed: Number(tab.lastAccessed || 0), capture, parsed: parseTai888Capture(capture, new Date()) });
+      }
+    } catch {}
+    if (!responded) silentTabIds.push(tab.id);
+  }
+  return { candidates, silentTabIds };
+}
+
+async function recoverTabs(tabs, tabIds, { force = false } = {}) {
+  const targets = new Set(tabIds);
+  let requested = false;
+  for (const tab of tabs) {
+    if (!targets.has(tab.id)) continue;
+    const last = Number(recoveryCooldownByTab.get(tab.id) || 0);
+    if (!force && Date.now() - last < RECOVERY_COOLDOWN_MS) continue;
+    recoveryCooldownByTab.set(tab.id, Date.now());
+    const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0 }]);
+    for (const frame of frames || []) try {
+      const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_READER_RECOVER' }, { frameId: frame.frameId });
+      requested = requested || answer?.ok === true;
+    } catch {}
+  }
+  if (requested) await wait(1600);
+  return requested;
+}
 
 async function pair(password, deviceName) {
   const current = await chrome.storage.local.get('deviceId'); const deviceId = current.deviceId || crypto.randomUUID();
@@ -110,28 +152,28 @@ async function performSync(reason, preferredTabId) {
   if (reason !== 'manual' && stored.autoEnabled === false) return { ok: true, skipped: true, message: '自動同步已關閉' };
   const tabs = [...new Map((await chrome.tabs.query({ url: PATTERNS })).map(tab => [tab.id, tab])).values()];
   if (!tabs.length) throw new Error('找不到 Tai888 分頁。請開啟四個聯盟的「讓分＆大小」頁。');
-  const candidates = [];
-  for (const tab of tabs) {
-    const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0, url: tab.url }]);
-    for (const frame of frames || []) try {
-      const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, { frameId: frame.frameId });
-      const rawCaptures = Array.isArray(answer?.capture?.captures)
-        ? answer.capture.captures
-        : answer?.capture ? [answer.capture] : [];
-      for (const rawCapture of rawCaptures) {
-        const capture = sanitizeCapture(rawCapture);
-        if (answer?.ok && capture.league && capture.tables.length) candidates.push({ tabId: tab.id, frameId: frame.frameId, active: Boolean(tab.active), lastAccessed: Number(tab.lastAccessed || 0), capture, parsed: parseTai888Capture(capture, new Date()) });
-      }
-    } catch {}
+  let scan = await collectCandidates(tabs);
+  if (scan.silentTabIds.length && await recoverTabs(tabs, scan.silentTabIds, { force: reason === 'manual' })) scan = await collectCandidates(tabs);
+  let candidates = scan.candidates;
+  const staleTabIds = [];
+  for (const league of LEAGUES) {
+    const selection = selectAuthoritativeBoard(candidates.filter(item => item.parsed.league === league), { now: Date.now(), preferredTabId, league });
+    if (!selection.ok && selection.assessed?.some(item => item.issues?.includes('stale-market-activity'))) staleTabIds.push(...selection.assessed.map(item => item.candidate.tabId));
   }
+  if (staleTabIds.length && await recoverTabs(tabs, staleTabIds, { force: reason === 'manual' })) candidates = (await collectCandidates(tabs)).candidates;
   const statuses = { ...(stored.readerStatuses || {}) }; const hashes = { ...(stored.lastSuccessfulPayloadHashes || {}) }; const times = { ...(stored.lastSuccessfulSyncAts || {}) }; const results = [];
   for (const league of LEAGUES) {
     const own = candidates.filter(item => item.parsed.league === league);
-    if (!own.length) { statuses[league] = { ok: false, state: 'missing', league, message: `找不到${LABELS[league]}標準盤分頁`, readerVersion: VERSION }; continue; }
+    if (!own.length) {
+      const disconnected = scan.silentTabIds.length > 0;
+      statuses[league] = { ok: false, state: disconnected ? 'disconnected' : 'missing', league, message: disconnected ? `${LABELS[league]} Reader 未連線，已自動重試；請重新整理該 Tai888 分頁（F5）` : `找不到${LABELS[league]}標準盤分頁（可能尚未開盤）`, readerVersion: VERSION };
+      continue;
+    }
     const selection = selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
     if (!selection.ok) {
       const detail = selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
-      statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
+      const noChange = selection.assessed?.some(item => item.issues?.includes('stale-market-activity'));
+      statuses[league] = { ok: false, state: noChange ? 'idle' : 'error', league, message: noChange ? `${LABELS[league]}盤面可讀，但超過 5 分鐘沒有可驗證更新；已自動重掛與重掃，若盤口應有變動請按 F5` : `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
     const selected = selection.selected; const payload = selected.candidate.parsed;

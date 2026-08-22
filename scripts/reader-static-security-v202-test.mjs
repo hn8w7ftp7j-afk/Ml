@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.17');
-assert.equal(manifest.version_name, '2.1.17 VERIFIED-LIVE-HEARTBEAT');
+assert.equal(manifest.version, '2.1.18');
+assert.equal(manifest.version_name, '2.1.18 SELF-HEAL');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -28,8 +28,11 @@ assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const VERSION = '2\.1\.17'/);
+assert.match(background, /const VERSION = '2\.1\.18'/);
 assert.match(background, /selectAuthoritativeBoard/);
+assert.match(background, /TAI888_READER_RECOVER/);
+assert.match(background, /RECOVERY_COOLDOWN_MS = 90_000/);
+assert.match(background, /if \(running\)/, 'self-heal must retain single-flight sync');
 assert.doesNotMatch(background, /captures\.flatMap|tables:\s*captures\.flatMap/);
 assert.match(background, /lastSuccessfulPayloadHashes/);
 assert.match(background, /delayInMinutes: \.5/);
@@ -70,6 +73,10 @@ assert.match(content, /getComputedStyle\(node, '::after'\)/);
 assert.equal(content.includes('\\\\f023'), true);
 assert.match(content, /aria-disabled/);
 assert.doesNotMatch(content, /TAI888_BOARD_MUTATED[^\n]*pageUrl/);
+assert.match(content, /TAI888_READER_RECOVER/);
+assert.match(content, /observerRoot === root && observerRoot\.isConnected/);
+assert.match(content, /visibilitychange/);
+assert.match(content, /root-replaced/);
 
 const browserParser = fs.readFileSync('reader/parser.js', 'utf8');
 assert.match(browserParser, /export function sanitizeTai888PageUrl/);
@@ -105,4 +112,4 @@ assert.match(status, /requestIsAuthenticated\(request\)/, 'Reader status must ac
 assert.match(auth, /60 \* 60 \* 24 \* 30/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
 
-console.log('Reader 2.1.17 static security audit: minimal permissions, verified live heartbeat, single-frame board selection, no credential storage, signed device token and strict origins PASS');
+console.log('Reader 2.1.18 static security audit: minimal permissions, verified live heartbeat, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');
