@@ -108,9 +108,9 @@ const strongestInput = secondaryIndependentMarketVerified => finalizeDeterminist
   },
   game,
 }).results[0];
-assert.equal(strongestInput(false).formulaDiagnosticScore, 8.4, '外部市場缺失只限制8.5以上，仍保留8.4分析排名');
-assert.equal(strongestInput(false).rankingQualified, true, '外部市場缺失不得阻擋7.2～8.4分析排名');
-assert.ok(strongestInput(false).scoreBreakdown.caps.includes('INDEPENDENT_MARKET_AUDIT_UNAVAILABLE'));
+assert.ok(strongestInput(false).formulaDiagnosticScore >= 8.5, '外部市場未使用時，8.5以上只由W/R、QA與模型資料門檻決定');
+assert.equal(strongestInput(false).rankingQualified, true, '外部市場未使用不得阻擋分析排名');
+assert.ok(!strongestInput(false).scoreBreakdown.caps.includes('INDEPENDENT_MARKET_AUDIT_UNAVAILABLE'));
 assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '外部市場驗證可保留稽核狀態，但不決定分析排名分數');
 
 const calibrationBlocked = finalizeDeterministicAnalysis({
@@ -176,5 +176,20 @@ assert.equal(nonMlb.results[0].formulaDiagnosticScore, null);
 assert.equal(nonMlb.results[0].shadowDiagnosticScore, null);
 assert.equal(nonMlb.results[0].scoreStatus, 'LEAGUE_MODEL_NOT_VALIDATED');
 assert.equal(nonMlb.results[0].betEligible, false);
+
+for (const leagueId of ['NPB', 'CPBL']) {
+  const asian = finalizeDeterministicAnalysis({
+    analysis: {
+      leagueId,
+      alignmentAudit: { targetMarketCalibration: 'DISABLED' },
+      dataGateV10: { passedForShadowScore: true },
+      results: [direction('全場大小', '大8平', 0.025, 0.01)],
+    },
+    game: { ...game, leagueId },
+  });
+  assert.equal(Number.isFinite(asian.results[0].formulaDiagnosticScore), true, `${leagueId}應顯示驗證中公式分數`);
+  assert.equal(asian.results[0].scoreStatus, 'SHADOW_DIAGNOSTIC_UNCALIBRATED');
+  assert.equal(asian.results[0].betEligible, false);
+}
 
 console.log('shadow-score-visibility-v102-test: PASS');

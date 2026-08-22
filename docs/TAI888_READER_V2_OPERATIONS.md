@@ -6,7 +6,7 @@
 - `APP_PASSWORD`
 - `SESSION_SECRET`
 
-`READER_PAIR_SECRET` must be independent. Reader pairing never uses `TAI888_PASSWORD`, and the website session never uses either Tai888 credential. `JBOT_API_TOKEN` or `THE_ODDS_API_KEY` is optional when a separate reference market is desired. Secret values must remain server-side and are never committed.
+`READER_PAIR_SECRET` must be independent. Reader pairing never uses `TAI888_PASSWORD`, and the website session never uses either Tai888 credential. `JBOT_API_TOKEN` is optional when a separate reference market is desired. The Odds API integration is disabled and is not part of scoring or ranking. Secret values must remain server-side and are never committed.
 
 Reader 2.1.0+ is required for NPB, KBO and CPBL; MLB retains Reader 2.0.3+ compatibility during migration. Reader 2.1.4 automatically selects one authoritative usable tab/frame, treats conflicting responsive DOM copies as duplicate observations, and separates two teams/directions even when the responsive layout reports them at the same visual height; it never combines unrelated markets. Every ingest must include valid `observedAt`, fresh `pageActivityAt`, `expectedGameCount`, and `detectedGameCount`; the submitted board counts must agree. Every visible game must map one-to-one to that league's official Taipei board-date slate, including doubleheaders. A visible open game must contain exactly four markets/eight executable directions; any visible partial game rejects the entire batch without replacing the previous snapshot. An official game that Tai888 has not presented, or has fully locked, remains non-executable and is never filled with invented prices.
 

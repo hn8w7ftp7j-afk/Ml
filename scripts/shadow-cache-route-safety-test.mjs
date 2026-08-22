@@ -86,11 +86,11 @@ try {
 
   const firstResponse = await analyzeRoute.POST(analyzeRequest(game, markets));
   const first = await firstResponse.json();
-  assert.equal(firstResponse.status, 409);
-  assert.equal(first.code, 'LEAGUE_NOT_READY');
-  assert.match(first.error, /停止分析|尚未完成/);
+  assert.equal(firstResponse.status, 422);
+  assert.equal(first.code, 'CORE_DATA_MISSING');
+  assert.match(first.error, /資料不足|核心資料/);
 } finally {
   globalThis.fetch = originalFetch;
 }
 
-console.log('Asian leagues fail closed before analysis cache or scoring PASS');
+console.log('Enabled NPB analysis still fails closed when official history core data is unavailable PASS');

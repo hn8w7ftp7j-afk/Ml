@@ -15,10 +15,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.6.2', 'package/release identity must match the V10.6.2 UI');
-assert.equal(packageLock.version, '10.6.2', 'package-lock release identity must match V10.6.2');
-assert.equal(packageLock.packages?.['']?.version, '10.6.2', 'root lockfile package must match V10.6.2');
-assert.equal(APP_VERSION, '10.6.2');
+assert.equal(packageJson.version, '10.7.1', 'package/release identity must match the V10.7.1 UI');
+assert.equal(packageLock.version, '10.7.1', 'package-lock release identity must match V10.7.1');
+assert.equal(packageLock.packages?.['']?.version, '10.7.1', 'root lockfile package must match V10.7.1');
+assert.equal(APP_VERSION, '10.7.1');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
@@ -72,9 +72,10 @@ mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing'
 mustMatch(/runPool\(tasks, 4,/, 'full-board analysis must process four games concurrently');
 assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation setting must be removed from the UI');
 
-// V10.4 reference-market flow must be wired into both full analysis and frozen-distribution repricing.
+// External-market requests are disabled; analysis keeps an explicit empty audit payload.
 mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetGames = \[\]\)/, 'target-aware reference-line loader missing');
-mustMatch(/requestJSON\('\/api\/reference-lines'/, 'reference-line API request missing');
+assert.doesNotMatch(page, /requestJSON\('\/api\/reference-lines'/, 'client must not request disabled external-market APIs');
+mustMatch(/message: '外部市場稽核未使用；不影響模型評分與排名。'/, 'disabled external-market status missing');
 mustMatch(/REFERENCE_REFRESH_INTERVAL_MS = 2 \* 60 \* 1000/, 'independent references must refresh before five-minute evidence expiry even when Reader hash is unchanged');
 mustMatch(/referenceRefreshDue/, 'same-hash Reader polling must not leave expired reference evidence on screen');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
@@ -83,10 +84,6 @@ mustMatch(/verificationMarkets: foundReference\?\.markets \|\| \[\]/, 'per-game 
 mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full analyze request must send matched reference markets');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
 assert.doesNotMatch(page, /verificationMarkets:\s*\[\]/, 'analyze/reprice must never hard-code an empty verification-market payload');
-assert.ok(
-  page.indexOf("requestJSON('/api/reference-lines'") < page.indexOf('const tasks = items.filter'),
-  'reference markets must be fetched before per-game analysis tasks are built',
-);
 
 // Actual-bet ledger and price comparison remain available while formal model scoring is locked.
 mustMatch(/betPriceMatches/, 'exact placed-price matching missing');

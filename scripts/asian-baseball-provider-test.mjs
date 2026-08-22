@@ -166,6 +166,16 @@ assert.match(context.modelVersion, /^NPB-/);
 assert.match(context.rulesVersion, /^NPB-/);
 assert.ok(context.historyGameCount === 2);
 assert.deepEqual(Object.keys(context.modelConfig.baselineBounds).sort(), ['first5', 'full']);
+assert.equal(context.dataGateV10.passedForShadowScore, true);
+assert.equal(context.dataGateV10.passedForFormalScore, false);
+assert.deepEqual(context.dataGateV10.missing, ['probableStartersAndHandedness', 'officialOrProjectedLineups', 'pureBullpenUsage']);
+assert.equal(context.away.starter.projectionMode, 'NEUTRAL_UNKNOWN_STARTER');
+assert.equal(context.away.starter.expectedInnings, 5.2);
+assert.equal(context.away.bullpen.pureRelief, false);
+assert.equal(context.gameStateModel.bottomNinthMayBeSkipped, true);
+assert.equal(context.gameStateModel.regulationWalkoff, true);
+assert.equal(context.gameStateModel.allowDraw, true);
+assert.equal(context.gameStateModel.automaticRunner, false);
 
 await assert.rejects(
   () => fetchAsianFinalResult('NPB', npb[0].gamePk, ''),
