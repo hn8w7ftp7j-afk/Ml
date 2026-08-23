@@ -18,6 +18,10 @@ import {
 } from '../lib/deterministic-finalizer.js';
 import { leagueAnalysisContract } from '../lib/league-provider.js';
 import { LEAGUE_IDS } from '../lib/leagues.js';
+import {
+  clearGameDistributionCacheForTest,
+  getOrBuildGameDistribution,
+} from '../lib/game-distribution-cache-v1.js';
 
 const team = (offenseIndex = 1) => ({
   seasonHitting: { gamesPlayed: 120, runsPerGame: 4.35, ops: 0.72, iso: 0.15, kRate: 0.225, bbRate: 0.085 },
@@ -93,9 +97,47 @@ assert.throws(() => assertAnalysisModeContract({ ...shadowContext, analysisMode:
 assert.throws(() => assertAnalysisModeContract({ ...shadowContext, betEligible: true }), /不得宣告 betEligible 或 executable/);
 
 const snapshot = buildDistributionSnapshot({ context: shadowContext, settings });
+assert.equal(snapshot.gamePk, shadowContext.game.gamePk, '亞洲聯盟比分分布必須保存 gamePk 供快取驗證');
 assert.equal(snapshot.analysisMode, SHADOW_ANALYSIS_MODE);
 assert.equal(snapshot.modelContractHash, contract.modelContractHash);
 assert.ok(snapshot.drawProb > 0 && snapshot.drawProb < 1);
+
+clearGameDistributionCacheForTest();
+let distributionBuilds = 0;
+const cachedGames = [550001, 550002, 550003].map(gamePk => {
+  const context = {
+    ...shadowContext,
+    game: { ...shadowContext.game, gamePk },
+    coreFingerprint: `npb-three-game-regression-${gamePk}`,
+  };
+  return getOrBuildGameDistribution({
+    league: 'NPB',
+    gamePk,
+    coreFingerprint: context.coreFingerprint,
+    modelVersion: context.modelVersion,
+    rulesVersion: context.rulesVersion,
+    build: () => {
+      distributionBuilds += 1;
+      return buildDistributionSnapshot({ context, settings });
+    },
+  });
+});
+assert.equal(distributionBuilds, 3, 'NPB 三場必須各自建立比分分布');
+assert.deepEqual(cachedGames.map(row => row.snapshot.gamePk), [550001, 550002, 550003]);
+assert.equal(new Set(cachedGames.map(row => row.snapshot.distributionId)).size, 3, 'NPB 三場分布識別不得互相串用');
+const cachedAgain = getOrBuildGameDistribution({
+  league: 'NPB',
+  gamePk: 550002,
+  coreFingerprint: 'npb-three-game-regression-550002',
+  modelVersion: shadowContext.modelVersion,
+  rulesVersion: shadowContext.rulesVersion,
+  build: () => {
+    distributionBuilds += 1;
+    return buildDistributionSnapshot({ context: { ...shadowContext, game: { ...shadowContext.game, gamePk: 550002 } }, settings });
+  },
+});
+assert.equal(cachedAgain.cacheStatus, 'HIT', '同一 NPB 場次再次分析必須命中自己的分布');
+assert.equal(distributionBuilds, 3);
 
 const direction = (market, pick, water) => ({
   market,
