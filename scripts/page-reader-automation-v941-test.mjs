@@ -95,7 +95,7 @@ mustMatch(/記錄實際下注/, 'actual-bet action missing');
 
 // Ranking rows must retain the original item/row and expose the same immutable
 // cloud-ledger action as the board instead of becoming a read-only desktop view.
-mustMatch(/\.map\(row => \(\{\s*item,\s*row,/, 'ranking entries must retain their source board item and actual market row');
+mustMatch(/return \{ item, row, gamePk:/, 'ranking entries must retain their source board item and actual market row');
 const rankingStart = page.indexOf("{tab === 'ranking' && <section");
 const rankingEnd = page.indexOf("{tab === 'bets' && <section", rankingStart);
 assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'ranking UI section missing');
@@ -104,6 +104,9 @@ assert.match(rankingUi, /getBetState\(entry\.item,\s*entry\.row\)/, 'ranking act
 assert.match(rankingUi, /betRecordable\(entry\.item,\s*entry\.row,\s*clockNow,\s*bettingEnabled\)/, 'ranking action must enforce the same prestart/fresh Reader write gate');
 assert.match(rankingUi, /recordBet\(entry\.item,\s*entry\.row\)/, 'ranking button must call the canonical cloud recordBet flow');
 assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');
+assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');
+assert.match(rankingUi, /不再只顯示7\.2以上或可下注方向/, 'ranking UI must explain that non-bettable directions remain visible');
+assert.match(rankingUi, /排名資格：否/, 'ranking UI must label non-qualified directions instead of filtering them out');
 
 // Fail-closed market coverage and all-direction diagnostic score presentation.
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
@@ -118,7 +121,7 @@ mustMatch(/QA BLOCK/, 'QA-blocked directions must remain visibly identified');
 mustMatch(/不列排名、不作推薦/, 'QA block must remain isolated from ranking and recommendation');
 assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'display must not hide scores below 7.2');
 assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must still display the fixed numeric S score');
-mustMatch(/row\.shadowDiagnosticScore != null/, 'ranking must explicitly reject null qualification scores');
+mustMatch(/row\.formulaDiagnosticScore != null/, 'ranking must retain formula score fallback so every analyzed direction can be displayed');
 mustMatch(/row\.provider === 'TAI888_READER_AUTO'/, 'ranking must accept only Reader-signed actual rows');
 mustMatch(/row\.evCalibration\?\.actualReaderEligible === true/, 'ranking must require the server-preserved fresh Reader qualification');
 mustMatch(/actualLineFreshNow\(row, clockNow\)/, 'ranking must expire stale Reader prices immediately on the client clock');
@@ -138,12 +141,12 @@ assert.match(readerPriceInvalidation, /lineFresh:\s*false/, 'Reader-price invali
 assert.match(readerPriceInvalidation, /actualReaderEligible:\s*false/, 'Reader-price invalidation must clear the server-preserved Reader qualification');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
-mustMatch(/row\.scoreAudit\?\.ok === true/, 'ranking must require QA PASS');
+mustMatch(/const qaPassed = row\.scoreAudit\?\.ok === true/, 'ranking must preserve QA PASS as a visible qualification flag');
 mustMatch(/row\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
-mustMatch(/Number\(row\.weightedEV\) > 0/, 'ranking must require positive Raw W EV');
-mustMatch(/Number\(row\.robustEV\) > 0/, 'ranking must require positive Robust R EV');
-mustMatch(/Number\(row\.shadowDiagnosticScore\) >= 7\.2/, 'ranking must require the 7.2 qualification threshold');
-mustMatch(/row\.evCalibration\?\.scenarioStable === true/, 'ranking must require the 5% model-scenario stability gate');
+mustMatch(/Number\(row\.weightedEV\) > 0/, 'ranking eligibility must still require positive Weighted EV without hiding other directions');
+mustMatch(/Number\(row\.robustEV\) > 0/, 'ranking eligibility must still require positive Robust EV without hiding other directions');
+mustMatch(/score != null && score >= 7\.2/, 'ranking eligibility must retain the 7.2 threshold without filtering lower scores from display');
+mustMatch(/row\.evCalibration\?\.scenarioStable === true/, 'ranking eligibility must retain the model-scenario stability gate without hiding unstable directions');
 assert.doesNotMatch(page, /row\.evCalibration\?\.extreme !== true/, 'ranking must not use a 15% cliff after continuous plausibility calibration');
 mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected direction coverage missing');
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
