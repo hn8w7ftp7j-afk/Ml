@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { enforceAnalysisModeSafety, repriceMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
+import { compactRepriceSnapshot, resolveRepriceDistribution } from '../../../lib/analysis-transport-v1.js';
+import { buildDistributionSnapshot, enforceAnalysisModeSafety, repriceMarkets, MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION, TAIWAN_CREDIT_REBATE_RATE } from '../../../lib/taiwan-settlement-v9.js';
@@ -90,16 +91,20 @@ export async function POST(request) {
     }
     const snapshot = body.snapshot && typeof body.snapshot === 'object' ? body.snapshot : null;
     const context = snapshot?.frozenContext;
-    const distributionSnapshot = snapshot?.distributionSnapshot;
-    if (!context?.game?.gamePk || !snapshot?.coreFingerprint || !distributionSnapshot?.distributionHash) {
-      return NextResponse.json({ ok: false, error: '缺少已保存的凍結比分分布，不能快速重算' }, { status: 400 });
+    if (!context?.game?.gamePk || !snapshot?.coreFingerprint || !snapshot?.distributionHash || !snapshot?.distributionId) {
+      return NextResponse.json({ ok: false, error: '缺少已保存的凍結比分分布識別，不能快速重算' }, { status: 400 });
     }
     const { game } = await resolveLeagueGame(league, context.game);
     assertLeagueGamePrestart(league, game);
     if (!(await verifyRepriceSnapshot(league, game, snapshot))) {
       return NextResponse.json({ ok: false, error: '凍結快照簽章無效或內容已被修改，必須完整重算' }, { status: 409 });
     }
-    if (distributionSnapshot.distributionId !== snapshot.distributionId || distributionSnapshot.distributionHash !== snapshot.distributionHash) {
+    // New compact snapshots intentionally omit the large joint distribution.
+    // Rebuilding from the signed frozen context is deterministic; the hash check
+    // below guarantees that repricing cannot silently change the model output.
+    const resolvedDistribution = resolveRepriceDistribution(snapshot, buildDistributionSnapshot);
+    const distributionSnapshot = resolvedDistribution.distributionSnapshot;
+    if (!resolvedDistribution.matches) {
       return NextResponse.json({ ok: false, error: '凍結比分分布識別不一致，已停止快速重算' }, { status: 409 });
     }
     const suppliedMarkets = await prepareMarkets(league, game, body.markets, 12);
@@ -156,7 +161,7 @@ export async function POST(request) {
       analysisAsOf, snapshotId: fingerprints.inputHash,
     };
     const unsignedRepriceSnapshot = {
-      ...snapshot,
+      ...compactRepriceSnapshot(snapshot),
       priceFingerprint: fingerprints.priceFingerprint,
       calculationFingerprint: fingerprints.calculationFingerprint,
       auxiliaryFingerprint: fingerprints.auxiliaryFingerprint,
@@ -177,7 +182,7 @@ export async function POST(request) {
       ok: true, league, game, context, analysis: finalized, repriceSnapshot,
       analysisMode: provider.analysisMode, betEligible: provider.betEligible,
       openMarkets: [...new Set(markets.map(row => row.market))],
-      reprice: { distributionReused: true, noCoreDataFetch: true, noSimulation: true, noGpt: true, distributionId: snapshot.distributionId, distributionHash: snapshot.distributionHash, coreFingerprint: snapshot.coreFingerprint, previousInputHash: snapshot.inputHash || null, newInputHash: fingerprints.inputHash },
+      reprice: { distributionReused: true, distributionRebuiltFromSignedContext: resolvedDistribution.rebuilt, noCoreDataFetch: true, noSimulation: !resolvedDistribution.rebuilt, noGpt: true, distributionId: snapshot.distributionId, distributionHash: snapshot.distributionHash, coreFingerprint: snapshot.coreFingerprint, previousInputHash: snapshot.inputHash || null, newInputHash: fingerprints.inputHash },
     };
     return NextResponse.json(enforceAnalysisModeSafety(payload, context), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {

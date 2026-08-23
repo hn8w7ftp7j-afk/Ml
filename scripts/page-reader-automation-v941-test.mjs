@@ -15,10 +15,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.8.1', 'package/release identity must match the V10.8.1 UI');
-assert.equal(packageLock.version, '10.8.1', 'package-lock release identity must match V10.8.1');
-assert.equal(packageLock.packages?.['']?.version, '10.8.1', 'root lockfile package must match V10.8.1');
-assert.equal(APP_VERSION, '10.8.1');
+assert.equal(packageJson.version, '10.8.2', 'package/release identity must match the V10.8.2 UI');
+assert.equal(packageLock.version, '10.8.2', 'package-lock release identity must match V10.8.2');
+assert.equal(packageLock.packages?.['']?.version, '10.8.2', 'root lockfile package must match V10.8.2');
+assert.equal(APP_VERSION, '10.8.2');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
@@ -69,7 +69,9 @@ mustMatch(/oneClickAnalyze\(key\)/, 'automatic Reader analysis trigger missing')
 mustMatch(/JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'credit-line request must bind league, date and schedule');
 mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missing');
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
-mustMatch(/runPool\(tasks, 4,/, 'full-board analysis must process four games concurrently');
+mustMatch(/initialAnalysisConcurrency\(league\)/, 'full-board concurrency must be league-aware for mobile reliability');
+mustMatch(/runPool\(tasks, analysisConcurrency,/, 'full-board analysis must use the bounded league concurrency');
+mustMatch(/runPool\(retryIndexes, 1,/, 'failed analyses must retry serially instead of repeating a mobile request burst');
 assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation setting must be removed from the UI');
 
 // External-market requests are disabled; analysis keeps an explicit empty audit payload.
@@ -175,9 +177,9 @@ mustMatch(/不產生有效EV、不評分、不列排名/, 'unqualified model or 
 assert.doesNotMatch(page, /原始W \$\{pct\(|原始R \$\{pct\(/, 'primary UI must not expose blocked raw EV percentages');
 mustMatch(/聯盟模型重建中｜EV與S分數暫停顯示/, 'unvalidated Asian leagues must hide misleading EV/S values');
 
-// Batch analysis cannot be held indefinitely by the first slow games.
-mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 65_000/, 'bounded per-game deadline missing');
-mustMatch(/runPool\(tasks, 4/, 'four-worker bounded analysis pool missing');
+// Batch analysis cannot be held indefinitely or overload a mobile connection.
+mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 120_000/, 'Production-safe per-game deadline missing');
+mustMatch(/runPool\(tasks, analysisConcurrency/, 'bounded league-aware analysis pool missing');
 mustMatch(/重試 \$\{retryIndexes\.length\} 場未完成分析/, 'trailing retry pass missing');
 mustMatch(/tasks\[index\]\?\.retryable === false/, 'permanent failures must not be retried');
 mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');

@@ -351,7 +351,10 @@ try {
   const fullAnalysisPayload = await fullAnalysisResponse.json();
   assert.equal(fullAnalysisResponse.status, 200, fullAnalysisPayload.error || 'signed Reader full analysis must pass');
   assert.equal(fullAnalysisPayload.analysis.analysisType, 'FULL');
-  assert.ok(fullAnalysisPayload.repriceSnapshot?.distributionSnapshot?.distributionHash);
+  assert.equal(fullAnalysisResponse.headers.get('x-reprice-snapshot'), 'COMPACT-REBUILDABLE');
+  assert.equal(fullAnalysisPayload.repriceSnapshot?.distributionSnapshot, undefined);
+  assert.ok(fullAnalysisPayload.repriceSnapshot?.distributionHash);
+  assert.ok(fullAnalysisPayload.repriceSnapshot?.distributionId);
 
   const heartbeatObservedAt = new Date(Date.now() - 100).toISOString();
   const heartbeatPageActivityAt = new Date(Date.now() - 250).toISOString();
@@ -389,6 +392,8 @@ try {
   assert.equal(heartbeatRepricePayload.analysis.analysisType, 'PRICE_ONLY_REPRICE');
   assert.equal(heartbeatRepricePayload.analysis.distributionHash, fullAnalysisPayload.analysis.distributionHash);
   assert.equal(heartbeatRepricePayload.analysis.lineAsOf, heartbeatPageActivityAt);
+  assert.equal(heartbeatRepricePayload.reprice.distributionRebuiltFromSignedContext, true);
+  assert.equal(heartbeatRepricePayload.repriceSnapshot?.distributionSnapshot, undefined);
 
   const referenceRoute = await import('../app/api/reference-lines/route.js');
   const subsetResponse = await referenceRoute.POST(request('/api/reference-lines', token, {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { compactRepriceSnapshot } from '../../../lib/analysis-transport-v1.js';
 import {
   buildDistributionSnapshot,
   enforceAnalysisModeSafety,
@@ -207,7 +208,12 @@ export async function POST(request) {
     const cached = responseCache.get(cacheKey);
     if (analysisCachePayloadMatches(cached, { league, game, fingerprints, signature })) {
       const safePayload = enforceAnalysisModeSafety(cached.payload, cached.payload.context || frozenContext);
-      return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'HIT', 'X-Distribution-Cache': 'RESPONSE-HIT' } });
+      return NextResponse.json(safePayload, { headers: {
+        'Cache-Control': 'no-store',
+        'X-Analysis-Cache': 'HIT',
+        'X-Distribution-Cache': 'RESPONSE-HIT',
+        'X-Reprice-Snapshot': 'COMPACT-REBUILDABLE',
+      } });
     }
     if (cached) responseCache.delete(cacheKey);
 
@@ -239,14 +245,18 @@ export async function POST(request) {
       analysisType: 'FULL', dataVersion: DATA_VERSION,
       dataAsOf: frozenContext.fetchedAt || analysisAsOf, lineAsOf, analysisAsOf, snapshotId: fingerprints.inputHash,
     };
-    const unsignedRepriceSnapshot = {
-      frozenContext, distributionSnapshot, coreFingerprint: fingerprints.coreFingerprint, priceFingerprint: fingerprints.priceFingerprint,
+    // The full frozen distribution can approach one megabyte for an Asian game.
+    // Sending four of them to a phone at once made Safari terminate otherwise
+    // successful 200 responses. Keep the signed inputs and distribution hash;
+    // /api/reprice deterministically rebuilds and verifies the same distribution.
+    const unsignedRepriceSnapshot = compactRepriceSnapshot({
+      frozenContext, coreFingerprint: fingerprints.coreFingerprint, priceFingerprint: fingerprints.priceFingerprint,
       inputHash: fingerprints.inputHash, contractSignature: signature,
       calculationSettings: fingerprints.calculationPayload,
       auxiliaryInput: fingerprints.auxiliaryPayload,
       distributionId: finalized.distributionId, distributionHash: finalized.distributionHash,
       dataAsOf: finalized.dataAsOf, simulationsPerScenario: finalized.scenarioSummary?.simulationsPerScenario, versions,
-    };
+    });
     const repriceSnapshot = await signRepriceSnapshot(
       league,
       game,
@@ -260,7 +270,12 @@ export async function POST(request) {
     };
     const safePayload = enforceAnalysisModeSafety(payload, frozenContext);
     cacheSet(cacheKey, signature, safePayload);
-    return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store', 'X-Analysis-Cache': 'MISS', 'X-Distribution-Cache': cachedDistribution.cacheStatus } });
+    return NextResponse.json(safePayload, { headers: {
+      'Cache-Control': 'no-store',
+      'X-Analysis-Cache': 'MISS',
+      'X-Distribution-Cache': cachedDistribution.cacheStatus,
+      'X-Reprice-Snapshot': 'COMPACT-REBUILDABLE',
+    } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
   }

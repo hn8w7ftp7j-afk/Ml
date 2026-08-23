@@ -24,13 +24,18 @@ import {
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
 } from '../lib/client-analysis-state.js';
+import { initialAnalysisConcurrency } from '../lib/analysis-transport-v1.js';
 
 const VERSION = APP_VERSION;
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.18-SELF-HEAL.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
-const ANALYSIS_REQUEST_TIMEOUT_MS = 65_000;
+// A cold Production analysis can legitimately spend close to a minute fetching
+// point-in-time data and building the deterministic distribution. iOS Safari
+// reports an AbortController timeout as the unhelpful `Load failed`, so keep the
+// browser timeout above the 90 second server route ceiling.
+const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 const REFERENCE_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const READER_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
@@ -941,13 +946,17 @@ export default function Home() {
 
       setProgress({ active: true, done: 0, running: 0, total: tasks.length, label: '分析今日全部盤口' });
       const outcomes = new Array(tasks.length).fill(false);
-      await runPool(tasks, 4, async (task, index) => {
+      // Four simultaneous simulations caused mobile clients to abort while the
+      // functions were still returning successful responses. MLB remains at
+      // two for slate throughput; the larger Asian snapshots run serially.
+      const analysisConcurrency = initialAnalysisConcurrency(league);
+      await runPool(tasks, analysisConcurrency, async (task, index) => {
         outcomes[index] = await analyzeBoardItem(task, index, tasks.length);
       });
       const retryIndexes = outcomes.map((ok, index) => ok || tasks[index]?.retryable === false ? -1 : index).filter(index => index >= 0);
       if (retryIndexes.length && generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
         setProgress({ active: true, done: 0, running: 0, total: retryIndexes.length, label: `重試 ${retryIndexes.length} 場未完成分析` });
-        await runPool(retryIndexes, 2, async (taskIndex, retryIndex) => {
+        await runPool(retryIndexes, 1, async (taskIndex, retryIndex) => {
           outcomes[taskIndex] = await analyzeBoardItem(tasks[taskIndex], retryIndex, retryIndexes.length, true);
         });
       }
