@@ -15,10 +15,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.8.2', 'package/release identity must match the V10.8.2 UI');
-assert.equal(packageLock.version, '10.8.2', 'package-lock release identity must match V10.8.2');
-assert.equal(packageLock.packages?.['']?.version, '10.8.2', 'root lockfile package must match V10.8.2');
-assert.equal(APP_VERSION, '10.8.2');
+assert.equal(packageJson.version, '10.8.3', 'package/release identity must match the V10.8.3 UI');
+assert.equal(packageLock.version, '10.8.3', 'package-lock release identity must match V10.8.3');
+assert.equal(packageLock.packages?.['']?.version, '10.8.3', 'root lockfile package must match V10.8.3');
+assert.equal(APP_VERSION, '10.8.3');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
@@ -52,12 +52,13 @@ mustMatch(/mergeReaderStatusHighWater/, 'Reader high-water merge missing');
 mustMatch(/\/api\/reader\/status\?league=\$\{encodeURIComponent\(league\)\}&date=\$\{encodeURIComponent\(date\)\}/, 'date-bound Reader status request missing');
 mustMatch(/latest\.boardDate !== currentDateRef\.current/, 'Reader date auto-switch guard missing');
 mustMatch(/setDate\(latest\.boardDate\)/, 'Reader date auto-switch missing');
-mustMatch(/readerRevisionKey\(date, readerStatus\?\.payloadHash, readerStatus\?\.pageActivityAt\)/, 'Reader revision key must include date, payload hash and page activity');
 mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key must include date and payload hash');
 mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
 mustMatch(/const READER_RECHECK_INTERVAL_MS = 5 \* 60 \* 1000/, 'Reader five-minute recheck cadence missing');
 mustMatch(/setInterval\(refreshReader, READER_RECHECK_INTERVAL_MS\)/, 'Reader status polling interval missing');
 mustMatch(/setInterval\(\(\) => pollReaderAndReprice\(\), READER_RECHECK_INTERVAL_MS\)/, 'Reader repricing interval missing');
+mustMatch(/touchReaderHeartbeat/, 'same-content Reader heartbeat must refresh freshness without repricing');
+assert.doesNotMatch(page, /lastFullAnalysisAtRef/, 'the client must never force a destructive full-board rerun on a timer');
 
 // Automatic analysis must be keyed to a fresh Reader payload and must not overlap.
 mustMatch(/autoAnalyzeHashRef/, 'automatic analysis hash guard missing');
@@ -78,14 +79,16 @@ assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation s
 mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetGames = \[\]\)/, 'target-aware reference-line loader missing');
 assert.doesNotMatch(page, /requestJSON\('\/api\/reference-lines'/, 'client must not request disabled external-market APIs');
 mustMatch(/message: '外部市場稽核未使用；不影響模型評分與排名。'/, 'disabled external-market status missing');
-mustMatch(/REFERENCE_REFRESH_INTERVAL_MS = 2 \* 60 \* 1000/, 'independent references must refresh before five-minute evidence expiry even when Reader hash is unchanged');
-mustMatch(/referenceRefreshDue/, 'same-hash Reader polling must not leave expired reference evidence on screen');
+assert.doesNotMatch(page, /referenceRefreshDue/, 'disabled external references must not force same-hash Reader repricing');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
 mustMatch(/verificationMarkets: foundReference\?\.markets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
 mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full analyze request must send matched reference markets');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
 assert.doesNotMatch(page, /verificationMarkets:\s*\[\]/, 'analyze/reprice must never hard-code an empty verification-market payload');
+mustMatch(/後台重新驗證中｜保留目前分數/, 'full refresh must retain completed scores on screen');
+mustMatch(/更新失敗｜保留上一版結果/, 'failed refresh must retain the previous completed result');
+assert.doesNotMatch(page, /系統將自動重新分析/, 'a failed Reader acknowledgement must not trigger a full-board retry loop');
 
 // Actual-bet ledger and price comparison remain available while formal model scoring is locked.
 mustMatch(/betPriceMatches/, 'exact placed-price matching missing');
@@ -129,7 +132,8 @@ mustMatch(/row\.evCalibration\?\.actualReaderEligible === true/, 'ranking must r
 mustMatch(/actualLineFreshNow\(row, clockNow\)/, 'ranking must expire stale Reader prices immediately on the client clock');
 mustMatch(/gameIsPrestartNow\(item\.game, clockNow\)/, 'ranking must remove games that have reached scheduled start');
 assert.doesNotMatch(page, /invalidateShadowScoreRow\(row, '獨立國際市場報價已超過5分鐘/, 'expired external consensus must remain audit-only');
-mustMatch(/return invalidateReaderPriceRow\(row, reason, reason\)/, 'expired or unverified Reader prices must clear W, R and score from the board');
+mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows must retain completed scores while bet recording is disabled');
+mustMatch(/recordable=\{row\.clientReaderPriceCurrent === true && betRecordable/, 'only the current acknowledged Reader price may be recorded');
 const scoreOnlyInvalidation = page.slice(
   page.indexOf('const invalidateShadowScoreRow'),
   page.indexOf('const invalidateReaderPriceRow'),

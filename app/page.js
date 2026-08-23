@@ -20,9 +20,9 @@ import {
   mergeReaderStatusHighWater,
   readerCoverageCounts,
   readerHashKey,
-  readerRevisionKey,
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
+  touchReaderHeartbeat,
 } from '../lib/client-analysis-state.js';
 import { initialAnalysisConcurrency } from '../lib/analysis-transport-v1.js';
 
@@ -36,7 +36,6 @@ const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
 // reports an AbortController timeout as the unhelpful `Load failed`, so keep the
 // browser timeout above the 90 second server route ceiling.
 const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
-const REFERENCE_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const READER_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
@@ -401,7 +400,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   </div>;
 }
 
-function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInProgress = false, betsEnabled = true, shadowMode = false }) {
+function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled = true, shadowMode = false }) {
   const readerBacked = item.actualSource?.provider === 'TAI888_READER_AUTO';
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const coverage = item.marketCoverage || {};
@@ -419,11 +418,10 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
       && row?.provider === 'TAI888_READER_AUTO'
       && row?.evCalibration?.actualReaderEligible === true
       && actualLineFreshNow(row, now);
-    if (!currentReaderPrice) {
-      const reason = analysisInProgress ? '今日整批分析進行中｜完成前暫停記錄' : 'Tai888 Reader 實際盤已過期或尚未完成最新版本驗證';
-      return invalidateReaderPriceRow(row, reason, reason);
-    }
-    return row;
+    // Keep the last completed model result visible while a new Reader board is
+    // being verified. It is excluded from ranking and bet recording below, but
+    // the user never loses a completed score because of a transient refresh.
+    return { ...row, clientReaderPriceCurrent: currentReaderPrice };
   });
   const expectedDirectionCount = openMarketCount * 2;
   const scoredDirectionCount = actualRows.filter(row => row.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))).length;
@@ -449,7 +447,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, analysisInP
           const rows = actualRows.filter(row => row.market === market);
           const blocked = blockedMarkets.has(market);
           return <div className={`marketBlock actualMarket ${blocked ? 'blockedMarket' : rows.length ? 'availableMarket' : 'unavailableMarket'}`} key={market}><div className="marketTitle"><h3>{market}</h3><span>{rows.length || availableMarkets.has(market) ? 'AVAILABLE' : blocked ? 'BLOCKED' : 'UNAVAILABLE'}</span></div>{rows.length
-            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} verificationPending={analysisInProgress && readerBacked && !readerExecutable}/>)
+            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={row.clientReaderPriceCurrent === true && betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} verificationPending={gamePrestart && row.clientReaderPriceCurrent !== true}/>)
             : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
       </div>}
@@ -507,8 +505,6 @@ export default function Home() {
   const readerPollBusyRef = useRef(false);
   const autoAnalyzeHashRef = useRef('');
   const autoAnalyzePendingRef = useRef('');
-  const lastFullAnalysisAtRef = useRef(0);
-  const lastReferenceRefreshAtRef = useRef(0);
   const currentDateRef = useRef(date);
   const currentLeagueRef = useRef(league);
   const analysisGenerationRef = useRef(0);
@@ -654,8 +650,6 @@ export default function Home() {
     creditRevisionRef.current = '';
     autoAnalyzeHashRef.current = '';
     autoAnalyzePendingRef.current = '';
-    lastFullAnalysisAtRef.current = 0;
-    lastReferenceRefreshAtRef.current = 0;
     setAcknowledgedReaderKey('');
     setSchedule([]);
     setBoard([]);
@@ -729,15 +723,7 @@ export default function Home() {
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [board, date, busy, league, readerEnabled, analysisEnabled]);
-  useEffect(() => {
-    if (!readerEnabled || !analysisEnabled || !board.length) return undefined;
-    const timer = window.setInterval(() => {
-      if (!busy && readerStatus?.fresh && Date.now() - Number(lastFullAnalysisAtRef.current || 0) > 30 * 60 * 1000) oneClickAnalyze();
-    }, 5 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, [board.length, date, busy, readerStatus?.fresh, league, readerEnabled, analysisEnabled]);
-
-  const currentReaderKey = readerRevisionKey(date, readerStatus?.payloadHash, readerStatus?.pageActivityAt);
+  const currentReaderKey = readerHashKey(date, readerStatus?.payloadHash);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
     && readerStatus?.fresh === true
@@ -747,6 +733,7 @@ export default function Home() {
   const itemReaderExecutable = item => readerEnabled
     && readerStatus?.fresh === true
     && readerStatus?.boardDate === date
+    && acknowledgedReaderKey === readerHashKey(date, readerStatus?.payloadHash)
     && Boolean(item?.readerPayloadHash)
     && item.readerPayloadHash === readerStatus?.payloadHash;
 
@@ -794,12 +781,18 @@ export default function Home() {
     return liveReaderHashMatches(targetDate, current, payloadHash);
   }
 
-  async function analyzeBoardItem(task, index, total, retry = false) {
+  async function analyzeBoardItem(task, index, total, retry = false, trackProgress = true) {
     if (task.generation !== analysisGenerationRef.current) return false;
     const game = task.game;
     const actualMarkets = task.actualMarkets || [];
-    setProgress(value => ({ ...value, running: (Number(value.running) || 0) + 1 }));
-    updateBoard(game.gamePk, item => ({ ...item, status: 'running', statusLabel: retry ? '重新建立驗證用比分分布中…' : '建立驗證用比分分布中…' }));
+    if (trackProgress) setProgress(value => ({ ...value, running: (Number(value.running) || 0) + 1 }));
+    updateBoard(game.gamePk, item => ({
+      ...item,
+      status: 'running',
+      statusLabel: item.customData
+        ? '後台更新中｜保留目前分數'
+        : retry ? '重新建立驗證用比分分布中…' : '建立驗證用比分分布中…',
+    }));
     try {
       const baseData = await requestJSON('/api/analyze', {
         method: 'POST',
@@ -816,6 +809,9 @@ export default function Home() {
       snapshots.current.set(game.gamePk, baseData.repriceSnapshot);
       updateBoard(game.gamePk, item => ({
         ...item,
+        actualSource: task.actualSource || item.actualSource || null,
+        marketCoverage: task.marketCoverage || item.marketCoverage || null,
+        readerPayloadHash: task.readerPayloadHash || item.readerPayloadHash || null,
         referenceData: compactAnalysisData(baseData),
         mode: 'actual',
         status: 'done',
@@ -834,12 +830,14 @@ export default function Home() {
       updateBoard(game.gamePk, item => ({
         ...item,
         status: blocked ? 'blocked' : 'failed',
-        statusLabel: blocked ? '資料不足｜不評分' : '分析失敗',
+        statusLabel: item.customData
+          ? '更新失敗｜保留上一版結果'
+          : blocked ? '資料不足｜不評分' : '分析失敗',
         error: message,
       }));
       return false;
     } finally {
-      if (task.generation === analysisGenerationRef.current) {
+      if (trackProgress && task.generation === analysisGenerationRef.current) {
         setProgress(value => ({
           ...value,
           done: Math.min(total, Number(value.done || 0) + 1),
@@ -858,9 +856,10 @@ export default function Home() {
     const requestedAutoKey = typeof automaticKey === 'string' ? automaticKey : '';
     const targetDate = date;
     const generation = analysisGenerationRef.current;
-    setError(''); setNotice(''); setTab('board'); snapshots.current.clear();
+    const previousByPk = new Map(board.map(item => [Number(item.game.gamePk), item]));
+    setError(''); setNotice(''); setTab('board');
     setBoard(current => current.map(item => item.actualSource?.provider === 'TAI888_READER_AUTO'
-      ? { ...item, actualSource: null, customMarkets: [], customData: null, status: 'running', statusLabel: '重新驗證Tai888盤口中…', error: '' }
+      ? { ...item, status: 'running', statusLabel: '後台重新驗證中｜保留目前分數', error: '' }
       : item));
     try {
       setProgress({ active: true, done: 0, running: 1, total: 1, label: `取得今日${activeLeague.shortLabel}賽事` });
@@ -890,40 +889,48 @@ export default function Home() {
 
       setProgress({ active: true, done: 0, running: 1, total: 1, label: '取得獨立國際市場同合約參考盤' });
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
-      lastReferenceRefreshAtRef.current = Date.now();
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
 
       const readerCreditReady = credit?.provider === 'TAI888_READER_AUTO' && credit?.readerFresh === true;
       const creditByPk = new Map((readerCreditReady ? credit.games || [] : []).map(row => [Number(row.gamePk), row]));
       const items = games.map(game => {
+        const previous = previousByPk.get(Number(game.gamePk));
         const foundCredit = creditByPk.get(Number(game.gamePk));
         const foundReference = referenceByPk.get(Number(game.gamePk));
         const available = Boolean(foundCredit?.markets?.length);
         return {
           game,
           mode: 'actual',
-          actualSource: foundCredit?.source || null,
-          marketCoverage: foundCredit?.marketCoverage || null,
-          readerPayloadHash: available ? credit.payloadHash : null,
-          customMarkets: foundCredit?.markets || [],
+          actualSource: previous?.actualSource || foundCredit?.source || null,
+          marketCoverage: foundCredit?.marketCoverage || previous?.marketCoverage || null,
+          readerPayloadHash: previous?.readerPayloadHash || (previous ? null : available ? credit.payloadHash : null),
+          customMarkets: previous?.customMarkets?.length ? previous.customMarkets : foundCredit?.markets || [],
           verificationMarkets: foundReference?.markets || [],
-          referenceSource: foundReference?.source || null,
+          referenceSource: foundReference?.source || previous?.referenceSource || null,
           status: available ? 'queued' : 'unopened',
-          statusLabel: available ? '等待分析' : '目前尚無可配對盤口',
-          referenceData: null,
-          customData: null,
+          statusLabel: available
+            ? previous?.customData ? '後台更新中｜保留目前分數' : '等待分析'
+            : previous?.customData ? '最新盤已下架｜保留上一版結果' : '目前尚無可配對盤口',
+          referenceData: previous?.referenceData || null,
+          customData: previous?.customData || null,
           error: '',
         };
       });
       setBoard(items);
 
-      const tasks = items.filter(item => item.customMarkets.length).map(item => ({
-        game: item.game,
-        actualMarkets: item.customMarkets,
-        verificationMarkets: item.verificationMarkets || [],
-        generation,
-      }));
+      const tasks = items.map(item => {
+        const actual = creditByPk.get(Number(item.game.gamePk));
+        return actual?.markets?.length ? {
+          game: item.game,
+          actualMarkets: actual.markets,
+          actualSource: actual.source,
+          marketCoverage: actual.marketCoverage,
+          readerPayloadHash: credit.payloadHash,
+          verificationMarkets: item.verificationMarkets || [],
+          generation,
+        } : null;
+      }).filter(Boolean);
       const coverage = readerCoverageCounts({
         rawGameCount: credit.rawGameCount,
         matchedGameCount: credit.matchedGameCount ?? tasks.length,
@@ -972,7 +979,7 @@ export default function Home() {
         failedCount: failedCreditCount,
       });
       let readerHashAcknowledged = !readerHashRequired;
-      const creditRevision = readerRevisionKey(targetDate, credit.payloadHash, credit.pageActivityAt);
+      const creditRevision = readerHashKey(targetDate, credit.payloadHash);
       if (hashEligible && await confirmLiveReaderHash(targetDate, credit.payloadHash, generation)) {
         creditRevisionRef.current = creditRevision;
         const completedKey = readerHashKey(targetDate, credit.payloadHash);
@@ -986,22 +993,24 @@ export default function Home() {
       const allSucceeded = analysisSucceeded && readerHashAcknowledged;
       const completedCount = outcomes.filter(Boolean).length;
       const failedCount = tasks.length - completedCount;
-      if (allSucceeded) lastFullAnalysisAtRef.current = Date.now();
       if (allSucceeded) {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${tasks.length} 場驗證分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
       } else if (analysisSucceeded && !readerHashAcknowledged) {
-        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${tasks.length} 場分析｜${coveragePendingText(coverage)}，但 Reader 在分析期間出現更新；舊盤暫停記錄。`);
-        setError('Reader 最新盤面版本尚未完成驗證，系統將自動重新分析。');
-        window.setTimeout(() => {
-          if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) oneClickAnalyze();
-        }, 800);
+        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${tasks.length} 場分析｜${coveragePendingText(coverage)}，但 Reader 在分析期間出現新盤；目前結果保留顯示。`);
+        setError('Reader 最新盤面版本尚未完成驗證；下次輪詢只更新變動場次，不會清空整批分數。');
       } else {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${completedCount}/${tasks.length} 場分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
         const readerHashPending = Boolean(credit?.readerFresh && creditCount > 0 && failedCreditCount > 0);
-        setError(`${failedCount} 場分析失敗${readerHashPending ? '，Reader 最新盤面版本尚未承認' : ''}；請查看各場錯誤後重試。`);
+        setError(`${failedCount} 場分析失敗${readerHashPending ? '，Reader 最新盤面版本尚未承認' : ''}；已保留成功場次與上一版結果，只需重試失敗場次。`);
       }
       return allSucceeded;
-    } catch (cause) { setError(String(cause?.message || cause)); return false; }
+    } catch (cause) {
+      setBoard(current => current.map(item => item.customData && ['running', 'queued'].includes(item.status)
+        ? { ...item, status: 'failed', statusLabel: '更新失敗｜保留上一版結果' }
+        : item));
+      setError(`${String(cause?.message || cause)}；已保留上一版分數。`);
+      return false;
+    }
     finally { releaseOperation(); setProgress(value => ({ ...value, active: false })); }
   }
 
@@ -1016,10 +1025,16 @@ export default function Home() {
       if (!stillCurrent()) return;
       commitReaderStatus(status);
       const currentStatus = readerStatusRef.current;
-      const statusRevision = readerRevisionKey(targetDate, currentStatus?.payloadHash, currentStatus?.pageActivityAt);
-      const referenceRefreshDue = Date.now() - Number(lastReferenceRefreshAtRef.current || 0) >= REFERENCE_REFRESH_INTERVAL_MS;
-      if (!currentStatus?.fresh || !statusRevision
-        || (statusRevision === creditRevisionRef.current && !referenceRefreshDue)) return;
+      const statusRevision = readerHashKey(targetDate, currentStatus?.payloadHash);
+      if (!currentStatus?.fresh || !statusRevision) return;
+      if (statusRevision === creditRevisionRef.current) {
+        setBoard(current => current.map(item => touchReaderHeartbeat(
+          item,
+          currentStatus.payloadHash,
+          currentStatus.pageActivityAt,
+        )));
+        return;
+      }
       const games = schedule.length ? schedule : board.map(item => item.game);
       const credit = await requestJSON('/api/credit-lines', {
         method: 'POST',
@@ -1027,12 +1042,14 @@ export default function Home() {
         body: JSON.stringify({ league, date: targetDate, schedule: games }),
       }, 60000);
       if (!stillCurrent()) return;
-      const creditRevision = readerRevisionKey(targetDate, credit.payloadHash, credit.pageActivityAt);
-      if (credit.provider !== 'TAI888_READER_AUTO' || !credit.readerFresh || !creditRevision
-        || (creditRevision === creditRevisionRef.current && !referenceRefreshDue)) return;
+      const creditRevision = readerHashKey(targetDate, credit.payloadHash);
+      if (credit.provider !== 'TAI888_READER_AUTO' || !credit.readerFresh || !creditRevision) return;
+      if (creditRevision === creditRevisionRef.current) {
+        setBoard(current => current.map(item => touchReaderHeartbeat(item, credit.payloadHash, credit.pageActivityAt)));
+        return;
+      }
       const creditByPk = new Map((credit.games || []).map(row => [Number(row.gamePk), row]));
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
-      lastReferenceRefreshAtRef.current = Date.now();
       if (!stillCurrent()) return;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
       const boardPks = new Set(board.map(item => Number(item.game.gamePk)));
@@ -1046,14 +1063,38 @@ export default function Home() {
         const actual = creditByPk.get(Number(item.game.gamePk));
         if (!actual?.markets?.length) {
           if (item.actualSource?.provider === 'TAI888_READER_AUTO') {
-            updateBoard(item.game.gamePk, current => ({ ...current, actualSource: null, readerPayloadHash: null, customMarkets: [], customData: null, referenceData: null, status: 'unopened', statusLabel: 'Tai888實際盤已下架' }));
+            updateBoard(item.game.gamePk, current => ({
+              ...current,
+              readerPayloadHash: null,
+              status: 'unopened',
+              statusLabel: 'Tai888最新盤已下架｜保留上一版結果',
+              error: '',
+            }));
             if (item.customMarkets?.length) removed += 1;
             completed += 1;
           }
           return;
         }
+        if (item.readerPayloadHash === credit.payloadHash && item.customData) {
+          updateBoard(item.game.gamePk, current => touchReaderHeartbeat(current, credit.payloadHash, credit.pageActivityAt));
+          completed += 1;
+          return;
+        }
         const snapshot = snapshots.current.get(item.game.gamePk);
-        if (!snapshot || !item.referenceData) { failed += 1; return; }
+        if (!snapshot || !item.referenceData) {
+          const rebuilt = await analyzeBoardItem({
+            game: item.game,
+            actualMarkets: actual.markets,
+            actualSource: actual.source,
+            marketCoverage: actual.marketCoverage,
+            readerPayloadHash: credit.payloadHash,
+            verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
+            generation,
+          }, 0, 1, true, false);
+          if (rebuilt) { updated += 1; completed += 1; }
+          else failed += 1;
+          return;
+        }
         try {
           const data = await requestJSON('/api/reprice', {
             method: 'POST',
@@ -1083,7 +1124,15 @@ export default function Home() {
           }));
           updated += 1;
           completed += 1;
-        } catch { failed += 1; }
+        } catch (cause) {
+          failed += 1;
+          updateBoard(item.game.gamePk, current => ({
+            ...current,
+            status: 'failed',
+            statusLabel: '盤口更新失敗｜保留上一版結果',
+            error: String(cause?.message || cause),
+          }));
+        }
       });
       if (!stillCurrent()) return;
       const hashEligible = shouldAcknowledgeReaderHash({ payloadHash: credit.payloadHash, expectedCount: expectedItems.length, completedCount: completed, failedCount: failed });
@@ -1096,11 +1145,9 @@ export default function Home() {
         setAcknowledgedReaderKey(completedKey);
       }
       if (updated || removed) {
-        setNotice(`Tai888盤口已自動更新：${updated}場快速重算${removed ? '｜' + removed + '場已下架清除' : ''}${failed ? '｜' + failed + '場改走完整分析' : ''}。`);
+        setNotice(`Tai888盤口已自動更新：${updated}場快速重算${removed ? '｜' + removed + '場已下架但保留舊結果' : ''}${failed ? '｜' + failed + '場保留上一版並等待單場重試' : ''}。`);
       }
-      if (!acknowledged) window.setTimeout(() => {
-        if (stillCurrent()) oneClickAnalyze();
-      }, 800);
+      if (failed) setError(`${failed}場最新盤更新失敗；已保留上一版分數，下次輪詢只重試失敗場次。`);
     } catch (cause) {
       if (stillCurrent()) invalidateReaderStatus(cause?.message || cause);
     } finally {
@@ -1261,7 +1308,7 @@ export default function Home() {
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && shadowMode && <LeagueShadowPanel config={activeLeague}/>}
       {analysisEnabled && !board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
-      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} analysisInProgress={progress.active} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode}/>) }
+      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode}/>) }
     </>}
 
     {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>模型影子排名｜全部方向</h2><span className="state shadow">全部顯示｜非正式推薦</span></div>

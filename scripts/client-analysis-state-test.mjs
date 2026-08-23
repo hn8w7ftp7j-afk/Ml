@@ -12,6 +12,7 @@ import {
   readerRevisionKey,
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
+  touchReaderHeartbeat,
 } from '../lib/client-analysis-state.js';
 
 const NOW = Date.parse('2026-08-15T08:00:00.000Z');
@@ -68,20 +69,37 @@ assert.equal(liveReaderHashMatches('2026-08-15', { ...h2, fresh: false }, 'h2'),
 const heartbeatAt = '2026-08-15T08:06:00.000Z';
 const sameBoardBeforeHeartbeat = { ...h2, payloadHash: 'same-board', pageActivityAt: '2026-08-15T08:00:00.000Z' };
 const sameBoardAfterHeartbeat = { ...sameBoardBeforeHeartbeat, receivedAt: heartbeatAt, pageActivityAt: heartbeatAt };
-assert.notEqual(
+assert.equal(
   readerRevisionKey('2026-08-15', sameBoardBeforeHeartbeat.payloadHash, sameBoardBeforeHeartbeat.pageActivityAt),
   readerRevisionKey('2026-08-15', sameBoardAfterHeartbeat.payloadHash, sameBoardAfterHeartbeat.pageActivityAt),
+  'Reader heartbeat must not become a new market-content revision',
 );
-assert.equal(liveReaderRevisionMatches('2026-08-15', sameBoardAfterHeartbeat, 'same-board', sameBoardBeforeHeartbeat.pageActivityAt), false);
+assert.equal(liveReaderRevisionMatches('2026-08-15', sameBoardAfterHeartbeat, 'same-board', sameBoardBeforeHeartbeat.pageActivityAt), true);
 assert.equal(liveReaderRevisionMatches('2026-08-15', sameBoardAfterHeartbeat, 'same-board', heartbeatAt), true);
 assert.equal(actualLineFreshNow({ ...eligible, lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt }, Date.parse(heartbeatAt)), false);
 assert.equal(actualLineFreshNow({ ...eligible, lineAsOf: heartbeatAt }, Date.parse(heartbeatAt) + 1), true);
 const heartbeatT3 = { ...sameBoardAfterHeartbeat, receivedAt: '2026-08-15T08:07:00.000Z', pageActivityAt: '2026-08-15T08:07:00.000Z' };
 assert.equal(
   liveReaderRevisionMatches('2026-08-15', heartbeatT3, 'same-board', heartbeatAt),
-  false,
-  'a T2 reprice response must not acknowledge after live status has advanced to T3',
+  true,
+  'same-content Reader heartbeats must match without forcing another reprice',
 );
+
+const heartbeatItem = {
+  readerPayloadHash: 'same-board',
+  actualSource: { provider: 'TAI888_READER_AUTO', pageActivityAt: sameBoardBeforeHeartbeat.pageActivityAt },
+  customMarkets: [{ market: '全場讓分', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt }],
+  customData: { analysis: { results: [
+    { sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt, formulaDiagnosticScore: 7.4 },
+    { sourceType: 'REFERENCE', provider: 'OTHER', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt },
+  ] } },
+};
+const heartbeatTouched = touchReaderHeartbeat(heartbeatItem, 'same-board', heartbeatAt);
+assert.equal(heartbeatTouched.customMarkets[0].lineAsOf, heartbeatAt);
+assert.equal(heartbeatTouched.customData.analysis.results[0].lineAsOf, heartbeatAt);
+assert.equal(heartbeatTouched.customData.analysis.results[0].formulaDiagnosticScore, 7.4, 'heartbeat refresh must preserve the completed score');
+assert.equal(heartbeatTouched.customData.analysis.results[1].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, 'heartbeat must not rewrite independent reference evidence');
+assert.equal(touchReaderHeartbeat(heartbeatItem, 'different-board', heartbeatAt), heartbeatItem, 'a different market hash must not refresh old rows');
 
 const game = { gamePk: 123, away: '客隊', home: '主隊' };
 const merged = mergeRecognizedGameInputs([
