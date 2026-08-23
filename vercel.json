@@ -1,1 +1,10 @@
-{"functions":{"app/api/vision/route.js":{"maxDuration":60},"app/api/analyze/route.js":{"maxDuration":60}}}
+{
+  "functions": {
+    "app/api/vision/route.js": { "maxDuration": 60 },
+    "app/api/analyze/route.js": { "maxDuration": 60 },
+    "app/api/cron/mlb-advanced-snapshots/route.js": { "maxDuration": 300 }
+  },
+  "crons": [
+    { "path": "/api/cron/mlb-advanced-snapshots", "schedule": "0 0 * * *" }
+  ]
+}

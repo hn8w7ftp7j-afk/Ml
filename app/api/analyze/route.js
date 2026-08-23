@@ -19,6 +19,7 @@ import { getOrBuildGameDistribution } from '../../../lib/game-distribution-cache
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
+import { persistMlbAdvancedSnapshotBestEffort } from '../../../lib/mlb-advanced-snapshot-store-v2.js';
 import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
 import {
   assertLeagueGamePrestart,
@@ -164,6 +165,7 @@ export async function POST(request) {
       expertMode: 'off',
     };
     const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
+    if (league === 'MLB') await persistMlbAdvancedSnapshotBestEffort(game, context);
     if (!context?.coreModelable || context?.dataGateV10?.passedForShadowScore !== true) {
       const blocking = Array.isArray(context?.dataGateV10?.blocking) ? context.dataGateV10.blocking : [];
       const detail = blocking.length ? blocking.join('、') : '核心資料Gate未通過';
