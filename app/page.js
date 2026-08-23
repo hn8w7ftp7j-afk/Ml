@@ -794,7 +794,13 @@ export default function Home() {
   useEffect(() => {
     if (!restoredBoardNeedsValidationRef.current || !board.length || busy || !readerStatus?.fresh) return undefined;
     restoredBoardNeedsValidationRef.current = false;
-    const timer = window.setTimeout(() => pollReaderAndReprice(), 250);
+    // A restored board intentionally contains completed games only. It is not
+    // the authoritative daily schedule, so repricing it directly can strand a
+    // mobile client with just the one result Safari managed to persist. Re-run
+    // the full slate bootstrap: it fetches the official schedule and current
+    // Reader board, preserves cached scores, and queues every open game.
+    const key = readerHashKey(date, readerStatus?.payloadHash);
+    const timer = window.setTimeout(() => oneClickAnalyze(key), 250);
     return () => window.clearTimeout(timer);
   }, [board.length, busy, readerStatus?.fresh, readerStatus?.payloadHash, date, league]);
   useEffect(() => {

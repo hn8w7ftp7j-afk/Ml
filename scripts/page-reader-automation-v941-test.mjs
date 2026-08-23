@@ -15,10 +15,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.9.2', 'package/release identity must match the V10.9.2 UI');
-assert.equal(packageLock.version, '10.9.2', 'package-lock release identity must match V10.9.2');
-assert.equal(packageLock.packages?.['']?.version, '10.9.2', 'root lockfile package must match V10.9.2');
-assert.equal(APP_VERSION, '10.9.2');
+assert.equal(packageJson.version, '10.9.3', 'package/release identity must match the V10.9.3 UI');
+assert.equal(packageLock.version, '10.9.3', 'package-lock release identity must match V10.9.3');
+assert.equal(packageLock.packages?.['']?.version, '10.9.3', 'root lockfile package must match V10.9.3');
+assert.equal(APP_VERSION, '10.9.3');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
@@ -184,5 +184,7 @@ mustMatch(/runPool\(tasks, analysisConcurrency/, 'bounded league-aware analysis 
 mustMatch(/重試 \$\{retryIndexes\.length\} 場未完成分析/, 'trailing retry pass missing');
 mustMatch(/tasks\[index\]\?\.retryable === false/, 'permanent failures must not be retried');
 mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');
+mustMatch(/const key = readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'restored board must bind validation to the current Reader revision');
+mustMatch(/window\.setTimeout\(\(\) => oneClickAnalyze\(key\), 250\)/, 'restored partial board must rebuild the full official slate instead of repricing only cached games');
 
 console.log('Page Reader automation, four-league navigation, storage continuity, board authority and all-score presentation PASS');
