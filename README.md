@@ -1,6 +1,6 @@
-# 多聯盟棒球影子分析｜10.9.0 / Tai888 Reader 2.1.14
+# 多聯盟棒球影子分析｜10.9.1 / Tai888 Reader 2.1.14
 
-目前發布基線為網站 `10.9.0` 與 Reader `2.1.14 MARKET-ACTIVITY-CONFLICT-SAFE`。
+目前發布基線為網站 `10.9.1` 與 Reader `2.1.14 MARKET-ACTIVITY-CONFLICT-SAFE`。
 
 - MLB：啟用資料蒐集、影子分析與影子排名；正式推薦與 Unit 仍停用。
 - NPB／KBO／CPBL：保留官方賽程、Reader 與下注帳本，但在各聯盟獨立模型完成前停止分析與排名，不得套用 MLB 參數。

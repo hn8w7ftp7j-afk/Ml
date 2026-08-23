@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { compactRepriceSnapshot } from '../../../lib/analysis-transport-v1.js';
+import { compactAnalysisContext, compactRepriceSnapshot } from '../../../lib/analysis-transport-v1.js';
 import {
   buildDistributionSnapshot,
   enforceAnalysisModeSafety,
@@ -10,7 +10,7 @@ import {
 import { finalizeDeterministicAnalysis, UNCERTAINTY_SET_VERSION } from '../../../lib/deterministic-finalizer-v10.js';
 import { SCORE_FORMULA_VERSION } from '../../../lib/deterministic-score.js';
 import { SETTLEMENT_RULE_VERSION, TAIWAN_CREDIT_REBATE_RATE } from '../../../lib/taiwan-settlement-v9.js';
-import { buildSnapshotFingerprints, DATA_VERSION } from '../../../lib/snapshot-v9.js';
+import { buildSnapshotFingerprints, DATA_VERSION, sha256 } from '../../../lib/snapshot-v9.js';
 import {
   analysisCacheKey,
   analysisCachePayloadMatches,
@@ -49,6 +49,8 @@ export const dynamic = 'force-dynamic';
 // v10.4 namespace invalidates every pre-independent-consensus response.
 const responseCache = globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ || new Map();
 globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ = responseCache;
+const requestResultCache = globalThis.__BASEBALL_ANALYSIS_REQUEST_RESULT_CACHE__ || new Map();
+globalThis.__BASEBALL_ANALYSIS_REQUEST_RESULT_CACHE__ = requestResultCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -120,6 +122,12 @@ function cacheSet(key, signature, value) {
   while (responseCache.size > 100) responseCache.delete(responseCache.keys().next().value);
 }
 
+function requestCacheSet(key, bodyHash, payload) {
+  if (!key) return;
+  requestResultCache.set(key, { bodyHash, payload, cachedAt: Date.now() });
+  while (requestResultCache.size > 100) requestResultCache.delete(requestResultCache.keys().next().value);
+}
+
 export async function POST(request) {
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
@@ -127,6 +135,16 @@ export async function POST(request) {
     const rate = checkRateLimit(request, { id: 'analyze-v9-3-3-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500000);
+    const requestKeyRaw = String(request.headers.get('idempotency-key') || '').trim();
+    const requestKey = /^[a-zA-Z0-9-]{16,100}$/.test(requestKeyRaw) ? requestKeyRaw : '';
+    const requestBodyHash = sha256(body);
+    const priorRequest = requestKey ? requestResultCache.get(requestKey) : null;
+    if (priorRequest?.bodyHash === requestBodyHash) {
+      return NextResponse.json(priorRequest.payload, { headers: {
+        'Cache-Control': 'no-store',
+        'X-Analysis-Request-Resume': 'HIT',
+      } });
+    }
     const league = requestedLeagueId(body?.league);
     if (!league) {
       return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
@@ -264,12 +282,13 @@ export async function POST(request) {
     );
     const provider = getLeagueProvider(league);
     const payload = {
-      ok: true, league, game, context: frozenContext, analysis: finalized, repriceSnapshot,
+      ok: true, league, game, context: compactAnalysisContext(frozenContext), analysis: finalized, repriceSnapshot,
       analysisMode: provider.analysisMode, betEligible: provider.betEligible,
       openMarkets: [...new Set(activeMarkets.map(row => row.market))],
     };
     const safePayload = enforceAnalysisModeSafety(payload, frozenContext);
     cacheSet(cacheKey, signature, safePayload);
+    requestCacheSet(requestKey, requestBodyHash, safePayload);
     return NextResponse.json(safePayload, { headers: {
       'Cache-Control': 'no-store',
       'X-Analysis-Cache': 'MISS',

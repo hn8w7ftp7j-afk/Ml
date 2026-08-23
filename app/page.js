@@ -37,6 +37,7 @@ const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
 // reports an AbortController timeout as the unhelpful `Load failed`, so keep the
 // browser timeout above the 90 second server route ceiling.
 const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
+const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
 const READER_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
@@ -238,6 +239,25 @@ async function requestJSON(url, options = {}, timeoutMs = 180000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function transientAnalysisError(error) {
+  if (Number.isFinite(Number(error?.status))) return Number(error.status) >= 500;
+  return /Load failed|Failed to fetch|NetworkError|network request failed|分析逾時/i.test(String(error?.message || error));
+}
+
+async function requestAnalysisWithResume(options) {
+  let failure;
+  for (let attempt = 0; attempt < ANALYSIS_TRANSIENT_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delay = ANALYSIS_TRANSIENT_RETRY_DELAYS_MS[attempt];
+    if (delay) await new Promise(resolve => window.setTimeout(resolve, delay));
+    try { return await requestJSON('/api/analyze', options, ANALYSIS_REQUEST_TIMEOUT_MS); }
+    catch (error) {
+      failure = error;
+      if (!transientAnalysisError(error) || attempt === ANALYSIS_TRANSIENT_RETRY_DELAYS_MS.length - 1) throw error;
+    }
+  }
+  throw failure;
 }
 
 async function runPool(items, concurrency, worker) {
@@ -825,9 +845,10 @@ export default function Home() {
         : retry ? '重新建立驗證用比分分布中…' : '建立驗證用比分分布中…',
     }));
     try {
-      const baseData = await requestJSON('/api/analyze', {
+      const requestId = uid();
+      const baseData = await requestAnalysisWithResume({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId },
         body: JSON.stringify({
           league,
           game,
@@ -835,7 +856,7 @@ export default function Home() {
           verificationMarkets: task.verificationMarkets || [],
           settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
         }),
-      }, ANALYSIS_REQUEST_TIMEOUT_MS);
+      });
       if (task.generation !== analysisGenerationRef.current) return false;
       snapshots.current.set(game.gamePk, baseData.repriceSnapshot);
       updateBoard(game.gamePk, item => ({
