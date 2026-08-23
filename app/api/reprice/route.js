@@ -17,6 +17,7 @@ import {
 } from '../../../lib/league-provider.js';
 import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import { checkRateLimit, cleanText, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
+import { assessCoreSnapshotFreshnessV109 } from '../../../lib/analysis-refresh-policy-v109.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -98,6 +99,15 @@ export async function POST(request) {
     assertLeagueGamePrestart(league, game);
     if (!(await verifyRepriceSnapshot(league, game, snapshot))) {
       return NextResponse.json({ ok: false, error: '凍結快照簽章無效或內容已被修改，必須完整重算' }, { status: 409 });
+    }
+    const coreFreshness = assessCoreSnapshotFreshnessV109(context);
+    if (!coreFreshness.fresh) {
+      return NextResponse.json({
+        ok: false,
+        code: 'CORE_REFRESH_REQUIRED',
+        error: '先發、打線、牛棚、捕手、屋頂或天氣快照已到重新檢查時間，必須完整重算',
+        coreFreshness,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
     // New compact snapshots intentionally omit the large joint distribution.
     // Rebuilding from the signed frozen context is deterministic; the hash check

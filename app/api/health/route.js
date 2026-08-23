@@ -25,6 +25,10 @@ import { readerPairingConfigured } from '../../../lib/reader-auth-v2.js';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 import { LEAGUE_REGISTRY_VERSION, publicLeagueRegistry } from '../../../lib/leagues.js';
 import { REFERENCE_LINES_VERSION, referenceProviderStatus } from '../../../lib/reference-lines.js';
+import { ANALYSIS_REFRESH_POLICY_V109_VERSION } from '../../../lib/analysis-refresh-policy-v109.js';
+import { CONTINUOUS_CALIBRATION_V109_VERSION } from '../../../lib/pit-continuous-calibration-v109.js';
+import { MLB_PRODUCTION_PIT_REPLAY_V109_VERSION } from '../../../lib/mlb-production-pit-replay-v109.js';
+import { MLB_ADVANCED_PROMOTION_GATE_V109_VERSION } from '../../../lib/mlb-advanced-promotion-gate-v109.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +88,10 @@ export async function GET(request) {
     actualBetLedgerEnabled: true,
     currentPriceComparisonEnabled: true,
     automaticSettlementEnabled: true,
+    continuousCalibrationVersion: CONTINUOUS_CALIBRATION_V109_VERSION,
+    productionPitReplayVersion: MLB_PRODUCTION_PIT_REPLAY_V109_VERSION,
+    coreRefreshPolicyVersion: ANALYSIS_REFRESH_POLICY_V109_VERSION,
+    advancedPromotionGateVersion: MLB_ADVANCED_PROMOTION_GATE_V109_VERSION,
     databaseConfigured: Boolean(process.env.DATABASE_URL),
     authConfigured: siteAuthConfigured(),
     appPasswordConfigured: appPasswordConfigured(),
