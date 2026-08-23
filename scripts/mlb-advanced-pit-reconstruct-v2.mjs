@@ -7,8 +7,9 @@ import { createGunzip, createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { buildAdvancedOosValidationV2 } from '../lib/mlb-advanced-oos-validation-v2.js';
 import { buildHistoricalWindFeatureV2 } from '../lib/mlb-historical-weather-v2.js';
+import { estimateRunProfileV13 } from '../lib/joint-score-v13.js';
 
-const VERSION = 'MLB-ADVANCED-PIT-RECONSTRUCTION-2026-08-v2.1.0';
+const VERSION = 'MLB-ADVANCED-PIT-RECONSTRUCTION-2026-08-v3.0.0-PRODUCTION-ENGINE';
 const root = process.argv[2] || '/workspace/mlb-pit-data';
 const outputRoot = process.argv[3] || `${root}/reconstructed-v2`;
 const indexPath = `${root}/normalized/game-index.jsonl`;
@@ -17,6 +18,14 @@ const featureNames = ['fielding', 'injury', 'pitchMatchup', 'catcherUmpireZone',
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 const finite = (value, fallback = null) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+const quantile = (values, probability) => {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const position = clamp(probability, 0, 1) * (sorted.length - 1);
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+};
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const previousDate = value => {
   const date = new Date(`${value}T00:00:00Z`);
@@ -149,12 +158,13 @@ async function readDay(path, games) {
 }
 
 function playerState(map, id) {
-  return nested(map, id, () => ({ pitchTotal: 0, pitches: new Map(), battingPitches: new Map(), pa: 0, battingRuns: 0, lastSeason: null, lastTeamGame: 0 }));
+  return nested(map, id, () => ({ pitchTotal: 0, gamesStarted: 0, pitches: new Map(), battingPitches: new Map(), pa: 0, battingRuns: 0, lastSeason: null, lastTeamGame: 0 }));
 }
 
 function decayPlayer(player, season) {
   if (player.lastSeason == null || player.lastSeason === season) { player.lastSeason = season; return; }
   player.pitchTotal *= 0.35;
+  player.gamesStarted *= 0.35;
   for (const [key, value] of player.pitches) player.pitches.set(key, value * 0.35);
   for (const value of player.battingPitches.values()) { value.count *= 0.35; value.runs *= 0.35; }
   player.pa *= 0.35;
@@ -166,7 +176,7 @@ function initialState() {
   return {
     leagueScores: [], homeMargins: [],
     teamScores: new Map(), teamGames: new Map(), teamFielding: new Map(), teamBatters: new Map(), teamCatchers: new Map(),
-    players: new Map(), umpires: new Map(), leaguePitch: new Map(),
+    players: new Map(), umpires: new Map(), leaguePitch: new Map(), venueScores: new Map(),
   };
 }
 
@@ -185,6 +195,64 @@ function baselineForGame(game, state) {
     return clamp(league + (offense - league) * offenseWeight + (defense - league) * defenseWeight + (home ? homeEdge : -homeEdge), 2.6, 6.6);
   };
   return { away: side(game.awayTeamId, game.homeTeamId, false), home: side(game.homeTeamId, game.awayTeamId, true), league };
+}
+
+function averageOr(values, fallback) {
+  return values.length ? mean(values) : fallback;
+}
+
+function variance(values, fallback = 7) {
+  if (values.length < 2) return fallback;
+  const average = mean(values);
+  return values.reduce((sum, value) => sum + (value - average) ** 2, 0) / (values.length - 1);
+}
+
+function productionTeam(teamId, probablePitcherId, state, league) {
+  const scores = state.teamScores.get(teamId) || { scored: [], allowed: [] };
+  const seasonScored = scores.scored.slice(-120);
+  const recentScored = scores.scored.slice(-14);
+  const seasonAllowed = scores.allowed.slice(-120);
+  const recentAllowed = scores.allowed.slice(-14);
+  const pitcher = state.players.get(Number(probablePitcherId || 0));
+  const lineupRows = projectedBatters(teamId, state).slice(0, 9);
+  const lineupRate = lineupRows.length ? mean(lineupRows.map(row => row.pa ? row.runs / row.pa : 0)) : 0;
+  const status = seasonScored.length >= 20 ? 'CONFIRMED' : 'PROJECTED';
+  const innings = Math.max(0, finite(pitcher?.pitchTotal, 0) / 15);
+  const gamesStarted = Math.max(0, finite(pitcher?.gamesStarted, 0));
+  return {
+    hitting: { games: seasonScored.length, gamesPlayed: seasonScored.length, runsPerGame: averageOr(seasonScored, league.runsPerTeamGame), ops: league.ops, status },
+    recentHitting: { games: recentScored.length, gamesPlayed: recentScored.length, runsPerGame: averageOr(recentScored, averageOr(seasonScored, league.runsPerTeamGame)), status: recentScored.length >= 6 ? 'CONFIRMED' : 'PROJECTED' },
+    pitching: { inningsPitched: seasonAllowed.length * 9, era: averageOr(seasonAllowed, league.era), whip: league.whip, kPer9: league.kPer9, bbPer9: league.bbPer9, hrPer9: league.hrPer9, status, projectedFromTeamPitching: true },
+    recentPitching: { inningsPitched: recentAllowed.length * 9, era: averageOr(recentAllowed, league.era), whip: league.whip, kPer9: league.kPer9, bbPer9: league.bbPer9, hrPer9: league.hrPer9, status: recentAllowed.length >= 6 ? 'CONFIRMED' : 'PROJECTED', projectedFromTeamPitching: true },
+    starter: { id: probablePitcherId || null, inningsPitched: innings, gamesStarted, expectedInnings: gamesStarted >= 2 ? clamp(innings / gamesStarted, 2.5, 7) : 5.2, era: league.era, whip: league.whip, kPer9: league.kPer9, bbPer9: league.bbPer9, hrPer9: league.hrPer9, status: innings >= 20 ? 'PROJECTED' : 'MISSING', throwsStatus: 'MISSING' },
+    bullpen: { pureRelief: false, status: 'PROJECTED' },
+    lineup: { official: false, projected: lineupRows.length >= 7, offensiveIndex: clamp(Math.exp(lineupRate * 0.40), 0.94, 1.06), players: lineupRows.map(row => ({ id: row.id })) },
+    scoring: { games: seasonScored.length, varianceRuns: variance(seasonScored) },
+    injuriesAvailable: false,
+    advanced: {},
+  };
+}
+
+function productionBaselineForGame(game, state) {
+  const runsPerTeamGame = state.leagueScores.length >= 200 ? mean(state.leagueScores) : 4.45;
+  const league = { runsPerTeamGame, ops: 0.72, era: runsPerTeamGame, whip: 1.30, kPer9: 8.6, bbPer9: 3.2, hrPer9: 1.15 };
+  const venueScores = state.venueScores.get(game.venueId) || [];
+  const parkReliability = venueScores.length / (venueScores.length + 180);
+  const parkFactor = clamp(1 + ((averageOr(venueScores, runsPerTeamGame) / runsPerTeamGame) - 1) * parkReliability, 0.92, 1.08);
+  const temperature = finite(game?.weather?.temp, finite(game?.weather?.temperature, 72));
+  const weatherFactor = clamp(1 + (temperature - 72) * 0.0014, 0.96, 1.04);
+  const context = {
+    leagueId: 'MLB',
+    game: { leagueId: 'MLB', gamePk: game.gamePk, gameDate: game.gameStart, scheduledInnings: 9 },
+    league,
+    away: productionTeam(game.awayTeamId, game.awayProbablePitcherId, state, league),
+    home: productionTeam(game.homeTeamId, game.homeProbablePitcherId, state, league),
+    park: { runFactor: parkFactor, factorStatus: venueScores.length >= 30 ? 'PROJECTED' : 'MISSING' },
+    weather: { meanRunFactor: weatherFactor, status: game.weather ? 'PROJECTED' : 'MISSING' },
+    sourceStatuses: { lineups: 'PROJECTED' },
+  };
+  const profile = estimateRunProfileV13(context);
+  return { away: profile.full.away, home: profile.full.home, league: runsPerTeamGame, first5: profile.first5, modelVersion: profile.version, contextCompleteness: 'PRODUCTION_ENGINE_WITH_RECONSTRUCTED_PIT_INPUTS' };
 }
 
 function fieldingFeature(teamId, state) {
@@ -310,10 +378,14 @@ function updateState(game, aggregate, state) {
     const home = nested(state.teamScores, game.homeTeamId, () => ({ scored: [], allowed: [] }));
     boundedPush(away.scored, game.awayRuns, 80); boundedPush(away.allowed, game.homeRuns, 80);
     boundedPush(home.scored, game.homeRuns, 80); boundedPush(home.allowed, game.awayRuns, 80);
+    const venue = nested(state.venueScores, game.venueId, () => []);
+    boundedPush(venue, game.awayRuns, 300);
+    boundedPush(venue, game.homeRuns, 300);
   }
   for (const [pitcherId, counts] of aggregate.pitchCounts) {
     const player = playerState(state.players, pitcherId); decayPlayer(player, season);
     player.pitchTotal += counts.total;
+    if (Number(pitcherId) === Number(game.awayProbablePitcherId) || Number(pitcherId) === Number(game.homeProbablePitcherId)) player.gamesStarted = (player.gamesStarted || 0) + 1;
     for (const [pitchType, count] of counts.byType) player.pitches.set(pitchType, (player.pitches.get(pitchType) || 0) + count);
   }
   for (const [batterId, values] of aggregate.batterPitch) {
@@ -425,7 +497,8 @@ for (let dateIndex = 0; dateIndex < dates.length; dateIndex += 1) {
   const file = `${root}/${dayGames[0].statcastFile}`;
   const aggregates = await readDay(file, dayGames);
   for (const game of dayGames) {
-    const baseline = baselineForGame(game, state);
+    const diagnosticSimpleBaseline = baselineForGame(game, state);
+    const baseline = productionBaselineForGame(game, state);
     const features = featuresForGame(game, state);
     const observedAt = new Date(Math.min(Date.parse(game.gameStart) - 1, Date.parse(`${date}T00:00:00Z`) - 1)).toISOString();
     reconstructed.push({
@@ -445,7 +518,8 @@ for (let dateIndex = 0; dateIndex < dates.length; dateIndex += 1) {
         weatherSource: 'MLB_STATSAPI_SCHEDULE_WEATHER_ARCHIVE_RECONSTRUCTED',
         injurySource: 'TRAILING_ROSTER_AVAILABILITY_PROXY_NOT_OFFICIAL_IL',
       },
-      baseline: { away: baseline.away, home: baseline.home },
+      baseline: { away: baseline.away, home: baseline.home, first5: baseline.first5, modelVersion: baseline.modelVersion },
+      diagnosticSimpleBaseline: { away: diagnosticSimpleBaseline.away, home: diagnosticSimpleBaseline.home },
       actual: { away: game.awayRuns, home: game.homeRuns },
       features,
     });
@@ -494,6 +568,26 @@ for (const name of featureNames) {
   familyOos[name] = buildAdvancedOosValidationV2(rows);
 }
 const shadow2026 = buildAdvancedOosValidationV2(validationRows.filter(row => Number(row.gameStart.slice(0, 4)) === 2026), { minimumGamesPerSeason: 200, requiredSeasons: [2026] });
+const promotionSource = {
+  fielding: 'fielding', injury: 'injury', pitchMatchup: 'pitchMatchup',
+  catcherFraming: 'catcherUmpireZone', umpireZone: 'catcherUmpireZone', directionalWind: 'windOrientation',
+};
+const featurePromotionInputs = Object.fromEntries(Object.entries(promotionSource).map(([family, name]) => {
+  const foldCoefficients = [2022, 2023, 2024, 2025].map(year => finite(coefficientsByFold?.[year]?.[name], null)).filter(value => value != null);
+  const stablePositive = foldCoefficients.length === 4 && foldCoefficients.every(value => value > 0);
+  const learnedBlendWeight = stablePositive ? clamp(mean(foldCoefficients), 0.05, 1) : null;
+  const impacts = learnedBlendWeight == null ? [] : reconstructed
+    .filter(row => row.season >= 2022 && row.season <= 2025)
+    .flatMap(row => ['away', 'home'].map(side => Math.abs(learnedBlendWeight * finite(row?.features?.[side]?.[name]?.regressed, 0))));
+  return [family, {
+    learnedBlendWeight,
+    absoluteRunDeltaP99: quantile(impacts, 0.99),
+    coefficientFolds: foldCoefficients,
+    stablePositive,
+    ...(family === 'injury' ? { officialImmutableIl: false } : {}),
+    ...(family === 'umpireZone' ? { abs2026SeparatelyValidated: false } : {}),
+  }];
+}));
 const familyDecisions = Object.fromEntries(featureNames.map(name => {
   if (name === 'windOrientation' && !familyOos[name].eligibleForManualPromotion) return [name, { decision: 'DIAGNOSTIC_ONLY', reason: 'OOS_FOLD_CRITERIA_NOT_MET' }];
   if (name === 'injury') return [name, { decision: 'DIAGNOSTIC_PROXY_ONLY', reason: 'TRAILING_AVAILABILITY_IS_NOT_OFFICIAL_POINT_IN_TIME_IL_DATA', oosEligible: familyOos[name].eligibleForManualPromotion }];
@@ -516,6 +610,7 @@ const artifact = {
   coefficientsByFold,
   oos2022Through2025: oos,
   featureFamilyOos: familyOos,
+  featurePromotionInputs,
   shadow2026,
   featureFamilyDecisions: familyDecisions,
   activation: { automatic: false, productionAppliedValuesRemainNeutral: true },

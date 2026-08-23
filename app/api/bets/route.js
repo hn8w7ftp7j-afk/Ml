@@ -6,9 +6,15 @@ import {
   settleOpenCloudBets,
   upsertCloudBet,
 } from '../../../lib/cloud-bet-store.js';
+import { buildCalibrationStatusFromBetsV109 } from '../../../lib/calibration-ledger-v109.js';
 import { checkRateLimit, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
 
-const response = bets => NextResponse.json({ ok: true, bets, stats: cloudBetStats(bets) }, { headers: { 'Cache-Control': 'no-store' } });
+const response = bets => NextResponse.json({
+  ok: true,
+  bets,
+  stats: cloudBetStats(bets),
+  calibration: buildCalibrationStatusFromBetsV109(bets),
+}, { headers: { 'Cache-Control': 'no-store' } });
 
 export async function GET(request) {
   const auth = await requireApiAuth(request); if (auth) return auth;

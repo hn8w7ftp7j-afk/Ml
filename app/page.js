@@ -25,6 +25,7 @@ import {
   touchReaderHeartbeat,
 } from '../lib/client-analysis-state.js';
 import { initialAnalysisConcurrency } from '../lib/analysis-transport-v1.js';
+import { assessCoreSnapshotFreshnessV109 } from '../lib/analysis-refresh-policy-v109.js';
 
 const VERSION = APP_VERSION;
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.18-SELF-HEAL.zip';
@@ -227,6 +228,7 @@ async function requestJSON(url, options = {}, timeoutMs = 180000) {
     if (!response.ok || data.ok === false) {
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
+      error.code = data.code || '';
       throw error;
     }
     return data;
@@ -274,6 +276,18 @@ function betRecordable(item, row, now = Date.now(), betsEnabled = true) {
 
 function compactAnalysisData(data) {
   return { game: data.game, context: data.context, analysis: data.analysis, openMarkets: data.openMarkets || [] };
+}
+
+function calibrationFeatureTimes(context) {
+  const fallback = context?.fetchedAt;
+  const rows = {};
+  for (const item of context?.featureProvenance || []) {
+    const name = String(item?.featureName || '').trim();
+    const value = item?.observedAt || item?.asOf || fallback;
+    if (name && Number.isFinite(Date.parse(String(value || '')))) rows[name] = new Date(value).toISOString();
+  }
+  if (!Object.keys(rows).length && Number.isFinite(Date.parse(String(fallback || '')))) rows.coreSnapshot = new Date(fallback).toISOString();
+  return rows;
 }
 
 function LoadingLine({ progress }) {
@@ -477,8 +491,8 @@ function LeagueSetupPanel({ config }) {
 
 function LeagueShadowPanel({ config }) {
   return <section className="leagueSetup panel">
-    <div className="setupHead"><div><span className="kicker">V10.6 狀態模型與QA</span><h2>{config.label}顯示通過核心資料閘門的未校準模型影子分析</h2></div><span className="state shadow">尚未啟用正式推薦</span></div>
-    <p className="muted">影子W/R由狀態感知聯合比分分布直接結算Tai888成交盤；獨立市場只作可選外部稽核，不再阻擋模型W/R。只有Reader、核心資料或數學未通過才不評分；W/R差距超過5%仍顯示，但不列排名。正式推薦與Unit仍等待locked OOS及forward驗證。</p>
+    <div className="setupHead"><div><span className="kicker">V10.9 Production PIT與持續校準</span><h2>{config.label}顯示通過核心資料閘門的模型影子分析</h2></div><span className="state shadow">尚未啟用正式推薦</span></div>
+    <p className="muted">每筆Reader成交盤會保存不可變PIT模型與資料雜湊，賽後依台灣盤結算，跨年度持續累積且舊資料逐步降權。獨立市場只作可選外部稽核；六項進階輸入逐項驗證並限制總得分影響，未通過者維持中性。正式推薦與Unit仍等待locked OOS及forward驗證。</p>
   </section>;
 }
 
@@ -486,6 +500,7 @@ export default function Home() {
   const [league, setLeague] = useState('MLB');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [bets, setBets] = useState([]);
+  const [calibrationStatus, setCalibrationStatus] = useState(null);
   const [storageReady, setStorageReady] = useState(false);
   const [tab, setTab] = useState('board');
   const [date, setDate] = useState(taipeiDate());
@@ -582,6 +597,7 @@ export default function Home() {
       if (Array.isArray(data.bets)) {
         betsRef.current = data.bets;
         setBets(data.bets);
+        setCalibrationStatus(data.calibration || null);
       }
     } catch {
       // A temporary result-provider failure must not erase or rewrite the ledger.
@@ -607,6 +623,7 @@ export default function Home() {
       if (!migrationComplete) markCloudBetMigrationComplete();
       betsRef.current = data.bets;
       setBets(data.bets);
+      setCalibrationStatus(data.calibration || null);
     }).catch(() => {}).finally(() => { cloudSyncBusyRef.current = false; });
   }, []);
   useEffect(() => {
@@ -627,6 +644,7 @@ export default function Home() {
           if (!migrationComplete) markCloudBetMigrationComplete();
           betsRef.current = data.bets;
           setBets(data.bets);
+          setCalibrationStatus(data.calibration || null);
         })
         .catch(() => {})
         .finally(() => { cloudSyncBusyRef.current = false; });
@@ -723,6 +741,19 @@ export default function Home() {
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [board, date, busy, league, readerEnabled, analysisEnabled]);
+  useEffect(() => {
+    if (!readerEnabled || !analysisEnabled || !board.length) return undefined;
+    const timer = window.setInterval(() => {
+      if (busy || !readerStatus?.fresh) return;
+      const now = Date.now();
+      const needsCoreRefresh = board.some(item => gameIsPrestartNow(item.game, now)
+        && item.customData?.context
+        && !assessCoreSnapshotFreshnessV109(item.customData.context, now).fresh);
+      if (needsCoreRefresh) oneClickAnalyze();
+    }, 2 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [board, date, busy, readerStatus?.fresh, league, readerEnabled, analysisEnabled]);
+
   const currentReaderKey = readerHashKey(date, readerStatus?.payloadHash);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
@@ -1199,6 +1230,8 @@ export default function Home() {
       legacyDiagnosticScore: row.legacyDiagnosticScore ?? null,
       weightedEV: row.weightedEV,
       robustEV: row.robustEV,
+      rawModelWeightedEV: row.rawWeightedEV ?? row.weightedEV,
+      rawModelRobustEV: row.rawRobustEV ?? row.robustEV,
       qaStatus: row.scoreAudit?.ok === false ? 'BLOCK' : 'SHADOW_DIAGNOSTIC',
       placedContractSnapshot: {
         pick: row.pick,
@@ -1213,6 +1246,12 @@ export default function Home() {
       readerRevision: currentReaderKey || null,
       snapshotId: item.customData?.analysis?.snapshotId || null,
       analysisAsOf: item.customData?.analysis?.analysisAsOf || null,
+      dataAsOf: item.customData?.analysis?.dataAsOf || item.customData?.context?.fetchedAt || null,
+      inputHash: item.customData?.analysis?.inputHash || item.customData?.analysis?.snapshotId || null,
+      coreFingerprint: item.customData?.analysis?.coreFingerprint || null,
+      priceFingerprint: item.customData?.analysis?.priceFingerprint || null,
+      distributionHash: item.customData?.analysis?.distributionHash || null,
+      featureObservedAts: calibrationFeatureTimes(item.customData?.context),
       modelVersion: item.customData?.analysis?.modelVersion || row.modelVersion || null,
       scoreFormulaVersion: row.scoreFormulaVersion || item.customData?.analysis?.scoreFormulaVersion || null,
       settlementRuleVersion: row.settlementRuleVersion || null,
@@ -1225,6 +1264,7 @@ export default function Home() {
       if (!Array.isArray(data.bets)) throw new Error('雲端下注紀錄回傳格式錯誤');
       betsRef.current = data.bets;
       setBets(data.bets);
+      setCalibrationStatus(data.calibration || null);
       setError('');
       setNotice(`已雲端記錄實際下注：${translateTeamText(row.pick)}｜${Number(row.water).toFixed(3)}｜${Number(settings.unitValue).toLocaleString()}元`);
     } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
@@ -1271,7 +1311,7 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>Tai888 Reader持續同步實際信用盤；V10.6納入打線、左右投、先發局數、純牛棚與九局終止狀態，產生未校準影子W/R。Tai888只作成交價，獨立市場只作可選稽核；正式下注建議仍停用。下注紀錄、盤口比較、賽果結算與績效統計獨立運作。</p></div>
+      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>V10.9使用Production等價比分引擎、事件式賽前資料重抓與跨年度PIT校準；打線、先發、純牛棚、捕手、屋頂或天氣到期即完整重算。Tai888只作成交價，獨立市場只作可選稽核；正式下注建議仍等待locked OOS與forward門檻。</p></div>
       <div className="headerBadges"><span className={health?.ok ? 'health ok' : 'health warn'}>{!health?.ok ? '系統檢查中' : '系統正常｜外部市場未使用'}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
     </header>
 
@@ -1336,6 +1376,7 @@ export default function Home() {
     {tab === 'stats' && <section className="panel">
       <div className="panelHead"><h2>全部聯盟｜實際下注績效</h2><button className="textButton" onClick={() => refreshSettlements('')}>更新全部賽果</button></div>
       <SummaryCards summary={allStats.overall}/>
+      <div className="emptySmall">跨年度校準：{calibrationStatus?.releaseEligible ? '已達發布審查門檻' : '持續累積中'}｜PIT已結算 {calibrationStatus?.settledPredictionRows ?? 0} 筆｜OOS {calibrationStatus?.oosSampleSize ?? 0} 筆｜每年不歸零，舊資料依時間逐步降權。</div>
       {allStats.groups.length ? allStats.groups.map(group => {
         const [groupLeague, market] = group.key.split('|||');
         return <div className="betRow" key={group.key}><div><strong><span className="leagueBadge inline">{groupLeague}</span>{market}</strong><span>{group.wins}勝／{group.losses}敗／{group.pushes}走／{group.halfWins}贏半／{group.halfLosses}輸半</span></div><small>{group.settled}筆已結算｜勝率 {pct(group.winRate)}｜ROI {pct(group.roi)}｜{moneyText(group.netPnl)}</small></div>;
