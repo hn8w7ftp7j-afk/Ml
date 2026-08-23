@@ -157,7 +157,7 @@ const historyGames = [
   { ...npb[0], gamePk: 1102, gameDate: '2099-08-16T09:00:00.000Z', officialDate: '2099-08-16', statusCode: 'F', awayScore: 1, homeScore: 4 },
 ];
 const context = await buildAsianGameContext('NPB', npb[0], { historyGames });
-assert.equal(context.coreModelable, true);
+assert.equal(context.coreModelable, false);
 assert.equal(context.analysisMode, ASIAN_ANALYSIS_MODE);
 assert.equal(context.betEligible, false);
 assert.equal(context.executable, false);
@@ -166,7 +166,7 @@ assert.match(context.modelVersion, /^NPB-/);
 assert.match(context.rulesVersion, /^NPB-/);
 assert.ok(context.historyGameCount === 2);
 assert.deepEqual(Object.keys(context.modelConfig.baselineBounds).sort(), ['first5', 'full']);
-assert.equal(context.dataGateV10.passedForShadowScore, true);
+assert.equal(context.dataGateV10.passedForShadowScore, false);
 assert.equal(context.dataGateV10.passedForFormalScore, false);
 assert.deepEqual(context.dataGateV10.missing, ['probableStartersAndHandedness', 'officialOrProjectedLineups', 'pureBullpenUsage']);
 assert.equal(context.away.starter.projectionMode, 'NEUTRAL_UNKNOWN_STARTER');
@@ -176,6 +176,18 @@ assert.equal(context.gameStateModel.bottomNinthMayBeSkipped, true);
 assert.equal(context.gameStateModel.regulationWalkoff, true);
 assert.equal(context.gameStateModel.allowDraw, true);
 assert.equal(context.gameStateModel.automaticRunner, false);
+
+await assert.rejects(
+  () => buildAsianGameContext('NPB', npb[0], {
+    fetchImpl: async url => ({
+      ok: !String(url).includes('index_07.html'),
+      status: 503,
+      text: async () => npbMonth,
+    }),
+  }),
+  error => error?.code === 'ASIAN_HISTORY_INCOMPLETE',
+  '任一歷史月份失敗不得靜默縮短樣本後繼續評分',
+);
 
 await assert.rejects(
   () => fetchAsianFinalResult('NPB', npb[0].gamePk, ''),
