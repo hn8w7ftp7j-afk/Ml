@@ -10,7 +10,7 @@ import {
   requestedLeagueId,
 } from '../lib/leagues.js';
 
-assert.equal(LEAGUE_REGISTRY_VERSION, 'SPORTS-LEAGUE-REGISTRY-2026-08-v2.2.1');
+assert.equal(LEAGUE_REGISTRY_VERSION, 'SPORTS-LEAGUE-REGISTRY-2026-08-v2.3.0');
 assert.deepEqual(LEAGUE_IDS, ['MLB', 'NPB', 'KBO', 'CPBL']);
 assert.equal(normalizeLeagueId('npb'), 'NPB');
 assert.equal(normalizeLeagueId('unknown'), 'MLB');

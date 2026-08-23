@@ -123,6 +123,7 @@ assert.equal(cpbl.find(game => game.statusCode === 'S').awayScore, null, 'CPBL S
 assert.equal(cpbl.find(game => game.statusCode === 'F').innings, 11, 'CPBL 必須使用 InningSeq，不可誤用 GameSno');
 
 const fetchImpl = async url => {
+  if (String(url).includes('/announcement/starter/')) return { ok: true, text: async () => '' };
   assert.match(String(url), /npb\.jp\/bis\/eng\/2099\/games\/gm20990818\.html/);
   return { ok: true, text: async () => npbDay };
 };
@@ -168,14 +169,32 @@ assert.ok(context.historyGameCount === 2);
 assert.deepEqual(Object.keys(context.modelConfig.baselineBounds).sort(), ['first5', 'full']);
 assert.equal(context.dataGateV10.passedForShadowScore, false);
 assert.equal(context.dataGateV10.passedForFormalScore, false);
-assert.deepEqual(context.dataGateV10.missing, ['probableStartersAndHandedness', 'officialOrProjectedLineups', 'pureBullpenUsage']);
-assert.equal(context.away.starter.projectionMode, 'NEUTRAL_UNKNOWN_STARTER');
-assert.equal(context.away.starter.expectedInnings, 5.2);
+assert.deepEqual(context.dataGateV10.missing, ['probableOrProjectedStarters', 'officialOrProjectedLineups', 'bullpenUsageProjection']);
+assert.equal(context.away.starter.projectionMode, 'ROTATION_SCENARIO_TEAM_RATE_PRIOR');
+assert.equal(context.away.starter.expectedInnings, 5.05);
 assert.equal(context.away.bullpen.pureRelief, false);
 assert.equal(context.gameStateModel.bottomNinthMayBeSkipped, true);
 assert.equal(context.gameStateModel.regulationWalkoff, true);
 assert.equal(context.gameStateModel.allowDraw, true);
 assert.equal(context.gameStateModel.automaticRunner, false);
+
+const sufficientHistory = Array.from({ length: 12 }, (_, index) => ({
+  ...npb[0],
+  gamePk: 2100 + index,
+  gameDate: `2099-08-${String(index + 1).padStart(2, '0')}T09:00:00.000Z`,
+  officialDate: `2099-08-${String(index + 1).padStart(2, '0')}`,
+  statusCode: 'F',
+  awayScore: [2, 5, 1, 4][index % 4],
+  homeScore: [3, 1, 6, 2][index % 4],
+  innings: index % 5 === 0 ? 10 : 9,
+}));
+const projectedContext = await buildAsianGameContext('NPB', npb[0], { historyGames: sufficientHistory });
+assert.equal(projectedContext.coreModelable, true);
+assert.equal(projectedContext.dataGateV10.passedForShadowScore, true);
+assert.equal(projectedContext.away.lineup.status, 'PROJECTED');
+assert.equal(projectedContext.away.bullpen.projectionBased, true);
+assert.equal(projectedContext.away.bullpen.pureRelief, false);
+assert.notEqual(projectedContext.away.lineup.offensiveIndex, 1);
 
 await assert.rejects(
   () => buildAsianGameContext('NPB', npb[0], {

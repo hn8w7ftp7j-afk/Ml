@@ -177,7 +177,7 @@ assert.equal(nonMlb.results[0].shadowDiagnosticScore, null);
 assert.equal(nonMlb.results[0].scoreStatus, 'LEAGUE_MODEL_NOT_VALIDATED');
 assert.equal(nonMlb.results[0].betEligible, false);
 
-for (const leagueId of ['NPB', 'CPBL']) {
+for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   const asian = finalizeDeterministicAnalysis({
     analysis: {
       leagueId,

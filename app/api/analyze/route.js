@@ -168,7 +168,13 @@ export async function POST(request) {
     if (league === 'MLB') await persistMlbAdvancedSnapshotBestEffort(game, context);
     if (!context?.coreModelable || context?.dataGateV10?.passedForShadowScore !== true) {
       const blocking = Array.isArray(context?.dataGateV10?.blocking) ? context.dataGateV10.blocking : [];
-      const detail = blocking.length ? blocking.join('、') : '核心資料Gate未通過';
+      const gateLabels = {
+        probableOrProjectedStarters: '先發投手或可信輪值預估',
+        officialOrProjectedLineups: '正式打線或可信打線預估',
+        bullpenUsageProjection: '牛棚使用量與疲勞預估',
+        officialScheduleIdentityOrRecentLeagueResults: '官方賽程識別或近期完賽賽果',
+      };
+      const detail = blocking.length ? blocking.map(name => gateLabels[name] || name).join('、') : '核心資料Gate未通過';
       console.error('[ANALYZE_CORE_BLOCK]', { league, gamePk: game?.gamePk, blocking, warnings: context?.warnings || [] });
       return NextResponse.json({
         ok: false,
