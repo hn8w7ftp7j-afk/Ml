@@ -1,6 +1,7 @@
 import { canonicalReaderPayload } from './parser.js';
+import { BOARD_ACTIVITY_TTL_MS } from './recovery-policy.js';
 
-export const BOARD_ACTIVITY_TTL_MS = 5 * 60 * 1000;
+export { BOARD_ACTIVITY_TTL_MS } from './recovery-policy.js';
 // Kept for diagnostic compatibility only. Candidate selection is board-based,
 // never blocked merely because the user opened a fifth Tai888 page.
 export const MAX_TAI888_TABS = Number.POSITIVE_INFINITY;

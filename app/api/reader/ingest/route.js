@@ -199,7 +199,7 @@ export async function POST(request) {
       freshness: status,
     }, { headers });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: String(error?.message || error) }, {
+    return NextResponse.json({ ok: false, code: String(error?.code || ''), error: String(error?.message || error) }, {
       status: Number(error?.status) || 500,
       headers,
     });

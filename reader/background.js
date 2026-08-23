@@ -1,7 +1,14 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from './board-selector.js';
+import {
+  RECOVERY_COOLDOWN_MS,
+  RELOAD_SETTLE_MS,
+  reserveRecoveryTabIds,
+  staleAssessedTabIds,
+  uniqueTabIds,
+} from './recovery-policy.js';
 
-const VERSION = '2.1.18';
+const VERSION = '2.1.19';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];
@@ -13,7 +20,6 @@ let pendingReason = 'mutation';
 let pendingPreferredTabId = null;
 let mutationTimer;
 const recoveryCooldownByTab = new Map();
-const RECOVERY_COOLDOWN_MS = 90_000;
 
 chrome.runtime.onInstalled.addListener(async () => {
   const old = await chrome.storage.local.get(['deviceId', 'autoEnabled', 'readerStatus', 'lastSuccessfulPayloadHash', 'lastSuccessfulSyncAt']);
@@ -99,14 +105,11 @@ async function collectCandidates(tabs) {
   return { candidates, silentTabIds };
 }
 
-async function recoverTabs(tabs, tabIds, { force = false } = {}) {
-  const targets = new Set(tabIds);
+async function softRecoverTabs(tabs, tabIds) {
+  const targets = new Set(uniqueTabIds(tabIds));
   let requested = false;
   for (const tab of tabs) {
     if (!targets.has(tab.id)) continue;
-    const last = Number(recoveryCooldownByTab.get(tab.id) || 0);
-    if (!force && Date.now() - last < RECOVERY_COOLDOWN_MS) continue;
-    recoveryCooldownByTab.set(tab.id, Date.now());
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0 }]);
     for (const frame of frames || []) try {
       const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_READER_RECOVER' }, { frameId: frame.frameId });
@@ -115,6 +118,41 @@ async function recoverTabs(tabs, tabIds, { force = false } = {}) {
   }
   if (requested) await wait(1600);
   return requested;
+}
+
+async function reloadTabs(tabIds) {
+  const reloaded = [];
+  for (const tabId of uniqueTabIds(tabIds)) {
+    try {
+      await chrome.tabs.reload(tabId, { bypassCache: false });
+      reloaded.push(tabId);
+    } catch {}
+  }
+  if (reloaded.length) await wait(RELOAD_SETTLE_MS);
+  return reloaded;
+}
+
+function staleTabsForCandidates(candidates, preferredTabId) {
+  const stale = [];
+  for (const league of LEAGUES) {
+    const selection = selectAuthoritativeBoard(candidates.filter(item => item.parsed.league === league), { now: Date.now(), preferredTabId, league });
+    if (!selection.ok) stale.push(...staleAssessedTabIds(selection.assessed));
+  }
+  return uniqueTabIds(stale);
+}
+
+async function recoverAndRescan(tabs, scan, tabIds, preferredTabId, { force = false, silent = false } = {}) {
+  const reserved = reserveRecoveryTabIds(tabIds, recoveryCooldownByTab, { force });
+  if (!reserved.length) return scan;
+  await softRecoverTabs(tabs, reserved);
+  let rescanned = await collectCandidates(tabs);
+  const remaining = silent
+    ? reserved.filter(tabId => rescanned.silentTabIds.includes(tabId))
+    : staleTabsForCandidates(rescanned.candidates, preferredTabId).filter(tabId => reserved.includes(tabId));
+  if (!remaining.length) return rescanned;
+  await reloadTabs(remaining);
+  rescanned = await collectCandidates(tabs);
+  return rescanned;
 }
 
 async function pair(password, deviceName) {
@@ -153,14 +191,13 @@ async function performSync(reason, preferredTabId) {
   const tabs = [...new Map((await chrome.tabs.query({ url: PATTERNS })).map(tab => [tab.id, tab])).values()];
   if (!tabs.length) throw new Error('找不到 Tai888 分頁。請開啟四個聯盟的「讓分＆大小」頁。');
   let scan = await collectCandidates(tabs);
-  if (scan.silentTabIds.length && await recoverTabs(tabs, scan.silentTabIds, { force: reason === 'manual' })) scan = await collectCandidates(tabs);
+  if (scan.silentTabIds.length) scan = await recoverAndRescan(tabs, scan, scan.silentTabIds, preferredTabId, { force: reason === 'manual', silent: true });
   let candidates = scan.candidates;
-  const staleTabIds = [];
-  for (const league of LEAGUES) {
-    const selection = selectAuthoritativeBoard(candidates.filter(item => item.parsed.league === league), { now: Date.now(), preferredTabId, league });
-    if (!selection.ok && selection.assessed?.some(item => item.issues?.includes('stale-market-activity'))) staleTabIds.push(...selection.assessed.map(item => item.candidate.tabId));
+  const staleTabIds = staleTabsForCandidates(candidates, preferredTabId);
+  if (staleTabIds.length) {
+    scan = await recoverAndRescan(tabs, scan, staleTabIds, preferredTabId, { force: reason === 'manual' });
+    candidates = scan.candidates;
   }
-  if (staleTabIds.length && await recoverTabs(tabs, staleTabIds, { force: reason === 'manual' })) candidates = (await collectCandidates(tabs)).candidates;
   const statuses = { ...(stored.readerStatuses || {}) }; const hashes = { ...(stored.lastSuccessfulPayloadHashes || {}) }; const times = { ...(stored.lastSuccessfulSyncAts || {}) }; const results = [];
   for (const league of LEAGUES) {
     const own = candidates.filter(item => item.parsed.league === league);
@@ -173,7 +210,7 @@ async function performSync(reason, preferredTabId) {
     if (!selection.ok) {
       const detail = selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
       const noChange = selection.assessed?.some(item => item.issues?.includes('stale-market-activity'));
-      statuses[league] = { ok: false, state: noChange ? 'idle' : 'error', league, message: noChange ? `${LABELS[league]}盤面可讀，但超過 5 分鐘沒有可驗證更新；已自動重掛與重掃，若盤口應有變動請按 F5` : `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
+      statuses[league] = { ok: false, state: noChange ? 'reconnecting' : 'error', league, message: noChange ? `${LABELS[league]}盤面超過 3 分鐘沒有可驗證更新；Reader 正在自動刷新並重新同步` : `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
     const selected = selection.selected; const payload = selected.candidate.parsed;
@@ -183,13 +220,27 @@ async function performSync(reason, preferredTabId) {
     if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[league], lastSuccessfulSyncAt: times[league] })) { results.push({ league, ok: true, skipped: true }); continue; }
     try {
       const response = await request(`${ORIGIN}/api/reader/ingest`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(payload) });
-      const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
+      const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) { const failure = new Error(data.error || `同步失敗（${response.status}）`); failure.code = String(data.code || ''); failure.status = response.status; throw failure; }
       const now = Date.now(); hashes[league] = payloadHash; times[league] = now;
       const matchedGameCount = integer(data.matchedGameCount, 40);
       const unopenedGameCount = integer(data.unopenedGameCount, 40);
       statuses[league] = { ok: true, state: 'synced', league, executable: matchedGameCount > 0, captureOnly: false, message: data.message, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount, unopenedGameCount, marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), localDiagnostic, boardDate: data.boardDate, readerVersion: VERSION };
       results.push({ league, ok: true, message: data.message });
-    } catch (error) { statuses[league] = { ok: false, state: 'error', league, message: error.message, lastAttemptAt: Date.now(), readerVersion: VERSION }; results.push({ league, ok: false, error: error.message }); }
+    } catch (error) {
+      if (error.code === 'PAGE_ACTIVITY_STALE') {
+        const reloadable = reserveRecoveryTabIds([selected.candidate.tabId], recoveryCooldownByTab);
+        const reloaded = await reloadTabs(reloadable);
+        if (reloaded.length) {
+          pendingRerun = true;
+          pendingReason = 'stale-reload';
+          pendingPreferredTabId = selected.candidate.tabId;
+          statuses[league] = { ok: false, state: 'reconnecting', league, message: `${LABELS[league]} Tai888 頁面停止更新，Reader 已自動刷新並等待重新同步`, lastAttemptAt: Date.now(), readerVersion: VERSION };
+          results.push({ league, ok: false, recovering: true, error: error.message });
+          continue;
+        }
+      }
+      statuses[league] = { ok: false, state: 'error', league, message: error.message, lastAttemptAt: Date.now(), readerVersion: VERSION }; results.push({ league, ok: false, error: error.message });
+    }
   }
   await chrome.storage.local.set({ readerStatuses: statuses, lastSuccessfulPayloadHashes: hashes, lastSuccessfulSyncAts: times, pairError: '' });
   const successes = results.filter(item => item.ok).length;

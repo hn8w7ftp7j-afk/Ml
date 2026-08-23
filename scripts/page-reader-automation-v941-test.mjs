@@ -25,10 +25,10 @@ assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API
 assert.match(analyzeRoute, /getOrBuildGameDistribution/, 'analyze API must reuse the same-game core distribution');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
-mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.18-SELF-HEAL\.zip'/, 'Reader download must point at the packaged production artifact');
+mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.19-UNATTENDED-RECOVERY\.zip'/, 'Reader download must point at the packaged production artifact');
 mustMatch(/href=\{READER_DOWNLOAD_PATH\}/, 'Reader download link must use the packaged production path');
-assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.18-SELF-HEAL.zip'), 'Reader production zip must exist');
-assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.18-SELF-HEAL.zip.sha256'), 'Reader checksum must exist');
+assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.19-UNATTENDED-RECOVERY.zip'), 'Reader production zip must exist');
+assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.19-UNATTENDED-RECOVERY.zip.sha256'), 'Reader checksum must exist');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
 mustMatch(/mlb-positive-ev-v9-4-4/, 'legacy MLB migration chain must remain available');
 
