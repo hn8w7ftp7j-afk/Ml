@@ -190,6 +190,24 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(Number.isFinite(asian.results[0].formulaDiagnosticScore), true, `${leagueId}應顯示驗證中公式分數`);
   assert.equal(asian.results[0].scoreStatus, 'SHADOW_DIAGNOSTIC_UNCALIBRATED');
   assert.equal(asian.results[0].betEligible, false);
+
+  const largeTai888Gap = finalizeDeterministicAnalysis({
+    analysis: {
+      leagueId,
+      alignmentAudit: { targetMarketCalibration: 'DISABLED' },
+      dataGateV10: { passedForShadowScore: true },
+      results: [{
+        ...direction('全場大小', '大8平', 0.025, 0.01),
+        rawMarketProbabilityGap: null,
+        tai888MarketProbabilityGap: 0.25,
+      }],
+    },
+    game: { ...game, leagueId },
+  });
+  assert.equal(Number.isFinite(largeTai888Gap.results[0].formulaDiagnosticScore), true, `${leagueId} Tai888差距只作影子稽核，不得硬性BLOCK`);
+  assert.equal(largeTai888Gap.results[0].scoreAudit.plausibility.hardGate, false);
+  assert.equal(largeTai888Gap.results[0].scoreAudit.plausibility.observedWithinLimit, false);
+  assert.equal(largeTai888Gap.results[0].scoreAudit.plausibility.auditWarnings.length, 1);
 }
 
 console.log('shadow-score-visibility-v102-test: PASS');
