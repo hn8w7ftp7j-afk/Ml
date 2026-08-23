@@ -194,7 +194,9 @@ assert.equal(projectedContext.dataGateV10.passedForShadowScore, true);
 assert.equal(projectedContext.away.lineup.status, 'PROJECTED');
 assert.equal(projectedContext.away.bullpen.projectionBased, true);
 assert.equal(projectedContext.away.bullpen.pureRelief, false);
-assert.notEqual(projectedContext.away.lineup.offensiveIndex, 1);
+assert.equal(projectedContext.away.lineup.offensiveIndex, 1, '近期得分不得再透過預估打線指數重複計算');
+assert.ok(projectedContext.asianCalibration.sampleReliability > 0 && projectedContext.asianCalibration.sampleReliability < 1);
+assert.ok(projectedContext.modelConfig.shrink.full < 0.30, '小樣本必須以經驗貝氏方式強烈收縮');
 
 await assert.rejects(
   () => buildAsianGameContext('NPB', npb[0], {

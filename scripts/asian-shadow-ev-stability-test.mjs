@@ -55,6 +55,15 @@ for (const [league, fixture] of Object.entries(fixtures)) {
   const changed = await analyze(league, fixture, history.map((row, index) => index === 0 ? { ...row, awayScore: row.awayScore + 1 } : row));
   const maxJump = Math.max(...base.preliminary.results.map((row, index) => Math.abs(row.weightedEV - changed.preliminary.results[index].weightedEV)));
   assert.ok(maxJump <= 0.05, `${league} EV jump ${(maxJump * 100).toFixed(2)}pp`);
+
+  const extremeHistory = history.map((row, index) => ({
+    ...row,
+    awayScore: [7, 8, 6][index % 3],
+    homeScore: [1, 2, 1][index % 3],
+  }));
+  const extreme = await analyze(league, fixture, extremeHistory);
+  const maximumPositiveEV = Math.max(...extreme.preliminary.results.map(row => row.weightedEV));
+  assert.ok(maximumPositiveEV <= 0.15, `${league} 小樣本極端近況不得產生不可信的長期EV ${(maximumPositiveEV * 100).toFixed(2)}%`);
 }
 
 console.log('Asian NPB/KBO/CPBL four-market EV stability and shadow-score contract PASS');
