@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {
+  analysisBoardCacheKey,
+  createAnalysisBoardCacheEntry,
+  restoreAnalysisBoardCache,
+  upsertAnalysisBoardCache,
+} from '../lib/analysis-board-cache-v1.js';
+
+const NOW = Date.parse('2026-08-23T11:00:00.000Z');
+const board = [{
+  game: { gamePk: 123, gameDate: '2026-08-23T10:00:00.000Z', away: 'Away', home: 'Home' },
+  actualSource: { provider: 'TAI888_READER_AUTO' },
+  readerPayloadHash: 'reader-hash',
+  customMarkets: [{ market: '全場大小', pick: '大8+50', water: 0.94 }],
+  customData: {
+    context: { deliberatelyLargeAndStale: true },
+    analysis: { results: [{ market: '全場大小', pick: '大8+50', formulaDiagnosticScore: 7.8 }] },
+  },
+}];
+
+const entry = createAnalysisBoardCacheEntry({ league: 'MLB', date: '2026-08-23', board, savedAt: NOW });
+assert.equal(entry.board.length, 1);
+assert.equal(entry.board[0].customData.context, undefined, 'volatile model context must not be persisted');
+assert.equal(entry.board[0].customData.analysis.results[0].formulaDiagnosticScore, 7.8);
+
+const restored = restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 60_000 });
+assert.equal(restored.length, 1, 'completed analysis must survive a mobile page reload');
+assert.equal(restored[0].statusLabel, '已恢復上一版分析｜背景驗證中');
+assert.equal(restored[0].customData.analysis.results[0].formulaDiagnosticScore, 7.8, 'restoring must preserve the visible score');
+assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'league caches must remain isolated');
+assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 73 * 60 * 60 * 1000 }), [], 'expired recovery data must not be restored');
+
+const store = upsertAnalysisBoardCache({}, entry);
+assert.equal(store[analysisBoardCacheKey('MLB', '2026-08-23')].board.length, 1);
+
+console.log('analysis board cache: mobile reload recovery and league isolation PASS');

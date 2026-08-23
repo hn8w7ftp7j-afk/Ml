@@ -26,12 +26,19 @@ import {
 } from '../lib/client-analysis-state.js';
 import { initialAnalysisConcurrency } from '../lib/analysis-transport-v1.js';
 import { assessCoreSnapshotFreshnessV109 } from '../lib/analysis-refresh-policy-v109.js';
+import {
+  analysisBoardCacheKey,
+  createAnalysisBoardCacheEntry,
+  restoreAnalysisBoardCache,
+  upsertAnalysisBoardCache,
+} from '../lib/analysis-board-cache-v1.js';
 
 const VERSION = APP_VERSION;
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.18-SELF-HEAL.zip';
 const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
+const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
 // A cold Production analysis can legitimately spend close to a minute fetching
 // point-in-time data and building the deterministic distribution. iOS Safari
 // reports an AbortController timeout as the unhelpful `Load failed`, so keep the
@@ -65,35 +72,6 @@ const referenceEvidenceFreshNow = (row, now = Date.now()) => {
   const expiresAt = Date.parse(row?.marketVerification?.referenceConsensusExpiresAt || '');
   return Number.isFinite(expiresAt) && expiresAt > Number(now);
 };
-const invalidateShadowScoreRow = (row, reason, tag = reason) => ({
-  ...row,
-  weightedEV: null,
-  robustEV: null,
-  formulaDiagnosticScore: null,
-  shadowDiagnosticScore: null,
-  rankingQualified: false,
-  betEligible: false,
-  scoreStatus: 'UNSCORED',
-  tag,
-  scoreAudit: { ...(row?.scoreAudit || {}), ok: false, reason },
-  evCalibration: {
-    ...(row?.evCalibration || {}),
-    qualified: false,
-    reasons: [reason],
-  },
-});
-const invalidateReaderPriceRow = (row, reason, tag = reason) => ({
-  ...invalidateShadowScoreRow(row, reason, tag),
-  executable: false,
-  lineFresh: false,
-  evCalibration: {
-    ...(row?.evCalibration || {}),
-    qualified: false,
-    actualReaderEligible: false,
-    reasons: [reason],
-  },
-});
-
 function outcomeText(value) {
   const outcome = String(value || '').toUpperCase();
   if (outcome === 'WIN') return '贏';
@@ -184,6 +162,35 @@ function saveCompactStore(value) {
   } catch {
     try { window.localStorage.removeItem(STORAGE); } catch {}
     return false;
+  }
+}
+
+function loadAnalysisBoardCache(league, date) {
+  try {
+    const store = safeParse(window.localStorage.getItem(ANALYSIS_BOARD_CACHE_STORAGE) || 'null');
+    const entry = store?.[analysisBoardCacheKey(league, date)];
+    return restoreAnalysisBoardCache(entry, { league, date });
+  } catch {
+    return [];
+  }
+}
+
+function saveAnalysisBoardCache(league, date, board) {
+  const entry = createAnalysisBoardCacheEntry({ league, date, board });
+  if (!entry) return false;
+  try {
+    const current = safeParse(window.localStorage.getItem(ANALYSIS_BOARD_CACHE_STORAGE) || 'null');
+    window.localStorage.setItem(ANALYSIS_BOARD_CACHE_STORAGE, JSON.stringify(upsertAnalysisBoardCache(current, entry)));
+    return true;
+  } catch {
+    // If older cached slates exhausted Safari's small quota, retain the current
+    // slate alone. Private mode may still reject it; live analysis continues.
+    try {
+      window.localStorage.setItem(ANALYSIS_BOARD_CACHE_STORAGE, JSON.stringify({
+        [analysisBoardCacheKey(league, date)]: entry,
+      }));
+      return true;
+    } catch { return false; }
   }
 }
 
@@ -352,7 +359,7 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   return { icon: '🟢', label: '7.2級分析候選', ranking: true, reason: '雙EV為正且達7.2' };
 }
 
-function ResultRow({ row, game, onBet, betState = null, recordable = false, now, verificationPending = false }) {
+function ResultRow({ row, game, onBet, betState = null, recordable = false, now, inactiveNotice = '' }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
   const storedFormulaScore = row?.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))
@@ -408,8 +415,8 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
       <div className="scorePick">{translateTeamText(row.pick) || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
       <div className="scoreMeta">{scoreMetaText}</div>
-      {actualLine && <div className={`qaLine ${verificationPending ? 'pending' : ''}`}>{verificationPending
-        ? '驗證中｜等待今日整批盤口完成'
+      {actualLine && <div className={`qaLine ${inactiveNotice ? 'pending' : ''}`}>{inactiveNotice
+        ? inactiveNotice
         : !leagueValidated
           ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否（${verdict.reason}）｜資料QA：${qaPassed ? 'PASS' : 'BLOCK'}｜正式推薦停用`
           : !qaPassed
@@ -444,18 +451,20 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
     ? Number(coverage.openMarkets)
     : new Set((item.customMarkets || []).map(row => row.market)).size;
   const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT').map(row => {
-    if (!gamePrestart) {
-      return invalidateReaderPriceRow(row, '已達官方預定開打時間', '已達官方預定開打時間｜停止記錄新下注');
-    }
     const currentReaderPrice = readerBacked
+      && gamePrestart
       && readerExecutable
       && row?.provider === 'TAI888_READER_AUTO'
       && row?.evCalibration?.actualReaderEligible === true
       && actualLineFreshNow(row, now);
-    // Keep the last completed model result visible while a new Reader board is
-    // being verified. It is excluded from ranking and bet recording below, but
-    // the user never loses a completed score because of a transient refresh.
-    return { ...row, clientReaderPriceCurrent: currentReaderPrice };
+    const inactiveNotice = !gamePrestart
+      ? '已達官方預定開打時間｜保留賽前分析｜停止記錄新下注'
+      : !currentReaderPrice
+        ? 'Reader盤口等待最新驗證｜保留上一版分析｜暫停下注與排名資格'
+        : '';
+    // A line becoming stale or a game starting changes execution eligibility,
+    // never the immutable score that was completed before first pitch.
+    return { ...row, clientReaderPriceCurrent: currentReaderPrice, clientInactiveNotice: inactiveNotice };
   });
   const expectedDirectionCount = openMarketCount * 2;
   const scoredDirectionCount = actualRows.filter(row => row.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))).length;
@@ -481,7 +490,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
           const rows = actualRows.filter(row => row.market === market);
           const blocked = blockedMarkets.has(market);
           return <div className={`marketBlock actualMarket ${blocked ? 'blockedMarket' : rows.length ? 'availableMarket' : 'unavailableMarket'}`} key={market}><div className="marketTitle"><h3>{market}</h3><span>{rows.length || availableMarkets.has(market) ? 'AVAILABLE' : blocked ? 'BLOCKED' : 'UNAVAILABLE'}</span></div>{rows.length
-            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={row.clientReaderPriceCurrent === true && betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} verificationPending={gamePrestart && row.clientReaderPriceCurrent !== true}/>)
+            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={row.clientReaderPriceCurrent === true && betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} inactiveNotice={row.clientInactiveNotice}/>)
             : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
       </div>}
@@ -548,6 +557,7 @@ export default function Home() {
   const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
   const settlementBusyRef = useRef(false);
+  const restoredBoardNeedsValidationRef = useRef(false);
   const activeLeague = leagueConfig(league);
   const analysisEnabled = activeLeague.capabilities.analysis === true;
   const readerEnabled = activeLeague.capabilities.reader === true;
@@ -560,10 +570,7 @@ export default function Home() {
     .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
       && row.sourceType === 'ACTUAL_TW_CREDIT'
       && row.provider === 'TAI888_READER_AUTO'
-      && row.evCalibration?.actualReaderEligible === true
-      && Boolean(item.readerPayloadHash)
-      && actualLineFreshNow(row, clockNow)
-      && gameIsPrestartNow(item.game, clockNow))
+      && row.evCalibration?.actualReaderEligible === true)
     .map(row => {
       const score = row.shadowDiagnosticScore != null && Number.isFinite(Number(row.shadowDiagnosticScore))
         ? Number(row.shadowDiagnosticScore)
@@ -572,13 +579,28 @@ export default function Home() {
           : null;
       const qaPassed = row.scoreAudit?.ok === true && row.pairAudit?.passed !== false;
       const qualified = row.evCalibration?.qualified === true;
-      const rankingEligible = qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
+      const gamePrestart = gameIsPrestartNow(item.game, clockNow);
+      const currentReaderPrice = gamePrestart
+        && readerStatus?.fresh === true
+        && readerStatus?.boardDate === date
+        && Boolean(item.readerPayloadHash)
+        && item.readerPayloadHash === readerStatus?.payloadHash
+        && acknowledgedReaderKey === readerHashKey(date, readerStatus?.payloadHash)
+        && actualLineFreshNow(row, clockNow);
+      const inactiveNotice = !gamePrestart
+        ? '比賽已開始｜保留賽前分析｜停止下注與目前排名資格'
+        : !currentReaderPrice
+          ? 'Reader盤口等待最新驗證｜保留上一版分析｜暫停下注與目前排名資格'
+          : '';
+      const rankingEligible = currentReaderPrice && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
         && row.evCalibration?.scenarioStable === true && Number(row.weightedEV) > 0 && Number(row.robustEV) > 0 && score != null && score >= 7.2;
       return { item, row, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
-        water: row.water, score, weightedEV: row.weightedEV, robustEV: row.robustEV, qaPassed, qualified, rankingEligible };
+        water: row.water, score, weightedEV: row.weightedEV, robustEV: row.robustEV, qaPassed, qualified,
+        currentReaderPrice, inactiveNotice, rankingEligible };
     }))
     .sort((left, right) => Number(right.score ?? -Infinity) - Number(left.score ?? -Infinity)
-      || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity)), [board, clockNow]);
+      || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity)),
+  [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, acknowledgedReaderKey, date]);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -689,12 +711,20 @@ export default function Home() {
     autoAnalyzeHashRef.current = '';
     autoAnalyzePendingRef.current = '';
     setAcknowledgedReaderKey('');
-    setSchedule([]);
-    setBoard([]);
+    const restoredBoard = storageReady ? loadAnalysisBoardCache(league, date) : [];
+    restoredBoardNeedsValidationRef.current = restoredBoard.length > 0;
+    setSchedule(restoredBoard.map(item => item.game));
+    setBoard(restoredBoard);
+    setError('');
+    if (restoredBoard.length) setNotice(`已恢復 ${restoredBoard.length} 場上一版分析；分數保留顯示，Reader 正在背景驗證目前盤口。`);
     readerStatusRef.current = null;
     readerStatusHighWaterRef.current = null;
     setReaderStatus(null);
-  }, [date, league]);
+  }, [date, league, storageReady]);
+  useEffect(() => {
+    if (!storageReady || !board.some(item => item.customData?.analysis?.results?.length)) return;
+    saveAnalysisBoardCache(league, date, board);
+  }, [board, date, league, storageReady]);
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), 30000);
     return () => window.clearInterval(timer);
@@ -761,6 +791,12 @@ export default function Home() {
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [board, date, busy, league, readerEnabled, analysisEnabled]);
+  useEffect(() => {
+    if (!restoredBoardNeedsValidationRef.current || !board.length || busy || !readerStatus?.fresh) return undefined;
+    restoredBoardNeedsValidationRef.current = false;
+    const timer = window.setTimeout(() => pollReaderAndReprice(), 250);
+    return () => window.clearTimeout(timer);
+  }, [board.length, busy, readerStatus?.fresh, readerStatus?.payloadHash, date, league]);
   useEffect(() => {
     if (!readerEnabled || !analysisEnabled || !board.length) return undefined;
     const timer = window.setInterval(() => {
@@ -870,6 +906,7 @@ export default function Home() {
         statusLabel: 'Tai888盤口分析完成（驗證中）',
         customMarkets: actualMarkets,
         customData: compactAnalysisData(baseData),
+        restoredFromCache: false,
         error: '',
       }));
       return true;
@@ -1105,13 +1142,15 @@ export default function Home() {
       if (!stillCurrent()) return;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
       const boardPks = new Set(board.map(item => Number(item.game.gamePk)));
-      const expectedItems = board.filter(item => creditByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO');
+      const expectedItems = board.filter(item => gameIsPrestartNow(item.game, Date.now())
+        && (creditByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO'));
       let failed = [...creditByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
       let completed = 0;
       let updated = 0;
       let removed = 0;
       await runPool(board, 2, async item => {
         if (!stillCurrent()) return;
+        if (!gameIsPrestartNow(item.game, Date.now())) return;
         const actual = creditByPk.get(Number(item.game.gamePk));
         if (!actual?.markets?.length) {
           if (item.actualSource?.provider === 'TAI888_READER_AUTO') {
@@ -1127,7 +1166,7 @@ export default function Home() {
           }
           return;
         }
-        if (item.readerPayloadHash === credit.payloadHash && item.customData) {
+        if (item.readerPayloadHash === credit.payloadHash && item.customData && item.restoredFromCache !== true) {
           updateBoard(item.game.gamePk, current => touchReaderHeartbeat(current, credit.payloadHash, credit.pageActivityAt));
           completed += 1;
           return;
@@ -1170,6 +1209,7 @@ export default function Home() {
             verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
             referenceSource: referenceByPk.get(Number(item.game.gamePk))?.source || item.referenceSource || null,
             customData: compactAnalysisData(data),
+            restoredFromCache: false,
             status: 'done',
             statusLabel: 'Tai888最新盤快速重算完成',
             error: '',
@@ -1376,12 +1416,12 @@ export default function Home() {
       <div className="emptySmall">此處顯示今日Reader已開盤且已完成分析的全部方向，不再只顯示7.2以上或可下注方向。仍依S分數由高到低排序；未通過EV校準、QA、情境穩定或雙正EV的方向也保留並清楚標示原因。</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-        const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
+        const recordable = entry.currentReaderPrice === true && betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
         const buttonText = betState.latest ? '已下注 ✓' : '紀錄實際下注';
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const icon = entry.rankingEligible ? (entry.score >= 8.5 ? '🔥' : '🟢') : entry.qualified && entry.qaPassed ? '⚪' : '⚠️';
         const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜EV校準未通過' : !entry.qaPassed ? '排名資格：否｜QA未通過' : '排名資格：否｜未達正式排名條件';
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{scoreText}</strong><div><span>{icon} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{scoreText}</strong><div><span>{icon} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 

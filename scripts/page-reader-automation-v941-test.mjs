@@ -15,10 +15,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.9.1', 'package/release identity must match the V10.9.1 UI');
-assert.equal(packageLock.version, '10.9.1', 'package-lock release identity must match V10.9.1');
-assert.equal(packageLock.packages?.['']?.version, '10.9.1', 'root lockfile package must match V10.9.1');
-assert.equal(APP_VERSION, '10.9.1');
+assert.equal(packageJson.version, '10.9.2', 'package/release identity must match the V10.9.2 UI');
+assert.equal(packageLock.version, '10.9.2', 'package-lock release identity must match V10.9.2');
+assert.equal(packageLock.packages?.['']?.version, '10.9.2', 'root lockfile package must match V10.9.2');
+assert.equal(APP_VERSION, '10.9.2');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
@@ -129,8 +129,9 @@ assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negativ
 mustMatch(/row\.formulaDiagnosticScore != null/, 'ranking must retain formula score fallback so every analyzed direction can be displayed');
 mustMatch(/row\.provider === 'TAI888_READER_AUTO'/, 'ranking must accept only Reader-signed actual rows');
 mustMatch(/row\.evCalibration\?\.actualReaderEligible === true/, 'ranking must require the server-preserved fresh Reader qualification');
-mustMatch(/actualLineFreshNow\(row, clockNow\)/, 'ranking must expire stale Reader prices immediately on the client clock');
-mustMatch(/gameIsPrestartNow\(item\.game, clockNow\)/, 'ranking must remove games that have reached scheduled start');
+mustMatch(/const currentReaderPrice = gamePrestart/, 'ranking must calculate current Reader execution eligibility separately from display');
+mustMatch(/比賽已開始｜保留賽前分析｜停止下注與目前排名資格/, 'started games must retain their completed pregame score while execution is disabled');
+mustMatch(/Reader盤口等待最新驗證｜保留上一版分析/, 'stale Reader prices must retain their completed score while execution is disabled');
 assert.doesNotMatch(page, /invalidateShadowScoreRow\(row, '獨立國際市場報價已超過5分鐘/, 'expired external consensus must remain audit-only');
 mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows must retain completed scores while bet recording is disabled');
 mustMatch(/recordable=\{row\.clientReaderPriceCurrent === true && betRecordable/, 'only the current acknowledged Reader price may be recorded');
@@ -139,12 +140,8 @@ const scoreOnlyInvalidation = page.slice(
   page.indexOf('const invalidateReaderPriceRow'),
 );
 assert.doesNotMatch(scoreOnlyInvalidation, /lineFresh:\s*false|actualReaderEligible:\s*false|executable:\s*false/, 'external-reference expiry must not invalidate a still-fresh Reader price or hide actual-bet recording');
-const readerPriceInvalidation = page.slice(
-  page.indexOf('const invalidateReaderPriceRow'),
-  page.indexOf('function outcomeText'),
-);
-assert.match(readerPriceInvalidation, /lineFresh:\s*false/, 'Reader-price invalidation must clear actual-line freshness');
-assert.match(readerPriceInvalidation, /actualReaderEligible:\s*false/, 'Reader-price invalidation must clear the server-preserved Reader qualification');
+assert.doesNotMatch(page, /invalidateReaderPriceRow/, 'client time progression must not destroy a completed immutable score');
+mustMatch(/recordable = entry\.currentReaderPrice === true && betRecordable/, 'ranking bet recording must still require a current acknowledged Reader price');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
 mustMatch(/const qaPassed = row\.scoreAudit\?\.ok === true/, 'ranking must preserve QA PASS as a visible qualification flag');
