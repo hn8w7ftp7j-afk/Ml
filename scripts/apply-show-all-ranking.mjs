@@ -74,4 +74,17 @@ const newUi=`    {tab === 'ranking' && <section className="panel"><div className
 if(!s.includes(oldUi)) throw new Error('ranking UI anchor not found');
 s=s.replace(oldUi,newUi);
 fs.writeFileSync(path,s);
-console.log('show-all ranking patch applied');
+
+const testPath='scripts/page-reader-automation-v941-test.mjs';
+let t=fs.readFileSync(testPath,'utf8');
+t=t.replace("mustMatch(/\\.map\\(row => \\(\\{\\s*item,\\s*row,/, 'ranking entries must retain their source board item and actual market row');", "mustMatch(/return \\{ item, row, gamePk:/, 'ranking entries must retain their source board item and actual market row');");
+t=t.replace("mustMatch(/row\\.shadowDiagnosticScore != null/, 'ranking must explicitly reject null qualification scores');", "mustMatch(/row\\.formulaDiagnosticScore != null/, 'ranking must retain formula score fallback so every analyzed direction can be displayed');");
+t=t.replace("mustMatch(/row\\.scoreAudit\\?\\.ok === true/, 'ranking must require QA PASS');", "mustMatch(/const qaPassed = row\\.scoreAudit\\?\\.ok === true/, 'ranking must preserve QA PASS as a visible qualification flag');");
+t=t.replace("mustMatch(/Number\\(row\\.weightedEV\\) > 0/, 'ranking must require positive Raw W EV');", "mustMatch(/Number\\(row\\.weightedEV\\) > 0/, 'ranking eligibility must still require positive Weighted EV without hiding other directions');");
+t=t.replace("mustMatch(/Number\\(row\\.robustEV\\) > 0/, 'ranking must require positive Robust R EV');", "mustMatch(/Number\\(row\\.robustEV\\) > 0/, 'ranking eligibility must still require positive Robust EV without hiding other directions');");
+t=t.replace("mustMatch(/Number\\(row\\.shadowDiagnosticScore\\) >= 7\\.2/, 'ranking must require the 7.2 qualification threshold');", "mustMatch(/score != null && score >= 7\\.2/, 'ranking eligibility must retain the 7.2 threshold without filtering lower scores from display');");
+t=t.replace("mustMatch(/row\\.evCalibration\\?\\.scenarioStable === true/, 'ranking must require the 5% model-scenario stability gate');", "mustMatch(/row\\.evCalibration\\?\\.scenarioStable === true/, 'ranking eligibility must retain the model-scenario stability gate without hiding unstable directions');");
+const insert="assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');\nassert.match(rankingUi, /不再只顯示7\\.2以上或可下注方向/, 'ranking UI must explain that non-bettable directions remain visible');\nassert.match(rankingUi, /排名資格：否/, 'ranking UI must label non-qualified directions instead of filtering them out');\n";
+t=t.replace("assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');\n", "assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');\n"+insert);
+fs.writeFileSync(testPath,t);
+console.log('show-all ranking patch and regression update applied');
