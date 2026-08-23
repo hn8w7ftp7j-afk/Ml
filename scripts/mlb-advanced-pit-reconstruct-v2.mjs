@@ -232,9 +232,14 @@ function pitchMatchupFeature(teamId, pitcherId, state) {
     let batterRuns = 0;
     let batterPitches = 0;
     for (const batter of batters) {
-      const value = state.players.get(batter.id)?.battingPitches?.get(pitchType);
+      const batterState = state.players.get(batter.id);
+      const value = batterState?.battingPitches?.get(pitchType);
       if (!value) continue;
-      batterRuns += value.runs;
+      const allPitchRows = [...(batterState?.battingPitches?.values() || [])];
+      const allPitchCount = allPitchRows.reduce((sum, row) => sum + row.count, 0);
+      const allPitchRuns = allPitchRows.reduce((sum, row) => sum + row.runs, 0);
+      const batterOverallPerPitch = allPitchCount ? allPitchRuns / allPitchCount : 0;
+      batterRuns += value.runs - batterOverallPerPitch * value.count;
       batterPitches += value.count;
     }
     const league = state.leaguePitch.get(pitchType) || { runs: 0, count: 0 };
@@ -332,14 +337,25 @@ function updateState(game, aggregate, state) {
     const row = nested(state.teamFielding, teamId, () => ({ bip: 0, preventedWoba: 0 }));
     row.bip += fielding.bip; row.preventedWoba += fielding.preventedWoba;
   }
+  if (game.umpireId && aggregate.umpireTaken.count) {
+    // Remove the pregame catcher expectation before updating catcher state, so
+    // the umpire history is a catcher-neutral residual instead of a second
+    // copy of the same edge-pitch value.
+    let expectedCatcherResidual = 0;
+    for (const [catcherId, current] of aggregate.catchers) {
+      const priorTeam = state.teamCatchers.get(current.teamId);
+      const prior = priorTeam?.get(catcherId);
+      const priorRate = prior?.count ? prior.residual / prior.count : 0;
+      expectedCatcherResidual += priorRate * current.count;
+    }
+    const umpire = nested(state.umpires, game.umpireId, () => ({ residual: 0, count: 0 }));
+    umpire.residual += aggregate.umpireTaken.residual - expectedCatcherResidual;
+    umpire.count += aggregate.umpireTaken.count;
+  }
   for (const [catcherId, catcher] of aggregate.catchers) {
     const team = nested(state.teamCatchers, catcher.teamId, () => new Map());
     const row = nested(team, catcherId, () => ({ residual: 0, count: 0, lastTeamGame: 0 }));
     row.residual += catcher.residual; row.count += catcher.count; row.lastTeamGame = state.teamGames.get(catcher.teamId) || 0;
-  }
-  if (game.umpireId && aggregate.umpireTaken.count) {
-    const umpire = nested(state.umpires, game.umpireId, () => ({ residual: 0, count: 0 }));
-    umpire.residual += aggregate.umpireTaken.residual; umpire.count += aggregate.umpireTaken.count;
   }
 }
 

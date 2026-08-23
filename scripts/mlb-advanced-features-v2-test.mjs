@@ -8,13 +8,13 @@ const advanced = {
   fielding: { status: 'CONFIRMED', validationStatus: 'PASSED', observedAt, fieldingRunValue: 12, catcherFramingRuns: 3, includesCatcherFraming: true, innings: 900 },
   catcherFraming: { status: 'CONFIRMED', validationStatus: 'PASSED', observedAt, framingRuns: 5, pitches: 2200 },
   umpireZone: { status: 'PROJECTED', validationStatus: 'PASSED', observedAt, catcherNeutralRunsPerGame: -0.04, takenPitches: 1600 },
-  injuryRunValue: { status: 'CONFIRMED', validationStatus: 'PASSED', observedAt, expectedAbsentShare: 1, replacementRunDeltaPerGame: 0.22, lineupCoverage: 1 },
+  injuryRunValue: { status: 'CONFIRMED', validationStatus: 'PASSED', observedAt, expectedAbsentShare: 1, replacementRunDeltaPerGame: 0.22, lineupCoverage: 1, regressedValue: { battingRunsPerGame: 0.18, fieldingRunsPerGame: 0.03, baserunningRunsPerGame: 0.01 } },
   pitchTypeMatchup: { status: 'CONFIRMED', validationStatus: 'PASSED', observedAt, centeredRunValuePer100: 0.15, expectedPitches: 95, samplePitches: 3000, lineupCoverage: 1 },
 };
 const context = {
   game: { gameDate }, league: { runsPerTeamGame: 4.5 },
   away: { advanced: structuredClone(advanced) }, home: { advanced: structuredClone(advanced) },
-  advancedEnvironment: { directionalWind: { status: 'CONFIRMED', validationStatus: 'PASSED', observedAt, validatedRunsPerMphAlignment: 0.012, fieldBearingDegrees: 45, windFromDegrees: 225, windSpeedMph: 10, roofOpenProbability: 1 } },
+  advancedEnvironment: { directionalWind: { status: 'CONFIRMED', validationStatus: 'PASSED', observedAt, validatedRunsPerMphAlignment: 0.012, parkBaselineAlignedWindMph: 2, fieldBearingDegrees: 45, windFromDegrees: 225, windSpeedMph: 10, roofOpenProbability: 1 } },
 };
 
 const promotedPolicy = Object.fromEntries(['fielding', 'injury', 'pitchMatchup', 'catcherFraming', 'umpireZone', 'directionalWind'].map(name => [name, { promoted: true }]));
@@ -24,6 +24,8 @@ assert.equal(result.pointInTimeSafe, true);
 assert.ok(result.away.components.fielding.runsPrevented > 0);
 assert.equal(result.away.components.fielding.audit.framingRemoved, 3, 'FRV must remove framing before separate framing adjustment');
 assert.ok(result.away.components.injury.runsLost > 0);
+assert.equal(result.away.components.injury.audit.replacementDelta, 0.04, 'lineup-owned batting injury value must be excluded');
+assert.equal(result.away.components.injury.audit.battingValueExcluded, true);
 assert.ok(result.wind.runDelta > 0, 'wind blowing toward center field must increase runs');
 
 const leaked = structuredClone(context);
@@ -45,6 +47,12 @@ const noWindCoefficient = structuredClone(context);
 delete noWindCoefficient.advancedEnvironment.directionalWind.validatedRunsPerMphAlignment;
 const neutralWind = buildMlbAdvancedAdjustmentV2(noWindCoefficient, { promotionPolicy: promotedPolicy });
 assert.equal(neutralWind.wind.factor, 1, 'unvalidated wind coefficient must not move the mean');
+
+const uncenteredWind = structuredClone(context);
+delete uncenteredWind.advancedEnvironment.directionalWind.parkBaselineAlignedWindMph;
+const blockedUncenteredWind = buildMlbAdvancedAdjustmentV2(uncenteredWind, { promotionPolicy: promotedPolicy });
+assert.equal(blockedUncenteredWind.wind.factor, 1, 'raw wind must not duplicate the average wind embedded in park factor');
+assert.equal(blockedUncenteredWind.wind.state.reason, 'WIND_NOT_CENTERED_AGAINST_PARK_BASELINE');
 
 const pendingValidation = structuredClone(context);
 pendingValidation.away.advanced.fielding.validationStatus = 'PENDING';

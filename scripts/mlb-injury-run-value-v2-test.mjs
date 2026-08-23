@@ -15,7 +15,8 @@ assert.equal(result.status, 'PROJECTED');
 assert.equal(result.validationStatus, 'PENDING');
 assert.equal(result.absentPlayers.length, 1);
 assert.ok(result.regressedValue.absentRunsPerGame > 0);
+assert.ok(result.regressedValue.battingRunsPerGame > 0);
+assert.equal(result.overlapRule, 'BATTING_VALUE_OWNED_BY_LINEUP_WHEN_LINEUP_IS_AVAILABLE');
 assert.equal(result.appliedValue.absentRunsPerGame, 0, 'unvalidated injury input must remain neutral');
 assert.equal(buildInjuryRunValueV2({ injuredRoster: { available: false } }).status, 'MISSING');
 console.log('MLB injury replacement run-value input PASS');
-
