@@ -1,0 +1,37 @@
+name: Apply all-leagues starter and score integrity
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: ${{ !contains(github.event.pull_request.head.sha || '', '[integrity-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/all-leagues-starter-score-integrity
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-asian-starter-integrity.mjs
+      - run: node scripts/apply-fixed-score-tests.mjs
+      - run: node --check lib/asian-baseball.js
+      - run: node scripts/deterministic-v9-test.mjs
+      - run: node scripts/asian-baseball-provider-test.mjs
+      - run: node scripts/shadow-score-visibility-v102-test.mjs
+      - run: npm test
+      - run: npm run build
+      - run: |
+          rm scripts/apply-asian-starter-integrity.mjs scripts/apply-fixed-score-tests.mjs .github/workflows/apply-all-leagues-integrity.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: restore locked scores and preserve Asian starters [integrity-applied]"
+          git push origin HEAD:fix/all-leagues-starter-score-integrity
