@@ -84,7 +84,7 @@ assert.equal(conflictingTabs.error, 'conflicting-duplicate-tabs');
 const staleBoard = candidate({ tabId: 9, active: true });
 staleBoard.capture.diagnostics.lastMutationAt = '2026-08-14T16:54:59.000Z';
 const staleSelection = selectAuthoritativeBoard([staleBoard], { now: NOW });
-assert.equal(staleSelection.ok, false, '盤口內容超過五分鐘沒有變動時不得繼續執行');
+assert.equal(staleSelection.ok, false, '盤口內容超過三分鐘沒有變動時不得繼續執行');
 assert.match(staleSelection.assessed.flatMap(row => row.issues || []).join('｜'), /stale-market-activity/);
 
 const otherDate = candidate({ tabId: 3, active: false, overWater: 0.95 });

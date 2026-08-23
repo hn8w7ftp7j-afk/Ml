@@ -1,12 +1,28 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {
+  BOARD_ACTIVITY_TTL_MS,
+  RECOVERY_COOLDOWN_MS,
+  reserveRecoveryTabIds,
+  staleAssessedTabIds,
+} from '../reader/recovery-policy.js';
+
+assert.equal(BOARD_ACTIVITY_TTL_MS, 180_000);
+assert.equal(RECOVERY_COOLDOWN_MS, 90_000);
+assert.deepEqual(staleAssessedTabIds([
+  { candidate: { tabId: 1 }, issues: ['stale-market-activity'] },
+  { candidate: { tabId: 2 }, issues: ['parser-error'] },
+]), [1]);
+const recoveryCooldowns = new Map();
+assert.deepEqual(reserveRecoveryTabIds([1], recoveryCooldowns, { now: 100_000 }), [1]);
+assert.deepEqual(reserveRecoveryTabIds([1], recoveryCooldowns, { now: 150_000 }), []);
 
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.18');
-assert.equal(manifest.version_name, '2.1.18 SELF-HEAL');
+assert.equal(manifest.version, '2.1.19');
+assert.equal(manifest.version_name, '2.1.19 UNATTENDED-RECOVERY');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -28,10 +44,12 @@ assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const VERSION = '2\.1\.18'/);
+assert.match(background, /const VERSION = '2\.1\.19'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.match(background, /TAI888_READER_RECOVER/);
-assert.match(background, /RECOVERY_COOLDOWN_MS = 90_000/);
+assert.match(background, /reserveRecoveryTabIds/);
+assert.match(background, /chrome\.tabs\.reload/);
+assert.match(background, /PAGE_ACTIVITY_STALE/);
 assert.match(background, /if \(running\)/, 'self-heal must retain single-flight sync');
 assert.doesNotMatch(background, /captures\.flatMap|tables:\s*captures\.flatMap/);
 assert.match(background, /lastSuccessfulPayloadHashes/);
@@ -78,6 +96,10 @@ assert.match(content, /observerRoot === root && observerRoot\.isConnected/);
 assert.match(content, /visibilitychange/);
 assert.match(content, /root-replaced/);
 
+const recoveryPolicy = fs.readFileSync('reader/recovery-policy.js', 'utf8');
+assert.match(recoveryPolicy, /BOARD_ACTIVITY_TTL_MS = 3 \* 60 \* 1000/);
+assert.match(recoveryPolicy, /RECOVERY_COOLDOWN_MS = 90 \* 1000/);
+
 const browserParser = fs.readFileSync('reader/parser.js', 'utf8');
 assert.match(browserParser, /export function sanitizeTai888PageUrl/);
 assert.match(browserParser, /pageUrl = sanitizeTai888PageUrl\(capture\?\.pageUrl\)/);
@@ -111,5 +133,6 @@ assert.match(status, /verifyReaderToken\(bearerToken\(request\)\)/, 'Reader stat
 assert.match(status, /requestIsAuthenticated\(request\)/, 'Reader status must accept an authenticated site session');
 assert.match(auth, /60 \* 60 \* 24 \* 30/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
+assert.match(ingest, /error\?\.code/);
 
-console.log('Reader 2.1.18 static security audit: minimal permissions, verified live heartbeat, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');
+console.log('Reader 2.1.19 static security audit: minimal permissions, unattended recovery, verified live heartbeat, single-frame board selection, no credential storage, signed device token and strict origins PASS');

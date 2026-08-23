@@ -285,11 +285,13 @@ const activeFailClosed = selectAuthoritativeBoard([hiddenComplete, activeIncompl
 assert.equal(activeFailClosed.ok, false, '可用分頁內容不一致時不得由 active tab 靜默覆蓋');
 assert.equal(activeFailClosed.error, 'conflicting-duplicate-tabs');
 
-const stale = candidate({ activity: '2026-08-14T16:56:00.000Z' });
-const backgroundAssessment = assessBoardCandidate(stale, now);
-assert.equal(backgroundAssessment.ok, true, 'a freshly captured background tab must not fail only because its odds did not mutate');
-assert.equal(backgroundAssessment.pageActivityAt, '2026-08-14T16:56:00.000Z', '只有市場內容變動時間可作為可執行新鮮度');
-assert.equal(backgroundAssessment.marketActivityAt, '2026-08-14T16:56:00.000Z', 'market mutation time remains available for audit');
+const freshBoundary = candidate({ activity: '2026-08-14T16:57:00.000Z' });
+const backgroundAssessment = assessBoardCandidate(freshBoundary, now);
+assert.equal(backgroundAssessment.ok, true, 'the Reader three-minute activity boundary must match the server and remain inclusive');
+assert.equal(backgroundAssessment.pageActivityAt, '2026-08-14T16:57:00.000Z', '只有市場內容變動時間可作為可執行新鮮度');
+assert.equal(backgroundAssessment.marketActivityAt, '2026-08-14T16:57:00.000Z', 'market mutation time remains available for audit');
+const expiredBoundary = candidate({ activity: '2026-08-14T16:56:59.999Z' });
+assert.equal(assessBoardCandidate(expiredBoundary, now).ok, false, 'one millisecond beyond the server activity limit must trigger unattended recovery');
 
 const captureConflict = candidate();
 captureConflict.capture.diagnostics.conflictingGameKeys = ['BAL|MIN|08-15|01:10'];
