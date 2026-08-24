@@ -585,7 +585,6 @@ export default function Home() {
         && readerStatus?.boardDate === date
         && Boolean(item.readerPayloadHash)
         && item.readerPayloadHash === readerStatus?.payloadHash
-        && acknowledgedReaderKey === readerHashKey(date, readerStatus?.payloadHash)
         && actualLineFreshNow(row, clockNow);
       const inactiveNotice = !gamePrestart
         ? '比賽已開始｜保留賽前分析｜停止下注與目前排名資格'
@@ -600,7 +599,7 @@ export default function Home() {
     }))
     .sort((left, right) => Number(right.score ?? -Infinity) - Number(left.score ?? -Infinity)
       || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity)),
-  [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, acknowledgedReaderKey, date]);
+  [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, date]);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -821,12 +820,10 @@ export default function Home() {
   const readerExecutable = readerEnabled
     && readerStatus?.fresh === true
     && readerStatus?.boardDate === date
-    && Boolean(currentReaderHashKey)
-    && (acknowledgedReaderKey === currentReaderHashKey || acknowledgedReaderKey.startsWith(`${currentReaderHashKey}:`));
+    && Boolean(currentReaderHashKey);
   const itemReaderExecutable = item => readerEnabled
     && readerStatus?.fresh === true
     && readerStatus?.boardDate === date
-    && acknowledgedReaderKey === readerHashKey(date, readerStatus?.payloadHash)
     && Boolean(item?.readerPayloadHash)
     && item.readerPayloadHash === readerStatus?.payloadHash;
 
