@@ -139,6 +139,8 @@ assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHa
 mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*actualLineFreshNow\(row, clockNow\)/, 'ranking must use per-item current hash and live line freshness');
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
 mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled\]\);/, 'Reader polling must not restart on every board item update');
+mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt\)/, 'a mobile reload must resume past completed unchanged games');
+mustMatch(/actual\?\.markets\?\.length && !item\.resumedCurrentReaderGame/, 'completed unchanged games must not be requeued from the first game');
 const scoreOnlyInvalidation = page.slice(
   page.indexOf('const invalidateShadowScoreRow'),
   page.indexOf('const invalidateReaderPriceRow'),

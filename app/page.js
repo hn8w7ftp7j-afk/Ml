@@ -995,21 +995,26 @@ export default function Home() {
         const foundCredit = creditByPk.get(Number(game.gamePk));
         const foundReference = referenceByPk.get(Number(game.gamePk));
         const available = Boolean(foundCredit?.markets?.length);
+        const resumed = available && previous
+          ? advanceUnchangedReaderGame(previous, foundCredit.markets, credit.payloadHash, credit.pageActivityAt)
+          : null;
         return {
           game,
           mode: 'actual',
-          actualSource: previous?.actualSource || foundCredit?.source || null,
+          actualSource: resumed?.actualSource || previous?.actualSource || foundCredit?.source || null,
           marketCoverage: foundCredit?.marketCoverage || previous?.marketCoverage || null,
-          readerPayloadHash: previous?.readerPayloadHash || (previous ? null : available ? credit.payloadHash : null),
-          customMarkets: previous?.customMarkets?.length ? previous.customMarkets : foundCredit?.markets || [],
+          readerPayloadHash: resumed?.readerPayloadHash || previous?.readerPayloadHash || (previous ? null : available ? credit.payloadHash : null),
+          customMarkets: resumed?.customMarkets || (previous?.customMarkets?.length ? previous.customMarkets : foundCredit?.markets || []),
           verificationMarkets: foundReference?.markets || [],
           referenceSource: foundReference?.source || previous?.referenceSource || null,
-          status: available ? 'queued' : 'unopened',
+          status: resumed ? 'done' : available ? 'queued' : 'unopened',
           statusLabel: available
-            ? previous?.customData ? '後台更新中｜保留目前分數' : '等待分析'
+            ? resumed ? 'Tai888盤口未變｜接續完成' : previous?.customData ? '後台更新中｜保留目前分數' : '等待分析'
             : previous?.customData ? '最新盤已下架｜保留上一版結果' : '目前尚無可配對盤口',
-          referenceData: previous?.referenceData || null,
-          customData: previous?.customData || null,
+          referenceData: resumed?.referenceData || previous?.referenceData || null,
+          customData: resumed?.customData || previous?.customData || null,
+          restoredFromCache: resumed ? false : previous?.restoredFromCache,
+          resumedCurrentReaderGame: Boolean(resumed),
           error: '',
         };
       });
@@ -1017,7 +1022,7 @@ export default function Home() {
 
       const tasks = items.map(item => {
         const actual = creditByPk.get(Number(item.game.gamePk));
-        return actual?.markets?.length ? {
+        return actual?.markets?.length && !item.resumedCurrentReaderGame ? {
           game: item.game,
           actualMarkets: actual.markets,
           actualSource: actual.source,
@@ -1042,6 +1047,15 @@ export default function Home() {
       ].filter(Boolean);
 
       if (!tasks.length) {
+        if (items.some(item => item.resumedCurrentReaderGame)) {
+          const completedKey = readerHashKey(targetDate, credit.payloadHash);
+          creditRevisionRef.current = completedKey;
+          autoAnalyzeHashRef.current = completedKey;
+          setAcknowledgedReaderKey(completedKey);
+          setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜所有已開盤場次沿用相同盤口的完成分析｜${coveragePendingText(coverage)}。`);
+          setProgress({ active: false, done: 0, running: 0, total: 0, label: '' });
+          return true;
+        }
         setNotice(sourceWarnings.join('；') || credit.message || `目前 Tai888 Reader 沒有可分析的${activeLeague.shortLabel}信用盤。`);
         setProgress({ active: false, done: 0, running: 0, total: 0, label: '' });
         return false;
