@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from './board-selector.js';
 
-const VERSION = '2.1.18';
+const VERSION = '2.1.19';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];
@@ -155,12 +155,6 @@ async function performSync(reason, preferredTabId) {
   let scan = await collectCandidates(tabs);
   if (scan.silentTabIds.length && await recoverTabs(tabs, scan.silentTabIds, { force: reason === 'manual' })) scan = await collectCandidates(tabs);
   let candidates = scan.candidates;
-  const staleTabIds = [];
-  for (const league of LEAGUES) {
-    const selection = selectAuthoritativeBoard(candidates.filter(item => item.parsed.league === league), { now: Date.now(), preferredTabId, league });
-    if (!selection.ok && selection.assessed?.some(item => item.issues?.includes('stale-market-activity'))) staleTabIds.push(...selection.assessed.map(item => item.candidate.tabId));
-  }
-  if (staleTabIds.length && await recoverTabs(tabs, staleTabIds, { force: reason === 'manual' })) candidates = (await collectCandidates(tabs)).candidates;
   const statuses = { ...(stored.readerStatuses || {}) }; const hashes = { ...(stored.lastSuccessfulPayloadHashes || {}) }; const times = { ...(stored.lastSuccessfulSyncAts || {}) }; const results = [];
   for (const league of LEAGUES) {
     const own = candidates.filter(item => item.parsed.league === league);
@@ -172,8 +166,7 @@ async function performSync(reason, preferredTabId) {
     const selection = selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
     if (!selection.ok) {
       const detail = selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
-      const noChange = selection.assessed?.some(item => item.issues?.includes('stale-market-activity'));
-      statuses[league] = { ok: false, state: noChange ? 'idle' : 'error', league, message: noChange ? `${LABELS[league]}盤面可讀，但超過 5 分鐘沒有可驗證更新；已自動重掛與重掃，若盤口應有變動請按 F5` : `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
+      statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
     const selected = selection.selected; const payload = selected.candidate.parsed;

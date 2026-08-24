@@ -288,7 +288,7 @@ assert.equal(activeFailClosed.error, 'conflicting-duplicate-tabs');
 const stale = candidate({ activity: '2026-08-14T16:56:00.000Z' });
 const backgroundAssessment = assessBoardCandidate(stale, now);
 assert.equal(backgroundAssessment.ok, true, 'a freshly captured background tab must not fail only because its odds did not mutate');
-assert.equal(backgroundAssessment.pageActivityAt, '2026-08-14T16:56:00.000Z', '只有市場內容變動時間可作為可執行新鮮度');
+assert.equal(backgroundAssessment.pageActivityAt, '2026-08-14T17:00:00.000Z', '完整重新讀取成功後應以本次DOM觀測時間更新可執行新鮮度');
 assert.equal(backgroundAssessment.marketActivityAt, '2026-08-14T16:56:00.000Z', 'market mutation time remains available for audit');
 
 const captureConflict = candidate();

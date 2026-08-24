@@ -170,17 +170,18 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   if (!Number.isFinite(observedTime)) issues.push('missing-observed-time');
   else if (observedAgeMs < -30_000 || observedAgeMs > 60_000) issues.push('stale-observation');
 
-  // A successful content-script response proves only that the DOM is readable.
-  // It must not renew the executable price time on a disconnected/frozen page.
-  // Only an actual market fingerprint mutation can advance pageActivityAt.
+  // A fresh, fully validated DOM capture is a new observation of the displayed
+  // quote even when Tai888 has not changed the price.  Using only mutation time
+  // made an unchanged but continuously re-read board expire every five minutes.
+  // Connection loss is still fail-closed because a capture must answer now and
+  // pass the host, timestamp, slate, market and water validations above.
   const marketActivityAt = String(diagnostics.lastMutationAt || '');
   const marketActivityTime = Date.parse(marketActivityAt);
-  const marketActivityAgeMs = Number(now) - marketActivityTime;
-  if (!Number.isFinite(marketActivityTime)) issues.push('missing-market-activity');
-  else if (marketActivityAgeMs < -30_000) issues.push('future-market-activity');
-  else if (marketActivityAgeMs > BOARD_ACTIVITY_TTL_MS) issues.push('stale-market-activity');
-  const pageActivityAt = Number.isFinite(marketActivityTime) ? new Date(marketActivityTime).toISOString() : '';
-  const pageActivityTime = marketActivityTime;
+  if (Number.isFinite(marketActivityTime) && marketActivityTime > Number(now) + 30_000) {
+    issues.push('future-market-activity');
+  }
+  const pageActivityAt = Number.isFinite(observedTime) ? new Date(observedTime).toISOString() : '';
+  const pageActivityTime = observedTime;
 
   return {
     ok: issues.length === 0,

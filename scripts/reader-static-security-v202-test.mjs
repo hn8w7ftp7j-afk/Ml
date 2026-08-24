@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.18');
-assert.equal(manifest.version_name, '2.1.18 SELF-HEAL');
+assert.equal(manifest.version, '2.1.19');
+assert.equal(manifest.version_name, '2.1.19 VERIFIED-RESCAN');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -28,7 +28,7 @@ assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const VERSION = '2\.1\.18'/);
+assert.match(background, /const VERSION = '2\.1\.19'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.match(background, /TAI888_READER_RECOVER/);
 assert.match(background, /RECOVERY_COOLDOWN_MS = 90_000/);
@@ -112,4 +112,4 @@ assert.match(status, /requestIsAuthenticated\(request\)/, 'Reader status must ac
 assert.match(auth, /60 \* 60 \* 24 \* 30/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
 
-console.log('Reader 2.1.18 static security audit: minimal permissions, verified live heartbeat, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');
+console.log('Reader 2.1.19 static security audit: minimal permissions, verified live rescan, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');
