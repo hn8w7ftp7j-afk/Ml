@@ -373,35 +373,34 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
     setSelectedLeague(value);
     setSelectedMarket('ALL');
   };
+  const choosePeriod = value => {
+    setPeriod(value);
+    setSelectedLeague('ALL');
+    setSelectedMarket('ALL');
+  };
   return <section className="panel ledgerPanel">
     <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" onClick={() => refreshSettlements('')}>更新全部賽果</button></div>
     <div className="periodTabs" aria-label="下注期間">
-      {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => setPeriod(item.id)}>{item.label}</button>)}
+      {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => choosePeriod(item.id)}>{item.label}</button>)}
     </div>
     <div className="ledgerPath">{periodLabel}｜{leagueLabel}｜{marketLabel}</div>
     <SummaryCards summary={summary}/>
 
-    <div className="ledgerSectionHead"><h3>1. 選擇聯盟</h3>{selectedLeague !== 'ALL' && <button className="textButton" onClick={() => chooseLeague('ALL')}>回全部聯盟</button>}</div>
-    <div className="breakdownGrid leagueBreakdown">
-      <BreakdownButton label="全部聯盟" active={selectedLeague === 'ALL'} summary={summarizeBetLedger(periodBets).overall} onClick={() => chooseLeague('ALL')}/>
-      {LEAGUE_IDS.map(id => {
-        const rows = periodBets.filter(bet => normalizeLeagueId(bet?.league) === id);
-        return <BreakdownButton key={id} label={`${id}｜${leagueConfig(id).shortLabel}`} active={selectedLeague === id} summary={summarizeBetLedger(rows).overall} onClick={() => chooseLeague(id)}/>;
+    <div className="ledgerSectionHead"><h3>1. 選擇聯盟範圍</h3></div>
+    <div className="leagueScopeTabs" aria-label="聯盟統計範圍">
+      <button className={selectedLeague === 'ALL' ? 'active' : ''} onClick={() => chooseLeague('ALL')}>全部聯盟</button>
+      {LEAGUE_IDS.map(id => <button key={id} className={selectedLeague === id ? 'active' : ''} onClick={() => chooseLeague(id)}>{id}<small>{leagueConfig(id).shortLabel}</small></button>)}
+    </div>
+
+    <div className="ledgerSectionHead"><h3>2. {leagueLabel}｜四種市場輸贏</h3>{selectedMarket !== 'ALL' && <button className="textButton" onClick={() => setSelectedMarket('ALL')}>回全部市場</button>}</div>
+    <div className="breakdownGrid marketBreakdown">
+      {MARKET_ORDER.map(market => {
+        const rows = leagueBets.filter(bet => bet?.market === market);
+        return <BreakdownButton key={market} label={market} active={selectedMarket === market} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === market ? 'ALL' : market)}/>;
       })}
     </div>
 
-    {selectedLeague !== 'ALL' && <>
-      <div className="ledgerSectionHead"><h3>2. 選擇市場</h3>{selectedMarket !== 'ALL' && <button className="textButton" onClick={() => setSelectedMarket('ALL')}>回全部市場</button>}</div>
-      <div className="breakdownGrid marketBreakdown">
-        <BreakdownButton label="全部市場" active={selectedMarket === 'ALL'} summary={summarizeBetLedger(leagueBets).overall} onClick={() => setSelectedMarket('ALL')}/>
-        {MARKET_ORDER.map(market => {
-          const rows = leagueBets.filter(bet => bet?.market === market);
-          return <BreakdownButton key={market} label={market} active={selectedMarket === market} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(market)}/>;
-        })}
-      </div>
-    </>}
-
-    <div className="ledgerSectionHead"><h3>{selectedLeague === 'ALL' ? '2' : '3'}. 下注明細</h3><span>{filteredBets.length} 注</span></div>
+    <div className="ledgerSectionHead"><h3>3. 下注明細</h3><span>{filteredBets.length} 注</span></div>
     {filteredBets.length ? filteredBets.map(bet => <div className="betRow" key={bet.id}>
       <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜模型分數未列入績效</small></div>
       <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '待結算'}</strong><button className="textButton" onClick={() => deleteBet(bet)}>刪除</button></div>
