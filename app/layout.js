@@ -1,5 +1,6 @@
 import './globals.css';
 import './security.css';
+import './ledger.css';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {

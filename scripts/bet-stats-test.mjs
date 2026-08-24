@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { summarizeBetLedger } from '../lib/bet-stats.js';
+import { BET_PERIODS, filterBetLedgerByPeriod, summarizeBetLedger } from '../lib/bet-stats.js';
 
 const settled = (id, league, market, outcome, netProfit, values = {}) => ({
   id,
@@ -57,3 +57,19 @@ assert.equal(npbRunline.effectiveLossStake, 5000);
 assert.equal(npbRunline.winRate, 0);
 
 console.log('Actual bet performance: net PnL, rebate, effective win rate, ROI and league-market grouping PASS');
+
+const periodLedger = [
+  { id: 'today', placedAt: '2026-08-25T04:00:00.000Z' },
+  { id: 'yesterday', placedAt: '2026-08-24T04:00:00.000Z' },
+  { id: 'last-week', placedAt: '2026-08-17T04:00:00.000Z' },
+  { id: 'this-month', placedAt: '2026-08-05T04:00:00.000Z' },
+  { id: 'last-month', placedAt: '2026-07-31T15:59:59.000Z' },
+];
+const periodNow = '2026-08-25T05:00:00.000Z';
+assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'TODAY', periodNow).map(row => row.id), ['today']);
+assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'YESTERDAY', periodNow).map(row => row.id), ['yesterday']);
+assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'THIS_WEEK', periodNow).map(row => row.id), ['today', 'yesterday']);
+assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'LAST_WEEK', periodNow).map(row => row.id), ['last-week']);
+assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'THIS_MONTH', periodNow).map(row => row.id), ['today', 'yesterday', 'last-week', 'this-month']);
+assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'LAST_MONTH', periodNow).map(row => row.id), ['last-month']);
+assert.equal(BET_PERIODS.map(row => row.id).join(','), 'TODAY,YESTERDAY,THIS_WEEK,LAST_WEEK,THIS_MONTH,LAST_MONTH,ALL');

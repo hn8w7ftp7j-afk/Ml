@@ -10,7 +10,7 @@ import {
   betPriceMatches,
 } from '../lib/bet-ledger.js';
 import { compareBetPrice } from '../lib/bet-price-comparison.js';
-import { summarizeBetLedger } from '../lib/bet-stats.js';
+import { BET_PERIODS, filterBetLedgerByPeriod, summarizeBetLedger } from '../lib/bet-stats.js';
 import { teamNameZh, translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
@@ -332,14 +332,79 @@ function SummaryCards({ summary }) {
   const values = [
     ['下注', summary?.bets ?? 0],
     ['已結算', summary?.settled ?? 0],
+    ['待結算', summary?.open ?? 0],
+    ['贏／輸／走', `${summary?.wins ?? 0}／${summary?.losses ?? 0}／${summary?.pushes ?? 0}`],
+    ['贏半／輸半', `${summary?.halfWins ?? 0}／${summary?.halfLosses ?? 0}`],
     ['有效勝率', pct(summary?.winRate)],
+    ['下注金額', moneyText(summary?.totalStake)],
     ['淨盈虧', moneyText(summary?.netPnl)],
     ['ROI', pct(summary?.roi)],
     ['退水', moneyText(summary?.rebate)],
   ];
-  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, margin: '14px 0' }}>
-    {values.map(([label, value]) => <div key={label} style={{ padding: 12, border: '1px solid rgba(255,255,255,.1)', borderRadius: 10 }}><span style={{ display: 'block', fontSize: 12, opacity: .7 }}>{label}</span><strong>{value}</strong></div>)}
+  return <div className="ledgerSummary">
+    {values.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
   </div>;
+}
+
+function BreakdownButton({ label, summary, active = false, onClick }) {
+  return <button className={`breakdownButton ${active ? 'active' : ''}`} onClick={onClick}>
+    <span>{label}</span>
+    <b>{summary?.bets ?? 0} 注｜{summary?.settled ?? 0} 已結算</b>
+    <small>{summary?.wins ?? 0}勝／{summary?.losses ?? 0}敗／{summary?.pushes ?? 0}走｜勝率 {pct(summary?.winRate)}</small>
+    <strong className={Number(summary?.netPnl || 0) >= 0 ? 'positive' : 'negative'}>{moneyText(summary?.netPnl)}</strong>
+  </button>;
+}
+
+function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, deleteBet }) {
+  const periodBets = useMemo(() => filterBetLedgerByPeriod(bets, period), [bets, period]);
+  const leagueBets = useMemo(() => selectedLeague === 'ALL'
+    ? periodBets
+    : periodBets.filter(bet => normalizeLeagueId(bet?.league) === selectedLeague), [periodBets, selectedLeague]);
+  const filteredBets = useMemo(() => selectedMarket === 'ALL'
+    ? leagueBets
+    : leagueBets.filter(bet => bet?.market === selectedMarket), [leagueBets, selectedMarket]);
+  const summary = useMemo(() => summarizeBetLedger(filteredBets).overall, [filteredBets]);
+  const periodLabel = BET_PERIODS.find(item => item.id === period)?.label || '全部';
+  const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : leagueConfig(selectedLeague).label;
+  const marketLabel = selectedMarket === 'ALL' ? '全部市場' : selectedMarket;
+  const chooseLeague = value => {
+    setSelectedLeague(value);
+    setSelectedMarket('ALL');
+  };
+  return <section className="panel ledgerPanel">
+    <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" onClick={() => refreshSettlements('')}>更新全部賽果</button></div>
+    <div className="periodTabs" aria-label="下注期間">
+      {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => setPeriod(item.id)}>{item.label}</button>)}
+    </div>
+    <div className="ledgerPath">{periodLabel}｜{leagueLabel}｜{marketLabel}</div>
+    <SummaryCards summary={summary}/>
+
+    <div className="ledgerSectionHead"><h3>1. 選擇聯盟</h3>{selectedLeague !== 'ALL' && <button className="textButton" onClick={() => chooseLeague('ALL')}>回全部聯盟</button>}</div>
+    <div className="breakdownGrid leagueBreakdown">
+      <BreakdownButton label="全部聯盟" active={selectedLeague === 'ALL'} summary={summarizeBetLedger(periodBets).overall} onClick={() => chooseLeague('ALL')}/>
+      {LEAGUE_IDS.map(id => {
+        const rows = periodBets.filter(bet => normalizeLeagueId(bet?.league) === id);
+        return <BreakdownButton key={id} label={`${id}｜${leagueConfig(id).shortLabel}`} active={selectedLeague === id} summary={summarizeBetLedger(rows).overall} onClick={() => chooseLeague(id)}/>;
+      })}
+    </div>
+
+    {selectedLeague !== 'ALL' && <>
+      <div className="ledgerSectionHead"><h3>2. 選擇市場</h3>{selectedMarket !== 'ALL' && <button className="textButton" onClick={() => setSelectedMarket('ALL')}>回全部市場</button>}</div>
+      <div className="breakdownGrid marketBreakdown">
+        <BreakdownButton label="全部市場" active={selectedMarket === 'ALL'} summary={summarizeBetLedger(leagueBets).overall} onClick={() => setSelectedMarket('ALL')}/>
+        {MARKET_ORDER.map(market => {
+          const rows = leagueBets.filter(bet => bet?.market === market);
+          return <BreakdownButton key={market} label={market} active={selectedMarket === market} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(market)}/>;
+        })}
+      </div>
+    </>}
+
+    <div className="ledgerSectionHead"><h3>{selectedLeague === 'ALL' ? '2' : '3'}. 下注明細</h3><span>{filteredBets.length} 注</span></div>
+    {filteredBets.length ? filteredBets.map(bet => <div className="betRow" key={bet.id}>
+      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜模型分數未列入績效</small></div>
+      <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '待結算'}</strong><button className="textButton" onClick={() => deleteBet(bet)}>刪除</button></div>
+    </div>) : <div className="emptySmall">這個篩選範圍目前沒有下注紀錄。</div>}
+  </section>;
 }
 
 function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
@@ -529,7 +594,10 @@ export default function Home() {
   const [league, setLeague] = useState('MLB');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [bets, setBets] = useState([]);
-  const [calibrationStatus, setCalibrationStatus] = useState(null);
+  const [, setCalibrationStatus] = useState(null);
+  const [betPeriod, setBetPeriod] = useState('TODAY');
+  const [betLeague, setBetLeague] = useState('ALL');
+  const [betMarket, setBetMarket] = useState('ALL');
   const [storageReady, setStorageReady] = useState(false);
   const [tab, setTab] = useState('board');
   const [date, setDate] = useState(taipeiDate());
@@ -696,9 +764,9 @@ export default function Home() {
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [storageReady]);
   useEffect(() => {
-    if (!storageReady || !['bets', 'stats'].includes(tab)) return undefined;
-    refreshSettlements(tab === 'bets' ? league : '');
-    const timer = window.setInterval(() => refreshSettlements(tab === 'bets' ? league : ''), 10 * 60 * 1000);
+    if (!storageReady || tab !== 'bets') return undefined;
+    refreshSettlements('');
+    const timer = window.setInterval(() => refreshSettlements(''), 10 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, [storageReady, tab, league]);
   useEffect(() => {
@@ -835,8 +903,6 @@ export default function Home() {
     () => bets.filter(bet => normalizeLeagueId(bet?.league) === league),
     [bets, league],
   );
-  const visibleStats = useMemo(() => summarizeBetLedger(visibleBets), [visibleBets]);
-  const allStats = useMemo(() => summarizeBetLedger(bets), [bets]);
 
   function getBetState(item, row) {
     const records = bets.filter(bet => betMatches(bet, date, item.game.gamePk, row, league))
@@ -1416,7 +1482,6 @@ export default function Home() {
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>
       <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>模型影子排名</button>
       <button className={tab === 'bets' ? 'active' : ''} onClick={() => setTab('bets')}>下注紀錄</button>
-      <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>績效統計</button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
     </nav>
 
@@ -1452,24 +1517,7 @@ export default function Home() {
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
-    {tab === 'bets' && <section className="panel">
-      <div className="panelHead"><h2>{activeLeague.label}｜雲端實際下注帳本</h2><div>{bettingEnabled && <button className="textButton" onClick={() => refreshSettlements(league)}>更新賽果</button>}{bettingEnabled && <button className="textButton" disabled={!visibleBets.length} onClick={clearLeagueBets}>清空本聯盟</button>}</div></div>
-      <SummaryCards summary={visibleStats.overall}/>
-      {bettingEnabled && visibleBets.length ? visibleBets.map(bet => <div className="betRow" key={bet.id}>
-        <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜模型分數未列入績效</small></div>
-        <div style={{ textAlign: 'right' }}><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '待結算'}</strong><br/><button className="textButton" onClick={() => deleteBet(bet)}>刪除</button></div>
-      </div>) : <div className="emptySmall">尚未記錄{activeLeague.shortLabel}實際下注。</div>}
-    </section>}
-
-    {tab === 'stats' && <section className="panel">
-      <div className="panelHead"><h2>全部聯盟｜實際下注績效</h2><button className="textButton" onClick={() => refreshSettlements('')}>更新全部賽果</button></div>
-      <SummaryCards summary={allStats.overall}/>
-      <div className="emptySmall">跨年度校準：{calibrationStatus?.releaseEligible ? '已達發布審查門檻' : '持續累積中'}｜PIT已結算 {calibrationStatus?.settledPredictionRows ?? 0} 筆｜OOS {calibrationStatus?.oosSampleSize ?? 0} 筆｜每年不歸零，舊資料依時間逐步降權。</div>
-      {allStats.groups.length ? allStats.groups.map(group => {
-        const [groupLeague, market] = group.key.split('|||');
-        return <div className="betRow" key={group.key}><div><strong><span className="leagueBadge inline">{groupLeague}</span>{market}</strong><span>{group.wins}勝／{group.losses}敗／{group.pushes}走／{group.halfWins}贏半／{group.halfLosses}輸半</span></div><small>{group.settled}筆已結算｜勝率 {pct(group.winRate)}｜ROI {pct(group.roi)}｜{moneyText(group.netPnl)}</small></div>;
-      }) : <div className="emptySmall">完成第一筆賽果結算後，這裡會依聯盟與全場讓分、全場大小、上半讓分、上半大小分開統計。</div>}
-    </section>}
+    {tab === 'bets' && <BetLedgerDashboard bets={bets} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} deleteBet={deleteBet}/>}
 
     {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.6使用精確狀態感知聯合比分分布，不使用虛構的模擬次數；同場正反方向共用同一份比分分布。獨立市場只作外部稽核，缺失時最高列為8.4，但不阻擋7.2～8.4排名。W/R差距超過5%仍顯示分數但不列排名；尚未完成樣本外驗證，正式推薦與Unit繼續停用。實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 

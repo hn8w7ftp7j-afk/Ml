@@ -102,7 +102,7 @@ mustMatch(/記錄實際下注/, 'actual-bet action missing');
 // cloud-ledger action as the board instead of becoming a read-only desktop view.
 mustMatch(/return \{ item, row, gamePk:/, 'ranking entries must retain their source board item and actual market row');
 const rankingStart = page.indexOf("{tab === 'ranking' && <section");
-const rankingEnd = page.indexOf("{tab === 'bets' && <section", rankingStart);
+const rankingEnd = page.indexOf("{tab === 'bets' && <BetLedgerDashboard", rankingStart);
 assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'ranking UI section missing');
 const rankingUi = page.slice(rankingStart, rankingEnd);
 assert.match(rankingUi, /getBetState\(entry\.item,\s*entry\.row\)/, 'ranking action must read the same cloud/local bet state as the board');
@@ -112,6 +112,10 @@ assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibl
 assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');
 assert.match(rankingUi, /不再只顯示7\.2以上或可下注方向/, 'ranking UI must explain that non-bettable directions remain visible');
 assert.match(rankingUi, /排名資格：否/, 'ranking UI must label non-qualified directions instead of filtering them out');
+mustMatch(/BET_PERIODS/, 'ledger quick period controls missing');
+mustMatch(/BetLedgerDashboard/, 'unified four-league ledger dashboard missing');
+mustMatch(/selectedLeague=\{betLeague\}/, 'ledger league drill-down state missing');
+mustMatch(/selectedMarket=\{betMarket\}/, 'ledger market drill-down state missing');
 
 // Fail-closed market coverage and all-direction diagnostic score presentation.
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
