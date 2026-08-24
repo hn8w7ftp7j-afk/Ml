@@ -28,6 +28,7 @@ import {
 } from '../lib/client-analysis-state.js';
 import { initialAnalysisConcurrency } from '../lib/analysis-transport-v1.js';
 import { assessCoreSnapshotFreshnessV109 } from '../lib/analysis-refresh-policy-v109.js';
+import { BET_ORDER_MIN_SCORE, buildBetOrderEntries, groupBetOrderEntries } from '../lib/bet-order.js';
 import {
   analysisBoardCacheKey,
   createAnalysisBoardCacheEntry,
@@ -727,6 +728,8 @@ export default function Home() {
     .sort((left, right) => Number(right.score ?? -Infinity) - Number(left.score ?? -Infinity)
       || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity)),
   [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, date]);
+  const shadowBetOrder = useMemo(() => buildBetOrderEntries(shadowRanking), [shadowRanking]);
+  const shadowBetOrderGames = useMemo(() => groupBetOrderEntries(shadowBetOrder), [shadowBetOrder]);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -1540,6 +1543,7 @@ export default function Home() {
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>
       <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>模型影子排名</button>
+      <button className={tab === 'betOrder' ? 'active' : ''} onClick={() => setTab('betOrder')}>下注順序</button>
       <button className={tab === 'bets' ? 'active' : ''} onClick={() => setTab('bets')}>下注紀錄</button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
     </nav>
@@ -1574,6 +1578,22 @@ export default function Home() {
         const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜EV校準未通過' : !entry.qaPassed ? '排名資格：否｜QA未通過' : '排名資格：否｜未達正式排名條件';
         return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{scoreText}</strong><div><span>{icon} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜非正式推薦</small></div>{(recordable || betState.latest) && <div className="rankActionStack"><button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div>}</div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
+    </section>}
+
+    {tab === 'betOrder' && <section className="panel"><div className="panelHead"><h2>下注順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非正式推薦</span></div>
+      <div className="emptySmall">先按比賽開始時間由早到晚，再於同場依序排列全場讓分、全場大小、上半讓分、上半大小；同一市場有多個7.0分以上方向時，分數較高者排前。已下注項目保留標記，時間未定賽事排在最後。</div>
+      {shadowBetOrderGames.length ? shadowBetOrderGames.map((group, gameIndex) => <div className="betOrderGame" key={group.key}>
+        <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
+        {group.entries.map(entry => {
+          const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
+          const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
+          const buttonText = betState.latest ? '已下注 ✓' : '紀錄實際下注';
+          const scoreText = entry.score.toFixed(1);
+          const icon = entry.rankingEligible ? (entry.score >= 8.5 ? '🔥' : '🟢') : entry.qualified && entry.qaPassed ? '🟡' : '⚠️';
+          const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜EV校準未通過' : !entry.qaPassed ? '排名資格：否｜QA未通過' : '排名資格：否｜未達正式排名條件';
+          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{entry.betOrderIndex}</b><strong>{scoreText}</strong><div><span>{icon} {entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+        })}
+      </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
 
     {tab === 'bets' && <BetLedgerDashboard bets={bets} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} deleteBet={deleteBet}/>}

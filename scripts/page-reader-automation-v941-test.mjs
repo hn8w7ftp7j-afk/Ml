@@ -16,10 +16,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.9.3', 'package/release identity must match the V10.9.3 UI');
-assert.equal(packageLock.version, '10.9.3', 'package-lock release identity must match V10.9.3');
-assert.equal(packageLock.packages?.['']?.version, '10.9.3', 'root lockfile package must match V10.9.3');
-assert.equal(APP_VERSION, '10.9.3');
+assert.equal(packageJson.version, '10.9.4', 'package/release identity must match the V10.9.4 UI');
+assert.equal(packageLock.version, '10.9.4', 'package-lock release identity must match V10.9.4');
+assert.equal(packageLock.packages?.['']?.version, '10.9.4', 'root lockfile package must match V10.9.4');
+assert.equal(APP_VERSION, '10.9.4');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
@@ -115,7 +115,7 @@ mustMatch(/記錄實際下注/, 'actual-bet action missing');
 // cloud-ledger action as the board instead of becoming a read-only desktop view.
 mustMatch(/return \{ item, row, gamePk:/, 'ranking entries must retain their source board item and actual market row');
 const rankingStart = page.indexOf("{tab === 'ranking' && <section");
-const rankingEnd = page.indexOf("{tab === 'bets' && <BetLedgerDashboard", rankingStart);
+const rankingEnd = page.indexOf("{tab === 'betOrder' && <section", rankingStart);
 assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'ranking UI section missing');
 const rankingUi = page.slice(rankingStart, rankingEnd);
 assert.match(rankingUi, /getBetState\(entry\.item,\s*entry\.row\)/, 'ranking action must read the same cloud/local bet state as the board');
@@ -131,6 +131,19 @@ mustMatch(/selectedLeague=\{betLeague\}/, 'ledger league drill-down state missin
 mustMatch(/selectedMarket=\{betMarket\}/, 'ledger market drill-down state missing');
 mustMatch(/選擇聯盟範圍/, 'ledger must expose aggregate and per-league scopes');
 mustMatch(/\{leagueLabel\}｜四種市場輸贏/, 'each league scope must expose its own four-market summary');
+
+const betOrderStart = page.indexOf("{tab === 'betOrder' && <section");
+const betOrderEnd = page.indexOf("{tab === 'bets' && <BetLedgerDashboard", betOrderStart);
+assert.ok(betOrderStart >= 0 && betOrderEnd > betOrderStart, 'bet-order UI section missing');
+const betOrderUi = page.slice(betOrderStart, betOrderEnd);
+assert.match(page, />下注順序<\//, 'bet-order tab must sit beside the ranking tab');
+assert.match(page, /buildBetOrderEntries\(shadowRanking\)/, 'bet order must derive from the same immutable Reader ranking entries');
+assert.match(page, /groupBetOrderEntries\(shadowBetOrder\)/, 'bet order must group directions by game');
+assert.match(betOrderUi, /全場讓分、全場大小、上半讓分、上半大小/, 'bet-order UI must disclose its fixed market order');
+assert.match(betOrderUi, /getBetState\(entry\.item, entry\.row\)/, 'bet order must reuse the canonical cloud/local bet state');
+assert.match(betOrderUi, /betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled\)/, 'bet order must enforce the canonical prestart/fresh Reader gate');
+assert.match(betOrderUi, /recordBet\(entry\.item, entry\.row\)/, 'bet-order button must use the canonical cloud record flow');
+assert.match(betOrderUi, /已下注 ✓/, 'bet order must visibly preserve already-recorded positions');
 
 // Fail-closed market coverage and all-direction diagnostic score presentation.
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
