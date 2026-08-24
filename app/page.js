@@ -370,6 +370,7 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
   const marketLabel = selectedMarket === 'ALL' ? '全部市場' : selectedMarket;
   const chooseLeague = value => {
     setSelectedLeague(value);
+    setSelectedMarket('ALL');
   };
   const choosePeriod = value => {
     setPeriod(value);
@@ -384,20 +385,17 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
     <div className="ledgerPath">{periodLabel}｜{leagueLabel}｜{marketLabel}</div>
     <SummaryCards summary={summary}/>
 
-    <div className="ledgerSectionHead"><h3>1. 四種市場輸贏</h3>{selectedMarket !== 'ALL' && <button className="textButton" onClick={() => setSelectedMarket('ALL')}>回全部市場</button>}</div>
+    <div className="ledgerSectionHead"><h3>1. 選擇聯盟範圍</h3></div>
+    <div className="leagueScopeTabs" aria-label="聯盟統計範圍">
+      <button className={selectedLeague === 'ALL' ? 'active' : ''} onClick={() => chooseLeague('ALL')}>全部聯盟</button>
+      {LEAGUE_IDS.map(id => <button key={id} className={selectedLeague === id ? 'active' : ''} onClick={() => chooseLeague(id)}>{id}<small>{leagueConfig(id).shortLabel}</small></button>)}
+    </div>
+
+    <div className="ledgerSectionHead"><h3>2. {leagueLabel}｜四種市場輸贏</h3>{selectedMarket !== 'ALL' && <button className="textButton" onClick={() => setSelectedMarket('ALL')}>回全部市場</button>}</div>
     <div className="breakdownGrid marketBreakdown">
       {MARKET_ORDER.map(market => {
         const rows = leagueBets.filter(bet => bet?.market === market);
         return <BreakdownButton key={market} label={market} active={selectedMarket === market} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === market ? 'ALL' : market)}/>;
-      })}
-    </div>
-
-    <div className="ledgerSectionHead"><h3>2. 聯盟細分（可選）</h3>{selectedLeague !== 'ALL' && <button className="textButton" onClick={() => chooseLeague('ALL')}>回全部聯盟</button>}</div>
-    <div className="breakdownGrid leagueBreakdown">
-      <BreakdownButton label="全部聯盟" active={selectedLeague === 'ALL'} summary={summarizeBetLedger(periodBets).overall} onClick={() => chooseLeague('ALL')}/>
-      {LEAGUE_IDS.map(id => {
-        const rows = periodBets.filter(bet => normalizeLeagueId(bet?.league) === id);
-        return <BreakdownButton key={id} label={`${id}｜${leagueConfig(id).shortLabel}`} active={selectedLeague === id} summary={summarizeBetLedger(rows).overall} onClick={() => chooseLeague(id)}/>;
       })}
     </div>
 

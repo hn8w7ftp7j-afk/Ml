@@ -116,6 +116,8 @@ mustMatch(/BET_PERIODS/, 'ledger quick period controls missing');
 mustMatch(/BetLedgerDashboard/, 'unified four-league ledger dashboard missing');
 mustMatch(/selectedLeague=\{betLeague\}/, 'ledger league drill-down state missing');
 mustMatch(/selectedMarket=\{betMarket\}/, 'ledger market drill-down state missing');
+mustMatch(/選擇聯盟範圍/, 'ledger must expose aggregate and per-league scopes');
+mustMatch(/\{leagueLabel\}｜四種市場輸贏/, 'each league scope must expose its own four-market summary');
 
 // Fail-closed market coverage and all-direction diagnostic score presentation.
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
