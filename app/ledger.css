@@ -185,6 +185,136 @@
   white-space: nowrap;
 }
 
+.betRow > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.priceComparisonStack {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.priceComparisonStack:empty {
+  display: none;
+}
+
+.priceComparison {
+  border: 1px solid #36546f;
+  border-radius: 11px;
+  background: #071522;
+  padding: 9px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.priceComparison.live.better {
+  border-color: #2a7659;
+  background: #0d2c25;
+}
+
+.priceComparison.live.worse {
+  border-color: #8a3f4b;
+  background: #321821;
+}
+
+.priceComparison.live.mixed {
+  border-color: #80612a;
+  background: #2d2414;
+}
+
+.priceComparison.closing {
+  border-color: #5a5791;
+  background: #171a36;
+}
+
+.priceComparisonHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  color: #8faac2;
+}
+
+.priceComparisonHead strong {
+  color: #eef7ff;
+  font-size: 12px;
+}
+
+.priceComparison.better .priceComparisonHead strong {
+  color: #82e1af;
+}
+
+.priceComparison.worse .priceComparisonHead strong {
+  color: #ff9eaa;
+}
+
+.priceComparison.mixed .priceComparisonHead strong {
+  color: #ffd079;
+}
+
+.priceComparisonRows {
+  display: grid;
+  gap: 2px;
+  margin-top: 5px;
+  color: #c3d4e3;
+}
+
+.priceComparison small,
+.priceComparison b,
+.priceComparison em {
+  display: block;
+  margin-top: 4px;
+}
+
+.priceComparison small {
+  color: #91a9bf;
+}
+
+.priceComparison b {
+  color: #f3c873;
+}
+
+.priceComparison em {
+  color: #858bb8;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.priceComparisonUnavailable {
+  border-left: 3px solid #557087;
+  padding: 6px 8px;
+  color: #829bb2;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.priceComparisonExact {
+  width: fit-content;
+  border-radius: 999px;
+  background: #123d31;
+  color: #92e4ba;
+  padding: 5px 10px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rowActions .priceComparisonStack {
+  width: min(230px, 34vw);
+}
+
+.rankActionStack {
+  grid-column: 3;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rankActionStack > .mini {
+  justify-self: start;
+}
+
 @media (max-width: 720px) {
   .ledgerPanel {
     padding: 17px;
@@ -220,5 +350,13 @@
 
   .betRowResult {
     text-align: left;
+  }
+
+  .rowActions .priceComparisonStack {
+    width: min(210px, 44vw);
+  }
+
+  .rankActionStack {
+    grid-column: 2 / -1;
   }
 }

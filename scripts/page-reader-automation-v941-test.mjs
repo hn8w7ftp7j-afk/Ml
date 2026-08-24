@@ -5,6 +5,7 @@ import { APP_VERSION } from '../lib/app-version.js';
 const page = fs.readFileSync('app/page.js', 'utf8');
 const healthRoute = fs.readFileSync('app/api/health/route.js', 'utf8');
 const analyzeRoute = fs.readFileSync('app/api/analyze/route.js', 'utf8');
+const betPricesRoute = fs.readFileSync('app/api/bet-prices/route.js', 'utf8');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
@@ -93,6 +94,18 @@ assert.doesNotMatch(page, /系統將自動重新分析/, 'a failed Reader acknow
 // Actual-bet ledger and price comparison remain available while formal model scoring is locked.
 mustMatch(/betPriceMatches/, 'exact placed-price matching missing');
 mustMatch(/compareBetPrice/, 'placed-versus-current price comparison missing');
+mustMatch(/BetPriceComparison/, 'placed-versus-current comparison UI missing');
+mustMatch(/即時 Reader 比較/, 'live Reader comparison must be visibly separated');
+mustMatch(/下注時盤口/, 'placed line and water must remain visible in comparison UI');
+mustMatch(/Reader目前盤口/, 'current Reader line and water must remain visible in comparison UI');
+mustMatch(/Closing CLV/, 'verified Closing comparison must use a separate UI section');
+mustMatch(/洞口的 u 差不是 CLV 百分比/, 'key-hole payoff delta must not be mislabeled as CLV percent');
+mustMatch(/requestJSON\('\/api\/bet-prices'/, 'ledger must refresh Reader price comparisons independently');
+assert.match(betPricesRoute, /listCloudBets/, 'price feed must resolve server-owned tickets');
+assert.match(betPricesRoute, /loadReaderSnapshot/, 'price feed must use the Reader snapshot authority');
+assert.match(betPricesRoute, /currentReaderPriceForBet/, 'price feed must match the same ticket position');
+assert.match(betPricesRoute, /current: status\.fresh \?/, 'stale Reader prices must not be presented as current');
+assert.match(betPricesRoute, /verifiedClosingPriceForBet/, 'Closing CLV must require a verified closing snapshot');
 mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
 mustMatch(/此方向已經記錄；盤口或水位變動也不再新增/, 'single-position bet suppression text missing');
 assert.doesNotMatch(page, /加注目前盤/, 'same direction must never expose a reprice add-on action');

@@ -10,6 +10,7 @@ import {
   betPriceMatches,
 } from '../lib/bet-ledger.js';
 import { compareBetPrice } from '../lib/bet-price-comparison.js';
+import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
 import { BET_PERIODS, filterBetLedgerByPeriod, summarizeBetLedger } from '../lib/bet-stats.js';
 import { teamNameZh, translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
@@ -329,6 +330,39 @@ function LoadingLine({ progress }) {
   return <div className="progressBox"><div className="progressTop"><strong>{progress.label}</strong><span>{detail}</span></div><div className="progressTrack"><i style={{ width: `${ratio}%` }}/></div></div>;
 }
 
+function PriceComparisonPanel({ title, referenceLabel, bet, reference, comparison, closing = false }) {
+  const status = comparison?.combinedStatus || 'UNKNOWN';
+  const detail = comparison?.comparable
+    ? `盤口：${comparison.lineLabel || '無法比較'}｜水位：${comparison.waterLabel || '無法比較'}`
+    : comparison?.reason || '場次方向、盤口或水位資料不足';
+  return <div className={`priceComparison ${closing ? 'closing' : 'live'} ${String(status).toLowerCase()}`}>
+    <div className="priceComparisonHead"><span>{title}</span><strong>{priceComparisonLabel(status)}</strong></div>
+    <div className="priceComparisonRows">
+      <span>下注時盤口：{translateTeamText(bet?.pick)}｜{waterText(bet?.water)}</span>
+      <span>{referenceLabel}：{translateTeamText(reference?.pick)}｜{waterText(reference?.water)}</span>
+    </div>
+    <small>{detail}</small>
+    {comparison?.keyDifference?.text && <b>關鍵洞口差：{comparison.keyDifference.text}</b>}
+    {closing && <em>Closing CLV 依收盤逐比分 payoff 比較，洞口的 u 差不是 CLV 百分比。</em>}
+  </div>;
+}
+
+function BetPriceComparison({ bet, currentRow = null, game = null, closingRow = null, readerChecked = false, showExactLabel = false }) {
+  if (!bet) return null;
+  const currentComparison = currentRow ? compareBetPrice({ bet, row: currentRow, game: game || bet, rebateRate: 0.015 }) : null;
+  const verifiedClosing = closingRow || verifiedClosingPriceForBet(bet);
+  const closingComparison = verifiedClosing
+    ? compareBetPrice({ bet, row: verifiedClosing, game: game || bet, rebateRate: 0.015 })
+    : null;
+  const showCurrent = currentComparison && currentComparison.exact !== true;
+  return <div className="priceComparisonStack">
+    {showExactLabel && currentComparison?.exact === true && <div className="priceComparisonExact">已下注 ✓</div>}
+    {showCurrent && <PriceComparisonPanel title="即時 Reader 比較" referenceLabel="Reader目前盤口" bet={bet} reference={currentRow} comparison={currentComparison}/>} 
+    {!currentRow && readerChecked && bet.status === 'OPEN' && <div className="priceComparisonUnavailable">Reader目前盤口：等待該聯盟最新同步；不使用舊盤冒充目前盤。</div>}
+    {closingComparison && <PriceComparisonPanel title="Closing CLV" referenceLabel="Closing盤口" bet={bet} reference={verifiedClosing} comparison={closingComparison} closing/>}
+  </div>;
+}
+
 function SummaryCards({ summary }) {
   const values = [
     ['下注', summary?.bets ?? 0],
@@ -358,6 +392,8 @@ function BreakdownButton({ label, summary, active = false, onClick }) {
 }
 
 function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, deleteBet }) {
+  const [priceFeed, setPriceFeed] = useState({});
+  const [priceFeedChecked, setPriceFeedChecked] = useState(false);
   const periodBets = useMemo(() => filterBetLedgerByPeriod(bets, period), [bets, period]);
   const leagueBets = useMemo(() => selectedLeague === 'ALL'
     ? periodBets
@@ -366,6 +402,11 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
     ? leagueBets
     : leagueBets.filter(bet => bet?.market === selectedMarket), [leagueBets, selectedMarket]);
   const summary = useMemo(() => summarizeBetLedger(filteredBets).overall, [filteredBets]);
+  const priceBetIds = useMemo(() => filteredBets
+    .filter(bet => bet?.status === 'OPEN' && bet?.id)
+    .slice(0, 300)
+    .map(bet => bet.id), [filteredBets]);
+  const priceRequestKey = priceBetIds.join('|');
   const periodLabel = BET_PERIODS.find(item => item.id === period)?.label || '全部';
   const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : leagueConfig(selectedLeague).label;
   const marketLabel = selectedMarket === 'ALL' ? '全部市場' : selectedMarket;
@@ -378,6 +419,34 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
     setSelectedLeague('ALL');
     setSelectedMarket('ALL');
   };
+  useEffect(() => {
+    let disposed = false;
+    setPriceFeed({});
+    setPriceFeedChecked(priceBetIds.length === 0);
+    if (!priceBetIds.length) return () => { disposed = true; };
+    const refresh = async () => {
+      try {
+        const data = await requestJSON('/api/bet-prices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ betIds: priceBetIds }),
+        }, 30_000);
+        if (disposed) return;
+        const next = {};
+        for (const item of Array.isArray(data?.prices) ? data.prices : []) {
+          if (item?.betId) next[item.betId] = item;
+        }
+        setPriceFeed(next);
+      } catch {
+        // Keep the ledger stable; an unavailable Reader comparison must not hide the bet.
+      } finally {
+        if (!disposed) setPriceFeedChecked(true);
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, READER_RECHECK_INTERVAL_MS);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, [priceRequestKey]);
   return <section className="panel ledgerPanel">
     <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" onClick={() => refreshSettlements('')}>更新全部賽果</button></div>
     <div className="periodTabs" aria-label="下注期間">
@@ -402,7 +471,7 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
 
     <div className="ledgerSectionHead"><h3>3. 下注明細</h3><span>{filteredBets.length} 注</span></div>
     {filteredBets.length ? filteredBets.map(bet => <div className="betRow" key={bet.id}>
-      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜模型分數未列入績效</small></div>
+      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜模型分數未列入績效</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
       <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '待結算'}</strong><button className="textButton" onClick={() => deleteBet(bet)}>刪除</button></div>
     </div>) : <div className="emptySmall">這個篩選範圍目前沒有下注紀錄。</div>}
   </section>;
@@ -468,12 +537,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
       : plausibilityBlocked
         ? `比分分布合理性未通過｜模型勝率、W、R與公式評分全部停用${marketGapText}｜不得用原始模型值下注`
       : `${provisionalBaseline ? '連續合理性校準' : '狀態模型'}等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${provisionalBaseline ? `｜原始模型/Tai888差距 ${pct(row.rawModelTai888ProbabilityGap)}｜連續校準權重 ${pct(baselineWeight)}` : marketGapText}`;
-  const exact = betState?.exact || null;
   const latest = betState?.latest || null;
-  const comparison = latest && !exact ? compareBetPrice({ bet: latest, row, game, rebateRate: 0.015 }) : null;
-  const comparisonTone = comparison?.combinedStatus === 'BETTER' ? '#75d69c'
-    : comparison?.combinedStatus === 'WORSE' ? '#ff8d8d'
-      : comparison?.combinedStatus === 'MIXED' ? '#f1c477' : '#c7cedb';
   const buttonText = latest ? '已下注 ✓' : '紀錄實際下注';
   return <div className="scoreRow">
     <div className={`score ${scoreClass}`} title={scoreTitle}>{scoreLabel}</div>
@@ -496,12 +560,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     <div className="rowActions">
       {(recordable || latest) && <div>
         <button className={`mini ${latest ? 'recorded' : 'green'}`} disabled={Boolean(latest)} title={latest ? '此方向已經記錄；盤口或水位變動也不再新增' : '記錄目前實際下注盤口與水位'} onClick={() => onBet(row)}>{buttonText}</button>
-        {latest && !exact && <div style={{ marginTop: 6, color: comparisonTone, fontSize: 10, lineHeight: 1.45, maxWidth: 190 }}>
-          <b>{comparison?.comparable ? `${comparison.label}｜${comparison.lineLabel}｜${comparison.waterLabel}` : '無法比較'}</b><br/>
-          下注時：{translateTeamText(latest.pick)}｜{waterText(latest.water)}<br/>
-          現在：{translateTeamText(row.pick)}｜{waterText(row.water)}
-          {comparison?.keyDifference?.text && <><br/>{comparison.keyDifference.text}</>}
-        </div>}
+        {latest && <BetPriceComparison bet={latest} currentRow={row} game={game}/>} 
       </div>}
     </div>
   </div>;
@@ -1517,7 +1576,7 @@ export default function Home() {
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const icon = entry.rankingEligible ? (entry.score >= 8.5 ? '🔥' : '🟢') : entry.qualified && entry.qaPassed ? '⚪' : '⚠️';
         const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜EV校準未通過' : !entry.qaPassed ? '排名資格：否｜QA未通過' : '排名資格：否｜未達正式排名條件';
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{scoreText}</strong><div><span>{icon} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜非正式推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{scoreText}</strong><div><span>{icon} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜非正式推薦</small></div>{(recordable || betState.latest) && <div className="rankActionStack"><button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div>}</div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
