@@ -46,7 +46,7 @@ const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
 // browser timeout above the 90 second server route ceiling.
 const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
-const READER_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
+const READER_RECHECK_INTERVAL_MS = 30 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
@@ -298,8 +298,7 @@ function betRecordable(item, row, now = Date.now(), betsEnabled = true) {
     && gameIsPrestartNow(item?.game, now)
     && row?.sourceType === 'ACTUAL_TW_CREDIT'
     && hasActualWater(row?.water)
-    && row?.waterEstimated !== true
-    && actualLineFreshNow(row, now);
+    && row?.waterEstimated !== true;
 }
 
 function compactAnalysisData(data) {
@@ -491,7 +490,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
           const rows = actualRows.filter(row => row.market === market);
           const blocked = blockedMarkets.has(market);
           return <div className={`marketBlock actualMarket ${blocked ? 'blockedMarket' : rows.length ? 'availableMarket' : 'unavailableMarket'}`} key={market}><div className="marketTitle"><h3>{market}</h3><span>{rows.length || availableMarkets.has(market) ? 'AVAILABLE' : blocked ? 'BLOCKED' : 'UNAVAILABLE'}</span></div>{rows.length
-            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={row.clientReaderPriceCurrent === true && betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} inactiveNotice={row.clientInactiveNotice}/>)
+            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled)} onBet={value => onBet(item, value)} now={now} inactiveNotice={row.clientInactiveNotice}/>)
             : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
       </div>}
@@ -788,9 +787,13 @@ export default function Home() {
   }, [readerStatus?.fresh, readerStatus?.payloadHash, board.length, busy, date, league, readerEnabled, analysisEnabled]);
   useEffect(() => {
     if (!readerEnabled || !analysisEnabled || !board.length) return undefined;
+    // Validate immediately after a page restore or completed analysis. Waiting
+    // for the first interval meant every mobile refresh restarted the delay and
+    // could leave otherwise-current bet buttons hidden indefinitely.
+    pollReaderAndReprice();
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [board, date, busy, league, readerEnabled, analysisEnabled]);
+  }, [board.length, date, busy, league, readerEnabled, analysisEnabled]);
   useEffect(() => {
     if (!restoredBoardNeedsValidationRef.current || !board.length || busy || !readerStatus?.fresh) return undefined;
     restoredBoardNeedsValidationRef.current = false;
@@ -1426,7 +1429,7 @@ export default function Home() {
       <div className="emptySmall">此處顯示今日Reader已開盤且已完成分析的全部方向，不再只顯示7.2以上或可下注方向。仍依S分數由高到低排序；未通過EV校準、QA、情境穩定或雙正EV的方向也保留並清楚標示原因。</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-        const recordable = entry.currentReaderPrice === true && betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
+        const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
         const buttonText = betState.latest ? '已下注 ✓' : '紀錄實際下注';
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const icon = entry.rankingEligible ? (entry.score >= 8.5 ? '🔥' : '🟢') : entry.qualified && entry.qaPassed ? '⚪' : '⚠️';

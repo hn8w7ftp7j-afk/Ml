@@ -54,7 +54,7 @@ mustMatch(/latest\.boardDate !== currentDateRef\.current/, 'Reader date auto-swi
 mustMatch(/setDate\(latest\.boardDate\)/, 'Reader date auto-switch missing');
 mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key must include date and payload hash');
 mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
-mustMatch(/const READER_RECHECK_INTERVAL_MS = 5 \* 60 \* 1000/, 'Reader five-minute recheck cadence missing');
+mustMatch(/const READER_RECHECK_INTERVAL_MS = 30 \* 1000/, 'Reader thirty-second recheck cadence missing');
 mustMatch(/setInterval\(refreshReader, READER_RECHECK_INTERVAL_MS\)/, 'Reader status polling interval missing');
 mustMatch(/setInterval\(\(\) => pollReaderAndReprice\(\), READER_RECHECK_INTERVAL_MS\)/, 'Reader repricing interval missing');
 mustMatch(/touchReaderHeartbeat/, 'same-content Reader heartbeat must refresh freshness without repricing');
@@ -133,17 +133,19 @@ mustMatch(/const currentReaderPrice = gamePrestart/, 'ranking must calculate cur
 mustMatch(/比賽已開始｜保留賽前分析｜停止下注與目前排名資格/, 'started games must retain their completed pregame score while execution is disabled');
 mustMatch(/Reader盤口等待最新驗證｜保留上一版分析/, 'stale Reader prices must retain their completed score while execution is disabled');
 assert.doesNotMatch(page, /invalidateShadowScoreRow\(row, '獨立國際市場報價已超過5分鐘/, 'expired external consensus must remain audit-only');
-mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows must retain completed scores while bet recording is disabled');
-mustMatch(/recordable=\{row\.clientReaderPriceCurrent === true && betRecordable/, 'only the current acknowledged Reader price may be recorded');
+mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows must retain completed scores and current-price status');
+mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled\)\}/, 'every prestart actual Reader direction with real water must expose bet recording');
 assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*acknowledgedReaderKey/, 'a successfully analyzed current item must not be blocked by an unrelated full-slate acknowledgement');
 mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*actualLineFreshNow\(row, clockNow\)/, 'ranking must use per-item current hash and live line freshness');
+mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
+mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled\]\);/, 'Reader polling must not restart on every board item update');
 const scoreOnlyInvalidation = page.slice(
   page.indexOf('const invalidateShadowScoreRow'),
   page.indexOf('const invalidateReaderPriceRow'),
 );
 assert.doesNotMatch(scoreOnlyInvalidation, /lineFresh:\s*false|actualReaderEligible:\s*false|executable:\s*false/, 'external-reference expiry must not invalidate a still-fresh Reader price or hide actual-bet recording');
 assert.doesNotMatch(page, /invalidateReaderPriceRow/, 'client time progression must not destroy a completed immutable score');
-mustMatch(/recordable = entry\.currentReaderPrice === true && betRecordable/, 'ranking bet recording must still require a current acknowledged Reader price');
+mustMatch(/recordable = betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled\)/, 'ranking must expose bet recording for every prestart actual Reader direction');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
 mustMatch(/const qaPassed = row\.scoreAudit\?\.ok === true/, 'ranking must preserve QA PASS as a visible qualification flag');
