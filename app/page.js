@@ -1063,9 +1063,9 @@ export default function Home() {
 
       setProgress({ active: true, done: 0, running: 0, total: tasks.length, label: '分析今日全部盤口' });
       const outcomes = new Array(tasks.length).fill(false);
-      // Four simultaneous simulations caused mobile clients to abort while the
-      // functions were still returning successful responses. MLB remains at
-      // two for slate throughput; the larger Asian snapshots run serially.
+      // Two simultaneous MLB simulations keep a 10-game slate moving without
+      // recreating the four-request mobile burst that caused aborted requests.
+      // Larger Asian snapshots remain serial so each game can finish and persist.
       const analysisConcurrency = initialAnalysisConcurrency(league);
       await runPool(tasks, analysisConcurrency, async (task, index) => {
         outcomes[index] = await analyzeBoardItem(task, index, tasks.length);

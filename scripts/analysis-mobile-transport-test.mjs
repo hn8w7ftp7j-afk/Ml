@@ -57,10 +57,12 @@ assert.equal(rebuilt.distributionSnapshot.distributionHash, distributionSnapshot
 const compactContext = compactAnalysisContext(frozenContext);
 assert.ok(Buffer.byteLength(JSON.stringify(compactContext)) < 5_000, 'phone response must not duplicate the full frozen context');
 assert.equal(compactContext.game.gamePk, game.gamePk);
-assert.equal(initialAnalysisConcurrency('MLB'), 1);
+assert.equal(initialAnalysisConcurrency('MLB'), 2);
+assert.equal(initialAnalysisConcurrency('mlb'), 2);
 assert.equal(initialAnalysisConcurrency('NPB'), 1);
 assert.equal(initialAnalysisConcurrency('KBO'), 1);
 assert.equal(initialAnalysisConcurrency('CPBL'), 1);
+assert.equal(initialAnalysisConcurrency(''), 1);
 
 const pageSource = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 const analyzeRouteSource = fs.readFileSync(new URL('../app/api/analyze/route.js', import.meta.url), 'utf8');
