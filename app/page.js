@@ -14,6 +14,7 @@ import { summarizeBetLedger } from '../lib/bet-stats.js';
 import { teamNameZh, translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
+  advanceUnchangedReaderGame,
   actualLineFreshNow,
   gameIsPrestartNow,
   liveReaderHashMatches,
@@ -1171,6 +1172,12 @@ export default function Home() {
         }
         if (item.readerPayloadHash === credit.payloadHash && item.customData && item.restoredFromCache !== true) {
           updateBoard(item.game.gamePk, current => touchReaderHeartbeat(current, credit.payloadHash, credit.pageActivityAt));
+          completed += 1;
+          return;
+        }
+        const unchanged = advanceUnchangedReaderGame(item, actual.markets, credit.payloadHash, credit.pageActivityAt);
+        if (unchanged) {
+          updateBoard(item.game.gamePk, () => unchanged);
           completed += 1;
           return;
         }

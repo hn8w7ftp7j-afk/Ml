@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  advanceUnchangedReaderGame,
   actualLineFreshNow,
   formalBetEligibility,
   gameIsPrestartNow,
@@ -13,6 +14,7 @@ import {
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
   touchReaderHeartbeat,
+  sameReaderGameMarkets,
 } from '../lib/client-analysis-state.js';
 
 const NOW = Date.parse('2026-08-15T08:00:00.000Z');
@@ -100,6 +102,27 @@ assert.equal(heartbeatTouched.customData.analysis.results[0].lineAsOf, heartbeat
 assert.equal(heartbeatTouched.customData.analysis.results[0].formulaDiagnosticScore, 7.4, 'heartbeat refresh must preserve the completed score');
 assert.equal(heartbeatTouched.customData.analysis.results[1].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, 'heartbeat must not rewrite independent reference evidence');
 assert.equal(touchReaderHeartbeat(heartbeatItem, 'different-board', heartbeatAt), heartbeatItem, 'a different market hash must not refresh old rows');
+
+const oldGameMarkets = [
+  { market: '全場讓分', pick: '客隊讓1+50', water: 0.95, lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt },
+  { market: '全場讓分', pick: '主隊受讓1+50', water: 0.93, lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt },
+];
+const sameGameMarkets = [
+  { market: '全場讓分', pick: '主隊受讓1+50', water: '0.930', lineAsOf: heartbeatAt },
+  { market: '全場讓分', pick: '客隊讓1+50', water: '0.950', lineAsOf: heartbeatAt },
+];
+assert.equal(sameReaderGameMarkets(oldGameMarkets, sameGameMarkets), true, 'timestamps and row order must not change a single-game market revision');
+assert.equal(sameReaderGameMarkets(oldGameMarkets, [{ ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1]]), false, 'a changed price must require reprice');
+const advanced = advanceUnchangedReaderGame({
+  ...heartbeatItem,
+  readerPayloadHash: 'old-whole-board',
+  customMarkets: oldGameMarkets,
+}, sameGameMarkets, 'new-whole-board', heartbeatAt);
+assert.equal(advanced.readerPayloadHash, 'new-whole-board', 'an unchanged game must advance across an unrelated whole-board revision');
+assert.equal(advanced.customData.analysis.results[0].lineAsOf, heartbeatAt);
+assert.equal(advanceUnchangedReaderGame({ ...heartbeatItem, customMarkets: oldGameMarkets }, [
+  { ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1],
+], 'new-whole-board', heartbeatAt), null, 'changed game markets must not reuse old analysis');
 
 const game = { gamePk: 123, away: '客隊', home: '主隊' };
 const merged = mergeRecognizedGameInputs([
