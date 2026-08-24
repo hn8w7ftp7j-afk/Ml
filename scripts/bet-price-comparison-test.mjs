@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { compareBetPrice, sameBetPrice } from '../lib/bet-price-comparison.js';
+import { currentReaderPriceForBet, priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
 
 const game = { away: '客隊', home: '主隊' };
 const baseBet = {
@@ -72,5 +73,44 @@ const wrongDirection = compareBetPrice({
 });
 assert.equal(wrongDirection.comparable, false);
 assert.equal(wrongDirection.combinedStatus, 'UNKNOWN');
+
+const readerSnapshot = {
+  league: 'MLB',
+  boardDate: '2026-08-20',
+  pageActivityAt: '2026-08-20T09:20:00.000Z',
+  games: [{
+    gamePk: 1,
+    markets: [
+      { market: '全場大小', pick: '小8+60', water: 0.94, lineAsOf: '2026-08-20T09:20:00.000Z' },
+      { market: '全場大小', pick: '大8+60', water: 0.94, lineAsOf: '2026-08-20T09:20:00.000Z' },
+    ],
+  }],
+};
+const current = currentReaderPriceForBet(baseBet, readerSnapshot);
+assert.equal(current.pick, '小8+60');
+assert.equal(current.water, 0.94);
+assert.equal(currentReaderPriceForBet({ ...baseBet, league: 'NPB' }, readerSnapshot), null, 'Reader price must remain league-isolated');
+assert.equal(currentReaderPriceForBet({ ...baseBet, date: '2026-08-21' }, readerSnapshot), null, 'Reader price must remain date-isolated');
+
+const verifiedClosingBet = {
+  ...baseBet,
+  gameDate: '2026-08-20T10:00:00.000Z',
+  closingContractSnapshot: {
+    verified: true,
+    provider: 'TAI888_READER_AUTO',
+    sourceType: 'ACTUAL_TW_CREDIT',
+    market: '全場大小',
+    pick: '小8+60',
+    water: 0.94,
+    lineAsOf: '2026-08-20T09:59:00.000Z',
+  },
+};
+assert.equal(verifiedClosingPriceForBet(verifiedClosingBet)?.pick, '小8+60');
+assert.equal(verifiedClosingPriceForBet({ ...verifiedClosingBet, closingContractSnapshot: { ...verifiedClosingBet.closingContractSnapshot, verified: false } }), null);
+assert.equal(verifiedClosingPriceForBet({ ...verifiedClosingBet, closingContractSnapshot: { ...verifiedClosingBet.closingContractSnapshot, lineAsOf: '2026-08-20T10:01:00.000Z' } }), null, 'post-start price must never be called Closing CLV');
+assert.equal(priceComparisonLabel('BETTER'), '原下注盤優');
+assert.equal(priceComparisonLabel('WORSE'), '原下注盤劣');
+assert.equal(priceComparisonLabel('EQUIVALENT'), '相同');
+assert.equal(priceComparisonLabel('MIXED'), '混合');
 
 console.log('Placed-versus-current Taiwan price comparison, exact suppression and key-hole delta PASS');
