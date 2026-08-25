@@ -16,10 +16,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.9.4', 'package/release identity must match the V10.9.4 UI');
-assert.equal(packageLock.version, '10.9.4', 'package-lock release identity must match V10.9.4');
-assert.equal(packageLock.packages?.['']?.version, '10.9.4', 'root lockfile package must match V10.9.4');
-assert.equal(APP_VERSION, '10.9.4');
+assert.equal(packageJson.version, '10.9.5', 'package/release identity must match the V10.9.5 UI');
+assert.equal(packageLock.version, '10.9.5', 'package-lock release identity must match V10.9.5');
+assert.equal(packageLock.packages?.['']?.version, '10.9.5', 'root lockfile package must match V10.9.5');
+assert.equal(APP_VERSION, '10.9.5');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
@@ -124,6 +124,9 @@ assert.match(rankingUi, /recordBet\(entry\.item,\s*entry\.row\)/, 'ranking butto
 assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');
 assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');
 assert.match(rankingUi, /不再只顯示7\.2以上或可下注方向/, 'ranking UI must explain that non-bettable directions remain visible');
+assert.match(rankingUi, /Reader覆蓋/, 'ranking UI must disclose Reader slate coverage for cross-snapshot comparisons');
+assert.match(rankingUi, /盤口雜湊/, 'ranking UI must expose a short Reader snapshot identity');
+assert.match(rankingUi, /不能與其他時點、其他盤口快照混合比較/, 'ranking UI must prevent cross-snapshot score comparisons');
 assert.match(rankingUi, /排名資格：否/, 'ranking UI must label non-qualified directions instead of filtering them out');
 mustMatch(/BET_PERIODS/, 'ledger quick period controls missing');
 mustMatch(/BetLedgerDashboard/, 'unified four-league ledger dashboard missing');
@@ -188,7 +191,7 @@ mustMatch(/Number\(row\.weightedEV\) > 0/, 'ranking eligibility must still requi
 mustMatch(/Number\(row\.robustEV\) > 0/, 'ranking eligibility must still require positive Robust EV without hiding other directions');
 mustMatch(/score != null && score >= 7\.2/, 'ranking eligibility must retain the 7.2 threshold without filtering lower scores from display');
 mustMatch(/row\.evCalibration\?\.scenarioStable === true/, 'ranking eligibility must retain the model-scenario stability gate without hiding unstable directions');
-assert.doesNotMatch(page, /row\.evCalibration\?\.extreme !== true/, 'ranking must not use a 15% cliff after continuous plausibility calibration');
+assert.doesNotMatch(page, /row\.evCalibration\?\.extreme !== true/, 'ranking must not use a raw-EV cliff; model/market disagreement has its own explicit QA gate');
 mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected direction coverage missing');
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
@@ -200,8 +203,9 @@ mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking 
 
 
 
-mustMatch(/V10\.6狀態感知相關風險聯合比分模型影子 S 分數/, 'score label must disclose state-aware correlated joint-score model semantics');
-mustMatch(/\$\{provisionalBaseline \? '連續合理性校準' : '狀態模型'\}等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must distinguish continuous plausibility calibration from state-model probability');
+mustMatch(/V10\.6\.1狀態感知共用聯合比分模型影子 S 分數/, 'score label must disclose state-aware shared joint-score model semantics');
+mustMatch(/狀態模型等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must identify the unmodified state-model probability');
+assert.doesNotMatch(page, /provisionalBaseline|連續合理性校準/, 'UI must not describe removed Tai888 probability feedback as active');
 mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
 mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
 mustMatch(/模型診斷W \${pct\(row\.weightedEV\)}/, 'W must be labelled as an unvalidated model diagnostic');

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   advanceUnchangedReaderGame,
   actualLineFreshNow,
+  coreSnapshotReusable,
   formalBetEligibility,
   gameIsPrestartNow,
   liveReaderHashMatches,
@@ -91,7 +92,13 @@ const heartbeatItem = {
   readerPayloadHash: 'same-board',
   actualSource: { provider: 'TAI888_READER_AUTO', pageActivityAt: sameBoardBeforeHeartbeat.pageActivityAt },
   customMarkets: [{ market: '全場讓分', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt }],
-  customData: { analysis: { results: [
+  customData: { context: {
+    fetchedAt: '2026-08-15T08:00:00.000Z',
+    game: { gameDate: '2026-08-15T12:00:00.000Z' },
+    away: { lineup: { official: true }, bullpen: { status: 'CONFIRMED' } },
+    home: { lineup: { official: true }, bullpen: { status: 'CONFIRMED' } },
+    weather: { roofConfirmed: true },
+  }, analysis: { results: [
     { sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt, formulaDiagnosticScore: 7.4 },
     { sourceType: 'REFERENCE', provider: 'OTHER', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt },
   ] } },
@@ -117,12 +124,19 @@ const advanced = advanceUnchangedReaderGame({
   ...heartbeatItem,
   readerPayloadHash: 'old-whole-board',
   customMarkets: oldGameMarkets,
-}, sameGameMarkets, 'new-whole-board', heartbeatAt);
+}, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW);
 assert.equal(advanced.readerPayloadHash, 'new-whole-board', 'an unchanged game must advance across an unrelated whole-board revision');
 assert.equal(advanced.customData.analysis.results[0].lineAsOf, heartbeatAt);
 assert.equal(advanceUnchangedReaderGame({ ...heartbeatItem, customMarkets: oldGameMarkets }, [
   { ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1],
-], 'new-whole-board', heartbeatAt), null, 'changed game markets must not reuse old analysis');
+], 'new-whole-board', heartbeatAt, NOW), null, 'changed game markets must not reuse old analysis');
+assert.equal(coreSnapshotReusable({ ...heartbeatItem, restoredFromCache: true }, NOW), false, 'browser-restored analysis must rebuild its missing frozen core');
+assert.equal(coreSnapshotReusable({ ...heartbeatItem, customData: { ...heartbeatItem.customData, context: { ...heartbeatItem.customData.context, fetchedAt: '2026-08-15T06:00:00.000Z' } } }, NOW), false, 'expired core must not be marked current just because Reader prices are unchanged');
+assert.equal(advanceUnchangedReaderGame({
+  ...heartbeatItem,
+  customMarkets: oldGameMarkets,
+  customData: { ...heartbeatItem.customData, context: { ...heartbeatItem.customData.context, fetchedAt: '2026-08-15T06:00:00.000Z' } },
+}, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW), null, 'unchanged Reader prices must not short-circuit an expired core rebuild');
 
 const game = { gamePk: 123, away: '客隊', home: '主隊' };
 const merged = mergeRecognizedGameInputs([

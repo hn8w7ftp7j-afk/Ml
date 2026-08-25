@@ -198,6 +198,17 @@ assert.equal(projectedContext.away.lineup.offensiveIndex, 1, '近期得分不得
 assert.ok(projectedContext.asianCalibration.sampleReliability > 0 && projectedContext.asianCalibration.sampleReliability < 1);
 assert.ok(projectedContext.modelConfig.shrink.full < 0.30, '小樣本必須以經驗貝氏方式強烈收縮');
 
+const namedStarterContext = await buildAsianGameContext('NPB', {
+  ...npb[0],
+  awayProbable: 'Named Away Starter', awayProbableId: 99001,
+  homeProbable: 'Named Home Starter', homeProbableId: 99002,
+  probableSource: 'NPB_OFFICIAL_PROBABLE_STARTER',
+}, { historyGames: sufficientHistory });
+assert.equal(namedStarterContext.away.starter.identityConfirmed, true);
+assert.equal(namedStarterContext.away.starter.confirmed, false, '確認先發姓名不等於確認投手能力資料');
+assert.equal(namedStarterContext.sourceStatuses.starters, 'PROJECTED');
+assert.equal(namedStarterContext.starterModelingMode, 'OFFICIAL_STARTER_IDENTITY_WITH_PROJECTED_TEAM_RATE_PRIOR');
+
 await assert.rejects(
   () => buildAsianGameContext('NPB', npb[0], {
     fetchImpl: async url => ({

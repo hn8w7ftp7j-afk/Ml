@@ -17,6 +17,7 @@ import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
   advanceUnchangedReaderGame,
   actualLineFreshNow,
+  coreSnapshotReusable,
   gameIsPrestartNow,
   liveReaderHashMatches,
   mergeReaderStatusHighWater,
@@ -514,8 +515,6 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const marketGapText = tai888Gap != null && Number.isFinite(Number(tai888Gap))
     ? `｜模型/Tai888去水差距 ${pct(tai888Gap)}`
     : '';
-  const provisionalBaseline = row?.marketBaselineApplied === true;
-  const baselineWeight = Number(row?.marketCalibrationWeight || 0);
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
   const scoreClass = calibrationBlocked ? 'warning' : formulaScore == null ? 'pass'
@@ -529,14 +528,15 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
         ? '缺少合法水位或雙EV，不能補造分數'
         : !qaPassed
           ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-          : `V10.6狀態感知相關風險聯合比分模型影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
+          : `V10.6.1狀態感知共用聯合比分模型影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
   const scoreMetaText = !leagueValidated
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
-      ? `V10.6模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
+      ? `V10.6.1模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
       : plausibilityBlocked
-        ? `比分分布合理性未通過｜模型勝率、W、R與公式評分全部停用${marketGapText}｜不得用原始模型值下注`
-      : `${provisionalBaseline ? '連續合理性校準' : '狀態模型'}等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${provisionalBaseline ? `｜原始模型/Tai888差距 ${pct(row.rawModelTai888ProbabilityGap)}｜連續校準權重 ${pct(baselineWeight)}` : marketGapText}`;
+        ? `比分分布合理性未通過｜原始模型勝率、W、R只保留稽核，公式評分停用${marketGapText}｜不得用原始模型值下注`
+      : `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
+  const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const buttonText = latest ? '已下注 ✓' : '紀錄實際下注';
   return <div className="scoreRow">
@@ -551,7 +551,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
           ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否（${verdict.reason}）｜資料QA：${qaPassed ? 'PASS' : 'BLOCK'}｜正式推薦停用`
           : !qaPassed
             ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否｜資料QA：BLOCK（${qaFailures.join('；') || '資料、數學或數值檢查未通過'}）｜不列排名、不作推薦｜正式推薦停用`
-            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜EV校準：${provisionalBaseline ? '連續暫行' : '未完成歷史驗證'}｜外部市場：未使用｜正式推薦與Unit停用`}</div>}
+            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜市場回灌：停用｜歷史驗證：未完成｜外部市場：未使用｜正式推薦與Unit停用`}</div>}
       {!calibrationBlocked && auditWarnings.length > 0 && <details className="auditWarnings">
         <summary>模型與外部稽核提示 {auditWarnings.length} 項</summary>
         <div>{auditWarnings.join('；')}</div>
@@ -599,12 +599,21 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
     row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false,
     row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED',
   ).ranking).length;
+  const expectedRuns = item.customData?.analysis?.expectedRuns || null;
+  const runCenter = value => {
+    const away = Number(value?.away);
+    const home = Number(value?.home);
+    return Number.isFinite(away) && Number.isFinite(home)
+      ? `客 ${away.toFixed(2)}／主 ${home.toFixed(2)}／合計 ${(away + home).toFixed(2)}`
+      : '資料不足';
+  };
   return <section className="gameCard">
     <div className="gameHead">
       <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
     {shadowMode && <div className="sourceBanner"><strong>{item.game.leagueId || item.game.league || 'MLB'} 驗證中聯合比分模型 EV</strong><span>已開 {openMarketCount}/4 市場｜應評 {expectedDirectionCount} 方向｜已評 {scoredDirectionCount}/{expectedDirectionCount}｜進排名 {rankingDirectionCount}；先發局數／左右投／打線／純牛棚依聯盟資料狀態納入，缺失時採中性擴大情境並清楚標示；九局終止、再見與和局規則納入，Tai888逐腿結算</span></div>}
+    {expectedRuns && <div className="sourceBanner"><strong>上游得分中心｜市場水位回灌：停用</strong><span>全場 {runCenter(expectedRuns.full)}｜前五局 {runCenter(expectedRuns.first5)}｜這份得分分布同時結算大／小與讓／受讓</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
@@ -730,6 +739,14 @@ export default function Home() {
   [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, date]);
   const shadowBetOrder = useMemo(() => buildBetOrderEntries(shadowRanking), [shadowRanking]);
   const shadowBetOrderGames = useMemo(() => groupBetOrderEntries(shadowBetOrder), [shadowBetOrder]);
+  const rankingProvenance = useMemo(() => {
+    const modelVersions = [...new Set(board.map(item => item.customData?.analysis?.modelVersion).filter(Boolean))];
+    const lineTimes = board.flatMap(item => (item.customData?.analysis?.results || []).map(row => row.lineAsOf).filter(Boolean));
+    return {
+      modelVersions,
+      latestLineAsOf: lineTimes.sort().at(-1) || null,
+    };
+  }, [board]);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -1315,7 +1332,7 @@ export default function Home() {
           }
           return;
         }
-        if (item.readerPayloadHash === credit.payloadHash && item.customData && item.restoredFromCache !== true) {
+        if (item.readerPayloadHash === credit.payloadHash && coreSnapshotReusable(item)) {
           updateBoard(item.game.gamePk, current => touchReaderHeartbeat(current, credit.payloadHash, credit.pageActivityAt));
           completed += 1;
           return;
@@ -1568,7 +1585,8 @@ export default function Home() {
     </>}
 
     {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>模型影子排名｜全部方向</h2><span className="state shadow">全部顯示｜非正式推薦</span></div>
-      <div className="emptySmall">此處顯示今日Reader已開盤且已完成分析的全部方向，不再只顯示7.2以上或可下注方向。仍依S分數由高到低排序；未通過EV校準、QA、情境穩定或雙正EV的方向也保留並清楚標示原因。</div>
+      <div className="emptySmall">此處顯示這一版Reader快照中已開盤且已完成分析的全部方向，不再只顯示7.2以上或可下注方向。Reader未呈現或尚未開盤的場次不在此列，不能與其他時點、其他盤口快照混合比較；未通過EV校準、QA、情境穩定或雙正EV的方向仍保留並清楚標示原因。</div>
+      <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
         const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled);
@@ -1598,7 +1616,7 @@ export default function Home() {
 
     {tab === 'bets' && <BetLedgerDashboard bets={bets} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} deleteBet={deleteBet}/>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.6使用精確狀態感知聯合比分分布，不使用虛構的模擬次數；同場正反方向共用同一份比分分布。獨立市場只作外部稽核，缺失時最高列為8.4，但不阻擋7.2～8.4排名。W/R差距超過5%仍顯示分數但不列排名；尚未完成樣本外驗證，正式推薦與Unit繼續停用。實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>1 Unit 金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V10.6.1使用精確狀態感知聯合比分分布，不使用虛構的模擬次數；同場正反方向共用同一份比分分布，Tai888只作成交payoff與合理性QA，不改寫模型機率或EV。獨立市場只作外部稽核，缺失時最高列為8.4，但不阻擋7.2～8.4排名。W/R差距超過5%仍顯示分數但不列排名；尚未完成樣本外驗證，正式推薦與Unit繼續停用。實際下注帳本使用伺服器端資料庫，賽後依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
   </main>;
 }

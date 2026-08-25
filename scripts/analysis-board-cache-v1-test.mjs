@@ -29,6 +29,9 @@ assert.equal(restored[0].statusLabel, '已恢復上一版分析｜背景驗證�
 assert.equal(restored[0].customData.analysis.results[0].formulaDiagnosticScore, 7.8, 'restoring must preserve the visible score');
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'league caches must remain isolated');
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 73 * 60 * 60 * 1000 }), [], 'expired recovery data must not be restored');
+assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 1 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-shared-distribution model snapshots must not survive the cache contract bump');
+const legacyAsianEntry = { ...entry, version: 1, league: 'KBO' };
+assert.equal(restoreAnalysisBoardCache(legacyAsianEntry, { league: 'KBO', date: '2026-08-23', now: NOW }).length, 1, 'MLB-only invalidation must not erase valid Asian shadow-board recovery');
 
 const store = upsertAnalysisBoardCache({}, entry);
 assert.equal(store[analysisBoardCacheKey('MLB', '2026-08-23')].board.length, 1);
