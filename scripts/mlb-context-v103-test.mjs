@@ -59,7 +59,7 @@ assert.ok(Math.abs(starter.expectedInnings - 5.1) < 1e-12);
 assert.equal(starter.expectedInningsStatus, 'CONFIRMED');
 const opener = expectedStarterInningsV13({ inningsPitched: 12, gamesStarted: 8, gamesPitched: 30 }, { probableId: 11, scheduledInnings: 9 });
 assert.equal(opener.role, 'OPENER_OR_BULK_RISK');
-assert.equal(opener.expectedInnings, 1.5);
+assert.equal(opener.expectedInnings, 3.0, 'mixed starter/reliever aggregate innings must fail neutral when starter-only game logs are unavailable');
 const reliefOnlyProbable = expectedStarterInningsV13({ inningsPitched: 9.2, gamesStarted: 0, gamesPitched: 2 }, { probableId: 12, scheduledInnings: 9 });
 assert.equal(reliefOnlyProbable.role, 'OPENER_OR_BULK_RISK');
 assert.equal(reliefOnlyProbable.expectedInnings, 3.0, 'zero-start probable must not silently receive a normal 5.2-inning starter workload');

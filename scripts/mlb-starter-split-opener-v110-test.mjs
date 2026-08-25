@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { personPitchingStatForTeamV11 } from '../lib/mlb-context-v11.js';
-import { expectedStarterInningsV13 } from '../lib/mlb-context-v13.js';
+import { expectedStarterInningsV13, starterOnlyGameLogV13 } from '../lib/mlb-context-v13.js';
 import { estimateRunProfileV13 } from '../lib/joint-score-v13.js';
 
 const transferred = { stats: [{ splits: [
@@ -18,7 +18,7 @@ assert.equal(opener.expectedInnings, 3);
 assert.equal(opener.expectedInningsStatus, 'PROJECTED');
 const oneStart = expectedStarterInningsV13({ inningsPitched: 2, gamesStarted: 1, gamesPitched: 8 }, { probableId: 124, scheduledInnings: 9 });
 assert.equal(oneStart.role, 'OPENER_OR_BULK_RISK');
-assert.equal(oneStart.expectedInnings, 2);
+assert.equal(oneStart.expectedInnings, 3);
 assert.equal(oneStart.expectedInningsStatus, 'PROJECTED');
 const rejectedTeamProxy = expectedStarterInningsV13({
   projectedFromTeamPitching: true,
@@ -34,6 +34,20 @@ assert.equal(rejectedTeamProxy.rawSeasonInningsPerStart, null);
 assert.equal(rejectedTeamProxy.expectedInningsStatus, 'PROJECTED');
 assert.equal(rejectedTeamProxy.source, 'TEAM_PITCHING_PROXY_REJECTED_NEUTRAL');
 assert.equal(rejectedTeamProxy.individualPitcherStatsAvailable, false);
+
+const mixedRoleLog = { stats: [{ splits: [
+  { date: '2026-04-01', team: { id: 146 }, stat: { gamesStarted: 1, inningsPitched: '5.1', earnedRuns: 2, hits: 5, baseOnBalls: 1, strikeOuts: 6, homeRuns: 1 } },
+  { date: '2026-04-06', team: { id: 146 }, stat: { gamesStarted: 0, inningsPitched: '3.0', earnedRuns: 0, hits: 1, baseOnBalls: 0, strikeOuts: 4, homeRuns: 0 } },
+  { date: '2026-04-12', team: { id: 146 }, stat: { gamesStarted: 1, inningsPitched: '4.2', earnedRuns: 3, hits: 6, baseOnBalls: 2, strikeOuts: 3, homeRuns: 1 } },
+  { date: '2026-04-18', team: { id: 147 }, stat: { gamesStarted: 1, inningsPitched: '9.0', earnedRuns: 0, hits: 0, baseOnBalls: 0, strikeOuts: 20, homeRuns: 0 } },
+] }] };
+const starterOnly = starterOnlyGameLogV13(mixedRoleLog, { teamId: 146, endDate: '2026-04-30' });
+assert.equal(starterOnly.gamesStarted, 2);
+assert.equal(starterOnly.inningsPitched, 10, 'starter workload must exclude relief appearances and other teams');
+assert.equal(expectedStarterInningsV13(starterOnly, { probableId: 126 }).expectedInnings, 5);
+const mixedAggregateFallback = expectedStarterInningsV13({ inningsPitched: 100.2, gamesStarted: 14, gamesPitched: 31 }, { probableId: 127 });
+assert.equal(mixedAggregateFallback.expectedInnings, 4.8, 'mixed-role aggregate IP must not be divided by starts');
+assert.equal(mixedAggregateFallback.expectedInningsStatus, 'PROJECTED');
 
 function team(expectedInnings) {
   return {
