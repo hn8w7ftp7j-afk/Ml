@@ -50,47 +50,27 @@ function analyzeRequest(game, markets) {
   });
 }
 
-function assertLockedContext(value) {
-  assert.equal(value.analysisMode, 'EXPERIMENTAL_SHADOW');
-  assert.equal(value.executable, false);
-  assert.equal(value.betEligible, false);
-}
-
-function assertLockedResult(row) {
-  assertLockedContext(row);
-  assert.equal(row.scoreType, 'SHADOW_DIAGNOSTIC');
-  assert.equal(row.tag, 'SHADOW｜影子評分｜不可下注');
-  assert.equal(row.unitSuggestion, null);
-  assert.equal(row.portfolioUnit, null);
-}
-
-function assertLockedPayload(body) {
-  assertLockedContext(body);
-  assert.deepEqual(body.portfolio, []);
-  assert.equal(body.tag, 'SHADOW｜影子評分｜不可下注');
-  assertLockedContext(body.context);
-  assertLockedContext(body.analysis);
-  assert.deepEqual(body.analysis.portfolio, []);
-  body.analysis.results.forEach(assertLockedResult);
-  assertLockedContext(body.repriceSnapshot);
-  assert.deepEqual(body.repriceSnapshot.portfolio, []);
-  assertLockedContext(body.repriceSnapshot.frozenContext);
-}
-
 try {
-  globalThis.fetch = async () => new Response(npbHtml, { status: 200, headers: { 'Content-Type': 'text/html' } });
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return new Response(npbHtml, { status: 200, headers: { 'Content-Type': 'text/html' } });
+  };
   const [game] = await fetchLeagueTaipeiSlate('NPB', '2099-08-18');
   assert.ok(game?.gamePk);
+  const callsBeforeAnalyze = providerCalls;
   const markets = manualMarkets(game);
   const analyzeRoute = await import('../app/api/analyze/route.js');
 
   const firstResponse = await analyzeRoute.POST(analyzeRequest(game, markets));
   const first = await firstResponse.json();
-  assert.equal(firstResponse.status, 422);
-  assert.equal(first.code, 'CORE_DATA_MISSING');
-  assert.match(first.error, /資料不足|核心資料/);
+  assert.equal(firstResponse.status, 409);
+  assert.equal(first.code, 'LEAGUE_NOT_READY');
+  assert.equal(first.league, 'NPB');
+  assert.match(first.error, /尚未完成|停止分析/);
+  assert.equal(providerCalls, callsBeforeAnalyze, '未發布的聯盟必須在任何官方核心資料、分布或評分工作前 fail closed');
 } finally {
   globalThis.fetch = originalFetch;
 }
 
-console.log('Enabled NPB analysis still fails closed when official history core data is unavailable PASS');
+console.log('Unreleased NPB analysis fails closed before any core fetch, distribution or scoring PASS');

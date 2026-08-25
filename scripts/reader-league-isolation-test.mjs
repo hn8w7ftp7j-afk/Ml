@@ -74,12 +74,26 @@ const npbSignature = analysisContractSignature('NPB', context.game, markets);
 assert.notEqual(mlbSignature, npbSignature);
 assert.notEqual(analysisCacheKey('MLB', 777, mlbPrints.inputHash), analysisCacheKey('NPB', 777, mlbPrints.inputHash));
 const mlbGame = { ...context.game, league: 'MLB' };
+const lockedContext = { leagueId: 'MLB', game: { ...mlbGame, leagueId: 'MLB' }, analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false };
+const lockedResult = {
+  analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+  scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注',
+  unitSuggestion: null, recommendedUnit: null, portfolioRole: '', portfolioUnit: null,
+};
 const payload = {
-  league: 'MLB',
-  game: mlbGame,
-  context: { game: mlbGame },
-  analysis: { inputHash: mlbPrints.inputHash },
-  repriceSnapshot: { inputHash: mlbPrints.inputHash },
+  league: 'MLB', game: mlbGame, context: lockedContext,
+  analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+  scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注', unitSuggestion: null,
+  portfolio: [], results: [lockedResult],
+  analysis: {
+    inputHash: mlbPrints.inputHash, analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+    scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注', unitSuggestion: null,
+    portfolio: [], results: [lockedResult],
+  },
+  repriceSnapshot: {
+    inputHash: mlbPrints.inputHash, analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+    portfolio: [], frozenContext: lockedContext,
+  },
 };
 assert.equal(analysisCachePayloadMatches({ signature: mlbSignature, payload }, {
   league: 'MLB', game: mlbGame, fingerprints: mlbPrints, signature: mlbSignature,

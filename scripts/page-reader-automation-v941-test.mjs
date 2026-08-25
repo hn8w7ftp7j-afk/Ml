@@ -16,12 +16,18 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '10.9.5', 'package/release identity must match the V10.9.5 UI');
-assert.equal(packageLock.version, '10.9.5', 'package-lock release identity must match V10.9.5');
-assert.equal(packageLock.packages?.['']?.version, '10.9.5', 'root lockfile package must match V10.9.5');
-assert.equal(APP_VERSION, '10.9.5');
+assert.equal(packageJson.version, '11.0.0', 'package/release identity must match the V11.0.0 UI');
+assert.equal(packageLock.version, '11.0.0', 'package-lock release identity must match V11.0.0');
+assert.equal(packageLock.packages?.['']?.version, '11.0.0', 'root lockfile package must match V11.0.0');
+assert.equal(APP_VERSION, '11.0.0');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
+assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
+assert.match(healthRoute, /databaseConfigured = analysisPitDatabaseConfigured\(\)/, 'health readiness must use the same PIT database contract as analysis persistence');
+assert.match(healthRoute, /ready,/, 'health must expose readiness to the UI');
+assert.match(healthRoute, /readinessReasons,/, 'health must expose actionable readiness reasons to the UI');
+assert.match(healthRoute, /readinessBasis: 'CONFIGURATION_ONLY_PERSISTENCE_CONFIRMED_PER_ANALYSIS'/, 'health must not claim a config-only DB check is a live connection probe');
+mustMatch(/必要設定已提供｜PIT寫入依逐場狀態/, 'header must not claim the database is connected or a write confirmed from configuration alone');
 assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API must not retain the fake simulation count');
 assert.match(analyzeRoute, /getOrBuildGameDistribution/, 'analyze API must reuse the same-game core distribution');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
@@ -79,7 +85,7 @@ assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation s
 // External-market requests are disabled; analysis keeps an explicit empty audit payload.
 mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetGames = \[\]\)/, 'target-aware reference-line loader missing');
 assert.doesNotMatch(page, /requestJSON\('\/api\/reference-lines'/, 'client must not request disabled external-market APIs');
-mustMatch(/message: '外部市場稽核未使用；不影響模型評分與排名。'/, 'disabled external-market status missing');
+mustMatch(/缺少兩個獨立同約時8\.5級最高封頂8\.4/, 'disabled external-market status must disclose the 8.5 qualification cap without implying W\/R feedback');
 assert.doesNotMatch(page, /referenceRefreshDue/, 'disabled external references must not force same-hash Reader repricing');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
@@ -110,6 +116,12 @@ mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
 mustMatch(/此方向已經記錄；盤口或水位變動也不再新增/, 'single-position bet suppression text missing');
 assert.doesNotMatch(page, /加注目前盤/, 'same direction must never expose a reprice add-on action');
 mustMatch(/記錄實際下注/, 'actual-bet action missing');
+mustMatch(/每筆實際下注金額/, 'stake preset must be labelled as an actual-ledger amount rather than a model Unit');
+assert.doesNotMatch(page, />1 Unit 金額</, 'formal Unit is disabled and must not appear as an active setting');
+assert.match(page, /unit: null/, 'actual ledger writes must not claim a model Unit');
+mustMatch(/不可變帳本/, 'ledger must disclose immutable evidence retention');
+mustMatch(/下注證據保留，不提供刪除/, 'ledger must not render a dead destructive action');
+assert.doesNotMatch(page, /action: 'delete'|action: 'clearLeague'/, 'client must not call unsupported destructive ledger actions');
 
 // Ranking rows must retain the original item/row and expose the same immutable
 // cloud-ledger action as the board instead of becoming a read-only desktop view.
@@ -119,7 +131,7 @@ const rankingEnd = page.indexOf("{tab === 'betOrder' && <section", rankingStart)
 assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'ranking UI section missing');
 const rankingUi = page.slice(rankingStart, rankingEnd);
 assert.match(rankingUi, /getBetState\(entry\.item,\s*entry\.row\)/, 'ranking action must read the same cloud/local bet state as the board');
-assert.match(rankingUi, /betRecordable\(entry\.item,\s*entry\.row,\s*clockNow,\s*bettingEnabled\)/, 'ranking action must enforce the same prestart/fresh Reader write gate');
+assert.match(rankingUi, /betRecordable\(entry\.item,\s*entry\.row,\s*clockNow,\s*bettingEnabled,\s*entry\.currentReaderPrice\)/, 'ranking action must enforce the same prestart/fresh Reader write gate');
 assert.match(rankingUi, /recordBet\(entry\.item,\s*entry\.row\)/, 'ranking button must call the canonical cloud recordBet flow');
 assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');
 assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');
@@ -139,12 +151,12 @@ const betOrderStart = page.indexOf("{tab === 'betOrder' && <section");
 const betOrderEnd = page.indexOf("{tab === 'bets' && <BetLedgerDashboard", betOrderStart);
 assert.ok(betOrderStart >= 0 && betOrderEnd > betOrderStart, 'bet-order UI section missing');
 const betOrderUi = page.slice(betOrderStart, betOrderEnd);
-assert.match(page, />下注順序<\//, 'bet-order tab must sit beside the ranking tab');
+assert.match(page, />影子候選順序<\//, 'shadow candidate-order tab must sit beside the ranking tab without implying a formal bet order');
 assert.match(page, /buildBetOrderEntries\(shadowRanking\)/, 'bet order must derive from the same immutable Reader ranking entries');
 assert.match(page, /groupBetOrderEntries\(shadowBetOrder\)/, 'bet order must group directions by game');
 assert.match(betOrderUi, /全場讓分、全場大小、上半讓分、上半大小/, 'bet-order UI must disclose its fixed market order');
 assert.match(betOrderUi, /getBetState\(entry\.item, entry\.row\)/, 'bet order must reuse the canonical cloud/local bet state');
-assert.match(betOrderUi, /betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled\)/, 'bet order must enforce the canonical prestart/fresh Reader gate');
+assert.match(betOrderUi, /betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice\)/, 'bet order must enforce the canonical prestart/current Reader gate');
 assert.match(betOrderUi, /recordBet\(entry\.item, entry\.row\)/, 'bet-order button must use the canonical cloud record flow');
 assert.match(betOrderUi, /已下注 ✓/, 'bet order must visibly preserve already-recorded positions');
 
@@ -169,7 +181,7 @@ mustMatch(/比賽已開始｜保留賽前分析｜停止下注與目前排名資
 mustMatch(/Reader盤口等待最新驗證｜保留上一版分析/, 'stale Reader prices must retain their completed score while execution is disabled');
 assert.doesNotMatch(page, /invalidateShadowScoreRow\(row, '獨立國際市場報價已超過5分鐘/, 'expired external consensus must remain audit-only');
 mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows must retain completed scores and current-price status');
-mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled\)\}/, 'every prestart actual Reader direction with real water must expose bet recording');
+mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled, row\.clientReaderPriceCurrent\)\}/, 'bet recording must require the item hash and live Reader-price proof calculated by GameCard');
 assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*acknowledgedReaderKey/, 'a successfully analyzed current item must not be blocked by an unrelated full-slate acknowledgement');
 mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*actualLineFreshNow\(row, clockNow\)/, 'ranking must use per-item current hash and live line freshness');
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
@@ -182,18 +194,24 @@ const scoreOnlyInvalidation = page.slice(
 );
 assert.doesNotMatch(scoreOnlyInvalidation, /lineFresh:\s*false|actualReaderEligible:\s*false|executable:\s*false/, 'external-reference expiry must not invalidate a still-fresh Reader price or hide actual-bet recording');
 assert.doesNotMatch(page, /invalidateReaderPriceRow/, 'client time progression must not destroy a completed immutable score');
-mustMatch(/recordable = betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled\)/, 'ranking must expose bet recording for every prestart actual Reader direction');
+mustMatch(/recordable = betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice\)/, 'ranking must expose bet recording only for a current item hash and live Reader direction');
+mustMatch(/currentReaderPrice === true/, 'canonical bet gate must fail closed unless the caller supplies current Reader proof');
+mustMatch(/const currentReaderPrice = itemReaderExecutable\(item\)/, 'recordBet must re-check board date, payload hash and Reader freshness at click time');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
 mustMatch(/const qaPassed = row\.scoreAudit\?\.ok === true/, 'ranking must preserve QA PASS as a visible qualification flag');
 mustMatch(/row\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
-mustMatch(/Number\(row\.weightedEV\) > 0/, 'ranking eligibility must still require positive Weighted EV without hiding other directions');
-mustMatch(/Number\(row\.robustEV\) > 0/, 'ranking eligibility must still require positive Robust EV without hiding other directions');
-mustMatch(/score != null && score >= 7\.2/, 'ranking eligibility must retain the 7.2 threshold without filtering lower scores from display');
-mustMatch(/row\.evCalibration\?\.scenarioStable === true/, 'ranking eligibility must retain the model-scenario stability gate without hiding unstable directions');
-assert.doesNotMatch(page, /row\.evCalibration\?\.extreme !== true/, 'ranking must not use a raw-EV cliff; model/market disagreement has its own explicit QA gate');
+mustMatch(/row\.rankingQualified === true/, 'client ranking must honor the signed backend W\/R, 7.2, stability and anomaly gates instead of reimplementing them');
+assert.doesNotMatch(page, /const rankingEligible[\s\S]{0,400}Number\(row\.weightedEV\) > 0/, 'client must not drift from backend Weighted EV ranking policy');
+assert.doesNotMatch(page, /const rankingEligible[\s\S]{0,400}Number\(row\.robustEV\) > 0/, 'client must not drift from backend Robust EV ranking policy');
+mustMatch(/row\?\.extremeEvReviewRequired === true/, 'W≥20% anomaly review must remain visible without rewriting W\/R');
 mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected direction coverage missing');
 mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
+mustMatch(/🧪 \{item\.game\.leagueId/, 'shadow candidates must use an explicit laboratory marker instead of formal recommendation icons');
+mustMatch(/上游資料狀態/, 'per-game upstream feature status must be visible');
+mustMatch(/資料截至/, 'point-in-time data timestamp must be visible');
+mustMatch(/輸入雜湊/, 'immutable analysis input hash must be visible');
+mustMatch(/市場水位回灌：停用/, 'the UI must state that Tai888 price feedback is disabled');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
 mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
 
@@ -203,7 +221,7 @@ mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking 
 
 
 
-mustMatch(/V10\.6\.1狀態感知共用聯合比分模型影子 S 分數/, 'score label must disclose state-aware shared joint-score model semantics');
+mustMatch(/V11\.0 PIT共用聯合比分模型影子 S 分數/, 'score label must disclose V11 PIT shared joint-score model semantics');
 mustMatch(/狀態模型等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must identify the unmodified state-model probability');
 assert.doesNotMatch(page, /provisionalBaseline|連續合理性校準/, 'UI must not describe removed Tai888 probability feedback as active');
 mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
@@ -213,7 +231,7 @@ mustMatch(/保守診斷R \${pct\(row\.robustEV\)}/, 'R must be labelled as an un
 mustMatch(/情境差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
 mustMatch(/合格模型影子分數啟用/, 'provider status must report model shadow-score mode');
 mustMatch(/Tai888只作成交價/, 'Tai888 execution-price-only role must be visible');
-mustMatch(/獨立市場只作可選/, 'independent market must be disclosed as optional audit-only');
+mustMatch(/外部同約：只作8\.5資格Gate、不改分布或W\/R/, 'independent market must be disclosed as an audit-only 8.5 qualification gate');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
 mustMatch(/不產生有效EV、不評分、不列排名/, 'unqualified model or reference evidence must fail closed in the primary UI');

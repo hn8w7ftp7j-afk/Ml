@@ -39,6 +39,6 @@ assert.equal(builds, 2);
 const expired = getOrBuildGameDistribution({ ...input, build, now: 1_101, ttlMs: 100 });
 assert.equal(expired.cacheStatus, 'MISS', '過期分布不得沿用');
 assert.equal(builds, 3);
-assert.equal(GAME_DISTRIBUTION_CACHE_VERSION, 'BASEBALL-GAME-DISTRIBUTION-CACHE-v1.0.0');
+assert.equal(GAME_DISTRIBUTION_CACHE_VERSION, 'BASEBALL-GAME-DISTRIBUTION-CACHE-v1.1.0');
 
 console.log('Game distribution cache: same-game directions share one core distribution; core changes and TTL rebuild PASS');

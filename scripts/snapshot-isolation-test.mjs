@@ -71,6 +71,17 @@ assert.equal(first.priceFingerprint, repeated.priceFingerprint, 'market row orde
 assert.equal(first.auxiliaryFingerprint, repeated.auxiliaryFingerprint, 'previous-market row order must not change auxiliary fingerprint');
 assert.equal(first.inputHash, repeated.inputHash, 'same complete input must reproduce the same inputHash');
 
+const observedSource = buildSnapshotFingerprints({
+  ...input,
+  context: { ...baseContext, featureProvenance: [{ featureName: 'lineup', fetchedAt: '2026-08-11T01:00:00Z' }] },
+});
+const refreshedSource = buildSnapshotFingerprints({
+  ...input,
+  context: { ...baseContext, featureProvenance: [{ featureName: 'lineup', fetchedAt: '2026-08-11T01:01:00Z' }] },
+});
+assert.notEqual(observedSource.coreFingerprint, refreshedSource.coreFingerprint, 'a new upstream PIT observation must change the core fingerprint even when values are unchanged');
+assert.notEqual(observedSource.inputHash, refreshedSource.inputHash, 'a new upstream PIT observation must create a new immutable input hash');
+
 const otherGame = buildSnapshotFingerprints({
   ...input,
   context: {
@@ -88,6 +99,34 @@ const otherWater = buildSnapshotFingerprints({
 assert.equal(first.coreFingerprint, otherWater.coreFingerprint, 'price-only change must retain core fingerprint');
 assert.notEqual(first.priceFingerprint, otherWater.priceFingerprint, 'water change must change price fingerprint');
 assert.notEqual(first.inputHash, otherWater.inputHash, 'water change must change inputHash');
+
+const readerMarkets = markets.map(row => ({
+  ...row,
+  sourceType: 'ACTUAL_TW_CREDIT',
+  provider: 'TAI888_READER_AUTO',
+  integrityOrigin: 'SERVER_SIGNED_READER',
+  authorizationStatus: 'READER_VERIFIED',
+  providerEventId: 'reader-event-1001',
+  marketSignatureVersion: 'market-signature-v1',
+  marketSignature: 'a'.repeat(64),
+}));
+const manualMarkets = readerMarkets.map(row => ({
+  ...row,
+  provider: 'USER_MANUAL_ENTRY',
+  integrityOrigin: 'CLIENT_MANUAL',
+  authorizationStatus: 'USER_CONFIRMED_MANUAL',
+  providerEventId: 'manual-event-1001',
+  marketSignature: 'b'.repeat(64),
+}));
+const readerPrints = buildSnapshotFingerprints({ ...input, markets: readerMarkets });
+const manualPrints = buildSnapshotFingerprints({ ...input, markets: manualMarkets });
+assert.notEqual(readerPrints.priceFingerprint, manualPrints.priceFingerprint, 'Reader and manual source provenance must never share a price fingerprint');
+assert.notEqual(readerPrints.inputHash, manualPrints.inputHash, 'Reader and manual source provenance must never share an input hash');
+assert.notEqual(
+  analysisContractSignature('MLB', baseContext.game, readerMarkets),
+  analysisContractSignature('MLB', baseContext.game, manualMarkets),
+  'Reader and manual source provenance must never share a response-cache contract signature',
+);
 
 const otherSimulationCount = buildSnapshotFingerprints({
   ...input,
@@ -149,12 +188,27 @@ const cacheKey = analysisCacheKey('MLB', baseContext.game.gamePk, first.inputHas
 const otherCacheKey = analysisCacheKey('MLB', otherGame.corePayload.game.gamePk, otherGame.inputHash);
 assert.notEqual(cacheKey, otherCacheKey, 'cache key must be game isolated');
 
+const mlbTransportGame = { ...baseContext.game, leagueId: 'MLB' };
+const mlbLockedContext = { leagueId: 'MLB', game: mlbTransportGame, analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false };
+const mlbLockedResult = {
+  analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+  scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注',
+  unitSuggestion: null, recommendedUnit: null, portfolioRole: '', portfolioUnit: null,
+};
 const payload = {
-  league: 'MLB',
-  game: baseContext.game,
-  context: { game: baseContext.game },
-  analysis: { inputHash: first.inputHash },
-  repriceSnapshot: { inputHash: first.inputHash },
+  league: 'MLB', game: mlbTransportGame, context: mlbLockedContext,
+  analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+  scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注', unitSuggestion: null,
+  portfolio: [], results: [mlbLockedResult],
+  analysis: {
+    inputHash: first.inputHash, analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+    scoreType: 'SHADOW_DIAGNOSTIC', tag: 'SHADOW｜影子評分｜不可下注', unitSuggestion: null,
+    portfolio: [], results: [mlbLockedResult],
+  },
+  repriceSnapshot: {
+    inputHash: first.inputHash, analysisMode: 'EXPERIMENTAL_SHADOW', executable: false, betEligible: false,
+    portfolio: [], frozenContext: mlbLockedContext,
+  },
 };
 assert.equal(analysisCachePayloadMatches({ signature, payload }, {
   league: 'MLB',
@@ -162,6 +216,9 @@ assert.equal(analysisCachePayloadMatches({ signature, payload }, {
   fingerprints: first,
   signature,
 }), true);
+assert.equal(analysisCachePayloadMatches({ signature, payload: { ...payload, executable: true } }, {
+  league: 'MLB', game: mlbTransportGame, fingerprints: first, signature,
+}), false, 'unsafe MLB shadow cache must fail closed');
 assert.equal(analysisCachePayloadMatches({ signature, payload }, {
   league: 'MLB',
   game: otherGame.corePayload.game,

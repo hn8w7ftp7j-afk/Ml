@@ -14,6 +14,7 @@ const board = [{
   customMarkets: [{ market: '全場大小', pick: '大8+50', water: 0.94 }],
   customData: {
     context: { deliberatelyLargeAndStale: true },
+    pitPersistence: { status: 'CONFIRMED', confirmed: true, snapshotId: 'MLB:123:FULL:hash' },
     analysis: { results: [{ market: '全場大小', pick: '大8+50', formulaDiagnosticScore: 7.8 }] },
   },
 }];
@@ -22,6 +23,7 @@ const entry = createAnalysisBoardCacheEntry({ league: 'MLB', date: '2026-08-23',
 assert.equal(entry.board.length, 1);
 assert.equal(entry.board[0].customData.context, undefined, 'volatile model context must not be persisted');
 assert.equal(entry.board[0].customData.analysis.results[0].formulaDiagnosticScore, 7.8);
+assert.equal(entry.board[0].customData.pitPersistence.confirmed, true, 'confirmed PIT persistence truth must survive mobile recovery');
 
 const restored = restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 60_000 });
 assert.equal(restored.length, 1, 'completed analysis must survive a mobile page reload');
@@ -31,7 +33,8 @@ assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'KBO', date: '2026-0
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 73 * 60 * 60 * 1000 }), [], 'expired recovery data must not be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 1 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-shared-distribution model snapshots must not survive the cache contract bump');
 const legacyAsianEntry = { ...entry, version: 1, league: 'KBO' };
-assert.equal(restoreAnalysisBoardCache(legacyAsianEntry, { league: 'KBO', date: '2026-08-23', now: NOW }).length, 1, 'MLB-only invalidation must not erase valid Asian shadow-board recovery');
+assert.deepEqual(restoreAnalysisBoardCache(legacyAsianEntry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'pre-V11 Asian fallback scores must never be restored');
+assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 2 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-V11 MLB advanced-policy snapshots must never be restored');
 
 const store = upsertAnalysisBoardCache({}, entry);
 assert.equal(store[analysisBoardCacheKey('MLB', '2026-08-23')].board.length, 1);

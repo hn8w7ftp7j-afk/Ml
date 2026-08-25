@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 import { readerSnapshotIsComplete, TAI888_READER_PARSER_VERSION } from '../../../lib/tai888-reader-parser-v2.js';
 import { signMarketGames } from '../../../lib/market-integrity-v1.js';
+import { readerGameMarketContentHash } from '../../../lib/reader-market-revision-v110.js';
 import {
   fetchLeagueTaipeiSlate,
   filterLeaguePrestartGames,
@@ -165,8 +166,18 @@ export async function POST(request) {
       const requestedOpenCount = schedule.filter(game => (
         !new Set((readerSnapshot.unopenedGames || []).map(row => Number(row.gamePk))).has(Number(game.gamePk))
       )).length;
-      const games = verifiedReaderGames.length === requestedOpenCount
-        ? await signMarketGames(league, verifiedReaderGames)
+      const readerEvidenceGames = verifiedReaderGames.map(row => ({
+        ...row,
+        markets: row.markets.map(market => ({
+          ...market,
+          readerGameMarketHash: readerGameMarketContentHash(row.markets),
+          readerPayloadHash: readerSnapshot.payloadHash,
+          readerRawBoardHash: readerSnapshot.rawBoardHash,
+          readerBoardDate: readerSnapshot.boardDate,
+        })),
+      }));
+      const games = readerEvidenceGames.length === requestedOpenCount
+        ? await signMarketGames(league, readerEvidenceGames)
         : [];
       if (games.length === requestedOpenCount) {
         return NextResponse.json({
@@ -174,6 +185,7 @@ export async function POST(request) {
           version: TAI888_READER_PARSER_VERSION, provider: 'TAI888_READER_AUTO',
           label: 'Tai888 Reader 自動信用盤', games,
           payloadHash: readerSnapshot.payloadHash, boardDate: readerSnapshot.boardDate,
+          rawBoardHash: readerSnapshot.rawBoardHash,
           observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt,
           pageActivityAt: readerSnapshot.pageActivityAt,
           rawGameCount: readerSnapshot.rawGameCount, matchedGameCount: games.length,

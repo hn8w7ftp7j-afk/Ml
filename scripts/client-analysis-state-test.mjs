@@ -17,6 +17,7 @@ import {
   touchReaderHeartbeat,
   sameReaderGameMarkets,
 } from '../lib/client-analysis-state.js';
+import { attestIncomingMarketRows, signMarketRow, verifyMarketRow } from '../lib/market-integrity-v1.js';
 
 const NOW = Date.parse('2026-08-15T08:00:00.000Z');
 const LINE_AT = Date.parse('2026-08-15T07:59:00.000Z');
@@ -91,7 +92,7 @@ assert.equal(
 const heartbeatItem = {
   readerPayloadHash: 'same-board',
   actualSource: { provider: 'TAI888_READER_AUTO', pageActivityAt: sameBoardBeforeHeartbeat.pageActivityAt },
-  customMarkets: [{ market: '全場讓分', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt }],
+  customMarkets: [{ market: '全場讓分', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt, marketSignature: 'immutable-signature' }],
   customData: { context: {
     fetchedAt: '2026-08-15T08:00:00.000Z',
     game: { gameDate: '2026-08-15T12:00:00.000Z' },
@@ -104,11 +105,35 @@ const heartbeatItem = {
   ] } },
 };
 const heartbeatTouched = touchReaderHeartbeat(heartbeatItem, 'same-board', heartbeatAt);
-assert.equal(heartbeatTouched.customMarkets[0].lineAsOf, heartbeatAt);
-assert.equal(heartbeatTouched.customData.analysis.results[0].lineAsOf, heartbeatAt);
+assert.equal(heartbeatTouched.customMarkets[0].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, 'heartbeat不得竄改已簽章盤口截點');
+assert.equal(heartbeatTouched.customMarkets[0].marketSignature, 'immutable-signature', 'heartbeat不得讓下一次reprice收到失效簽章');
+assert.equal(heartbeatTouched.customData.analysis.results[0].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, 'heartbeat不得竄改PIT分析盤口截點');
+assert.equal(heartbeatTouched.customData.analysis.results[0].readerLiveAsOf, heartbeatAt, 'Reader存活時間必須與不可變盤口截點分欄');
+assert.equal(actualLineFreshNow({ ...heartbeatTouched.customData.analysis.results[0], lineFresh: true }, Date.parse(heartbeatAt) + 1), true, '存活時間可刷新執行資格但不得竄改PIT截點');
 assert.equal(heartbeatTouched.customData.analysis.results[0].formulaDiagnosticScore, 7.4, 'heartbeat refresh must preserve the completed score');
 assert.equal(heartbeatTouched.customData.analysis.results[1].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, 'heartbeat must not rewrite independent reference evidence');
 assert.equal(touchReaderHeartbeat(heartbeatItem, 'different-board', heartbeatAt), heartbeatItem, 'a different market hash must not refresh old rows');
+
+process.env.MARKET_INTEGRITY_SECRET = 'client-heartbeat-signature-regression-secret';
+const signedGame = {
+  league: 'MLB', leagueId: 'MLB', gamePk: 12345, gameDate: '2026-08-15T12:00:00.000Z',
+  officialDate: '2026-08-15', gameNumber: 1, awayTeamId: 1, homeTeamId: 2,
+};
+const signedBefore = await signMarketRow('MLB', signedGame, {
+  market: '全場大小', pick: '大8平', water: 0.94, sourceType: 'ACTUAL_TW_CREDIT',
+  provider: 'TAI888_READER_AUTO', executable: true, lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt,
+});
+const signedHeartbeatItem = touchReaderHeartbeat({
+  ...heartbeatItem,
+  customMarkets: [signedBefore],
+}, 'same-board', heartbeatAt);
+assert.equal(await verifyMarketRow('MLB', signedGame, signedHeartbeatItem.customMarkets[0]), true, '同內容心跳後舊盤簽章仍須有效');
+const signedAfter = await signMarketRow('MLB', signedGame, {
+  ...signedBefore, water: 0.95, lineAsOf: heartbeatAt,
+  marketSignature: undefined, marketSignatureVersion: undefined,
+});
+const attestedAfterMove = await attestIncomingMarketRows('MLB', signedGame, [signedHeartbeatItem.customMarkets[0], signedAfter]);
+assert.equal(attestedAfterMove.length, 2, '同內容心跳後再變盤，reprice的新舊盤簽章都必須可驗證');
 
 const oldGameMarkets = [
   { market: '全場讓分', pick: '客隊讓1+50', water: 0.95, lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt },
@@ -126,7 +151,8 @@ const advanced = advanceUnchangedReaderGame({
   customMarkets: oldGameMarkets,
 }, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW);
 assert.equal(advanced.readerPayloadHash, 'new-whole-board', 'an unchanged game must advance across an unrelated whole-board revision');
-assert.equal(advanced.customData.analysis.results[0].lineAsOf, heartbeatAt);
+assert.equal(advanced.customData.analysis.results[0].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, '跨全盤revision但同場未變時仍保留原PIT盤口截點');
+assert.equal(advanced.customData.analysis.results[0].readerLiveAsOf, heartbeatAt);
 assert.equal(advanceUnchangedReaderGame({ ...heartbeatItem, customMarkets: oldGameMarkets }, [
   { ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1],
 ], 'new-whole-board', heartbeatAt, NOW), null, 'changed game markets must not reuse old analysis');

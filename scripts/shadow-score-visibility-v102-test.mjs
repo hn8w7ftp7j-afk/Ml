@@ -108,10 +108,25 @@ const strongestInput = secondaryIndependentMarketVerified => finalizeDeterminist
   },
   game,
 }).results[0];
-assert.ok(strongestInput(false).formulaDiagnosticScore >= 8.5, '外部市場未使用時，8.5以上只由W/R、QA與模型資料門檻決定');
-assert.equal(strongestInput(false).rankingQualified, true, '外部市場未使用不得阻擋分析排名');
-assert.ok(!strongestInput(false).scoreBreakdown.caps.includes('INDEPENDENT_MARKET_AUDIT_UNAVAILABLE'));
-assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '外部市場驗證可保留稽核狀態，但不決定分析排名分數');
+assert.equal(strongestInput(false).formulaDiagnosticScore, 8.4, '缺少兩個獨立同合約市場時，最強區間必須封頂8.4');
+assert.equal(strongestInput(false).rankingQualified, true, '外部市場未使用不得阻擋7.2～8.4分析排名');
+assert.ok(strongestInput(false).scoreBreakdown.caps.includes('TWO_INDEPENDENT_MARKETS_NOT_VERIFIED'));
+assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '外部市場驗證只控制8.5資格，不得改寫分布或W/R');
+
+const extremeReview = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true },
+    results: [{
+      ...direction('全場大小', '大9平', 0.20, 0.08),
+      marketVerification: { verified: true, referencePriorEligible: true, secondaryIndependentMarketVerified: true },
+    }],
+  },
+  game,
+}).results[0];
+assert.ok(extremeReview.formulaDiagnosticScore >= 8.5, '極端EV複核不得改寫固定公式分數');
+assert.equal(extremeReview.rankingQualified, false, 'W達20%以上必須暫停排名等待異常複核');
+assert.equal(extremeReview.extremeEvReviewRequired, true);
+assert.ok(extremeReview.scoreBreakdown.caps.includes('WEIGHTED_EV_20_PERCENT_REVIEW'));
 
 const calibrationBlocked = finalizeDeterministicAnalysis({
   analysis: {

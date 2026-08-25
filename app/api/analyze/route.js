@@ -19,8 +19,19 @@ import {
 import { getOrBuildGameDistribution } from '../../../lib/game-distribution-cache-v1.js';
 import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
+import {
+  ANALYSIS_IDEMPOTENCY_CACHE_TTL_MS,
+  ANALYSIS_RESPONSE_CACHE_TTL_MS,
+  assessAnalysisCacheEntryV110,
+} from '../../../lib/analysis-response-cache-policy-v110.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
 import { persistMlbAdvancedSnapshotBestEffort } from '../../../lib/mlb-advanced-snapshot-store-v2.js';
+import {
+  analysisPitDatabaseConfigured,
+  analysisPitProductionPersistenceRequired,
+  analysisPitSnapshotId,
+  persistAnalysisPitSnapshotForResponse,
+} from '../../../lib/analysis-pit-snapshot-store-v1.js';
 import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
 import {
   assertLeagueGamePrestart,
@@ -46,11 +57,11 @@ export const runtime = 'nodejs';
 export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
-// v10.4 namespace invalidates every pre-independent-consensus response.
-const responseCache = globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V1050_ANALYSIS_CACHE__ = responseCache;
-const requestResultCache = globalThis.__BASEBALL_ANALYSIS_REQUEST_RESULT_CACHE__ || new Map();
-globalThis.__BASEBALL_ANALYSIS_REQUEST_RESULT_CACHE__ = requestResultCache;
+// V11 namespace invalidates every pre-PIT/fail-closed response.
+const responseCache = globalThis.__BASEBALL_V1100_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1100_ANALYSIS_CACHE__ = responseCache;
+const requestResultCache = globalThis.__BASEBALL_V1100_ANALYSIS_REQUEST_RESULT_CACHE__ || new Map();
+globalThis.__BASEBALL_V1100_ANALYSIS_REQUEST_RESULT_CACHE__ = requestResultCache;
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -83,6 +94,10 @@ function sanitizeMarketRows(rows, maximum = 16) {
     sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
     lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: null,
     rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
+    readerGameMarketHash: cleanText(row?.readerGameMarketHash, 64),
+    readerPayloadHash: cleanText(row?.readerPayloadHash, 64),
+    readerRawBoardHash: cleanText(row?.readerRawBoardHash, 64),
+    readerBoardDate: cleanText(row?.readerBoardDate, 20),
     referenceNoVigProbability: optionalNumber(row?.referenceNoVigProbability),
     referenceRobustProbability: optionalNumber(row?.referenceRobustProbability),
     referenceProbabilityMinimum: optionalNumber(row?.referenceProbabilityMinimum),
@@ -138,13 +153,6 @@ export async function POST(request) {
     const requestKeyRaw = String(request.headers.get('idempotency-key') || '').trim();
     const requestKey = /^[a-zA-Z0-9-]{16,100}$/.test(requestKeyRaw) ? requestKeyRaw : '';
     const requestBodyHash = sha256(body);
-    const priorRequest = requestKey ? requestResultCache.get(requestKey) : null;
-    if (priorRequest?.bodyHash === requestBodyHash) {
-      return NextResponse.json(priorRequest.payload, { headers: {
-        'Cache-Control': 'no-store',
-        'X-Analysis-Request-Resume': 'HIT',
-      } });
-    }
     const league = requestedLeagueId(body?.league);
     if (!league) {
       return NextResponse.json({ ok: false, code: 'UNKNOWN_LEAGUE', error: '不支援的聯盟' }, { status: 400 });
@@ -160,6 +168,46 @@ export async function POST(request) {
     }
     const requestedGame = sanitizeGame(body.game);
     if (!requestedGame || !Array.isArray(body.markets)) return NextResponse.json({ ok: false, error: '缺少或無效的賽事／盤口資料' }, { status: 400 });
+    if (analysisPitProductionPersistenceRequired() && !analysisPitDatabaseConfigured()) {
+      return NextResponse.json({
+        ok: false,
+        code: 'PIT_PERSISTENCE_REQUIRED',
+        error: 'Production缺少DATABASE_URL，永久PIT不可用，已停止分析',
+        pitPersistence: {
+          status: 'FAILED', confirmed: false, required: true,
+          reason: 'DATABASE_NOT_CONFIGURED', snapshotId: null,
+        },
+      }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
+    const priorRequest = requestKey ? requestResultCache.get(requestKey) : null;
+    const priorFreshness = assessAnalysisCacheEntryV110(priorRequest, {
+      league,
+      gamePk: requestedGame.gamePk,
+      maxAgeMs: ANALYSIS_IDEMPOTENCY_CACHE_TTL_MS,
+    });
+    const priorPitConfirmed = priorRequest?.payload?.pitPersistence?.confirmed === true;
+    if (priorRequest?.bodyHash === requestBodyHash
+      && priorFreshness.fresh
+      && (priorPitConfirmed || !analysisPitDatabaseConfigured())) {
+      assertLeagueGamePrestart(league, priorRequest.payload.game);
+      const pitPersistence = priorPitConfirmed ? priorRequest.payload.pitPersistence : {
+        status: 'UNAVAILABLE',
+        confirmed: false,
+        required: false,
+        reason: 'DATABASE_NOT_CONFIGURED',
+        snapshotId: priorRequest.payload?.analysis?.pitSnapshotId || null,
+      };
+      const safePayload = enforceAnalysisModeSafety(
+        { ...priorRequest.payload, pitPersistence },
+        priorRequest.payload.context || {},
+      );
+      assertLeagueGamePrestart(league, priorRequest.payload.game);
+      return NextResponse.json(safePayload, { headers: {
+        'Cache-Control': 'no-store',
+        'X-Analysis-Request-Resume': 'HIT',
+      } });
+    }
+    if (priorRequest) requestResultCache.delete(requestKey);
     const { game } = await resolveLeagueGame(league, requestedGame);
     assertLeagueGamePrestart(league, game);
 
@@ -224,14 +272,80 @@ export async function POST(request) {
     const signature = analysisContractSignature(league, game, activeMarkets);
     const cacheKey = analysisCacheKey(league, game.gamePk, fingerprints.inputHash);
     const cached = responseCache.get(cacheKey);
-    if (analysisCachePayloadMatches(cached, { league, game, fingerprints, signature })) {
+    const cacheFreshness = assessAnalysisCacheEntryV110(cached, {
+      league,
+      gamePk: game.gamePk,
+      maxAgeMs: ANALYSIS_RESPONSE_CACHE_TTL_MS,
+    });
+    if (cacheFreshness.fresh && analysisCachePayloadMatches(cached, { league, game, fingerprints, signature })) {
+      assertLeagueGamePrestart(league, game);
       const safePayload = enforceAnalysisModeSafety(cached.payload, cached.payload.context || frozenContext);
-      return NextResponse.json(safePayload, { headers: {
-        'Cache-Control': 'no-store',
-        'X-Analysis-Cache': 'HIT',
-        'X-Distribution-Cache': 'RESPONSE-HIT',
-        'X-Reprice-Snapshot': 'COMPACT-REBUILDABLE',
-      } });
+      const cachedPitConfirmed = safePayload?.pitPersistence?.confirmed === true;
+      if (cachedPitConfirmed || !analysisPitDatabaseConfigured()) {
+        if (!cachedPitConfirmed) safePayload.pitPersistence = {
+          status: 'UNAVAILABLE',
+          confirmed: false,
+          required: false,
+          reason: 'DATABASE_NOT_CONFIGURED',
+          snapshotId: safePayload?.analysis?.pitSnapshotId || null,
+        };
+        requestCacheSet(requestKey, requestBodyHash, safePayload);
+        assertLeagueGamePrestart(league, game);
+        return NextResponse.json(safePayload, { headers: {
+          'Cache-Control': 'no-store',
+          'X-Analysis-Cache': 'HIT',
+          'X-Distribution-Cache': 'RESPONSE-HIT',
+          'X-Reprice-Snapshot': 'COMPACT-REBUILDABLE',
+        } });
+      }
+
+      // A response may have been cached while Neon was unavailable. Rebuild the
+      // exact signed distribution and retry the missing immutable PIT write
+      // before the cached analysis is allowed to leave the API again.
+      const cachedFrozenContext = safePayload?.repriceSnapshot?.frozenContext || frozenContext;
+      const retryDistribution = getOrBuildGameDistribution({
+        league,
+        gamePk: game.gamePk,
+        coreFingerprint: fingerprints.coreFingerprint,
+        modelVersion: versions.modelVersion,
+        rulesVersion: versions.rulesVersion,
+        build: () => buildDistributionSnapshot({ context: cachedFrozenContext }),
+      }).snapshot;
+      if (retryDistribution?.distributionId === safePayload?.analysis?.distributionId
+        && retryDistribution?.distributionHash === safePayload?.analysis?.distributionHash) {
+        assertLeagueGamePrestart(league, game);
+        const pitPersistence = await persistAnalysisPitSnapshotForResponse({
+          league,
+          game,
+          frozenContext: cachedFrozenContext,
+          analysis: safePayload.analysis,
+          distributionSnapshot: retryDistribution,
+          repriceSnapshot: safePayload.repriceSnapshot,
+          versions,
+          markets: activeMarkets,
+          previousMarkets,
+        }, { requiredWhenConfigured: true });
+        safePayload.pitPersistence = pitPersistence;
+        assertLeagueGamePrestart(league, game);
+        cacheSet(cacheKey, signature, safePayload);
+        if (pitPersistence.required && !pitPersistence.confirmed) {
+          assertLeagueGamePrestart(league, game);
+          return NextResponse.json({
+            ok: false,
+            code: 'PIT_PERSISTENCE_REQUIRED',
+            error: '永久PIT快照未確認，已停止回傳分析結果',
+            pitPersistence,
+          }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+        }
+        requestCacheSet(requestKey, requestBodyHash, safePayload);
+        assertLeagueGamePrestart(league, game);
+        return NextResponse.json(safePayload, { headers: {
+          'Cache-Control': 'no-store',
+          'X-Analysis-Cache': 'HIT-PIT-RETRIED',
+          'X-Distribution-Cache': 'RESPONSE-HIT',
+          'X-Reprice-Snapshot': 'COMPACT-REBUILDABLE',
+        } });
+      }
     }
     if (cached) responseCache.delete(cacheKey);
 
@@ -250,6 +364,7 @@ export async function POST(request) {
       settings,
       distributionSnapshot: cachedDistribution.snapshot,
     });
+    assertLeagueGamePrestart(league, game);
     const deterministic = enforceAnalysisModeSafety(
       finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }),
       frozenContext,
@@ -258,10 +373,17 @@ export async function POST(request) {
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
     const analysisAsOf = new Date().toISOString();
     const lineAsOf = activeMarkets.map(row => row.lineAsOf).filter(Boolean).sort().at(-1) || analysisAsOf;
+    const pitSnapshotId = analysisPitSnapshotId({
+      league,
+      gamePk: game.gamePk,
+      analysisType: 'FULL',
+      inputHash: fingerprints.inputHash,
+    });
     const finalized = {
       ...analysisWithoutDistribution, ...fingerprints, contractSignature: signature,
       analysisType: 'FULL', dataVersion: DATA_VERSION,
       dataAsOf: frozenContext.fetchedAt || analysisAsOf, lineAsOf, analysisAsOf, snapshotId: fingerprints.inputHash,
+      pitSnapshotId,
     };
     // The full frozen distribution can approach one megabyte for an Asian game.
     // Sending four of them to a phone at once made Safari terminate otherwise
@@ -270,6 +392,7 @@ export async function POST(request) {
     const unsignedRepriceSnapshot = compactRepriceSnapshot({
       frozenContext, coreFingerprint: fingerprints.coreFingerprint, priceFingerprint: fingerprints.priceFingerprint,
       inputHash: fingerprints.inputHash, contractSignature: signature,
+      analysisType: 'FULL', pitSnapshotId,
       calculationSettings: fingerprints.calculationPayload,
       auxiliaryInput: fingerprints.auxiliaryPayload,
       distributionId: finalized.distributionId, distributionHash: finalized.distributionHash,
@@ -287,8 +410,32 @@ export async function POST(request) {
       openMarkets: [...new Set(activeMarkets.map(row => row.market))],
     };
     const safePayload = enforceAnalysisModeSafety(payload, frozenContext);
+    assertLeagueGamePrestart(league, game);
+    const pitPersistence = await persistAnalysisPitSnapshotForResponse({
+      league,
+      game,
+      frozenContext,
+      analysis: finalized,
+      distributionSnapshot,
+      repriceSnapshot,
+      versions,
+      markets: activeMarkets,
+      previousMarkets,
+    }, { requiredWhenConfigured: true });
+    safePayload.pitPersistence = pitPersistence;
+    assertLeagueGamePrestart(league, game);
     cacheSet(cacheKey, signature, safePayload);
+    if (pitPersistence.required && !pitPersistence.confirmed) {
+      assertLeagueGamePrestart(league, game);
+      return NextResponse.json({
+        ok: false,
+        code: 'PIT_PERSISTENCE_REQUIRED',
+        error: '永久PIT快照未確認，已停止回傳分析結果',
+        pitPersistence,
+      }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
     requestCacheSet(requestKey, requestBodyHash, safePayload);
+    assertLeagueGamePrestart(league, game);
     return NextResponse.json(safePayload, { headers: {
       'Cache-Control': 'no-store',
       'X-Analysis-Cache': 'MISS',

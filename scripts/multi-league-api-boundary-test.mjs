@@ -36,7 +36,9 @@ assert.match(analyze, /const safePayload = enforceAnalysisModeSafety\(payload, f
 assert.match(analyze, /cacheSet\(cacheKey, signature, safePayload\)/, '快取只能儲存已鎖定 payload');
 
 const reprice = read('app/api/reprice/route.js');
-assert.match(reprice, /resolveLeagueGame\(league, context\.game\)/);
+assert.doesNotMatch(reprice, /resolveLeagueGame\(/, 'price-only reprice不得重新抓官方賽程或其他核心棒球資料');
+assert.match(reprice, /const game = context\.game/);
+assert.match(reprice, /assertLeagueGamePrestart\(league, game\)/);
 assert.match(reprice, /verifyRepriceSnapshot\(league, game, snapshot\)/);
 assert.match(reprice, /attestIncomingMarketRows\(league, game,/);
 assert.match(reprice, /buildSnapshotFingerprints\(\{\s*league,/s);
@@ -48,7 +50,8 @@ assert.match(credit, /fetchLeagueTaipeiSlate\(league, date\)/);
 assert.match(credit, /validateLeagueScheduleSubset\(league,/);
 assert.match(credit, /loadReaderSnapshot\(league, date\)/);
 assert.match(credit, /readerSnapshotStatus\(readerSnapshot, Date\.now\(\), league\)/);
-assert.match(credit, /signMarketGames\(league, verifiedReaderGames\)/);
+assert.match(credit, /readerGameMarketHash: readerGameMarketContentHash\(row\.markets\)/, 'Reader must sign a per-game content revision independent of heartbeat liveness');
+assert.match(credit, /signMarketGames\(league, readerEvidenceGames\)/);
 
 const readerIngest = read('app/api/reader/ingest/route.js');
 assert.match(readerIngest, /fetchLeagueTaipeiSlate\(league, boardDate\)/);
