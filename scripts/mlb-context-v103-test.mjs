@@ -5,6 +5,7 @@ import {
   parseOfficialLineupV13,
   projectLineupV13,
 } from '../lib/mlb-context-v13.js';
+import { personPitchingStatForTeamV11 } from '../lib/mlb-context-v11.js';
 
 function batter(id, order, ops, position = 'OF') {
   return {
@@ -59,6 +60,17 @@ assert.equal(starter.expectedInningsStatus, 'CONFIRMED');
 const opener = expectedStarterInningsV13({ inningsPitched: 12, gamesStarted: 8, gamesPitched: 30 }, { probableId: 11, scheduledInnings: 9 });
 assert.equal(opener.role, 'OPENER_OR_BULK_RISK');
 assert.equal(opener.expectedInnings, 1.5);
+const reliefOnlyProbable = expectedStarterInningsV13({ inningsPitched: 9.2, gamesStarted: 0, gamesPitched: 2 }, { probableId: 12, scheduledInnings: 9 });
+assert.equal(reliefOnlyProbable.role, 'OPENER_OR_BULK_RISK');
+assert.equal(reliefOnlyProbable.expectedInnings, 3.0, 'zero-start probable must not silently receive a normal 5.2-inning starter workload');
+
+const transferredPitcher = { stats: [{ splits: [
+  { team: { id: 134 }, stat: { inningsPitched: '6.1', era: '8.53' } },
+  { team: { id: 145 }, stat: { inningsPitched: '9.2', era: '2.79' } },
+  { stat: { inningsPitched: '16.0', era: '5.06' } },
+] }] };
+assert.equal(personPitchingStatForTeamV11(transferredPitcher, 145).era, '2.79', 'a transferred probable must use the split for the team in this game');
+assert.equal(personPitchingStatForTeamV11(transferredPitcher, 999), null, 'another club split must never be substituted for the current team');
 
 const starterPlayer = pitcher(10, 'Starter', 'SP');
 const relievers = [pitcher(20, 'Closer'), pitcher(21, 'Setup'), pitcher(22, 'Reliever')];

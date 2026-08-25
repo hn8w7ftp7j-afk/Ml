@@ -71,7 +71,7 @@ const extremeVisible = finalizeDeterministicAnalysis({
   game,
 }).results[0];
 assert.ok(extremeVisible.formulaDiagnosticScore > 7.1, 'W達15%以上仍須保留固定公式原始S，不得人工封頂');
-assert.equal(extremeVisible.rankingQualified, true, '不得再用15%單點斷層取消排名；連續合理性校準必須在分析層處理');
+assert.equal(extremeVisible.rankingQualified, true, '不得只因W達15%就取消排名；應由資料、數學、情境穩定與模型/Tai888差距QA判斷');
 assert.ok(extremeVisible.scoreBreakdown.rawScore >= extremeVisible.formulaDiagnosticScore);
 assert.equal(extremeVisible.scoreBreakdown.caps.includes('UNCALIBRATED_W_OVER_15_PERCENT'), false);
 

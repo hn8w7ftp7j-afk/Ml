@@ -37,7 +37,7 @@ async function analyze(league, fixture, historyGames) {
   assert.equal(context.dataGateV10.passedForShadowScore, true);
   const snapshot = buildDistributionSnapshot({ context, settings });
   const preliminary = evaluateMarketsFromDistribution({ context, markets: marketRows(game, fixture), settings, distributionSnapshot: snapshot });
-  return { preliminary, finalized: finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }) };
+  return { game, context, snapshot, preliminary, finalized: finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }) };
 }
 
 for (const [league, fixture] of Object.entries(fixtures)) {
@@ -48,6 +48,13 @@ for (const [league, fixture] of Object.entries(fixtures)) {
   assert.ok(base.preliminary.results.every(row => Number.isFinite(row.weightedEV) && Number.isFinite(row.robustEV) && row.robustEV <= row.weightedEV + 1e-12));
   assert.ok(base.finalized.results.some(row => Number.isFinite(row.formulaDiagnosticScore)));
   assert.ok(base.finalized.results.every(row => row.score === null && row.betEligible === false));
+  const changedWaterMarkets = marketRows(base.game, fixture).map((row, index) => ({ ...row, water: Number(row.water) + (index % 2 ? -0.02 : 0.03) }));
+  const changedWater = evaluateMarketsFromDistribution({ context: base.context, markets: changedWaterMarkets, settings, distributionSnapshot: base.snapshot });
+  assert.equal(changedWater.distributionId, base.preliminary.distributionId, `${league} water changes must reuse the same frozen score distribution`);
+  for (const row of base.preliminary.results) {
+    const repriced = changedWater.results.find(item => item.market === row.market && item.pick === row.pick);
+    assert.ok(Math.abs(row.rawModelProbability - repriced.rawModelProbability) <= 1e-12, `${league} Tai888 water must not rewrite upstream baseball probability`);
+  }
   for (const market of ['全場讓分', '全場大小', '上半讓分', '上半大小']) {
     const pair = base.preliminary.results.filter(row => row.market === market);
     assert.ok(Math.abs(pair[0].modelProbability + pair[1].modelProbability - 1) <= 0.012);

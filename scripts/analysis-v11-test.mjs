@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { analyzeMarkets, buildDistributionSnapshot, continuousMarketBaselineWeight, independentMinimumWater, MODEL_VERSION, PROVISIONAL_MARKET_BASELINE_GAP, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
+import { analyzeMarkets, buildDistributionSnapshot, independentMinimumWater, MODEL_VERSION, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 
 const team = (runsPerGame, ops, era, scoringMean, scoringVariance) => ({
@@ -59,19 +59,18 @@ assert.equal(analysis.scenarioSummary.exactDistribution, true);
 assert.equal(analysis.results.length, 8);
 const scenarioGaps = analysis.results.map(row => ({ market: row.market, pick: row.pick, gap: row.evCalibration?.rawScenarioSpread }));
 assert.ok(scenarioGaps.every(row => Number(row.gap) <= 0.05), 'a normal complete-data board must naturally stay within the 5% scenario stability target');
-assert.equal(continuousMarketBaselineWeight(0.05), 0);
-assert.ok(Math.abs(continuousMarketBaselineWeight(0.075) - 0.5) < 1e-12);
-assert.equal(continuousMarketBaselineWeight(0.10), 1);
+assert.equal(analysis.scenarioSummary.sharedDistribution, true);
+assert.equal(analysis.scenarioSummary.targetPriceCalibratesDistribution, false);
+assert.equal(analysis.scenarioSummary.marketProbabilityCalibrationApplied, false);
+assert.equal(analysis.alignmentAudit.targetMarketCalibration, 'DISABLED_EXECUTION_PRICE_ONLY');
 for (const row of analysis.results) {
-  const expectedWeight = continuousMarketBaselineWeight(row.rawModelTai888ProbabilityGap);
-  assert.ok(Math.abs(row.marketCalibrationWeight - expectedWeight) < 1e-12);
-  assert.equal(row.marketCalibrationApplied, expectedWeight > 0);
-  if (expectedWeight > 0) {
-    const expectedProbability = row.rawModelProbabilityBeforeBaseline
-      + expectedWeight * (row.marketAnchorProbability - row.rawModelProbabilityBeforeBaseline);
-    assert.ok(Math.abs(row.modelProbability - expectedProbability) < 1e-9, '5–10pp disagreement must shrink continuously instead of jumping at one threshold');
-  }
-  assert.equal(row.rawMarketProbabilityGap, row.tai888MarketProbabilityGap, 'QA gap fields must share the evaluated model-vs-Tai888 no-vig gap');
+  assert.equal(row.marketCalibrationWeight, 0);
+  assert.equal(row.marketCalibrationApplied, false);
+  assert.equal(row.marketBaselineApplied, false);
+  assert.equal(row.targetPriceCalibratesDistribution, false);
+  assert.equal(row.marketBaselineTargetProbability, null);
+  assert.ok(Math.abs(row.modelProbability - row.rawModelProbabilityBeforeBaseline) < 1e-12, 'Tai888 must never rewrite the baseball model probability');
+  assert.equal(row.rawMarketProbabilityGap, row.tai888MarketProbabilityGap, 'QA gap fields must share the raw model-vs-Tai888 no-vig gap');
   assert.ok(Math.abs(row.rawMarketProbabilityGap - Math.abs(row.rawModelProbability - row.marketAnchorProbability)) < 1e-12);
   assert.ok(Number.isFinite(row.rawWeightedEV));
   assert.ok(Number.isFinite(row.rawRobustEV));
@@ -114,22 +113,32 @@ assert.ok(receivingModifier.settlementIdentityAudit.evIdentityError < 1e-9);
 
 const lowTotalAnalysis = analyzeMarkets({
   context,
-  markets: [direction('全場大小', '大6平', 0.94), direction('全場大小', '小6平', 0.94)],
+  markets: [direction('全場大小', '大6-20', 0.94), direction('全場大小', '小6-20', 0.94)],
   settings: { rebateRate: 0.015 },
 });
+const lowTotalOver = lowTotalAnalysis.results.find(row => row.pick === '大6-20');
+const lowTotalUnder = lowTotalAnalysis.results.find(row => row.pick === '小6-20');
 for (const row of lowTotalAnalysis.results) {
-  assert.equal(row.marketBaselineApplied, true, '模型與雙邊去水市場差距超過10pp時必須完成連續合理性校準');
-  assert.equal(row.marketCalibrationWeight, 1);
-  assert.ok(Math.abs(row.modelProbability - 0.5) < 1e-9);
-  assert.ok(row.weightedEV < 0 && row.weightedEV > -0.03, '同水雙邊市場基準W應只有水差造成的小幅負值');
+  assert.equal(row.marketBaselineApplied, false, 'even an extreme model/market gap must not rewrite the shared score distribution');
+  assert.equal(row.marketCalibrationWeight, 0);
+  assert.equal(row.targetPriceCalibratesDistribution, false);
+  assert.ok(Math.abs(row.modelProbability - row.rawModelProbabilityBeforeBaseline) < 1e-12);
   assert.ok(row.robustEV <= row.weightedEV + 1e-12);
   assert.ok(row.settlementIdentityAudit.evIdentityError < 1e-9);
-  assert.ok(row.rawModelTai888ProbabilityGap > PROVISIONAL_MARKET_BASELINE_GAP);
+  assert.ok(row.rawModelTai888ProbabilityGap > 0.10);
 }
+assert.ok(Math.abs(lowTotalOver.modelProbability + lowTotalUnder.modelProbability - 1) < 1e-12, 'opposite directions must remain complementary on one frozen score world');
+assert.ok(Math.abs(lowTotalOver.equivalentWinProbability - lowTotalUnder.equivalentLossProbability) < 1e-12);
+assert.ok(Math.abs(lowTotalOver.equivalentLossProbability - lowTotalUnder.equivalentWinProbability) < 1e-12);
+assert.ok(Math.abs(lowTotalOver.equivalentPushProbability - lowTotalUnder.equivalentPushProbability) < 1e-12);
+assert.ok(Math.abs(lowTotalOver.weightedEV - lowTotalUnder.weightedEV) > 0.20, 'extreme opposing views must not collapse to identical market-implied W/R');
 const finalizedLowTotal = finalizeDeterministicAnalysis({ analysis: lowTotalAnalysis, game: context.game });
 for (const row of finalizedLowTotal.results) {
-  assert.equal(row.scoreAudit.ok, true);
-  assert.ok(row.formulaDiagnosticScore >= 1.0 && row.formulaDiagnosticScore < 6.6);
+  assert.equal(row.scoreAudit.ok, false);
+  assert.equal(row.scoreAudit.plausibility.passed, false);
+  assert.equal(row.formulaDiagnosticScore, null, 'a >10pp model/market gap must QA BLOCK instead of being hidden by probability feedback');
+  assert.ok(row.scoreBreakdown.caps.includes('TARGET_MARKET_PROBABILITY_GAP_QA_BLOCK'));
+  assert.equal(row.pairAudit.passed, true, 'the raw shared distribution must still pass mirror and complement QA');
 }
 const finalized = finalizeDeterministicAnalysis({ analysis, game: context.game, settings: { candidateThreshold: 7.2 } });
 for (const row of finalized.results) {
