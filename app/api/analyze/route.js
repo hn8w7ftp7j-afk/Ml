@@ -32,6 +32,7 @@ import {
   analysisPitSnapshotId,
   persistAnalysisPitSnapshotForResponse,
 } from '../../../lib/analysis-pit-snapshot-store-v1.js';
+import { enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
 import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
 import {
   assertLeagueGamePrestart,
@@ -330,12 +331,15 @@ export async function POST(request) {
         cacheSet(cacheKey, signature, safePayload);
         if (pitPersistence.required && !pitPersistence.confirmed) {
           assertLeagueGamePrestart(league, game);
-          return NextResponse.json({
-            ok: false,
-            code: 'PIT_PERSISTENCE_REQUIRED',
-            error: '永久PIT快照未確認，已停止回傳分析結果',
-            pitPersistence,
-          }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+          return NextResponse.json(
+            enforceUnconfirmedPitShadowSafety(safePayload, pitPersistence),
+            { headers: {
+              'Cache-Control': 'no-store',
+              'X-Analysis-Cache': 'HIT-PIT-DEGRADED',
+              'X-Distribution-Cache': 'RESPONSE-HIT',
+              'X-PIT-Persistence': 'UNCONFIRMED-SHADOW-ONLY',
+            } },
+          );
         }
         requestCacheSet(requestKey, requestBodyHash, safePayload);
         assertLeagueGamePrestart(league, game);
@@ -427,12 +431,15 @@ export async function POST(request) {
     cacheSet(cacheKey, signature, safePayload);
     if (pitPersistence.required && !pitPersistence.confirmed) {
       assertLeagueGamePrestart(league, game);
-      return NextResponse.json({
-        ok: false,
-        code: 'PIT_PERSISTENCE_REQUIRED',
-        error: '永久PIT快照未確認，已停止回傳分析結果',
-        pitPersistence,
-      }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(
+        enforceUnconfirmedPitShadowSafety(safePayload, pitPersistence),
+        { headers: {
+          'Cache-Control': 'no-store',
+          'X-Analysis-Cache': 'MISS-PIT-DEGRADED',
+          'X-Distribution-Cache': cachedDistribution.cacheStatus,
+          'X-PIT-Persistence': 'UNCONFIRMED-SHADOW-ONLY',
+        } },
+      );
     }
     requestCacheSet(requestKey, requestBodyHash, safePayload);
     assertLeagueGamePrestart(league, game);
