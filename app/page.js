@@ -309,6 +309,7 @@ function scoreQaFailures(row) {
 function betRecordable(item, row, now = Date.now(), betsEnabled = true, currentReaderPrice = false) {
   return betsEnabled
     && currentReaderPrice === true
+    && item?.customData?.pitPersistence?.confirmed === true
     && gameIsPrestartNow(item?.game, now)
     && item?.actualSource?.provider === 'TAI888_READER_AUTO'
     && row?.sourceType === 'ACTUAL_TW_CREDIT'
@@ -530,7 +531,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   const calibrationReason = row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過';
   const qaFailures = scoreQaFailures(row);
   const plausibilityBlocked = row?.scoreAudit?.plausibility?.passed === false;
-  const formulaScore = plausibilityBlocked ? null : storedFormulaScore;
+  const formulaScore = storedFormulaScore;
   const auditWarnings = Array.isArray(row?.evCalibration?.auditWarnings)
     ? row.evCalibration.auditWarnings.filter(Boolean) : [];
   const tai888Gap = row?.tai888MarketProbabilityGap == null
@@ -557,9 +558,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
       ? `V11.0模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
-      : plausibilityBlocked
-        ? `比分分布合理性未通過｜原始模型勝率、W、R只保留稽核，公式評分停用${marketGapText}｜不得用原始模型值下注`
-      : `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
+      : `${plausibilityBlocked ? '模型／Tai888差距超過10%，異常待複核｜保留原始S、W、R，但禁止排名下注｜' : ''}狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const buttonText = latest ? '已下注 ✓' : '紀錄實際下注';
@@ -599,6 +598,8 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
   const openMarketCount = Number.isInteger(Number(coverage.openMarkets))
     ? Number(coverage.openMarkets)
     : new Set((item.customMarkets || []).map(row => row.market)).size;
+  const pitPersistence = item.customData?.pitPersistence || null;
+  const pitUnconfirmed = pitPersistence?.confirmed !== true;
   const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT').map(row => {
     const currentReaderPrice = readerBacked
       && gamePrestart
@@ -608,6 +609,8 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
       && actualLineFreshNow(row, now);
     const inactiveNotice = !gamePrestart
       ? '已達官方預定開打時間｜保留賽前分析｜停止記錄新下注'
+      : pitUnconfirmed
+        ? 'PIT永久保存未確認｜保留影子分析｜暫停下注與排名資格'
       : !currentReaderPrice
         ? 'Reader盤口等待最新驗證｜保留上一版分析｜暫停下注與排名資格'
         : '';
@@ -624,7 +627,6 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
     row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED',
   ).ranking).length;
   const analysis = item.customData?.analysis || {};
-  const pitPersistence = item.customData?.pitPersistence || null;
   const expectedRuns = analysis.expectedRuns || null;
   const sourceStatusLabels = {
     starters: '先發', lineups: '打線', bullpen: '純牛棚', parkFactor: '球場', weather: '天氣',
@@ -655,7 +657,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
     {expectedRuns && <div className="sourceBanner"><strong>上游得分中心｜市場水位回灌：停用</strong><span>全場 {runCenter(expectedRuns.full)}｜前五局 {runCenter(expectedRuns.first5)}｜這份得分分布同時結算大／小與讓／受讓</span></div>}
     {(sourceStatusText || provenanceText) && <div className="sourceBanner dataStatusBanner"><strong>上游資料狀態</strong><span>{sourceStatusText || provenanceText}</span></div>}
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT永久保存已確認' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
-    {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>更新：{localTime(item.actualSource.observedAt)}</span></div>}
+    {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
     {item.referenceData && <>
@@ -754,8 +756,7 @@ export default function Home() {
   const shadowRanking = useMemo(() => board.flatMap(item => (item.customData?.analysis?.results || [])
     .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
       && row.sourceType === 'ACTUAL_TW_CREDIT'
-      && row.provider === 'TAI888_READER_AUTO'
-      && row.evCalibration?.actualReaderEligible === true)
+      && row.provider === 'TAI888_READER_AUTO')
     .map(row => {
       const score = row.shadowDiagnosticScore != null && Number.isFinite(Number(row.shadowDiagnosticScore))
         ? Number(row.shadowDiagnosticScore)
@@ -764,8 +765,11 @@ export default function Home() {
           : null;
       const qaPassed = row.scoreAudit?.ok === true && row.pairAudit?.passed !== false;
       const qualified = row.evCalibration?.qualified === true;
+      const readerQualified = row.evCalibration?.actualReaderEligible === true;
       const gamePrestart = gameIsPrestartNow(item.game, clockNow);
+      const pitConfirmed = item.customData?.pitPersistence?.confirmed === true;
       const currentReaderPrice = gamePrestart
+        && readerQualified
         && readerStatus?.fresh === true
         && readerStatus?.boardDate === date
         && Boolean(item.readerPayloadHash)
@@ -773,10 +777,12 @@ export default function Home() {
         && actualLineFreshNow(row, clockNow);
       const inactiveNotice = !gamePrestart
         ? '比賽已開始｜保留賽前分析｜停止下注與目前排名資格'
+        : !pitConfirmed
+          ? 'PIT永久保存未確認｜保留影子分析｜暫停下注與目前排名資格'
         : !currentReaderPrice
           ? 'Reader盤口等待最新驗證｜保留上一版分析｜暫停下注與目前排名資格'
           : '';
-      const rankingEligible = currentReaderPrice && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
+      const rankingEligible = pitConfirmed && currentReaderPrice && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
         && row.rankingQualified === true;
       return { item, row, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
         water: row.water, score, weightedEV: row.weightedEV, robustEV: row.robustEV, qaPassed, qualified,

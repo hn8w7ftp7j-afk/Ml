@@ -16,10 +16,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.0.1', 'package/release identity must match the V11.0.1 UI');
-assert.equal(packageLock.version, '11.0.1', 'package-lock release identity must match V11.0.1');
-assert.equal(packageLock.packages?.['']?.version, '11.0.1', 'root lockfile package must match V11.0.1');
-assert.equal(APP_VERSION, '11.0.1');
+assert.equal(packageJson.version, '11.0.2', 'package/release identity must match the V11.0.2 UI');
+assert.equal(packageLock.version, '11.0.2', 'package-lock release identity must match V11.0.2');
+assert.equal(packageLock.packages?.['']?.version, '11.0.2', 'root lockfile package must match V11.0.2');
+assert.equal(APP_VERSION, '11.0.2');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
@@ -124,6 +124,8 @@ mustMatch(/下注證據保留，不提供刪除/, 'ledger must not render a dead
 assert.doesNotMatch(page, /action: 'delete'|action: 'clearLeague'/, 'client must not call unsupported destructive ledger actions');
 assert.match(page, /CLOUD_LEDGER_FAILURE_BACKOFF_MS/, 'DB失敗後必須停止每15秒重打雲端帳本');
 assert.match(page, /影子分析完成｜PIT未保存、禁止排名下注/, 'PIT失敗必須保留唯讀分析並清楚停用排名下注');
+assert.match(page, /PIT永久保存未確認｜保留影子分析｜暫停下注與排名資格/, 'PIT失敗不得錯標成Reader等待驗證');
+assert.match(page, /盤口內容時間：/, 'Reader來源卡必須區分盤口內容時間與服務心跳');
 
 // Ranking rows must retain the original item/row and expose the same immutable
 // cloud-ledger action as the board instead of becoming a read-only desktop view.
@@ -172,6 +174,7 @@ mustMatch(/UNAVAILABLE/, 'unavailable market state missing');
 mustMatch(/row\?\.formulaDiagnosticScore != null/, 'every calculable direction must expose its fixed-formula score');
 mustMatch(/formulaScore\.toFixed\(1\)/, 'fixed S score must always render as a number');
 mustMatch(/QA BLOCK/, 'QA-blocked directions must remain visibly identified');
+mustMatch(/模型／Tai888差距超過10%，異常待複核｜保留原始S、W、R，但禁止排名下注/, '10pp合理性Gate必須保留原始S/W/R並只取消資格');
 mustMatch(/不列排名、不作推薦/, 'QA block must remain isolated from ranking and recommendation');
 assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'display must not hide scores below 7.2');
 assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must still display the fixed numeric S score');
