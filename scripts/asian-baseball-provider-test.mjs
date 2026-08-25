@@ -142,7 +142,13 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   const contract = leagueAnalysisContract(league);
   assert.equal(contract.analysisMode, ASIAN_ANALYSIS_MODE);
   assert.equal(contract.betEligible, false);
+  assert.equal(contract.executable, false);
   assert.notEqual(config.modelVersion, leagueAnalysisContract('MLB').modelVersion);
+  assert.equal(config.mlbFallbackAllowed, false);
+  assert.equal(config.featureContract.starter.teamRunsAllowedProxyAllowed, false);
+  assert.equal(config.featureContract.bullpen.teamRunsAllowedProxyAllowed, false);
+  assert.equal(config.featureContract.lineup.emptyPlayersQualify, false);
+  assert.equal(config.featureContract.park.neutralPlaceholderQualifies, false);
   for (const section of ['baselineBounds', 'scoreClamps']) {
     for (const period of ['full', 'first5']) {
       assert.ok(Number.isFinite(config.modelConfig[section][period].min));
@@ -169,10 +175,23 @@ assert.ok(context.historyGameCount === 2);
 assert.deepEqual(Object.keys(context.modelConfig.baselineBounds).sort(), ['first5', 'full']);
 assert.equal(context.dataGateV10.passedForShadowScore, false);
 assert.equal(context.dataGateV10.passedForFormalScore, false);
-assert.deepEqual(context.dataGateV10.missing, ['probableOrProjectedStarters', 'officialOrProjectedLineups', 'bullpenUsageProjection']);
-assert.equal(context.away.starter.projectionMode, 'ROTATION_SCENARIO_TEAM_RATE_PRIOR');
-assert.equal(context.away.starter.expectedInnings, 5.05);
+for (const missing of ['pointInTimeFeatureSnapshot', 'teamStrengthBaseline', 'starterIdentityAndIndependentPerformance', 'credibleLineupScenario', 'pureReliefBullpen', 'recognizedVenueParkFactor']) {
+  assert.ok(context.dataGateV10.missing.includes(missing), `${missing} 必須 fail closed`);
+}
+assert.equal(context.away.starter.projectionMode, 'STARTER_IDENTITY_AND_PERFORMANCE_MISSING');
+assert.equal(context.away.starter.expectedInnings, null);
+assert.equal(context.away.starter.era, null, '整隊 RA 不得偽裝成個別先發 ERA');
+assert.equal(context.away.starter.fip, null, '整隊 RA 不得偽裝成個別先發 FIP');
+assert.equal(context.away.starter.whip, null, '整隊 RA 不得偽裝成個別先發 WHIP');
+assert.equal(context.away.seasonPitching.era, null, '整隊比分代理不得命名成投手 ERA');
 assert.equal(context.away.bullpen.pureRelief, false);
+assert.equal(context.away.bullpen.usageAvailable, false, '整隊賽程推估不得偽裝成純牛棚 workload');
+assert.equal(context.away.lineup.players.length, 0);
+assert.equal(context.away.lineup.available, false, '空打線不得被視為可信預估');
+assert.equal(context.park.isNeutralPlaceholder, true);
+assert.equal(context.park.recognized, false, '中性 1.00 placeholder 不得通過球場資料');
+assert.equal(context.asianProxyAudit.teamRunsUsedAsStarterPerformance, false);
+assert.equal(context.asianProxyAudit.teamRunsUsedAsPureBullpenQuality, false);
 assert.equal(context.gameStateModel.bottomNinthMayBeSkipped, true);
 assert.equal(context.gameStateModel.regulationWalkoff, true);
 assert.equal(context.gameStateModel.allowDraw, true);
@@ -189,9 +208,9 @@ const sufficientHistory = Array.from({ length: 12 }, (_, index) => ({
   innings: index % 5 === 0 ? 10 : 9,
 }));
 const projectedContext = await buildAsianGameContext('NPB', npb[0], { historyGames: sufficientHistory });
-assert.equal(projectedContext.coreModelable, true);
-assert.equal(projectedContext.dataGateV10.passedForShadowScore, true);
-assert.equal(projectedContext.away.lineup.status, 'PROJECTED');
+assert.equal(projectedContext.coreModelable, false, '增加整隊比分樣本仍不得補出先發、打線、純牛棚與球場能力');
+assert.equal(projectedContext.dataGateV10.passedForShadowScore, false);
+assert.equal(projectedContext.away.lineup.status, 'MISSING');
 assert.equal(projectedContext.away.bullpen.projectionBased, true);
 assert.equal(projectedContext.away.bullpen.pureRelief, false);
 assert.equal(projectedContext.away.lineup.offensiveIndex, 1, '近期得分不得再透過預估打線指數重複計算');
@@ -206,8 +225,113 @@ const namedStarterContext = await buildAsianGameContext('NPB', {
 }, { historyGames: sufficientHistory });
 assert.equal(namedStarterContext.away.starter.identityConfirmed, true);
 assert.equal(namedStarterContext.away.starter.confirmed, false, '確認先發姓名不等於確認投手能力資料');
-assert.equal(namedStarterContext.sourceStatuses.starters, 'PROJECTED');
-assert.equal(namedStarterContext.starterModelingMode, 'OFFICIAL_STARTER_IDENTITY_WITH_PROJECTED_TEAM_RATE_PRIOR');
+assert.equal(namedStarterContext.away.starter.performanceAvailable, false);
+assert.equal(namedStarterContext.away.starter.era, null);
+assert.equal(namedStarterContext.sourceStatuses.starters, 'MISSING_INDIVIDUAL_PERFORMANCE');
+assert.equal(namedStarterContext.starterModelingMode, 'IDENTITY_ONLY_CORE_PERFORMANCE_BLOCKED');
+assert.equal(namedStarterContext.dataGateV10.passedForShadowScore, false);
+
+function qualifiedTeamSnapshot(id, name, throws, label, teamId) {
+  return {
+    teamStrength: {
+      available: true,
+      metricScope: 'TEAM_STRENGTH_BASELINE',
+      baselineMethod: 'CURRENT_SEASON_WITH_REGRESSED_PRIOR',
+      priorSeasonRegressed: true,
+      source: `SYNTHETIC_${label}_TEAM_STRENGTH`,
+      seasonHitting: { gamesPlayed: 100, runsPerGame: 4.1, ops: 0.73, iso: 0.15, kRate: 0.22, bbRate: 0.09 },
+      recentHitting: { gamesPlayed: 10, runsPerGame: 4.0, ops: 0.72, iso: 0.14, kRate: 0.23, bbRate: 0.08 },
+    },
+    starter: {
+      id,
+      teamId,
+      name,
+      identityConfirmed: true,
+      performanceAvailable: true,
+      performanceScope: 'INDIVIDUAL_STARTER',
+      independentOfTeamResults: true,
+      performanceSource: `SYNTHETIC_${label}_INDIVIDUAL_STARTER`,
+      throws,
+      expectedInnings: 5.2,
+      season: { gamesStarted: 18, inningsPitched: 101, era: 3.4, fip: 3.6, whip: 1.18, kMinusBB: 0.16, hrPer9: 0.9 },
+      recent: { gamesStarted: 5, inningsPitched: 28, era: 3.2, fip: 3.5, whip: 1.15, kMinusBB: 0.17, hrPer9: 0.8 },
+      pitchQuality: { available: true, runFactor: 0.98 },
+    },
+    lineup: {
+      available: true,
+      official: false,
+      projected: true,
+      credibleScenario: true,
+      source: `SYNTHETIC_${label}_PROJECTED_LINEUP`,
+      offensiveIndex: 1.01,
+      players: Array.from({ length: 9 }, (_, index) => ({ id: `${label}-BAT-${index + 1}` })),
+    },
+    bullpen: {
+      available: true,
+      pureRelief: true,
+      usageAvailable: true,
+      qualityScope: 'PURE_RELIEF',
+      source: `SYNTHETIC_${label}_RELIEF_ONLY`,
+      projectionBased: true,
+      qualityFactor: 0.99,
+      fatigueIndex: 0.22,
+      highLeverageAvailability: 0.78,
+    },
+  };
+}
+
+const qualifiedGame = {
+  ...npb[0],
+  awayProbable: 'Synthetic Away Starter', awayProbableId: 'NPB-A-1',
+  homeProbable: 'Synthetic Home Starter', homeProbableId: 'NPB-H-1',
+  probableSource: 'NPB_OFFICIAL_PROBABLE_STARTER',
+};
+const qualifiedFeatures = {
+  asOf: '2099-08-18T07:00:00.000Z',
+  away: qualifiedTeamSnapshot('NPB-A-1', 'Synthetic Away Starter', 'R', 'AWAY', npb[0].awayTeamId),
+  home: qualifiedTeamSnapshot('NPB-H-1', 'Synthetic Home Starter', 'L', 'HOME', npb[0].homeTeamId),
+  park: {
+    available: true,
+    recognized: true,
+    isNeutralPlaceholder: false,
+    name: 'Synthetic NPB Park',
+    runFactor: 0.98,
+    roof: 'outdoor',
+    roofConfirmed: true,
+    factorMethod: 'SYNTHETIC_REGRESSED_MULTI_SEASON',
+    source: 'SYNTHETIC_NPB_PARK_REGISTRY',
+  },
+};
+const qualifiedContext = await buildAsianGameContext('NPB', qualifiedGame, {
+  historyGames: sufficientHistory,
+  featureSnapshot: qualifiedFeatures,
+});
+assert.equal(qualifiedContext.coreModelable, true);
+assert.equal(qualifiedContext.dataGateV10.passedForShadowScore, true);
+assert.equal(qualifiedContext.dataGateV10.passedForFormalScore, false);
+assert.equal(qualifiedContext.betEligible, false);
+assert.equal(qualifiedContext.executable, false);
+assert.equal(qualifiedContext.away.starter.confirmed, true);
+assert.equal(qualifiedContext.away.starter.performanceScope, 'INDIVIDUAL_STARTER');
+assert.equal(qualifiedContext.away.bullpen.pureRelief, true);
+assert.equal(qualifiedContext.away.lineup.players.length, 9);
+assert.equal(qualifiedContext.park.recognized, true);
+assert.equal(qualifiedContext.leagueRuleState.npb.status, 'RESOLVED');
+assert.equal(qualifiedContext.leagueRuleState.npb.designatedHitter, false, '央聯主場測試場應解析為無 DH');
+
+const identityMismatch = await buildAsianGameContext('NPB', qualifiedGame, {
+  historyGames: sufficientHistory,
+  featureSnapshot: {
+    ...qualifiedFeatures,
+    away: {
+      ...qualifiedFeatures.away,
+      starter: { ...qualifiedFeatures.away.starter, id: 'WRONG-PITCHER-ID' },
+    },
+  },
+});
+assert.equal(identityMismatch.coreModelable, false);
+assert.equal(identityMismatch.away.starter.identityMismatch, true);
+assert.ok(identityMismatch.dataGateV10.blocking.includes('starterIdentityAndIndependentPerformance'));
 
 await assert.rejects(
   () => buildAsianGameContext('NPB', npb[0], {

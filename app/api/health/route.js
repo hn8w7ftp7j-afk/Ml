@@ -29,19 +29,39 @@ import { ANALYSIS_REFRESH_POLICY_V109_VERSION } from '../../../lib/analysis-refr
 import { CONTINUOUS_CALIBRATION_V109_VERSION } from '../../../lib/pit-continuous-calibration-v109.js';
 import { MLB_PRODUCTION_PIT_REPLAY_V109_VERSION } from '../../../lib/mlb-production-pit-replay-v109.js';
 import { MLB_ADVANCED_PROMOTION_GATE_V109_VERSION } from '../../../lib/mlb-advanced-promotion-gate-v109.js';
+import {
+  analysisPitDatabaseConfigured,
+  analysisPitProductionPersistenceRequired,
+} from '../../../lib/analysis-pit-snapshot-store-v1.js';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   const version = APP_VERSION;
   if (!(await requestIsAuthenticated(request))) {
-    return NextResponse.json({ ok: true, version }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ok: true, alive: true, version }, { headers: { 'Cache-Control': 'no-store' } });
   }
+  const databaseConfigured = analysisPitDatabaseConfigured();
+  const authConfigured = siteAuthConfigured();
+  const pairingConfigured = readerPairingConfigured();
+  const integrityConfigured = marketIntegrityConfigured();
+  const productionPitRequired = analysisPitProductionPersistenceRequired();
+  const readinessReasons = [
+    ...(!databaseConfigured ? ['PIT資料庫未設定'] : []),
+    ...(!authConfigured ? ['網站驗證未完整設定'] : []),
+    ...(!pairingConfigured ? ['Reader配對密鑰未設定'] : []),
+    ...(!integrityConfigured ? ['市場簽章密鑰未設定'] : []),
+  ];
+  const ready = readinessReasons.length === 0;
   const readerSnapshot = await loadReaderSnapshot('MLB');
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   const referenceStatus = referenceProviderStatus();
   return NextResponse.json({
-    ok: true,
+    ok: ready,
+    alive: true,
+    ready,
+    readinessBasis: 'CONFIGURATION_ONLY_PERSISTENCE_CONFIRMED_PER_ANALYSIS',
+    readinessReasons,
     version,
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
@@ -71,7 +91,7 @@ export async function GET(request) {
     referenceProviders: referenceStatus.providers,
     referenceConsensusPolicy: 'DISABLED_ANALYSIS_MODEL_ONLY',
     creditLinesProvider: 'TAI888_READER_AUTO',
-    readerPairingConfigured: readerPairingConfigured(),
+    readerPairingConfigured: pairingConfigured,
     readerStoreVersion: READER_STORE_VERSION,
     readerAvailable: readerStatus.available,
     readerFresh: readerStatus.fresh,
@@ -92,11 +112,12 @@ export async function GET(request) {
     productionPitReplayVersion: MLB_PRODUCTION_PIT_REPLAY_V109_VERSION,
     coreRefreshPolicyVersion: ANALYSIS_REFRESH_POLICY_V109_VERSION,
     advancedPromotionGateVersion: MLB_ADVANCED_PROMOTION_GATE_V109_VERSION,
-    databaseConfigured: Boolean(process.env.DATABASE_URL),
-    authConfigured: siteAuthConfigured(),
+    databaseConfigured,
+    productionPitRequired,
+    authConfigured,
     appPasswordConfigured: appPasswordConfigured(),
     sessionSecretConfigured: sessionSecretConfigured(),
-    marketIntegrityConfigured: marketIntegrityConfigured(),
+    marketIntegrityConfigured: integrityConfigured,
     marketIntegrityVersion: MARKET_INTEGRITY_VERSION,
     snapshotIntegrityVersion: SNAPSHOT_INTEGRITY_VERSION,
     officialScheduleVersion: OFFICIAL_SCHEDULE_VERSION,

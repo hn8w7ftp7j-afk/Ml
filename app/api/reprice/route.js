@@ -13,11 +13,16 @@ import {
   assertLeagueGamePrestart,
   getLeagueProvider,
   leagueAnalysisContract,
-  resolveLeagueGame,
 } from '../../../lib/league-provider.js';
 import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
 import { checkRateLimit, cleanText, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
 import { assessCoreSnapshotFreshnessV109 } from '../../../lib/analysis-refresh-policy-v109.js';
+import {
+  analysisPitDatabaseConfigured,
+  analysisPitProductionPersistenceRequired,
+  analysisPitSnapshotId,
+  persistAnalysisPitSnapshotForResponse,
+} from '../../../lib/analysis-pit-snapshot-store-v1.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -36,6 +41,10 @@ function sanitizeMarkets(rows, maximum = 16) {
     sourceLabel: cleanText(row?.sourceLabel, 120), provider: cleanText(row?.provider, 80),
     lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: null,
     rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
+    readerGameMarketHash: cleanText(row?.readerGameMarketHash, 64),
+    readerPayloadHash: cleanText(row?.readerPayloadHash, 64),
+    readerRawBoardHash: cleanText(row?.readerRawBoardHash, 64),
+    readerBoardDate: cleanText(row?.readerBoardDate, 20),
     referenceNoVigProbability: optionalNumber(row?.referenceNoVigProbability),
     referenceRobustProbability: optionalNumber(row?.referenceRobustProbability),
     referenceProbabilityMinimum: optionalNumber(row?.referenceProbabilityMinimum),
@@ -90,12 +99,29 @@ export async function POST(request) {
         error: `${config.label}尚未完成正式賽程、Reader 與模型驗證，已停止快速重算`,
       }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
+    if (analysisPitProductionPersistenceRequired() && !analysisPitDatabaseConfigured()) {
+      return NextResponse.json({
+        ok: false,
+        code: 'PIT_PERSISTENCE_REQUIRED',
+        error: 'Production缺少DATABASE_URL，永久PIT不可用，已停止快速重算',
+        pitPersistence: {
+          status: 'FAILED', confirmed: false, required: true,
+          reason: 'DATABASE_NOT_CONFIGURED', snapshotId: null,
+        },
+      }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
     const snapshot = body.snapshot && typeof body.snapshot === 'object' ? body.snapshot : null;
     const context = snapshot?.frozenContext;
-    if (!context?.game?.gamePk || !snapshot?.coreFingerprint || !snapshot?.distributionHash || !snapshot?.distributionId) {
+    if (!context?.game?.gamePk || !snapshot?.inputHash || !snapshot?.coreFingerprint || !snapshot?.distributionHash || !snapshot?.distributionId) {
       return NextResponse.json({ ok: false, error: '缺少已保存的凍結比分分布識別，不能快速重算' }, { status: 400 });
     }
-    const { game } = await resolveLeagueGame(league, context.game);
+    const contextLeague = String(context?.leagueId || context?.game?.leagueId || context?.game?.league || '').trim().toUpperCase();
+    if (contextLeague !== league) {
+      return NextResponse.json({ ok: false, error: '凍結快照聯盟與快速重算聯盟不一致' }, { status: 409 });
+    }
+    // The signed frozen game identity is authoritative for a price-only reprice.
+    // Do not fetch schedules, core baseball data or GPT here.
+    const game = context.game;
     assertLeagueGamePrestart(league, game);
     if (!(await verifyRepriceSnapshot(league, game, snapshot))) {
       return NextResponse.json({ ok: false, error: '凍結快照簽章無效或內容已被修改，必須完整重算' }, { status: 409 });
@@ -137,6 +163,7 @@ export async function POST(request) {
       expertMode: 'off',
     };
     const preliminary = repriceMarkets({ context, markets, previousMarkets, settings, distributionSnapshot });
+    assertLeagueGamePrestart(league, game);
     const deterministic = enforceAnalysisModeSafety(
       finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }),
       context,
@@ -158,17 +185,42 @@ export async function POST(request) {
       calculationSettings: settings,
       auxiliaryInput: { previousMarkets },
     });
+    if (fingerprints.inputHash === snapshot.inputHash) {
+      assertLeagueGamePrestart(league, game);
+      return NextResponse.json({
+        ok: false,
+        code: 'NO_OP_REPRICE',
+        error: '盤口與計算輸入未改變，沿用原快照即可，不建立self-parent',
+        pitSnapshotId: snapshot.pitSnapshotId || null,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+    }
     if (fingerprints.coreFingerprint !== snapshot.coreFingerprint) return NextResponse.json({ ok: false, error: '核心資料指紋已改變，必須完整重算' }, { status: 409 });
     if (analysisWithoutDistribution.distributionId !== snapshot.distributionId || analysisWithoutDistribution.distributionHash !== snapshot.distributionHash) {
       return NextResponse.json({ ok: false, error: '快速重算不得改變比分分布' }, { status: 409 });
     }
     const analysisAsOf = new Date().toISOString();
+    const parentAnalysisType = ['FULL', 'PRICE_ONLY_REPRICE'].includes(String(snapshot.analysisType || '').toUpperCase())
+      ? String(snapshot.analysisType).toUpperCase()
+      : 'FULL';
+    const parentPitSnapshotId = snapshot.pitSnapshotId || analysisPitSnapshotId({
+      league,
+      gamePk: game.gamePk,
+      analysisType: parentAnalysisType,
+      inputHash: snapshot.inputHash,
+    });
+    const pitSnapshotId = analysisPitSnapshotId({
+      league,
+      gamePk: game.gamePk,
+      analysisType: 'PRICE_ONLY_REPRICE',
+      inputHash: fingerprints.inputHash,
+    });
     const finalized = {
       ...analysisWithoutDistribution, ...fingerprints, analysisType: 'PRICE_ONLY_REPRICE', repriceVersion: REPRICE_VERSION,
-      parentInputHash: snapshot.inputHash || null, parentDistributionId: snapshot.distributionId, distributionReused: true,
+      parentInputHash: snapshot.inputHash || null, parentAnalysisType, parentPitSnapshotId,
+      parentDistributionId: snapshot.distributionId, distributionReused: true,
       dataAsOf: snapshot.dataAsOf || context.fetchedAt || null,
       lineAsOf: markets.map(row => row.lineAsOf).filter(Boolean).sort().at(-1) || analysisAsOf,
-      analysisAsOf, snapshotId: fingerprints.inputHash,
+      analysisAsOf, snapshotId: fingerprints.inputHash, pitSnapshotId,
     };
     const unsignedRepriceSnapshot = {
       ...compactRepriceSnapshot(snapshot),
@@ -176,6 +228,10 @@ export async function POST(request) {
       calculationFingerprint: fingerprints.calculationFingerprint,
       auxiliaryFingerprint: fingerprints.auxiliaryFingerprint,
       inputHash: fingerprints.inputHash,
+      analysisType: 'PRICE_ONLY_REPRICE',
+      pitSnapshotId,
+      parentAnalysisType,
+      parentPitSnapshotId,
       calculationSettings: fingerprints.calculationPayload,
       auxiliaryInput: fingerprints.auxiliaryPayload,
       distributionId: snapshot.distributionId,
@@ -194,7 +250,32 @@ export async function POST(request) {
       openMarkets: [...new Set(markets.map(row => row.market))],
       reprice: { distributionReused: true, distributionRebuiltFromSignedContext: resolvedDistribution.rebuilt, noCoreDataFetch: true, noSimulation: !resolvedDistribution.rebuilt, noGpt: true, distributionId: snapshot.distributionId, distributionHash: snapshot.distributionHash, coreFingerprint: snapshot.coreFingerprint, previousInputHash: snapshot.inputHash || null, newInputHash: fingerprints.inputHash },
     };
-    return NextResponse.json(enforceAnalysisModeSafety(payload, context), { headers: { 'Cache-Control': 'no-store' } });
+    const safePayload = enforceAnalysisModeSafety(payload, context);
+    assertLeagueGamePrestart(league, game);
+    const pitPersistence = await persistAnalysisPitSnapshotForResponse({
+      league,
+      game,
+      frozenContext: context,
+      analysis: finalized,
+      distributionSnapshot: null,
+      repriceSnapshot,
+      versions,
+      markets,
+      previousMarkets,
+    }, { requiredWhenConfigured: true });
+    safePayload.pitPersistence = pitPersistence;
+    assertLeagueGamePrestart(league, game);
+    if (pitPersistence.required && !pitPersistence.confirmed) {
+      assertLeagueGamePrestart(league, game);
+      return NextResponse.json({
+        ok: false,
+        code: 'PIT_PERSISTENCE_REQUIRED',
+        error: '永久PIT快照未確認，已停止回傳快速重算結果',
+        pitPersistence,
+      }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
+    assertLeagueGamePrestart(league, game);
+    return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
   }

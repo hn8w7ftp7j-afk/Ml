@@ -10,7 +10,7 @@ import {
   requestedLeagueId,
 } from '../lib/leagues.js';
 
-assert.equal(LEAGUE_REGISTRY_VERSION, 'SPORTS-LEAGUE-REGISTRY-2026-08-v2.3.0');
+assert.equal(LEAGUE_REGISTRY_VERSION, 'SPORTS-LEAGUE-REGISTRY-2026-08-v3.0.0');
 assert.deepEqual(LEAGUE_IDS, ['MLB', 'NPB', 'KBO', 'CPBL']);
 assert.equal(normalizeLeagueId('npb'), 'NPB');
 assert.equal(normalizeLeagueId('unknown'), 'MLB');
@@ -32,21 +32,19 @@ assert.equal(leagueCanAnalyze(['MLB']), false);
 
 for (const id of LEAGUE_IDS) {
   const item = leagueConfig(id);
-  assert.equal(item.status, 'shadow');
-  assert.deepEqual(item.capabilities, {
-    schedule: true,
-    reader: true,
-    analysis: true,
-    ranking: true,
-    bets: true,
-    formalRecommendations: false,
-  });
+  assert.equal(item.status, id === 'MLB' ? 'shadow' : 'setup');
+  assert.deepEqual(item.capabilities, id === 'MLB'
+    ? { schedule: true, reader: true, analysis: true, ranking: true, bets: true, formalRecommendations: false }
+    : { schedule: true, reader: true, analysis: false, ranking: false, bets: true, formalRecommendations: false });
   assert.equal(item.readerProvider, 'TAI888_READER_AUTO');
   assert.equal(item.scheduleEndpoint, '/api/schedule');
 }
 
 assert.equal(leagueConfig('MLB').scheduleProvider, 'MLB_STATS_API');
 assert.equal(leagueConfig('MLB').modelFamily, 'MLB_JOINT_SCORE_DISTRIBUTION_REBUILD');
+assert.equal(leagueCanAnalyze('NPB'), false);
+assert.equal(leagueCanAnalyze('KBO'), false);
+assert.equal(leagueCanAnalyze('CPBL'), false);
 for (const id of ['NPB', 'KBO', 'CPBL']) {
   const item = leagueConfig(id);
   assert.match(item.scheduleProvider, new RegExp(`^${id}_OFFICIAL`));
@@ -58,9 +56,13 @@ assert.equal(publicRows.length, 4);
 assert.equal(publicRows.every(row => row.capabilities && typeof row.capabilities === 'object'), true);
 assert.deepEqual(publicRows.map(row => row.id), LEAGUE_IDS);
 assert.equal(publicRows.find(row => row.id === 'MLB').capabilities.analysis, true);
-assert.equal(publicRows.find(row => row.id === 'NPB').capabilities.analysis, true);
-assert.equal(publicRows.find(row => row.id === 'CPBL').capabilities.analysis, true);
-assert.equal(publicRows.find(row => row.id === 'KBO').capabilities.analysis, true);
+assert.equal(publicRows.find(row => row.id === 'NPB').capabilities.analysis, false);
+assert.equal(publicRows.find(row => row.id === 'CPBL').capabilities.analysis, false);
+assert.equal(publicRows.find(row => row.id === 'KBO').capabilities.analysis, false);
+for (const id of ['NPB', 'KBO', 'CPBL']) {
+  assert.equal(publicRows.find(row => row.id === id).capabilities.ranking, false);
+  assert.equal(publicRows.find(row => row.id === id).capabilities.bets, true);
+}
 assert.equal(publicRows.every(row => row.capabilities.bets === true), true, 'Shadow只停用模型推薦，不得停用使用者真實下注帳本');
 assert.equal(publicRows.every(row => row.capabilities.formalRecommendations === false), true);
 

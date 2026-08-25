@@ -197,7 +197,7 @@ export async function POST(request) {
         providers: status.providers,
         games: [],
         unmatched: [],
-        message: '外部市場稽核未使用；不影響模型評分與排名。',
+        message: '外部市場稽核未使用；不改比分分布或W/R，8.5級資格最高封頂8.4。',
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
@@ -239,7 +239,7 @@ export async function POST(request) {
       enrichedEventCount: results.reduce((sum, row) => sum + Number(row?.enrichedEventCount || 0), 0),
       fetchedAt: new Date().toISOString(),
       failures,
-      message: '外部市場稽核未使用；不影響模型評分與排名。',
+      message: '外部市場稽核未使用；不改比分分布或W/R，8.5級資格最高封頂8.4。',
       cache: 'MISS',
     };
     cache.set(key, { payload, expiresAt: Date.now() + 3 * 60 * 1000 });
