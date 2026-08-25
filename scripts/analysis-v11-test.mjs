@@ -136,7 +136,8 @@ const finalizedLowTotal = finalizeDeterministicAnalysis({ analysis: lowTotalAnal
 for (const row of finalizedLowTotal.results) {
   assert.equal(row.scoreAudit.ok, false);
   assert.equal(row.scoreAudit.plausibility.passed, false);
-  assert.equal(row.formulaDiagnosticScore, null, 'a >10pp model/market gap must QA BLOCK instead of being hidden by probability feedback');
+  assert.equal(Number.isFinite(row.formulaDiagnosticScore), true, 'a >10pp gap must preserve inspectable S while QA blocks ranking');
+  assert.equal(row.shadowDiagnosticScore, null, 'a >10pp gap must remain excluded from qualified shadow ranking');
   assert.ok(row.scoreBreakdown.caps.includes('TARGET_MARKET_PROBABILITY_GAP_QA_BLOCK'));
   assert.equal(row.pairAudit.passed, true, 'the raw shared distribution must still pass mirror and complement QA');
 }
