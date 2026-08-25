@@ -505,6 +505,7 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   const weightedEV = Number(row?.weightedEV);
   const robustEV = Number(row?.robustEV);
   if (row?.evCalibration?.qualified !== true) return { icon: '⚠️', label: '模型評分阻擋', ranking: false, reason: row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過' };
+  if (row?.scoreAudit?.plausibility?.passed === false) return { icon: '⛔', label: '上游分布異常', ranking: false, reason: '模型與Tai888去水機率差距超過10%，原始結果只留後台稽核' };
   if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
   if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
   if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
@@ -549,6 +550,8 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
       ? 'Reader、核心資料或數學未通過｜不顯示W/R、不建立S分數、不列排名'
+      : plausibilityBlocked
+        ? '上游比分分布合理性未通過｜原始結果只留後台稽核，不顯示為EV或S分數'
       : formulaScore == null
         ? '缺少合法水位或雙EV，不能補造分數'
         : !qaPassed
@@ -558,7 +561,9 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     ? '聯盟模型重建中｜EV與S分數暫停顯示'
     : calibrationBlocked
       ? `V11.0模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
-      : `${plausibilityBlocked ? '模型／Tai888差距超過10%，異常待複核｜保留原始S、W、R，但禁止排名下注｜' : ''}狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
+      : plausibilityBlocked
+        ? `模型／Tai888去水差距 ${pct(tai888Gap)}，上游比分分布合理性未通過｜原始機率與損益只留後台稽核，不顯示為EV或S分數｜市場未回灌模型`
+        : `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const buttonText = latest ? '已下注 ✓' : '紀錄實際下注';
@@ -1659,7 +1664,7 @@ export default function Home() {
 
     {tab === 'bets' && <BetLedgerDashboard bets={bets} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements}/>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V11使用PIT狀態感知聯合比分分布，不使用虛構模擬次數；同場正反方向共用凍結分布，Tai888只作成交payoff與合理性QA，不改寫模型機率或EV。缺少兩個獨立同合約市場時最高8.4；W/R差距超過5%或W達20%以上仍保留原始分數，但暫停影子排名。尚未完成locked OOS與forward驗證前，正式推薦與Unit持續停用。此金額只供實際下注帳本紀錄，不是模型Unit建議；帳本依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V11使用PIT狀態感知聯合比分分布，不使用虛構模擬次數；同場正反方向共用凍結分布，Tai888只作成交payoff與合理性QA，不改寫模型機率或EV。MLB模型與Tai888去水機率差距超過10%時，原始結果只留後台稽核，不顯示為EV或S分數；缺少兩個獨立同合約市場時最高8.4。尚未完成locked OOS與forward驗證前，正式推薦與Unit持續停用。此金額只供實際下注帳本紀錄，不是模型Unit建議；帳本依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
   </main>;
 }

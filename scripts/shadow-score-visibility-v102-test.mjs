@@ -87,7 +87,8 @@ const implausibleDistribution = finalizeDeterministicAnalysis({
   },
   game,
 }).results[0];
-assert.equal(Number.isFinite(implausibleDistribution.formulaDiagnosticScore), true, '模型/Tai888差距只阻擋資格，不得清除可計算的原始S分數');
+assert.equal(implausibleDistribution.formulaDiagnosticScore, null, 'MLB上游分布合理性未通過時不得把原始診斷數字顯示為S分數');
+assert.equal(Number.isFinite(implausibleDistribution.scoreBreakdown.rawUnqualifiedScore), true, '原始計算只保留於後台稽核');
 assert.equal(implausibleDistribution.shadowDiagnosticScore, null);
 assert.equal(implausibleDistribution.scoreAudit.ok, false, '模型與Tai888去水機率極端背離時不得標示QA PASS');
 assert.equal(implausibleDistribution.rankingQualified, false);

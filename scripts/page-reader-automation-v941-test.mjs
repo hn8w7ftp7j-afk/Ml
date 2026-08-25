@@ -16,10 +16,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.0.2', 'package/release identity must match the V11.0.2 UI');
-assert.equal(packageLock.version, '11.0.2', 'package-lock release identity must match V11.0.2');
-assert.equal(packageLock.packages?.['']?.version, '11.0.2', 'root lockfile package must match V11.0.2');
-assert.equal(APP_VERSION, '11.0.2');
+assert.equal(packageJson.version, '11.0.3', 'package/release identity must match the V11.0.3 UI');
+assert.equal(packageLock.version, '11.0.3', 'package-lock release identity must match V11.0.3');
+assert.equal(packageLock.packages?.['']?.version, '11.0.3', 'root lockfile package must match V11.0.3');
+assert.equal(APP_VERSION, '11.0.3');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
@@ -174,7 +174,7 @@ mustMatch(/UNAVAILABLE/, 'unavailable market state missing');
 mustMatch(/row\?\.formulaDiagnosticScore != null/, 'every calculable direction must expose its fixed-formula score');
 mustMatch(/formulaScore\.toFixed\(1\)/, 'fixed S score must always render as a number');
 mustMatch(/QA BLOCK/, 'QA-blocked directions must remain visibly identified');
-mustMatch(/模型／Tai888差距超過10%，異常待複核｜保留原始S、W、R，但禁止排名下注/, '10pp合理性Gate必須保留原始S/W/R並只取消資格');
+mustMatch(/模型／Tai888去水差距 \${pct\(tai888Gap\)}，上游比分分布合理性未通過｜原始機率與損益只留後台稽核，不顯示為EV或S分數/, '10pp合理性Gate不得把未合格的原始結果顯示為EV或S分數');
 mustMatch(/不列排名、不作推薦/, 'QA block must remain isolated from ranking and recommendation');
 assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'display must not hide scores below 7.2');
 assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must still display the fixed numeric S score');
