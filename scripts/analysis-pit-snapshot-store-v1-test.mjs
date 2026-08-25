@@ -350,8 +350,10 @@ const analyzeRoute = fs.readFileSync(new URL('../app/api/analyze/route.js', impo
 const repriceRoute = fs.readFileSync(new URL('../app/api/reprice/route.js', import.meta.url), 'utf8');
 assert.match(analyzeRoute, /await persistAnalysisPitSnapshotForResponse\(/, '完整分析必須等待永久PIT確認');
 assert.match(repriceRoute, /await persistAnalysisPitSnapshotForResponse\(/, '快速重算必須等待父快照鏈結保存');
-assert.match(analyzeRoute, /PIT_PERSISTENCE_REQUIRED/, 'DB已設定但PIT未確認時完整分析必須fail closed');
-assert.match(repriceRoute, /PIT_PERSISTENCE_REQUIRED/, 'DB已設定但PIT未確認時快速重算必須fail closed');
+assert.match(analyzeRoute, /enforceUnconfirmedPitShadowSafety/, 'DB寫入失敗時完整分析只能降級為不排名、不下注的唯讀影子輸出');
+assert.match(repriceRoute, /enforceUnconfirmedPitShadowSafety/, 'DB寫入失敗時快速重算只能降級為不排名、不下注的唯讀影子輸出');
+assert.match(analyzeRoute, /X-PIT-Persistence.*UNCONFIRMED-SHADOW-ONLY/s, '降級完整分析必須明確標示PIT未確認');
+assert.match(repriceRoute, /X-PIT-Persistence.*UNCONFIRMED-SHADOW-ONLY/s, '降級快速重算必須明確標示PIT未確認');
 assert.match(analyzeRoute, /analysisPitDatabaseConfigured\(\)/, '未確認的response cache必須在DB恢復後重試PIT');
 assert.match(analyzeRoute, /analysisPitProductionPersistenceRequired\(\)/, 'Production缺少DB時完整分析必須提早fail closed');
 assert.match(repriceRoute, /analysisPitProductionPersistenceRequired\(\)/, 'Production缺少DB時快速重算必須提早fail closed');

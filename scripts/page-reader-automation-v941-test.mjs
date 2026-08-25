@@ -16,10 +16,10 @@ mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output')
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.0.0', 'package/release identity must match the V11.0.0 UI');
-assert.equal(packageLock.version, '11.0.0', 'package-lock release identity must match V11.0.0');
-assert.equal(packageLock.packages?.['']?.version, '11.0.0', 'root lockfile package must match V11.0.0');
-assert.equal(APP_VERSION, '11.0.0');
+assert.equal(packageJson.version, '11.0.1', 'package/release identity must match the V11.0.1 UI');
+assert.equal(packageLock.version, '11.0.1', 'package-lock release identity must match V11.0.1');
+assert.equal(packageLock.packages?.['']?.version, '11.0.1', 'root lockfile package must match V11.0.1');
+assert.equal(APP_VERSION, '11.0.1');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
@@ -122,6 +122,8 @@ assert.match(page, /unit: null/, 'actual ledger writes must not claim a model Un
 mustMatch(/不可變帳本/, 'ledger must disclose immutable evidence retention');
 mustMatch(/下注證據保留，不提供刪除/, 'ledger must not render a dead destructive action');
 assert.doesNotMatch(page, /action: 'delete'|action: 'clearLeague'/, 'client must not call unsupported destructive ledger actions');
+assert.match(page, /CLOUD_LEDGER_FAILURE_BACKOFF_MS/, 'DB失敗後必須停止每15秒重打雲端帳本');
+assert.match(page, /影子分析完成｜PIT未保存、禁止排名下注/, 'PIT失敗必須保留唯讀分析並清楚停用排名下注');
 
 // Ranking rows must retain the original item/row and expose the same immutable
 // cloud-ledger action as the board instead of becoming a read-only desktop view.

@@ -49,6 +49,7 @@ const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
 // browser timeout above the 90 second server route ceiling.
 const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
+const CLOUD_LEDGER_FAILURE_BACKOFF_MS = 5 * 60 * 1000;
 const READER_RECHECK_INTERVAL_MS = 30 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
@@ -261,6 +262,7 @@ async function requestJSON(url, options = {}, timeoutMs = 180000) {
 }
 
 function transientAnalysisError(error) {
+  if (String(error?.code || '') === 'PIT_PERSISTENCE_REQUIRED') return false;
   if (Number.isFinite(Number(error?.status))) return Number(error.status) >= 500;
   return /Load failed|Failed to fetch|NetworkError|network request failed|分析逾時/i.test(String(error?.message || error));
 }
@@ -738,6 +740,7 @@ export default function Home() {
   const readerStatusHighWaterRef = useRef(null);
   const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
+  const cloudSyncRetryAtRef = useRef(0);
   const settlementBusyRef = useRef(false);
   const restoredBoardNeedsValidationRef = useRef(false);
   const activeLeague = leagueConfig(league);
@@ -857,7 +860,11 @@ export default function Home() {
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
-    }).catch(() => {}).finally(() => { cloudSyncBusyRef.current = false; });
+    }).then(() => {
+      cloudSyncRetryAtRef.current = 0;
+    }).catch(() => {
+      cloudSyncRetryAtRef.current = Date.now() + CLOUD_LEDGER_FAILURE_BACKOFF_MS;
+    }).finally(() => { cloudSyncBusyRef.current = false; });
   }, []);
   useEffect(() => {
     betsRef.current = bets;
@@ -866,7 +873,7 @@ export default function Home() {
   useEffect(() => {
     if (!storageReady) return undefined;
     const syncCloudBets = () => {
-      if (cloudSyncBusyRef.current) return;
+      if (cloudSyncBusyRef.current || Date.now() < cloudSyncRetryAtRef.current) return;
       cloudSyncBusyRef.current = true;
       const migrationComplete = cloudBetMigrationComplete();
       requestJSON(`/api/bets${migrationComplete ? `?t=${Date.now()}` : ''}`, migrationComplete ? {} : {
@@ -878,8 +885,11 @@ export default function Home() {
           betsRef.current = data.bets;
           setBets(data.bets);
           setCalibrationStatus(data.calibration || null);
+          cloudSyncRetryAtRef.current = 0;
         })
-        .catch(() => {})
+        .catch(() => {
+          cloudSyncRetryAtRef.current = Date.now() + CLOUD_LEDGER_FAILURE_BACKOFF_MS;
+        })
         .finally(() => { cloudSyncBusyRef.current = false; });
     };
     const onVisible = () => { if (document.visibilityState === 'visible') syncCloudBets(); };
@@ -1100,7 +1110,9 @@ export default function Home() {
         referenceData: compactAnalysisData(baseData),
         mode: 'actual',
         status: 'done',
-        statusLabel: 'Tai888盤口分析完成（驗證中）',
+        statusLabel: baseData.pitPersistence?.confirmed
+          ? 'Tai888盤口分析完成｜PIT已確認'
+          : '影子分析完成｜PIT未保存、禁止排名下注',
         customMarkets: actualMarkets,
         customData: compactAnalysisData(baseData),
         restoredFromCache: false,

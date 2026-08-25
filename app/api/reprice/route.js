@@ -23,6 +23,7 @@ import {
   analysisPitSnapshotId,
   persistAnalysisPitSnapshotForResponse,
 } from '../../../lib/analysis-pit-snapshot-store-v1.js';
+import { enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -267,12 +268,13 @@ export async function POST(request) {
     assertLeagueGamePrestart(league, game);
     if (pitPersistence.required && !pitPersistence.confirmed) {
       assertLeagueGamePrestart(league, game);
-      return NextResponse.json({
-        ok: false,
-        code: 'PIT_PERSISTENCE_REQUIRED',
-        error: '永久PIT快照未確認，已停止回傳快速重算結果',
-        pitPersistence,
-      }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(
+        enforceUnconfirmedPitShadowSafety(safePayload, pitPersistence),
+        { headers: {
+          'Cache-Control': 'no-store',
+          'X-PIT-Persistence': 'UNCONFIRMED-SHADOW-ONLY',
+        } },
+      );
     }
     assertLeagueGamePrestart(league, game);
     return NextResponse.json(safePayload, { headers: { 'Cache-Control': 'no-store' } });
