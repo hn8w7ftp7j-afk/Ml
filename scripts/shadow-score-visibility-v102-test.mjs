@@ -82,18 +82,22 @@ const implausibleDistribution = finalizeDeterministicAnalysis({
       ...direction('全場大小', '大6平', 0.355, 0.3214, 0.708),
       rawMarketProbabilityGap: null,
       tai888MarketProbabilityGap: 0.208,
+      marketVerification: { verified: true, referencePriorEligible: true, secondaryIndependentMarketVerified: true },
       evCalibration: { ...common.evCalibration, extreme: true, auditWarnings: ['未校準模型W達35.5%'] },
     }],
   },
   game,
 }).results[0];
-assert.equal(implausibleDistribution.formulaDiagnosticScore, null, 'MLB上游分布合理性未通過時不得把原始診斷數字顯示為S分數');
-assert.equal(Number.isFinite(implausibleDistribution.scoreBreakdown.rawUnqualifiedScore), true, '原始計算只保留於後台稽核');
-assert.equal(implausibleDistribution.shadowDiagnosticScore, null);
-assert.equal(implausibleDistribution.scoreAudit.ok, false, '模型與Tai888去水機率極端背離時不得標示QA PASS');
-assert.equal(implausibleDistribution.rankingQualified, false);
-assert.match(implausibleDistribution.tag, /QA BLOCK/);
-assert.match(implausibleDistribution.scoreAudit.plausibility.failures.join('；'), /比分分布合理性未通過/);
+assert.equal(implausibleDistribution.formulaDiagnosticScore, 8.9, '市場高度分歧不得取消固定公式S分數');
+assert.equal(implausibleDistribution.scoreBreakdown.rawUnqualifiedScore, null);
+assert.equal(implausibleDistribution.shadowDiagnosticScore, 8.9);
+assert.equal(implausibleDistribution.scoreAudit.ok, true, '沒有實質資料或數學錯誤時QA必須PASS');
+assert.equal(implausibleDistribution.rankingQualified, true, '市場差距與極高EV都只能WARNING，不得取消排名');
+assert.doesNotMatch(implausibleDistribution.tag, /QA BLOCK|不可下注|不下注/);
+assert.deepEqual(implausibleDistribution.scoreAudit.plausibility.failures, []);
+assert.match(implausibleDistribution.scoreAudit.plausibility.auditWarnings.join('；'), /高度分歧 20\.80pp/);
+assert.ok(implausibleDistribution.scoreBreakdown.caps.includes('TARGET_MARKET_PROBABILITY_GAP_WARNING'));
+assert.ok(implausibleDistribution.scoreBreakdown.caps.includes('WEIGHTED_EV_20_PERCENT_WARNING'));
 assert.equal(implausibleDistribution.scoreAudit.plausibility.targetMarketProbabilityGap, 0.208);
 assert.equal(implausibleDistribution.scoreAudit.plausibility.source, 'tai888MarketProbabilityGap');
 
@@ -125,9 +129,11 @@ const extremeReview = finalizeDeterministicAnalysis({
   game,
 }).results[0];
 assert.ok(extremeReview.formulaDiagnosticScore >= 8.5, '極端EV複核不得改寫固定公式分數');
-assert.equal(extremeReview.rankingQualified, false, 'W達20%以上必須暫停排名等待異常複核');
+assert.equal(extremeReview.rankingQualified, true, 'W達20%以上只作警示，不得暫停排名');
 assert.equal(extremeReview.extremeEvReviewRequired, true);
-assert.ok(extremeReview.scoreBreakdown.caps.includes('WEIGHTED_EV_20_PERCENT_REVIEW'));
+assert.equal(extremeReview.scoreAudit.extremeEvReview.passed, true);
+assert.equal(extremeReview.scoreAudit.extremeEvReview.hardGate, false);
+assert.ok(extremeReview.scoreBreakdown.caps.includes('WEIGHTED_EV_20_PERCENT_WARNING'));
 
 const calibrationBlocked = finalizeDeterministicAnalysis({
   analysis: {

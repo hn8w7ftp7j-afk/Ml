@@ -96,7 +96,7 @@ assert.equal(noPriorExtreme.qualified, true);
 assert.equal(noPriorExtreme.weightedEV, 0.22);
 assert.equal(noPriorExtreme.status, 'QUALIFIED_MODEL_EV_EXTERNAL_AUDIT_UNAVAILABLE');
 assert.equal(noPriorExtreme.extreme, true);
-assert.match(noPriorExtreme.auditWarnings.join('｜'), /待複核/);
+assert.match(noPriorExtreme.auditWarnings.join('｜'), /極高模型EV.*建議複核.*排名資格照實保留/);
 
 const moderateNoPrior = qualifyEvV103({
   row: {
@@ -112,7 +112,7 @@ const moderateNoPrior = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.match(EV_CALIBRATION_V103_VERSION, /v11\.1\.0/);
+assert.match(EV_CALIBRATION_V103_VERSION, /v11\.2\.0/);
 assert.equal(moderateNoPrior.qualified, true, 'international markets are optional audit evidence');
 assert.equal(moderateNoPrior.weightedEV, 0.08);
 assert.equal(moderateNoPrior.robustEV, 0.025);
@@ -322,7 +322,7 @@ const confirmedExtreme = qualifyEvV103({
 assert.equal(confirmedExtreme.qualified, true, '15%+ raw model EV stays visible for review');
 assert.equal(confirmedExtreme.weightedEV, 0.20);
 assert.equal(confirmedExtreme.robustEV, 0.12);
-assert.match(confirmedExtreme.auditWarnings.join('｜'), /待複核/);
+assert.match(confirmedExtreme.auditWarnings.join('｜'), /極高模型EV.*建議複核.*排名資格照實保留/);
 
 const disagreement = qualifyEvV103({
   row: { water: 0.94, marketVerification: eligibleVerification({ referenceNoVigProbability: 0.50, referenceRobustProbability: 0.495 }) },
