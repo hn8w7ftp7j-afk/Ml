@@ -3,6 +3,7 @@ import { verifyCloudBetEvidenceV110 } from '../lib/bet-evidence-verification-v11
 import { buildAnalysisPitReplayBundle, buildAnalysisPitSnapshotRecord } from '../lib/analysis-pit-snapshot-store-v1.js';
 import { signMarketRow } from '../lib/market-integrity-v1.js';
 import { readerGameMarketContentHash } from '../lib/reader-market-revision-v110.js';
+import { isDatabaseError } from '../lib/database-error.js';
 
 process.env.MARKET_INTEGRITY_SECRET = 'bet-evidence-v110-test-secret';
 
@@ -92,6 +93,15 @@ const noPit = await verifyCloudBetEvidenceV110({ ...candidate, pitSnapshotId: ''
 assert.equal(noPit.readerVerified, true);
 assert.equal(noPit.pitVerified, false);
 assert.equal(noPit.calibrationEligibility, 'EXCLUDED_UNVERIFIABLE');
+
+await assert.rejects(
+  () => verifyCloudBetEvidenceV110(candidate, {
+    ...dependencies,
+    loadPitReplay: async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect timed out'), { code: 'ETIMEDOUT' }) }); },
+  }),
+  error => isDatabaseError(error) && error?.operation === 'BET_PIT_REPLAY_READ_FAILED',
+  'PIT database transport failures must escape as database failures instead of PIT evidence 409',
+);
 
 const olderMarket = await signMarketRow('MLB', game, {
   ...market,

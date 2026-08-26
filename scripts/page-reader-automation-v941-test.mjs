@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { APP_VERSION } from '../lib/app-version.js';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
+const cloudLedgerSyncPolicy = fs.readFileSync('lib/cloud-ledger-sync-policy.js', 'utf8');
 const healthRoute = fs.readFileSync('app/api/health/route.js', 'utf8');
 const analyzeRoute = fs.readFileSync('app/api/analyze/route.js', 'utf8');
 const betPricesRoute = fs.readFileSync('app/api/bet-prices/route.js', 'utf8');
@@ -16,10 +17,10 @@ mustMatch(/全部方向EV/, 'ranking tab must identify the all-direction EV outp
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.1.0', 'package/release identity must match the V11.1.0 UI');
-assert.equal(packageLock.version, '11.1.0', 'package-lock release identity must match V11.1.0');
-assert.equal(packageLock.packages?.['']?.version, '11.1.0', 'root lockfile package must match V11.1.0');
-assert.equal(APP_VERSION, '11.1.0');
+assert.equal(packageJson.version, '11.1.1', 'package/release identity must match the V11.1.1 UI');
+assert.equal(packageLock.version, '11.1.1', 'package-lock release identity must match V11.1.1');
+assert.equal(packageLock.packages?.['']?.version, '11.1.1', 'root lockfile package must match V11.1.1');
+assert.equal(APP_VERSION, '11.1.1');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
@@ -107,7 +108,7 @@ mustMatch(/Reader目前盤口/, 'current Reader line and water must remain visib
 mustMatch(/Closing CLV/, 'verified Closing comparison must use a separate UI section');
 mustMatch(/洞口的 u 差不是 CLV 百分比/, 'key-hole payoff delta must not be mislabeled as CLV percent');
 mustMatch(/requestJSON\('\/api\/bet-prices'/, 'ledger must refresh Reader price comparisons independently');
-assert.match(betPricesRoute, /listCloudBets/, 'price feed must resolve server-owned tickets');
+assert.match(betPricesRoute, /listCloudBetsByIds/, 'price feed must resolve only requested server-owned tickets');
 assert.match(betPricesRoute, /loadReaderSnapshot/, 'price feed must use the Reader snapshot authority');
 assert.match(betPricesRoute, /currentReaderPriceForBet/, 'price feed must match the same ticket position');
 assert.match(betPricesRoute, /current: status\.fresh \?/, 'stale Reader prices must not be presented as current');
@@ -122,7 +123,8 @@ assert.match(page, /unit: null/, 'actual ledger writes must not claim a model Un
 mustMatch(/不可變帳本/, 'ledger must disclose immutable evidence retention');
 mustMatch(/下注證據保留，不提供刪除/, 'ledger must not render a dead destructive action');
 assert.doesNotMatch(page, /action: 'delete'|action: 'clearLeague'/, 'client must not call unsupported destructive ledger actions');
-assert.match(page, /CLOUD_LEDGER_FAILURE_BACKOFF_MS/, 'DB失敗後必須停止每15秒重打雲端帳本');
+assert.match(cloudLedgerSyncPolicy, /CLOUD_LEDGER_FAILURE_BACKOFF_MS/, 'DB失敗後必須停止每15秒重打雲端帳本');
+assert.match(page, /cloudLedgerAutomaticRefreshAllowed/, '帳本與結算輪詢必須共用可見分頁與退避政策');
 assert.match(page, /影子分析完成｜PIT未保存、禁止排名下注/, 'PIT失敗必須保留唯讀分析並清楚停用排名下注');
 assert.match(page, /PIT永久保存未確認｜保留影子分析｜暫停下注與排名資格/, 'PIT失敗不得錯標成Reader等待驗證');
 assert.match(page, /盤口內容時間：/, 'Reader來源卡必須區分盤口內容時間與服務心跳');

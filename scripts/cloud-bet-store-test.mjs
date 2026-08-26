@@ -48,9 +48,10 @@ const store = fs.readFileSync(new URL('../lib/cloud-bet-store.js', import.meta.u
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 const uniquenessMigration = fs.readFileSync(new URL('../database/0006_cloud_bet_position_uniqueness.sql', import.meta.url), 'utf8');
 assert.match(store, /baseball_private_bets_v2/);
-assert.match(store, /LEGACY_CACHE_KEY/);
 assert.match(store, /function requireDurableDatabase\(\)[\s\S]*DATABASE_URL/, '未設定資料庫時正式寫入必須失敗關閉');
-assert.doesNotMatch(store, /await cache\.set\(CACHE_KEY/, 'Runtime Cache不得作為正式帳本寫入真值');
+assert.match(store, /export async function listCloudBets\(\)\s*\{\s*requireDurableDatabase\(\);/, '正式帳本讀取缺少資料庫時也必須失敗關閉');
+assert.match(store, /export async function listCloudBetsByIds\(values\)[\s\S]*WHERE id = ANY\(\$\{ids\}::text\[\]\)/, 'Reader盤口比較只可讀取要求的下注ID，不得每次下載完整帳本');
+assert.doesNotMatch(store, /readCachedBets|runtimeCache|LEGACY_CACHE_KEY|CACHE_KEY/, 'Runtime Cache不得冒充永久帳本讀取真值');
 assert.match(store, /crypto\.randomUUID\(\)/, '下注ID必須由伺服器產生');
 assert.match(store, /Date\.now\(\) >= Date\.parse\(verification\?\.officialGame\?\.gameDate/, 'PIT查核後、資料庫寫入前必須再次阻擋已開打賽事');
 assert.match(store, /if \(!prediction\.ok\)/, '不完整PIT prediction不得先寫入再由讀取時隔離');

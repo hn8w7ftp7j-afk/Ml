@@ -36,6 +36,11 @@ import {
   restoreAnalysisBoardCache,
   upsertAnalysisBoardCache,
 } from '../lib/analysis-board-cache-v1.js';
+import {
+  CLOUD_LEDGER_VISIBLE_REFRESH_MS,
+  cloudLedgerAutomaticRefreshAllowed,
+  cloudLedgerRetryDelay,
+} from '../lib/cloud-ledger-sync-policy.js';
 
 const VERSION = APP_VERSION;
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.19-VERIFIED-RESCAN.zip';
@@ -49,8 +54,8 @@ const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
 // browser timeout above the 90 second server route ceiling.
 const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
-const CLOUD_LEDGER_FAILURE_BACKOFF_MS = 5 * 60 * 1000;
 const READER_RECHECK_INTERVAL_MS = 30 * 1000;
+const BET_PRICE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
   unitValue: 10000,
@@ -320,6 +325,12 @@ async function requestJSON(url, options = {}, timeoutMs = 180000) {
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
       error.code = data.code || '';
+      const retryAfterHeader = Number(response.headers.get('retry-after'));
+      const retryAfterBody = Number(data.retryAfterSeconds);
+      const retryAfterSeconds = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader
+        : Number.isFinite(retryAfterBody) && retryAfterBody > 0 ? retryAfterBody : 0;
+      error.retryAfterMs = retryAfterSeconds * 1000;
       throw error;
     }
     return data;
@@ -329,6 +340,14 @@ async function requestJSON(url, options = {}, timeoutMs = 180000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function cloudLedgerFailureState(error) {
+  return {
+    state: 'unavailable',
+    code: String(error?.code || 'DATABASE_UNAVAILABLE'),
+    message: String(error?.message || '永久資料庫目前無法使用'),
+  };
 }
 
 function transientAnalysisError(error) {
@@ -482,9 +501,11 @@ function BreakdownButton({ label, summary, active = false, onClick }) {
   </button>;
 }
 
-function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements }) {
+function BetLedgerDashboard({ bets, cloudLedgerStatus, reportCloudLedgerFailure, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements }) {
   const [priceFeed, setPriceFeed] = useState({});
   const [priceFeedChecked, setPriceFeedChecked] = useState(false);
+  const priceFeedBusyRef = useRef(false);
+  const priceFeedRetryAtRef = useRef(0);
   const periodBets = useMemo(() => filterBetLedgerByPeriod(bets, period), [bets, period]);
   const leagueBets = useMemo(() => selectedLeague === 'ALL'
     ? periodBets
@@ -514,8 +535,17 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
     let disposed = false;
     setPriceFeed({});
     setPriceFeedChecked(priceBetIds.length === 0);
-    if (!priceBetIds.length) return () => { disposed = true; };
+    if (!priceBetIds.length || cloudLedgerStatus?.state === 'unavailable') return () => { disposed = true; };
     const refresh = async () => {
+      if (!cloudLedgerAutomaticRefreshAllowed({
+        storageReady: true,
+        tab: 'bets',
+        visibilityState: document.visibilityState,
+        busy: priceFeedBusyRef.current,
+        now: Date.now(),
+        retryAt: priceFeedRetryAtRef.current,
+      })) return;
+      priceFeedBusyRef.current = true;
       try {
         const data = await requestJSON('/api/bet-prices', {
           method: 'POST',
@@ -528,18 +558,27 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
           if (item?.betId) next[item.betId] = item;
         }
         setPriceFeed(next);
-      } catch {
+        priceFeedRetryAtRef.current = 0;
+      } catch (cause) {
+        priceFeedRetryAtRef.current = Date.now() + cloudLedgerRetryDelay(cause);
+        if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
+          reportCloudLedgerFailure(cause);
+        }
         // Keep the ledger stable; an unavailable Reader comparison must not hide the bet.
       } finally {
+        priceFeedBusyRef.current = false;
         if (!disposed) setPriceFeedChecked(true);
       }
     };
     refresh();
-    const timer = window.setInterval(refresh, READER_RECHECK_INTERVAL_MS);
-    return () => { disposed = true; window.clearInterval(timer); };
-  }, [priceRequestKey]);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const timer = window.setInterval(refresh, BET_PRICE_REFRESH_INTERVAL_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { disposed = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [priceRequestKey, cloudLedgerStatus?.state]);
   return <section className="panel ledgerPanel">
-    <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" onClick={() => refreshSettlements('')}>更新全部賽果</button></div>
+    <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" onClick={() => refreshSettlements('', { force: true })}>更新全部賽果</button></div>
+    {cloudLedgerStatus?.state === 'unavailable' && <div className="errorBox" role="alert"><strong>永久雲端帳本目前無法讀取</strong><br/>{cloudLedgerStatus.message}<br/>下方若顯示 0 注，只代表這台裝置沒有可用暫存，不代表資料庫內沒有紀錄；系統不會把失敗回應冒充空帳本。</div>}
     <div className="periodTabs" aria-label="下注期間">
       {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => choosePeriod(item.id)}>{item.label}</button>)}
     </div>
@@ -829,6 +868,7 @@ export default function Home() {
   const [betLeague, setBetLeague] = useState('ALL');
   const [betMarket, setBetMarket] = useState('ALL');
   const [storageReady, setStorageReady] = useState(false);
+  const [cloudLedgerStatus, setCloudLedgerStatus] = useState({ state: 'loading', code: '', message: '' });
   const [tab, setTab] = useState('board');
   const [date, setDate] = useState(taipeiDate());
   const [schedule, setSchedule] = useState([]);
@@ -855,7 +895,6 @@ export default function Home() {
   const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
   const cloudSyncRetryAtRef = useRef(0);
-  const settlementBusyRef = useRef(false);
   const restoredBoardNeedsValidationRef = useRef(false);
   const activeLeague = leagueConfig(league);
   const analysisEnabled = activeLeague.capabilities.analysis === true;
@@ -950,22 +989,44 @@ export default function Home() {
     setBusy(false);
   }
 
-  async function refreshSettlements(targetLeague = '') {
-    if (settlementBusyRef.current) return;
-    settlementBusyRef.current = true;
+  function reportCloudLedgerFailure(cause) {
+    cloudSyncRetryAtRef.current = Date.now() + cloudLedgerRetryDelay(cause);
+    setCloudLedgerStatus(cloudLedgerFailureState(cause));
+  }
+
+  async function refreshSettlements(targetLeague = '', { force = false } = {}) {
+    if (!force && !cloudLedgerAutomaticRefreshAllowed({
+      storageReady,
+      tab,
+      visibilityState: document.visibilityState,
+      busy: cloudSyncBusyRef.current,
+      now: Date.now(),
+      retryAt: cloudSyncRetryAtRef.current,
+    })) return;
+    if (cloudSyncBusyRef.current) return;
+    cloudSyncBusyRef.current = true;
     try {
+      const migrationComplete = cloudBetMigrationComplete();
       const data = await requestJSON('/api/bets', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settleOpen', league: targetLeague, limit: 500 }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(migrationComplete
+          ? { action: 'settleOpen', league: targetLeague, limit: 500 }
+          : { action: 'merge', bets: migrateLegacyLocalBets(betsRef.current) }),
       }, 120000);
       if (Array.isArray(data.bets)) {
+        if (!migrationComplete) markCloudBetMigrationComplete();
         betsRef.current = data.bets;
         setBets(data.bets);
         setCalibrationStatus(data.calibration || null);
+        cloudSyncRetryAtRef.current = 0;
+        setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
       }
-    } catch {
+    } catch (cause) {
+      reportCloudLedgerFailure(cause);
       // A temporary result-provider failure must not erase or rewrite the ledger.
     } finally {
-      settlementBusyRef.current = false;
+      cloudSyncBusyRef.current = false;
     }
   }
 
@@ -989,8 +1050,9 @@ export default function Home() {
       setCalibrationStatus(data.calibration || null);
     }).then(() => {
       cloudSyncRetryAtRef.current = 0;
-    }).catch(() => {
-      cloudSyncRetryAtRef.current = Date.now() + CLOUD_LEDGER_FAILURE_BACKOFF_MS;
+      setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
+    }).catch(cause => {
+      reportCloudLedgerFailure(cause);
     }).finally(() => { cloudSyncBusyRef.current = false; });
   }, []);
   useEffect(() => {
@@ -998,37 +1060,12 @@ export default function Home() {
     if (storageReady) saveCompactStore({ settings, bets, activeLeague: league });
   }, [settings, bets, league, storageReady]);
   useEffect(() => {
-    if (!storageReady) return undefined;
-    const syncCloudBets = () => {
-      if (cloudSyncBusyRef.current || Date.now() < cloudSyncRetryAtRef.current) return;
-      cloudSyncBusyRef.current = true;
-      const migrationComplete = cloudBetMigrationComplete();
-      requestJSON(`/api/bets${migrationComplete ? `?t=${Date.now()}` : ''}`, migrationComplete ? {} : {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: migrateLegacyLocalBets(betsRef.current) }),
-      }, 20000)
-        .then(data => {
-          if (!Array.isArray(data.bets)) return;
-          if (!migrationComplete) markCloudBetMigrationComplete();
-          betsRef.current = data.bets;
-          setBets(data.bets);
-          setCalibrationStatus(data.calibration || null);
-          cloudSyncRetryAtRef.current = 0;
-        })
-        .catch(() => {
-          cloudSyncRetryAtRef.current = Date.now() + CLOUD_LEDGER_FAILURE_BACKOFF_MS;
-        })
-        .finally(() => { cloudSyncBusyRef.current = false; });
-    };
-    const onVisible = () => { if (document.visibilityState === 'visible') syncCloudBets(); };
-    const timer = window.setInterval(syncCloudBets, 15000);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
-  }, [storageReady]);
-  useEffect(() => {
     if (!storageReady || tab !== 'bets') return undefined;
     refreshSettlements('');
-    const timer = window.setInterval(() => refreshSettlements(''), 10 * 60 * 1000);
-    return () => window.clearInterval(timer);
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshSettlements(''); };
+    const timer = window.setInterval(() => refreshSettlements(''), CLOUD_LEDGER_VISIBLE_REFRESH_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [storageReady, tab, league]);
   useEffect(() => {
     currentDateRef.current = date;
@@ -1715,9 +1752,16 @@ export default function Home() {
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
+      cloudSyncRetryAtRef.current = 0;
+      setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
       setError('');
       setNotice(`已雲端記錄實際下注：${translateTeamText(row.pick)}｜${Number(row.water).toFixed(3)}｜${Number(settings.unitValue).toLocaleString()}元`);
-    } catch (cause) { setError(cause?.message || '雲端下注紀錄更新失敗'); }
+    } catch (cause) {
+      if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
+        reportCloudLedgerFailure(cause);
+      }
+      setError(cause?.message || '雲端下注紀錄更新失敗');
+    }
   }
 
   function selectLeague(value) {
@@ -1805,7 +1849,7 @@ export default function Home() {
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
 
-    {tab === 'bets' && <BetLedgerDashboard bets={bets} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements}/>}
+    {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements}/>}
 
     {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>每場正反方向、讓分大小、全場與上半場共用一份PIT凍結聯合比分分布；Tai888只提供待評估的成交盤口與水位，不改寫模型概率。所有可計算方向都先顯示模型EV（W）與穩健EV（R）；Tai888差距、外部同約、QA、分數及長期驗證只影響排名與正式下注資格。尚未完成locked OOS與forward驗證前，正式推薦與Unit持續停用。此金額只供實際下注帳本紀錄，不是模型Unit建議；帳本依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
