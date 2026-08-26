@@ -312,7 +312,7 @@ function markCloudBetMigrationComplete() {
   catch {}
 }
 
-async function requestJSON(url, options = {}, timeoutMs = 180000) {
+async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplicationFailure = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -321,7 +321,7 @@ async function requestJSON(url, options = {}, timeoutMs = 180000) {
     let data;
     try { data = JSON.parse(text); }
     catch { throw new Error(`伺服器回傳格式錯誤（${response.status}）`); }
-    if (!response.ok || data.ok === false) {
+    if (!response.ok || (data.ok === false && !allowApplicationFailure)) {
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
       error.code = data.code || '';
@@ -1098,7 +1098,7 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    requestJSON('/api/health', {}, 20000).then(setHealth).catch(() => setHealth(null));
+    requestJSON('/api/health', {}, 20000, { allowApplicationFailure: true }).then(setHealth).catch(() => setHealth(null));
   }, []);
   useEffect(() => {
     if (!readerEnabled || !analysisEnabled) return undefined;

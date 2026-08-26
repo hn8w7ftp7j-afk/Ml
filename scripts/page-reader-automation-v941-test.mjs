@@ -17,13 +17,14 @@ mustMatch(/全部方向EV/, 'ranking tab must identify the all-direction EV outp
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.1.1', 'package/release identity must match the V11.1.1 UI');
-assert.equal(packageLock.version, '11.1.1', 'package-lock release identity must match V11.1.1');
-assert.equal(packageLock.packages?.['']?.version, '11.1.1', 'root lockfile package must match V11.1.1');
-assert.equal(APP_VERSION, '11.1.1');
+assert.equal(packageJson.version, '11.1.2', 'package/release identity must match the V11.1.2 UI');
+assert.equal(packageLock.version, '11.1.2', 'package-lock release identity must match V11.1.2');
+assert.equal(packageLock.packages?.['']?.version, '11.1.2', 'root lockfile package must match V11.1.2');
+assert.equal(APP_VERSION, '11.1.2');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
+assert.match(page, /requestJSON\('\/api\/health', \{\}, 20000, \{ allowApplicationFailure: true \}\)/, 'health readiness false must remain visible instead of being mislabeled as a transport failure');
 assert.match(healthRoute, /databaseConfigured = analysisPitDatabaseConfigured\(\)/, 'health readiness must use the same PIT database contract as analysis persistence');
 assert.match(healthRoute, /ready,/, 'health must expose readiness to the UI');
 assert.match(healthRoute, /readinessReasons,/, 'health must expose actionable readiness reasons to the UI');
