@@ -98,6 +98,7 @@ assert.match(route, /PIT_EVIDENCE_REQUIRED/, 'PIT缺失必須回明確fail-close
 assert.doesNotMatch(route, /action === 'delete'/);
 assert.doesNotMatch(route, /action === 'clearLeague'/);
 assert.match(route, /action === 'settleOpen'/);
+assert.match(route, /settlePendingAnalysisDirections/, '自動結算必須覆蓋所有CALCULATED分析方向，不只是真實下注');
 
 const mergeFunction = store.match(/export async function mergeCloudBets\(values\) \{([\s\S]*?)\n\}\n\nexport async function deleteCloudBet/)?.[1] || '';
 assert.ok(mergeFunction, 'mergeCloudBets implementation missing');

@@ -10,7 +10,7 @@ import {
   requestedLeagueId,
 } from '../lib/leagues.js';
 
-assert.equal(LEAGUE_REGISTRY_VERSION, 'SPORTS-LEAGUE-REGISTRY-2026-08-v3.0.0');
+assert.equal(LEAGUE_REGISTRY_VERSION, 'SPORTS-LEAGUE-REGISTRY-2026-08-v3.1.0');
 assert.deepEqual(LEAGUE_IDS, ['MLB', 'NPB', 'KBO', 'CPBL']);
 assert.equal(normalizeLeagueId('npb'), 'NPB');
 assert.equal(normalizeLeagueId('unknown'), 'MLB');
@@ -49,6 +49,14 @@ for (const id of ['NPB', 'KBO', 'CPBL']) {
   const item = leagueConfig(id);
   assert.match(item.scheduleProvider, new RegExp(`^${id}_OFFICIAL`));
   assert.match(item.modelFamily, new RegExp(`^${id}_SHADOW_`));
+  assert.equal(item.analysisReadiness.status, 'DISABLED_FAIL_CLOSED');
+  assert.equal(item.analysisReadiness.canBuildDistribution, false);
+  assert.equal(item.analysisReadiness.canCalculateModelEvW, false);
+  assert.equal(item.analysisReadiness.mlbFallbackAllowed, false);
+  assert.equal(item.analysisReadiness.tai888ProbabilityInputAllowed, false);
+  assert.ok(item.analysisReadiness.displayAnalysisBlockers.some(row => row.code === 'INDEPENDENT_JOINT_DISTRIBUTION_ENGINE_NOT_RELEASED'));
+  assert.ok(item.analysisReadiness.settlementBlockers.some(row => row.code === 'FIRST5_OFFICIAL_RESULT_FEED_NOT_CONNECTED'));
+  assert.ok(item.analysisReadiness.formalRecommendationBlockers.every(row => !row.blocks.includes('MODEL_EV_W')));
 }
 
 const publicRows = publicLeagueRegistry();
@@ -62,6 +70,7 @@ assert.equal(publicRows.find(row => row.id === 'KBO').capabilities.analysis, fal
 for (const id of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(publicRows.find(row => row.id === id).capabilities.ranking, false);
   assert.equal(publicRows.find(row => row.id === id).capabilities.bets, true);
+  assert.equal(publicRows.find(row => row.id === id).analysisReadiness.leagueId, id);
 }
 assert.equal(publicRows.every(row => row.capabilities.bets === true), true, 'Shadow只停用模型推薦，不得停用使用者真實下注帳本');
 assert.equal(publicRows.every(row => row.capabilities.formalRecommendations === false), true);

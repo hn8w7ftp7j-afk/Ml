@@ -4,16 +4,19 @@ import {
   asianLeagueConfig,
   buildAsianGameContext,
   fetchAsianFinalResult,
+  normalizeAsianFinalResult,
   parseCpblSchedulePayload,
   parseKboOfficialSchedulePayload,
   parseKboScheduleHtml,
   parseNpbMonthHtml,
   parseNpbScheduleHtml,
 } from '../lib/asian-baseball.js';
+import { normalizeMlbFinalResult } from '../lib/mlb.js';
 import {
   fetchLeagueTaipeiSlate,
   filterLeaguePrestartGames,
   leagueAnalysisContract,
+  validateLeagueFinalResult,
   validateLeagueScheduleSubset,
 } from '../lib/league-provider.js';
 
@@ -145,6 +148,9 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(contract.executable, false);
   assert.notEqual(config.modelVersion, leagueAnalysisContract('MLB').modelVersion);
   assert.equal(config.mlbFallbackAllowed, false);
+  assert.equal(config.releaseReadiness.leagueId, league);
+  assert.equal(config.releaseReadiness.canBuildDistribution, false);
+  assert.equal(config.releaseReadiness.mlbFallbackAllowed, false);
   assert.equal(config.featureContract.starter.teamRunsAllowedProxyAllowed, false);
   assert.equal(config.featureContract.bullpen.teamRunsAllowedProxyAllowed, false);
   assert.equal(config.featureContract.lineup.emptyPlayersQualify, false);
@@ -350,4 +356,187 @@ await assert.rejects(
   error => error?.code === 'RESULT_DATE_REQUIRED',
 );
 
-console.log('Asian official fixture parsers, safe identity, doubleheader and shadow context PASS');
+const scoreOnlyNpbDay = parseNpbScheduleHtml(npbDay
+  .replace('<div class="score_text score_left">&nbsp;</div>', '<div class="score_text score_left">2</div>')
+  .replace('<div class="score_text score_right">&nbsp;</div>', '<div class="score_text score_right">3</div>'), '2099-08-18');
+assert.equal(scoreOnlyNpbDay[0].statusCode, 'S', 'NPB 日程只有即時比分、沒有明確完賽狀態時不得自動視為終場');
+assert.equal(scoreOnlyNpbDay[0].awayScore, null);
+assert.equal(scoreOnlyNpbDay[0].homeScore, null);
+
+const liveKbo = parseKboOfficialSchedulePayload({ rows: [{ row: [
+  { Text: '08.18(화)', Class: 'day' }, { Text: '<b>18:00</b>', Class: 'time' },
+  { Text: '<span>LG</span><em><span class="win">3</span><span>vs</span><span class="lose">1</span></em><span>두산</span>', Class: 'play' },
+  { Text: "<a href='?gameId=20990818LGOB9&section=RELAY'>중계</a>", Class: 'relay' },
+  { Text: '' }, { Text: '' }, { Text: '잠실' }, { Text: '5회말' },
+] }] }, 2099, 8);
+assert.equal(liveKbo[0].statusCode, 'I', 'KBO 진행中比分不得因 win/lose CSS 類別被誤判為終場');
+assert.equal(liveKbo[0].awayScore, null);
+assert.equal(liveKbo[0].homeScore, null);
+
+const mlbGamePk = 990001;
+const mlbInnings = [
+  [1, 0], [0, 1], [2, 0], [0, 0], [0, 0],
+  [1, 0], [0, 1], [0, 1], [0, 0],
+].map(([awayRuns, homeRuns], index) => ({ num: index + 1, away: { runs: awayRuns }, home: { runs: homeRuns } }));
+const mlbFeed = {
+  gamePk: mlbGamePk,
+  metaData: { timeStamp: '20990818123000' },
+  gameData: {
+    game: { pk: mlbGamePk, gameNumber: 2, scheduledInnings: 9 },
+    datetime: { officialDate: '2099-08-18' },
+    status: { abstractGameState: 'Final', detailedState: 'Final' },
+    teams: {
+      away: { id: 147, name: 'New York Yankees' },
+      home: { id: 141, name: 'Toronto Blue Jays' },
+    },
+  },
+  liveData: { linescore: { teams: { away: { runs: 4 }, home: { runs: 3 } }, innings: mlbInnings } },
+};
+const mlbResult = normalizeMlbFinalResult(mlbFeed, mlbGamePk);
+assert.deepEqual({
+  league: mlbResult.league,
+  gamePk: mlbResult.gamePk,
+  gameNumber: mlbResult.gameNumber,
+  officialDate: mlbResult.officialDate,
+  awayTeamId: mlbResult.awayTeamId,
+  homeTeamId: mlbResult.homeTeamId,
+  away: mlbResult.away,
+  home: mlbResult.home,
+  innings: mlbResult.innings,
+  scheduledInnings: mlbResult.scheduledInnings,
+  first5Complete: mlbResult.first5Complete,
+}, {
+  league: 'MLB', gamePk: mlbGamePk, gameNumber: 2, officialDate: '2099-08-18',
+  awayTeamId: 147, homeTeamId: 141, away: 'New York Yankees', home: 'Toronto Blue Jays',
+  innings: 9, scheduledInnings: 9, first5Complete: true,
+});
+assert.equal(mlbResult.awayFirst5, 3);
+assert.equal(mlbResult.homeFirst5, 1);
+assert.equal(mlbResult.provider, 'MLB_STATS_API_LIVE_FEED');
+assert.match(mlbResult.sourceRecord, new RegExp(String(mlbGamePk)));
+assert.equal(validateLeagueFinalResult('MLB', mlbGamePk, mlbResult, {
+  date: '2099-08-18',
+  game: { gamePk: mlbGamePk, gameNumber: 2, officialDate: '2099-08-18', awayTeamId: 147, homeTeamId: 141 },
+}).final, true);
+
+const missingMlbFirst5Feed = structuredClone(mlbFeed);
+delete missingMlbFirst5Feed.liveData.linescore.innings[2].home.runs;
+const missingMlbFirst5 = normalizeMlbFinalResult(missingMlbFirst5Feed, mlbGamePk);
+assert.equal(missingMlbFirst5.final, true, '缺 F5 不得破壞可信全場終場');
+assert.equal(missingMlbFirst5.first5Complete, false, '任一前五局半局缺失必須 fail closed');
+assert.equal(missingMlbFirst5.awayFirst5, null);
+assert.equal(missingMlbFirst5.homeFirst5, null);
+assert.equal(validateLeagueFinalResult('MLB', mlbGamePk, missingMlbFirst5).first5Complete, false);
+
+assert.throws(
+  () => normalizeMlbFinalResult(mlbFeed, mlbGamePk + 1),
+  error => error?.code === 'OFFICIAL_IDENTITY_MISMATCH',
+  'MLB feed 回傳錯場不得被請求 gamePk 接受',
+);
+const shortMlbFinal = structuredClone(mlbFeed);
+shortMlbFinal.liveData.linescore.innings = shortMlbFinal.liveData.linescore.innings.slice(0, 5);
+assert.throws(
+  () => normalizeMlbFinalResult(shortMlbFinal, mlbGamePk),
+  error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'MLB 異常短局完賽不得自動結算',
+);
+const tiedMlbFinal = structuredClone(mlbFeed);
+tiedMlbFinal.liveData.linescore.teams.home.runs = 4;
+assert.throws(
+  () => normalizeMlbFinalResult(tiedMlbFinal, mlbGamePk),
+  error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'MLB Final 和局不符合聯盟規則',
+);
+const invalidMlbDate = structuredClone(mlbFeed);
+invalidMlbDate.gameData.datetime.officialDate = '2099-02-30';
+assert.throws(
+  () => normalizeMlbFinalResult(invalidMlbDate, mlbGamePk),
+  error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'MLB 不得接受只符合字串格式但不存在的日期',
+);
+const duplicateMlbTeam = structuredClone(mlbFeed);
+duplicateMlbTeam.gameData.teams.home.id = duplicateMlbTeam.gameData.teams.away.id;
+assert.throws(
+  () => normalizeMlbFinalResult(duplicateMlbTeam, mlbGamePk),
+  error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'MLB 主客隊 ID 相同時不得結算',
+);
+
+const npbFinalGame = {
+  ...npb[0], status: '比賽結束', statusEnglish: 'Final', statusCode: 'F',
+  awayScore: 4, homeScore: 4, innings: 12,
+};
+const npbResult = normalizeAsianFinalResult('NPB', npbFinalGame.gamePk, '2099-08-18', npbFinalGame);
+const kboFinalGame = {
+  ...officialKbo[1], status: '比賽結束', statusEnglish: '경기종료', statusCode: 'F',
+  awayScore: 6, homeScore: 5, innings: 10,
+};
+const kboResult = normalizeAsianFinalResult('KBO', kboFinalGame.gamePk, '2099-08-18', kboFinalGame);
+const cpblFinalGame = cpbl.find(game => game.statusCode === 'F');
+const cpblResult = normalizeAsianFinalResult('CPBL', cpblFinalGame.gamePk, '2099-08-18', cpblFinalGame);
+
+for (const result of [npbResult, kboResult, cpblResult]) {
+  assert.ok(['NPB', 'KBO', 'CPBL'].includes(result.league));
+  assert.equal(Number.isSafeInteger(result.gamePk), true);
+  assert.equal(Number.isSafeInteger(result.gameNumber), true);
+  assert.equal(result.officialDate, '2099-08-18');
+  assert.ok(result.awayTeamId > 0 && result.homeTeamId > 0);
+  assert.ok(result.away && result.home);
+  assert.ok(result.provider && result.sourceRecord);
+  assert.match(result.sourceRecord, new RegExp(result.providerGameId));
+  assert.ok(result.innings >= 9 && result.innings <= 12);
+  assert.equal(result.first5Complete, false, `${result.league} 尚無官方 F5 feed 時必須 fail closed`);
+  assert.equal(result.awayFirst5, null);
+  assert.equal(result.homeFirst5, null);
+  assert.equal(validateLeagueFinalResult(result.league, result.gamePk, result, {
+    date: result.officialDate,
+    game: {
+      gamePk: result.gamePk, gameNumber: result.gameNumber, officialDate: result.officialDate,
+      awayTeamId: result.awayTeamId, homeTeamId: result.homeTeamId,
+    },
+  }).final, true);
+}
+assert.equal(npbResult.awayRuns, npbResult.homeRuns, 'NPB 只允許已發布規則上限局數的和局');
+assert.equal(npbResult.innings, asianLeagueConfig('NPB').rules.extraInningsLimit);
+assert.equal(kboResult.gameNumber, 2, 'KBO 雙重賽 gameNumber 必須保留至正式賽果');
+
+assert.throws(
+  () => normalizeAsianFinalResult('NPB', npbFinalGame.gamePk, '2099-08-18', { ...npbFinalGame, innings: null }),
+  error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'NPB 完賽缺局數不得只憑總比分自動結算',
+);
+assert.throws(
+  () => normalizeAsianFinalResult('KBO', kboFinalGame.gamePk, '2099-08-18', { ...kboFinalGame, awayScore: 3, homeScore: 3, innings: 11 }),
+  error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'KBO 和局未達已發布上限局數必須 fail closed',
+);
+assert.throws(
+  () => normalizeAsianFinalResult('CPBL', cpblFinalGame.gamePk, '2099-08-18', { ...cpblFinalGame, innings: 13 }),
+  error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'CPBL 超出已發布延長局上限必須 fail closed',
+);
+assert.throws(
+  () => normalizeAsianFinalResult('NPB', npbFinalGame.gamePk + 1, '2099-08-18', npbFinalGame),
+  error => error?.code === 'OFFICIAL_IDENTITY_MISMATCH',
+);
+assert.throws(
+  () => normalizeAsianFinalResult('NPB', npbFinalGame.gamePk, '2099-08-18', { ...npbFinalGame, league: 'KBO', leagueId: 'KBO' }),
+  error => error?.code === 'OFFICIAL_IDENTITY_MISMATCH',
+);
+assert.throws(
+  () => validateLeagueFinalResult('KBO', kboResult.gamePk, kboResult, {
+    date: kboResult.officialDate,
+    game: { ...kboFinalGame, awayTeamId: kboResult.awayTeamId + 1 },
+  }),
+  error => error?.code === 'OFFICIAL_IDENTITY_MISMATCH',
+  '保存快照與賽果隊伍不一致不得結算',
+);
+assert.throws(
+  () => validateLeagueFinalResult('NPB', mlbResult.gamePk, mlbResult),
+  error => error?.code === 'OFFICIAL_IDENTITY_MISMATCH',
+  '亞洲聯盟正式賽果不得回退或接受 MLB provider',
+);
+assert.equal(new Set(['NPB', 'KBO', 'CPBL'].map(league => asianLeagueConfig(league).rulesVersion)).size, 3);
+assert.equal(['NPB', 'KBO', 'CPBL'].every(league => asianLeagueConfig(league).mlbFallbackAllowed === false), true);
+
+console.log('Four-league official final-result identity, F5 fail-closed, abnormal-finish and independent-rule provider tests PASS');

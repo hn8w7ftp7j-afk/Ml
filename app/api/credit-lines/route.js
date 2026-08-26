@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '../../../lib/reader-store-v2.js';
 import { readerSnapshotIsComplete, TAI888_READER_PARSER_VERSION } from '../../../lib/tai888-reader-parser-v2.js';
-import { signMarketGames } from '../../../lib/market-integrity-v1.js';
-import { readerGameMarketContentHash } from '../../../lib/reader-market-revision-v110.js';
+import { signMarketGames, signReaderProvenance } from '../../../lib/market-integrity-v1.js';
+import {
+  readerGameMarketContentHash,
+  readerUnopenedGameMarketContentHash,
+} from '../../../lib/reader-market-revision-v110.js';
+import { MARKET_ORDER } from '../../../lib/markets.js';
 import {
   fetchLeagueTaipeiSlate,
   filterLeaguePrestartGames,
@@ -23,6 +27,58 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+function unopenedMarketCoverage() {
+  return {
+    openMarkets: 0,
+    totalMarkets: MARKET_ORDER.length,
+    directionCount: 0,
+    availableMarkets: [],
+    unavailableMarkets: [...MARKET_ORDER],
+    blockedMarkets: [],
+    missingMarkets: [...MARKET_ORDER],
+  };
+}
+
+function readerCoverageIntegrityRows(row, lineAsOf) {
+  const available = new Set(Array.isArray(row?.marketCoverage?.availableMarkets)
+    ? row.marketCoverage.availableMarkets
+    : []);
+  return (Array.isArray(row?.marketCoverage?.blockedMarkets) ? row.marketCoverage.blockedMarkets : [])
+    .filter(market => MARKET_ORDER.includes(market) && !available.has(market))
+    .map(market => ({
+      market,
+      pick: '',
+      water: null,
+      waterEstimated: false,
+      waterMissing: true,
+      confidence: 1,
+      sourceType: 'ACTUAL_TW_CREDIT',
+      sourceLabel: 'Tai888 Reader 自動信用盤',
+      provider: 'TAI888_READER_AUTO',
+      lineAsOf,
+      executable: false,
+      marketVerification: null,
+      rawText: '',
+      referenceSide: '',
+      sourceTemplateVersion: 'TAI888-DOM-COVERAGE-BLOCK-v1.0.0',
+      authorizationStatus: 'SERVER_ATTESTED_READER_COVERAGE_BLOCK',
+      integrityOrigin: 'SERVER_SIGNED_READER_COVERAGE',
+      integrityError: `Reader coverage BLOCKED：${market}盤口欄位不完整、重複或無法辨識，禁止當成尚未開盤`,
+    }));
+}
+
+async function signedReaderProvenance(league, game, readerSnapshot, marketStatus, readerGameMarketHash) {
+  return signReaderProvenance(league, game, {
+    readerVersion: readerSnapshot.readerVersion,
+    payloadHash: readerSnapshot.payloadHash,
+    rawBoardHash: readerSnapshot.rawBoardHash,
+    boardDate: readerSnapshot.boardDate,
+    lineAsOf: readerSnapshot.pageActivityAt,
+    marketStatus,
+    readerGameMarketHash,
+  });
+}
 
 function sanitizeSchedule(rows, league) {
   return (Array.isArray(rows) ? rows : []).slice(0, 40).map(game => ({
@@ -163,27 +219,68 @@ export async function POST(request) {
         game: officialByPk.get(Number(row.gamePk)),
         source: { ...row.source, observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt },
       }));
-      const requestedOpenCount = schedule.filter(game => (
-        !new Set((readerSnapshot.unopenedGames || []).map(row => Number(row.gamePk))).has(Number(game.gamePk))
-      )).length;
-      const readerEvidenceGames = verifiedReaderGames.map(row => ({
-        ...row,
-        markets: row.markets.map(market => ({
-          ...market,
-          readerGameMarketHash: readerGameMarketContentHash(row.markets),
-          readerPayloadHash: readerSnapshot.payloadHash,
-          readerRawBoardHash: readerSnapshot.rawBoardHash,
-          readerBoardDate: readerSnapshot.boardDate,
-        })),
+      const requestedUnopenedRows = (readerSnapshot.unopenedGames || [])
+        .filter(row => requestedGamePks.has(Number(row.gamePk)));
+      const requestedOpenCount = schedule.length - requestedUnopenedRows.length;
+      const readerEvidenceGames = await Promise.all(verifiedReaderGames.map(async row => {
+        const evidenceMarkets = [
+          ...row.markets,
+          ...readerCoverageIntegrityRows(row, readerSnapshot.pageActivityAt),
+        ];
+        const readerGameMarketHash = readerGameMarketContentHash(evidenceMarkets);
+        return {
+          ...row,
+          markets: evidenceMarkets.map(market => ({
+            ...market,
+            readerGameMarketHash,
+            readerVersion: readerSnapshot.readerVersion,
+            readerPayloadHash: readerSnapshot.payloadHash,
+            readerRawBoardHash: readerSnapshot.rawBoardHash,
+            readerBoardDate: readerSnapshot.boardDate,
+          })),
+          readerProvenance: await signedReaderProvenance(
+            league,
+            row.game,
+            readerSnapshot,
+            'OPEN',
+            readerGameMarketHash,
+          ),
+        };
       }));
       const games = readerEvidenceGames.length === requestedOpenCount
         ? await signMarketGames(league, readerEvidenceGames)
         : [];
-      if (games.length === requestedOpenCount) {
+      const unopenedGames = await Promise.all(requestedUnopenedRows.map(async row => {
+        const game = officialByPk.get(Number(row.gamePk));
+        const readerGameMarketHash = readerUnopenedGameMarketContentHash({ league, game, readerSnapshot });
+        return {
+          ...row,
+          league,
+          gamePk: Number(row.gamePk),
+          game,
+          source: {
+            ...row.source,
+            observedAt: readerSnapshot.observedAt,
+            receivedAt: readerSnapshot.receivedAt,
+          },
+          marketStatus: 'locked',
+          markets: [],
+          marketCoverage: row.marketCoverage || unopenedMarketCoverage(),
+          readerProvenance: await signedReaderProvenance(
+            league,
+            game,
+            readerSnapshot,
+            'UNOPENED',
+            readerGameMarketHash,
+          ),
+        };
+      }));
+      if (games.length === requestedOpenCount && games.length + unopenedGames.length === schedule.length) {
         return NextResponse.json({
           ok: true, league, configured: true, blocked: false, readerFresh: true,
           version: TAI888_READER_PARSER_VERSION, provider: 'TAI888_READER_AUTO',
           label: 'Tai888 Reader 自動信用盤', games,
+          readerVersion: readerSnapshot.readerVersion,
           payloadHash: readerSnapshot.payloadHash, boardDate: readerSnapshot.boardDate,
           rawBoardHash: readerSnapshot.rawBoardHash,
           observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt,
@@ -192,10 +289,8 @@ export async function POST(request) {
           marketCount: readerSnapshot.marketCount || 0,
           directionCount: readerSnapshot.directionCount || 0,
           partialGameCount: readerSnapshot.partialGameCount || 0,
-          unopenedGameCount: schedule.length - games.length,
-          unopenedGames: (readerSnapshot.unopenedGames || [])
-            .filter(row => requestedGamePks.has(Number(row.gamePk)))
-            .map(row => ({ gamePk: row.gamePk, marketStatus: 'locked' })),
+          unopenedGameCount: unopenedGames.length,
+          unopenedGames,
           scheduleGameCount: schedule.length, unmatched: readerSnapshot.unmatched || [],
           readerStatus: readerState, fetchedAt: new Date().toISOString(), cache: 'READER_RUNTIME_CACHE',
         }, { headers: { 'Cache-Control': 'no-store' } });
@@ -209,6 +304,7 @@ export async function POST(request) {
       blocked: true,
       readerFresh: readerState.fresh,
       version: TAI888_READER_PARSER_VERSION,
+      readerVersion: readerSnapshot?.readerVersion || null,
       provider: 'TAI888_READER_AUTO',
       label: 'Tai888 Reader 自動信用盤',
       games: [],
@@ -216,6 +312,7 @@ export async function POST(request) {
         ? `Tai888 Reader 盤面不是目前官方完整賽前場次，已停止分析。請刷新 Tai888 ${config.shortLabel}盤面後重新同步。`
         : readerState.message || 'Tai888 Reader 尚未同步新鮮完整盤面，已停止分析。',
       payloadHash: readerSnapshot?.payloadHash || null,
+      rawBoardHash: readerSnapshot?.rawBoardHash || null,
       boardDate: readerSnapshot?.boardDate || date,
       observedAt: readerSnapshot?.observedAt || null,
       receivedAt: readerSnapshot?.receivedAt || null,

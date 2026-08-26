@@ -129,6 +129,10 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(context.executable, false);
   assert.equal(context.provider.mlbFallbackAllowed, false);
   assert.equal(context.asianProxyAudit.mlbFallbackUsed, false);
+  assert.equal(context.analysisReadiness.coreInputsReady, true);
+  assert.equal(context.analysisReadiness.distributionEngineReady, false);
+  assert.equal(context.analysisReadiness.status, 'BLOCKED_ENGINE_UNRELEASED');
+  assert.deepEqual(context.analysisReadiness.blockers.map(row => row.code), ['INDEPENDENT_JOINT_DISTRIBUTION_ENGINE_NOT_RELEASED']);
   assert.throws(
     () => buildDistributionSnapshot({ context }),
     error => error?.code === 'LEAGUE_DISTRIBUTION_ENGINE_NOT_RELEASED' && String(error?.message || '').includes('禁止回退'),
@@ -147,6 +151,9 @@ assert.equal(namedOnly.away.starter.identityConfirmed, true);
 assert.equal(namedOnly.away.starter.performanceAvailable, false);
 assert.equal(namedOnly.away.starter.era, null);
 assert.equal(namedOnly.dataGateV10.passedForShadowScore, false);
+assert.equal(namedOnly.analysisReadiness.status, 'BLOCKED_UPSTREAM_AND_ENGINE');
+assert.ok(namedOnly.dataGateV10.blockerDetails.every(row => typeof row.code === 'string' && row.code.length > 0));
+assert.ok(namedOnly.dataGateV10.rows.every(row => typeof row.ready === 'boolean'));
 
 const disguisedTeamRa = featuresFor('NPB');
 disguisedTeamRa.away.starter.performanceSource = 'OFFICIAL_TEAM_RESULTS_TEAM_RATE_PRIOR';

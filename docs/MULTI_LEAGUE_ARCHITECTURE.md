@@ -4,25 +4,75 @@ The website is one authenticated product with four isolated league modules:
 MLB, NPB, KBO and CPBL.
 
 `lib/leagues.js` is the authoritative capability registry. A league may expose
-schedule, Reader, analysis and ranking only after each dependency has passed
-its own fixture, identity, time, market-completeness and model-calibration
-tests. A disabled capability must fail closed in the UI and API; the system
-must never reuse MLB data, team identities, schedule adapters, Reader parsing
-or model probabilities for another league.
+schedule, Reader, analysis, ranking and formal recommendations only after each
+dependency has passed its own identity, point-in-time data, market coverage,
+league-rule, joint-distribution and replay tests. Disabled capabilities fail
+closed in both UI and API. No league may reuse another league's schedule,
+team identities, Reader namespace, cache entries, run parameters or model
+probabilities.
 
-MLB is the only formal, bet-eligible module. NPB, KBO and CPBL are enabled in
-Production as `EXPERIMENTAL_SHADOW` modules: each uses its own official schedule
-adapter, Tai888 aliases, Reader namespace, model configuration and version
-family, and may display the complete four-market/eight-direction diagnostic
-analysis and ranking. The server always forces their analyses to
-`executable=false`, `betEligible=false` and `portfolio=[]`; they cannot create
-bet records or fall back to an MLB schedule, identity, cache or model snapshot.
+## Current Production state
 
-Moving any shadow league to formal, bet-eligible status requires:
+MLB is the only league whose independent joint-score distribution is released.
+Its W/R outputs remain uncalibrated shadow diagnostics: the actual-bet ledger is
+available, but `formalRecommendations=false`, and score/ranking qualification is
+downstream from the raw model EV shown as W.
 
-1. an authoritative schedule adapter with Taipei-date and game-identity tests;
-2. Tai888 DOM fixtures for four markets and eight directions;
-3. league-specific team aliases, doubleheader handling and start-time gates;
-4. a separate model/version family plus an out-of-sample calibration report;
-5. Reader snapshot keys namespaced by league and date;
-6. end-to-end tests proving that no payload can cross league boundaries.
+NPB, KBO and CPBL currently expose official schedule, league-isolated Tai888
+Reader data and the actual-bet ledger. Their analysis capability is
+`DISABLED_FAIL_CLOSED`; they must not display W, R or a score until their own
+upstream data and joint-score distribution can be built credibly. The API
+returns `LEAGUE_NOT_READY` with machine-readable blockers.
+
+Common Asian-league blockers are:
+
+- Production PIT team-strength, independent starter-performance, credible
+  lineup, pure-relief bullpen and recognized-park-factor pipelines;
+- a released league-specific joint distribution linking first-five and full
+  game scores;
+- an official first-five result feed for automatic settlement.
+
+For result settlement, CPBL full-game results are accepted only when the
+official innings field is complete. NPB and KBO currently expose final scores
+without a trustworthy final-innings field, so their full-game auto-settlement
+also remains fail closed. All three Asian providers lack an official first-five
+inning feed.
+
+KBO additionally requires official starter handedness, weather or dome state,
+and doubleheader bullpen recomputation. CPBL additionally requires verified
+starter identity/handedness and a PIT snapshot of foreign-player constraints.
+NPB must preserve its own DH/interleague, tie and extra-inning rules. None of
+these gaps may be filled with MLB defaults, neutral placeholders, recent team
+scores masquerading as pitcher skill, or probabilities inferred from Tai888.
+
+## Shared output boundary
+
+Once a league is enabled, shared presentation, settlement, persistence and QA
+code may be reused, but the league model remains independent. Every game owns
+one frozen joint score world and eight contractual slots: full-game runline
+home/away, full-game total over/under, first-five runline home/away, and
+first-five total over/under. Price-only repricing must retain the same
+distribution ID/hash; a core baseball-input change must create a new one.
+
+Tai888 supplies only the contract line and water used by the deterministic
+Taiwan-credit payoff tree. External markets are optional audit evidence. Neither
+source may calibrate, tilt or overwrite the score distribution, W or R.
+
+Moving any disabled league to analysis-enabled status requires:
+
+1. an authoritative schedule adapter with Taipei-date, doubleheader and game-
+   identity tests;
+2. Tai888 DOM fixtures covering four markets, eight directions, partial opening
+   and malformed/duplicate market isolation;
+3. league-specific PIT starter, lineup, pure bullpen, park and required context
+   pipelines with source timestamps;
+4. an independent first-five/full-game joint distribution and league-rule
+   tests, with no MLB fallback path;
+5. immutable eight-slot persistence, reprice replay and official-result
+   settlement tests;
+6. league-namespaced Reader, cache, database and API end-to-end tests.
+
+Formal recommendation or bet eligibility is a later release decision. It also
+requires locked out-of-sample and forward validation, but that validation gate
+does not suppress a mathematically valid W once an independent league model is
+released.

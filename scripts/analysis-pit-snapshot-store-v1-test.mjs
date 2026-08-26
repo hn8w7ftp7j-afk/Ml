@@ -98,6 +98,8 @@ assert.equal(asyncFirst.snapshotId, first.snapshotId, '非同步壓縮路徑不�
 assert.equal(asyncFirst.replayIdentityHash, first.replayIdentityHash, '非同步壓縮路徑必須完全可重播');
 assert.deepEqual(decodeAnalysisPitPayload(first.frozenContextPayload), context);
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).results[0].pick, '大8平');
+assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).directionSlots, [], '舊輸入仍必須有可重播的八方向槽位容器');
+assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).marketCoverage, null);
 assert.equal(decodeAnalysisPitPayload(first.distributionPayload).distributionHash, analysis.distributionHash);
 assert.equal(first.providerTimestamps.sources[0].provider, 'OFFICIAL');
 assert.equal(first.evidenceStatus, 'CURRENT_IMMUTABLE_PIT_CAPTURE');

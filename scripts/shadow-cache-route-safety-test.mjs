@@ -67,7 +67,8 @@ try {
   assert.equal(firstResponse.status, 409);
   assert.equal(first.code, 'LEAGUE_NOT_READY');
   assert.equal(first.league, 'NPB');
-  assert.match(first.error, /尚未完成|停止分析/);
+  assert.match(first.error, /尚無法可信建立獨立比分分布/);
+  assert.match(first.error, /fail-closed 停止模型EV/);
   assert.equal(providerCalls, callsBeforeAnalyze, '未發布的聯盟必須在任何官方核心資料、分布或評分工作前 fail closed');
 } finally {
   globalThis.fetch = originalFetch;

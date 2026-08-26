@@ -6,9 +6,10 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const RELEASE = path.join(ROOT, 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.1.13-KBO-TRADITIONAL-NAME-SAFE.zip';
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
+const ARCHIVE_NAME = `Tai888-Reader-v${manifest.version}-VERIFIED-RESCAN.zip`;
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
-const REPORT_NAME = 'Tai888-Reader-v2.1.13-VERIFICATION.md';
+const REPORT_NAME = `Tai888-Reader-v${manifest.version}-VERIFICATION.md`;
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
 const flags = new Map(process.argv.slice(2).map(argument => {
   const [name, ...rest] = argument.replace(/^--/, '').split('=');
@@ -30,7 +31,6 @@ const digest = createHash('sha256').update(bytes).digest('hex');
 const declared = fs.readFileSync(shaFile, 'utf8').trim().split(/\s+/)[0];
 assert.equal(declared, digest, 'SHA-256 sidecar does not match the archive');
 const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
 const testCount = String(packageJson.scripts.test || '').split(' && ').filter(Boolean).length;
 const archiveEntries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
@@ -38,7 +38,7 @@ const dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: ROOT
 const sourceRef = process.env.GITHUB_SHA || `${commit}${dirty ? '+working-tree' : ''}`;
 const generatedAt = new Date().toISOString();
 
-const report = `# Tai888 Reader 2.1.13 / Baseball EV 9.7.0 驗證報告
+const report = `# Tai888 Reader ${manifest.version_name} / Baseball EV ${packageJson.version} 驗證報告
 
 - 產生時間：${generatedAt}
 - 原始碼基線：\`${sourceRef}\`
@@ -54,7 +54,7 @@ const report = `# Tai888 Reader 2.1.13 / Baseball EV 9.7.0 驗證報告
 
 | Gate | 結果 | 範圍 |
 |---|---:|---|
-| 專案測試 | PASS | ${testCount} 支既有 script + Reader 2.1.13 A–J 專項，包含 KBO 真實五場與「鬥山熊」繁體別名、背景分頁存活、NPB 真實標題、跨聯盟 DOM、partial market、freshness isolation、trailing rerun、server/auth/integrity 與 UI 回歸 |
+| 專案測試 | PASS | ${testCount} 支主測試及 pre/post gates；Reader ${manifest.version} 回歸包含 KBO 真實五場與「鬥山熊」繁體別名、背景分頁存活、NPB 真實標題、跨聯盟 DOM、partial market、freshness isolation、server/auth/integrity 與 W-first 八方向 UI |
 | Production build | PASS | Next.js ${packageJson.dependencies.next} 正式建置 |
 | Production dependency audit | PASS | \`npm audit --omit=dev --audit-level=high\`，0 high/critical vulnerabilities |
 | Reader full-flow | PASS | Production route handlers + live MLB official slate：Pair → ingest → signed credit → FULL analyze → 同 hash heartbeat → signed PRICE_ONLY_REPRICE；四聯盟另由 deterministic fixture/unit gates 驗證 |
@@ -63,9 +63,9 @@ const report = `# Tai888 Reader 2.1.13 / Baseball EV 9.7.0 驗證報告
 
 ## 整合與來源判定
 
-- Reader 2.1.13 接受 Tai888 KBO 實際使用的「鬥山熊」繁體隊名，並以真實五場盤面回歸驗證不再漏場；同時保留 2.1.12 的背景分頁存活修正。
+- Reader ${manifest.version} 保留 Tai888 KBO 實際使用的「鬥山熊」繁體隊名與背景分頁存活修正，並以真實五場盤面回歸驗證不再漏場。
 - 本 ZIP 只取自目前 \`reader/\` 的固定 12 檔白名單；封裝器會把交付目錄內不同內容的舊 Tai888 ZIP 移至相鄰的 ignored quarantine 目錄。
-- MLB 保留正式分析相容性；NPB／KBO／CPBL 即使完整 ingest，網站分析仍由 server 強制鎖為 shadow、不可下注。
+- MLB 保留 W-first 影子分析；NPB／KBO／CPBL 即使完整 ingest，網站分析仍以 \`LEAGUE_NOT_READY\` fail closed，直到各自獨立資料與比分引擎發布。
 
 ## 主要安全邊界
 

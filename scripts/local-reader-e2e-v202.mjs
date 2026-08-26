@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { APP_VERSION } from '../lib/app-version.js';
 import { sha256 } from '../lib/snapshot-v9.js';
 import { canonicalReaderPayload } from '../reader/parser.js';
 
@@ -7,7 +9,7 @@ const APP_PASSWORD = process.env.APP_PASSWORD || 'local-app-password';
 const PAIR_PASSWORD = process.env.READER_PAIR_SECRET || 'local-reader-password';
 const EXTENSION_ORIGIN = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const LEAGUE = 'MLB';
-const READER_VERSION = '2.1.13';
+const READER_VERSION = JSON.parse(fs.readFileSync(new URL('../reader/manifest.json', import.meta.url), 'utf8')).version;
 
 const TEAM_CODE_BY_ID = Object.freeze({
   108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC', 113: 'CIN',
@@ -54,7 +56,7 @@ async function waitUntilReady() {
   for (let index = 0; index < 60; index += 1) {
     try {
       const { value } = await json('/api/health?t=' + Date.now(), {}, 20000);
-      if (value.ok && value.version === '9.6.2') return value;
+      if (value.ok && value.version === APP_VERSION) return value;
       last = JSON.stringify(value);
     } catch (error) { last = String(error?.message || error); }
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -119,9 +121,9 @@ function nextReaderTimes(previousObservedAt, previousPageActivityAt) {
   };
 }
 
-const health = await waitUntilReady();
-assert.equal(health.readerPairingConfigured, true);
-assert.equal(health.authConfigured, true);
+const publicHealth = await waitUntilReady();
+assert.equal(publicHealth.alive, true);
+assert.equal(publicHealth.readerPairingConfigured, undefined, '未登入健康檢查不得洩露內部設定狀態');
 
 const login = await json('/api/auth', {
   method: 'POST',
@@ -130,6 +132,14 @@ const login = await json('/api/auth', {
 }, 30000);
 const cookie = (login.response.headers.get('set-cookie') || '').split(';')[0];
 assert.match(cookie, /^mlb_session=/);
+
+const authenticatedHealthResponse = await raw(`/api/health?t=${Date.now()}`, {
+  headers: { Cookie: cookie },
+}, 20000);
+assert.equal(authenticatedHealthResponse.status, 200);
+const health = await authenticatedHealthResponse.json();
+assert.equal(health.readerPairingConfigured, true);
+assert.equal(health.authConfigured, true);
 
 let selectedDate = '';
 let game = null;
@@ -209,7 +219,7 @@ assert.equal(heartbeat.value.payloadHash, ingest.value.payloadHash);
 assert.equal(heartbeat.value.matchedGameCount, schedule.length);
 
 const status = await json(`/api/reader/status?league=${LEAGUE}&date=${selectedDate}&t=${Date.now()}`, {
-  headers: { Origin: EXTENSION_ORIGIN },
+  headers: readerHeaders,
 }, 20000);
 assert.equal(status.value.fresh, true, `Reader status must be fresh: ${JSON.stringify(status.value)}`);
 assert.equal(status.value.executable, true, `Reader status must be executable: ${JSON.stringify(status.value)}`);
@@ -247,7 +257,9 @@ const analysis = await json('/api/analyze', {
   }),
 }, 120000);
 assert.equal(analysis.value.analysis.analysisType, 'FULL');
-assert.ok(analysis.value.repriceSnapshot?.distributionSnapshot?.distributionHash);
+assert.equal(analysis.value.repriceSnapshot?.distributionSnapshot, undefined, '手機續跑傳輸不得夾帶巨大分布 payload');
+assert.match(analysis.value.repriceSnapshot?.distributionId || '', /^.+$/);
+assert.match(analysis.value.repriceSnapshot?.distributionHash || '', /^[a-f0-9]{64}$/);
 assert.equal(analysis.value.analysis.results.length, 8);
 
 const targetAwayCode = TEAM_CODE_BY_ID[Number(game.awayTeamId)];
