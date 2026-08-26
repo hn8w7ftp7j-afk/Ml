@@ -1,6 +1,6 @@
 # 四聯盟棒球 PIT 影子分析
 
-網站版本：`11.1.2`
+網站版本：`11.1.3`
 Tai888 Reader：`2.1.19`（本次不需重裝）
 
 這是私人使用的盤口分析與實際下注帳本。所有模型輸出目前都是影子診斷，不是正式推薦；正式推薦、正式下注資格與 Unit 在 locked OOS 與 forward 驗證完成前一律停用。
@@ -11,7 +11,7 @@ Tai888 Reader：`2.1.19`（本次不需重裝）
 
 V11.1.1 將 Neon 配額、設定、schema 與一般不可用狀態分開回報；帳本失敗不得顯示成「雲端 0 注」。帳本只在可見的下注紀錄頁定期同步，背景分頁停止輪詢，資料庫明確回傳配額錯誤時至少退避 6 小時；已完成的唯一鍵遷移也不再於每個冷啟動重跑全表掃描。
 
-V11.1.2 讓私人健康檢查在 `ready:false` 時仍顯示真正的設定阻擋原因，不再把缺少 `CRON_SECRET` 等 readiness 問題誤標為「系統檢查中」。
+V11.1.3 讓實際下注按鍵在今日盤口、全部方向與影子候選順序中維持可見；PIT或永久雲端帳本不可寫入時，按鍵會停用並直接顯示原因，不再整顆消失，也不會把未永久保存的下注冒充成功。V11.1.2 讓私人健康檢查在 `ready:false` 時仍顯示真正的設定阻擋原因，不再把缺少 `CRON_SECRET` 等 readiness 問題誤標為「系統檢查中」。
 
 ## 目前發布狀態
 
@@ -166,6 +166,6 @@ npm run e2e:reader
 2. 確認 `DATABASE_URL` 可建立或已執行 `0005`～`0007` migration，且 `CRON_SECRET` 已在 Production 設定。
 3. 確認 Reader 仍為 `2.1.19` 且四聯盟頁籤、Reader league isolation 與八方向端到端測試通過。
 4. 合併到 `main`，再部署 Vercel Production，等待 deployment `READY`。
-5. 驗證 `/api/health` 的 `11.1.2` 與 commit、登入、MLB 四市場八方向、方向歷史落庫、cron／統計 API、亞洲 setup 真實阻擋原因與未登入 API fail closed。
+5. 驗證 `/api/health` 的 `11.1.3` 與 commit、登入、MLB 四市場八方向、方向歷史落庫、cron／統計 API、亞洲 setup 真實阻擋原因與未登入 API fail closed。
 
 本系統不保證單場或長期獲利；目前輸出只供模型驗證與實際下注紀錄稽核。
