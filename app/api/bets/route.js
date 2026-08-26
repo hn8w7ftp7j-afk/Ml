@@ -9,6 +9,7 @@ import {
 import { buildCalibrationStatusFromBetsV109 } from '../../../lib/calibration-ledger-v109.js';
 import { verifyCloudBetEvidenceV110 } from '../../../lib/bet-evidence-verification-v110.js';
 import { settlePendingAnalysisDirections } from '../../../lib/analysis-direction-history-v1.js';
+import { classifyDatabaseError, databaseFailureLog, isDatabaseError } from '../../../lib/database-error.js';
 import { checkRateLimit, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
 
 const response = (bets, extra = {}) => NextResponse.json({
@@ -19,10 +20,27 @@ const response = (bets, extra = {}) => NextResponse.json({
   ...extra,
 }, { headers: { 'Cache-Control': 'no-store' } });
 
+function databaseFailureResponse(error, operation) {
+  const failure = classifyDatabaseError(error);
+  console.error(`[${operation}]`, databaseFailureLog(error, operation));
+  return NextResponse.json({
+    ok: false,
+    code: failure.code,
+    error: failure.publicMessage,
+    retryAfterSeconds: failure.retryAfterSeconds,
+  }, {
+    status: failure.status,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Retry-After': String(failure.retryAfterSeconds),
+    },
+  });
+}
+
 export async function GET(request) {
   const auth = await requireApiAuth(request); if (auth) return auth;
   try { return response(await listCloudBets()); }
-  catch { return NextResponse.json({ ok: false, error: '雲端下注紀錄讀取失敗' }, { status: 503 }); }
+  catch (error) { return databaseFailureResponse(error, 'BET_LEDGER_READ_FAILED'); }
 }
 
 export async function POST(request) {
@@ -70,6 +88,8 @@ export async function POST(request) {
     }
     return NextResponse.json({ ok: false, error: '不支援的下注紀錄操作' }, { status: 400 });
   } catch (error) {
-    return NextResponse.json({ ok: false, code: error?.code || 'BET_LEDGER_WRITE_FAILED', error: error?.message || '雲端下注紀錄更新失敗' }, { status: Number(error?.status) || 400 });
+    const message = String(error?.message || '');
+    if (isDatabaseError(error)) return databaseFailureResponse(error, 'BET_LEDGER_WRITE_FAILED');
+    return NextResponse.json({ ok: false, code: error?.code || 'BET_LEDGER_WRITE_FAILED', error: message || '雲端下注紀錄更新失敗' }, { status: Number(error?.status) || 400 });
   }
 }
