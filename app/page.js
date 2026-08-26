@@ -737,7 +737,7 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   return <div className="scoreRow">
     <div className={`score ${scoreClass}`} title={scoreTitle} aria-label={`S分數 ${scoreLabel}`}>
       <span style={{ display: 'block', fontSize: 9, lineHeight: 1.1 }}>S 分數</span>
-      <strong style={{ display: 'block', fontSize: 13, lineHeight: 1.35 }}>{scoreMark} {scoreLabel}</strong>
+      <strong className="scoreValue">{scoreMark} {scoreLabel}</strong>
     </div>
     <div className="scoreBody">
       <div className="scorePick">{translateTeamText(row.pick) || '水位未提供｜不評分'}</div>
@@ -775,7 +775,7 @@ function DirectionSlotRow({ row, game }) {
   return <div className="scoreRow">
     <div className={`score ${blocked ? 'warning' : 'pass'}`} aria-label="S分數尚未產生">
       <span style={{ display: 'block', fontSize: 9, lineHeight: 1.1 }}>S 分數</span>
-      <strong style={{ display: 'block', fontSize: 13, lineHeight: 1.35 }}>—</strong>
+      <strong className="scoreValue">—</strong>
     </div>
     <div className="scoreBody">
       <div className="scorePick">{directionLabel(row, game)}</div>
