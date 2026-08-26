@@ -17,10 +17,10 @@ mustMatch(/全部方向EV/, 'ranking tab must identify the all-direction EV outp
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.1.2', 'package/release identity must match the V11.1.2 UI');
-assert.equal(packageLock.version, '11.1.2', 'package-lock release identity must match V11.1.2');
-assert.equal(packageLock.packages?.['']?.version, '11.1.2', 'root lockfile package must match V11.1.2');
-assert.equal(APP_VERSION, '11.1.2');
+assert.equal(packageJson.version, '11.1.3', 'package/release identity must match the V11.1.3 UI');
+assert.equal(packageLock.version, '11.1.3', 'package-lock release identity must match V11.1.3');
+assert.equal(packageLock.packages?.['']?.version, '11.1.3', 'root lockfile package must match V11.1.3');
+assert.equal(APP_VERSION, '11.1.3');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
@@ -138,9 +138,14 @@ const rankingEnd = page.indexOf("{tab === 'betOrder' && <section", rankingStart)
 assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'ranking UI section missing');
 const rankingUi = page.slice(rankingStart, rankingEnd);
 assert.match(rankingUi, /getBetState\(entry\.item,\s*entry\.row\)/, 'ranking action must read the same cloud/local bet state as the board');
-assert.match(rankingUi, /betRecordable\(entry\.item,\s*entry\.row,\s*clockNow,\s*bettingEnabled,\s*entry\.currentReaderPrice\)/, 'ranking action must enforce the same prestart/fresh Reader write gate');
+assert.match(rankingUi, /betRecordable\(entry\.item,\s*entry\.row,\s*clockNow,\s*bettingEnabled,\s*entry\.currentReaderPrice,\s*cloudLedgerStatus\.state !== 'unavailable'\)/, 'ranking action must enforce the same prestart/fresh Reader and durable-ledger write gate');
 assert.match(rankingUi, /recordBet\(entry\.item,\s*entry\.row\)/, 'ranking button must call the canonical cloud recordBet flow');
-assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');
+assert.match(rankingUi, /\{action\.text\}/, 'ranking row must visibly expose its placed, recordable, or blocked action state');
+mustMatch(/text: '已下注 ✓'/, 'placed action label missing');
+mustMatch(/text: '紀錄實際下注'/, 'recordable action label missing');
+assert.match(rankingUi, /betActionState/, 'ranking rows must render an explicit enabled or disabled action state');
+assert.doesNotMatch(rankingUi, /\(recordable \|\| betState\.latest\) &&/, 'ranking action must never disappear merely because durable recording is temporarily blocked');
+mustMatch(/text: '永久帳本暫停'/, 'ranking action must explain a cloud-ledger outage instead of disappearing');
 assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');
 assert.match(rankingUi, /負EV、R≤0、QA BLOCK、低分與不具下注資格的方向都不刪除/, 'ranking UI must explain that non-bettable directions remain visible');
 assert.match(rankingUi, /Reader覆蓋/, 'ranking UI must disclose Reader slate coverage for cross-snapshot comparisons');
@@ -163,9 +168,10 @@ assert.match(page, /buildBetOrderEntries\(shadowRanking\)/, 'bet order must deri
 assert.match(page, /groupBetOrderEntries\(shadowBetOrder\)/, 'bet order must group directions by game');
 assert.match(betOrderUi, /全場讓分、全場大小、上半讓分、上半大小/, 'bet-order UI must disclose its fixed market order');
 assert.match(betOrderUi, /getBetState\(entry\.item, entry\.row\)/, 'bet order must reuse the canonical cloud/local bet state');
-assert.match(betOrderUi, /betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice\)/, 'bet order must enforce the canonical prestart/current Reader gate');
+assert.match(betOrderUi, /betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice, cloudLedgerStatus\.state !== 'unavailable'\)/, 'bet order must enforce the canonical prestart/current Reader and durable-ledger gate');
 assert.match(betOrderUi, /recordBet\(entry\.item, entry\.row\)/, 'bet-order button must use the canonical cloud record flow');
-assert.match(betOrderUi, /已下注 ✓/, 'bet order must visibly preserve already-recorded positions');
+assert.match(betOrderUi, /\{action\.text\}/, 'bet order must visibly preserve already-recorded and blocked action states');
+assert.match(betOrderUi, /betActionState/, 'bet order must expose a disabled reason when a record cannot be persisted');
 
 // Fail-closed market coverage and all-direction diagnostic score presentation.
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
@@ -190,7 +196,8 @@ mustMatch(/比賽已開始｜保留賽前分析｜停止下注與目前排名資
 mustMatch(/Reader盤口等待最新驗證｜保留上一版分析/, 'stale Reader prices must retain their completed score while execution is disabled');
 assert.doesNotMatch(page, /invalidateShadowScoreRow\(row, '獨立國際市場報價已超過5分鐘/, 'expired external consensus must remain audit-only');
 mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows must retain completed scores and current-price status');
-mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled, row\.clientReaderPriceCurrent\)\}/, 'bet recording must require the item hash and live Reader-price proof calculated by GameCard');
+mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled, row\.clientReaderPriceCurrent, !cloudLedgerUnavailable\)\}/, 'bet recording must require the item hash, live Reader-price proof and writable durable ledger calculated by GameCard');
+mustMatch(/\{actualLine && <div>/, 'actual Reader directions must retain a visible action even while recording is blocked');
 assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*acknowledgedReaderKey/, 'a successfully analyzed current item must not be blocked by an unrelated full-slate acknowledgement');
 mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*actualLineFreshNow\(row, clockNow\)/, 'ranking must use per-item current hash and live line freshness');
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
@@ -203,8 +210,9 @@ const scoreOnlyInvalidation = page.slice(
 );
 assert.doesNotMatch(scoreOnlyInvalidation, /lineFresh:\s*false|actualReaderEligible:\s*false|executable:\s*false/, 'external-reference expiry must not invalidate a still-fresh Reader price or hide actual-bet recording');
 assert.doesNotMatch(page, /invalidateReaderPriceRow/, 'client time progression must not destroy a completed immutable score');
-mustMatch(/recordable = betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice\)/, 'ranking must expose bet recording only for a current item hash and live Reader direction');
+mustMatch(/recordable = betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice, cloudLedgerStatus\.state !== 'unavailable'\)/, 'ranking must enable bet recording only for a current Reader direction and writable durable ledger');
 mustMatch(/currentReaderPrice === true/, 'canonical bet gate must fail closed unless the caller supplies current Reader proof');
+mustMatch(/cloudLedgerWritable === true/, 'canonical bet gate must fail closed unless the durable ledger is writable');
 mustMatch(/const currentReaderPrice = itemReaderExecutable\(item\)/, 'recordBet must re-check board date, payload hash and Reader freshness at click time');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
