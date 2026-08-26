@@ -3,7 +3,12 @@ import { APP_VERSION } from '../../../lib/app-version.js';
 import { appPasswordConfigured, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured } from '../../../lib/security.js';
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
-import { MODEL_VERSION, RULES_VERSION } from '../../../lib/analysis-v11.js';
+import {
+  MODEL_EV_FORMULA_VERSION,
+  MODEL_VERSION,
+  ROBUST_EV_VERSION,
+  RULES_VERSION,
+} from '../../../lib/analysis-v11.js';
 import { EV_CALIBRATION_V103_VERSION } from '../../../lib/ev-calibration-v103.js';
 import { MLB_CONTEXT_V13_VERSION } from '../../../lib/mlb-context-v13.js';
 import { BATCH_VERSION } from '../../../lib/batch.js';
@@ -33,6 +38,13 @@ import {
   analysisPitDatabaseConfigured,
   analysisPitProductionPersistenceRequired,
 } from '../../../lib/analysis-pit-snapshot-store-v1.js';
+import { DIRECTION_SLOT_CONTRACT_VERSION } from '../../../lib/direction-slots-v1.js';
+import {
+  ANALYSIS_DIRECTION_HISTORY_VERSION,
+  ANALYSIS_DIRECTION_SETTLEMENT_VERSION,
+  analysisDirectionHistoryDatabaseConfigured,
+} from '../../../lib/analysis-direction-history-v1.js';
+import { ASIAN_LEAGUE_READINESS_VERSION } from '../../../lib/asian-league-readiness.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,11 +58,14 @@ export async function GET(request) {
   const pairingConfigured = readerPairingConfigured();
   const integrityConfigured = marketIntegrityConfigured();
   const productionPitRequired = analysisPitProductionPersistenceRequired();
+  const directionHistoryDatabaseConfigured = analysisDirectionHistoryDatabaseConfigured();
+  const cronSecretConfigured = Boolean(String(process.env.CRON_SECRET || '').trim());
   const readinessReasons = [
     ...(!databaseConfigured ? ['PIT資料庫未設定'] : []),
     ...(!authConfigured ? ['網站驗證未完整設定'] : []),
     ...(!pairingConfigured ? ['Reader配對密鑰未設定'] : []),
     ...(!integrityConfigured ? ['市場簽章密鑰未設定'] : []),
+    ...(!cronSecretConfigured ? ['自動結算CRON_SECRET未設定'] : []),
   ];
   const ready = readinessReasons.length === 0;
   const readerSnapshot = await loadReaderSnapshot('MLB');
@@ -66,6 +81,8 @@ export async function GET(request) {
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues: publicLeagueRegistry(),
     modelVersion: MODEL_VERSION,
+    modelEvFormulaVersion: MODEL_EV_FORMULA_VERSION,
+    robustEvVersion: ROBUST_EV_VERSION,
     mlbContextVersion: MLB_CONTEXT_V13_VERSION,
     rulesVersion: RULES_VERSION,
     evCalibrationVersion: EV_CALIBRATION_V103_VERSION,
@@ -83,6 +100,10 @@ export async function GET(request) {
     repriceVersion: REPRICE_VERSION,
     analysisCacheVersion: ANALYSIS_CACHE_VERSION,
     gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION,
+    directionSlotContractVersion: DIRECTION_SLOT_CONTRACT_VERSION,
+    analysisDirectionHistoryVersion: ANALYSIS_DIRECTION_HISTORY_VERSION,
+    analysisDirectionSettlementVersion: ANALYSIS_DIRECTION_SETTLEMENT_VERSION,
+    asianLeagueReadinessVersion: ASIAN_LEAGUE_READINESS_VERSION,
     referenceLinesEnabled: false,
     referenceConsensusReady: false,
     externalMarketAuditEnabled: false,
@@ -113,6 +134,9 @@ export async function GET(request) {
     coreRefreshPolicyVersion: ANALYSIS_REFRESH_POLICY_V109_VERSION,
     advancedPromotionGateVersion: MLB_ADVANCED_PROMOTION_GATE_V109_VERSION,
     databaseConfigured,
+    directionHistoryDatabaseConfigured,
+    cronSecretConfigured,
+    analysisDirectionAutomaticSettlementEnabled: directionHistoryDatabaseConfigured && cronSecretConfigured,
     productionPitRequired,
     authConfigured,
     appPasswordConfigured: appPasswordConfigured(),

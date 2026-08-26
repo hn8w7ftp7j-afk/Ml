@@ -17,7 +17,11 @@ import {
   analysisContractSignature,
 } from '../../../lib/analysis-cache-v9.js';
 import { getOrBuildGameDistribution } from '../../../lib/game-distribution-cache-v1.js';
-import { MARKET_ORDER, marketIsOpen, validateMarketPair } from '../../../lib/markets.js';
+import { MARKET_ORDER } from '../../../lib/markets.js';
+import {
+  assessEightDirectionMarketCoverage,
+  attachEightDirectionContract,
+} from '../../../lib/direction-slots-v1.js';
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import {
   ANALYSIS_IDEMPOTENCY_CACHE_TTL_MS,
@@ -33,7 +37,12 @@ import {
   persistAnalysisPitSnapshotForResponse,
 } from '../../../lib/analysis-pit-snapshot-store-v1.js';
 import { enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
-import { attestIncomingMarketRows, signRepriceSnapshot } from '../../../lib/market-integrity-v1.js';
+import {
+  attestIncomingMarketRows,
+  normalizeSignedReaderProvenance,
+  signRepriceSnapshot,
+  verifyReaderProvenance,
+} from '../../../lib/market-integrity-v1.js';
 import {
   assertLeagueGamePrestart,
   buildLeagueGameContext,
@@ -59,10 +68,30 @@ export const maxDuration = 90;
 export const dynamic = 'force-dynamic';
 
 // V11 namespace invalidates every pre-PIT/fail-closed response.
-const responseCache = globalThis.__BASEBALL_V1100_ANALYSIS_CACHE__ || new Map();
-globalThis.__BASEBALL_V1100_ANALYSIS_CACHE__ = responseCache;
-const requestResultCache = globalThis.__BASEBALL_V1100_ANALYSIS_REQUEST_RESULT_CACHE__ || new Map();
-globalThis.__BASEBALL_V1100_ANALYSIS_REQUEST_RESULT_CACHE__ = requestResultCache;
+const responseCache = globalThis.__BASEBALL_V1110_ANALYSIS_CACHE__ || new Map();
+globalThis.__BASEBALL_V1110_ANALYSIS_CACHE__ = responseCache;
+const requestResultCache = globalThis.__BASEBALL_V1110_ANALYSIS_REQUEST_RESULT_CACHE__ || new Map();
+globalThis.__BASEBALL_V1110_ANALYSIS_REQUEST_RESULT_CACHE__ = requestResultCache;
+
+const MAX_SUPPLIED_MARKET_ROWS = 12;
+const MAX_PREVIOUS_MARKET_ROWS = 24;
+const MAX_VERIFICATION_MARKET_ROWS = 120;
+
+function requestError(message, status = 400, code = 'INVALID_MARKET_REQUEST') {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  return error;
+}
+
+function boundedMarketRows(rows, maximum, label) {
+  if (rows == null) return [];
+  if (!Array.isArray(rows)) throw requestError(`${label}必須是陣列`);
+  if (rows.length > maximum) {
+    throw requestError(`${label}超過${maximum}筆，已拒絕而非靜默截斷`, 400, 'MARKET_ROW_LIMIT_EXCEEDED');
+  }
+  return rows;
+}
 
 function optionalNumber(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -87,7 +116,7 @@ function sanitizeGame(game) {
 }
 
 function sanitizeMarketRows(rows, maximum = 16) {
-  return (Array.isArray(rows) ? rows : []).slice(0, maximum).map(row => ({
+  return boundedMarketRows(rows, maximum, '盤口資料').map(row => ({
     market: MARKET_ORDER.includes(row?.market) ? row.market : '', pick: cleanText(row?.pick, 120), water: optionalNumber(row?.water),
     waterEstimated: Boolean(row?.waterEstimated), waterMissing: row?.waterMissing === true,
     confidence: Math.max(0, Math.min(1, Number(row?.confidence) || 0)),
@@ -96,6 +125,7 @@ function sanitizeMarketRows(rows, maximum = 16) {
     lineAsOf: cleanText(row?.lineAsOf, 40), executable: row?.executable !== false, marketVerification: null,
     rawDecimalOdds: optionalNumber(row?.rawDecimalOdds), providerEventId: cleanText(row?.providerEventId, 120),
     readerGameMarketHash: cleanText(row?.readerGameMarketHash, 64),
+    readerVersion: cleanText(row?.readerVersion, 100),
     readerPayloadHash: cleanText(row?.readerPayloadHash, 64),
     readerRawBoardHash: cleanText(row?.readerRawBoardHash, 64),
     readerBoardDate: cleanText(row?.readerBoardDate, 20),
@@ -121,6 +151,7 @@ function sanitizeMarketRows(rows, maximum = 16) {
       })).filter(item => item.bookmakerKey && item.observedAt && item.probability != null),
     } : {}),
     referenceSide: cleanText(row?.referenceSide, 40), rawText: cleanText(row?.rawText, 300),
+    integrityError: cleanText(row?.integrityError, 300),
     sourceTemplateVersion: cleanText(row?.sourceTemplateVersion, 80), authorizationStatus: cleanText(row?.authorizationStatus, 80),
     integrityOrigin: cleanText(row?.integrityOrigin, 80),
     marketSignatureVersion: cleanText(row?.marketSignatureVersion, 80), marketSignature: cleanText(row?.marketSignature, 160),
@@ -131,6 +162,83 @@ async function prepareMarketRows(league, game, rows, maximum) {
   const attested = await attestIncomingMarketRows(league, game, sanitizeMarketRows(rows, maximum));
   const now = Date.now();
   return attested.map(row => applyMarketFreshness(row, now));
+}
+
+function deriveReaderProvenanceFromSignedRows(suppliedMarkets) {
+  if (!suppliedMarkets.length) return null;
+  const readerRows = suppliedMarkets.filter(row => row?.sourceType === 'ACTUAL_TW_CREDIT'
+    && String(row?.provider || '').toUpperCase() === 'TAI888_READER_AUTO');
+  if (!readerRows.length) return null;
+  if (readerRows.length !== suppliedMarkets.length) {
+    throw requestError('Reader簽章盤口不得與手動盤混用', 409, 'READER_PROVENANCE_MISMATCH');
+  }
+  const first = readerRows[0];
+  const lineage = {
+    provider: 'TAI888_READER_AUTO',
+    sourceType: 'ACTUAL_TW_CREDIT',
+    readerVersion: first.readerVersion,
+    payloadHash: first.readerPayloadHash,
+    rawBoardHash: first.readerRawBoardHash,
+    boardDate: first.readerBoardDate,
+    lineAsOf: first.lineAsOf,
+    marketStatus: 'OPEN',
+    readerGameMarketHash: first.readerGameMarketHash,
+    authorizationStatus: 'SERVER_ATTESTED_SIGNED_MARKET_ROWS',
+    integrityOrigin: 'SERVER_DERIVED_SIGNED_MARKET_ROWS',
+    provenanceSignatureVersion: null,
+    provenanceSignature: null,
+  };
+  const hash = /^[a-f0-9]{64}$/;
+  const complete = Boolean(lineage.readerVersion)
+    && hash.test(lineage.payloadHash || '')
+    && hash.test(lineage.rawBoardHash || '')
+    && hash.test(lineage.readerGameMarketHash || '')
+    && /^\d{4}-\d{2}-\d{2}$/.test(lineage.boardDate || '')
+    && Number.isFinite(Date.parse(lineage.lineAsOf || ''));
+  const mismatch = !complete || readerRows.some(row => (
+    row.readerVersion !== lineage.readerVersion
+    || row.readerPayloadHash !== lineage.payloadHash
+    || row.readerRawBoardHash !== lineage.rawBoardHash
+    || row.readerBoardDate !== lineage.boardDate
+    || row.readerGameMarketHash !== lineage.readerGameMarketHash
+    || row.lineAsOf !== lineage.lineAsOf
+  ));
+  if (mismatch) {
+    throw requestError('Reader簽章盤口的版本、盤日、時間或雜湊不一致', 409, 'READER_PROVENANCE_MISMATCH');
+  }
+  return lineage;
+}
+
+async function verifiedReaderProvenance(league, game, value, suppliedMarkets) {
+  if (value == null) {
+    if (!suppliedMarkets.length) {
+      throw requestError('空盤分析必須附帶伺服器簽署的 Reader provenance', 400, 'READER_PROVENANCE_REQUIRED');
+    }
+    return deriveReaderProvenanceFromSignedRows(suppliedMarkets);
+  }
+  const normalized = normalizeSignedReaderProvenance(value);
+  if (!normalized || !(await verifyReaderProvenance(league, game, normalized))) {
+    throw requestError('Reader provenance 簽章無效或內容已被修改', 409, 'READER_PROVENANCE_REJECTED');
+  }
+  const readerRows = suppliedMarkets.filter(row => row?.sourceType === 'ACTUAL_TW_CREDIT'
+    && String(row?.provider || '').toUpperCase() === 'TAI888_READER_AUTO');
+  if (normalized.marketStatus === 'UNOPENED') {
+    if (suppliedMarkets.length) throw requestError('UNOPENED Reader provenance 不得夾帶盤口資料', 409, 'READER_PROVENANCE_MISMATCH');
+    return normalized;
+  }
+  if (!suppliedMarkets.length || readerRows.length !== suppliedMarkets.length) {
+    throw requestError('OPEN Reader provenance 必須對應完整的伺服器簽章Reader盤口', 409, 'READER_PROVENANCE_MISMATCH');
+  }
+  const mismatch = readerRows.some(row => (
+    row.readerVersion !== normalized.readerVersion
+    || row.readerPayloadHash !== normalized.payloadHash
+    || row.readerRawBoardHash !== normalized.rawBoardHash
+    || row.readerBoardDate !== normalized.boardDate
+    || row.readerGameMarketHash !== normalized.readerGameMarketHash
+    || row.lineAsOf !== normalized.lineAsOf
+  ));
+  if (mismatch) throw requestError('Reader provenance 與簽章盤口版本或雜湊不一致', 409, 'READER_PROVENANCE_MISMATCH');
+  return normalized;
 }
 
 function cacheSet(key, signature, value) {
@@ -164,7 +272,8 @@ export async function POST(request) {
         ok: false,
         code: 'LEAGUE_NOT_READY',
         league,
-        error: `${config.label}尚未完成正式賽程、Reader 與模型驗證，已停止分析`,
+        error: `${config.label}尚無法可信建立獨立比分分布，已依 fail-closed 停止模型EV：${config.statusLabel}`,
+        analysisReadiness: config.analysisReadiness || null,
       }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
     const requestedGame = sanitizeGame(body.game);
@@ -212,19 +321,13 @@ export async function POST(request) {
     const { game } = await resolveLeagueGame(league, requestedGame);
     assertLeagueGamePrestart(league, game);
 
-    const suppliedMarkets = await prepareMarketRows(league, game, body.markets, 12);
-    const verificationMarkets = await prepareMarketRows(league, game, body.verificationMarkets, 120);
+    const suppliedMarkets = await prepareMarketRows(league, game, body.markets, MAX_SUPPLIED_MARKET_ROWS);
+    const readerProvenance = await verifiedReaderProvenance(league, game, body.readerProvenance, suppliedMarkets);
+    const verificationMarkets = await prepareMarketRows(league, game, body.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS);
     const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
-    const previousMarkets = await prepareMarketRows(league, game, body.previousMarkets, 24);
-    const errors = [];
-    for (const name of MARKET_ORDER) {
-      const pair = markets.filter(row => row.market === name);
-      if (!marketIsOpen(pair)) continue;
-      errors.push(...validateMarketPair(name, pair).map(error => `${name}：${error}`));
-    }
-    if (errors.length) return NextResponse.json({ ok: false, error: `⛔ QA未通過｜不評分｜不下注：${[...new Set(errors)].join('、')}` }, { status: 400 });
-    const activeMarkets = markets.filter(row => row.pick);
-    if (!activeMarkets.length) return NextResponse.json({ ok: false, error: '目前沒有任何已開盤市場可分析' }, { status: 400 });
+    const previousMarkets = await prepareMarketRows(league, game, body.previousMarkets, MAX_PREVIOUS_MARKET_ROWS);
+    const marketCoverage = assessEightDirectionMarketCoverage(markets, game);
+    const activeMarkets = marketCoverage.validRows;
 
     const settings = {
       rebateRate: TAIWAN_CREDIT_REBATE_RATE,
@@ -265,12 +368,12 @@ export async function POST(request) {
     const fingerprints = buildSnapshotFingerprints({
       league,
       context: frozenContext,
-      markets: activeMarkets,
+      markets,
       versions,
       calculationSettings: settings,
-      auxiliaryInput: { previousMarkets },
+      auxiliaryInput: { previousMarkets, contractRule: readerProvenance },
     });
-    const signature = analysisContractSignature(league, game, activeMarkets);
+    const signature = analysisContractSignature(league, game, markets);
     const cacheKey = analysisCacheKey(league, game.gamePk, fingerprints.inputHash);
     const cached = responseCache.get(cacheKey);
     const cacheFreshness = assessAnalysisCacheEntryV110(cached, {
@@ -323,8 +426,9 @@ export async function POST(request) {
           distributionSnapshot: retryDistribution,
           repriceSnapshot: safePayload.repriceSnapshot,
           versions,
-          markets: activeMarkets,
+          markets,
           previousMarkets,
+          readerSnapshot: readerProvenance,
         }, { requiredWhenConfigured: true });
         safePayload.pitPersistence = pitPersistence;
         assertLeagueGamePrestart(league, game);
@@ -369,14 +473,17 @@ export async function POST(request) {
       distributionSnapshot: cachedDistribution.snapshot,
     });
     assertLeagueGamePrestart(league, game);
-    const deterministic = enforceAnalysisModeSafety(
+    const deterministicCore = enforceAnalysisModeSafety(
       finalizeDeterministicAnalysis({ analysis: preliminary, game, settings }),
       frozenContext,
     );
+    const deterministic = attachEightDirectionContract(deterministicCore, marketCoverage, game, readerProvenance);
     const distributionSnapshot = deterministic.distributionSnapshot;
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
     const analysisAsOf = new Date().toISOString();
-    const lineAsOf = activeMarkets.map(row => row.lineAsOf).filter(Boolean).sort().at(-1) || analysisAsOf;
+    const lineAsOf = markets.map(row => row.lineAsOf).filter(Boolean).sort().at(-1)
+      || readerProvenance?.lineAsOf
+      || analysisAsOf;
     const pitSnapshotId = analysisPitSnapshotId({
       league,
       gamePk: game.gamePk,
@@ -412,6 +519,8 @@ export async function POST(request) {
       ok: true, league, game, context: compactAnalysisContext(frozenContext), analysis: finalized, repriceSnapshot,
       analysisMode: provider.analysisMode, betEligible: provider.betEligible,
       openMarkets: [...new Set(activeMarkets.map(row => row.market))],
+      blockedMarkets: marketCoverage.blockedMarkets,
+      unopenedMarkets: marketCoverage.unopenedMarkets,
     };
     const safePayload = enforceAnalysisModeSafety(payload, frozenContext);
     assertLeagueGamePrestart(league, game);
@@ -423,8 +532,9 @@ export async function POST(request) {
       distributionSnapshot,
       repriceSnapshot,
       versions,
-      markets: activeMarkets,
+      markets,
       previousMarkets,
+      readerSnapshot: readerProvenance,
     }, { requiredWhenConfigured: true });
     safePayload.pitPersistence = pitPersistence;
     assertLeagueGamePrestart(league, game);
@@ -450,6 +560,10 @@ export async function POST(request) {
       'X-Reprice-Snapshot': 'COMPACT-REBUILDABLE',
     } });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({
+      ok: false,
+      ...(error?.code ? { code: String(error.code) } : {}),
+      error: String(error?.message || error),
+    }, { status: Number(error?.status) || 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }

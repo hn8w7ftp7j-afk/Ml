@@ -163,6 +163,15 @@ assert.ok(Math.abs(receiving.equivalentPush - 0.08) < 1e-12);
 
 const repriceRoute = fs.readFileSync(new URL('../app/api/reprice/route.js', import.meta.url), 'utf8');
 assert.match(repriceRoute, /referenceBookProbabilities:\s*row\.referenceBookProbabilities/, 'reprice must preserve signed per-book payoff evidence');
-assert.match(repriceRoute, /body\.verificationMarkets, 120\)/, 'reprice must retain the complete targeted payoff lattice');
+assert.match(
+  repriceRoute,
+  /const MAX_VERIFICATION_MARKET_ROWS = 120;/,
+  'reprice verification lattice limit must remain 120 rows',
+);
+assert.match(
+  repriceRoute,
+  /body\.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS\)/,
+  'reprice must retain the complete targeted payoff lattice through the named limit',
+);
 
 console.log('Payoff-vector integer, modifier, split, monotonicity and period isolation PASS');

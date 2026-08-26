@@ -112,7 +112,7 @@ const moderateNoPrior = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.match(EV_CALIBRATION_V103_VERSION, /v10\.5\.1/);
+assert.match(EV_CALIBRATION_V103_VERSION, /v11\.1\.0/);
 assert.equal(moderateNoPrior.qualified, true, 'international markets are optional audit evidence');
 assert.equal(moderateNoPrior.weightedEV, 0.08);
 assert.equal(moderateNoPrior.robustEV, 0.025);
@@ -151,9 +151,11 @@ const staleReader = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(staleReader.qualified, false, 'expired Reader prices must never retain W/R or a score');
+assert.equal(staleReader.qualified, false, 'expired Reader prices must block ranking/execution without hiding replayable W/R');
 assert.equal(staleReader.actualReaderEligible, false);
-assert.equal(staleReader.weightedEV, null);
+assert.equal(staleReader.weightedEV, 0.045);
+assert.equal(staleReader.robustEV, 0.012);
+assert.equal(staleReader.modelEvVisible, true);
 assert.match(staleReader.reasons.join('｜'), /Reader 實際盤已過期/);
 
 const manualEntry = qualifyEvV103({
@@ -169,10 +171,11 @@ const manualEntry = qualifyEvV103({
   rebateRate: 0.015,
   gate,
 });
-assert.equal(manualEntry.qualified, false, 'manual entries may be recorded but must never create W/R or ranking');
+assert.equal(manualEntry.qualified, false, 'manual entries remain QA blocked and cannot rank');
 assert.equal(manualEntry.actualReaderSource, false);
-assert.equal(manualEntry.weightedEV, null);
-assert.match(manualEntry.reasons.join('｜'), /只允許 Tai888 Reader/);
+assert.equal(manualEntry.weightedEV, 0.045);
+assert.equal(manualEntry.robustEV, 0.012);
+assert.match(manualEntry.reasons.join('｜'), /非 Tai888 Reader/);
 
 const overEightPlusEightyVector = ({ below, exact, above, bookmakerKey = '' }) => ({
   bookmakerKey,
@@ -272,6 +275,8 @@ const projectedCoreStillBlocks = qualifyEvV103({
   },
 });
 assert.equal(projectedCoreStillBlocks.qualified, false, 'core baseball data quality must fail closed');
+assert.equal(projectedCoreStillBlocks.weightedEV, 0.045, '資料QA BLOCK仍保留數學已建立的W');
+assert.equal(projectedCoreStillBlocks.robustEV, 0.012);
 assert.ok(Math.abs(projectedCoreStillBlocks.qualificationDataQuality - 0.81) < 1e-12);
 assert.match(projectedCoreStillBlocks.reasons.join('｜'), /核心棒球資料品質0\.81低於0\.85/);
 

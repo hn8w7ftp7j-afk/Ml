@@ -70,9 +70,79 @@ function normalizeSettings(value) {
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const pct = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
+const signedPct = value => value == null || !Number.isFinite(Number(value))
+  ? '—'
+  : `${Number(value) > 0 ? '+' : ''}${(Number(value) * 100).toFixed(2)}%`;
 const waterText = value => hasActualWater(value) ? Number(value).toFixed(3) : '水位未提供';
 const moneyText = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value) >= 0 ? '+' : ''}${Math.round(Number(value)).toLocaleString()}元`;
 const matchup = game => `${translateTeamText(game?.away || '')} 對 ${translateTeamText(game?.home || '')}`;
+
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    if (value == null || value === '') continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
+// W/R are mathematical outputs of the frozen score distribution. Qualification
+// gates may stop ranking or betting, but must never hide an already calculated
+// value. The raw aliases keep older cached/PIT responses readable during rollout.
+function modelEvValue(row) {
+  return firstFiniteNumber(row?.modelEV, row?.modelEv, row?.rawWeightedEV, row?.weightedEV);
+}
+
+function robustEvValue(row) {
+  return firstFiniteNumber(row?.robustEV, row?.robustEv, row?.rawRobustEV);
+}
+
+function directionStatus(row) {
+  const explicit = String(row?.status || row?.slotStatus || row?.directionStatus || '').toUpperCase();
+  if (explicit === 'CALCULATED' || explicit === 'UNOPENED' || explicit === 'BLOCKED') return explicit;
+  return modelEvValue(row) == null ? 'UNOPENED' : 'CALCULATED';
+}
+
+function directionQaPassed(row) {
+  const canonical = String(row?.qa?.status || '').trim().toUpperCase();
+  const qaPassed = canonical
+    ? canonical === 'PASS'
+    : row?.scoreAudit?.ok === true;
+  return qaPassed && row?.pairAudit?.passed !== false;
+}
+
+function directionIdentity(row) {
+  return String(row?.slotId || row?.directionKey || row?.id || `${row?.market || ''}|||${row?.pick || row?.direction || row?.side || ''}`);
+}
+
+function analysisDirectionRows(analysis) {
+  const results = Array.isArray(analysis?.results) ? analysis.results : [];
+  const slots = Array.isArray(analysis?.directionSlots) ? analysis.directionSlots
+    : Array.isArray(analysis?.slots) ? analysis.slots
+      : [];
+  if (!slots.length) return results;
+  const byIdentity = new Map(results.map(row => [directionIdentity(row), row]));
+  return slots.map(slot => {
+    const embedded = slot?.result && typeof slot.result === 'object' ? slot.result : {};
+    const matching = byIdentity.get(directionIdentity(slot)) || {};
+    return { ...slot, ...matching, ...embedded, status: slot?.status || matching?.status || embedded?.status };
+  });
+}
+
+function directionLabel(row, game) {
+  if (row?.pick) return translateTeamText(row.pick);
+  if (row?.label || row?.directionLabel) return translateTeamText(row.label || row.directionLabel);
+  const identity = `${row?.slotId || ''} ${row?.directionKey || ''} ${row?.direction || ''} ${row?.side || ''}`.toUpperCase();
+  if (/OVER|大分|^大$/.test(identity)) return '大分方向';
+  if (/UNDER|小分|^小$/.test(identity)) return '小分方向';
+  if (/HOME|主隊|主方/.test(identity)) return `${translateTeamText(game?.home || '') || '主隊'}方向`;
+  if (/AWAY|客隊|客方/.test(identity)) return `${translateTeamText(game?.away || '') || '客隊'}方向`;
+  return '待開盤方向';
+}
+
+function compareDirectionsByW(left, right) {
+  return (modelEvValue(right) ?? -Infinity) - (modelEvValue(left) ?? -Infinity);
+}
 const referenceEvidenceFreshNow = (row, now = Date.now()) => {
   const expiresAt = Date.parse(row?.marketVerification?.referenceConsensusExpiresAt || '');
   return Number.isFinite(expiresAt) && expiresAt > Number(now);
@@ -292,12 +362,9 @@ async function runPool(items, concurrency, worker) {
   await Promise.all(runners);
 }
 
-function rowKey(row) {
-  return `${row?.market || ''}|||${row?.pick || ''}`;
-}
-
 function scoreQaFailures(row) {
   return [...new Set([
+    ...(row?.qa?.reasons || []),
     ...(row?.scoreAudit?.baseQa?.failures || []),
     ...(row?.scoreAudit?.boundary?.errors || []),
     ...(row?.scoreAudit?.thirdAudit?.failures || []),
@@ -502,10 +569,10 @@ function BetLedgerDashboard({ bets, period, setPeriod, selectedLeague, setSelect
 }
 
 function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
-  const weightedEV = Number(row?.weightedEV);
-  const robustEV = Number(row?.robustEV);
+  const weightedEV = modelEvValue(row);
+  const robustEV = robustEvValue(row);
   if (row?.evCalibration?.qualified !== true) return { icon: '⚠️', label: '模型評分阻擋', ranking: false, reason: row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過' };
-  if (row?.scoreAudit?.plausibility?.passed === false) return { icon: '⛔', label: '上游分布異常', ranking: false, reason: '模型與Tai888去水機率差距超過10%，原始結果只留後台稽核' };
+  if (row?.scoreAudit?.plausibility?.passed === false) return { icon: '⛔', label: '上游分布異常', ranking: false, reason: '模型與Tai888去水機率差距超過10%；保留W/R，不列排名' };
   if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
   if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
   if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
@@ -524,9 +591,11 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
 function ResultRow({ row, game, onBet, betState = null, recordable = false, now, inactiveNotice = '' }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
+  const modelEV = modelEvValue(row);
+  const robustEV = robustEvValue(row);
   const storedFormulaScore = row?.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))
     ? Number(row.formulaDiagnosticScore) : null;
-  const qaPassed = row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false;
+  const qaPassed = directionQaPassed(row);
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
   const calibrationBlocked = row?.evCalibration?.qualified !== true;
   const calibrationReason = row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過';
@@ -543,44 +612,41 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
     : '';
   const scoreLabel = !leagueValidated || formulaScore == null ? '—' : formulaScore.toFixed(1);
   const verdict = diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated);
-  const scoreClass = calibrationBlocked ? 'warning' : formulaScore == null ? 'pass'
-    : !qaPassed || !leagueValidated ? 'warning'
-      : formulaScore >= 8.5 ? 'strongest' : formulaScore >= 7.2 ? 'candidate' : 'pass';
-  const scoreTitle = !leagueValidated
-    ? '聯盟模型重建中｜EV與S分數暫停顯示'
-    : calibrationBlocked
-      ? 'Reader、核心資料或數學未通過｜不顯示W/R、不建立S分數、不列排名'
-      : plausibilityBlocked
-        ? '上游比分分布合理性未通過｜原始結果只留後台稽核，不顯示為EV或S分數'
-      : formulaScore == null
-        ? '缺少合法水位或雙EV，不能補造分數'
-        : !qaPassed
-          ? `固定雙EV公式 S 分數 ${formulaScore.toFixed(1)}｜QA BLOCK｜不列排名、不可視為推薦`
-          : `V11.0 PIT共用聯合比分模型影子 S 分數 ${formulaScore.toFixed(1)}｜QA PASS｜不可視為正式下注建議`;
-  const scoreMetaText = !leagueValidated
-    ? '聯盟模型重建中｜EV與S分數暫停顯示'
-    : calibrationBlocked
-      ? `V11.0模型評分阻擋｜${calibrationReason}｜不產生有效EV、不評分、不列排名`
-      : plausibilityBlocked
-        ? `模型／Tai888去水差距 ${pct(tai888Gap)}，上游比分分布合理性未通過｜原始機率與損益只留後台稽核，不顯示為EV或S分數｜市場未回灌模型`
-        : `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜模型診斷W ${pct(row.weightedEV)}｜保守診斷R ${pct(row.robustEV)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
+  const evClass = modelEV == null ? 'pass' : modelEV > 0 ? 'candidate' : modelEV < 0 ? 'warning' : 'pass';
+  const qaReason = !leagueValidated
+    ? '聯盟模型尚未驗證'
+    : !qaPassed
+      ? qaFailures.join('；') || '資料、數學或數值檢查未通過'
+      : calibrationBlocked
+        ? calibrationReason
+        : plausibilityBlocked
+          ? '模型與Tai888去水機率差距超過10個百分點'
+          : '';
+  const qaLabel = qaPassed && !calibrationBlocked && !plausibilityBlocked ? 'PASS' : 'BLOCK';
+  const rankText = inactiveNotice
+    ? `不排名（${inactiveNotice}）`
+    : verdict.ranking
+      ? `是（${verdict.label}）`
+      : `否（${verdict.reason}）`;
+  const scoreTitle = `模型EV（W）${signedPct(modelEV)}｜穩健EV（R）${signedPct(robustEV)}｜資料／QA ${qaLabel}｜分數 ${scoreLabel}｜排名資格 ${rankText}`;
+  const probabilityDetail = `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   const buttonText = latest ? '已下注 ✓' : '紀錄實際下注';
   return <div className="scoreRow">
-    <div className={`score ${scoreClass}`} title={scoreTitle}>{scoreLabel}</div>
+    <div className={`score ${evClass}`} title={scoreTitle} aria-label={`模型EV（W）${signedPct(modelEV)}`}>
+      <span style={{ display: 'block', fontSize: 9, lineHeight: 1.1 }}>模型EV（W）</span>
+      <strong style={{ display: 'block', fontSize: 13, lineHeight: 1.35 }}>{signedPct(modelEV)}</strong>
+    </div>
     <div className="scoreBody">
       <div className="scorePick">{translateTeamText(row.pick) || '水位未提供｜不評分'}</div>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
-      <div className="scoreMeta">{scoreMetaText}</div>
-      {actualLine && <div className={`qaLine ${inactiveNotice ? 'pending' : ''}`}>{inactiveNotice
-        ? inactiveNotice
-        : !leagueValidated
-          ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否（${verdict.reason}）｜資料QA：${qaPassed ? 'PASS' : 'BLOCK'}｜正式推薦停用`
-          : !qaPassed
-            ? `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：否｜資料QA：BLOCK（${qaFailures.join('；') || '資料、數學或數值檢查未通過'}）｜不列排名、不作推薦｜正式推薦停用`
-            : `公式評分 ${scoreLabel}｜${verdict.icon} ${verdict.label}｜排名資格：${verdict.ranking ? '是' : `否（${verdict.reason}）`}｜資料QA：PASS｜市場回灌：停用｜歷史驗證：未完成｜外部同約：只作8.5資格Gate、不改分布或W/R｜正式推薦與Unit停用`}</div>}
-      {!calibrationBlocked && auditWarnings.length > 0 && <details className="auditWarnings">
+      <div className="scoreMeta"><strong>穩健EV（R） {signedPct(robustEV)}</strong>{robustEV != null && robustEV <= 0 ? '｜觀察／不排名' : ''}</div>
+      <div className={`qaLine ${qaLabel === 'BLOCK' || inactiveNotice ? 'pending' : ''}`}>資料／QA狀態：{qaLabel}{qaReason ? `（${qaReason}）` : ''}｜原始W/R保留</div>
+      <div className="scoreMeta">分數：{scoreLabel}{formulaScore == null ? '｜未產生或不適用' : ''}</div>
+      <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}｜正式下注資格：否（長期驗證與正式發布尚未完成）</div>
+      <div className="scoreMeta">{probabilityDetail}</div>
+      {auditWarnings.length > 0 && <details className="auditWarnings">
         <summary>模型與外部稽核提示 {auditWarnings.length} 項</summary>
         <div>{auditWarnings.join('；')}</div>
       </details>}
@@ -594,18 +660,56 @@ function ResultRow({ row, game, onBet, betState = null, recordable = false, now,
   </div>;
 }
 
+function DirectionSlotRow({ row, game }) {
+  const status = directionStatus(row);
+  const blocked = status === 'BLOCKED';
+  const statusLabel = status === 'UNOPENED' ? '尚未開盤'
+    : blocked ? '資料異常｜此市場方向已封鎖'
+      : '等待模型計算';
+  const reason = [
+    row?.reason,
+    row?.statusReason,
+    row?.error,
+    ...(Array.isArray(row?.coverageErrors) ? row.coverageErrors : []),
+    ...(Array.isArray(row?.errors) ? row.errors : []),
+    ...(Array.isArray(row?.qa?.reasons) ? row.qa.reasons : []),
+  ].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join('；');
+  return <div className="scoreRow">
+    <div className={`score ${blocked ? 'warning' : 'pass'}`} aria-label="模型EV（W）尚未產生">
+      <span style={{ display: 'block', fontSize: 9, lineHeight: 1.1 }}>模型EV（W）</span>
+      <strong style={{ display: 'block', fontSize: 13, lineHeight: 1.35 }}>—</strong>
+    </div>
+    <div className="scoreBody">
+      <div className="scorePick">{directionLabel(row, game)}</div>
+      <div className="scorePrice">盤口／水位：{status === 'UNOPENED' ? '尚未開盤' : '—'}</div>
+      <div className="scoreMeta"><strong>穩健EV（R） —</strong></div>
+      <div className={`qaLine ${blocked ? 'pending' : ''}`}>資料／QA狀態：{status}{reason ? `（${reason}）` : ''}</div>
+      <div className="scoreMeta">分數：—</div>
+      <div className="qaLine pending">排名資格：否｜正式下注資格：否｜{statusLabel}</div>
+    </div>
+  </div>;
+}
+
 function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled = true, shadowMode = false }) {
   const readerBacked = item.actualSource?.provider === 'TAI888_READER_AUTO';
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const coverage = item.marketCoverage || {};
   const availableMarkets = new Set(coverage.availableMarkets || []);
   const blockedMarkets = new Set(coverage.blockedMarkets || []);
+  const analysis = item.customData?.analysis || {};
+  const externalDirectionSlots = item.customData?.directionSlots || item.directionSlots || null;
+  const directionAnalysis = externalDirectionSlots && !analysis.directionSlots
+    ? { ...analysis, directionSlots: externalDirectionSlots }
+    : analysis;
+  const hasDirectionSlots = Array.isArray(directionAnalysis.directionSlots) || Array.isArray(directionAnalysis.slots);
   const openMarketCount = Number.isInteger(Number(coverage.openMarkets))
     ? Number(coverage.openMarkets)
     : new Set((item.customMarkets || []).map(row => row.market)).size;
   const pitPersistence = item.customData?.pitPersistence || null;
   const pitUnconfirmed = pitPersistence?.confirmed !== true;
-  const actualRows = (item.customData?.analysis?.results || []).filter(row => row.sourceType === 'ACTUAL_TW_CREDIT').map(row => {
+  const actualRows = analysisDirectionRows(directionAnalysis)
+    .filter(row => hasDirectionSlots || row.sourceType === 'ACTUAL_TW_CREDIT')
+    .map(row => {
     const currentReaderPrice = readerBacked
       && gamePrestart
       && readerExecutable
@@ -623,15 +727,14 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
     // never the immutable score that was completed before first pitch.
     return { ...row, clientReaderPriceCurrent: currentReaderPrice, clientInactiveNotice: inactiveNotice };
   });
-  const expectedDirectionCount = openMarketCount * 2;
-  const scoredDirectionCount = actualRows.filter(row => row.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))).length;
-  const rankingDirectionCount = actualRows.filter(row => diagnosticVerdict(
+  const expectedDirectionCount = 8;
+  const scoredDirectionCount = actualRows.filter(row => modelEvValue(row) != null).length;
+  const rankingDirectionCount = actualRows.filter(row => modelEvValue(row) != null && diagnosticVerdict(
     row,
     row.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore)) ? Number(row.formulaDiagnosticScore) : null,
-    row?.scoreAudit?.ok === true && row?.pairAudit?.passed !== false,
+    directionQaPassed(row),
     row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED',
   ).ranking).length;
-  const analysis = item.customData?.analysis || {};
   const expectedRuns = analysis.expectedRuns || null;
   const sourceStatusLabels = {
     starters: '先發', lineups: '打線', bullpen: '純牛棚', parkFactor: '球場', weather: '天氣',
@@ -669,10 +772,14 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
       {(item.actualSource || item.marketCoverage || actualRows.length > 0) && <div className="actualBox">
         <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>已開 {openMarketCount}/4 市場</span></div>
         {MARKET_ORDER.map(market => {
-          const rows = actualRows.filter(row => row.market === market);
-          const blocked = blockedMarkets.has(market);
-          return <div className={`marketBlock actualMarket ${blocked ? 'blockedMarket' : rows.length ? 'availableMarket' : 'unavailableMarket'}`} key={market}><div className="marketTitle"><h3>{market}</h3><span>{rows.length || availableMarkets.has(market) ? 'AVAILABLE' : blocked ? 'BLOCKED' : 'UNAVAILABLE'}</span></div>{rows.length
-            ? rows.map(row => <ResultRow key={rowKey(row)} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled, row.clientReaderPriceCurrent)} onBet={value => onBet(item, value)} now={now} inactiveNotice={row.clientInactiveNotice}/>)
+          const rows = actualRows.filter(row => row.market === market).sort(compareDirectionsByW);
+          const calculated = rows.some(row => modelEvValue(row) != null);
+          const blocked = blockedMarkets.has(market) || rows.some(row => directionStatus(row) === 'BLOCKED');
+          const marketState = calculated ? 'AVAILABLE' : blocked ? 'BLOCKED' : 'UNOPENED';
+          return <div className={`marketBlock actualMarket ${blocked && !calculated ? 'blockedMarket' : calculated ? 'availableMarket' : 'unavailableMarket'}`} key={market}><div className="marketTitle"><h3>{market}</h3><span>{marketState}</span></div>{rows.length
+            ? rows.map((row, index) => directionStatus(row) === 'CALCULATED' || modelEvValue(row) != null
+              ? <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled, row.clientReaderPriceCurrent)} onBet={value => onBet(item, value)} now={now} inactiveNotice={row.clientInactiveNotice}/>
+              : <DirectionSlotRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game}/>)
             : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
       </div>}
@@ -758,17 +865,24 @@ export default function Home() {
   const shadowMode = activeLeague.status === 'shadow';
   const readerCoverage = readerCoverageCounts(readerStatus);
   const readerPendingText = coveragePendingText(readerCoverage);
-  const shadowRanking = useMemo(() => board.flatMap(item => (item.customData?.analysis?.results || [])
-    .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
-      && row.sourceType === 'ACTUAL_TW_CREDIT'
-      && row.provider === 'TAI888_READER_AUTO')
-    .map(row => {
+  const shadowRanking = useMemo(() => board.flatMap(item => {
+    const analysis = item.customData?.analysis || {};
+    const externalDirectionSlots = item.customData?.directionSlots || item.directionSlots || null;
+    const directionAnalysis = externalDirectionSlots && !analysis.directionSlots
+      ? { ...analysis, directionSlots: externalDirectionSlots }
+      : analysis;
+    const hasDirectionSlots = Array.isArray(directionAnalysis.directionSlots) || Array.isArray(directionAnalysis.slots);
+    return analysisDirectionRows(directionAnalysis)
+      .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
+        && modelEvValue(row) != null
+        && (hasDirectionSlots || (row.sourceType === 'ACTUAL_TW_CREDIT' && row.provider === 'TAI888_READER_AUTO')))
+      .map(row => {
       const score = row.shadowDiagnosticScore != null && Number.isFinite(Number(row.shadowDiagnosticScore))
         ? Number(row.shadowDiagnosticScore)
         : row.formulaDiagnosticScore != null && Number.isFinite(Number(row.formulaDiagnosticScore))
           ? Number(row.formulaDiagnosticScore)
           : null;
-      const qaPassed = row.scoreAudit?.ok === true && row.pairAudit?.passed !== false;
+      const qaPassed = directionQaPassed(row);
       const qualified = row.evCalibration?.qualified === true;
       const readerQualified = row.evCalibration?.actualReaderEligible === true;
       const gamePrestart = gameIsPrestartNow(item.game, clockNow);
@@ -790,11 +904,13 @@ export default function Home() {
       const rankingEligible = pitConfirmed && currentReaderPrice && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
         && row.rankingQualified === true;
       return { item, row, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
-        water: row.water, score, weightedEV: row.weightedEV, robustEV: row.robustEV, qaPassed, qualified,
+        water: row.water, score, weightedEV: modelEvValue(row), robustEV: robustEvValue(row), qaPassed, qualified,
         currentReaderPrice, inactiveNotice, rankingEligible };
-    }))
-    .sort((left, right) => Number(right.score ?? -Infinity) - Number(left.score ?? -Infinity)
-      || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity)),
+      });
+  })
+    .sort((left, right) => Number(right.weightedEV ?? -Infinity) - Number(left.weightedEV ?? -Infinity)
+      || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity)
+      || Number(right.score ?? -Infinity) - Number(left.score ?? -Infinity)),
   [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, date]);
   const shadowBetOrder = useMemo(() => buildBetOrderEntries(shadowRanking), [shadowRanking]);
   const shadowBetOrderGames = useMemo(() => groupBetOrderEntries(shadowBetOrder), [shadowBetOrder]);
@@ -934,7 +1050,10 @@ export default function Home() {
     setReaderStatus(null);
   }, [date, league, storageReady]);
   useEffect(() => {
-    if (!storageReady || !board.some(item => item.customData?.analysis?.results?.length)) return;
+    if (!storageReady || !board.some(item => (
+      item.customData?.analysis?.results?.length
+      || item.customData?.analysis?.directionSlots?.length
+    ))) return;
     saveAnalysisBoardCache(league, date, board);
   }, [board, date, league, storageReady]);
   useEffect(() => {
@@ -1107,6 +1226,7 @@ export default function Home() {
           league,
           game,
           markets: actualMarkets,
+          readerProvenance: task.readerProvenance || null,
           verificationMarkets: task.verificationMarkets || [],
           settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
         }),
@@ -1117,13 +1237,16 @@ export default function Home() {
         ...item,
         actualSource: task.actualSource || item.actualSource || null,
         marketCoverage: task.marketCoverage || item.marketCoverage || null,
+        readerProvenance: task.readerProvenance || item.readerProvenance || null,
         readerPayloadHash: task.readerPayloadHash || item.readerPayloadHash || null,
         referenceData: compactAnalysisData(baseData),
         mode: 'actual',
         status: 'done',
-        statusLabel: baseData.pitPersistence?.confirmed
-          ? 'Tai888盤口分析完成｜PIT已確認'
-          : '影子分析完成｜PIT未保存、禁止排名下注',
+        statusLabel: Number(baseData?.analysis?.calculatedDirectionCount || 0) === 0
+          ? '八方向槽位已保存｜目前尚未開盤或市場BLOCKED'
+          : baseData.pitPersistence?.confirmed
+            ? 'Tai888盤口分析完成｜PIT已確認'
+            : '影子分析完成｜PIT未保存、禁止排名下注',
         customMarkets: actualMarkets,
         customData: compactAnalysisData(baseData),
         restoredFromCache: false,
@@ -1203,27 +1326,33 @@ export default function Home() {
 
       const readerCreditReady = credit?.provider === 'TAI888_READER_AUTO' && credit?.readerFresh === true;
       const creditByPk = new Map((readerCreditReady ? credit.games || [] : []).map(row => [Number(row.gamePk), row]));
+      const unopenedByPk = new Map((readerCreditReady ? credit.unopenedGames || [] : []).map(row => [Number(row.gamePk), row]));
+      const readerGameByPk = new Map([...unopenedByPk, ...creditByPk]);
       const items = games.map(game => {
         const previous = previousByPk.get(Number(game.gamePk));
-        const foundCredit = creditByPk.get(Number(game.gamePk));
+        const foundCredit = readerGameByPk.get(Number(game.gamePk));
         const foundReference = referenceByPk.get(Number(game.gamePk));
-        const available = Boolean(foundCredit?.markets?.length);
-        const resumed = available && previous
+        const represented = Boolean(foundCredit);
+        const hasOpenRows = Boolean(foundCredit?.markets?.length);
+        const resumed = hasOpenRows && previous
           ? advanceUnchangedReaderGame(previous, foundCredit.markets, credit.payloadHash, credit.pageActivityAt)
           : null;
         return {
           game,
           mode: 'actual',
-          actualSource: resumed?.actualSource || previous?.actualSource || foundCredit?.source || null,
+          actualSource: resumed?.actualSource || foundCredit?.source || previous?.actualSource || null,
           marketCoverage: foundCredit?.marketCoverage || previous?.marketCoverage || null,
-          readerPayloadHash: resumed?.readerPayloadHash || previous?.readerPayloadHash || (previous ? null : available ? credit.payloadHash : null),
-          customMarkets: resumed?.customMarkets || (previous?.customMarkets?.length ? previous.customMarkets : foundCredit?.markets || []),
+          readerProvenance: foundCredit?.readerProvenance || previous?.readerProvenance || null,
+          readerPayloadHash: resumed?.readerPayloadHash || previous?.readerPayloadHash || (represented ? credit.payloadHash : null),
+          customMarkets: resumed?.customMarkets || (represented ? foundCredit.markets || [] : previous?.customMarkets || []),
           verificationMarkets: foundReference?.markets || [],
           referenceSource: foundReference?.source || previous?.referenceSource || null,
-          status: resumed ? 'done' : available ? 'queued' : 'unopened',
-          statusLabel: available
-            ? resumed ? 'Tai888盤口未變｜接續完成' : previous?.customData ? '後台更新中｜保留目前分數' : '等待分析'
-            : previous?.customData ? '最新盤已下架｜保留上一版結果' : '目前尚無可配對盤口',
+          status: resumed ? 'done' : represented ? 'queued' : 'unopened',
+          statusLabel: represented
+            ? resumed ? 'Tai888盤口未變｜接續完成'
+              : hasOpenRows ? previous?.customData ? '後台更新中｜保留目前分數' : '等待分析'
+                : previous?.customData ? '最新盤未開｜建立八方向UNOPENED快照中' : '建立八方向尚未開盤快照中'
+            : previous?.customData ? 'Reader未呈現｜保留上一版結果' : '目前尚無可配對盤口',
           referenceData: resumed?.referenceData || previous?.referenceData || null,
           customData: resumed?.customData || previous?.customData || null,
           restoredFromCache: resumed ? false : previous?.restoredFromCache,
@@ -1234,12 +1363,13 @@ export default function Home() {
       setBoard(items);
 
       const tasks = items.map(item => {
-        const actual = creditByPk.get(Number(item.game.gamePk));
-        return actual?.markets?.length && !item.resumedCurrentReaderGame ? {
+        const actual = readerGameByPk.get(Number(item.game.gamePk));
+        return actual && !item.resumedCurrentReaderGame ? {
           game: item.game,
-          actualMarkets: actual.markets,
+          actualMarkets: actual.markets || [],
           actualSource: actual.source,
           marketCoverage: actual.marketCoverage,
+          readerProvenance: actual.readerProvenance,
           readerPayloadHash: credit.payloadHash,
           verificationMarkets: item.verificationMarkets || [],
           generation,
@@ -1291,8 +1421,8 @@ export default function Home() {
         });
       }
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
-      const creditCount = tasks.filter(task => task.actualMarkets.length).length;
-      const completedCreditCount = tasks.reduce((count, task, index) => count + (task.actualMarkets.length && outcomes[index] ? 1 : 0), 0);
+      const creditCount = tasks.length;
+      const completedCreditCount = outcomes.filter(Boolean).length;
       const failedCreditCount = creditCount - completedCreditCount;
       const readerHashRequired = Boolean(credit?.readerFresh && creditCount > 0);
       const hashEligible = readerHashRequired && shouldAcknowledgeReaderHash({
@@ -1372,21 +1502,23 @@ export default function Home() {
         return;
       }
       const creditByPk = new Map((credit.games || []).map(row => [Number(row.gamePk), row]));
+      const unopenedByPk = new Map((credit.unopenedGames || []).map(row => [Number(row.gamePk), row]));
+      const readerGameByPk = new Map([...unopenedByPk, ...creditByPk]);
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
       if (!stillCurrent()) return;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
       const boardPks = new Set(board.map(item => Number(item.game.gamePk)));
       const expectedItems = board.filter(item => gameIsPrestartNow(item.game, Date.now())
-        && (creditByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO'));
-      let failed = [...creditByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
+        && (readerGameByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO'));
+      let failed = [...readerGameByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
       let completed = 0;
       let updated = 0;
       let removed = 0;
       await runPool(board, 2, async item => {
         if (!stillCurrent()) return;
         if (!gameIsPrestartNow(item.game, Date.now())) return;
-        const actual = creditByPk.get(Number(item.game.gamePk));
-        if (!actual?.markets?.length) {
+        const actual = readerGameByPk.get(Number(item.game.gamePk));
+        if (!actual) {
           if (item.actualSource?.provider === 'TAI888_READER_AUTO') {
             updateBoard(item.game.gamePk, current => ({
               ...current,
@@ -1405,7 +1537,9 @@ export default function Home() {
           completed += 1;
           return;
         }
-        const unchanged = advanceUnchangedReaderGame(item, actual.markets, credit.payloadHash, credit.pageActivityAt);
+        const unchanged = actual.markets?.length
+          ? advanceUnchangedReaderGame(item, actual.markets, credit.payloadHash, credit.pageActivityAt)
+          : null;
         if (unchanged) {
           updateBoard(item.game.gamePk, () => unchanged);
           completed += 1;
@@ -1418,6 +1552,7 @@ export default function Home() {
             actualMarkets: actual.markets,
             actualSource: actual.source,
             marketCoverage: actual.marketCoverage,
+            readerProvenance: actual.readerProvenance,
             readerPayloadHash: credit.payloadHash,
             verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
             generation,
@@ -1433,7 +1568,8 @@ export default function Home() {
             body: JSON.stringify({
               league,
               snapshot,
-              markets: actual.markets,
+              markets: actual.markets || [],
+              readerProvenance: actual.readerProvenance || null,
               previousMarkets: item.customMarkets || [],
               verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
               settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
@@ -1444,16 +1580,21 @@ export default function Home() {
           updateBoard(item.game.gamePk, current => ({
             ...current,
             actualSource: actual.source,
+            marketCoverage: actual.marketCoverage || current.marketCoverage || null,
+            readerProvenance: actual.readerProvenance || current.readerProvenance || null,
             readerPayloadHash: credit.payloadHash,
-            customMarkets: actual.markets,
+            customMarkets: actual.markets || [],
             verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
             referenceSource: referenceByPk.get(Number(item.game.gamePk))?.source || item.referenceSource || null,
             customData: compactAnalysisData(data),
             restoredFromCache: false,
             status: 'done',
-            statusLabel: 'Tai888最新盤快速重算完成',
+            statusLabel: Number(data?.analysis?.calculatedDirectionCount || 0) === 0
+              ? '八方向槽位已更新｜目前尚未開盤或市場BLOCKED'
+              : 'Tai888最新盤快速重算完成',
             error: '',
           }));
+          if (item.customMarkets?.length && !actual.markets?.length) removed += 1;
           updated += 1;
           completed += 1;
         } catch (cause) {
@@ -1535,10 +1676,10 @@ export default function Home() {
       formulaDiagnosticScore: row.formulaDiagnosticScore ?? null,
       shadowDiagnosticScore: row.shadowDiagnosticScore ?? null,
       legacyDiagnosticScore: row.legacyDiagnosticScore ?? null,
-      weightedEV: row.weightedEV,
-      robustEV: row.robustEV,
-      rawModelWeightedEV: row.rawWeightedEV ?? row.weightedEV,
-      rawModelRobustEV: row.rawRobustEV ?? row.robustEV,
+      weightedEV: modelEvValue(row),
+      robustEV: robustEvValue(row),
+      rawModelWeightedEV: modelEvValue(row),
+      rawModelRobustEV: robustEvValue(row),
       qaStatus: row.scoreAudit?.ok === false ? 'BLOCK' : 'SHADOW_DIAGNOSTIC',
       placedContractSnapshot: {
         pick: row.pick,
@@ -1592,7 +1733,7 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>V11.0使用聯盟隔離的賽前PIT資料、單一共用聯合比分分布與可回放雜湊；核心資料不足就不評分。Tai888只作成交價；外部同約不改分布或W/R，只作8.5資格Gate；正式下注建議仍等待locked OOS與forward驗證。</p></div>
+      <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>每場使用一份聯盟專屬的凍結聯合比分分布，依Tai888實際盤口逐腿結算八個方向；模型EV（W）與穩健EV（R）完整顯示，QA、分數、排名與正式下注資格只作後續判斷。Tai888與外部市場都不回灌模型概率。</p></div>
       <div className="headerBadges"><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
     </header>
 
@@ -1607,7 +1748,7 @@ export default function Home() {
 
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>
-      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>模型影子排名</button>
+      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>全部方向EV</button>
       <button className={tab === 'betOrder' ? 'active' : ''} onClick={() => setTab('betOrder')}>影子候選順序</button>
       <button className={tab === 'bets' ? 'active' : ''} onClick={() => setTab('bets')}>下注紀錄</button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
@@ -1619,11 +1760,11 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。核心資料、聯合比分分布、Tai888逐腿結算與數學QA通過即可顯示模型影子分析；外部同約不參與棒球分布或EV，只控制8.5資格上限。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時即顯示模型EV（W）與穩健EV（R）；QA或資格未通過只會清楚標示不排名、不可正式下注，不會刪除已算出的EV。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
-          <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立方向或分數。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每5分鐘複核｜合格模型影子分數啟用｜正式推薦停用` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
+          <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每5分鐘複核｜模型EV完整顯示｜正式推薦停用` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
         </div>
       </section>
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
@@ -1632,17 +1773,18 @@ export default function Home() {
       {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode}/>) }
     </>}
 
-    {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>模型影子排名｜全部方向</h2><span className="state shadow">全部顯示｜非推薦</span></div>
-      <div className="emptySmall">此處顯示這一版Reader快照中已開盤且已完成分析的全部方向，不再只顯示7.2以上或可下注方向。Reader未呈現或尚未開盤的場次不在此列，不能與其他時點、其他盤口快照混合比較；未通過EV校準、QA、情境穩定或雙正EV的方向仍保留並清楚標示原因。</div>
+    {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>全部方向｜模型EV（W）由高到低</h2><span className="state shadow">正負完整顯示｜非推薦</span></div>
+      <div className="emptySmall">此處顯示這一版Reader快照中已開盤且成功產生模型EV（W）的全部方向，依W由高到低排列；負EV、R≤0、QA BLOCK、低分與不具下注資格的方向都不刪除。尚未開盤或市場資料錯誤的固定槽位保留在各場今日盤口，不能與其他時點、其他盤口快照混合比較。</div>
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
         const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice);
         const buttonText = betState.latest ? '已下注 ✓' : '紀錄實際下注';
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
+        const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const icon = entry.rankingEligible ? '🧪' : entry.row?.extremeEvReviewRequired ? '⚠️' : entry.qualified && entry.qaPassed ? (Number(entry.robustEV) > 0 ? '🟡' : '⚪') : '⚠️';
         const status = entry.rankingEligible ? '影子排名資格：是' : !entry.qualified ? '影子排名資格：否｜EV校準未通過' : !entry.qaPassed ? '影子排名資格：否｜QA未通過' : `影子排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong>{scoreText}</strong><div><span>{icon} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜影子診斷、非推薦</small></div>{(recordable || betState.latest) && <div className="rankActionStack"><button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div>}</div>;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong style={{ fontSize: 12 }} title="模型EV（W）">{signedPct(entry.weightedEV)}</strong><div><span>{icon} {entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>穩健EV（R） {signedPct(entry.robustEV)}｜資料／QA狀態：{qaText}｜分數：{scoreText}｜{status}｜正式下注資格：否｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜未校準模型分析</small></div>{(recordable || betState.latest) && <div className="rankActionStack"><button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div>}</div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
@@ -1655,16 +1797,17 @@ export default function Home() {
           const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice);
           const buttonText = betState.latest ? '已下注 ✓' : '紀錄實際下注';
           const scoreText = entry.score.toFixed(1);
+          const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const icon = entry.rankingEligible ? '🧪' : entry.row?.extremeEvReviewRequired ? '⚠️' : entry.qualified && entry.qaPassed ? '🟡' : '⚠️';
           const status = entry.rankingEligible ? '影子排名資格：是' : !entry.qualified ? '影子排名資格：否｜EV校準未通過' : !entry.qaPassed ? '影子排名資格：否｜QA未通過' : `影子排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{entry.betOrderIndex}</b><strong>{scoreText}</strong><div><span>{icon} {entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>W {pct(entry.weightedEV)}｜R {pct(entry.robustEV)}｜{status}｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜影子診斷、非推薦</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
+          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{entry.betOrderIndex}</b><strong style={{ fontSize: 12 }} title="模型EV（W）">{signedPct(entry.weightedEV)}</strong><div><span>{icon} {entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>穩健EV（R） {signedPct(entry.robustEV)}｜資料／QA狀態：{qaText}｜分數：{scoreText}｜{status}｜正式下注資格：否｜{entry.inactiveNotice || 'Reader目前盤口驗證完成'}｜未校準模型分析</small></div>{(recordable || betState.latest) && <button className={`mini ${betState.latest ? 'recorded' : 'green'}`} disabled={Boolean(betState.latest)} onClick={() => recordBet(entry.item, entry.row)}>{buttonText}</button>}</div>;
         })}
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
 
     {tab === 'bets' && <BetLedgerDashboard bets={bets} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements}/>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>V11使用PIT狀態感知聯合比分分布，不使用虛構模擬次數；同場正反方向共用凍結分布，Tai888只作成交payoff與合理性QA，不改寫模型機率或EV。MLB模型與Tai888去水機率差距超過10%時，原始結果只留後台稽核，不顯示為EV或S分數；缺少兩個獨立同合約市場時最高8.4。尚未完成locked OOS與forward驗證前，正式推薦與Unit持續停用。此金額只供實際下注帳本紀錄，不是模型Unit建議；帳本依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>每場正反方向、讓分大小、全場與上半場共用一份PIT凍結聯合比分分布；Tai888只提供待評估的成交盤口與水位，不改寫模型概率。所有可計算方向都先顯示模型EV（W）與穩健EV（R）；Tai888差距、外部同約、QA、分數及長期驗證只影響排名與正式下注資格。尚未完成locked OOS與forward驗證前，正式推薦與Unit持續停用。此金額只供實際下注帳本紀錄，不是模型Unit建議；帳本依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
   </main>;
 }

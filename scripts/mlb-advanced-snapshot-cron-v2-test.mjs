@@ -9,6 +9,8 @@ assert.match(route, /Bearer \$\{secret\}/);
 assert.match(route, /filterLeaguePrestartGames\('MLB'/);
 assert.match(route, /persistMlbAdvancedSnapshotBestEffort/);
 assert.match(middleware, /\/api\/cron\/mlb-advanced-snapshots/);
-assert.deepEqual(vercel.crons, [{ path: '/api/cron/mlb-advanced-snapshots', schedule: '0 0 * * *' }]);
+assert.deepEqual(vercel.crons, [
+  { path: '/api/cron/mlb-advanced-snapshots', schedule: '0 0 * * *' },
+  { path: '/api/cron/analysis-direction-settlements', schedule: '30 21 * * *' },
+]);
 console.log('Authenticated daily MLB advanced snapshot cron PASS');
-

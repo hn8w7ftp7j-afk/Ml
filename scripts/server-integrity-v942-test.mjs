@@ -3,8 +3,10 @@ import {
   attestIncomingMarketRows,
   marketIntegrityConfigured,
   signMarketRow,
+  signReaderProvenance,
   signRepriceSnapshot,
   verifyMarketRow,
+  verifyReaderProvenance,
   verifyRepriceSnapshot,
 } from '../lib/market-integrity-v1.js';
 import {
@@ -49,6 +51,17 @@ const signedMarket = await signMarketRow('MLB', game, market, signingEnv);
 assert.equal(await verifyMarketRow('MLB', game, signedMarket, signingEnv), true);
 assert.equal(await verifyMarketRow('MLB', game, { ...signedMarket, water: 1.05 }, signingEnv), false);
 assert.equal(await verifyMarketRow('MLB', { ...game, gameNumber: 2 }, signedMarket, signingEnv), false);
+
+const signedUnopenedProvenance = await signReaderProvenance('MLB', game, {
+  readerVersion: '2.0.3', payloadHash: 'a'.repeat(64), rawBoardHash: 'b'.repeat(64),
+  boardDate: '2099-08-12', lineAsOf: '2099-08-11T22:59:00.000Z', marketStatus: 'UNOPENED',
+  readerGameMarketHash: 'c'.repeat(64),
+}, signingEnv);
+assert.equal(await verifyReaderProvenance('MLB', game, signedUnopenedProvenance, signingEnv), true);
+assert.equal(await verifyReaderProvenance('MLB', game, {
+  ...signedUnopenedProvenance, readerGameMarketHash: 'd'.repeat(64),
+}, signingEnv), false);
+assert.equal(await verifyReaderProvenance('MLB', { ...game, gameNumber: 2 }, signedUnopenedProvenance, signingEnv), false);
 
 await assert.rejects(
   () => attestIncomingMarketRows('MLB', game, [market], signingEnv),

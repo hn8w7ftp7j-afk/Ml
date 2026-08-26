@@ -1,13 +1,13 @@
 # 四聯盟棒球 PIT 影子分析
 
-網站版本：`11.0.3`
+網站版本：`11.1.0`
 Tai888 Reader：`2.1.19`（本次不需重裝）
 
 這是私人使用的盤口分析與實際下注帳本。所有模型輸出目前都是影子診斷，不是正式推薦；正式推薦、正式下注資格與 Unit 在 locked OOS 與 forward 驗證完成前一律停用。
 
-資料庫額度或 PIT 寫入暫時不可用時，網站仍會快速回傳唯讀影子診斷，但該批全部取消排名與下注資格並明示「PIT未保存」；資料庫恢復後才會重新確認 PIT 與排名。下注帳本不使用未保存的本機假成功紀錄。
+網站第一層固定顯示比分分布逐比分、逐腿結算出的未校準「模型EV（W）」；「穩健EV（R）」排在 W 後面。QA、分數、排名與正式下注資格都是後續判斷，不能刪除已通過數學完整性檢查的 W。
 
-PIT永久保存與 Reader 盤口新鮮度分開顯示；PIT 寫入失敗不得冒充 Reader 過期。模型與 Tai888 雙邊去水機率差距超過 10 個百分點時，保留可稽核的原始 W、R、S，但一律取消排名與下注資格，且 Tai888 不得改寫比分分布或原始分數。
+資料庫額度或 PIT 寫入暫時不可用時，網站仍會回傳唯讀 W／R，但該批取消排名與下注資格並明示「PIT未保存」；資料庫恢復後才重新確認 PIT 與排名。PIT 永久保存與 Reader 盤口新鮮度分開顯示，任何一層失敗都不得冒充另一層失敗。模型與 Tai888 雙邊去水機率差距超過 10 個百分點時，W／R 仍照實保留，但一律取消排名與下注資格，且 Tai888 不得改寫比分分布或模型概率。
 
 ## 目前發布狀態
 
@@ -20,6 +20,8 @@ PIT永久保存與 Reader 盤口新鮮度分開顯示；PIT 寫入失敗不得�
 
 NPB、KBO、CPBL 已建立各自的資料與規則契約，但在聯盟專屬先發能力、打線、純後援牛棚、球場與情境資料鏈完整發布前，API 會以 `LEAGUE_NOT_READY` fail closed。不得回退 `analysis-v10`、不得套用 MLB 參數，也不得用整隊失分冒充先發 ERA／FIP／WHIP或純牛棚品質。
 
+目前三個亞洲聯盟也缺少已發布的獨立上半／全場聯合比分引擎；KBO 另缺官方左右投、天氣／巨蛋與雙重賽牛棚重算，CPBL 另缺可驗證先發與洋將規則快照。它們可使用官方賽程、Reader 與下注帳本，但在阻擋項目真正完成前不產生假 EV。CPBL 官方來源在局數完整時可安全自動結算全場；NPB／KBO 雖可讀取終場比分，目前仍缺可信的正式完賽局數，所以全場自動結算維持 fail closed。三個亞洲聯盟都尚缺官方前五局逐局結果，上半市場不自動結算。
+
 ## V11 不可違反的模型鏈
 
 每場只建立一份不可變的聯合比分分布：
@@ -29,7 +31,7 @@ NPB、KBO、CPBL 已建立各自的資料與規則契約，但在聯盟專屬先
   → 上游客／主得分中心與共用聯合比分分布
   → 同一分布結算四市場、八方向
   → Tai888 盤口與水位只轉換 payoff
-  → Weighted EV / Robust EV
+  → 模型EV（W）／穩健EV（R）
   → 數學、資料、情境與排名 Gate
   → 影子 S 分數
 ```
@@ -40,8 +42,15 @@ NPB、KBO、CPBL 已建立各自的資料與規則契約，但在聯盟專屬先
 - Tai888 是實際成交價，不得回灌或改變預測得分、勝率與方向。
 - 外部市場只可作同合約稽核，不能取代模型 EV 或改寫分布。
 - 盤口、水位、來源、Reader hash、聯盟與場次完全隔離。
-- 核心資料缺失、過期、未能 PIT 證明或數學 QA 失敗時不建立有效 EV、S 分數或排名。
-- 已開賽、Reader 過期、盤日或 payload hash 不一致時，保留完成的賽前分析供稽核，但停止排名與新下注紀錄。
+- 只有合法盤口／水位、成功建立的聯合比分分布與逐腿數學完整性是建立 W 的必要條件。
+- R≤0、資料 QA BLOCK、低分、無外盤、Reader 快照過期、PIT 寫入失敗或正式資格未通過，只能改變狀態、排名與下注資格，不能把可計算的 W 改成空白。
+- 已開賽、盤日或 payload hash 不一致時，保留完成的賽前 W／R 供稽核，但停止排名與新下注紀錄。
+
+## 四市場八方向固定契約
+
+每場固定保留八個唯一槽位：全場讓分主／客、全場大小大／小、上半讓分主／客、上半大小大／小。四市場全開時必須精確產生八筆 `CALCULATED`；未開盤市場保留兩筆 `UNOPENED` 並顯示「尚未開盤」；單一市場資料錯誤只把該市場兩筆標為 `BLOCKED`，其他合法市場繼續計算。
+
+同一市場出現三筆以上、方向重複、缺水位或盤口無法解析時，系統必須回傳明確 coverage／duplicate 原因，不可靜默截成兩筆。今日盤口維持四市場順序、同市場以 W 高者在上；全部方向頁依 W 由高到低顯示，負 EV 永遠保留。「已評 X/8」只計算成功產生 W 的槽位。
 
 ## 上游方向完整性
 
@@ -65,11 +74,11 @@ MLB 必要核心包含可信場次身分、先發／opener-bulk 情境、打線�
 
 影子排名至少受下列硬規則控制：
 
-- `Weighted EV > 0` 且 `Robust EV > 0` 才可能達 7.2。
-- Weighted／Robust 差距超過 5 個百分點：保留原始 W、R 與公式分數供稽核，但不列排名。
-- Weighted EV 達 20% 以上：視為異常複核，不覆寫原值，但不列排名。
+- `W > 0` 且 `R > 0` 才可能達 7.2；這只控制分數與排名，不控制 W 顯示。
+- W／R 差距超過 5 個百分點：保留原始 W、R 與公式分數供稽核，但不列排名。
+- W 達 20% 以上：視為異常複核，不覆寫原值，但不列排名。
 - 8.5 以上必須有兩個彼此獨立、完全相同合約的驗證來源；不足時最高 8.4。
-- QA、情境穩定、雙正 EV、Reader 新鮮度與後端 `rankingQualified` 任一失敗即不列排名。
+- QA、情境穩定、雙正 EV、Reader 新鮮度與後端 `rankingQualified` 任一失敗即不列排名，但 W／R 仍按固定順序顯示。
 - 所有畫面文字使用「影子候選／影子排名」，不顯示主推、正式注碼或正式推薦。
 
 ## 不可變 PIT 與回放
@@ -77,6 +86,8 @@ MLB 必要核心包含可信場次身分、先發／opener-bulk 情境、打線�
 `database/0005_analysis_pit_snapshots.sql` 建立四聯盟共用、聯盟隔離的 append-only PIT 表。FULL 分析永久保存完整聯合比分分布（JSON 或 gzip），price-only reprice 只引用父分布，不得重新抓核心資料或重建另一個棒球世界。
 
 `database/0006_cloud_bet_position_uniqueness.sql` 先隔離既有重複部位，再以聯盟、官方場次、市場與方向建立唯一鍵；新增下注採原子衝突檢查，避免重送、雙擊或多實例競態產生重複紀錄。
+
+`database/0007_analysis_direction_history.sql` 建立 append-only 八方向歷史與結算事件表。每次 FULL 分析與 price-only reprice 都保存完整八槽，不只保存實際下注項目；reprice 以父快照引用相同 `distributionId`／`distributionHash`，只有價格指紋改變。
 
 每筆快照包含：
 
@@ -89,6 +100,12 @@ MLB 必要核心包含可信場次身分、先發／opener-bulk 情境、打線�
 資料庫只接受開賽前寫入；內容不可更新或刪除。PIT 狀態只有資料庫確認後才可顯示為已永久保存；未設定資料庫或寫入失敗必須明示未確認，不能把排程中當成已保存。任何 hash、父鏈、聯盟、場次、核心或完整分布不一致都會停止回放。
 
 舊版無法證明 PIT 的紀錄保留在 quarantine，不納入 calibration、OOS、績效或模型升級證據。
+
+## 全方向自動結算與長期統計
+
+Vercel Cron 每日呼叫 `/api/cron/analysis-direction-settlements`，依官方終場比分自動結算所有尚未結算的 `CALCULATED` 方向，而不是只處理人工下注。全場方向可直接結算；缺少可信前五局比分時，上半方向建立 `MANUAL_REVIEW` 事件，不偽造比分。
+
+登入後可透過 `/api/analysis-directions/stats` 查詢已結算歷史，依聯盟、市場、W 區間、R 正負、QA、盤口類型與距離開賽時間切分，輸出勝／敗／走水、ROI、總盈虧及樣本數。W／R 公式版本、Reader 版本與 hash、模型／資料／規則／結算／不確定性版本及父快照關係均隨方向永久保存，可重播稽核。
 
 ## Reader 與下注紀錄安全
 
@@ -113,6 +130,7 @@ Production 必要：
 - `SESSION_SECRET`：至少 32 個隨機字元，不得與網站或 Tai888 密碼共用。
 - `READER_PAIR_SECRET`：Reader 配對密鑰。
 - `DATABASE_URL`：下注帳本與永久 PIT 儲存。
+- `CRON_SECRET`：Vercel Cron Bearer 驗證；缺少時進階快照與八方向自動結算都會拒絕執行。
 
 建議獨立設定：
 
@@ -123,24 +141,27 @@ Production 必要：
 ## 本機驗證
 
 ```bash
-npm install
-npm test
-npm run build
-npm audit --omit=dev --audit-level=high
-npm run package:reader
+npm ci
+npm run verify
+```
+
+Reader full-flow 需先以相同測試環境變數啟動 Production build，再執行：
+
+```bash
+npm start
 npm run e2e:reader
 ```
 
-`npm test` 包含比分分布隔離、PIT 永久分布與父鏈、Reader hash／時效、台灣盤結算、MLB opener／split、進階特徵 Gate、亞洲三聯盟 fail-closed 與快取跨開賽安全回歸。
+`npm run verify` 依序執行完整 `npm test`、Production build、production dependency high-severity audit 與 Reader 可重現封裝。`npm test` 包含八方向唯一性、正負 W、R≤0／QA BLOCK 仍顯示 W、PIT 永久分布與父鏈、八方向保存／重播／賽後結算、Reader hash／時效、台灣盤逐腿退水、MLB opener／split、進階特徵 Gate、亞洲三聯盟 fail-closed 與快取跨開賽安全回歸。
 
 ## 部署
 
 正式部署前必須：
 
 1. 全部測試、Production build 與 high-severity audit 通過。
-2. 確認 `DATABASE_URL` 可建立或已執行 PIT migration。
-3. 確認 Reader 仍為 `2.1.19` 且四聯盟頁籤與 league isolation 測試通過。
-4. 合併到 `main`，再部署 Vercel Production。
-5. 驗證 `/api/health`、登入、四聯盟狀態、MLB 影子頁、亞洲 setup 頁與未登入 API fail closed。
+2. 確認 `DATABASE_URL` 可建立或已執行 `0005`～`0007` migration，且 `CRON_SECRET` 已在 Production 設定。
+3. 確認 Reader 仍為 `2.1.19` 且四聯盟頁籤、Reader league isolation 與八方向端到端測試通過。
+4. 合併到 `main`，再部署 Vercel Production，等待 deployment `READY`。
+5. 驗證 `/api/health` 的 `11.1.0` 與 commit、登入、MLB 四市場八方向、方向歷史落庫、cron／統計 API、亞洲 setup 真實阻擋原因與未登入 API fail closed。
 
 本系統不保證單場或長期獲利；目前輸出只供模型驗證與實際下注紀錄稽核。

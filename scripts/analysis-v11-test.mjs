@@ -75,6 +75,8 @@ for (const row of analysis.results) {
   assert.ok(Number.isFinite(row.rawWeightedEV));
   assert.ok(Number.isFinite(row.rawRobustEV));
   assert.ok(row.rawRobustEV <= row.rawWeightedEV + 1e-12);
+  assert.ok(row.robustVariants.every(variant => ['scenario-q10', 'data-margin'].includes(variant.id)), 'R只能來自同一份模型分布的不確定性情境');
+  assert.equal(row.evCalibration.robustVariants.length, 0, '外部市場不得進入R情境');
   assert.equal(row.evDoubleCheck.passed, true);
   assert.ok(Math.abs(row.distributionCoverage - 1) < 1e-9);
   assert.equal(typeof row.evCalibration?.qualified, 'boolean');
@@ -90,8 +92,8 @@ for (const row of analysis.results) {
     assert.ok(Number.isFinite(row.robustEV));
     assert.ok(row.robustEV <= row.weightedEV + 1e-12);
   } else {
-    assert.equal(row.weightedEV, null);
-    assert.equal(row.robustEV, null);
+    assert.ok(Number.isFinite(row.weightedEV), 'QA BLOCK不得刪除已通過數學完整性的W');
+    assert.ok(Number.isFinite(row.robustEV), 'QA BLOCK不得刪除已建立的R');
     assert.ok((row.evCalibration.reasons || []).length > 0);
   }
 }

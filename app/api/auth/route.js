@@ -30,7 +30,7 @@ export async function POST(request) {
     }
     const password = String(body.password || '').slice(0, 256);
     if (!(await passwordMatches(password))) return NextResponse.json({ ok: false, error: '密碼錯誤' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
-    const maxAge = 60 * 60 * 24 * 30;
+    const maxAge = 60 * 60 * 24 * 7;
     const response = NextResponse.json({ ok: true });
     response.cookies.set('mlb_session', await createSessionToken(maxAge), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge });
     return response;

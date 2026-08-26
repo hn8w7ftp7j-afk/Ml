@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { createSessionToken } from '../lib/security.js';
-import { signRepriceSnapshot, verifyMarketRow } from '../lib/market-integrity-v1.js';
+import {
+  signMarketRow,
+  signRepriceSnapshot,
+  verifyMarketRow,
+  verifyReaderProvenance,
+} from '../lib/market-integrity-v1.js';
+import { readerUnopenedGameMarketContentHash } from '../lib/reader-market-revision-v110.js';
 
 register('./next-route-test-loader.mjs', import.meta.url);
 
@@ -337,13 +343,17 @@ try {
   assert.equal(signedCreditResponse.status, 200);
   assert.equal(signedCreditPayload.games.length, 1);
   assert.equal(signedCreditPayload.provider, 'TAI888_READER_AUTO');
+  assert.equal(signedCreditPayload.readerVersion, '2.0.3');
   assert.equal(signedCreditPayload.pageActivityAt, readerObservedAt);
+  assert.equal(await verifyReaderProvenance('MLB', signedCreditPayload.games[0].game, signedCreditPayload.games[0].readerProvenance), true);
+  assert.ok(signedCreditPayload.games[0].markets.every(row => row.readerVersion === '2.0.3'));
   assert.ok(await Promise.all(signedCreditPayload.games[0].markets.map(row => verifyMarketRow('MLB', signedCreditPayload.games[0].game, row))).then(results => results.every(Boolean)));
 
   const analyzeRoute = await import('../app/api/analyze/route.js');
   const fullAnalysisResponse = await analyzeRoute.POST(request('/api/analyze', token, {
     game: signedCreditPayload.games[0].game,
     markets: signedCreditPayload.games[0].markets,
+    readerProvenance: signedCreditPayload.games[0].readerProvenance,
     previousMarkets: [],
     verificationMarkets: [],
     settings: { rebateRate: 0.015, simulationsPerScenario: 500, candidateThreshold: 7.2, strongestThreshold: 8.5 },
@@ -351,6 +361,13 @@ try {
   const fullAnalysisPayload = await fullAnalysisResponse.json();
   assert.equal(fullAnalysisResponse.status, 200, fullAnalysisPayload.error || 'signed Reader full analysis must pass');
   assert.equal(fullAnalysisPayload.analysis.analysisType, 'FULL');
+  assert.equal(fullAnalysisPayload.analysis.directionSlots.length, 8);
+  assert.equal(fullAnalysisPayload.analysis.calculatedDirectionCount, 8);
+  assert.equal(fullAnalysisPayload.analysis.directionSlots.every(row => row.status === 'CALCULATED'), true);
+  assert.equal(fullAnalysisPayload.analysis.directionSlots.every(row => Number.isFinite(row.modelEV)), true);
+  assert.equal(fullAnalysisPayload.analysis.directionSlots.every(row => row.readerVersion === '2.0.3'), true);
+  assert.equal(new Set(fullAnalysisPayload.analysis.directionSlots.map(row => row.distributionId)).size, 1);
+  assert.equal(new Set(fullAnalysisPayload.analysis.directionSlots.map(row => row.distributionHash)).size, 1);
   assert.equal(fullAnalysisResponse.headers.get('x-reprice-snapshot'), 'COMPACT-REBUILDABLE');
   assert.equal(fullAnalysisPayload.repriceSnapshot?.distributionSnapshot, undefined);
   assert.ok(fullAnalysisPayload.repriceSnapshot?.distributionHash);
@@ -383,6 +400,7 @@ try {
   const heartbeatRepriceResponse = await repriceRoute.POST(request('/api/reprice', token, {
     snapshot: fullAnalysisPayload.repriceSnapshot,
     markets: refreshedCreditPayload.games[0].markets,
+    readerProvenance: refreshedCreditPayload.games[0].readerProvenance,
     previousMarkets: signedCreditPayload.games[0].markets,
     verificationMarkets: [],
     settings: { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5 },
@@ -390,10 +408,183 @@ try {
   const heartbeatRepricePayload = await heartbeatRepriceResponse.json();
   assert.equal(heartbeatRepriceResponse.status, 200, heartbeatRepricePayload.error || 'same-hash heartbeat reprice must pass');
   assert.equal(heartbeatRepricePayload.analysis.analysisType, 'PRICE_ONLY_REPRICE');
+  assert.equal(heartbeatRepricePayload.analysis.directionSlots.length, 8);
+  assert.equal(heartbeatRepricePayload.analysis.calculatedDirectionCount, 8);
   assert.equal(heartbeatRepricePayload.analysis.distributionHash, fullAnalysisPayload.analysis.distributionHash);
   assert.equal(heartbeatRepricePayload.analysis.lineAsOf, heartbeatPageActivityAt);
   assert.equal(heartbeatRepricePayload.reprice.distributionRebuiltFromSignedContext, true);
   assert.equal(heartbeatRepricePayload.repriceSnapshot?.distributionSnapshot, undefined);
+
+  const derivedLineageRepriceResponse = await repriceRoute.POST(request('/api/reprice', token, {
+    snapshot: fullAnalysisPayload.repriceSnapshot,
+    markets: refreshedCreditPayload.games[0].markets,
+    previousMarkets: signedCreditPayload.games[0].markets,
+    verificationMarkets: [],
+    settings: { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5 },
+  }));
+  const derivedLineageRepricePayload = await derivedLineageRepriceResponse.json();
+  assert.equal(derivedLineageRepriceResponse.status, 200, derivedLineageRepricePayload.error || 'signed Reader rows must safely derive lineage for legacy clients');
+  assert.equal(derivedLineageRepricePayload.analysis.readerPayloadHash, refreshedCreditPayload.payloadHash);
+  assert.equal(derivedLineageRepricePayload.analysis.readerProvenance.authorizationStatus, 'SERVER_ATTESTED_SIGNED_MARKET_ROWS');
+
+  const inconsistentLineageRow = await signMarketRow('MLB', signedCreditPayload.games[0].game, {
+    ...refreshedCreditPayload.games[0].markets[0],
+    readerPayloadHash: 'f'.repeat(64),
+    marketSignature: undefined,
+    marketSignatureVersion: undefined,
+  });
+  const inconsistentLineageResponse = await repriceRoute.POST(request('/api/reprice', token, {
+    snapshot: fullAnalysisPayload.repriceSnapshot,
+    markets: [inconsistentLineageRow, ...refreshedCreditPayload.games[0].markets.slice(1)],
+    previousMarkets: signedCreditPayload.games[0].markets,
+    verificationMarkets: [],
+  }));
+  const inconsistentLineagePayload = await inconsistentLineageResponse.json();
+  assert.equal(inconsistentLineageResponse.status, 409);
+  assert.equal(inconsistentLineagePayload.code, 'READER_PROVENANCE_MISMATCH');
+
+  const duplicateTotal = await signMarketRow('MLB', signedCreditPayload.games[0].game, {
+    ...signedCreditPayload.games[0].markets.find(row => row.market === '全場大小' && row.pick.startsWith('大')),
+    water: 0.91,
+    marketSignature: undefined,
+    marketSignatureVersion: undefined,
+  });
+  const isolatedCoverageResponse = await analyzeRoute.POST(request('/api/analyze', token, {
+    game: signedCreditPayload.games[0].game,
+    markets: [...signedCreditPayload.games[0].markets, duplicateTotal],
+    readerProvenance: signedCreditPayload.games[0].readerProvenance,
+    previousMarkets: [],
+    verificationMarkets: [],
+  }));
+  const isolatedCoveragePayload = await isolatedCoverageResponse.json();
+  assert.equal(isolatedCoverageResponse.status, 200, isolatedCoveragePayload.error || '單一市場重複不得阻擋其他市場');
+  assert.equal(isolatedCoveragePayload.analysis.directionSlots.length, 8);
+  assert.equal(isolatedCoveragePayload.analysis.directionSlots.filter(row => row.status === 'BLOCKED').length, 2);
+  assert.equal(isolatedCoveragePayload.analysis.directionSlots.filter(row => row.status === 'CALCULATED').length, 6);
+  assert.match(
+    isolatedCoveragePayload.analysis.marketCoverage.markets.find(row => row.market === '全場大小').errors.join('|'),
+    /禁止靜默截斷/,
+  );
+
+  const overLimitResponse = await analyzeRoute.POST(request('/api/analyze', token, {
+    game: signedCreditPayload.games[0].game,
+    markets: Array.from({ length: 13 }, () => signedCreditPayload.games[0].markets[0]),
+    readerProvenance: signedCreditPayload.games[0].readerProvenance,
+  }));
+  const overLimitPayload = await overLimitResponse.json();
+  assert.equal(overLimitResponse.status, 400);
+  assert.equal(overLimitPayload.code, 'MARKET_ROW_LIMIT_EXCEEDED');
+  assert.match(overLimitPayload.error, /拒絕而非靜默截斷/);
+
+  const unopenedObservedAt = new Date().toISOString();
+  const unopenedReaderPayload = {
+    ...readerPayload,
+    observedAt: unopenedObservedAt,
+    pageActivityAt: unopenedObservedAt,
+    payloadHash: 'd'.repeat(64),
+    games: [
+      {
+        ...rawReaderGame({ boardTime: '07:00' }),
+        first5Runline: null,
+        marketStates: {
+          FULL_HANDICAP: 'AVAILABLE', FULL_TOTAL: 'AVAILABLE',
+          FIRST_HALF_HANDICAP: 'BLOCKED', FIRST_HALF_TOTAL: 'AVAILABLE',
+        },
+      },
+      {
+        awayCode: 'BOS', homeCode: 'TOR', boardDate: '2099-08-12', boardTime: '10:00',
+        marketStatus: 'locked', fullRunline: null, fullTotal: null, first5Runline: null, first5Total: null,
+      },
+    ],
+  };
+  const unopenedIngestResponse = await ingestRoute.POST(readerRequest('/api/reader/ingest', unopenedReaderPayload, { token: pairPayload.token }));
+  const unopenedIngestPayload = await unopenedIngestResponse.json();
+  assert.equal(unopenedIngestResponse.status, 200, unopenedIngestPayload.error || 'Reader unopened slate ingest must pass');
+  const unopenedCreditResponse = await creditRoute.POST(request('/api/credit-lines', token, {
+    date: '2099-08-12',
+    schedule: [clientGame({ gamePk: 880002, gameDate: '2099-08-12T02:00:00Z', gameNumber: 2 })],
+  }));
+  const unopenedCreditPayload = await unopenedCreditResponse.json();
+  assert.equal(unopenedCreditResponse.status, 200, unopenedCreditPayload.error || 'Reader unopened credit response must pass');
+  assert.equal(Array.isArray(unopenedCreditPayload.unopenedGames), true, JSON.stringify(unopenedCreditPayload));
+  assert.equal(unopenedCreditPayload.games.length, 0);
+  assert.equal(unopenedCreditPayload.unopenedGames.length, 1);
+  const unopenedCreditGame = unopenedCreditPayload.unopenedGames[0];
+  assert.equal(await verifyReaderProvenance('MLB', unopenedCreditGame.game, unopenedCreditGame.readerProvenance), true);
+  assert.match(unopenedCreditGame.readerProvenance.readerGameMarketHash, /^[a-f0-9]{64}$/);
+  assert.equal(unopenedCreditGame.readerProvenance.readerGameMarketHash, readerUnopenedGameMarketContentHash({
+    league: 'MLB', game: unopenedCreditGame.game, readerSnapshot: unopenedCreditPayload,
+  }));
+  const unopenedAnalysisResponse = await analyzeRoute.POST(request('/api/analyze', token, {
+    game: unopenedCreditGame.game,
+    markets: [],
+    readerProvenance: unopenedCreditGame.readerProvenance,
+    previousMarkets: [],
+    verificationMarkets: [],
+  }));
+  const unopenedAnalysisPayload = await unopenedAnalysisResponse.json();
+  assert.equal(unopenedAnalysisResponse.status, 200, unopenedAnalysisPayload.error || 'signed Reader unopened analysis must pass');
+  assert.equal(unopenedAnalysisPayload.analysis.directionSlots.length, 8);
+  assert.equal(unopenedAnalysisPayload.analysis.calculatedDirectionCount, 0);
+  assert.equal(unopenedAnalysisPayload.analysis.directionSlots.every(row => row.status === 'UNOPENED'), true);
+  assert.equal(unopenedAnalysisPayload.analysis.directionSlots.every(row => (
+    row.readerGameMarketHash === unopenedCreditGame.readerProvenance.readerGameMarketHash
+      && row.readerPayloadHash === unopenedCreditPayload.payloadHash
+      && row.readerRawBoardHash === unopenedCreditPayload.rawBoardHash
+  )), true);
+
+  const unopenedHeartbeatAt = new Date().toISOString();
+  const unopenedHeartbeatResponse = await ingestRoute.POST(readerRequest('/api/reader/ingest', {
+    ...unopenedReaderPayload,
+    observedAt: unopenedHeartbeatAt,
+    pageActivityAt: unopenedHeartbeatAt,
+    payloadHash: 'e'.repeat(64),
+  }, { token: pairPayload.token }));
+  const unopenedHeartbeatPayload = await unopenedHeartbeatResponse.json();
+  assert.equal(unopenedHeartbeatResponse.status, 200, unopenedHeartbeatPayload.error || 'Reader unopened heartbeat must pass');
+  assert.equal(unopenedHeartbeatPayload.heartbeat, true);
+  const repricedUnopenedCreditResponse = await creditRoute.POST(request('/api/credit-lines', token, {
+    date: '2099-08-12',
+    schedule: [clientGame({ gamePk: 880002, gameDate: '2099-08-12T02:00:00Z', gameNumber: 2 })],
+  }));
+  const repricedUnopenedCreditPayload = await repricedUnopenedCreditResponse.json();
+  const repricedUnopenedGame = repricedUnopenedCreditPayload.unopenedGames[0];
+  const unopenedRepriceResponse = await repriceRoute.POST(request('/api/reprice', token, {
+    snapshot: unopenedAnalysisPayload.repriceSnapshot,
+    markets: [],
+    readerProvenance: repricedUnopenedGame.readerProvenance,
+    previousMarkets: [], verificationMarkets: [],
+  }));
+  const unopenedRepricePayload = await unopenedRepriceResponse.json();
+  assert.equal(unopenedRepriceResponse.status, 200, unopenedRepricePayload.error || 'signed Reader unopened reprice must pass');
+  assert.equal(unopenedRepricePayload.analysis.directionSlots.length, 8);
+  assert.equal(unopenedRepricePayload.analysis.directionSlots.every(row => row.status === 'UNOPENED'), true);
+  assert.equal(unopenedRepricePayload.analysis.distributionHash, unopenedAnalysisPayload.analysis.distributionHash);
+  assert.equal(unopenedRepricePayload.analysis.marketCoverage.markets.every(row => row.status === 'UNOPENED'), true);
+
+  const malformedCreditResponse = await creditRoute.POST(request('/api/credit-lines', token, {
+    date: '2099-08-12', schedule: [clientGame()],
+  }));
+  const malformedCreditPayload = await malformedCreditResponse.json();
+  assert.equal(malformedCreditResponse.status, 200, malformedCreditPayload.error || 'Reader malformed-market credit response must pass');
+  assert.equal(malformedCreditPayload.games.length, 1);
+  const malformedGame = malformedCreditPayload.games[0];
+  const integrityRows = malformedGame.markets.filter(row => row.integrityError);
+  assert.equal(integrityRows.length, 1);
+  assert.equal(integrityRows[0].market, '上半讓分');
+  assert.equal(integrityRows[0].pick, '');
+  assert.equal(integrityRows[0].water, null);
+  assert.equal(await verifyMarketRow('MLB', malformedGame.game, integrityRows[0]), true);
+  const malformedAnalysisResponse = await analyzeRoute.POST(request('/api/analyze', token, {
+    game: malformedGame.game,
+    markets: malformedGame.markets,
+    readerProvenance: malformedGame.readerProvenance,
+    previousMarkets: [], verificationMarkets: [],
+  }));
+  const malformedAnalysisPayload = await malformedAnalysisResponse.json();
+  assert.equal(malformedAnalysisResponse.status, 200, malformedAnalysisPayload.error || 'Reader malformed-market isolation must pass');
+  assert.equal(malformedAnalysisPayload.analysis.directionSlots.filter(row => row.status === 'BLOCKED').length, 2);
+  assert.equal(malformedAnalysisPayload.analysis.directionSlots.filter(row => row.status === 'CALCULATED').length, 6);
 
   const referenceRoute = await import('../app/api/reference-lines/route.js');
   const subsetResponse = await referenceRoute.POST(request('/api/reference-lines', token, {

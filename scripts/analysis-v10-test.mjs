@@ -80,6 +80,14 @@ assert.equal(snapshot.legacyDistributionUsed, false);
 assert.equal(snapshot.targetMarketCalibrationApplied, false);
 assert.ok(Math.abs(snapshot.scenarioWeight - 1) < 1e-12);
 
+const changedCoreContext = structuredClone(context);
+changedCoreContext.home.hitting.runsPerGame += 0.35;
+const changedCoreSnapshot = buildDistributionSnapshot({ context: changedCoreContext, settings });
+assert.notEqual(changedCoreSnapshot.distributionHash, snapshot.distributionHash,
+  '核心棒球輸入改變必須建立不同的distribution hash');
+assert.notEqual(changedCoreSnapshot.distributionId, snapshot.distributionId,
+  '核心棒球輸入改變必須建立不同的distribution ID');
+
 const preliminary = evaluateMarketsFromDistribution({ context, markets, settings, distributionSnapshot: snapshot });
 assert.equal(preliminary.modelVersion, MODEL_VERSION);
 assert.equal(preliminary.rulesVersion, RULES_VERSION);
@@ -102,8 +110,9 @@ for (const row of preliminary.results) {
     assert.ok(Number.isFinite(row.robustEV));
     assert.ok(row.robustEV <= row.weightedEV + 1e-12);
   } else {
-    assert.equal(row.weightedEV, null);
-    assert.equal(row.robustEV, null);
+    assert.ok(Number.isFinite(row.weightedEV), 'QA／Reader資格未通過不得刪除數學完整的W');
+    assert.ok(Number.isFinite(row.robustEV), 'QA／Reader資格未通過不得刪除同分布產生的R');
+    assert.ok((row.evCalibration.reasons || []).length > 0);
   }
 }
 
@@ -127,8 +136,10 @@ for (const row of finalized.results) {
   assert.equal(row.betEligible, false);
   if (row.evCalibration?.qualified === false) {
     assert.equal(row.formulaDiagnosticScore, null);
-    assert.equal(row.scoreStatus, 'UNSCORED');
-    assert.match(row.tag, /模型評分未通過/);
+    assert.equal(row.scoreStatus, 'BLOCKED');
+    assert.match(row.tag, /QA BLOCK|模型評分未通過/);
+    assert.ok(Number.isFinite(row.weightedEV), 'QA BLOCK仍須公開W');
+    assert.ok(Number.isFinite(row.robustEV), 'QA BLOCK仍須公開R');
   } else {
     assert.equal(Number.isFinite(Number(row.formulaDiagnosticScore)), true, '校準合格方向須保留固定公式診斷分');
     assert.ok(['SHADOW_DIAGNOSTIC_UNCALIBRATED', 'BLOCKED'].includes(row.scoreStatus));

@@ -9,17 +9,17 @@ const betPricesRoute = fs.readFileSync('app/api/bet-prices/route.js', 'utf8');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
-mustMatch(/模型影子排名/, 'ranking tab must identify model shadow output');
+mustMatch(/全部方向EV/, 'ranking tab must identify the all-direction EV output');
 
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.0.3', 'package/release identity must match the V11.0.3 UI');
-assert.equal(packageLock.version, '11.0.3', 'package-lock release identity must match V11.0.3');
-assert.equal(packageLock.packages?.['']?.version, '11.0.3', 'root lockfile package must match V11.0.3');
-assert.equal(APP_VERSION, '11.0.3');
+assert.equal(packageJson.version, '11.1.0', 'package/release identity must match the V11.1.0 UI');
+assert.equal(packageLock.version, '11.1.0', 'package-lock release identity must match V11.1.0');
+assert.equal(packageLock.packages?.['']?.version, '11.1.0', 'root lockfile package must match V11.1.0');
+assert.equal(APP_VERSION, '11.1.0');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
@@ -139,7 +139,7 @@ assert.match(rankingUi, /betRecordable\(entry\.item,\s*entry\.row,\s*clockNow,\s
 assert.match(rankingUi, /recordBet\(entry\.item,\s*entry\.row\)/, 'ranking button must call the canonical cloud recordBet flow');
 assert.match(rankingUi, /已下注|記錄實際下注/, 'ranking row must visibly expose placed/record action state');
 assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');
-assert.match(rankingUi, /不再只顯示7\.2以上或可下注方向/, 'ranking UI must explain that non-bettable directions remain visible');
+assert.match(rankingUi, /負EV、R≤0、QA BLOCK、低分與不具下注資格的方向都不刪除/, 'ranking UI must explain that non-bettable directions remain visible');
 assert.match(rankingUi, /Reader覆蓋/, 'ranking UI must disclose Reader slate coverage for cross-snapshot comparisons');
 assert.match(rankingUi, /盤口雜湊/, 'ranking UI must expose a short Reader snapshot identity');
 assert.match(rankingUi, /不能與其他時點、其他盤口快照混合比較/, 'ranking UI must prevent cross-snapshot score comparisons');
@@ -170,12 +170,13 @@ mustMatch(/資料異常｜不評分/, 'blocked market must fail closed');
 mustMatch(/尚未開盤/, 'unopened market state missing');
 mustMatch(/AVAILABLE/, 'available market state missing');
 mustMatch(/BLOCKED/, 'blocked market state missing');
-mustMatch(/UNAVAILABLE/, 'unavailable market state missing');
+mustMatch(/UNOPENED/, 'unopened market state missing');
 mustMatch(/row\?\.formulaDiagnosticScore != null/, 'every calculable direction must expose its fixed-formula score');
 mustMatch(/formulaScore\.toFixed\(1\)/, 'fixed S score must always render as a number');
 mustMatch(/QA BLOCK/, 'QA-blocked directions must remain visibly identified');
-mustMatch(/模型／Tai888去水差距 \${pct\(tai888Gap\)}，上游比分分布合理性未通過｜原始機率與損益只留後台稽核，不顯示為EV或S分數/, '10pp合理性Gate不得把未合格的原始結果顯示為EV或S分數');
-mustMatch(/不列排名、不作推薦/, 'QA block must remain isolated from ranking and recommendation');
+mustMatch(/模型與Tai888去水機率差距超過10個百分點/, '10pp合理性Gate必須保留為QA原因');
+mustMatch(/原始W\/R保留/, '10pp、QA或資格Gate不得隱藏已計算的W/R');
+mustMatch(/排名資格：\{rankText\}｜正式下注資格：否/, 'QA block must remain isolated from ranking and formal eligibility');
 assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'display must not hide scores below 7.2');
 assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must still display the fixed numeric S score');
 mustMatch(/row\.formulaDiagnosticScore != null/, 'ranking must retain formula score fallback so every analyzed direction can be displayed');
@@ -192,7 +193,7 @@ mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*actual
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
 mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled\]\);/, 'Reader polling must not restart on every board item update');
 mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt\)/, 'a mobile reload must resume past completed unchanged games');
-mustMatch(/actual\?\.markets\?\.length && !item\.resumedCurrentReaderGame/, 'completed unchanged games must not be requeued from the first game');
+mustMatch(/return actual && !item\.resumedCurrentReaderGame/, 'completed unchanged games must not be requeued while unopened Reader games still receive an eight-slot analysis');
 const scoreOnlyInvalidation = page.slice(
   page.indexOf('const invalidateShadowScoreRow'),
   page.indexOf('const invalidateReaderPriceRow'),
@@ -204,8 +205,8 @@ mustMatch(/currentReaderPrice === true/, 'canonical bet gate must fail closed un
 mustMatch(/const currentReaderPrice = itemReaderExecutable\(item\)/, 'recordBet must re-check board date, payload hash and Reader freshness at click time');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
-mustMatch(/const qaPassed = row\.scoreAudit\?\.ok === true/, 'ranking must preserve QA PASS as a visible qualification flag');
-mustMatch(/row\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
+mustMatch(/const qaPassed = directionQaPassed\(row\)/, 'ranking must prefer canonical QA status while preserving legacy fallback');
+mustMatch(/row\?\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
 mustMatch(/row\.rankingQualified === true/, 'client ranking must honor the signed backend W\/R, 7.2, stability and anomaly gates instead of reimplementing them');
 assert.doesNotMatch(page, /const rankingEligible[\s\S]{0,400}Number\(row\.weightedEV\) > 0/, 'client must not drift from backend Weighted EV ranking policy');
 assert.doesNotMatch(page, /const rankingEligible[\s\S]{0,400}Number\(row\.robustEV\) > 0/, 'client must not drift from backend Robust EV ranking policy');
@@ -218,7 +219,7 @@ mustMatch(/資料截至/, 'point-in-time data timestamp must be visible');
 mustMatch(/輸入雜湊/, 'immutable analysis input hash must be visible');
 mustMatch(/市場水位回灌：停用/, 'the UI must state that Tai888 price feedback is disabled');
 mustMatch(/排名資格：/, 'score qualification reason must be visible');
-mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking qualification');
+mustMatch(/資料／QA狀態：\{qaLabel\}/, 'data QA must be presented separately from ranking qualification');
 
 
 
@@ -226,22 +227,21 @@ mustMatch(/資料QA：PASS/, 'data QA must be presented separately from ranking 
 
 
 
-mustMatch(/V11\.0 PIT共用聯合比分模型影子 S 分數/, 'score label must disclose V11 PIT shared joint-score model semantics');
 mustMatch(/狀態模型等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must identify the unmodified state-model probability');
 assert.doesNotMatch(page, /provisionalBaseline|連續合理性校準/, 'UI must not describe removed Tai888 probability feedback as active');
 mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
 mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
-mustMatch(/模型診斷W \${pct\(row\.weightedEV\)}/, 'W must be labelled as an unvalidated model diagnostic');
-mustMatch(/保守診斷R \${pct\(row\.robustEV\)}/, 'R must be labelled as an unvalidated conservative diagnostic');
+mustMatch(/模型EV（W）/, 'raw distribution EV must use the fixed public W label');
+mustMatch(/穩健EV（R） \{signedPct\(robustEV\)\}/, 'robust EV must follow W and use the fixed public R label');
+mustMatch(/function modelEvValue\(row\)[\s\S]*row\?\.rawWeightedEV/, 'W display must fall back to the raw distribution EV when qualification fields are null');
+mustMatch(/function robustEvValue\(row\)[\s\S]*row\?\.rawRobustEV/, 'R display must fall back to the raw robust EV when qualification fields are null');
 mustMatch(/情境差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
-mustMatch(/合格模型影子分數啟用/, 'provider status must report model shadow-score mode');
-mustMatch(/Tai888只作成交價/, 'Tai888 execution-price-only role must be visible');
-mustMatch(/外部同約：只作8\.5資格Gate、不改分布或W\/R/, 'independent market must be disclosed as an audit-only 8.5 qualification gate');
+mustMatch(/模型EV完整顯示/, 'provider status must report W-first display mode');
+mustMatch(/Tai888與外部市場都不回灌模型概率/, 'Tai888 and external markets must remain execution/audit inputs only');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
-mustMatch(/不產生有效EV、不評分、不列排名/, 'unqualified model or reference evidence must fail closed in the primary UI');
-assert.doesNotMatch(page, /原始W \$\{pct\(|原始R \$\{pct\(/, 'primary UI must not expose blocked raw EV percentages');
-mustMatch(/聯盟模型重建中｜EV與S分數暫停顯示/, 'unvalidated Asian leagues must hide misleading EV/S values');
+mustMatch(/QA、分數、排名與正式下注資格只作後續判斷/, 'qualification layers must remain downstream of W/R display');
+assert.doesNotMatch(page, /不顯示W\/R|不顯示為EV/, 'qualification failures must not suppress calculated EV');
 
 // Batch analysis cannot be held indefinitely or overload a mobile connection.
 mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 120_000/, 'Production-safe per-game deadline missing');

@@ -17,7 +17,16 @@ try {
   globalThis.fetch = async url => {
     assert.match(String(url), new RegExp(`/game/${gamePk}/feed/live$`));
     return new Response(JSON.stringify({
-      gameData: { status: { abstractGameState: 'Final', detailedState: 'Final' } },
+      gamePk,
+      gameData: {
+        game: { pk: gamePk, gameNumber: 1, scheduledInnings: 9 },
+        datetime: { officialDate: '2099-08-21' },
+        teams: {
+          away: { id: 147, name: 'New York Yankees' },
+          home: { id: 141, name: 'Toronto Blue Jays' },
+        },
+        status: { abstractGameState: 'Final', detailedState: 'Final' },
+      },
       liveData: {
         linescore: {
           teams: { away: { runs: 3 }, home: { runs: 2 } },
@@ -27,6 +36,10 @@ try {
             { away: { runs: 1 }, home: { runs: 0 } },
             { away: { runs: 0 }, home: { runs: 1 } },
             { away: { runs: 1 }, home: { runs: 0 } },
+            { away: { runs: 0 }, home: { runs: 0 } },
+            { away: { runs: 0 }, home: { runs: 0 } },
+            { away: { runs: 0 }, home: { runs: 0 } },
+            { away: { runs: 0 }, home: { runs: 0 } },
           ],
         },
       },
