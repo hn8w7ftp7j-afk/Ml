@@ -11,5 +11,6 @@
 @media(max-width:720px){.betOrderGame{padding:0 11px}.betOrderGameHead{align-items:flex-start}.betOrderGameHead>div{display:grid;gap:6px}.betOrderGameHead strong{font-size:14px}.betOrderGameHead time{font-size:11px}}
 .score.warning{color:#ff8f9e}.qaLine.pending{color:#f1c477}
 .auditWarnings{margin-top:5px;color:#9aaabd;font-size:10px;line-height:1.45}.auditWarnings summary{cursor:pointer;color:#d0a96a}.auditWarnings div{margin-top:4px;padding:6px 8px;border-left:2px solid #6f5830;background:rgba(111,88,48,.12);border-radius:4px}
+.warningLine,.warningText{display:block;margin-top:5px;color:#f1c477;font-size:10px;line-height:1.45}.rankRow{grid-template-columns:35px 64px minmax(0,1fr) auto}.rankRow>strong.rankScore{font-size:15px;color:#c5a7ff;white-space:nowrap}.rankRow>strong.rankScore.strongest{color:#e2c3ff}@media(max-width:720px){.rankRow{grid-template-columns:32px 60px minmax(0,1fr)}}
 .readerDownload{display:block;text-align:center;text-decoration:none}
 .score.candidate{color:#c5a7ff}.score.strongest{color:#e2c3ff}.state.shadow{background:#322454;color:#d8c2ff}.shadowBanner{border-color:#624a8f;background:#17142b}.shadowBanner strong{color:#d8c2ff}.dataStatusBanner{border-color:#355370}.dataStatusBanner span{overflow-wrap:anywhere}
