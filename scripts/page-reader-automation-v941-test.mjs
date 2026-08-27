@@ -17,10 +17,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.4.2', 'package/release identity must match the V11.4.2 automatic PWA update release');
-assert.equal(packageLock.version, '11.4.2', 'package-lock release identity must match V11.4.2');
-assert.equal(packageLock.packages?.['']?.version, '11.4.2', 'root lockfile package must match V11.4.2');
-assert.equal(APP_VERSION, '11.4.2');
+assert.equal(packageJson.version, '11.4.3', 'package/release identity must match the V11.4.3 Reader bet-button heartbeat hotfix');
+assert.equal(packageLock.version, '11.4.3', 'package-lock release identity must match V11.4.3');
+assert.equal(packageLock.packages?.['']?.version, '11.4.3', 'root lockfile package must match V11.4.3');
+assert.equal(APP_VERSION, '11.4.3');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -204,7 +204,8 @@ mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows mus
 mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled, row\.clientReaderPriceCurrent, !cloudLedgerUnavailable\)\}/, 'bet recording must require the item hash, live Reader-price proof and writable durable ledger calculated by GameCard');
 mustMatch(/\{actualLine && <div>/, 'actual Reader directions must retain a visible action even while recording is blocked');
 assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*acknowledgedReaderKey/, 'a successfully analyzed current item must not be blocked by an unrelated full-slate acknowledgement');
-mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*actualLineFreshNow\(row, clockNow\)/, 'ranking must use per-item current hash and live line freshness');
+mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash;/, 'ranking must use the fresh server Reader status and exact per-item content hash');
+assert.doesNotMatch(page, /actualLineFreshNow\(/, 'the client must not re-expire a row after the current Reader hash has already proved identical content; the bet API performs the authoritative line-freshness check');
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
 mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled\]\);/, 'Reader polling must not restart on every board item update');
 mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt\)/, 'a mobile reload must resume past completed unchanged games');

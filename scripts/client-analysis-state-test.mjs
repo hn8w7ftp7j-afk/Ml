@@ -114,6 +114,23 @@ assert.equal(heartbeatTouched.customData.analysis.results[0].formulaDiagnosticSc
 assert.equal(heartbeatTouched.customData.analysis.results[1].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, 'heartbeat must not rewrite independent reference evidence');
 assert.equal(touchReaderHeartbeat(heartbeatItem, 'different-board', heartbeatAt), heartbeatItem, 'a different market hash must not refresh old rows');
 
+const directionSlotHeartbeatItem = {
+  ...heartbeatItem,
+  customData: {
+    ...heartbeatItem.customData,
+    analysis: {
+      ...heartbeatItem.customData.analysis,
+      directionSlots: [{
+        sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO',
+        lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt, slotId: 'FULL_TOTAL_OVER',
+      }],
+    },
+  },
+};
+const directionSlotHeartbeatTouched = touchReaderHeartbeat(directionSlotHeartbeatItem, 'same-board', heartbeatAt);
+assert.equal(directionSlotHeartbeatTouched.customData.analysis.directionSlots[0].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, 'heartbeat不得竄改八方向PIT盤口截點');
+assert.equal(directionSlotHeartbeatTouched.customData.analysis.directionSlots[0].readerLiveAsOf, heartbeatAt, 'heartbeat必須刷新八方向顯示資料的Reader存活時間');
+
 process.env.MARKET_INTEGRITY_SECRET = 'client-heartbeat-signature-regression-secret';
 const signedGame = {
   league: 'MLB', leagueId: 'MLB', gamePk: 12345, gameDate: '2026-08-15T12:00:00.000Z',
