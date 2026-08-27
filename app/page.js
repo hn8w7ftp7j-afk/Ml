@@ -1854,7 +1854,7 @@ export default function Home() {
   return <main className="appShell">
     <header className="appHeader">
       <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>每場使用一份聯盟專屬的凍結聯合比分分布，依Tai888實際盤口逐腿結算八個方向；前台以固定S分數為主，模型EV（W）與穩健EV（R）作次要診斷。Tai888與外部市場都不回灌模型概率。</p></div>
-      <div className="headerBadges"><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><span className="version">v{VERSION}</span></div>
+      <div className="headerBadges"><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><button type="button" className="appRefreshButton" title="重新整理並取得最新版" onClick={() => window.location.reload()}>↻ 更新</button><span className="version">v{VERSION}</span></div>
     </header>
 
     <nav className="leagueTabs" aria-label="聯盟切換">

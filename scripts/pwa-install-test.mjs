@@ -16,6 +16,12 @@ assert.match(manifest, /display:\s*'standalone'/, 'manifest must remove browser 
 assert.match(manifest, /app-icon-maskable-512\.png/, 'maskable install icon missing');
 assert.match(register, /navigator\.serviceWorker\.register\('\/sw\.js'\)/, 'service worker registration missing');
 assert.match(register, /加入主畫面/, 'iPhone install instructions missing');
+assert.match(register, /fetch\(`\/api\/health\?t=\$\{Date\.now\(\)\}`/, 'PWA must bypass cache when checking the deployed release version');
+assert.match(register, /latest\.version === APP_VERSION/, 'PWA update check must compare against the shared app version');
+assert.match(register, /visibilitychange/, 'PWA must check for updates when it returns to the foreground');
+assert.match(register, /pageshow/, 'PWA must check for updates when iOS restores it from memory');
+assert.match(register, /window\.location\.reload\(\)/, 'PWA must automatically reload after detecting a newer release');
+assert.match(register, /pwa-update-attempt-version/, 'PWA update reload must be guarded against an infinite loop');
 assert.match(serviceWorker, /fetch\(event\.request, \{ cache: 'no-store' \}\)/, 'private app navigation must remain network-only');
 assert.doesNotMatch(serviceWorker, /caches\.(?:open|match)|cache\.put/, 'private analysis pages must not be cached offline');
 assert.match(nextConfig, /Service-Worker-Allowed/, 'service worker scope header missing');
@@ -32,4 +38,4 @@ for (const path of [
   assert.deepEqual([...data.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], `${path}不是有效PNG`);
 }
 
-console.log('Installable standalone PWA metadata, icons, iOS instructions and private network-only service worker PASS');
+console.log('Installable standalone PWA metadata, automatic updates, icons, iOS instructions and private network-only service worker PASS');
