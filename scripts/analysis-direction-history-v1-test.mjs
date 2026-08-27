@@ -367,7 +367,9 @@ const missingRStats = summarizeAnalysisDirectionHistory([{
 assert.equal(missingRStats.groups[0].rSign, 'MISSING', 'R=null不得混入NON_POSITIVE');
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
+const originalDatabaseV2Url = process.env.DATABASE_V2_URL;
 delete process.env.DATABASE_URL;
+delete process.env.DATABASE_V2_URL;
 const unavailable = await persistAnalysisDirectionHistory(history);
 assert.equal(unavailable.stored, false);
 assert.equal(unavailable.reason, 'DATABASE_NOT_CONFIGURED');
@@ -378,6 +380,8 @@ assert.equal(history.records[2].modelEV, 0.04, '永久保存不可用時不得�
 await assert.rejects(() => loadAnalysisDirectionHistory(snapshotRecord.snapshotId), /DATABASE_URL/);
 if (originalDatabaseUrl == null) delete process.env.DATABASE_URL;
 else process.env.DATABASE_URL = originalDatabaseUrl;
+if (originalDatabaseV2Url == null) delete process.env.DATABASE_V2_URL;
+else process.env.DATABASE_V2_URL = originalDatabaseV2Url;
 
 const migration = fs.readFileSync(new URL('../database/0007_analysis_direction_history.sql', import.meta.url), 'utf8');
 assert.match(migration, /unique \(snapshot_id, slot_id\)/i);

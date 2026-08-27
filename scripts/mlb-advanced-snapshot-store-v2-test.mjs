@@ -23,12 +23,15 @@ assert.match(record.snapshotId, /^778899:2026-08-23T08:00:00\.000Z:/);
 assert.throws(() => buildMlbAdvancedSnapshotRecord(game, { ...context, fetchedAt: game.gameDate }), /不是賽前/);
 
 const previous = process.env.DATABASE_URL;
+const previousV2 = process.env.DATABASE_V2_URL;
 delete process.env.DATABASE_URL;
+delete process.env.DATABASE_V2_URL;
 assert.deepEqual(await persistMlbAdvancedSnapshot(game, context), { stored: false, reason: 'DATABASE_NOT_CONFIGURED' });
 if (previous) process.env.DATABASE_URL = previous;
+if (previousV2 == null) delete process.env.DATABASE_V2_URL;
+else process.env.DATABASE_V2_URL = previousV2;
 
 const migration = fs.readFileSync(new URL('../database/0004_mlb_advanced_feature_snapshots.sql', import.meta.url), 'utf8');
 assert.match(migration, /check \(observed_at < game_start\)/i);
 assert.match(migration, /before update or delete/i);
 console.log('Immutable MLB advanced PIT snapshot storage PASS');
-
