@@ -9,6 +9,11 @@ import {
 } from '../lib/cloud-ledger-sync-policy.js';
 import { listCloudBets, listCloudBetsByIds } from '../lib/cloud-bet-store.js';
 import { classifyDatabaseError, databaseFailureLog, isDatabaseError, markDatabaseError } from '../lib/database-error.js';
+import { durableDatabaseConfigured, durableDatabaseUrl } from '../lib/database-url.js';
+
+assert.equal(durableDatabaseUrl({ DATABASE_V2_URL: ' postgres://new ', DATABASE_URL: 'postgres://old' }), 'postgres://new');
+assert.equal(durableDatabaseUrl({ DATABASE_URL: ' postgres://old ' }), 'postgres://old');
+assert.equal(durableDatabaseConfigured({ DATABASE_V2_URL: '  ', DATABASE_URL: '' }), false);
 
 const quota = classifyDatabaseError(new Error('Server error (HTTP status 402): Your project has exceeded the data transfer quota. Upgrade your plan to increase limits.'));
 assert.equal(quota.code, 'DATABASE_TRANSFER_QUOTA_EXCEEDED');
@@ -44,11 +49,15 @@ assert.equal(cloudLedgerAutomaticRefreshAllowed({ storageReady: true, tab: 'bets
 assert.equal(cloudLedgerAutomaticRefreshAllowed({ storageReady: true, tab: 'bets', visibilityState: 'visible', busy: true, now: 100, retryAt: 0 }), false);
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
+const originalDatabaseV2Url = process.env.DATABASE_V2_URL;
 delete process.env.DATABASE_URL;
+delete process.env.DATABASE_V2_URL;
 await assert.rejects(() => listCloudBets(), /DATABASE_URL/, 'missing durable database must never return an empty Runtime Cache ledger');
 await assert.rejects(() => listCloudBetsByIds(['bet-1']), /DATABASE_URL/, 'targeted price lookups must use the same durable fail-closed database');
 if (originalDatabaseUrl == null) delete process.env.DATABASE_URL;
 else process.env.DATABASE_URL = originalDatabaseUrl;
+if (originalDatabaseV2Url == null) delete process.env.DATABASE_V2_URL;
+else process.env.DATABASE_V2_URL = originalDatabaseV2Url;
 
 const route = fs.readFileSync(new URL('../app/api/bets/route.js', import.meta.url), 'utf8');
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
