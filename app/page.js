@@ -16,7 +16,6 @@ import { teamNameZh, translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
   advanceUnchangedReaderGame,
-  actualLineFreshNow,
   coreSnapshotReusable,
   gameIsPrestartNow,
   liveReaderHashMatches,
@@ -433,7 +432,6 @@ function betRecordable(item, row, now = Date.now(), betsEnabled = true, currentR
     && row?.sourceType === 'ACTUAL_TW_CREDIT'
     && row?.provider === 'TAI888_READER_AUTO'
     && row?.evCalibration?.actualReaderEligible === true
-    && actualLineFreshNow(row, now)
     && hasActualWater(row?.water)
     && row?.waterEstimated !== true;
 }
@@ -811,8 +809,7 @@ function GameCard({ item, onBet, getBetState, readerExecutable, now, betsEnabled
       && gamePrestart
       && readerExecutable
       && row?.provider === 'TAI888_READER_AUTO'
-      && row?.evCalibration?.actualReaderEligible === true
-      && actualLineFreshNow(row, now);
+      && row?.evCalibration?.actualReaderEligible === true;
     const inactiveNotice = !gamePrestart
       ? '已達官方預定開打時間｜保留賽前分析｜停止記錄新下注'
       : pitUnconfirmed
@@ -985,8 +982,7 @@ export default function Home() {
         && readerStatus?.fresh === true
         && readerStatus?.boardDate === date
         && Boolean(item.readerPayloadHash)
-        && item.readerPayloadHash === readerStatus?.payloadHash
-        && actualLineFreshNow(row, clockNow);
+        && item.readerPayloadHash === readerStatus?.payloadHash;
       const inactiveNotice = !gamePrestart
         ? '比賽已開始｜保留賽前分析與排名｜停止記錄新下注'
         : !pitConfirmed
@@ -1751,8 +1747,7 @@ export default function Home() {
     const currentReaderPrice = itemReaderExecutable(item)
       && item?.actualSource?.provider === 'TAI888_READER_AUTO'
       && row?.provider === 'TAI888_READER_AUTO'
-      && row?.evCalibration?.actualReaderEligible === true
-      && actualLineFreshNow(row, now);
+      && row?.evCalibration?.actualReaderEligible === true;
     if (cloudLedgerStatus.state === 'unavailable') {
       setError('永久雲端帳本目前無法寫入；系統不會把未保存的下注顯示成成功');
       return;
