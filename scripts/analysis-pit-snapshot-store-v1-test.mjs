@@ -91,11 +91,17 @@ const input = {
 const first = buildAnalysisPitSnapshotRecord(input);
 const duplicate = buildAnalysisPitSnapshotRecord(input);
 const asyncFirst = await buildAnalysisPitSnapshotRecordAsync(input);
+const reverseKeys = value => Object.fromEntries(Object.entries(value).reverse());
 assert.equal(first.schemaVersion, ANALYSIS_PIT_SNAPSHOT_SCHEMA_VERSION);
 assert.equal(first.snapshotId, duplicate.snapshotId, '相同PIT輸入必須產生相同snapshot id');
 assert.equal(first.replayIdentityHash, duplicate.replayIdentityHash, '相同PIT輸入必須冪等');
 assert.equal(asyncFirst.snapshotId, first.snapshotId, '非同步壓縮路徑不得改變snapshot id');
 assert.equal(asyncFirst.replayIdentityHash, first.replayIdentityHash, '非同步壓縮路徑必須完全可重播');
+assert.doesNotThrow(() => validateAnalysisPitSnapshotRecord({
+  ...first,
+  gameIdentity: reverseKeys(first.gameIdentity),
+  versions: reverseKeys(first.versions),
+}), 'JSONB重新排列巢狀物件欄位後仍必須通過相同重播識別雜湊');
 assert.deepEqual(decodeAnalysisPitPayload(first.frozenContextPayload), context);
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).results[0].pick, '大8平');
 assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).directionSlots, [], '舊輸入仍必須有可重播的八方向槽位容器');
