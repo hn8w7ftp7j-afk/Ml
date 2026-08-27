@@ -64,14 +64,12 @@ try {
 
   const firstResponse = await analyzeRoute.POST(analyzeRequest(game, markets));
   const first = await firstResponse.json();
-  assert.equal(firstResponse.status, 409);
-  assert.equal(first.code, 'LEAGUE_NOT_READY');
-  assert.equal(first.league, 'NPB');
-  assert.match(first.error, /尚無法可信建立獨立比分分布/);
-  assert.match(first.error, /fail-closed 停止模型EV/);
-  assert.equal(providerCalls, callsBeforeAnalyze, '未發布的聯盟必須在任何官方核心資料、分布或評分工作前 fail closed');
+  assert.equal(firstResponse.status, 422);
+  assert.equal(first.code, 'CORE_DATA_MISSING');
+  assert.match(first.error, /資料不足/);
+  assert.ok(providerCalls > callsBeforeAnalyze, '已發布聯盟必須實際查核官方PIT核心資料後，才可逐場fail closed');
 } finally {
   globalThis.fetch = originalFetch;
 }
 
-console.log('Unreleased NPB analysis fails closed before any core fetch, distribution or scoring PASS');
+console.log('Released NPB analysis performs runtime PIT checks and blocks incomplete games before distribution/scoring PASS');

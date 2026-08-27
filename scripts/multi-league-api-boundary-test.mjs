@@ -22,7 +22,8 @@ for (const file of routes) {
 const analyze = read('app/api/analyze/route.js');
 assert.match(analyze, /resolveLeagueGame\(league, requestedGame\)/);
 assert.match(analyze, /assertLeagueGamePrestart\(league, game\)/);
-assert.match(analyze, /buildLeagueGameContext\(league, game\)/);
+assert.match(analyze, /buildLeagueGameContext\(league, game, \{ starterEvidence \}\)/);
+assert.match(analyze, /extractAsianStarterEvidence\(suppliedMarkets, game\)/, '亞洲先發身分證據必須從已簽章 Reader 盤口擷取後交由官方名單驗證');
 assert.match(analyze, /positiveInteger\(game\?\.gamePk, Number\.MAX_SAFE_INTEGER\)/);
 assert.match(analyze, /attestIncomingMarketRows\(league, game,/);
 assert.match(analyze, /buildSnapshotFingerprints\(\{ league,/);

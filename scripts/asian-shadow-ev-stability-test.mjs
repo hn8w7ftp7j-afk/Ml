@@ -39,9 +39,9 @@ for (const [league, [away, home, awayTeamId, homeTeamId, awayCode, homeCode]] of
     () => evaluateMarketsFromDistribution({ context, markets: [], distributionSnapshot: {} }),
     () => repriceMarkets({ context, markets: [], distributionSnapshot: {} }),
   ]) {
-    assert.throws(call, error => error?.code === 'LEAGUE_DISTRIBUTION_ENGINE_NOT_RELEASED'
+    assert.throws(call, error => error?.code === 'ASIAN_DISTRIBUTION_INPUT_GATE_BLOCKED'
       && /禁止回退analysis-v10或MLB參數/.test(error.message));
   }
 }
 
-console.log('Asian NPB/KBO/CPBL fail closed: no legacy/MLB fallback, no EV, no score and no ranking PASS');
+console.log('Asian NPB/KBO/CPBL runtime PIT fail closed: no legacy/MLB fallback or incomplete-input EV PASS');

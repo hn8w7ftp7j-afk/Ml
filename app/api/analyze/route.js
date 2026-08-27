@@ -52,6 +52,7 @@ import {
   withLeagueProviderTimeout,
 } from '../../../lib/league-provider.js';
 import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/leagues.js';
+import { extractAsianStarterEvidence } from '../../../lib/asian-production-features-v1.js';
 import {
   checkRateLimit,
   cleanText,
@@ -335,7 +336,12 @@ export async function POST(request) {
       strongestThreshold: 8.5,
       expertMode: 'off',
     };
-    const context = await withLeagueProviderTimeout(league, buildLeagueGameContext(league, game), 30000);
+    const starterEvidence = league === 'MLB' ? null : extractAsianStarterEvidence(suppliedMarkets, game);
+    const context = await withLeagueProviderTimeout(
+      league,
+      buildLeagueGameContext(league, game, { starterEvidence }),
+      league === 'MLB' ? 30000 : 75000,
+    );
     if (league === 'MLB') await persistMlbAdvancedSnapshotBestEffort(game, context);
     if (!context?.coreModelable || context?.dataGateV10?.passedForShadowScore !== true) {
       const blocking = Array.isArray(context?.dataGateV10?.blocking) ? context.dataGateV10.blocking : [];

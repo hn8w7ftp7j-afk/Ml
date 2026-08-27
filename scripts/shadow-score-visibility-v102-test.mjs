@@ -203,7 +203,7 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   const asian = finalizeDeterministicAnalysis({
     analysis: {
       leagueId,
-      alignmentAudit: { targetMarketCalibration: 'DISABLED' },
+      alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
       dataGateV10: { passedForShadowScore: true },
       results: [direction('全場大小', '大8平', 0.025, 0.01)],
     },
@@ -216,7 +216,7 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   const largeTai888Gap = finalizeDeterministicAnalysis({
     analysis: {
       leagueId,
-      alignmentAudit: { targetMarketCalibration: 'DISABLED' },
+      alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
       dataGateV10: { passedForShadowScore: true },
       results: [{
         ...direction('全場大小', '大8平', 0.025, 0.01),

@@ -149,7 +149,7 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   assert.notEqual(config.modelVersion, leagueAnalysisContract('MLB').modelVersion);
   assert.equal(config.mlbFallbackAllowed, false);
   assert.equal(config.releaseReadiness.leagueId, league);
-  assert.equal(config.releaseReadiness.canBuildDistribution, false);
+  assert.equal(config.releaseReadiness.canBuildDistribution, true);
   assert.equal(config.releaseReadiness.mlbFallbackAllowed, false);
   assert.equal(config.featureContract.starter.teamRunsAllowedProxyAllowed, false);
   assert.equal(config.featureContract.bullpen.teamRunsAllowedProxyAllowed, false);

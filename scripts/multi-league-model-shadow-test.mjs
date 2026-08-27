@@ -29,8 +29,8 @@ for (const league of LEAGUE_IDS) {
   assert.equal(contract.formalScoringEnabled, false);
   assert.equal(registry.capabilities.formalRecommendations, false);
   assert.equal(registry.capabilities.bets, true, `${league}帳本必須保留`);
-  assert.equal(registry.capabilities.analysis, league === 'MLB', `${league}分析能力Gate錯誤`);
-  assert.equal(registry.capabilities.ranking, league === 'MLB', `${league}排名能力Gate錯誤`);
+  assert.equal(registry.capabilities.analysis, true, `${league}分析能力Gate錯誤`);
+  assert.equal(registry.capabilities.ranking, true, `${league}排名能力Gate錯誤`);
 }
 
 const unsafe = {
@@ -60,9 +60,9 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
     () => repriceMarkets({ context, markets: [], distributionSnapshot: {} }),
   ];
   for (const call of calls) {
-    assert.throws(call, error => error?.code === 'LEAGUE_DISTRIBUTION_ENGINE_NOT_RELEASED'
+    assert.throws(call, error => error?.code === 'ASIAN_DISTRIBUTION_INPUT_GATE_BLOCKED'
       && /禁止回退analysis-v10或MLB參數/.test(error?.message || ''));
   }
 }
 
-console.log('Four-league V11 boundary PASS: MLB shadow-only; NPB/KBO/CPBL fail closed until independent engines ship');
+console.log('Four-league boundary PASS: independent engines released; incomplete Asian PIT contexts fail closed');

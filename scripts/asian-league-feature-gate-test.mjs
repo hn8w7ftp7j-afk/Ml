@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildAsianGameContext } from '../lib/asian-baseball.js';
-import { buildDistributionSnapshot } from '../lib/analysis-v11.js';
+import { analyzeMarkets, buildDistributionSnapshot } from '../lib/analysis-v11.js';
+import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 
 const teams = {
   NPB: { away: '讀賣巨人', home: '埼玉西武獅', awayCode: 'YOM', homeCode: 'SEI', awayTeamId: 501, homeTeamId: 512 },
@@ -121,6 +122,20 @@ async function contextFor(league, game = gameFor(league), features = featuresFor
   return buildAsianGameContext(league, game, { historyGames: historyFor(game), featureSnapshot: features });
 }
 
+function eightMarkets(game) {
+  const row = (market, pick, water) => ({
+    market, pick, water, waterEstimated: false, sourceType: 'ACTUAL_TW_CREDIT',
+    provider: 'TAI888_READER_AUTO', lineFresh: true, executable: true,
+    marketVerification: { verified: false, referencePriorEligible: false },
+  });
+  return [
+    row('全場讓分', `${game.away}讓1平`, 0.95), row('全場讓分', `${game.home}受讓1平`, 0.95),
+    row('全場大小', '大9平', 0.94), row('全場大小', '小9平', 0.94),
+    row('上半讓分', `${game.away}讓0.5`, 0.94), row('上半讓分', `${game.home}受讓0.5`, 0.94),
+    row('上半大小', '大5平', 0.93), row('上半大小', '小5平', 0.93),
+  ];
+}
+
 for (const league of ['NPB', 'KBO', 'CPBL']) {
   const context = await contextFor(league);
   assert.equal(context.dataGateV10.passedForShadowScore, true, `${league} 完整 synthetic feature contract 應可建立影子分布`);
@@ -130,14 +145,30 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(context.provider.mlbFallbackAllowed, false);
   assert.equal(context.asianProxyAudit.mlbFallbackUsed, false);
   assert.equal(context.analysisReadiness.coreInputsReady, true);
-  assert.equal(context.analysisReadiness.distributionEngineReady, false);
-  assert.equal(context.analysisReadiness.status, 'BLOCKED_ENGINE_UNRELEASED');
-  assert.deepEqual(context.analysisReadiness.blockers.map(row => row.code), ['INDEPENDENT_JOINT_DISTRIBUTION_ENGINE_NOT_RELEASED']);
-  assert.throws(
-    () => buildDistributionSnapshot({ context }),
-    error => error?.code === 'LEAGUE_DISTRIBUTION_ENGINE_NOT_RELEASED' && String(error?.message || '').includes('禁止回退'),
-    `${league} 獨立比分引擎未發布時，即使上游完整也不得回退legacy／MLB產生數字分數`,
-  );
+  assert.equal(context.analysisReadiness.distributionEngineReady, true);
+  assert.equal(context.analysisReadiness.status, 'READY_SHADOW_RUNTIME_PIT');
+  assert.deepEqual(context.analysisReadiness.blockers, []);
+  const distribution = buildDistributionSnapshot({ context });
+  assert.equal(distribution.leagueId, league);
+  assert.equal(distribution.legacyDistributionUsed, false);
+  assert.equal(distribution.mlbParameterFallbackUsed, false);
+  assert.equal(distribution.tai888ProbabilityInputUsed, false);
+  assert.equal(distribution.scenarios.length, 27);
+  const analysis = analyzeMarkets({ context, markets: eightMarkets(context.game), settings: { rebateRate: 0.015 } });
+  assert.equal(analysis.results.length, 8, `${league}必須由同一份獨立分布計算八方向`);
+  assert.equal(new Set(analysis.results.map(row => row.distributionId)).size, 1);
+  for (const row of analysis.results) {
+    assert.ok(Number.isFinite(row.weightedEV), `${league} ${row.pick} W必須可計算`);
+    assert.ok(Number.isFinite(row.robustEV), `${league} ${row.pick} R必須可計算`);
+    assert.ok(row.robustEV <= row.weightedEV + 1e-12);
+    assert.equal(row.evDoubleCheck.passed, true);
+    assert.ok(row.settlementIdentityAudit.probabilityIdentityError < 1e-12);
+    assert.ok(row.settlementIdentityAudit.evIdentityError < 1e-9);
+  }
+  const finalized = finalizeDeterministicAnalysis({ analysis, game: context.game, settings: { candidateThreshold: 7.2 } });
+  assert.equal(finalized.results.length, 8);
+  assert.ok(finalized.results.every(row => Number.isFinite(row.formulaDiagnosticScore)), `${league}八方向必須沿用既有固定S公式`);
+  assert.ok(finalized.results.every(row => row.scoreAudit?.ok === true), `${league}八方向固定S／W／R與Tai888逐腿結算QA必須通過`);
 }
 
 const npb = await contextFor('NPB');
@@ -151,7 +182,8 @@ assert.equal(namedOnly.away.starter.identityConfirmed, true);
 assert.equal(namedOnly.away.starter.performanceAvailable, false);
 assert.equal(namedOnly.away.starter.era, null);
 assert.equal(namedOnly.dataGateV10.passedForShadowScore, false);
-assert.equal(namedOnly.analysisReadiness.status, 'BLOCKED_UPSTREAM_AND_ENGINE');
+assert.equal(namedOnly.analysisReadiness.status, 'BLOCKED_RUNTIME_INPUT');
+assert.equal(namedOnly.analysisReadiness.distributionEngineReady, true);
 assert.ok(namedOnly.dataGateV10.blockerDetails.every(row => typeof row.code === 'string' && row.code.length > 0));
 assert.ok(namedOnly.dataGateV10.rows.every(row => typeof row.ready === 'boolean'));
 
@@ -172,6 +204,14 @@ emptyLineupFeatures.away.lineup.players = [];
 const emptyLineup = await contextFor('NPB', gameFor('NPB'), emptyLineupFeatures);
 assert.equal(emptyLineup.away.lineup.emptyLineup, true);
 assert.ok(emptyLineup.dataGateV10.blocking.includes('credibleLineupScenario'));
+
+for (const league of ['NPB', 'KBO', 'CPBL']) {
+  const missingHandednessFeatures = featuresFor(league);
+  missingHandednessFeatures.away.starter.throws = null;
+  const missingHandedness = await contextFor(league, gameFor(league), missingHandednessFeatures);
+  assert.ok(missingHandedness.dataGateV10.blocking.includes('officialStarterHandedness'), `${league}先發左右投缺失必須BLOCK`);
+  assert.equal(missingHandedness.analysisReadiness.coreInputsReady, false);
+}
 
 const kboGame = gameFor('KBO', { awayProbableThrows: 'R' });
 const kboConflictFeatures = featuresFor('KBO');

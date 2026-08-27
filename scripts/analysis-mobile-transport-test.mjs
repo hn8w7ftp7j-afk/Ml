@@ -24,8 +24,8 @@ const frozenContext = await buildAsianGameContext(league, game, { historyGames }
 assert.equal(frozenContext.coreModelable, false);
 assert.throws(
   () => buildDistributionSnapshot({ context: frozenContext }),
-  error => error?.code === 'LEAGUE_DISTRIBUTION_ENGINE_NOT_RELEASED',
-  'mobile transport must not rebuild an unreleased Asian distribution',
+  error => error?.code === 'ASIAN_DISTRIBUTION_INPUT_GATE_BLOCKED',
+  'mobile transport must not rebuild an Asian distribution with an incomplete PIT gate',
 );
 const compactContext = compactAnalysisContext(frozenContext);
 assert.ok(Buffer.byteLength(JSON.stringify(compactContext)) < 5_000, 'blocked Asian context response must stay phone-safe');
@@ -47,4 +47,4 @@ assert.match(pageSource, /'Idempotency-Key': requestId/);
 assert.match(analyzeRouteSource, /requestResultCache\.get\(requestKey\)/);
 assert.match(analyzeRouteSource, /requestCacheSet\(requestKey, requestBodyHash, safePayload\)/);
 
-console.log('Mobile transport stays compact and unreleased Asian engines fail closed PASS');
+console.log('Mobile transport stays compact and incomplete Asian PIT inputs fail closed PASS');
