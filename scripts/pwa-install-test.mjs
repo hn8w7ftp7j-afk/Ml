@@ -7,6 +7,7 @@ const manifest = read('app/manifest.js');
 const register = read('app/pwa-register.js');
 const serviceWorker = read('public/sw.js');
 const nextConfig = read('next.config.mjs');
+const middleware = read('middleware.js');
 
 assert.match(layout, /appleWebApp:\s*\{[^}]*capable:\s*true/s, 'iOS standalone metadata missing');
 assert.match(layout, /viewportFit:\s*'cover'/, 'iOS safe-area viewport missing');
@@ -18,6 +19,8 @@ assert.match(register, /加入主畫面/, 'iPhone install instructions missing')
 assert.match(serviceWorker, /fetch\(event\.request, \{ cache: 'no-store' \}\)/, 'private app navigation must remain network-only');
 assert.doesNotMatch(serviceWorker, /caches\.(?:open|match)|cache\.put/, 'private analysis pages must not be cached offline');
 assert.match(nextConfig, /Service-Worker-Allowed/, 'service worker scope header missing');
+assert.match(middleware, /PUBLIC_PWA_PATHS[\s\S]*manifest\.webmanifest[\s\S]*sw\.js/, 'PWA bootstrap files must remain public before app authentication');
+assert.match(middleware, /pathname\.startsWith\('\/icons\/'\)/, 'install icons must remain publicly readable');
 
 for (const path of [
   'public/icons/app-icon-192.png',

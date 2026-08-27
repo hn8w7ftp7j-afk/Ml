@@ -17,10 +17,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.4.0', 'package/release identity must match the V11.4.0 installable PWA release');
-assert.equal(packageLock.version, '11.4.0', 'package-lock release identity must match V11.4.0');
-assert.equal(packageLock.packages?.['']?.version, '11.4.0', 'root lockfile package must match V11.4.0');
-assert.equal(APP_VERSION, '11.4.0');
+assert.equal(packageJson.version, '11.4.1', 'package/release identity must match the V11.4.1 authenticated installable PWA release');
+assert.equal(packageLock.version, '11.4.1', 'package-lock release identity must match V11.4.1');
+assert.equal(packageLock.packages?.['']?.version, '11.4.1', 'root lockfile package must match V11.4.1');
+assert.equal(APP_VERSION, '11.4.1');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
