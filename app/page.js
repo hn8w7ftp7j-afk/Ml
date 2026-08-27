@@ -1209,7 +1209,7 @@ export default function Home() {
     };
   }, [readerStatus?.fresh, readerStatus?.payloadHash, board.length, busy, date, league, readerEnabled, analysisEnabled]);
   useEffect(() => {
-    if (!readerEnabled || !analysisEnabled || !board.length) return undefined;
+    if (!readerEnabled || !analysisEnabled || !board.length || restoredBoardNeedsValidationRef.current) return undefined;
     // Validate immediately after a page restore or completed analysis. Waiting
     // for the first interval meant every mobile refresh restarted the delay and
     // could leave otherwise-current bet buttons hidden indefinitely.
@@ -1219,15 +1219,25 @@ export default function Home() {
   }, [board.length, date, busy, league, readerEnabled, analysisEnabled]);
   useEffect(() => {
     if (!restoredBoardNeedsValidationRef.current || !board.length || busy || !readerStatus?.fresh) return undefined;
-    restoredBoardNeedsValidationRef.current = false;
     // A restored board intentionally contains completed games only. It is not
     // the authoritative daily schedule, so repricing it directly can strand a
     // mobile client with just the one result Safari managed to persist. Re-run
     // the full slate bootstrap: it fetches the official schedule and current
     // Reader board, preserves cached scores, and queues every open game.
-    const key = readerHashKey(date, readerStatus?.payloadHash);
-    const timer = window.setTimeout(() => oneClickAnalyze(key), 250);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+    let timer;
+    const bootstrapFullSlate = () => {
+      if (cancelled) return;
+      if (operationBusyRef.current || readerPollBusyRef.current) {
+        timer = window.setTimeout(bootstrapFullSlate, 250);
+        return;
+      }
+      const key = readerHashKey(date, readerStatusRef.current?.payloadHash || readerStatus?.payloadHash);
+      restoredBoardNeedsValidationRef.current = false;
+      void oneClickAnalyze(key);
+    };
+    timer = window.setTimeout(bootstrapFullSlate, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [board.length, busy, readerStatus?.fresh, readerStatus?.payloadHash, date, league]);
   useEffect(() => {
     if (!readerEnabled || !analysisEnabled || !board.length) return undefined;
@@ -1564,6 +1574,7 @@ export default function Home() {
     const generation = analysisGenerationRef.current;
     const stillCurrent = () => generation === analysisGenerationRef.current && currentDateRef.current === targetDate;
     readerPollBusyRef.current = true;
+    let fullSlateRecoveryNeeded = false;
     try {
       const status = await requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`, {}, 20000);
       if (!stillCurrent()) return;
@@ -1599,9 +1610,15 @@ export default function Home() {
       if (!stillCurrent()) return;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
       const boardPks = new Set(board.map(item => Number(item.game.gamePk)));
+      const missingReaderGameCount = [...readerGameByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
+      if (missingReaderGameCount > 0) {
+        fullSlateRecoveryNeeded = true;
+        setNotice(`Reader有 ${readerGameByPk.size} 場、目前畫面缺少 ${missingReaderGameCount} 場；正在自動補齊完整賽程。`);
+        return;
+      }
       const expectedItems = board.filter(item => gameIsPrestartNow(item.game, Date.now())
         && (readerGameByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO'));
-      let failed = [...readerGameByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
+      let failed = 0;
       let completed = 0;
       let updated = 0;
       let removed = 0;
@@ -1716,6 +1733,7 @@ export default function Home() {
       if (stillCurrent()) invalidateReaderStatus(cause?.message || cause);
     } finally {
       readerPollBusyRef.current = false;
+      if (fullSlateRecoveryNeeded && stillCurrent()) void oneClickAnalyze();
     }
   }
 

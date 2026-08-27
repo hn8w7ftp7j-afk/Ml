@@ -17,10 +17,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.3.1', 'package/release identity must match the V11.3.1 PIT replay identity hotfix');
-assert.equal(packageLock.version, '11.3.1', 'package-lock release identity must match V11.3.1');
-assert.equal(packageLock.packages?.['']?.version, '11.3.1', 'root lockfile package must match V11.3.1');
-assert.equal(APP_VERSION, '11.3.1');
+assert.equal(packageJson.version, '11.3.2', 'package/release identity must match the V11.3.2 full-slate recovery hotfix');
+assert.equal(packageLock.version, '11.3.2', 'package-lock release identity must match V11.3.2');
+assert.equal(packageLock.packages?.['']?.version, '11.3.2', 'root lockfile package must match V11.3.2');
+assert.equal(APP_VERSION, '11.3.2');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
 assert.match(healthRoute, /const ready = readinessReasons\.length === 0/, 'authenticated health must publish a fail-closed Production readiness decision');
@@ -94,6 +94,9 @@ mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated b
 mustMatch(/verificationMarkets: foundReference\?\.markets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
 mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full analyze request must send matched reference markets');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
+mustMatch(/restoredBoardNeedsValidationRef\.current\) return undefined/, 'restored partial board must not race a single-board reader reprice');
+mustMatch(/missingReaderGameCount > 0[\s\S]*fullSlateRecoveryNeeded = true/, 'reader games missing from the rendered board must trigger full-slate recovery');
+mustMatch(/fullSlateRecoveryNeeded && stillCurrent\(\)[\s\S]*oneClickAnalyze\(\)/, 'full-slate recovery must run after releasing the reader poll lock');
 assert.doesNotMatch(page, /verificationMarkets:\s*\[\]/, 'analyze/reprice must never hard-code an empty verification-market payload');
 mustMatch(/後台重新驗證中｜保留目前分數/, 'full refresh must retain completed scores on screen');
 mustMatch(/更新失敗｜保留上一版結果/, 'failed refresh must retain the previous completed result');
@@ -262,7 +265,7 @@ mustMatch(/runPool\(tasks, analysisConcurrency/, 'bounded league-aware analysis 
 mustMatch(/重試 \$\{retryIndexes\.length\} 場未完成分析/, 'trailing retry pass missing');
 mustMatch(/tasks\[index\]\?\.retryable === false/, 'permanent failures must not be retried');
 mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');
-mustMatch(/const key = readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'restored board must bind validation to the current Reader revision');
-mustMatch(/window\.setTimeout\(\(\) => oneClickAnalyze\(key\), 250\)/, 'restored partial board must rebuild the full official slate instead of repricing only cached games');
+mustMatch(/const key = readerHashKey\(date, readerStatusRef\.current\?\.payloadHash \|\| readerStatus\?\.payloadHash\)/, 'restored board must bind validation to the current Reader revision');
+mustMatch(/window\.setTimeout\(bootstrapFullSlate, 250\)/, 'restored partial board must keep retrying the full official slate bootstrap while another operation is busy');
 
 console.log('Page Reader automation, four-league navigation, storage continuity, board authority and all-score presentation PASS');
