@@ -42,4 +42,5 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);
+import { withWorkflow } from 'workflow/next';

@@ -61,6 +61,7 @@ import {
   rateLimitResponse,
   readJsonBody,
   requireApiAuth,
+  verifyBackgroundAnalysisAuthorization,
   validateSameOrigin,
 } from '../../../lib/security.js';
 
@@ -255,11 +256,14 @@ function requestCacheSet(key, bodyHash, payload) {
 
 export async function POST(request) {
   try {
-    const auth = await requireApiAuth(request); if (auth) return auth;
-    if (!validateSameOrigin(request)) return originErrorResponse();
-    const rate = checkRateLimit(request, { id: 'analyze-v9-3-3-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
-    if (!rate.allowed) return rateLimitResponse(rate);
     const body = await readJsonBody(request, 500000);
+    const backgroundAuthorized = await verifyBackgroundAnalysisAuthorization(request, body);
+    if (!backgroundAuthorized) {
+      const auth = await requireApiAuth(request); if (auth) return auth;
+      if (!validateSameOrigin(request)) return originErrorResponse();
+      const rate = checkRateLimit(request, { id: 'analyze-v9-3-3-deterministic', limit: 60, windowMs: 10 * 60 * 1000 });
+      if (!rate.allowed) return rateLimitResponse(rate);
+    }
     const requestKeyRaw = String(request.headers.get('idempotency-key') || '').trim();
     const requestKey = /^[a-zA-Z0-9-]{16,100}$/.test(requestKeyRaw) ? requestKeyRaw : '';
     const requestBodyHash = sha256(body);

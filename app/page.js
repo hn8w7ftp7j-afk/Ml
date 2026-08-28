@@ -26,7 +26,6 @@ import {
   shouldAcknowledgeReaderHash,
   touchReaderHeartbeat,
 } from '../lib/client-analysis-state.js';
-import { initialAnalysisConcurrency } from '../lib/analysis-transport-v1.js';
 import { assessCoreSnapshotFreshnessV109 } from '../lib/analysis-refresh-policy-v109.js';
 import { BET_ORDER_MIN_SCORE, buildBetOrderEntries, groupBetOrderEntries } from '../lib/bet-order.js';
 import {
@@ -47,6 +46,7 @@ const STORAGE = 'sports-positive-ev-v10-0-0';
 const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
 const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
+const ANALYSIS_JOB_STORAGE = 'sports-positive-ev-background-jobs-v1';
 // A cold Production analysis can legitimately spend close to a minute fetching
 // point-in-time data and building the deterministic distribution. iOS Safari
 // reports an AbortController timeout as the unhelpful `Load failed`, so keep the
@@ -302,6 +302,40 @@ function saveAnalysisBoardCache(league, date, board) {
       return true;
     } catch { return false; }
   }
+}
+
+function backgroundJobKey(league, date) {
+  return `${String(league || '').toUpperCase()}|||${String(date || '')}`;
+}
+
+function loadBackgroundJob(league, date) {
+  try {
+    const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
+    return jobs?.[backgroundJobKey(league, date)] || null;
+  } catch { return null; }
+}
+
+function saveBackgroundJob(job) {
+  try {
+    const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
+    const source = jobs && typeof jobs === 'object' && !Array.isArray(jobs) ? jobs : {};
+    window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify({
+      ...source,
+      [backgroundJobKey(job.league, job.date)]: job,
+    }));
+    return true;
+  } catch { return false; }
+}
+
+function clearBackgroundJob(league, date, runId = '') {
+  try {
+    const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
+    if (!jobs || typeof jobs !== 'object' || Array.isArray(jobs)) return;
+    const key = backgroundJobKey(league, date);
+    if (runId && jobs[key]?.runId !== runId) return;
+    const { [key]: omitted, ...remaining } = jobs;
+    window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify(remaining));
+  } catch {}
 }
 
 function recoverLocalBetCopies(primary, backup) {
@@ -950,6 +984,7 @@ export default function Home() {
   const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
   const cloudSyncRetryAtRef = useRef(0);
+  const backgroundJobPollsRef = useRef(new Map());
   const restoredBoardNeedsValidationRef = useRef(false);
   const activeLeague = leagueConfig(league);
   const analysisEnabled = activeLeague.capabilities.analysis === true;
@@ -1137,6 +1172,28 @@ export default function Home() {
     setReaderStatus(null);
   }, [date, league, storageReady]);
   useEffect(() => {
+    if (!storageReady) return undefined;
+    const saved = loadBackgroundJob(league, date);
+    if (!saved?.runId) return undefined;
+    if (operationBusyRef.current) return undefined;
+    const generation = analysisGenerationRef.current;
+    operationBusyRef.current = true;
+    setBusy(true);
+    setProgress({ active: true, done: 0, running: 1, total: Number(saved.total) || 1, label: '伺服器背景分析中｜可離開App' });
+    setNotice('已接回尚未完成的伺服器背景分析；可以切換畫面，完成後會自動載入。');
+    pollBackgroundJob(saved.runId, generation, date).then(result => {
+      if (generation !== analysisGenerationRef.current || currentDateRef.current !== date) return;
+      const completed = Number(result?.completed) || 0;
+      setNotice(`伺服器背景分析完成 ${completed}/${Number(result?.total) || completed} 場；結果已自動載入。`);
+    }).catch(cause => {
+      if (generation === analysisGenerationRef.current && currentDateRef.current === date) setError(String(cause?.message || cause));
+    }).finally(() => {
+      releaseOperation();
+      if (generation === analysisGenerationRef.current && currentDateRef.current === date) setProgress(value => ({ ...value, active: false }));
+    });
+    return undefined;
+  }, [date, league, storageReady]);
+  useEffect(() => {
     if (!storageReady || !board.some(item => (
       item.customData?.analysis?.results?.length
       || item.customData?.analysis?.directionSlots?.length
@@ -1302,6 +1359,96 @@ export default function Home() {
     return liveReaderHashMatches(targetDate, current, payloadHash);
   }
 
+  function commitAnalysisPayload(task, baseData) {
+    const game = task?.game || baseData?.game;
+    if (!game?.gamePk || !baseData?.analysis) return false;
+    const actualMarkets = task?.actualMarkets || [];
+    snapshots.current.set(game.gamePk, baseData.repriceSnapshot);
+    setBoard(current => {
+      const previous = current.find(item => Number(item?.game?.gamePk) === Number(game.gamePk)) || {};
+      const completed = {
+        ...previous,
+        game,
+        actualSource: task?.actualSource || previous.actualSource || null,
+        marketCoverage: task?.marketCoverage || previous.marketCoverage || null,
+        readerProvenance: task?.readerProvenance || previous.readerProvenance || null,
+        readerPayloadHash: task?.readerPayloadHash || previous.readerPayloadHash || null,
+        referenceData: compactAnalysisData(baseData),
+        mode: 'actual',
+        status: 'done',
+        statusLabel: Number(baseData?.analysis?.calculatedDirectionCount || 0) === 0
+          ? '八方向槽位已保存｜目前尚未開盤或市場BLOCKED'
+          : baseData.pitPersistence?.confirmed
+            ? 'Tai888盤口分析完成｜PIT已確認'
+            : '模型分析完成｜PIT未保存、實際下注紀錄暫停',
+        customMarkets: actualMarkets,
+        verificationMarkets: task?.verificationMarkets || previous.verificationMarkets || [],
+        customData: compactAnalysisData(baseData),
+        restoredFromCache: false,
+        error: '',
+      };
+      return previous.game
+        ? current.map(item => Number(item?.game?.gamePk) === Number(game.gamePk) ? completed : item)
+        : [...current, completed];
+    });
+    return true;
+  }
+
+  function commitAnalysisFailure(task, message) {
+    const game = task?.game;
+    if (!game?.gamePk) return;
+    const blocked = /資料不足｜不評分|比賽已開打或結束/.test(String(message || ''));
+    setBoard(current => {
+      const previous = current.find(item => Number(item?.game?.gamePk) === Number(game.gamePk)) || {};
+      const failed = {
+        ...previous,
+        game,
+        status: blocked ? 'blocked' : 'failed',
+        statusLabel: previous.customData
+          ? '更新失敗｜保留上一版結果'
+          : blocked ? '資料不足｜不評分' : '分析失敗',
+        error: String(message || '背景分析失敗'),
+      };
+      return previous.game
+        ? current.map(item => Number(item?.game?.gamePk) === Number(game.gamePk) ? failed : item)
+        : [...current, failed];
+    });
+  }
+
+  function pollBackgroundJob(runId, generation, targetDate) {
+    const currentPoll = backgroundJobPollsRef.current.get(runId);
+    if (currentPoll) return currentPoll;
+    const poll = (async () => {
+      while (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
+        try {
+          const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&t=${Date.now()}`, {}, 30000);
+          if (state.status === 'completed') {
+            const result = state.result || {};
+            const rows = Array.isArray(result.results) ? result.results : [];
+            rows.forEach(row => row?.ok ? commitAnalysisPayload(row.task, row.payload) : commitAnalysisFailure(row?.task, row?.error));
+            clearBackgroundJob(result.league || league, result.date || targetDate, runId);
+            setProgress({ active: false, done: Number(result.total) || rows.length, running: 0, total: Number(result.total) || rows.length, label: '伺服器背景分析完成' });
+            return result;
+          }
+          if (['failed', 'cancelled'].includes(String(state.status || '').toLowerCase())) {
+            clearBackgroundJob(league, targetDate, runId);
+            const failure = new Error('伺服器背景分析未完成，請按更新後重試');
+            failure.backgroundFatal = true;
+            throw failure;
+          }
+          setProgress(value => ({ ...value, active: true, running: 1, label: '伺服器背景分析中｜可離開App' }));
+        } catch (cause) {
+          if (cause?.backgroundFatal || [401, 403, 404].includes(Number(cause?.status))) throw cause;
+          setNotice('伺服器仍在背景分析；目前網路暫時無法取得進度，回到App後會自動再接續。');
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 2500));
+      }
+      return { detached: true, total: 0, completed: 0, results: [] };
+    })().finally(() => backgroundJobPollsRef.current.delete(runId));
+    backgroundJobPollsRef.current.set(runId, poll);
+    return poll;
+  }
+
   async function analyzeBoardItem(task, index, total, retry = false, trackProgress = true) {
     if (task.generation !== analysisGenerationRef.current) return false;
     const game = task.game;
@@ -1329,41 +1476,14 @@ export default function Home() {
         }),
       });
       if (task.generation !== analysisGenerationRef.current) return false;
-      snapshots.current.set(game.gamePk, baseData.repriceSnapshot);
-      updateBoard(game.gamePk, item => ({
-        ...item,
-        actualSource: task.actualSource || item.actualSource || null,
-        marketCoverage: task.marketCoverage || item.marketCoverage || null,
-        readerProvenance: task.readerProvenance || item.readerProvenance || null,
-        readerPayloadHash: task.readerPayloadHash || item.readerPayloadHash || null,
-        referenceData: compactAnalysisData(baseData),
-        mode: 'actual',
-        status: 'done',
-        statusLabel: Number(baseData?.analysis?.calculatedDirectionCount || 0) === 0
-          ? '八方向槽位已保存｜目前尚未開盤或市場BLOCKED'
-          : baseData.pitPersistence?.confirmed
-            ? 'Tai888盤口分析完成｜PIT已確認'
-            : '模型分析完成｜PIT未保存、實際下注紀錄暫停',
-        customMarkets: actualMarkets,
-        customData: compactAnalysisData(baseData),
-        restoredFromCache: false,
-        error: '',
-      }));
-      return true;
+      return commitAnalysisPayload(task, baseData);
     } catch (cause) {
       if (task.generation !== analysisGenerationRef.current) return false;
       const message = String(cause?.message || cause);
       const blocked = /資料不足｜不評分|比賽已開打或結束/.test(message);
       const permanent = blocked || /HTTP (?:400|401|403|404|422)\b|CORE_DATA_MISSING|GAME_ALREADY_STARTED|INVALID_[A-Z_]+/.test(message);
       task.retryable = !permanent;
-      updateBoard(game.gamePk, item => ({
-        ...item,
-        status: blocked ? 'blocked' : 'failed',
-        statusLabel: item.customData
-          ? '更新失敗｜保留上一版結果'
-          : blocked ? '資料不足｜不評分' : '分析失敗',
-        error: message,
-      }));
+      commitAnalysisFailure(task, message);
       return false;
     } finally {
       if (trackProgress && task.generation === analysisGenerationRef.current) {
@@ -1502,21 +1622,19 @@ export default function Home() {
       }
 
       setProgress({ active: true, done: 0, running: 0, total: tasks.length, label: '分析今日全部盤口' });
-      const outcomes = new Array(tasks.length).fill(false);
-      // Two simultaneous MLB simulations keep a 10-game slate moving without
-      // recreating the four-request mobile burst that caused aborted requests.
-      // Larger Asian snapshots remain serial so each game can finish and persist.
-      const analysisConcurrency = initialAnalysisConcurrency(league);
-      await runPool(tasks, analysisConcurrency, async (task, index) => {
-        outcomes[index] = await analyzeBoardItem(task, index, tasks.length);
-      });
-      const retryIndexes = outcomes.map((ok, index) => ok || tasks[index]?.retryable === false ? -1 : index).filter(index => index >= 0);
-      if (retryIndexes.length && generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
-        setProgress({ active: true, done: 0, running: 0, total: retryIndexes.length, label: `重試 ${retryIndexes.length} 場未完成分析` });
-        await runPool(retryIndexes, 1, async (taskIndex, retryIndex) => {
-          outcomes[taskIndex] = await analyzeBoardItem(tasks[taskIndex], retryIndex, retryIndexes.length, true);
-        });
-      }
+      const job = await requestJSON('/api/analysis-jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({
+          league,
+          date: targetDate,
+          tasks: tasks.map(task => ({ ...task, requestId: uid(), generation: undefined })),
+        }),
+      }, 30000);
+      saveBackgroundJob({ runId: job.runId, league, date: targetDate, total: tasks.length, startedAt: new Date().toISOString() });
+      setNotice(`已交給伺服器背景分析 ${tasks.length} 場；現在可以離開App或鎖定手機。`);
+      const backgroundResult = await pollBackgroundJob(job.runId, generation, targetDate);
+      const outcomes = tasks.map((task, index) => Boolean(backgroundResult?.results?.[index]?.ok));
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
       const creditCount = tasks.length;
       const completedCreditCount = outcomes.filter(Boolean).length;

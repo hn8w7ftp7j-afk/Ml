@@ -17,10 +17,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.4.3', 'package/release identity must match the V11.4.3 Reader bet-button heartbeat hotfix');
-assert.equal(packageLock.version, '11.4.3', 'package-lock release identity must match V11.4.3');
-assert.equal(packageLock.packages?.['']?.version, '11.4.3', 'root lockfile package must match V11.4.3');
-assert.equal(APP_VERSION, '11.4.3');
+assert.equal(packageJson.version, '11.5.0', 'package/release identity must match the V11.5.0 durable background analysis release');
+assert.equal(packageLock.version, '11.5.0', 'package-lock release identity must match V11.5.0');
+assert.equal(packageLock.packages?.['']?.version, '11.5.0', 'root lockfile package must match V11.5.0');
+assert.equal(APP_VERSION, '11.5.0');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -80,9 +80,9 @@ mustMatch(/oneClickAnalyze\(key\)/, 'automatic Reader analysis trigger missing')
 mustMatch(/JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'credit-line request must bind league, date and schedule');
 mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missing');
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
-mustMatch(/initialAnalysisConcurrency\(league\)/, 'full-board concurrency must be league-aware for mobile reliability');
-mustMatch(/runPool\(tasks, analysisConcurrency,/, 'full-board analysis must use the bounded league concurrency');
-mustMatch(/runPool\(retryIndexes, 1,/, 'failed analyses must retry serially instead of repeating a mobile request burst');
+mustMatch(/requestJSON\('\/api\/analysis-jobs'/, 'full-board analysis must start one durable server workflow');
+mustMatch(/saveBackgroundJob\(/, 'background workflow identity must survive an app close or reload');
+mustMatch(/pollBackgroundJob\(job\.runId, generation, targetDate\)/, 'the app must reconnect to the server workflow result');
 assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation setting must be removed from the UI');
 
 // External-market requests are disabled; analysis keeps an explicit empty audit payload.
@@ -261,11 +261,11 @@ assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed w
 mustMatch(/前台以固定S分數為主/, 'the public presentation must be S-first');
 assert.doesNotMatch(page, /不顯示W\/R|不顯示為EV/, 'qualification failures must not suppress calculated EV');
 
-// Batch analysis cannot be held indefinitely or overload a mobile connection.
+// Batch analysis must leave the mobile lifecycle and reconnect to durable server work.
 mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 120_000/, 'Production-safe per-game deadline missing');
-mustMatch(/runPool\(tasks, analysisConcurrency/, 'bounded league-aware analysis pool missing');
-mustMatch(/重試 \$\{retryIndexes\.length\} 場未完成分析/, 'trailing retry pass missing');
-mustMatch(/tasks\[index\]\?\.retryable === false/, 'permanent failures must not be retried');
+mustMatch(/伺服器背景分析中｜可離開App/, 'background execution status must explicitly allow leaving the app');
+mustMatch(/loadBackgroundJob\(league, date\)/, 'app reopen must resume the active background job');
+mustMatch(/state\.status === 'completed'/, 'client must reload completed server workflow results');
 mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');
 mustMatch(/const key = readerHashKey\(date, readerStatusRef\.current\?\.payloadHash \|\| readerStatus\?\.payloadHash\)/, 'restored board must bind validation to the current Reader revision');
 mustMatch(/window\.setTimeout\(bootstrapFullSlate, 250\)/, 'restored partial board must keep retrying the full official slate bootstrap while another operation is busy');

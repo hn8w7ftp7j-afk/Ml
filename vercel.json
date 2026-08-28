@@ -1,7 +1,8 @@
 {
   "functions": {
     "app/api/vision/route.js": { "maxDuration": 60 },
-    "app/api/analyze/route.js": { "maxDuration": 60 },
+    "app/api/analyze/route.js": { "maxDuration": 120 },
+    "app/api/analysis-jobs/route.js": { "maxDuration": 60 },
     "app/api/cron/mlb-advanced-snapshots/route.js": { "maxDuration": 300 },
     "app/api/cron/analysis-direction-settlements/route.js": { "maxDuration": 300 }
   },
