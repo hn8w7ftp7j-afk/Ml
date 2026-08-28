@@ -25,7 +25,16 @@ async function analyzeGameStep(task) {
   if (response.status === 429) throw new RetryableError(payload?.error || '分析請求過於頻繁', { retryAfter: '20s' });
   if (response.status >= 500) throw new RetryableError(payload?.error || `分析伺服器錯誤（${response.status}）`, { retryAfter: '10s' });
   if (!response.ok || payload?.ok === false) {
-    return { ok: false, status: response.status, error: payload?.error || `分析失敗（${response.status}）`, code: payload?.code || '', task: resultTask(task) };
+    return {
+      ok: false,
+      status: response.status,
+      error: payload?.error || `分析失敗（${response.status}）`,
+      code: payload?.code || '',
+      blocking: Array.isArray(payload?.blocking) ? payload.blocking : [],
+      warnings: Array.isArray(payload?.warnings) ? payload.warnings : [],
+      retryable: false,
+      task: resultTask(task),
+    };
   }
   return { ok: true, status: response.status, payload, task: resultTask(task) };
 }
@@ -47,7 +56,16 @@ export async function analyzeBoardWorkflow(input) {
       const result = settled[index];
       results.push(result.status === 'fulfilled'
         ? result.value
-        : { ok: false, status: 500, error: String(result.reason?.message || result.reason || '背景分析失敗'), code: 'BACKGROUND_STEP_FAILED', task: resultTask(batch[index]) });
+        : {
+          ok: false,
+          status: 500,
+          error: String(result.reason?.message || result.reason || '背景分析失敗'),
+          code: 'BACKGROUND_STEP_FAILED',
+          blocking: [],
+          warnings: [],
+          retryable: true,
+          task: resultTask(batch[index]),
+        });
     }
   }
   return {

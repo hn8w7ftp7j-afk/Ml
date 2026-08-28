@@ -54,6 +54,7 @@ const ANALYSIS_JOB_STORAGE = 'sports-positive-ev-background-jobs-v1';
 const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
 const READER_RECHECK_INTERVAL_MS = 30 * 1000;
+const CORE_DATA_BLOCK_RECHECK_MS = 5 * 60 * 1000;
 const BET_PRICE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_KEYS = ['sports-positive-ev-v9-7-0', 'sports-positive-ev-v9-6-0', 'sports-positive-ev-v9-5-0', 'mlb-positive-ev-v9-4-4', 'mlb-positive-ev-v9-4-3', 'mlb-positive-ev-v9-4-2', 'mlb-positive-ev-v9-4-1', 'mlb-positive-ev-v9-4-0', 'mlb-positive-ev-v9-3-4', 'mlb-positive-ev-v9-3-3', 'mlb-positive-ev-v9-3-2', 'mlb-positive-ev-v9-3', 'mlb-positive-ev-v9-2', 'mlb-positive-ev-v9-1-preview', 'mlb-positive-ev-v8-4', 'mlb-positive-ev-v7'];
 const DEFAULT_SETTINGS = {
@@ -389,6 +390,8 @@ async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplica
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
       error.code = data.code || '';
+      error.blocking = Array.isArray(data.blocking) ? data.blocking : [];
+      error.warnings = Array.isArray(data.warnings) ? data.warnings : [];
       const retryAfterHeader = Number(response.headers.get('retry-after'));
       const retryAfterBody = Number(data.retryAfterSeconds);
       const retryAfterSeconds = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
@@ -404,6 +407,37 @@ async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplica
   } finally {
     clearTimeout(timer);
   }
+}
+
+function analysisFailureState(value) {
+  const source = value && typeof value === 'object' ? value : { error: value };
+  const message = String(source.error || source.message || value || '背景分析失敗');
+  const code = String(source.code || '');
+  const numericStatus = Number(source.status);
+  const status = Number.isFinite(numericStatus) ? numericStatus : null;
+  const blocking = Array.isArray(source.blocking) ? source.blocking.map(String) : [];
+  const warnings = Array.isArray(source.warnings) ? source.warnings.map(String) : [];
+  const blocked = source.blocked === true
+    || code === 'CORE_DATA_MISSING'
+    || status === 422
+    || /資料不足.*不評分|QA BLOCK|比賽已開打或結束/.test(message);
+  const permanent = blocked
+    || code === 'PIT_PERSISTENCE_REQUIRED'
+    || [400, 401, 403, 404, 409, 413].includes(status)
+    || /^INVALID_[A-Z_]+$/.test(code)
+    || code === 'GAME_ALREADY_STARTED';
+  return { message, code, status, blocking, warnings, blocked, permanent };
+}
+
+function readerGameEvidenceHash(value) {
+  return String(value?.readerProvenance?.readerGameMarketHash
+    || value?.readerGameMarketHash
+    || value?.readerPayloadHash
+    || '');
+}
+
+function coreDataBlockKey(league, date, gamePk, evidenceHash) {
+  return `${String(league || '').toUpperCase()}|||${String(date || '')}|||${Number(gamePk) || ''}|||${String(evidenceHash || '')}`;
 }
 
 function cloudLedgerFailureState(error) {
@@ -962,6 +996,8 @@ export default function Home() {
   const [date, setDate] = useState(taipeiDate());
   const [schedule, setSchedule] = useState([]);
   const [board, setBoard] = useState([]);
+  const boardRef = useRef(board);
+  boardRef.current = board;
   const [readerStatus, setReaderStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ active: false, done: 0, total: 0, label: '' });
@@ -985,6 +1021,7 @@ export default function Home() {
   const cloudSyncBusyRef = useRef(false);
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
+  const coreDataBlockRetryRef = useRef(new Map());
   const restoredBoardNeedsValidationRef = useRef(false);
   const activeLeague = leagueConfig(league);
   const analysisEnabled = activeLeague.capabilities.analysis === true;
@@ -1160,6 +1197,7 @@ export default function Home() {
     creditRevisionRef.current = '';
     autoAnalyzeHashRef.current = '';
     autoAnalyzePendingRef.current = '';
+    coreDataBlockRetryRef.current.clear();
     setAcknowledgedReaderKey('');
     const restoredBoard = storageReady ? loadAnalysisBoardCache(league, date) : [];
     restoredBoardNeedsValidationRef.current = restoredBoard.length > 0;
@@ -1183,8 +1221,11 @@ export default function Home() {
     setNotice('已接回尚未完成的伺服器背景分析；可以切換畫面，完成後會自動載入。');
     pollBackgroundJob(saved.runId, generation, date).then(result => {
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== date) return;
-      const completed = Number(result?.completed) || 0;
-      setNotice(`伺服器背景分析完成 ${completed}/${Number(result?.total) || completed} 場；結果已自動載入。`);
+      const rows = Array.isArray(result?.results) ? result.results : [];
+      const completed = rows.filter(row => row?.ok).length;
+      const blocked = rows.filter(row => !row?.ok && analysisFailureState(row).blocked).length;
+      const failed = Math.max(0, (Number(result?.total) || rows.length) - completed - blocked);
+      setNotice(`伺服器背景分析已載入：完成 ${completed} 場${blocked ? `｜資料不足 ${blocked} 場` : ''}${failed ? `｜暫時失敗 ${failed} 場` : ''}。`);
     }).catch(cause => {
       if (generation === analysisGenerationRef.current && currentDateRef.current === date) setError(String(cause?.message || cause));
     }).finally(() => {
@@ -1192,7 +1233,7 @@ export default function Home() {
       if (generation === analysisGenerationRef.current && currentDateRef.current === date) setProgress(value => ({ ...value, active: false }));
     });
     return undefined;
-  }, [date, league, storageReady]);
+  }, [date, league, storageReady, busy]);
   useEffect(() => {
     if (!storageReady || !board.some(item => (
       item.customData?.analysis?.results?.length
@@ -1292,19 +1333,6 @@ export default function Home() {
     timer = window.setTimeout(bootstrapFullSlate, 250);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [board.length, busy, readerStatus?.fresh, readerStatus?.payloadHash, date, league]);
-  useEffect(() => {
-    if (!readerEnabled || !analysisEnabled || !board.length) return undefined;
-    const timer = window.setInterval(() => {
-      if (busy || !readerStatus?.fresh) return;
-      const now = Date.now();
-      const needsCoreRefresh = board.some(item => gameIsPrestartNow(item.game, now)
-        && item.customData?.context
-        && !assessCoreSnapshotFreshnessV109(item.customData.context, now).fresh);
-      if (needsCoreRefresh) oneClickAnalyze();
-    }, 2 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, [board, date, busy, readerStatus?.fresh, league, readerEnabled, analysisEnabled]);
-
   const currentReaderKey = readerHashKey(date, readerStatus?.payloadHash);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
@@ -1363,6 +1391,7 @@ export default function Home() {
     const game = task?.game || baseData?.game;
     if (!game?.gamePk || !baseData?.analysis) return false;
     const actualMarkets = task?.actualMarkets || [];
+    coreDataBlockRetryRef.current.delete(coreDataBlockKey(league, currentDateRef.current, game.gamePk, readerGameEvidenceHash(task)));
     snapshots.current.set(game.gamePk, baseData.repriceSnapshot);
     setBoard(current => {
       const previous = current.find(item => Number(item?.game?.gamePk) === Number(game.gamePk)) || {};
@@ -1385,6 +1414,7 @@ export default function Home() {
         verificationMarkets: task?.verificationMarkets || previous.verificationMarkets || [],
         customData: compactAnalysisData(baseData),
         restoredFromCache: false,
+        analysisFailure: null,
         error: '',
       };
       return previous.game
@@ -1394,20 +1424,40 @@ export default function Home() {
     return true;
   }
 
-  function commitAnalysisFailure(task, message) {
+  function commitAnalysisFailure(task, value) {
     const game = task?.game;
     if (!game?.gamePk) return;
-    const blocked = /資料不足｜不評分|比賽已開打或結束/.test(String(message || ''));
+    const failure = analysisFailureState(value);
+    const payloadHash = task?.readerPayloadHash || '';
+    const evidenceHash = readerGameEvidenceHash(task);
+    const retryAt = failure.blocked ? Date.now() + CORE_DATA_BLOCK_RECHECK_MS : 0;
+    if (failure.blocked && evidenceHash) {
+      coreDataBlockRetryRef.current.set(
+        coreDataBlockKey(league, currentDateRef.current, game.gamePk, evidenceHash),
+        retryAt,
+      );
+    }
     setBoard(current => {
       const previous = current.find(item => Number(item?.game?.gamePk) === Number(game.gamePk)) || {};
       const failed = {
         ...previous,
         game,
-        status: blocked ? 'blocked' : 'failed',
-        statusLabel: previous.customData
-          ? '更新失敗｜保留上一版結果'
-          : blocked ? '資料不足｜不評分' : '分析失敗',
-        error: String(message || '背景分析失敗'),
+        status: failure.blocked ? 'blocked' : 'failed',
+        statusLabel: failure.blocked
+          ? previous.customData ? '資料不足｜保留上一版結果' : '資料不足｜QA BLOCK｜不評分'
+          : previous.customData ? '更新失敗｜保留上一版結果' : '分析失敗',
+        analysisFailure: {
+          code: failure.code,
+          status: failure.status,
+          blocking: failure.blocking,
+          warnings: failure.warnings,
+          permanent: failure.permanent,
+          blocked: failure.blocked,
+          readerPayloadHash: payloadHash || previous.readerPayloadHash || null,
+          readerEvidenceHash: evidenceHash || null,
+          retryAt: retryAt ? new Date(retryAt).toISOString() : null,
+        },
+        error: failure.message,
       };
       return previous.game
         ? current.map(item => Number(item?.game?.gamePk) === Number(game.gamePk) ? failed : item)
@@ -1416,18 +1466,31 @@ export default function Home() {
   }
 
   function pollBackgroundJob(runId, generation, targetDate) {
-    const currentPoll = backgroundJobPollsRef.current.get(runId);
+    const pollKey = `${runId}|||${generation}|||${targetDate}`;
+    const currentPoll = backgroundJobPollsRef.current.get(pollKey);
     if (currentPoll) return currentPoll;
     const poll = (async () => {
       while (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
         try {
           const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&t=${Date.now()}`, {}, 30000);
+          if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
+            return { detached: true, total: 0, completed: 0, results: [] };
+          }
           if (state.status === 'completed') {
             const result = state.result || {};
             const rows = Array.isArray(result.results) ? result.results : [];
-            rows.forEach(row => row?.ok ? commitAnalysisPayload(row.task, row.payload) : commitAnalysisFailure(row?.task, row?.error));
+            rows.forEach(row => row?.ok ? commitAnalysisPayload(row.task, row.payload) : commitAnalysisFailure(row?.task, row));
             clearBackgroundJob(result.league || league, result.date || targetDate, runId);
-            setProgress({ active: false, done: Number(result.total) || rows.length, running: 0, total: Number(result.total) || rows.length, label: '伺服器背景分析完成' });
+            const total = Number(result.total) || rows.length;
+            const succeeded = rows.filter(row => row?.ok).length;
+            const blocked = rows.filter(row => analysisFailureState(row).blocked).length;
+            setProgress({
+              active: false,
+              done: succeeded,
+              running: 0,
+              total,
+              label: blocked ? `伺服器背景分析結束｜${blocked}場資料不足` : '伺服器背景分析完成',
+            });
             return result;
           }
           if (['failed', 'cancelled'].includes(String(state.status || '').toLowerCase())) {
@@ -1439,14 +1502,44 @@ export default function Home() {
           setProgress(value => ({ ...value, active: true, running: 1, label: '伺服器背景分析中｜可離開App' }));
         } catch (cause) {
           if (cause?.backgroundFatal || [401, 403, 404].includes(Number(cause?.status))) throw cause;
-          setNotice('伺服器仍在背景分析；目前網路暫時無法取得進度，回到App後會自動再接續。');
+          if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
+            setNotice('伺服器仍在背景分析；目前網路暫時無法取得進度，回到App後會自動再接續。');
+          }
         }
         await new Promise(resolve => window.setTimeout(resolve, 2500));
       }
       return { detached: true, total: 0, completed: 0, results: [] };
-    })().finally(() => backgroundJobPollsRef.current.delete(runId));
-    backgroundJobPollsRef.current.set(runId, poll);
+    })().finally(() => backgroundJobPollsRef.current.delete(pollKey));
+    backgroundJobPollsRef.current.set(pollKey, poll);
     return poll;
+  }
+
+  async function runDurableAnalysisTasks(tasks, generation, targetDate, {
+    progressLabel = '分析今日全部盤口',
+    noticeLabel = '',
+  } = {}) {
+    if (!Array.isArray(tasks) || !tasks.length) return { ok: true, total: 0, completed: 0, results: [] };
+    setProgress({ active: true, done: 0, running: 0, total: tasks.length, label: progressLabel });
+    const job = await requestJSON('/api/analysis-jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+      body: JSON.stringify({
+        league,
+        date: targetDate,
+        tasks: tasks.map(task => ({ ...task, requestId: uid(), generation: undefined })),
+      }),
+    }, 30000);
+    const reconnectSaved = saveBackgroundJob({
+      runId: job.runId,
+      league,
+      date: targetDate,
+      total: tasks.length,
+      startedAt: new Date().toISOString(),
+    });
+    setNotice(reconnectSaved
+      ? `${noticeLabel || `已交給伺服器背景分析 ${tasks.length} 場`}；現在可以離開App或鎖定手機。`
+      : `${noticeLabel || `伺服器已開始分析 ${tasks.length} 場`}；此裝置無法保存工作編號，完成前請保持App開啟。`);
+    return pollBackgroundJob(job.runId, generation, targetDate);
   }
 
   async function analyzeBoardItem(task, index, total, retry = false, trackProgress = true) {
@@ -1479,11 +1572,9 @@ export default function Home() {
       return commitAnalysisPayload(task, baseData);
     } catch (cause) {
       if (task.generation !== analysisGenerationRef.current) return false;
-      const message = String(cause?.message || cause);
-      const blocked = /資料不足｜不評分|比賽已開打或結束/.test(message);
-      const permanent = blocked || /HTTP (?:400|401|403|404|422)\b|CORE_DATA_MISSING|GAME_ALREADY_STARTED|INVALID_[A-Z_]+/.test(message);
-      task.retryable = !permanent;
-      commitAnalysisFailure(task, message);
+      const failure = analysisFailureState(cause);
+      task.retryable = !failure.permanent;
+      commitAnalysisFailure(task, cause);
       return false;
     } finally {
       if (trackProgress && task.generation === analysisGenerationRef.current) {
@@ -1551,7 +1642,8 @@ export default function Home() {
         const foundReference = referenceByPk.get(Number(game.gamePk));
         const represented = Boolean(foundCredit);
         const hasOpenRows = Boolean(foundCredit?.markets?.length);
-        const resumed = hasOpenRows && previous
+        const previousBlocked = analysisFailureState(previous?.analysisFailure || {}).blocked;
+        const resumed = hasOpenRows && previous && !previousBlocked
           ? advanceUnchangedReaderGame(previous, foundCredit.markets, credit.payloadHash, credit.pageActivityAt)
           : null;
         return {
@@ -1621,20 +1713,10 @@ export default function Home() {
         return false;
       }
 
-      setProgress({ active: true, done: 0, running: 0, total: tasks.length, label: '分析今日全部盤口' });
-      const job = await requestJSON('/api/analysis-jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
-        body: JSON.stringify({
-          league,
-          date: targetDate,
-          tasks: tasks.map(task => ({ ...task, requestId: uid(), generation: undefined })),
-        }),
-      }, 30000);
-      saveBackgroundJob({ runId: job.runId, league, date: targetDate, total: tasks.length, startedAt: new Date().toISOString() });
-      setNotice(`已交給伺服器背景分析 ${tasks.length} 場；現在可以離開App或鎖定手機。`);
-      const backgroundResult = await pollBackgroundJob(job.runId, generation, targetDate);
-      const outcomes = tasks.map((task, index) => Boolean(backgroundResult?.results?.[index]?.ok));
+      const backgroundResult = await runDurableAnalysisTasks(tasks, generation, targetDate);
+      const resultRows = Array.isArray(backgroundResult?.results) ? backgroundResult.results : [];
+      const outcomes = tasks.map((task, index) => Boolean(resultRows[index]?.ok));
+      const blockedCount = tasks.filter((task, index) => analysisFailureState(resultRows[index]).blocked).length;
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
       const creditCount = tasks.length;
       const completedCreditCount = outcomes.filter(Boolean).length;
@@ -1660,16 +1742,20 @@ export default function Home() {
       const analysisSucceeded = outcomes.every(Boolean);
       const allSucceeded = analysisSucceeded && readerHashAcknowledged;
       const completedCount = outcomes.filter(Boolean).length;
-      const failedCount = tasks.length - completedCount;
+      const failedCount = Math.max(0, tasks.length - completedCount - blockedCount);
       if (allSucceeded) {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${tasks.length} 場驗證分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
       } else if (analysisSucceeded && !readerHashAcknowledged) {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${tasks.length} 場分析｜${coveragePendingText(coverage)}，但 Reader 在分析期間出現新盤；目前結果保留顯示。`);
         setError('Reader 最新盤面版本尚未完成驗證；下次輪詢只更新變動場次，不會清空整批分數。');
       } else {
-        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${completedCount}/${tasks.length} 場分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
-        const readerHashPending = Boolean(credit?.readerFresh && creditCount > 0 && failedCreditCount > 0);
-        setError(`${failedCount} 場分析失敗${readerHashPending ? '，Reader 最新盤面版本尚未承認' : ''}；已保留成功場次與上一版結果，只需重試失敗場次。`);
+        setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${completedCount} 場｜資料不足 ${blockedCount} 場${failedCount ? `｜暫時失敗 ${failedCount} 場` : ''}｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
+        if (blockedCount) {
+          setError(`${blockedCount} 場官方先發身分、左右投或獨立表現資料不足，QA 已停止評分；同一盤面每5分鐘重驗一次，也可按「同步今日 ${activeLeague.id}」立即重驗。${failedCount ? `另有 ${failedCount} 場暫時分析失敗。` : ''}`);
+        } else {
+          const readerHashPending = Boolean(credit?.readerFresh && creditCount > 0 && failedCreditCount > 0);
+          setError(`${failedCount} 場暫時分析失敗${readerHashPending ? '，Reader 最新盤面版本尚未承認' : ''}；已保留成功場次與上一版結果。`);
+        }
       }
       return allSucceeded;
     } catch (cause) {
@@ -1682,8 +1768,38 @@ export default function Home() {
     finally { releaseOperation(); setProgress(value => ({ ...value, active: false })); }
   }
 
+  function blockedReaderHashRecheckDue(payloadHash, now = Date.now()) {
+    return boardRef.current.some(item => {
+      const failure = analysisFailureState(item?.analysisFailure || {});
+      if (!failure.blocked || item?.analysisFailure?.readerPayloadHash !== payloadHash) return false;
+      const evidenceHash = item?.analysisFailure?.readerEvidenceHash || payloadHash;
+      const retryKey = coreDataBlockKey(league, date, item?.game?.gamePk, evidenceHash);
+      const storedRetryAt = Number(coreDataBlockRetryRef.current.get(retryKey));
+      const itemRetryAt = Date.parse(item?.analysisFailure?.retryAt || '');
+      const retryAt = Number.isFinite(storedRetryAt) && storedRetryAt > 0 ? storedRetryAt : itemRetryAt;
+      return !Number.isFinite(retryAt) || retryAt <= now;
+    });
+  }
+
+  function readerBoardNeedsCoreRefresh(now = Date.now()) {
+    return boardRef.current.some(item => {
+      if (!gameIsPrestartNow(item?.game, now)
+        || !item?.customData?.context
+        || assessCoreSnapshotFreshnessV109(item.customData.context, now).fresh) return false;
+      const failure = analysisFailureState(item?.analysisFailure || {});
+      if (!failure.blocked) return true;
+      const evidenceHash = item?.analysisFailure?.readerEvidenceHash
+        || item?.analysisFailure?.readerPayloadHash;
+      const retryKey = coreDataBlockKey(league, date, item?.game?.gamePk, evidenceHash);
+      const storedRetryAt = Number(coreDataBlockRetryRef.current.get(retryKey));
+      const itemRetryAt = Date.parse(item?.analysisFailure?.retryAt || '');
+      const retryAt = Number.isFinite(storedRetryAt) && storedRetryAt > 0 ? storedRetryAt : itemRetryAt;
+      return !Number.isFinite(retryAt) || retryAt <= now;
+    });
+  }
+
   async function pollReaderAndReprice() {
-    if (operationBusyRef.current || readerPollBusyRef.current || !board.length) return;
+    if (operationBusyRef.current || readerPollBusyRef.current || !boardRef.current.length) return;
     const targetDate = date;
     const generation = analysisGenerationRef.current;
     const stillCurrent = () => generation === analysisGenerationRef.current && currentDateRef.current === targetDate;
@@ -1696,7 +1812,9 @@ export default function Home() {
       const currentStatus = readerStatusRef.current;
       const statusRevision = readerHashKey(targetDate, currentStatus?.payloadHash);
       if (!currentStatus?.fresh || !statusRevision) return;
-      if (statusRevision === creditRevisionRef.current) {
+      if (statusRevision === creditRevisionRef.current
+        && !blockedReaderHashRecheckDue(currentStatus.payloadHash)
+        && !readerBoardNeedsCoreRefresh()) {
         setBoard(current => current.map(item => touchReaderHeartbeat(
           item,
           currentStatus.payloadHash,
@@ -1704,7 +1822,7 @@ export default function Home() {
         )));
         return;
       }
-      const games = schedule.length ? schedule : board.map(item => item.game);
+      const games = schedule.length ? schedule : boardRef.current.map(item => item.game);
       const credit = await requestJSON('/api/credit-lines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
@@ -1713,7 +1831,9 @@ export default function Home() {
       if (!stillCurrent()) return;
       const creditRevision = readerHashKey(targetDate, credit.payloadHash);
       if (credit.provider !== 'TAI888_READER_AUTO' || !credit.readerFresh || !creditRevision) return;
-      if (creditRevision === creditRevisionRef.current) {
+      if (creditRevision === creditRevisionRef.current
+        && !blockedReaderHashRecheckDue(credit.payloadHash)
+        && !readerBoardNeedsCoreRefresh()) {
         setBoard(current => current.map(item => touchReaderHeartbeat(item, credit.payloadHash, credit.pageActivityAt)));
         return;
       }
@@ -1722,21 +1842,24 @@ export default function Home() {
       const readerGameByPk = new Map([...unopenedByPk, ...creditByPk]);
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
       if (!stillCurrent()) return;
+      const currentBoard = boardRef.current;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
-      const boardPks = new Set(board.map(item => Number(item.game.gamePk)));
+      const boardPks = new Set(currentBoard.map(item => Number(item.game.gamePk)));
       const missingReaderGameCount = [...readerGameByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
       if (missingReaderGameCount > 0) {
         fullSlateRecoveryNeeded = true;
         setNotice(`Reader有 ${readerGameByPk.size} 場、目前畫面缺少 ${missingReaderGameCount} 場；正在自動補齊完整賽程。`);
         return;
       }
-      const expectedItems = board.filter(item => gameIsPrestartNow(item.game, Date.now())
+      const expectedItems = currentBoard.filter(item => gameIsPrestartNow(item.game, Date.now())
         && (readerGameByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO'));
       let failed = 0;
+      let blocked = 0;
       let completed = 0;
       let updated = 0;
       let removed = 0;
-      await runPool(board, 2, async item => {
+      const rebuildTasks = [];
+      await runPool(currentBoard, 2, async item => {
         if (!stillCurrent()) return;
         if (!gameIsPrestartNow(item.game, Date.now())) return;
         const actual = readerGameByPk.get(Number(item.game.gamePk));
@@ -1754,6 +1877,36 @@ export default function Home() {
           }
           return;
         }
+        const rebuildTask = {
+          game: item.game,
+          actualMarkets: actual.markets,
+          actualSource: actual.source,
+          marketCoverage: actual.marketCoverage,
+          readerProvenance: actual.readerProvenance,
+          readerPayloadHash: credit.payloadHash,
+          verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
+          generation,
+        };
+        const priorFailure = analysisFailureState(item.analysisFailure || {});
+        const currentEvidenceHash = readerGameEvidenceHash(rebuildTask);
+        const priorEvidenceHash = item.analysisFailure?.readerEvidenceHash
+          || item.analysisFailure?.readerPayloadHash;
+        const sameBlockedEvidence = priorFailure.blocked
+          && Boolean(currentEvidenceHash)
+          && priorEvidenceHash === currentEvidenceHash;
+        if (sameBlockedEvidence) {
+          const retryKey = coreDataBlockKey(league, targetDate, item.game.gamePk, currentEvidenceHash);
+          const storedRetryAt = Number(coreDataBlockRetryRef.current.get(retryKey));
+          const itemRetryAt = Date.parse(item.analysisFailure?.retryAt || '');
+          const retryAt = Number.isFinite(storedRetryAt) && storedRetryAt > 0 ? storedRetryAt : itemRetryAt;
+          if (Number.isFinite(retryAt) && retryAt > Date.now()) {
+            blocked += 1;
+            return;
+          }
+          coreDataBlockRetryRef.current.set(retryKey, Date.now() + CORE_DATA_BLOCK_RECHECK_MS);
+          rebuildTasks.push(rebuildTask);
+          return;
+        }
         if (item.readerPayloadHash === credit.payloadHash && coreSnapshotReusable(item)) {
           updateBoard(item.game.gamePk, current => touchReaderHeartbeat(current, credit.payloadHash, credit.pageActivityAt));
           completed += 1;
@@ -1768,19 +1921,8 @@ export default function Home() {
           return;
         }
         const snapshot = snapshots.current.get(item.game.gamePk);
-        if (!snapshot || !item.referenceData) {
-          const rebuilt = await analyzeBoardItem({
-            game: item.game,
-            actualMarkets: actual.markets,
-            actualSource: actual.source,
-            marketCoverage: actual.marketCoverage,
-            readerProvenance: actual.readerProvenance,
-            readerPayloadHash: credit.payloadHash,
-            verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
-            generation,
-          }, 0, 1, true, false);
-          if (rebuilt) { updated += 1; completed += 1; }
-          else failed += 1;
+        if (!snapshot || !item.referenceData || !coreSnapshotReusable(item)) {
+          rebuildTasks.push(rebuildTask);
           return;
         }
         try {
@@ -1820,15 +1962,50 @@ export default function Home() {
           updated += 1;
           completed += 1;
         } catch (cause) {
-          failed += 1;
-          updateBoard(item.game.gamePk, current => ({
-            ...current,
-            status: 'failed',
-            statusLabel: '盤口更新失敗｜保留上一版結果',
-            error: String(cause?.message || cause),
-          }));
+          const failure = analysisFailureState(cause);
+          if (failure.blocked) {
+            blocked += 1;
+            commitAnalysisFailure(rebuildTask, cause);
+          } else {
+            failed += 1;
+            updateBoard(item.game.gamePk, current => ({
+              ...current,
+              status: 'failed',
+              statusLabel: '盤口更新暫時失敗｜保留上一版結果',
+              analysisFailure: {
+                ...failure,
+                readerPayloadHash: credit.payloadHash,
+                readerEvidenceHash: readerGameEvidenceHash(rebuildTask) || null,
+                retryAt: null,
+              },
+              error: failure.message,
+            }));
+          }
         }
       });
+      if (rebuildTasks.length && stillCurrent()) {
+        operationBusyRef.current = true;
+        setBusy(true);
+        try {
+          const rebuilt = await runDurableAnalysisTasks(rebuildTasks, generation, targetDate, {
+            progressLabel: '伺服器背景重建比分分布',
+            noticeLabel: `已交給伺服器背景重建 ${rebuildTasks.length} 場比分分布`,
+          });
+          const rows = Array.isArray(rebuilt?.results) ? rebuilt.results : [];
+          const rebuiltCompleted = rows.filter(row => row?.ok).length;
+          const rebuiltBlocked = rows.filter(row => !row?.ok && analysisFailureState(row).blocked).length;
+          const rebuiltFailed = Math.max(0, rebuildTasks.length - rebuiltCompleted - rebuiltBlocked);
+          completed += rebuiltCompleted;
+          updated += rebuiltCompleted;
+          blocked += rebuiltBlocked;
+          failed += rebuiltFailed;
+        } catch (cause) {
+          failed += rebuildTasks.length;
+          setError(`伺服器背景重建暫時失敗：${String(cause?.message || cause)}；已保留上一版分數。`);
+        } finally {
+          releaseOperation();
+        }
+      }
       if (!stillCurrent()) return;
       const hashEligible = shouldAcknowledgeReaderHash({ payloadHash: credit.payloadHash, expectedCount: expectedItems.length, completedCount: completed, failedCount: failed });
       const acknowledged = hashEligible && await confirmLiveReaderHash(targetDate, credit.payloadHash, generation);
@@ -1839,10 +2016,14 @@ export default function Home() {
         autoAnalyzeHashRef.current = completedKey;
         setAcknowledgedReaderKey(completedKey);
       }
-      if (updated || removed) {
-        setNotice(`Tai888盤口已自動更新：${updated}場快速重算${removed ? '｜' + removed + '場已下架但保留舊結果' : ''}${failed ? '｜' + failed + '場保留上一版並等待單場重試' : ''}。`);
+      if (updated || removed || blocked) {
+        setNotice(`Tai888盤口處理完成：${updated}場更新${removed ? '｜' + removed + '場已下架但保留舊結果' : ''}${blocked ? '｜' + blocked + '場核心資料不足' : ''}${failed ? '｜' + failed + '場暫時失敗' : ''}。`);
       }
-      if (failed) setError(`${failed}場最新盤更新失敗；已保留上一版分數，下次輪詢只重試失敗場次。`);
+      if (blocked) {
+        setError(`${blocked}場官方先發身分、左右投或獨立表現資料不足，QA 已停止評分；同一盤面每5分鐘重驗一次，也可按「同步今日 ${activeLeague.id}」立即重驗。${failed ? `另有 ${failed} 場盤口更新暫時失敗。` : ''}`);
+      } else if (failed) {
+        setError(`${failed}場盤口更新暫時失敗；已保留上一版分數，下次輪詢只重試暫時失敗場次。`);
+      }
     } catch (cause) {
       if (stillCurrent()) invalidateReaderStatus(cause?.message || cause);
     } finally {

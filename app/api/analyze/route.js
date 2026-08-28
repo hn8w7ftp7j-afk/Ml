@@ -354,6 +354,19 @@ export async function POST(request) {
         officialOrProjectedLineups: '正式打線或可信打線預估',
         bullpenUsageProjection: '牛棚使用量與疲勞預估',
         officialScheduleIdentityOrRecentLeagueResults: '官方賽程識別或近期完賽賽果',
+        officialScheduleIdentity: '官方賽程與球隊識別',
+        leagueRunEnvironment: '官方聯盟得分環境',
+        pointInTimeFeatureSnapshot: '賽前時間點資料快照',
+        teamStrengthBaseline: '獨立球隊能力基準',
+        starterIdentityAndIndependentPerformance: '官方先發身分與獨立個人投球能力',
+        officialStarterHandedness: '官方先發左右投',
+        credibleLineupScenario: '正式打線或可信打線情境',
+        pureReliefBullpen: '純後援牛棚能力與使用量',
+        recognizedVenueParkFactor: '可辨識球場因子',
+        npbDhAndInterleagueRuleState: 'NPB 指定打擊與跨聯盟規則',
+        kboWeatherOrDomeScenario: 'KBO 天候或巨蛋情境',
+        kboDoubleheaderState: 'KBO 雙重賽狀態',
+        cpblForeignPlayerConstraintState: 'CPBL 洋將規則狀態',
       };
       const detail = blocking.length ? blocking.map(name => gateLabels[name] || name).join('、') : '核心資料Gate未通過';
       console.error('[ANALYZE_CORE_BLOCK]', { league, gamePk: game?.gamePk, blocking, warnings: context?.warnings || [] });

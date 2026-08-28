@@ -6,9 +6,11 @@ import {
   parseKboBoxScorePayload,
   parseKboGameListPayload,
   parseKboStarterAnalysisPayload,
+  matchNpbStarterStats,
   parseNpbGameDetailHtml,
   parseNpbPitchingStatsHtml,
 } from '../lib/asian-production-features-v1.js';
+import { parseNpbProbableStartersHtml } from '../lib/asian-baseball.js';
 import { extraInningsKernelV13 } from '../lib/joint-score-v13.js';
 
 assert.equal(baseballInnings('5', '.2'), 5 + 2 / 3);
@@ -22,6 +24,35 @@ assert.equal(npbPitching.length, 1);
 assert.equal(npbPitching[0].throws, 'L');
 assert.equal(npbPitching[0].inningsPitched, 101 + 2 / 3);
 assert.ok(Math.abs(npbPitching[0].whip - 109 / (101 + 2 / 3)) < 1e-12);
+
+const npbProbables = parseNpbProbableStartersHtml(`
+<h4>8月28日の予告先発投手</h4>
+<section class="starting_wrap_cl"><div class="unit cl_1">
+  <div class="team_left"><img src="/img/common/logo/2026/logo_t_m.gif"><a href="/bis/players/13315153.html">村上　頌樹</a></div>
+  <div class="team_right"><img src="/img/common/logo/2026/logo_g_m.gif"><a href="/bis/players/23725150.html">Ｓ．ハワード</a></div>
+  <div class="info">（甲子園）18:00</div>
+</div></section>
+<section class="starting_wrap_pl"><div class="unit pl_1">
+  <div class="team_left"><img src="/img/common/logo/2026/logo_b_m.gif"><a href="/bis/players/43545159.html">Ａ．エスピノーザ</a></div>
+  <div class="team_right"><img src="/img/common/logo/2026/logo_h_m.gif"><a href="/bis/players/13115159.html">前田　悠伍</a></div>
+  <div class="info">（京セラD大阪）18:00</div>
+</div></section>`, '2026-08-28');
+assert.deepEqual(npbProbables.map(row => [row.awayCode, row.homeCode]), [['YOM', 'HAN'], ['SOF', 'ORI']]);
+assert.deepEqual(npbProbables[1].away, { name: '前田 悠伍', id: '13115159', source: 'NPB_OFFICIAL_PROBABLE_STARTER' });
+
+const npbOfficialShape = parseNpbPitchingStatsHtml(`
+<table><tbody>
+<tr><th>選手</th><th>登板</th><th>勝利</th><th>敗北</th><th>セーブ</th><th>ホールド</th><th>打者</th><th>投球回</th><th>安打</th><th>四球</th><th>三振</th><th>自責点</th><th>防御率</th></tr>
+<tr><td>ハワード</td><td>6</td><td>3</td><td>0</td><td>0</td><td>0</td><td>137</td><td><span class="integer">34</span><span class="decimal">.1</span></td><td>26</td><td>10</td><td>40</td><td>5</td><td>1.31</td></tr>
+<tr><td><sup>*</sup><a href="/bis/players/99990001.html">公式 左投</a></td><td>20</td><td>8</td><td>4</td><td>0</td><td>1</td><td>420</td><td><span class="integer">101</span><span class="decimal">.2</span></td><td>84</td><td>25</td><td>95</td><td>32</td><td>2.83</td></tr>
+</tbody></table>`);
+assert.equal(npbOfficialShape.length, 2, 'NPB投手表不得依賴table class或thead');
+assert.equal(npbOfficialShape[0].inningsPitched, 34 + 1 / 3, 'NPB正式decimal局數不得截成整數');
+assert.ok(Math.abs(npbOfficialShape[0].whip - 36 / (34 + 1 / 3)) < 1e-12);
+assert.equal(npbOfficialShape[1].id, '99990001');
+assert.equal(npbOfficialShape[1].throws, 'L', 'NPB姓名前星號代表左投');
+assert.equal(matchNpbStarterStats(npbOfficialShape, { name: 'Ｓ．ハワード', id: '23725150' })?.name, 'ハワード');
+assert.equal(matchNpbStarterStats(npbOfficialShape, { name: '公告姓名格式不同', id: '99990001' })?.name, '公式 左投', '官方player id必須優先於姓名');
 
 const npbDetail = parseNpbGameDetailHtml(`
 <div id="gmdivinfo"><table><tr><td>Tokyo Dome</td></tr></table></div>
