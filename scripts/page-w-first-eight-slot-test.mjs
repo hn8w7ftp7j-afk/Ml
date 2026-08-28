@@ -13,6 +13,9 @@ assert.match(page, /rows = actualRows\.filter\(row => row\.market === market\)\.
 assert.match(page, /DirectionSlotRow/, 'UNOPENED and BLOCKED slots must have a visible row');
 assert.match(page, /status === 'UNOPENED' \? '尚未開盤'/, 'unopened direction slots must be explicit');
 assert.match(page, /status === 'BLOCKED'/, 'blocked direction slots must be explicit');
+assert.match(page, /allDirectionsUnopened[\s\S]*readerWaitingSummary/, 'an all-unopened game must render one compact waiting state instead of eight blank rows');
+assert.match(page, /marketAllUnopened[\s\S]*尚未開盤｜Reader持續監看/, 'a partial game must retain eight-slot data internally while collapsing unopened market rows');
+assert.match(page, /marketBlocked[\s\S]*資料異常｜不評分[\s\S]*marketAllUnopened/, 'a true coverage error must render BLOCKED before the compact unopened branch');
 assert.match(page, /function directionQaPassed[\s\S]*row\?\.qa\?\.status[\s\S]*=== 'PASS'/, 'canonical qa.status must take precedence over legacy score audit fields');
 assert.match(page, /readerProvenance: task\.readerProvenance \|\| null/, 'analyze must carry signed Reader provenance');
 assert.match(page, /readerProvenance: actual\.readerProvenance \|\| null/, 'reprice must carry signed Reader provenance');

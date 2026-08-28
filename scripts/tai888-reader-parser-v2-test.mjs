@@ -47,7 +47,7 @@ const payload = {
 };
 const options = { deviceId: 'device-12345678', receivedAt: '2026-08-11T22:30:30Z' };
 const result = normalizeTai888ReaderPayload(payload, schedule, options);
-assert.equal(result.version, 'TAI888-READER-PARSER-v2.2.0');
+assert.equal(result.version, 'TAI888-READER-PARSER-v2.2.1');
 assert.equal(result.league, 'MLB');
 assert.equal(result.matchedGameCount, 2);
 assert.equal(result.scheduleGameCount, 2);
@@ -72,8 +72,21 @@ assert.equal(result.games[1].markets.some(row => row.pick === '克里夫蘭守�
 assert.match(result.payloadHash, /^[a-f0-9]{64}$/);
 assert.match(result.rawBoardHash, /^[a-f0-9]{64}$/);
 assert.equal(readerSnapshotIsComplete(result), true);
+assert.equal(
+  readerSnapshotIsComplete({ ...result, version: 'TAI888-READER-PARSER-v2.2.0' }),
+  false,
+  'snapshots created before coverage-state hashing must be rejected after deployment',
+);
 assert.equal(readerSnapshotIsComplete({ ...result, pageTitle: 'LEGACY_TITLE_SECRET' }), false);
 assert.equal(readerSnapshotIsComplete({ ...result, frameUrl: 'https://www1.tai888.in/frame?LEGACY_FRAME_SECRET' }), false);
+assert.throws(
+  () => normalizeTai888ReaderPayload(payload, [
+    { ...schedule[0], gameDate: '2026-08-11T22:20:00Z' },
+    schedule[1],
+  ], options),
+  /擷取當下已開賽、延期或取消場次/,
+  'the parser must reject a caller that accidentally includes a post-start game in the writable slate',
+);
 assert.equal(
   readerSnapshotIsComplete({ ...result, pageUrl: 'https://www1.tai888.in/newapp/?LEGACY_QUERY_SECRET#/BS' }),
   false,
@@ -109,6 +122,31 @@ assert.equal(partialResult.matchedGameCount, 2, 'a game with two complete open m
 assert.equal(partialResult.games[0].markets.length, 4, 'only the two available market pairs are emitted');
 assert.deepEqual([...new Set(partialResult.games[0].markets.map(row => row.market))], ['全場讓分', '全場大小']);
 assert.equal(readerSnapshotIsComplete(partialResult), true, 'a partially opened but internally valid slate remains a complete snapshot');
+
+const unavailableStatePayload = structuredClone(partialPayload);
+unavailableStatePayload.version = 'TAI888-READER-DOM-v2.2.0';
+unavailableStatePayload.readerVersion = '2.2.0 COVERAGE STATE HASH';
+unavailableStatePayload.payloadHash = 'a'.repeat(64);
+unavailableStatePayload.games[0].marketStates = {
+  FULL_HANDICAP: 'AVAILABLE', FULL_TOTAL: 'AVAILABLE',
+  FIRST_HALF_HANDICAP: 'UNAVAILABLE', FIRST_HALF_TOTAL: 'UNAVAILABLE',
+};
+const unavailableStateResult = normalizeTai888ReaderPayload(unavailableStatePayload, schedule, options);
+const blockedStatePayload = structuredClone(unavailableStatePayload);
+blockedStatePayload.games[0].marketStates.FIRST_HALF_TOTAL = 'BLOCKED';
+blockedStatePayload.payloadHash = 'b'.repeat(64);
+const blockedStateResult = normalizeTai888ReaderPayload(blockedStatePayload, schedule, options);
+assert.deepEqual(
+  blockedStateResult.games[0].markets.map(row => [row.market, row.pick, row.water]),
+  unavailableStateResult.games[0].markets.map(row => [row.market, row.pick, row.water]),
+  'coverage-only transitions keep the same actual market rows',
+);
+assert.notEqual(
+  blockedStateResult.payloadHash,
+  unavailableStateResult.payloadHash,
+  'UNAVAILABLE↔BLOCKED coverage-only transitions must advance the normalized Reader revision',
+);
+assert.deepEqual(blockedStateResult.games[0].marketCoverage.blockedMarkets, ['上半大小']);
 
 const contaminatedLockedPayload = structuredClone(lockedPayload);
 contaminatedLockedPayload.games[1].fullTotal = { line: '8+30', overWater: .94, underWater: .94 };

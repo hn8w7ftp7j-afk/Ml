@@ -44,7 +44,7 @@ const workflowSource = fs.readFileSync(new URL('../workflows/analyze-board.js', 
 assert.match(pageSource, /ANALYSIS_REQUEST_TIMEOUT_MS = 120_000/);
 assert.match(pageSource, /requestJSON\('\/api\/analysis-jobs'/);
 assert.match(pageSource, /伺服器背景分析中｜可離開App/);
-assert.match(pageSource, /pollBackgroundJob\(job\.runId, generation, targetDate\)/);
+assert.match(pageSource, /pollBackgroundJob\([\s\S]*job\.runId,[\s\S]*generation,[\s\S]*targetDate,[\s\S]*tasks\.map/);
 assert.match(workflowSource, /'use workflow'/);
 assert.match(workflowSource, /'use step'/);
 assert.match(workflowSource, /analyzeGameStep\.maxRetries = 2/);

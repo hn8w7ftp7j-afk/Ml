@@ -3,6 +3,7 @@ import { loadReaderSnapshot, readerSnapshotStatus, READER_STORE_VERSION } from '
 import { readerSnapshotIsComplete, TAI888_READER_PARSER_VERSION } from '../../../lib/tai888-reader-parser-v2.js';
 import { signMarketGames, signReaderProvenance } from '../../../lib/market-integrity-v1.js';
 import {
+  readerGameEvidenceRows,
   readerGameMarketContentHash,
   readerUnopenedGameMarketContentHash,
 } from '../../../lib/reader-market-revision-v110.js';
@@ -38,34 +39,6 @@ function unopenedMarketCoverage() {
     blockedMarkets: [],
     missingMarkets: [...MARKET_ORDER],
   };
-}
-
-function readerCoverageIntegrityRows(row, lineAsOf) {
-  const available = new Set(Array.isArray(row?.marketCoverage?.availableMarkets)
-    ? row.marketCoverage.availableMarkets
-    : []);
-  return (Array.isArray(row?.marketCoverage?.blockedMarkets) ? row.marketCoverage.blockedMarkets : [])
-    .filter(market => MARKET_ORDER.includes(market) && !available.has(market))
-    .map(market => ({
-      market,
-      pick: '',
-      water: null,
-      waterEstimated: false,
-      waterMissing: true,
-      confidence: 1,
-      sourceType: 'ACTUAL_TW_CREDIT',
-      sourceLabel: 'Tai888 Reader 自動信用盤',
-      provider: 'TAI888_READER_AUTO',
-      lineAsOf,
-      executable: false,
-      marketVerification: null,
-      rawText: '',
-      referenceSide: '',
-      sourceTemplateVersion: 'TAI888-DOM-COVERAGE-BLOCK-v1.0.0',
-      authorizationStatus: 'SERVER_ATTESTED_READER_COVERAGE_BLOCK',
-      integrityOrigin: 'SERVER_SIGNED_READER_COVERAGE',
-      integrityError: `Reader coverage BLOCKED：${market}盤口欄位不完整、重複或無法辨識，禁止當成尚未開盤`,
-    }));
 }
 
 async function signedReaderProvenance(league, game, readerSnapshot, marketStatus, readerGameMarketHash) {
@@ -195,11 +168,52 @@ export async function POST(request) {
     if (!requestedSchedule.length) return NextResponse.json({ ok: false, error: '今日賽事清單為空，無法配對信用盤' }, { status: 400 });
     const fullOfficialSlate = await fetchLeagueTaipeiSlate(league, date);
     const schedule = validateLeagueScheduleSubset(league, requestedSchedule, fullOfficialSlate, date);
-    const requestedGamePks = new Set(schedule.map(game => Number(game.gamePk)));
+    const requestNow = Date.now();
+    const currentPrestartPks = new Set(filterLeaguePrestartGames(
+      league,
+      fullOfficialSlate,
+      requestNow,
+    ).map(game => Number(game.gamePk)));
+    const currentSchedule = schedule.filter(game => currentPrestartPks.has(Number(game.gamePk)));
+    const requestedGamePks = new Set(currentSchedule.map(game => Number(game.gamePk)));
     const officialByPk = new Map(fullOfficialSlate.map(game => [Number(game.gamePk), game]));
 
     readerSnapshot = await loadReaderSnapshot(league, date);
     readerState = readerSnapshotStatus(readerSnapshot, Date.now(), league);
+    if (!currentSchedule.length) {
+      return NextResponse.json({
+        ok: true,
+        league,
+        configured: Boolean(process.env.READER_PAIR_SECRET),
+        blocked: false,
+        readerFresh: readerState.fresh,
+        code: 'NO_PRESTART_GAMES',
+        message: '目前已無尚未開賽場次；停止建立未開盤分析。',
+        version: TAI888_READER_PARSER_VERSION,
+        readerVersion: readerSnapshot?.readerVersion || null,
+        provider: 'TAI888_READER_AUTO',
+        label: 'Tai888 Reader 自動信用盤',
+        games: [],
+        unopenedGames: [],
+        payloadHash: readerSnapshot?.payloadHash || null,
+        rawBoardHash: readerSnapshot?.rawBoardHash || null,
+        boardDate: readerSnapshot?.boardDate || date,
+        observedAt: readerSnapshot?.observedAt || null,
+        receivedAt: readerSnapshot?.receivedAt || null,
+        pageActivityAt: readerSnapshot?.pageActivityAt || null,
+        rawGameCount: 0,
+        matchedGameCount: 0,
+        marketCount: 0,
+        directionCount: 0,
+        partialGameCount: 0,
+        unopenedGameCount: 0,
+        scheduleGameCount: 0,
+        unmatched: [],
+        readerStatus: readerState,
+        fetchedAt: new Date().toISOString(),
+        cache: 'READER_RUNTIME_CACHE',
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
     const executableOfficialSlate = filterLeaguePrestartGames(
       league,
       fullOfficialSlate,
@@ -221,12 +235,9 @@ export async function POST(request) {
       }));
       const requestedUnopenedRows = (readerSnapshot.unopenedGames || [])
         .filter(row => requestedGamePks.has(Number(row.gamePk)));
-      const requestedOpenCount = schedule.length - requestedUnopenedRows.length;
+      const requestedOpenCount = currentSchedule.length - requestedUnopenedRows.length;
       const readerEvidenceGames = await Promise.all(verifiedReaderGames.map(async row => {
-        const evidenceMarkets = [
-          ...row.markets,
-          ...readerCoverageIntegrityRows(row, readerSnapshot.pageActivityAt),
-        ];
+        const evidenceMarkets = readerGameEvidenceRows(row, readerSnapshot.pageActivityAt);
         const readerGameMarketHash = readerGameMarketContentHash(evidenceMarkets);
         return {
           ...row,
@@ -275,9 +286,17 @@ export async function POST(request) {
           ),
         };
       }));
-      if (games.length === requestedOpenCount && games.length + unopenedGames.length === schedule.length) {
+      if (games.length === requestedOpenCount && games.length + unopenedGames.length === currentSchedule.length) {
+        const currentRawGameCount = games.length + requestedUnopenedRows
+          .filter(row => row?.unavailableReason !== 'not-rendered-by-reader').length;
+        const currentMarketCount = games.reduce((count, row) => (
+          count + new Set((row.markets || []).map(market => market.market)).size
+        ), 0);
+        const currentDirectionCount = games.reduce((count, row) => count + (row.markets || []).length, 0);
         return NextResponse.json({
           ok: true, league, configured: true, blocked: false, readerFresh: true,
+          code: currentSchedule.length ? undefined : 'NO_PRESTART_GAMES',
+          message: currentSchedule.length ? undefined : '目前已無尚未開賽場次；停止建立未開盤分析。',
           version: TAI888_READER_PARSER_VERSION, provider: 'TAI888_READER_AUTO',
           label: 'Tai888 Reader 自動信用盤', games,
           readerVersion: readerSnapshot.readerVersion,
@@ -285,13 +304,13 @@ export async function POST(request) {
           rawBoardHash: readerSnapshot.rawBoardHash,
           observedAt: readerSnapshot.observedAt, receivedAt: readerSnapshot.receivedAt,
           pageActivityAt: readerSnapshot.pageActivityAt,
-          rawGameCount: readerSnapshot.rawGameCount, matchedGameCount: games.length,
-          marketCount: readerSnapshot.marketCount || 0,
-          directionCount: readerSnapshot.directionCount || 0,
-          partialGameCount: readerSnapshot.partialGameCount || 0,
+          rawGameCount: currentRawGameCount, matchedGameCount: games.length,
+          marketCount: currentMarketCount,
+          directionCount: currentDirectionCount,
+          partialGameCount: games.filter(row => new Set((row.markets || []).map(market => market.market)).size < MARKET_ORDER.length).length,
           unopenedGameCount: unopenedGames.length,
           unopenedGames,
-          scheduleGameCount: schedule.length, unmatched: readerSnapshot.unmatched || [],
+          scheduleGameCount: currentSchedule.length, unmatched: readerSnapshot.unmatched || [],
           readerStatus: readerState, fetchedAt: new Date().toISOString(), cache: 'READER_RUNTIME_CACHE',
         }, { headers: { 'Cache-Control': 'no-store' } });
       }
@@ -319,7 +338,7 @@ export async function POST(request) {
       pageActivityAt: readerSnapshot?.pageActivityAt || null,
       rawGameCount: readerSnapshot?.rawGameCount || 0,
       matchedGameCount: readerSnapshot?.matchedGameCount || 0,
-      scheduleGameCount: schedule.length,
+      scheduleGameCount: currentSchedule.length,
       readerStatus: readerState,
       fetchedAt: new Date().toISOString(),
       cache: 'READER_RUNTIME_CACHE',

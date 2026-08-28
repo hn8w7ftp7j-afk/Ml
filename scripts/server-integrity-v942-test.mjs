@@ -195,6 +195,14 @@ assert.throws(
   () => assertGameHasNotStarted({ ...game, gameDate: '2000-01-01T00:00:00.000Z' }, Date.parse('2000-01-01T00:00:00.000Z')),
   error => error?.status === 409 && error?.code === 'GAME_ALREADY_STARTED',
 );
+for (const terminal of [
+  { statusCode: 'D', statusEnglish: 'Postponed' },
+  { statusCode: 'C', statusEnglish: 'Cancelled' },
+]) assert.throws(
+  () => assertGameHasNotStarted({ ...game, ...terminal }, Date.parse('2099-08-11T22:00:00.000Z')),
+  error => error?.status === 409 && error?.code === 'GAME_ALREADY_STARTED',
+  `${terminal.statusEnglish} must be rejected by the server-side bet evidence gate`,
+);
 
 console.log(JSON.stringify({
   ok: true,

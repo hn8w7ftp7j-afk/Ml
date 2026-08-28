@@ -43,7 +43,7 @@ const fullPayload = payload([
 ]);
 const options = { deviceId: 'device-12345678', receivedAt: '2026-08-12T01:00:30Z' };
 const result = normalizeTai888ReaderPayload(fullPayload, schedule, options);
-assert.equal(result.version, 'TAI888-READER-PARSER-v2.2.0');
+assert.equal(result.version, 'TAI888-READER-PARSER-v2.2.1');
 assert.equal(result.matchedGameCount, 3);
 assert.deepEqual(result.games.map(game => Number(game.gamePk)), [101, 102, 103]);
 assert.equal(result.games.every(game => game.markets.length === 8), true);

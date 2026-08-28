@@ -11,7 +11,7 @@ assert.match(page, /commitAnalysisFailure\(row\?\.task, row\)/, 'background poll
 assert.match(page, /const state = await requestJSON\(`\/api\/analysis-jobs[\s\S]*generation !== analysisGenerationRef\.current \|\| currentDateRef\.current !== targetDate\)[\s\S]*return \{ detached: true/, 'a completed old job must detach before mutating a newly selected league or date');
 assert.match(page, /const pollKey = `\$\{runId\}\|\|\|\$\{generation\}\|\|\|\$\{targetDate\}`;[\s\S]*backgroundJobPollsRef\.current\.get\(pollKey\)/, 'reconnect polling must not reuse a detached promise from an older league/date generation');
 assert.match(page, /const saved = loadBackgroundJob\(league, date\)[\s\S]*\}, \[date, league, storageReady, busy\]\);/, 'a new league/date must retry saved-job reconnect after the old operation releases busy state');
-assert.match(page, /status: failure\.blocked \? 'blocked' : 'failed'/, 'QA blocks must not render as generic analysis failures');
+assert.match(page, /status: terminalGame \? 'done' : failure\.blocked \? 'blocked' : 'failed'/, 'terminal games must stop while QA blocks remain distinct from generic analysis failures');
 assert.match(page, /資料不足｜QA BLOCK｜不評分/, 'blocked cards need explicit fail-closed copy');
 
 const pollStart = page.indexOf('async function pollReaderAndReprice()');
@@ -27,7 +27,7 @@ assert.match(poll, /creditRevision === creditRevisionRef\.current\s*&& !blockedR
 assert.doesNotMatch(page, /needsCoreRefresh[\s\S]{0,240}oneClickAnalyze\(\)/, 'core expiry must not use the foreground full-board retry timer');
 assert.match(poll, /sameBlockedEvidence[\s\S]*retryAt > Date\.now\(\)/, 'the same blocked per-game evidence must be suppressed during backoff');
 assert.match(poll, /rebuildTasks\.push\(rebuildTask\)/, 'missing snapshots must be collected for durable rebuild');
-assert.match(poll, /if \(!snapshot \|\| !item\.referenceData \|\| !coreSnapshotReusable\(item\)\) \{\s*rebuildTasks\.push\(rebuildTask\)/, 'stale core snapshots must use durable rebuild instead of looping through reprice 409');
+assert.match(poll, /if \(!snapshot \|\| !item\.referenceData \|\| !coreSnapshotReusable\(item\)\) \{[\s\S]*readerPayloadHash: null[\s\S]*rebuildTasks\.push\(rebuildTask\)/, 'stale core snapshots must revoke execution and use durable rebuild instead of looping through reprice 409');
 assert.match(poll, /runDurableAnalysisTasks\(rebuildTasks, generation, targetDate/, 'automatic rebuilds must use the durable Workflow route');
 assert.doesNotMatch(poll, /const rebuilt = await analyzeBoardItem\(/, 'Reader polling must not rebuild distributions in the foreground');
 assert.match(poll, /let blocked = 0;[\s\S]*let completed = 0;[\s\S]*let updated = 0/, 'blocked and successful outcomes must be counted separately');
@@ -39,6 +39,7 @@ const oneClickEnd = page.indexOf('function blockedReaderHashRecheckDue(', oneCli
 const oneClick = page.slice(oneClickStart, oneClickEnd);
 assert.match(oneClick, /runDurableAnalysisTasks\(tasks, generation, targetDate\)/, 'manual sync must always launch a durable job');
 assert.doesNotMatch(oneClick, /coreDataBlockRetryRef\.current\.get/, 'manual sync must bypass automatic same-hash backoff');
-assert.match(oneClick, /previousBlocked = analysisFailureState\(previous\?\.analysisFailure \|\| \{\}\)\.blocked;[\s\S]*hasOpenRows && previous && !previousBlocked/, 'manual sync must not resume a blocked prior result without revalidation');
+assert.match(oneClick, /previousBlocked = analysisFailureState\(previous\?\.analysisFailure \|\| \{\}\)\.blocked;[\s\S]*hasOpenRows && !coverageRegression && previous && !previousBlocked/, 'manual sync must not resume a blocked or Reader-regressed prior result without revalidation');
+assert.match(page, /function commitAnalysisFailure\(task, value\)[\s\S]*taskReaderStateIsStale\(task\)/, 'a late failure from an old Reader hash must be ignored before it can install a QA retry');
 
 console.log('Structured QA BLOCK display, five-minute same-hash throttle and durable Reader rebuild PASS');

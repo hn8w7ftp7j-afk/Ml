@@ -3,6 +3,7 @@ import {
   advanceUnchangedReaderGame,
   actualLineFreshNow,
   coreSnapshotReusable,
+  finalizeReaderBoardAtStart,
   formalBetEligibility,
   gameIsPrestartNow,
   liveReaderHashMatches,
@@ -39,7 +40,28 @@ const futureGame = { gameDate: '2026-08-15T08:01:00.000Z', statusCode: 'S', stat
 assert.equal(gameIsPrestartNow(futureGame, NOW), true);
 assert.equal(gameIsPrestartNow(futureGame, Date.parse(futureGame.gameDate)), false);
 assert.equal(gameIsPrestartNow({ ...futureGame, statusCode: 'I', statusEnglish: 'In Progress' }, NOW), false);
+assert.equal(gameIsPrestartNow({ ...futureGame, statusCode: 'D', statusEnglish: 'Postponed' }, NOW), false);
+assert.equal(gameIsPrestartNow({ ...futureGame, statusCode: 'C', statusEnglish: 'Cancelled' }, NOW), false);
+assert.equal(gameIsPrestartNow({ ...futureGame, statusCode: 'S', statusEnglish: 'Game Postponed' }, NOW), false);
 assert.equal(gameIsPrestartNow({ ...futureGame, gameDate: '' }, NOW), false);
+
+const waitingItem = {
+  game: futureGame,
+  readerPayloadHash: 'reader-waiting',
+  status: 'unopened',
+  customData: { analysis: { directionSlots: Array.from({ length: 8 }, (_, index) => ({ slotId: `WAIT_${index}`, status: 'UNOPENED' })) } },
+};
+const scoredItem = {
+  game: futureGame,
+  readerPayloadHash: 'reader-scored',
+  status: 'done',
+  customData: { analysis: { calculatedDirectionCount: 1, directionSlots: [{ slotId: 'SCORED', status: 'CALCULATED', modelEV: 0.03 }] } },
+};
+const afterStart = finalizeReaderBoardAtStart([waitingItem, scoredItem], Date.parse(futureGame.gameDate));
+assert.equal(afterStart.length, 1, 'post-start waiting cards must disappear instead of retaining blank UNOPENED rows');
+assert.equal(afterStart[0].readerPayloadHash, null, 'post-start retained analysis must lose execution authority');
+assert.match(afterStart[0].statusLabel, /比賽已開始｜保留賽前分析/);
+assert.equal(finalizeReaderBoardAtStart([waitingItem], NOW, { noPrestartGames: true }).length, 0, 'NO_PRESTART_GAMES must remove a race-window waiting card even before its stale client start time');
 
 assert.equal(readerHashKey('2026-08-15', 'abc'), '2026-08-15:abc');
 assert.equal(shouldAcknowledgeReaderHash({ payloadHash: 'abc', expectedCount: 2, completedCount: 2 }), true);
@@ -89,9 +111,11 @@ assert.equal(
   'same-content Reader heartbeats must match without forcing another reprice',
 );
 
+const SAME_GAME_EVIDENCE_HASH = 'e'.repeat(64);
 const heartbeatItem = {
   readerPayloadHash: 'same-board',
   actualSource: { provider: 'TAI888_READER_AUTO', pageActivityAt: sameBoardBeforeHeartbeat.pageActivityAt },
+  readerProvenance: { readerGameMarketHash: SAME_GAME_EVIDENCE_HASH },
   customMarkets: [{ market: '全場讓分', lineAsOf: sameBoardBeforeHeartbeat.pageActivityAt, marketSignature: 'immutable-signature' }],
   customData: { context: {
     fetchedAt: '2026-08-15T08:00:00.000Z',
@@ -160,26 +184,69 @@ const sameGameMarkets = [
   { market: '全場讓分', pick: '主隊受讓1+50', water: '0.930', lineAsOf: heartbeatAt },
   { market: '全場讓分', pick: '客隊讓1+50', water: '0.950', lineAsOf: heartbeatAt },
 ];
+const sameEvidenceRevision = {
+  actualSource: { provider: 'TAI888_READER_AUTO', pageActivityAt: heartbeatAt },
+  marketCoverage: { openMarkets: 1, availableMarkets: ['全場讓分'], blockedMarkets: [] },
+  readerProvenance: { readerGameMarketHash: SAME_GAME_EVIDENCE_HASH },
+};
 assert.equal(sameReaderGameMarkets(oldGameMarkets, sameGameMarkets), true, 'timestamps and row order must not change a single-game market revision');
 assert.equal(sameReaderGameMarkets(oldGameMarkets, [{ ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1]]), false, 'a changed price must require reprice');
 const advanced = advanceUnchangedReaderGame({
   ...heartbeatItem,
   readerPayloadHash: 'old-whole-board',
+  latestMarketCoverage: { blockedMarkets: ['全場讓分'] },
+  latestReaderSource: { pageActivityAt: '2026-08-15T07:58:00.000Z' },
+  analysisFailure: { code: 'TEMPORARY' },
+  preservedCurrentReaderGame: true,
+  readerWaitingHandled: true,
   customMarkets: oldGameMarkets,
-}, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW);
+}, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW, sameEvidenceRevision);
 assert.equal(advanced.readerPayloadHash, 'new-whole-board', 'an unchanged game must advance across an unrelated whole-board revision');
+assert.equal(advanced.latestMarketCoverage, null, 'a current unchanged game must clear an older partial/blocked overlay');
+assert.equal(advanced.latestReaderSource, null, 'a current unchanged game must clear older Reader evidence overlays');
+assert.equal(advanced.analysisFailure, null, 'a current unchanged game must clear an older transient failure');
+assert.equal(advanced.preservedCurrentReaderGame, false, 'a current unchanged game must leave preservation mode');
+assert.equal(advanced.readerWaitingHandled, false, 'a current unchanged game must leave waiting mode');
+assert.deepEqual(advanced.marketCoverage, sameEvidenceRevision.marketCoverage, 'unchanged resume must install the current signed coverage atomically');
+assert.deepEqual(advanced.readerProvenance, sameEvidenceRevision.readerProvenance, 'unchanged resume must install the current per-game evidence');
 assert.equal(advanced.customData.analysis.results[0].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, '跨全盤revision但同場未變時仍保留原PIT盤口截點');
 assert.equal(advanced.customData.analysis.results[0].readerLiveAsOf, heartbeatAt);
 assert.equal(advanceUnchangedReaderGame({ ...heartbeatItem, customMarkets: oldGameMarkets }, [
   { ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1],
-], 'new-whole-board', heartbeatAt, NOW), null, 'changed game markets must not reuse old analysis');
+], 'new-whole-board', heartbeatAt, NOW, sameEvidenceRevision), null, 'changed game markets must not reuse old analysis');
+assert.equal(advanceUnchangedReaderGame({
+  ...heartbeatItem,
+  customMarkets: oldGameMarkets,
+}, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW, {
+  ...sameEvidenceRevision,
+  marketCoverage: { openMarkets: 1, availableMarkets: ['全場讓分'], blockedMarkets: ['上半大小'] },
+  readerProvenance: { readerGameMarketHash: 'f'.repeat(64) },
+}), null, 'coverage-only UNAVAILABLE-to-BLOCKED evidence changes must never reuse the prior analysis as current');
+const changedFullMarkets = [
+  { ...sameGameMarkets[0], water: 0.92 },
+  sameGameMarkets[1],
+];
+const failedPendingRevision = {
+  ...heartbeatItem,
+  readerPayloadHash: null,
+  customMarkets: oldGameMarkets,
+  latestMarketCoverage: { openMarkets: 1, availableMarkets: ['全場讓分'], blockedMarkets: [] },
+  latestReaderSource: { provider: 'TAI888_READER_AUTO', pageActivityAt: heartbeatAt },
+  pendingReaderAnalysis: true,
+  status: 'failed',
+};
+assert.equal(
+  advanceUnchangedReaderGame(failedPendingRevision, changedFullMarkets, 'new-whole-board', heartbeatAt, NOW, sameEvidenceRevision),
+  null,
+  'a failed partial-to-full update must retain the old analyzed markets so the next poll cannot stamp old W/R onto the new Reader hash',
+);
 assert.equal(coreSnapshotReusable({ ...heartbeatItem, restoredFromCache: true }, NOW), false, 'browser-restored analysis must rebuild its missing frozen core');
 assert.equal(coreSnapshotReusable({ ...heartbeatItem, customData: { ...heartbeatItem.customData, context: { ...heartbeatItem.customData.context, fetchedAt: '2026-08-15T06:00:00.000Z' } } }, NOW), false, 'expired core must not be marked current just because Reader prices are unchanged');
 assert.equal(advanceUnchangedReaderGame({
   ...heartbeatItem,
   customMarkets: oldGameMarkets,
   customData: { ...heartbeatItem.customData, context: { ...heartbeatItem.customData.context, fetchedAt: '2026-08-15T06:00:00.000Z' } },
-}, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW), null, 'unchanged Reader prices must not short-circuit an expired core rebuild');
+}, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW, sameEvidenceRevision), null, 'unchanged Reader prices must not short-circuit an expired core rebuild');
 
 const game = { gamePk: 123, away: '客隊', home: '主隊' };
 const merged = mergeRecognizedGameInputs([

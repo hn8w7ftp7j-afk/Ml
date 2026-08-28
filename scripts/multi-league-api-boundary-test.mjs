@@ -53,7 +53,7 @@ assert.match(credit, /fetchLeagueTaipeiSlate\(league, date\)/);
 assert.match(credit, /validateLeagueScheduleSubset\(league,/);
 assert.match(credit, /loadReaderSnapshot\(league, date\)/);
 assert.match(credit, /readerSnapshotStatus\(readerSnapshot, Date\.now\(\), league\)/);
-assert.match(credit, /const evidenceMarkets = \[/, 'Reader evidence must retain all per-game market coverage rows');
+assert.match(credit, /const evidenceMarkets = readerGameEvidenceRows\(row, readerSnapshot\.pageActivityAt\)/, 'Reader evidence must retain all per-game market coverage rows through the shared coverage-aware contract');
 assert.match(credit, /const readerGameMarketHash = readerGameMarketContentHash\(evidenceMarkets\)/, 'Reader must sign a per-game content revision independent of heartbeat liveness');
 assert.match(credit, /signMarketGames\(league, readerEvidenceGames\)/);
 

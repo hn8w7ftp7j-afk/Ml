@@ -45,4 +45,26 @@ assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 3 }, { league: '
 const store = upsertAnalysisBoardCache({}, entry);
 assert.equal(store[analysisBoardCacheKey('MLB', '2026-08-23')].board.length, 1);
 
+const unopenedBoard = [{
+  ...board[0],
+  readerPayloadHash: null,
+  customData: {
+    analysis: {
+      results: [],
+      directionSlots: Array.from({ length: 8 }, (_, index) => ({
+        slotId: `WAITING_${index}`,
+        market: index < 2 ? '全場讓分' : index < 4 ? '全場大小' : index < 6 ? '上半讓分' : '上半大小',
+        status: 'UNOPENED',
+        modelEV: null,
+        robustEV: null,
+      })),
+    },
+  },
+}];
+assert.equal(
+  createAnalysisBoardCacheEntry({ league: 'MLB', date: '2026-08-23', board: unopenedBoard, savedAt: NOW }),
+  null,
+  'transient all-UNOPENED cards must not replace a completed analysis after reopening the app',
+);
+
 console.log('analysis board cache: mobile reload recovery and league isolation PASS');

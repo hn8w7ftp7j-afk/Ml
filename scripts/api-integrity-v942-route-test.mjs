@@ -586,6 +586,25 @@ try {
   assert.equal(malformedAnalysisPayload.analysis.directionSlots.filter(row => row.status === 'BLOCKED').length, 2);
   assert.equal(malformedAnalysisPayload.analysis.directionSlots.filter(row => row.status === 'CALCULATED').length, 6);
 
+  const scheduledOfficialPayload = officialPayload;
+  officialPayload = { dates: scheduledOfficialPayload.dates.map(day => ({
+    ...day,
+    games: day.games.map(gameRow => ({
+      ...gameRow,
+      status: { ...gameRow.status, detailedState: 'Postponed', statusCode: 'D' },
+    })),
+  })) };
+  const noPrestartCreditResponse = await creditRoute.POST(request('/api/credit-lines', token, {
+    date: '2099-08-12', schedule: [clientGame()],
+  }));
+  const noPrestartCreditPayload = await noPrestartCreditResponse.json();
+  assert.equal(noPrestartCreditResponse.status, 200, noPrestartCreditPayload.error || 'postponed slate should close cleanly');
+  assert.equal(noPrestartCreditPayload.code, 'NO_PRESTART_GAMES');
+  assert.deepEqual(noPrestartCreditPayload.games, []);
+  assert.deepEqual(noPrestartCreditPayload.unopenedGames, []);
+  assert.equal(noPrestartCreditPayload.scheduleGameCount, 0);
+  officialPayload = scheduledOfficialPayload;
+
   const referenceRoute = await import('../app/api/reference-lines/route.js');
   const subsetResponse = await referenceRoute.POST(request('/api/reference-lines', token, {
     date: '2099-08-12',

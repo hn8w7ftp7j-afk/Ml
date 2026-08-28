@@ -17,10 +17,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.6.0', 'package/release identity must match the V11.6.0 NPB official starter and background QA recovery release');
-assert.equal(packageLock.version, '11.6.0', 'package-lock release identity must match V11.6.0');
-assert.equal(packageLock.packages?.['']?.version, '11.6.0', 'root lockfile package must match V11.6.0');
-assert.equal(APP_VERSION, '11.6.0');
+assert.equal(packageJson.version, '11.6.1', 'package/release identity must match the V11.6.1 Reader monotonic-state release');
+assert.equal(packageLock.version, '11.6.1', 'package-lock release identity must match V11.6.1');
+assert.equal(packageLock.packages?.['']?.version, '11.6.1', 'root lockfile package must match V11.6.1');
+assert.equal(APP_VERSION, '11.6.1');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -82,7 +82,7 @@ mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missin
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
 mustMatch(/requestJSON\('\/api\/analysis-jobs'/, 'full-board analysis must start one durable server workflow');
 mustMatch(/saveBackgroundJob\(/, 'background workflow identity must survive an app close or reload');
-mustMatch(/pollBackgroundJob\(job\.runId, generation, targetDate\)/, 'the app must reconnect to the server workflow result');
+mustMatch(/pollBackgroundJob\([\s\S]*job\.runId,[\s\S]*generation,[\s\S]*targetDate,[\s\S]*tasks\.map/, 'the app must reconnect to the server workflow result with its owned game scope');
 assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation setting must be removed from the UI');
 
 // External-market requests are disabled; analysis keeps an explicit empty audit payload.
@@ -92,7 +92,7 @@ mustMatch(/缺少兩個獨立同約時8\.5級最高封頂8\.4/, 'disabled extern
 assert.doesNotMatch(page, /referenceRefreshDue/, 'disabled external references must not force same-hash Reader repricing');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
-mustMatch(/verificationMarkets: foundReference\?\.markets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
+mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
 mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full analyze request must send matched reference markets');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
 mustMatch(/restoredBoardNeedsValidationRef\.current\) return undefined/, 'restored partial board must not race a single-board reader reprice');
@@ -181,9 +181,11 @@ assert.match(betOrderUi, /betActionState/, 'bet order must expose a disabled rea
 mustMatch(/已開 \{openMarketCount\}\/4 市場/, 'partial-market coverage counter missing');
 mustMatch(/資料異常｜不評分/, 'blocked market must fail closed');
 mustMatch(/尚未開盤/, 'unopened market state missing');
-mustMatch(/AVAILABLE/, 'available market state missing');
-mustMatch(/BLOCKED/, 'blocked market state missing');
-mustMatch(/UNOPENED/, 'unopened market state missing');
+mustMatch(/marketState === 'AVAILABLE' \? '已完成分析'/, 'available market state must be translated for the UI');
+mustMatch(/marketState === 'BLOCKED' \? '資料異常'/, 'blocked market state must be translated for the UI');
+mustMatch(/status === 'UNOPENED' \? '等待開盤'/, 'unopened QA state must be translated instead of leaking the enum');
+mustMatch(/readerWaitingSummary/, 'an all-unopened board must collapse to one compact Reader waiting summary');
+mustMatch(/尚未開盤｜Reader持續監看/, 'a partial board must collapse each unopened market instead of drawing two blank direction rows');
 mustMatch(/const storedFormulaScore = formulaScoreValue\(row\)/, 'every calculable direction must expose its fixed-formula score');
 mustMatch(/formulaScore\.toFixed\(1\)/, 'fixed S score must always render as a number');
 mustMatch(/QA BLOCK/, 'QA-blocked directions must remain visibly identified');
@@ -208,8 +210,31 @@ mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash;/, 'ranking m
 assert.doesNotMatch(page, /actualLineFreshNow\(/, 'the client must not re-expire a row after the current Reader hash has already proved identical content; the bet API performs the authoritative line-freshness check');
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
 mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled\]\);/, 'Reader polling must not restart on every board item update');
-mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt\)/, 'a mobile reload must resume past completed unchanged games');
-mustMatch(/return actual && !item\.resumedCurrentReaderGame/, 'completed unchanged games must not be requeued while unopened Reader games still receive an eight-slot analysis');
+mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt, Date\.now\(\), \{[\s\S]*marketCoverage: foundCredit\.marketCoverage,[\s\S]*readerProvenance: foundCredit\.readerProvenance/, 'a mobile reload may resume only when current signed per-game markets and coverage evidence are unchanged');
+mustMatch(/return actual\?\.markets\?\.length && !item\.resumedCurrentReaderGame && !item\.preservedCurrentReaderGame/, 'only Reader games with actual market rows may enter the model queue');
+mustMatch(/const previousByPk = new Map\(boardRef\.current\.map/, 'manual and automatic refreshes must merge against the latest board instead of a stale React closure');
+mustMatch(/shouldPreserveCalculatedAnalysis/, 'a partial or unopened Reader result must not downgrade completed W\/R');
+mustMatch(/const retainingPreviousRevision = preservePreviousReaderAnalysis \|\| pendingReaderAnalysis[\s\S]*customMarkets: resumed\?\.customMarkets \|\| \(retainingPreviousRevision \? previous\?\.customMarkets \|\| \[\]/, 'a changed Reader revision must keep the previously analyzed markets until its new distribution commits atomically');
+mustMatch(/readerPayloadHash: resumed\?\.readerPayloadHash \|\| null/, 'a queued Reader revision must remain non-executable until analysis succeeds');
+mustMatch(/const retainedFinishedItems = \[\.\.\.previousByPk\.values\(\)\][\s\S]*analysisHasCalculatedDirections[\s\S]*readerPayloadHash: null[\s\S]*const items = \[\.\.\.retainedFinishedItems, \.\.\.activeItems\]/, 'a full-slate refresh must retain completed early-game analysis while later games remain prestart');
+mustMatch(/readerResultIsStale/, 'late background results must be rejected when the live Reader hash has advanced');
+mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*readerEvidenceIsOlder\([\s\S]*currentItem\?\.actualSource,[\s\S]*currentItem\?\.latestReaderSource/, 'late success and failure results must respect the newest single-game Reader evidence time');
+mustMatch(/commitAnalysisFailure\(task, value\)[\s\S]*taskReaderStateIsStale\(task\)/, 'a late failed background job must not overwrite a newer Reader result');
+mustMatch(/commitAnalysisFailure\(task, value\)[\s\S]*readerPayloadHash: null/, 'a failed or terminal background job must immediately revoke Reader execution authority');
+mustMatch(/credit\?\.code === 'NO_PRESTART_GAMES'[\s\S]*finalizeReaderBoardAtStart/, 'the client must remove empty waiting cards across the official start boundary');
+mustMatch(/credit\?\.code === 'NO_PRESTART_GAMES'[\s\S]*autoAnalyzeHashRef\.current = readerHashKey/, 'a terminal same-hash board must be acknowledged locally instead of retrying every render');
+mustMatch(/function markReaderBoardVerificationBlocked\(item\)[\s\S]*readerPayloadHash: null[\s\S]*latestMarketCoverage: \{ openMarkets: 0[\s\S]*preservedCurrentReaderGame: preserve[\s\S]*Reader資料驗證未通過/, 'a blocked Reader board must keep prior scores visibly historical while removing ranking and execution authority');
+mustMatch(/credit\?\.blocked === true[\s\S]*current\.map\(markReaderBoardVerificationBlocked\)/, 'both manual and polling blocked-board paths must apply the fail-closed preservation state');
+mustMatch(/const waitingForReader = preservePreviousReaderAnalysis[\s\S]*represented && \(!hasOpenRows \|\| coverageRegression\)/, 'an unrepresented previous result must be preserved for display only with a null Reader hash');
+mustMatch(/const OFFICIAL_PRESTART_RECHECK_MS = 60 \* 1000/, 'same-hash Reader boards must still revalidate the official prestart state every minute');
+mustMatch(/Date\.now\(\) - officialPrestartCheckedAtRef\.current < OFFICIAL_PRESTART_RECHECK_MS/, 'the Reader hash fast path must expire for official postponed and cancelled checks');
+mustMatch(/expectedReaderHashes[\s\S]*\/api\/credit-lines[\s\S]*taskEvidenceHash = readerGameEvidenceHash\(row\.task\)[\s\S]*liveEvidenceHash = readerGameEvidenceHash\(liveGame\)[\s\S]*applicableRows\.forEach/, 'a completed background job must re-confirm each game against the current official slate and Reader evidence before applying it');
+mustMatch(/catch \(cause\) \{[\s\S]*taskReaderStateIsStale\(rebuildTask\)[\s\S]*commitAnalysisFailure\(rebuildTask, cause\)/, 'a late direct-reprice failure must not overwrite newer Reader evidence');
+mustMatch(/const currentBlockedMarkets = new Set\(\(item\.latestMarketCoverage \|\| item\.marketCoverage\)\?\.blockedMarkets \|\| \[\]\)/, 'current BLOCKED coverage must hide preserved directions from ranking');
+mustMatch(/function readerAnalysisRevisionReady\(item\)[\s\S]*item\?\.status === 'done'[\s\S]*restoredFromCache !== true[\s\S]*pendingReaderAnalysis !== true[\s\S]*analysisFailure == null/, 'only a fully committed, validated Reader revision may regain ranking or bet authority');
+mustMatch(/const currentAnalysisExecutable = readerAnalysisRevisionReady\(item\)[\s\S]*Boolean\(item\.readerPayloadHash\)[\s\S]*!preservedReaderAnalysis/, 'preserved analysis must never regain current ranking or bet authority');
+mustMatch(/const itemReaderExecutable = item =>[\s\S]*readerAnalysisRevisionReady\(item\)[\s\S]*item\.readerPayloadHash === readerStatus\?\.payloadHash/, 'cache-restored, queued, failed and partial revisions must stay fail-closed even when their saved hash matches the live Reader');
+mustMatch(/\.filter\(row => item\.actualSource\?\.provider === 'TAI888_READER_AUTO'\s*&& !preservedReaderAnalysis/, 'partial, missing or pending Reader revisions must stay on their game card but leave the current ranking list');
 const scoreOnlyInvalidation = page.slice(
   page.indexOf('const invalidateShadowScoreRow'),
   page.indexOf('const invalidateReaderPriceRow'),
@@ -229,8 +254,8 @@ assert.doesNotMatch(page, /const rankingEligible = pitConfirmed|const rankingEli
 assert.doesNotMatch(page, /const rankingEligible[\s\S]{0,400}Number\(row\.weightedEV\) > 0/, 'client must not drift from backend Weighted EV ranking policy');
 assert.doesNotMatch(page, /const rankingEligible[\s\S]{0,400}Number\(row\.robustEV\) > 0/, 'client must not drift from backend Robust EV ranking policy');
 mustMatch(/row\?\.extremeEvReviewRequired === true/, 'W≥20% anomaly review must remain visible without rewriting W\/R');
-mustMatch(/應評 \{expectedDirectionCount\} 方向/, 'per-game expected direction coverage missing');
-mustMatch(/已評 \{scoredDirectionCount\}\/\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
+mustMatch(/應評 \$\{expectedDirectionCount\} 方向/, 'per-game expected direction coverage missing');
+mustMatch(/已評 \$\{scoredDirectionCount\}\/\$\{expectedDirectionCount\}/, 'per-game scored direction coverage missing');
 mustMatch(/🧪 \{item\.game\.leagueId/, 'shadow candidates must use an explicit laboratory marker instead of formal recommendation icons');
 mustMatch(/上游資料狀態/, 'per-game upstream feature status must be visible');
 mustMatch(/資料截至/, 'point-in-time data timestamp must be visible');

@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { verifyCloudBetEvidenceV110 } from '../lib/bet-evidence-verification-v110.js';
 import { buildAnalysisPitReplayBundle, buildAnalysisPitSnapshotRecord } from '../lib/analysis-pit-snapshot-store-v1.js';
 import { signMarketRow } from '../lib/market-integrity-v1.js';
-import { readerGameMarketContentHash } from '../lib/reader-market-revision-v110.js';
+import {
+  readerGameEvidenceContentHash,
+  readerGameMarketContentHash,
+} from '../lib/reader-market-revision-v110.js';
 import { isDatabaseError } from '../lib/database-error.js';
 
 process.env.MARKET_INTEGRITY_SECRET = 'bet-evidence-v110-test-secret';
@@ -80,6 +83,53 @@ assert.equal(verified.readerVerified, true);
 assert.equal(verified.pitVerified, true);
 assert.equal(verified.pit.weightedEV, 0.04);
 assert.equal(verified.pit.inputHash, inputHash);
+
+const coverageReaderGame = {
+  ...snapshot.games[0],
+  marketCoverage: {
+    openMarkets: 1,
+    totalMarkets: 4,
+    directionCount: 1,
+    availableMarkets: ['全場大小'],
+    unavailableMarkets: ['全場讓分', '上半讓分'],
+    blockedMarkets: ['上半大小'],
+    missingMarkets: ['全場讓分', '上半讓分', '上半大小'],
+  },
+};
+const coverageHash = readerGameEvidenceContentHash(coverageReaderGame, snapshot.pageActivityAt);
+const coverageMarket = await signMarketRow('MLB', game, {
+  ...market,
+  readerGameMarketHash: coverageHash,
+});
+const coverageInputHash = '7'.repeat(64);
+const coverageAnalysis = {
+  ...analysis,
+  inputHash: coverageInputHash,
+  results: [{ ...coverageMarket, weightedEV: 0.04, robustEV: 0.01 }],
+};
+const coveragePitRecord = buildAnalysisPitSnapshotRecord({
+  league: 'MLB', game, frozenContext, analysis: coverageAnalysis,
+  distributionSnapshot, versions, markets: [coverageMarket], previousMarkets: [],
+});
+const coverageReplay = buildAnalysisPitReplayBundle(coveragePitRecord);
+const coverageSnapshot = { ...snapshot, games: [coverageReaderGame] };
+const coverageCandidate = { ...candidate, pitSnapshotId: coveragePitRecord.snapshotId };
+const coverageVerified = await verifyCloudBetEvidenceV110(coverageCandidate, {
+  ...dependencies,
+  loadReader: async () => coverageSnapshot,
+  loadPitReplay: async () => coverageReplay,
+  loadLatestPitIdentity: async () => ({
+    snapshotId: coveragePitRecord.snapshotId,
+    inputHash: coverageInputHash,
+  }),
+});
+assert.equal(coverageVerified.readerVerified, true);
+assert.equal(
+  coverageVerified.pitVerified,
+  true,
+  'a currently available direction must remain recordable when another market is coverage-BLOCKED',
+);
+assert.equal(coverageVerified.pit.readerGameMarketHash, coverageHash);
 
 await assert.rejects(
   () => verifyCloudBetEvidenceV110({ ...candidate, readerPayloadHash: 'f'.repeat(64) }, dependencies),
