@@ -1043,7 +1043,7 @@ function LeagueSetupPanel({ config }) {
 
 function LeagueShadowPanel({ config }) {
   return <section className="leagueSetup panel">
-    <div className="setupHead"><div><span className="kicker">V11.3 四聯盟 PIT 影子驗證</span><h2>{config.label}顯示固定S分數、雙EV與資料QA</h2></div><span className="state shadow">模型分析與排序</span></div>
+    <div className="setupHead"><div><span className="kicker">v{VERSION} 四聯盟 PIT 影子驗證</span><h2>{config.label}顯示固定S分數、雙EV與資料QA</h2></div><span className="state shadow">模型分析與排序</span></div>
     <p className="muted">每筆分析只有在資料庫回覆CONFIRMED後才標示為已永久保存不可變PIT；未確認不影響已完成的模型分數與排名，只暫停實際下注紀錄。Tai888與獨立同約市場不改比分分布或W/R；市場差距與極高EV只顯示診斷警示，資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。</p>
   </section>;
 }

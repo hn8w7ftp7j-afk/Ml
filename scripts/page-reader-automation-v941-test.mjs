@@ -17,10 +17,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.6.1', 'package/release identity must match the V11.6.1 Reader monotonic-state release');
-assert.equal(packageLock.version, '11.6.1', 'package-lock release identity must match V11.6.1');
-assert.equal(packageLock.packages?.['']?.version, '11.6.1', 'root lockfile package must match V11.6.1');
-assert.equal(APP_VERSION, '11.6.1');
+assert.equal(packageJson.version, '11.6.2', 'package/release identity must match the V11.6.2 Reader status clarity release');
+assert.equal(packageLock.version, '11.6.2', 'package-lock release identity must match V11.6.2');
+assert.equal(packageLock.packages?.['']?.version, '11.6.2', 'root lockfile package must match V11.6.2');
+assert.equal(APP_VERSION, '11.6.2');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -62,6 +62,7 @@ mustMatch(/mergeReaderStatusHighWater/, 'Reader high-water merge missing');
 mustMatch(/\/api\/reader\/status\?league=\$\{encodeURIComponent\(league\)\}&date=\$\{encodeURIComponent\(date\)\}/, 'date-bound Reader status request missing');
 mustMatch(/latest\.boardDate !== currentDateRef\.current/, 'Reader date auto-switch guard missing');
 mustMatch(/setDate\(latest\.boardDate\)/, 'Reader date auto-switch missing');
+mustMatch(/<span className="kicker">v\{VERSION\} 四聯盟 PIT 影子驗證<\/span>/, 'visible model card must use the current app release instead of a stale hard-coded version');
 mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key must include date and payload hash');
 mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
 mustMatch(/const READER_RECHECK_INTERVAL_MS = 30 \* 1000/, 'Reader thirty-second recheck cadence missing');

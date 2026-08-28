@@ -110,4 +110,11 @@ assert.equal(freshPayload.scheduleGameCount, 3);
 assert.equal(freshPayload.lockedGameCount, 0);
 assert.equal(freshPayload.notRenderedGameCount, 2);
 assert.match(freshPayload.message, /已讀取 1\/3 場｜已開盤 1 場｜Reader 未呈現 2 場/);
+const incompletePayload = readerSnapshotPublicView(staleComplete, {
+  complete: false,
+  now: Date.parse(staleAt) + 30_000,
+  league: 'MLB',
+});
+assert.match(incompletePayload.message, /Reader 電腦、Chrome 與 Tai888 分頁保持開啟/);
+assert.match(incompletePayload.message, /網站會自動恢復/);
 console.log('reader store v2: exact-date isolation and fail-closed write ordering ok');
