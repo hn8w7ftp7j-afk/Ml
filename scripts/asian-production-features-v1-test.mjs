@@ -10,7 +10,7 @@ import {
   parseNpbGameDetailHtml,
   parseNpbPitchingStatsHtml,
 } from '../lib/asian-production-features-v1.js';
-import { parseNpbProbableStartersHtml } from '../lib/asian-baseball.js';
+import { parseNpbProbableStartersHtml, parseNpbScheduleDetailStartersHtml } from '../lib/asian-baseball.js';
 import { extraInningsKernelV13 } from '../lib/joint-score-v13.js';
 
 assert.equal(baseballInnings('5', '.2'), 5 + 2 / 3);
@@ -53,6 +53,19 @@ assert.equal(npbOfficialShape[1].id, '99990001');
 assert.equal(npbOfficialShape[1].throws, 'L', 'NPB姓名前星號代表左投');
 assert.equal(matchNpbStarterStats(npbOfficialShape, { name: 'Ｓ．ハワード', id: '23725150' })?.name, 'ハワード');
 assert.equal(matchNpbStarterStats(npbOfficialShape, { name: '公告姓名格式不同', id: '99990001' })?.name, '公式 左投', '官方player id必須優先於姓名');
+
+const npbScheduleDetail = parseNpbScheduleDetailStartersHtml(`
+<table><tbody>
+<tr id="date0829"><th>8/29（土）</th><td><div class="team1">阪神</div><div class="team2">巨人</div></td><td><div class="time">18:00</div></td><td><div class="pit">先発：大竹</div><div class="pit">先発：田中将</div></td></tr>
+<tr><td><div class="team1">オリックス</div><div class="team2">ソフトバンク</div></td><td><div class="time">18:00</div></td><td><div class="pit">先発：髙島</div><div class="pit">先発：大津</div></td></tr>
+<tr id="date0830"><th>8/30（日）</th><td><div class="team1">阪神</div><div class="team2">巨人</div></td><td><div class="pit"></div><div class="pit"></div></td></tr>
+</tbody></table>`, '2026-08-29');
+assert.deepEqual(npbScheduleDetail.map(row => [row.awayCode, row.homeCode, row.away.name, row.home.name]), [
+  ['YOM', 'HAN', '田中将', '大竹'], ['SOF', 'ORI', '大津', '髙島'],
+]);
+assert.equal(npbScheduleDetail[0].away.source, 'NPB_OFFICIAL_SCHEDULE_DETAIL_STARTER');
+assert.equal(matchNpbStarterStats([{ name: '大竹 耕太郎', id: '1' }, { name: '大竹 寛', id: '2' }], { name: '大竹' }), null, '官方簡稱有歧義時必須維持QA BLOCK');
+assert.equal(matchNpbStarterStats([{ name: '田中 将大', id: '3' }], { name: '田中将' })?.id, '3', '官方日程簡稱可唯一匹配同隊官方投手表');
 
 const npbDetail = parseNpbGameDetailHtml(`
 <div id="gmdivinfo"><table><tr><td>Tokyo Dome</td></tr></table></div>
