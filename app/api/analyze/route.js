@@ -355,6 +355,7 @@ export async function POST(request) {
         bullpenUsageProjection: '牛棚使用量與疲勞預估',
         officialScheduleIdentityOrRecentLeagueResults: '官方賽程識別或近期完賽賽果',
         officialScheduleIdentity: '官方賽程與球隊識別',
+        officialPrecheckCompleted: '官方公布資料預查',
         leagueRunEnvironment: '官方聯盟得分環境',
         pointInTimeFeatureSnapshot: '賽前時間點資料快照',
         teamStrengthBaseline: '獨立球隊能力基準',
