@@ -252,6 +252,10 @@ assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-refere
 assert.match(css, /html,body\{width:100%;max-width:100%;overflow-x:hidden\}/, 'mobile document must never expand beyond the viewport');
 assert.match(css, /\.sourceBanner strong,\.sourceBanner span[^}]*overflow-wrap:anywhere;word-break:break-word/, 'long PIT and upstream diagnostic strings must wrap inside cards');
 assert.match(css, /\.scoreRow>\*[^}]*min-width:0;max-width:100%/, 'score grid children must be allowed to shrink on mobile');
+assert.match(css, /@media\(max-width:720px\)[\s\S]*\.leagueTabs\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);overflow:visible/, 'mobile league navigation must use a non-scrolling grid');
+assert.match(css, /@media\(max-width:720px\)[\s\S]*\.mainTabs\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);overflow:visible/, 'mobile function navigation must not retain a horizontal scroll offset');
+assert.match(css, /@media\(max-width:720px\)[\s\S]*\.gameHead\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:10px\}/, 'mobile game headers must stack the status badge below the matchup');
+assert.match(css, /\.gameHead \.state\{[^}]*max-width:100%;white-space:normal[^}]*overflow-wrap:anywhere;word-break:break-word/, 'long mobile status badges must wrap inside their game card');
 mustMatch(/const qaPassed = directionQaPassed\(row\)/, 'ranking must prefer canonical QA status while preserving legacy fallback');
 mustMatch(/row\?\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
 mustMatch(/row\.rankingQualified === true/, 'client ranking must honor the signed backend W\/R, 7.2 and true-QA gates instead of reimplementing them');
