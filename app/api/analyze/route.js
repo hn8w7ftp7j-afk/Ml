@@ -31,6 +31,7 @@ import {
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
 import { persistMlbAdvancedSnapshotBestEffort } from '../../../lib/mlb-advanced-snapshot-store-v2.js';
 import {
+  ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION,
   analysisPitDatabaseConfigured,
   analysisPitProductionPersistenceRequired,
   analysisPitSnapshotId,
@@ -385,6 +386,7 @@ export async function POST(request) {
       rulesVersion: context.rulesVersion || contract.rulesVersion || RULES_VERSION,
       dataVersion: DATA_VERSION,
       scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
+      pitPayloadEncodingVersion: ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION,
     };
 
     const coreOnly = buildSnapshotFingerprints({ league, context, markets: [], versions });
