@@ -204,6 +204,18 @@ assert.throws(() => validateAsianTeamFeatureOwnership({
   away: { starter: { teamId: 701, id: 'DUP', candidates: [{ teamId: 701, officialPlayerId: 'DUP' }] } },
   home: { starter: { teamId: 702, id: 'DUP', candidates: [{ teamId: 702, officialPlayerId: 'DUP' }] } },
 }, 701, 702), /ASIAN_CROSS_TEAM_OFFICIAL_PLAYER_ID:DUP/);
+assert.throws(() => validateAsianTeamFeatureOwnership({
+  away: { lineup: { teamId: 701, players: [{ teamId: 701, officialPlayerId: 'DUP-LINEUP' }] } },
+  home: { lineup: { teamId: 702, players: [{ teamId: 702, officialPlayerId: 'DUP-LINEUP' }] } },
+}, 701, 702), /ASIAN_CROSS_TEAM_OFFICIAL_PLAYER_ID:DUP-LINEUP/);
+assert.throws(() => validateAsianTeamFeatureOwnership({
+  away: { bullpen: { teamId: 701, pitcherIds: ['DUP-BULLPEN'] } },
+  home: { bullpen: { teamId: 702, pitcherIds: ['DUP-BULLPEN'] } },
+}, 701, 702), /ASIAN_CROSS_TEAM_OFFICIAL_PLAYER_ID:DUP-BULLPEN/);
+assert.throws(() => validateAsianTeamFeatureOwnership({
+  away: { starter: { teamId: 701, id: 'DUP-CROSS-ROLE', candidates: [] } },
+  home: { lineup: { teamId: 702, players: [{ teamId: 702, officialPlayerId: 'DUP-CROSS-ROLE' }] } },
+}, 701, 702), /ASIAN_CROSS_TEAM_OFFICIAL_PLAYER_ID:DUP-CROSS-ROLE/);
 
 const todayCpblReplay = [
   ['G295', '0000007832', '0000005604'],

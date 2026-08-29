@@ -53,6 +53,8 @@ for (const id of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(item.analysisReadiness.canCalculateModelEvW, true);
   assert.equal(item.analysisReadiness.mlbFallbackAllowed, false);
   assert.equal(item.analysisReadiness.tai888ProbabilityInputAllowed, false);
+  assert.match(item.statusLabel, /官方未公布採保守預測/);
+  assert.doesNotMatch(item.statusLabel, /資料不足即BLOCK/);
   assert.deepEqual(item.analysisReadiness.displayAnalysisBlockers, []);
   assert.ok(item.analysisReadiness.settlementBlockers.some(row => row.code === 'FIRST5_OFFICIAL_RESULT_FEED_NOT_CONNECTED'));
   assert.ok(item.analysisReadiness.formalRecommendationBlockers.every(row => !row.blocks.includes('MODEL_EV_W')));

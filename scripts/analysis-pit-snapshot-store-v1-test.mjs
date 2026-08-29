@@ -103,6 +103,31 @@ assert.doesNotThrow(() => validateAnalysisPitSnapshotRecord({
   versions: reverseKeys(first.versions),
 }), 'JSONB重新排列巢狀物件欄位後仍必須通過相同重播識別雜湊');
 assert.deepEqual(decodeAnalysisPitPayload(first.frozenContextPayload), context);
+assert.equal(first.frozenContextPayload.encoding, 'JSON');
+assert.equal(typeof first.frozenContextPayload.data, 'string', '新內嵌PIT payload必須保存精確JSON文字');
+assert.equal(Object.hasOwn(first.frozenContextPayload, 'value'), false, '新payload不得再把可重排物件直接寫入JSONB');
+const legacyJsonbEnvelope = {
+  ...first.frozenContextPayload,
+  value: reverseKeys(context),
+};
+delete legacyJsonbEnvelope.data;
+assert.throws(
+  () => decodeAnalysisPitPayload(legacyJsonbEnvelope),
+  /雜湊或大小不一致/,
+  '一般呼叫不得放寬舊JSON物件的精確雜湊驗證',
+);
+assert.deepEqual(
+  decodeAnalysisPitPayload(legacyJsonbEnvelope, { allowLegacyJsonbReordered: true }),
+  reverseKeys(context),
+  '不可變資料庫舊列必須容許JSONB只重排鍵順序後重播',
+);
+const legacyJsonbRecord = { ...first, frozenContextPayload: legacyJsonbEnvelope };
+assert.throws(() => buildAnalysisPitReplayBundle(legacyJsonbRecord), /雜湊或大小不一致/);
+assert.deepEqual(
+  buildAnalysisPitReplayBundle(legacyJsonbRecord, { allowLegacyJsonbReorderedPayloads: true }).frozenContext,
+  reverseKeys(context),
+  '資料庫重播相容模式只套用於既有不可變JSONB列',
+);
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).results[0].pick, '大8平');
 assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).directionSlots, [], '舊輸入仍必須有可重播的八方向槽位容器');
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).marketCoverage, null);
@@ -355,6 +380,7 @@ assert.match(storeSource, /PARENT_SNAPSHOT_NOT_STORED/, '跨Runtime父快照尚�
 assert.match(storeSource, /ALTER TABLE baseball_analysis_pit_snapshots[\s\S]*ADD COLUMN IF NOT EXISTS quarantine_contract/, 'rolling Production必須能演進既有schema');
 assert.match(storeSource, /buildAnalysisPitSnapshotRecordAsync\(input\)/, 'waitUntil備援路徑也不得同步gzip大型payload');
 assert.match(storeSource, /maxOutputLength: DISTRIBUTION_RAW_LIMIT_BYTES \+ 1/, 'gzip解碼必須限制輸出大小');
+assert.match(storeSource, /loadAnalysisPitReplay[\s\S]*allowLegacyJsonbReorderedPayloads: true/, '只有資料庫重播路徑可啟用舊JSONB鍵順序相容模式');
 assert.match(storeSource, /pg_advisory_xact_lock/, 'runtime schema migration必須序列化trigger/constraint建立');
 assert.doesNotMatch(storeSource, /DROP TRIGGER/i, 'runtime不得先刪immutable trigger再重建');
 
