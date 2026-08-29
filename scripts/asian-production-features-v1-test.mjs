@@ -5,6 +5,7 @@ import {
   detailSide,
   extractAsianStarterEvidence,
   parseCpblGameDetailPayload,
+  projectCpblRotationStarter,
   parseKboBoxScorePayload,
   parseKboGameListPayload,
   parseKboStarterAnalysisPayload,
@@ -20,6 +21,35 @@ import { extraInningsKernelV13 } from '../lib/joint-score-v13.js';
 
 assert.equal(baseballInnings('5', '.2'), 5 + 2 / 3);
 assert.equal(baseballInnings('4.1'), 4 + 1 / 3);
+
+const cpblRotation = projectCpblRotationStarter([
+  {
+    game: { gameDate: '2026-08-24T17:05:00+08:00', awayTeamId: 799, homeTeamId: 798 },
+    detail: { away: { pitchers: [{ id: 'X1', name: '其他隊客投', starter: true }] }, home: { pitchers: [{ id: 'X2', name: '其他隊主投', starter: true }] } },
+  },
+  {
+    game: { gameDate: '2026-08-24T17:05:00+08:00', awayTeamId: 701, homeTeamId: 702 },
+    detail: { away: { pitchers: [{ id: 'P1', name: '輪值甲', starter: true }] }, home: { pitchers: [] } },
+  },
+  {
+    game: { gameDate: '2026-08-22T17:05:00+08:00', awayTeamId: 701, homeTeamId: 703 },
+    detail: { away: { pitchers: [{ id: 'P2', name: '輪值乙', starter: true }] }, home: { pitchers: [] } },
+  },
+  {
+    game: { gameDate: '2026-08-28T17:05:00+08:00', awayTeamId: 701, homeTeamId: 704 },
+    detail: { away: { pitchers: [{ id: 'R1', name: '昨天先發', starter: true }] }, home: { pitchers: [] } },
+  },
+], 701, '2026-08-29T17:05:00+08:00');
+assert.equal(cpblRotation.id, 'P1', '五天輪值候選應優先於七天前與昨天先發');
+assert.equal(cpblRotation.projected, true);
+assert.equal(cpblRotation.candidates.some(row => row.id === 'R1'), false, '休息不足的投手不可成為預測先發');
+assert.equal(cpblRotation.candidates.some(row => row.id.startsWith('X')), false, '合併對手明細時不得把無關球隊投手串入候選');
+
+const cpblFourDateRotation = projectCpblRotationStarter([{
+  game: { gameDate: '2026-08-25T18:35:00+08:00', awayTeamId: 701, homeTeamId: 702 },
+  detail: { away: { pitchers: [{ id: 'P3', name: '四日輪值', starter: true, inningsPitched: 6 }] }, home: { pitchers: [] } },
+}], 701, '2026-08-29T17:05:00+08:00');
+assert.equal(cpblFourDateRotation.id, 'P3', '同屬四個比賽日、僅因開賽時間不同而少於96小時的輪值不可誤刪');
 
 const npbPitching = parseNpbPitchingStatsHtml(`
 <table class="tablefix2"><thead><tr><th>選手</th><th>登板</th><th>セーブ</th><th>ホールド</th><th>打者</th><th>投球回</th><th>安打</th><th>四球</th><th>三振</th><th>自責点</th><th>防御率</th></tr></thead><tbody>

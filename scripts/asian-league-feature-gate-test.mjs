@@ -208,6 +208,30 @@ assert.equal(namedOnly.analysisReadiness.distributionEngineReady, true);
 assert.ok(namedOnly.dataGateV10.blockerDetails.every(row => typeof row.code === 'string' && row.code.length > 0));
 assert.ok(namedOnly.dataGateV10.rows.every(row => typeof row.ready === 'boolean'));
 
+const projectedCpblFeatures = featuresFor('CPBL');
+projectedCpblFeatures.away.starter = {
+  ...projectedCpblFeatures.away.starter,
+  assignmentStatus: 'PROJECTED_ROTATION_SCENARIO',
+  performanceSource: 'CPBL_OFFICIAL_INDIVIDUAL_STARTER_PIT',
+  qualityMetricScope: 'INDIVIDUAL_STARTER_RUN_PREVENTION',
+  qualityFactor: 1.02,
+  expectedInnings: 5.5,
+  season: { gamesStarted: 0, inningsPitched: 6, era: 1.5, whip: 1.5, battersFaced: 26 },
+  recent: { gamesStarted: 1, inningsPitched: 6 },
+};
+const projectedCpbl = await contextFor('CPBL', gameFor('CPBL'), projectedCpblFeatures);
+assert.equal(projectedCpbl.away.starter.performanceAvailable, true, '官方輪值預測可使用新投手已完成的一軍個人先發並高度回歸');
+assert.equal(projectedCpbl.dataGateV10.passedForShadowScore, true);
+
+const insufficientProjectedCpblFeatures = structuredClone(projectedCpblFeatures);
+insufficientProjectedCpblFeatures.away.starter.season.battersFaced = 8;
+insufficientProjectedCpblFeatures.away.starter.recent.inningsPitched = 1.2;
+const insufficientProjectedCpbl = await contextFor('CPBL', gameFor('CPBL'), insufficientProjectedCpblFeatures);
+assert.equal(insufficientProjectedCpbl.dataGateV10.passedForShadowScore, true, '個人樣本不足時應退回擴大不確定性的預測，不得整場QA BLOCK');
+assert.ok(insufficientProjectedCpbl.dataGateV10.projected.includes('starterIdentityAndIndependentPerformance'));
+assert.equal(insufficientProjectedCpbl.away.starter.status, 'PROJECTED');
+assert.equal(insufficientProjectedCpbl.away.starter.performanceAvailable, false, '樣本不足不得冒充已確認的個人先發表現');
+
 const disguisedTeamRa = featuresFor('NPB');
 disguisedTeamRa.away.starter.performanceSource = 'OFFICIAL_TEAM_RESULTS_TEAM_RATE_PRIOR';
 const disguisedTeamRaContext = await contextFor('NPB', gameFor('NPB'), disguisedTeamRa);
