@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { APP_VERSION } from '../lib/app-version.js';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
+const css = fs.readFileSync('app/globals.css', 'utf8');
 const cloudLedgerSyncPolicy = fs.readFileSync('lib/cloud-ledger-sync-policy.js', 'utf8');
 const healthRoute = fs.readFileSync('app/api/health/route.js', 'utf8');
 const analyzeRoute = fs.readFileSync('app/api/analyze/route.js', 'utf8');
@@ -248,6 +249,9 @@ mustMatch(/cloudLedgerWritable === true/, 'canonical bet gate must fail closed u
 mustMatch(/const currentReaderPrice = itemReaderExecutable\(item\)/, 'recordBet must re-check board date, payload hash and Reader freshness at click time');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
+assert.match(css, /html,body\{width:100%;max-width:100%;overflow-x:hidden\}/, 'mobile document must never expand beyond the viewport');
+assert.match(css, /\.sourceBanner strong,\.sourceBanner span[^}]*overflow-wrap:anywhere;word-break:break-word/, 'long PIT and upstream diagnostic strings must wrap inside cards');
+assert.match(css, /\.scoreRow>\*[^}]*min-width:0;max-width:100%/, 'score grid children must be allowed to shrink on mobile');
 mustMatch(/const qaPassed = directionQaPassed\(row\)/, 'ranking must prefer canonical QA status while preserving legacy fallback');
 mustMatch(/row\?\.pairAudit\?\.passed !== false/, 'ranking must require pair QA');
 mustMatch(/row\.rankingQualified === true/, 'client ranking must honor the signed backend W\/R, 7.2 and true-QA gates instead of reimplementing them');
