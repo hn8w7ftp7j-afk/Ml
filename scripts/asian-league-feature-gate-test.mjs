@@ -171,6 +171,27 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   assert.ok(finalized.results.every(row => row.scoreAudit?.ok === true), `${league}八方向固定S／W／R與Tai888逐腿結算QA必須通過`);
 }
 
+for (const league of ['NPB', 'KBO', 'CPBL']) {
+  const officialNotPublished = featuresFor(league);
+  officialNotPublished.away = { teamStrength: officialNotPublished.away.teamStrength };
+  officialNotPublished.home = { teamStrength: officialNotPublished.home.teamStrength };
+  officialNotPublished.park = null;
+  officialNotPublished.rules = {};
+  delete officialNotPublished.weather;
+  const predicted = await contextFor(league, gameFor(league, {
+    awayProbable: '', homeProbable: '', awayProbableId: null, homeProbableId: null, probableSource: '',
+  }), officialNotPublished);
+  assert.equal(predicted.dataGateV10.passedForShadowScore, true, `${league}官方先發／打線尚未公布時必須改走預測`);
+  assert.equal(predicted.starterModelingMode, 'OFFICIAL_FIRST_ROTATION_PREDICTION_FALLBACK');
+  assert.equal(predicted.away.starter.status, 'PROJECTED');
+  assert.equal(predicted.away.lineup.status, 'PROJECTED_TEAM_OFFENSE_SCENARIO');
+  assert.equal(predicted.away.bullpen.status, 'PROJECTED_NEUTRAL_RELIEF_SCENARIO');
+  assert.equal(predicted.dataGateV10.rows.find(row => row.name === 'recognizedVenueParkFactor').status, 'PROJECTED');
+  assert.ok(predicted.dataGateV10.projected.includes('starterIdentityAndIndependentPerformance'));
+  const distribution = buildDistributionSnapshot({ context: predicted });
+  assert.equal(distribution.scenarios.length, 27);
+}
+
 const npb = await contextFor('NPB');
 assert.equal(npb.leagueRuleState.npb.interleague, true);
 assert.equal(npb.leagueRuleState.npb.designatedHitter, true, 'NPB 交流戰應按太平洋聯盟主場解析 DH');
@@ -191,26 +212,30 @@ const disguisedTeamRa = featuresFor('NPB');
 disguisedTeamRa.away.starter.performanceSource = 'OFFICIAL_TEAM_RESULTS_TEAM_RATE_PRIOR';
 const disguisedTeamRaContext = await contextFor('NPB', gameFor('NPB'), disguisedTeamRa);
 assert.equal(disguisedTeamRaContext.away.starter.performanceAvailable, false, '即使標記 independent，整隊比分來源仍不得冒充個別先發能力');
-assert.ok(disguisedTeamRaContext.dataGateV10.blocking.includes('starterIdentityAndIndependentPerformance'));
+assert.equal(disguisedTeamRaContext.away.starter.projectionMode, 'LEAGUE_NEUTRAL_ROTATION_SCENARIO');
+assert.equal(disguisedTeamRaContext.away.starter.qualityFactor, 1, '被拒絕的整隊RA不得滲入先發平均值');
+assert.equal(disguisedTeamRaContext.dataGateV10.passedForShadowScore, true, '無效個人資料應改走中性預測，不應整場停分');
 
 const neutralParkFeatures = featuresFor('NPB');
 neutralParkFeatures.park = { runFactor: 1, roof: 'unknown' };
 const neutralPark = await contextFor('NPB', gameFor('NPB'), neutralParkFeatures);
-assert.equal(neutralPark.park.isNeutralPlaceholder, true);
-assert.ok(neutralPark.dataGateV10.blocking.includes('recognizedVenueParkFactor'));
+assert.equal(neutralPark.park.projectionBased, true);
+assert.equal(neutralPark.park.runFactor, 1);
+assert.equal(neutralPark.dataGateV10.rows.find(row => row.name === 'recognizedVenueParkFactor').status, 'PROJECTED');
 
 const emptyLineupFeatures = featuresFor('NPB');
 emptyLineupFeatures.away.lineup.players = [];
 const emptyLineup = await contextFor('NPB', gameFor('NPB'), emptyLineupFeatures);
 assert.equal(emptyLineup.away.lineup.emptyLineup, true);
-assert.ok(emptyLineup.dataGateV10.blocking.includes('credibleLineupScenario'));
+assert.equal(emptyLineup.away.lineup.status, 'PROJECTED_TEAM_OFFENSE_SCENARIO');
+assert.equal(emptyLineup.dataGateV10.passedForShadowScore, true);
 
 for (const league of ['NPB', 'KBO', 'CPBL']) {
   const missingHandednessFeatures = featuresFor(league);
   missingHandednessFeatures.away.starter.throws = null;
   const missingHandedness = await contextFor(league, gameFor(league), missingHandednessFeatures);
-  assert.ok(missingHandedness.dataGateV10.blocking.includes('officialStarterHandedness'), `${league}先發左右投缺失必須BLOCK`);
-  assert.equal(missingHandedness.analysisReadiness.coreInputsReady, false);
+  assert.equal(missingHandedness.dataGateV10.rows.find(row => row.name === 'officialStarterHandedness').status, 'PROJECTED', `${league}左右投未公布應使用中性混合情境`);
+  assert.equal(missingHandedness.analysisReadiness.coreInputsReady, true);
 }
 
 const kboGame = gameFor('KBO', { awayProbableThrows: 'R' });
@@ -225,11 +250,13 @@ assert.equal(kboConflict.dataGateV10.passedForShadowScore, true);
 const kboOutdoorFeatures = featuresFor('KBO');
 kboOutdoorFeatures.park = { ...kboOutdoorFeatures.park, dome: false, roof: 'outdoor' };
 const kboOutdoor = await contextFor('KBO', gameFor('KBO'), kboOutdoorFeatures);
-assert.ok(kboOutdoor.dataGateV10.blocking.includes('kboWeatherOrDomeScenario'));
+assert.equal(kboOutdoor.dataGateV10.rows.find(row => row.name === 'kboWeatherOrDomeScenario').status, 'PROJECTED');
+assert.equal(kboOutdoor.weather.meanRunFactor, 1);
 
 const kboDh2Game = gameFor('KBO', { gameNumber: 2, doubleHeader: 'Y' });
 const kboDh2Blocked = await contextFor('KBO', kboDh2Game, featuresFor('KBO'));
-assert.ok(kboDh2Blocked.dataGateV10.blocking.includes('kboDoubleheaderState'));
+assert.equal(kboDh2Blocked.dataGateV10.rows.find(row => row.name === 'kboDoubleheaderState').status, 'PROJECTED');
+assert.equal(kboDh2Blocked.leagueRuleState.kbo.doubleheader.uncertaintyExpanded, true);
 const kboDh2Features = featuresFor('KBO');
 kboDh2Features.rules.doubleheader = { secondGameBullpenRecomputed: true };
 const kboDh2Ready = await contextFor('KBO', kboDh2Game, kboDh2Features);
@@ -239,7 +266,8 @@ assert.equal(kboDh2Ready.dataGateV10.passedForShadowScore, true);
 const cpblMissingRuleFeatures = featuresFor('CPBL');
 cpblMissingRuleFeatures.rules = {};
 const cpblMissingRule = await contextFor('CPBL', gameFor('CPBL'), cpblMissingRuleFeatures);
-assert.ok(cpblMissingRule.dataGateV10.blocking.includes('cpblForeignPlayerConstraintState'));
+assert.equal(cpblMissingRule.dataGateV10.rows.find(row => row.name === 'cpblForeignPlayerConstraintState').status, 'PROJECTED');
+assert.equal(cpblMissingRule.dataGateV10.passedForShadowScore, true);
 
 const cpblIncompleteTransition = featuresFor('CPBL');
 cpblIncompleteTransition.rules.foreignPlayerConstraint = {

@@ -181,7 +181,7 @@ assert.ok(context.historyGameCount === 2);
 assert.deepEqual(Object.keys(context.modelConfig.baselineBounds).sort(), ['first5', 'full']);
 assert.equal(context.dataGateV10.passedForShadowScore, false);
 assert.equal(context.dataGateV10.passedForFormalScore, false);
-for (const missing of ['pointInTimeFeatureSnapshot', 'teamStrengthBaseline', 'starterIdentityAndIndependentPerformance', 'credibleLineupScenario', 'pureReliefBullpen', 'recognizedVenueParkFactor']) {
+for (const missing of ['officialPrecheckCompleted', 'pointInTimeFeatureSnapshot', 'teamStrengthBaseline', 'starterIdentityAndIndependentPerformance', 'credibleLineupScenario', 'pureReliefBullpen']) {
   assert.ok(context.dataGateV10.missing.includes(missing), `${missing} 必須 fail closed`);
 }
 assert.equal(context.away.starter.projectionMode, 'STARTER_IDENTITY_AND_PERFORMANCE_MISSING');
@@ -194,8 +194,8 @@ assert.equal(context.away.bullpen.pureRelief, false);
 assert.equal(context.away.bullpen.usageAvailable, false, '整隊賽程推估不得偽裝成純牛棚 workload');
 assert.equal(context.away.lineup.players.length, 0);
 assert.equal(context.away.lineup.available, false, '空打線不得被視為可信預估');
-assert.equal(context.park.isNeutralPlaceholder, true);
-assert.equal(context.park.recognized, false, '中性 1.00 placeholder 不得通過球場資料');
+assert.equal(context.park.projectionBased, true);
+assert.equal(context.park.recognized, true, '官方場地已知但球場樣本不足時應採聯盟中性預測並標示');
 assert.equal(context.asianProxyAudit.teamRunsUsedAsStarterPerformance, false);
 assert.equal(context.asianProxyAudit.teamRunsUsedAsPureBullpenQuality, false);
 assert.equal(context.gameStateModel.bottomNinthMayBeSkipped, true);
