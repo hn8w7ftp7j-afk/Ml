@@ -19,6 +19,14 @@ import {
 import { signRepriceSnapshot, verifyRepriceSnapshot } from '../lib/market-integrity-v1.js';
 
 const hash = character => character.repeat(64);
+const jsonbLikeRoundTrip = value => {
+  if (Array.isArray(value)) return value.map(jsonbLikeRoundTrip);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .sort(([left], [right]) => Buffer.byteLength(left, 'utf8') - Buffer.byteLength(right, 'utf8')
+      || left.localeCompare(right))
+    .map(([key, nested]) => [key, jsonbLikeRoundTrip(nested)]));
+};
 const game = {
   league: 'MLB',
   leagueId: 'MLB',
@@ -103,31 +111,9 @@ assert.doesNotThrow(() => validateAnalysisPitSnapshotRecord({
   versions: reverseKeys(first.versions),
 }), 'JSONB重新排列巢狀物件欄位後仍必須通過相同重播識別雜湊');
 assert.deepEqual(decodeAnalysisPitPayload(first.frozenContextPayload), context);
-assert.equal(first.frozenContextPayload.encoding, 'JSON');
-assert.equal(typeof first.frozenContextPayload.data, 'string', '新內嵌PIT payload必須保存精確JSON文字');
+assert.equal(first.frozenContextPayload.encoding, 'JSON_BASE64');
+assert.equal(typeof first.frozenContextPayload.data, 'string', '新內嵌PIT payload必須保存精確UTF-8 bytes的Base64');
 assert.equal(Object.hasOwn(first.frozenContextPayload, 'value'), false, '新payload不得再把可重排物件直接寫入JSONB');
-const legacyJsonbEnvelope = {
-  ...first.frozenContextPayload,
-  value: reverseKeys(context),
-};
-delete legacyJsonbEnvelope.data;
-assert.throws(
-  () => decodeAnalysisPitPayload(legacyJsonbEnvelope),
-  /雜湊或大小不一致/,
-  '一般呼叫不得放寬舊JSON物件的精確雜湊驗證',
-);
-assert.deepEqual(
-  decodeAnalysisPitPayload(legacyJsonbEnvelope, { allowLegacyJsonbReordered: true }),
-  reverseKeys(context),
-  '不可變資料庫舊列必須容許JSONB只重排鍵順序後重播',
-);
-const legacyJsonbRecord = { ...first, frozenContextPayload: legacyJsonbEnvelope };
-assert.throws(() => buildAnalysisPitReplayBundle(legacyJsonbRecord), /雜湊或大小不一致/);
-assert.deepEqual(
-  buildAnalysisPitReplayBundle(legacyJsonbRecord, { allowLegacyJsonbReorderedPayloads: true }).frozenContext,
-  reverseKeys(context),
-  '資料庫重播相容模式只套用於既有不可變JSONB列',
-);
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).results[0].pick, '大8平');
 assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).directionSlots, [], '舊輸入仍必須有可重播的八方向槽位容器');
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).marketCoverage, null);
@@ -296,6 +282,40 @@ const compressed = encodeAnalysisPitPayload({ text: 'z'.repeat(2_000) }, {
 assert.equal(compressed.encoding, 'GZIP_BASE64');
 assert.equal(decodeAnalysisPitPayload(compressed).text.length, 2_000);
 assert.equal(compressed.base64Bytes, Buffer.byteLength(compressed.data, 'ascii'));
+const inlineSource = { longerKey: { zebra: 1, a: 2 }, a: 'JSONB-safe' };
+const inline = encodeAnalysisPitPayload(inlineSource, {
+  label: 'JSONB鍵序測試', inlineLimitBytes: 10_000, rawLimitBytes: 10_000, compressedLimitBytes: 1_000,
+});
+assert.equal(inline.encoding, 'JSON_BASE64', '小型payload也必須保存原始UTF-8 bytes，不得把物件直接嵌入JSONB');
+assert.deepEqual(
+  decodeAnalysisPitPayload(jsonbLikeRoundTrip(inline)),
+  inlineSource,
+  'JSONB重新排列envelope鍵序後仍必須通過原始byte hash與大小驗證',
+);
+const tamperedInline = {
+  ...inline,
+  data: `${inline.data[0] === 'A' ? 'B' : 'A'}${inline.data.slice(1)}`,
+};
+assert.throws(
+  () => decodeAnalysisPitPayload(tamperedInline),
+  error => error?.code === 'PIT_PAYLOAD_INTEGRITY_FAILED',
+  '原始JSON Base64被修改時必須維持fail-closed',
+);
+const legacyInlineText = JSON.stringify(inlineSource);
+const legacyInline = {
+  version: 'BASEBALL-PIT-JSON-PAYLOAD-v1.0.0',
+  encoding: 'JSON',
+  rawBytes: Buffer.byteLength(legacyInlineText, 'utf8'),
+  compressedBytes: null,
+  payloadHash: inline.payloadHash,
+  value: inlineSource,
+};
+assert.deepEqual(decodeAnalysisPitPayload(legacyInline), inlineSource, '未經JSONB改序的舊格式仍須可讀');
+assert.throws(
+  () => decodeAnalysisPitPayload(jsonbLikeRoundTrip(legacyInline)),
+  error => error?.code === 'PIT_PAYLOAD_INTEGRITY_FAILED' && /雜湊|大小/.test(error.message),
+  '已失去原始鍵序的舊JSONB payload不得在無法證明hash時假裝通過',
+);
 const asyncCompressed = await encodeAnalysisPitPayloadAsync({ text: 'y'.repeat(2_000) }, {
   label: '非同步壓縮測試', inlineLimitBytes: 100, rawLimitBytes: 5_000, compressedLimitBytes: 1_000,
 });
@@ -380,7 +400,7 @@ assert.match(storeSource, /PARENT_SNAPSHOT_NOT_STORED/, '跨Runtime父快照尚�
 assert.match(storeSource, /ALTER TABLE baseball_analysis_pit_snapshots[\s\S]*ADD COLUMN IF NOT EXISTS quarantine_contract/, 'rolling Production必須能演進既有schema');
 assert.match(storeSource, /buildAnalysisPitSnapshotRecordAsync\(input\)/, 'waitUntil備援路徑也不得同步gzip大型payload');
 assert.match(storeSource, /maxOutputLength: DISTRIBUTION_RAW_LIMIT_BYTES \+ 1/, 'gzip解碼必須限制輸出大小');
-assert.match(storeSource, /loadAnalysisPitReplay[\s\S]*allowLegacyJsonbReorderedPayloads: true/, '只有資料庫重播路徑可啟用舊JSONB鍵順序相容模式');
+assert.doesNotMatch(storeSource, /allowLegacyJsonbReordered/, '無法證明原始hash的舊JSONB內容不得繞過完整性驗證');
 assert.match(storeSource, /pg_advisory_xact_lock/, 'runtime schema migration必須序列化trigger/constraint建立');
 assert.doesNotMatch(storeSource, /DROP TRIGGER/i, 'runtime不得先刪immutable trigger再重建');
 
@@ -395,6 +415,8 @@ assert.match(repriceRoute, /X-PIT-Persistence.*UNCONFIRMED-SHADOW-ONLY/s, '降�
 assert.match(analyzeRoute, /analysisPitDatabaseConfigured\(\)/, '未確認的response cache必須在DB恢復後重試PIT');
 assert.match(analyzeRoute, /analysisPitProductionPersistenceRequired\(\)/, 'Production缺少DB時完整分析必須提早fail closed');
 assert.match(repriceRoute, /analysisPitProductionPersistenceRequired\(\)/, 'Production缺少DB時快速重算必須提早fail closed');
+assert.match(analyzeRoute, /pitPayloadEncodingVersion:\s*ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION/, '新payload編碼必須進入FULL input hash並建立新PIT快照');
+assert.match(repriceRoute, /pitPayloadEncodingVersion:\s*ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION/, '新payload編碼必須進入reprice input hash並建立新PIT快照');
 assert.match(repriceRoute, /NO_OP_REPRICE/, '快速重算必須拒絕無變更/self-parent請求');
 assert.ok((analyzeRoute.match(/assertLeagueGamePrestart\(league, game\)/g) || []).length >= 6, '完整分析必須在finalize、persist與response前重查開賽');
 assert.ok((repriceRoute.match(/assertLeagueGamePrestart\(league, game\)/g) || []).length >= 5, '快速重算必須在finalize、persist與response前重查開賽');

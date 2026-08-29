@@ -450,11 +450,12 @@ function coreDataBlockKey(league, date, gamePk, evidenceHash) {
   return `${String(league || '').toUpperCase()}|||${String(date || '')}|||${Number(gamePk) || ''}|||${String(evidenceHash || '')}`;
 }
 
-function cloudLedgerFailureState(error) {
+function cloudLedgerFailureState(error, retryAt = 0) {
   return {
     state: 'unavailable',
     code: String(error?.code || 'DATABASE_UNAVAILABLE'),
     message: String(error?.message || '永久資料庫目前無法使用'),
+    retryAt: Number(retryAt) || 0,
   };
 }
 
@@ -1189,8 +1190,27 @@ export default function Home() {
   }
 
   function reportCloudLedgerFailure(cause) {
-    cloudSyncRetryAtRef.current = Date.now() + cloudLedgerRetryDelay(cause);
-    setCloudLedgerStatus(cloudLedgerFailureState(cause));
+    const retryAt = Date.now() + cloudLedgerRetryDelay(cause);
+    cloudSyncRetryAtRef.current = retryAt;
+    setCloudLedgerStatus(cloudLedgerFailureState(cause, retryAt));
+  }
+
+  async function probeCloudLedgerRecovery() {
+    if (cloudSyncBusyRef.current || document.visibilityState !== 'visible') return;
+    cloudSyncBusyRef.current = true;
+    try {
+      const data = await requestJSON('/api/bets', {}, 30000);
+      if (!Array.isArray(data.bets)) throw new Error('雲端下注紀錄回傳格式錯誤');
+      betsRef.current = data.bets;
+      setBets(data.bets);
+      setCalibrationStatus(data.calibration || null);
+      cloudSyncRetryAtRef.current = 0;
+      setCloudLedgerStatus({ state: 'ready', code: '', message: '', retryAt: 0 });
+    } catch (cause) {
+      reportCloudLedgerFailure(cause);
+    } finally {
+      cloudSyncBusyRef.current = false;
+    }
   }
 
   async function refreshSettlements(targetLeague = '', { force = false } = {}) {
@@ -1266,6 +1286,25 @@ export default function Home() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [storageReady, tab, league]);
+  useEffect(() => {
+    if (!storageReady || cloudLedgerStatus.state !== 'unavailable') return undefined;
+    let disposed = false;
+    let timer;
+    const attemptWhenDue = () => {
+      if (disposed || document.visibilityState !== 'visible') return;
+      const delay = Math.max(0, Number(cloudLedgerStatus.retryAt || cloudSyncRetryAtRef.current || 0) - Date.now());
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => { if (!disposed) void probeCloudLedgerRecovery(); }, delay);
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') attemptWhenDue(); };
+    attemptWhenDue();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [storageReady, cloudLedgerStatus.state, cloudLedgerStatus.retryAt]);
   useEffect(() => {
     currentDateRef.current = date;
     currentLeagueRef.current = league;

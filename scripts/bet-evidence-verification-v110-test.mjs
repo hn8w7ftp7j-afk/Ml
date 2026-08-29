@@ -153,6 +153,19 @@ await assert.rejects(
   'PIT database transport failures must escape as database failures instead of PIT evidence 409',
 );
 
+const pitIntegrityError = Object.assign(new Error('PIT快照內容雜湊或大小不一致'), {
+  name: 'AnalysisPitIntegrityError',
+  code: 'PIT_PAYLOAD_INTEGRITY_FAILED',
+  status: 409,
+});
+const integrityRejected = await verifyCloudBetEvidenceV110(candidate, {
+  ...dependencies,
+  loadPitReplay: async () => { throw pitIntegrityError; },
+});
+assert.equal(integrityRejected.pitVerified, false);
+assert.match(integrityRejected.pitError, /雜湊或大小不一致/);
+assert.equal(isDatabaseError(pitIntegrityError), false, 'PIT內容完整性錯誤不得誤報成整個永久資料庫停機');
+
 const olderMarket = await signMarketRow('MLB', game, {
   ...market,
   lineAsOf: '2026-08-25T07:58:30.000Z',

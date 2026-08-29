@@ -18,10 +18,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.6.2', 'package/release identity must match the V11.6.2 Reader status clarity release');
-assert.equal(packageLock.version, '11.6.2', 'package-lock release identity must match V11.6.2');
-assert.equal(packageLock.packages?.['']?.version, '11.6.2', 'root lockfile package must match V11.6.2');
-assert.equal(APP_VERSION, '11.6.2');
+assert.equal(packageJson.version, '11.6.3', 'package/release identity must match the V11.6.3 PIT ledger recovery release');
+assert.equal(packageLock.version, '11.6.3', 'package-lock release identity must match V11.6.3');
+assert.equal(packageLock.packages?.['']?.version, '11.6.3', 'root lockfile package must match V11.6.3');
+assert.equal(APP_VERSION, '11.6.3');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');

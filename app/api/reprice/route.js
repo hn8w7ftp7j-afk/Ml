@@ -28,6 +28,7 @@ import { leagueCanAnalyze, leagueConfig, requestedLeagueId } from '../../../lib/
 import { checkRateLimit, cleanText, originErrorResponse, rateLimitResponse, readJsonBody, requireApiAuth, validateSameOrigin } from '../../../lib/security.js';
 import { assessCoreSnapshotFreshnessV109 } from '../../../lib/analysis-refresh-policy-v109.js';
 import {
+  ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION,
   analysisPitDatabaseConfigured,
   analysisPitProductionPersistenceRequired,
   analysisPitSnapshotId,
@@ -283,6 +284,7 @@ export async function POST(request) {
       dataVersion: DATA_VERSION, scoreFormulaVersion: SCORE_FORMULA_VERSION,
       settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
       repriceVersion: REPRICE_VERSION,
+      pitPayloadEncodingVersion: ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION,
     };
     const fingerprints = buildSnapshotFingerprints({
       league,
