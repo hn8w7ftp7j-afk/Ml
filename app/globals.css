@@ -21,3 +21,6 @@ body{min-height:100dvh;-webkit-tap-highlight-color:transparent}.appShell,.shell{
 /* Keep long runtime diagnostics inside the mobile viewport. Safari otherwise
    expands the layout canvas and visually zooms the entire page out. */
 html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard,.actualBox,.sourceBanner,.scoreRow,.scoreRow>*,.gameHead>*,.marketTitle>*{min-width:0;max-width:100%}.gameCard,.actualBox{width:100%}.sourceBanner strong,.sourceBanner span,.gameHead h2,.gameHead p,.scorePick,.scorePrice,.scoreMeta,.qaLine,.warningLine,.warningText,.auditWarnings,.marketTitle h3{overflow-wrap:anywhere;word-break:break-word}
+
+/* Mobile navigation and game headers must never create a hidden horizontal canvas. */
+@media(max-width:720px){.leagueTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;margin-right:0;padding-right:0}.leagueTabs button{min-width:0;width:100%}.mainTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.mainTabs button{min-width:0;white-space:normal;overflow-wrap:anywhere}.gameHead{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}.gameHead .state{justify-self:start;max-width:100%;white-space:normal;line-height:1.4;overflow-wrap:anywhere;word-break:break-word}}
