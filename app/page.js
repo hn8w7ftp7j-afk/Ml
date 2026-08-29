@@ -1307,8 +1307,10 @@ export default function Home() {
     }).catch(cause => {
       if (generation === analysisGenerationRef.current && currentDateRef.current === date) setError(String(cause?.message || cause));
     }).finally(() => {
-      releaseOperation();
-      if (generation === analysisGenerationRef.current && currentDateRef.current === date) setProgress(value => ({ ...value, active: false }));
+      if (generation === analysisGenerationRef.current && currentDateRef.current === date) {
+        releaseOperation();
+        setProgress(value => ({ ...value, active: false }));
+      }
     });
     return undefined;
   }, [date, league, storageReady, busy]);
@@ -2239,7 +2241,12 @@ export default function Home() {
       setError(`${String(cause?.message || cause)}；已保留上一版分數。`);
       return false;
     }
-    finally { releaseOperation(); setProgress(value => ({ ...value, active: false })); }
+    finally {
+      if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
+        releaseOperation();
+        setProgress(value => ({ ...value, active: false }));
+      }
+    }
   }
 
   function blockedReaderHashRecheckDue(payloadHash, now = Date.now()) {
@@ -2594,7 +2601,7 @@ export default function Home() {
           failed += rebuildTasks.length;
           setError(`伺服器背景重建暫時失敗：${String(cause?.message || cause)}；已保留上一版分數。`);
         } finally {
-          releaseOperation();
+          if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) releaseOperation();
         }
       }
       if (!stillCurrent()) return;
@@ -2727,7 +2734,15 @@ export default function Home() {
 
   function selectLeague(value) {
     const nextLeague = normalizeLeagueId(value);
-    if (busy || nextLeague === league) return;
+    if (nextLeague === league) return;
+    // Analysis runs are durable server jobs. Switching the visible league only
+    // detaches this screen from the old poll; it does not cancel the server run.
+    // The saved job is reattached when the user returns to that league/date.
+    if (operationBusyRef.current) {
+      operationBusyRef.current = false;
+      setBusy(false);
+      setProgress(value => ({ ...value, active: false, running: 0 }));
+    }
     currentLeagueRef.current = nextLeague;
     analysisGenerationRef.current += 1;
     setError('');
@@ -2745,7 +2760,7 @@ export default function Home() {
     <nav className="leagueTabs" aria-label="聯盟切換">
       {LEAGUE_IDS.map(id => {
         const config = leagueConfig(id);
-        return <button key={id} className={league === id ? 'active' : ''} disabled={busy} onClick={() => selectLeague(id)} aria-pressed={league === id}>
+        return <button key={id} className={league === id ? 'active' : ''} onClick={() => selectLeague(id)} aria-pressed={league === id}>
           <span className={`leagueDot ${config.status}`}/><b>{id}</b><small>{config.shortLabel}</small>
         </button>;
       })}
