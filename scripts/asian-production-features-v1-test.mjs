@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {
   baseballInnings,
+  bullpenSnapshot,
+  detailSide,
   extractAsianStarterEvidence,
   parseCpblGameDetailPayload,
   parseKboBoxScorePayload,
@@ -9,6 +11,9 @@ import {
   matchNpbStarterStats,
   parseNpbGameDetailHtml,
   parseNpbPitchingStatsHtml,
+  projectedLineup,
+  rotationPrediction,
+  validateAsianTeamFeatureOwnership,
 } from '../lib/asian-production-features-v1.js';
 import { parseNpbProbableStartersHtml, parseNpbScheduleDetailStartersHtml } from '../lib/asian-baseball.js';
 import { extraInningsKernelV13 } from '../lib/joint-score-v13.js';
@@ -135,6 +140,53 @@ assert.deepEqual([evidence.away.name, evidence.away.throws, evidence.home.name, 
 const placeholder = extractAsianStarterEvidence([{ rawText: '中信兄弟 投手[右] | 統一7-ELEVEn獅[主] 投手[右]' }], { away: '中信兄弟', home: '統一7-ELEVEn獅' });
 assert.equal(placeholder.away, null);
 assert.equal(placeholder.home, null);
+
+const makeCpblSide = (teamId, starterId, starterName, date) => ({
+  lineup: Array.from({ length: 9 }, (_, index) => ({
+    id: `${teamId}-B${index + 1}`, officialPlayerId: `${teamId}-B${index + 1}`,
+    name: `${teamId}打者${index + 1}`, order: index + 1, battingAverage: 0.25,
+  })),
+  pitchers: [
+    { id: starterId, officialPlayerId: starterId, name: starterName, starter: true, inningsPitched: 6, earnedRuns: 2, hits: 5, walks: 1, battersFaced: 24 },
+    { id: `${teamId}-R-${date}`, officialPlayerId: `${teamId}-R-${date}`, name: `${teamId}後援`, starter: false, inningsPitched: 3, earnedRuns: 1 },
+  ],
+});
+const isolationDetails = [
+  { game: { gamePk: 'unrelated', gameDate: '2026-08-27T10:00:00Z', awayTeamId: 900, homeTeamId: 901 }, detail: { away: makeCpblSide(900, 'X1', '他隊先發', '0827'), home: makeCpblSide(901, 'X2', '另隊先發', '0827') } },
+  { game: { gamePk: 'own-1', gameDate: '2026-08-24T10:00:00Z', awayTeamId: 701, homeTeamId: 702 }, detail: { away: makeCpblSide(701, 'P1', '本隊先發一', '0824'), home: makeCpblSide(702, 'Q1', '對手先發一', '0824') } },
+  { game: { gamePk: 'own-2', gameDate: '2026-08-22T10:00:00Z', awayTeamId: 703, homeTeamId: 701 }, detail: { away: makeCpblSide(703, 'Q2', '對手先發二', '0822'), home: makeCpblSide(701, 'P2', '本隊先發二', '0822') } },
+  { game: { gamePk: 'yesterday', gameDate: '2026-08-28T10:00:00Z', awayTeamId: 701, homeTeamId: 704 }, detail: { away: makeCpblSide(701, 'P3', '昨日先發', '0828'), home: makeCpblSide(704, 'Q3', '對手先發三', '0828') } },
+];
+assert.equal(detailSide(isolationDetails[0].detail, isolationDetails[0].game, 701), null, '未明確命中客隊／主隊必須回傳 null');
+const isolatedRotation = rotationPrediction(isolationDetails, 701, '2026-08-29T10:00:00Z', 'CPBL');
+assert.deepEqual(isolatedRotation.candidates.map(row => row.id).sort(), ['P1', 'P2'], '不得混入他隊或昨日才先發的投手');
+assert.ok(isolatedRotation.candidates.every(row => row.teamId === 701));
+const isolatedLineup = projectedLineup(isolationDetails, 701, 'CPBL');
+assert.equal(isolatedLineup.asOfGamePk, 'own-1');
+assert.ok(isolatedLineup.players.every(row => row.teamId === 701 && row.officialPlayerId.startsWith('701-')));
+const isolatedBullpen = bullpenSnapshot(isolationDetails, 701, 'CPBL', 4.3, '2026-08-29T10:00:00Z');
+assert.ok(isolatedBullpen.pitcherIds.every(id => id.startsWith('701-')));
+validateAsianTeamFeatureOwnership({
+  away: { starter: isolatedRotation, lineup: isolatedLineup, bullpen: isolatedBullpen },
+  home: { starter: { teamId: 702, id: 'Q1', candidates: [{ teamId: 702, officialPlayerId: 'Q1' }] }, lineup: { teamId: 702, players: [] }, bullpen: { teamId: 702, pitcherIds: [] } },
+}, 701, 702);
+assert.throws(() => validateAsianTeamFeatureOwnership({
+  away: { starter: { teamId: 701, id: 'DUP', candidates: [{ teamId: 701, officialPlayerId: 'DUP' }] } },
+  home: { starter: { teamId: 702, id: 'DUP', candidates: [{ teamId: 702, officialPlayerId: 'DUP' }] } },
+}, 701, 702), /ASIAN_CROSS_TEAM_OFFICIAL_PLAYER_ID:DUP/);
+
+const todayCpblReplay = [
+  ['G295', '0000007832', '0000005604'],
+  ['G296', '0000007778', '0000006237'],
+  ['G297', '0000002274', '0000006497'],
+];
+for (const [gamePk, awayId, homeId] of todayCpblReplay) {
+  assert.notEqual(awayId, homeId, `${gamePk}客主先發官方 ID 不得相同`);
+  validateAsianTeamFeatureOwnership({
+    away: { starter: { teamId: Number(gamePk.slice(1)) * 10 + 1, id: awayId, candidates: [] } },
+    home: { starter: { teamId: Number(gamePk.slice(1)) * 10 + 2, id: homeId, candidates: [] } },
+  }, Number(gamePk.slice(1)) * 10 + 1, Number(gamePk.slice(1)) * 10 + 2);
+}
 
 const extra = extraInningsKernelV13({
   means: { awayNinth: 0.35, homeNinth: 0.35 },
