@@ -208,13 +208,50 @@ const changedContentPit = await verifyCloudBetEvidenceV110(candidate, {
 assert.equal(changedContentPit.pitVerified, false, '同方向同水位但不同場次內容修訂不得附著');
 assert.match(changedContentPit.pitError, /不是同一場盤口內容版本/);
 
+const latestInputHash = '9'.repeat(64);
+const latestPitRecord = buildAnalysisPitSnapshotRecord({
+  league: 'MLB', game, frozenContext,
+  analysis: {
+    ...analysis,
+    inputHash: latestInputHash,
+    analysisAsOf: '2026-08-25T07:59:50.000Z',
+  },
+  distributionSnapshot, versions, markets: [signedMarket], previousMarkets: [],
+});
 const supersededPit = await verifyCloudBetEvidenceV110(candidate, {
   ...dependencies,
-  loadLatestPitIdentity: async () => ({ snapshotId: `MLB:123:${'9'.repeat(64)}`, inputHash: '9'.repeat(64) }),
+  loadPitReplay: async ({ snapshotId: requestedSnapshotId, expected }) => {
+    assert.equal(requestedSnapshotId, latestPitRecord.snapshotId);
+    assert.equal(expected.inputHash, latestInputHash);
+    return buildAnalysisPitReplayBundle(latestPitRecord);
+  },
+  loadLatestPitIdentity: async () => ({ snapshotId: latestPitRecord.snapshotId, inputHash: latestInputHash }),
 });
 assert.equal(supersededPit.readerVerified, true);
-assert.equal(supersededPit.pitVerified, false, '同一Reader截點的舊核心分析不得被挑選附著');
-assert.match(supersededPit.pitError, /較新的核心分析取代/);
+assert.equal(supersededPit.pitVerified, true, '畫面舊PIT必須安全附著伺服器選出的同場最新PIT');
+assert.equal(supersededPit.pit.snapshotId, latestPitRecord.snapshotId);
+
+const incompatibleLatestInputHash = '6'.repeat(64);
+const incompatibleLatestRecord = buildAnalysisPitSnapshotRecord({
+  league: 'MLB', game, frozenContext,
+  analysis: {
+    ...analysis,
+    inputHash: incompatibleLatestInputHash,
+    analysisAsOf: '2026-08-25T07:59:51.000Z',
+    results: [{ ...changedContentMarket, weightedEV: 0.04, robustEV: 0.01 }],
+  },
+  distributionSnapshot, versions, markets: [changedContentMarket], previousMarkets: [],
+});
+const incompatibleLatest = await verifyCloudBetEvidenceV110(candidate, {
+  ...dependencies,
+  loadPitReplay: async () => buildAnalysisPitReplayBundle(incompatibleLatestRecord),
+  loadLatestPitIdentity: async () => ({
+    snapshotId: incompatibleLatestRecord.snapshotId,
+    inputHash: incompatibleLatestInputHash,
+  }),
+});
+assert.equal(incompatibleLatest.pitVerified, false, '較新PIT若不是目前Reader內容仍必須拒絕附著');
+assert.match(incompatibleLatest.pitError, /不是同一場盤口內容版本/);
 
 await assert.rejects(
   () => verifyCloudBetEvidenceV110(candidate, {
