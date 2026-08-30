@@ -1114,6 +1114,8 @@ export default function Home() {
   const readerPendingText = coveragePendingText(readerCoverage);
   const shadowRanking = useMemo(() => board.flatMap(item => {
     const analysis = item.customData?.analysis || {};
+    const itemLeague = String(analysis.leagueId || item?.game?.leagueId || item?.game?.league || '').trim().toUpperCase();
+    if (itemLeague !== league) return [];
     const externalDirectionSlots = item.customData?.directionSlots || item.directionSlots || null;
     const directionAnalysis = externalDirectionSlots && !analysis.directionSlots
       ? { ...analysis, directionSlots: externalDirectionSlots }
@@ -1389,6 +1391,9 @@ export default function Home() {
     const refreshReader = async () => {
       try {
         const stamp = Date.now();
+        // Completed cards may remain cached after midnight. Their presence must
+        // not pin the app to yesterday and hide the new board's full slate.
+        const hasCurrentPrestartGame = board.some(item => gameIsPrestartNow(item?.game, stamp));
         const [value, latest] = await Promise.all([
           requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(date)}&t=${stamp}`, {}, 20000),
           requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&t=${stamp}`, {}, 20000),
@@ -1397,7 +1402,7 @@ export default function Home() {
         if (latest?.fresh
           && /^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))
           && latest.boardDate !== currentDateRef.current
-          && !board.length
+          && !hasCurrentPrestartGame
           && !operationBusyRef.current
           && !readerPollBusyRef.current) {
           setNotice(`已依 ${league} Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
@@ -1405,7 +1410,7 @@ export default function Home() {
           return;
         }
         commitReaderStatus(value);
-        if (value?.fresh || board.length || operationBusyRef.current || readerPollBusyRef.current) return;
+        if (value?.fresh || hasCurrentPrestartGame || operationBusyRef.current || readerPollBusyRef.current) return;
         if (!active || !latest?.fresh || !/^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))) return;
         if (latest.boardDate !== currentDateRef.current) {
           setNotice(`已依 Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
@@ -2797,6 +2802,12 @@ export default function Home() {
     }
     currentLeagueRef.current = nextLeague;
     analysisGenerationRef.current += 1;
+    // Clear synchronously as well as in the league/date effect. Otherwise a
+    // fast click can start the new league analysis with the previous league's
+    // completed cards still present in boardRef.current.
+    boardRef.current = [];
+    setBoard([]);
+    setSchedule([]);
     setError('');
     setNotice('');
     setTab('board');

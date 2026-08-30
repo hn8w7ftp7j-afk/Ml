@@ -13,13 +13,15 @@ const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
 mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score output');
+mustMatch(/const hasCurrentPrestartGame = board\.some\(item => gameIsPrestartNow\(item\?\.game, stamp\)\)/, '跨盤日必須依是否仍有未開賽場次判斷，不得被昨日已完成快取卡片卡住');
+mustMatch(/latest\.boardDate !== currentDateRef\.current\s*&& !hasCurrentPrestartGame/, 'Reader已有新盤日且目前無未開賽場次時必須自動切換完整新盤日');
 
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.6.5', 'package/release identity must match the V11.6.5 closing-line tracking release');
+assert.equal(packageJson.version, '11.6.5', 'package/release identity must match the integrated V11.6.5 closing-line and full-prestart-slate release');
 assert.equal(packageLock.version, '11.6.5', 'package-lock release identity must match V11.6.5');
 assert.equal(packageLock.packages?.['']?.version, '11.6.5', 'root lockfile package must match V11.6.5');
 assert.equal(APP_VERSION, '11.6.5');

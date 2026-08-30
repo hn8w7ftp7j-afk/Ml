@@ -3,6 +3,17 @@ import fs from 'node:fs';
 
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 
+assert.match(
+  page,
+  /const itemLeague = String\(analysis\.leagueId \|\| item\?\.game\?\.leagueId \|\| item\?\.game\?\.league \|\| ''\)[\s\S]*?if \(itemLeague !== league\) return \[\]/,
+  'ranking and bet-order source must reject cards from every other league',
+);
+assert.match(
+  page,
+  /currentLeagueRef\.current = nextLeague;[\s\S]*?boardRef\.current = \[\];[\s\S]*?setBoard\(\[\]\);[\s\S]*?setSchedule\(\[\]\);/,
+  'league switch must synchronously detach the previous league board before a fast analyze click',
+);
+
 assert.doesNotMatch(
   page,
   /className=\{league === id \? 'active' : ''\} disabled=\{busy\}/,
