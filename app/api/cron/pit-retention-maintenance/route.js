@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { planPitRetentionMaintenance } from '../../../../lib/pit-retention-maintenance-v1.js';
+import { compactExpiredUnprotectedRepricePayloads } from '../../../../lib/pit-retention-maintenance-v1.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -24,13 +24,13 @@ export async function GET(request) {
     });
   }
   try {
-    const plan = await planPitRetentionMaintenance();
-    console.log('[PIT_RETENTION_PLAN]', JSON.stringify(plan));
-    return NextResponse.json({ ok: true, mode: 'PLAN_ONLY', plan }, {
+    const result = await compactExpiredUnprotectedRepricePayloads();
+    console.log('[PIT_RETENTION_COMPACTED]', JSON.stringify(result));
+    return NextResponse.json({ ok: true, mode: 'COMPACT_ONCE', result }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    console.error('[PIT_RETENTION_PLAN_FAILED]', String(error?.message || error));
+    console.error('[PIT_RETENTION_COMPACTION_FAILED]', String(error?.message || error));
     return NextResponse.json({ ok: false, error: String(error?.message || error) }, {
       status: 503,
       headers: { 'Cache-Control': 'no-store' },
