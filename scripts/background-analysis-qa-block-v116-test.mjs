@@ -10,7 +10,7 @@ assert.match(page, /error\.blocking = Array\.isArray\(data\.blocking\)/, 'client
 assert.match(page, /commitAnalysisFailure\(row\?\.task, row\)/, 'background polling must pass the full result row instead of dropping code and status');
 assert.match(page, /const state = await requestJSON\(`\/api\/analysis-jobs[\s\S]*generation !== analysisGenerationRef\.current \|\| currentDateRef\.current !== targetDate\)[\s\S]*return \{ detached: true/, 'a completed old job must detach before mutating a newly selected league or date');
 assert.match(page, /const pollKey = `\$\{runId\}\|\|\|\$\{generation\}\|\|\|\$\{targetDate\}`;[\s\S]*backgroundJobPollsRef\.current\.get\(pollKey\)/, 'reconnect polling must not reuse a detached promise from an older league/date generation');
-assert.match(page, /const saved = loadBackgroundJob\(league, date\)[\s\S]*\}, \[date, league, storageReady, busy\]\);/, 'a new league/date must retry saved-job reconnect after the old operation releases busy state');
+assert.match(page, /const saved = loadBackgroundJob\(league, date\)[\s\S]*\}, \[date, league, storageReady, busy, backgroundJobRevision\]\);/, 'a new league/date or newly queued all-league job must retry saved-job reconnect after the old operation releases busy state');
 assert.match(page, /status: terminalGame \? 'done' : failure\.blocked \? 'blocked' : 'failed'/, 'terminal games must stop while QA blocks remain distinct from generic analysis failures');
 assert.match(page, /資料不足｜QA BLOCK｜不評分/, 'blocked cards need explicit fail-closed copy');
 

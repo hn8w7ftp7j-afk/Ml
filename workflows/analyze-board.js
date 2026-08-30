@@ -77,3 +77,57 @@ export async function analyzeBoardWorkflow(input) {
     results,
   };
 }
+
+export async function analyzeAllLeaguesWorkflow(input) {
+  'use workflow';
+
+  if (!input || !Array.isArray(input.batches) || !input.batches.length || input.batches.length > 4) {
+    throw new FatalError('四聯盟背景分析缺少有效工作');
+  }
+  const batches = [];
+  for (const batch of input.batches) {
+    const tasks = Array.isArray(batch?.tasks) ? batch.tasks : [];
+    if (!batch?.league || tasks.length > 20) throw new FatalError('四聯盟背景分析工作內容無效');
+    const results = [];
+    const concurrency = batch.league === 'MLB' ? 2 : 1;
+    // League groups intentionally run one after another. A failure within one
+    // group is captured by allSettled and never prevents the next league from
+    // receiving its own independent analysis result.
+    for (let offset = 0; offset < tasks.length; offset += concurrency) {
+      const group = tasks.slice(offset, offset + concurrency);
+      const settled = await Promise.allSettled(group.map(task => analyzeGameStep(task)));
+      for (let index = 0; index < settled.length; index += 1) {
+        const result = settled[index];
+        results.push(result.status === 'fulfilled'
+          ? result.value
+          : {
+            ok: false,
+            status: 500,
+            error: String(result.reason?.message || result.reason || '背景分析失敗'),
+            code: 'BACKGROUND_STEP_FAILED',
+            blocking: [],
+            warnings: [],
+            retryable: true,
+            task: resultTask(group[index]),
+          });
+      }
+    }
+    batches.push({
+      ok: results.every(result => result.ok),
+      league: batch.league,
+      date: batch.date,
+      emptyReason: batch.emptyReason || null,
+      total: results.length,
+      completed: results.filter(result => result.ok).length,
+      results,
+    });
+  }
+  return {
+    ok: batches.every(batch => batch.ok),
+    mode: 'all-leagues',
+    date: input.date,
+    total: batches.reduce((sum, batch) => sum + batch.total, 0),
+    completed: batches.reduce((sum, batch) => sum + batch.completed, 0),
+    batches,
+  };
+}

@@ -12,5 +12,6 @@ assert.match(middleware, /\/api\/cron\/mlb-advanced-snapshots/);
 assert.deepEqual(vercel.crons, [
   { path: '/api/cron/mlb-advanced-snapshots', schedule: '0 0 * * *' },
   { path: '/api/cron/analysis-direction-settlements', schedule: '30 21 * * *' },
+  { path: '/api/cron/pit-retention-maintenance', schedule: '*/5 * * * *' },
 ]);
 console.log('Authenticated daily MLB advanced snapshot cron PASS');
