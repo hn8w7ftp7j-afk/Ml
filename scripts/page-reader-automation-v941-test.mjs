@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate !== currentDateRef\.current\s*&& !hasCurrentPrestar
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.7.1', 'package/release identity must match the V11.7.1 integration repair release');
-assert.equal(packageLock.version, '11.7.1', 'package-lock release identity must match V11.7.1');
-assert.equal(packageLock.packages?.['']?.version, '11.7.1', 'root lockfile package must match V11.7.1');
-assert.equal(APP_VERSION, '11.7.1');
+assert.equal(packageJson.version, '11.7.2', 'package/release identity must match the V11.7.2 manual-entry release');
+assert.equal(packageLock.version, '11.7.2', 'package-lock release identity must match V11.7.2');
+assert.equal(packageLock.packages?.['']?.version, '11.7.2', 'root lockfile package must match V11.7.2');
+assert.equal(APP_VERSION, '11.7.2');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -75,13 +75,14 @@ mustMatch(/setInterval\(\(\) => pollReaderAndReprice\(\), READER_RECHECK_INTERVA
 mustMatch(/touchReaderHeartbeat/, 'same-content Reader heartbeat must refresh freshness without repricing');
 assert.doesNotMatch(page, /lastFullAnalysisAtRef/, 'the client must never force a destructive full-board rerun on a timer');
 
-// Automatic analysis must be keyed to a fresh Reader payload and must not overlap.
-mustMatch(/autoAnalyzeHashRef/, 'automatic analysis hash guard missing');
-mustMatch(/autoAnalyzePendingRef/, 'automatic analysis pending guard missing');
+// Reader discovery may refresh status, but entering or reopening the app must
+// never start an analysis until the user presses a single- or all-league button.
+mustMatch(/manualAnalysisScopesRef/, 'manual analysis session scope guard missing');
 mustMatch(/operationBusyRef/, 'operation concurrency guard missing');
 mustMatch(/readerPollBusyRef/, 'Reader polling concurrency guard missing');
 mustMatch(/readerStatus\?\.fresh/, 'fresh Reader gate missing');
-mustMatch(/oneClickAnalyze\(key\)/, 'automatic Reader analysis trigger missing');
+assert.doesNotMatch(page, /Promise\.resolve\(oneClickAnalyze\(key\)\)/, 'fresh Reader status must not automatically start MLB analysis');
+assert.doesNotMatch(page, /void oneClickAnalyze\(key\)/, 'restored analysis must remain visible without automatically rerunning the full slate');
 mustMatch(/JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'credit-line request must bind league, date and schedule');
 mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missing');
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
@@ -311,7 +312,6 @@ mustMatch(/伺服器背景分析中｜可離開App/, 'background execution statu
 mustMatch(/loadBackgroundJob\(league, date\)/, 'app reopen must resume the active background job');
 mustMatch(/state\.status === 'completed'/, 'client must reload completed server workflow results');
 mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');
-mustMatch(/const key = readerHashKey\(date, readerStatusRef\.current\?\.payloadHash \|\| readerStatus\?\.payloadHash\)/, 'restored board must bind validation to the current Reader revision');
-mustMatch(/window\.setTimeout\(bootstrapFullSlate, 250\)/, 'restored partial board must keep retrying the full official slate bootstrap while another operation is busy');
+mustMatch(/restoredBoardNeedsValidationRef\.current = restoredBoard\.length > 0[\s\S]*manualAnalysisScopesRef\.current\.has/, 'restored scores must wait for a manual analysis action before Reader repricing starts');
 
 console.log('Page Reader automation, four-league navigation, storage continuity, board authority and all-score presentation PASS');

@@ -1143,7 +1143,7 @@ export default function Home() {
   const allLeagueBusyRef = useRef(false);
   const readerPollBusyRef = useRef(false);
   const autoAnalyzeHashRef = useRef('');
-  const autoAnalyzePendingRef = useRef('');
+  const manualAnalysisScopesRef = useRef(new Set());
   const currentDateRef = useRef(date);
   const currentLeagueRef = useRef(league);
   const analysisGenerationRef = useRef(0);
@@ -1467,11 +1467,11 @@ export default function Home() {
     creditRevisionRef.current = '';
     officialPrestartCheckedAtRef.current = 0;
     autoAnalyzeHashRef.current = '';
-    autoAnalyzePendingRef.current = '';
     coreDataBlockRetryRef.current.clear();
     setAcknowledgedReaderKey('');
     const restoredBoard = storageReady ? loadAnalysisBoardCache(league, date) : [];
-    restoredBoardNeedsValidationRef.current = restoredBoard.length > 0;
+    restoredBoardNeedsValidationRef.current = restoredBoard.length > 0
+      && !manualAnalysisScopesRef.current.has(`${league}:${date}`);
     setSchedule(restoredBoard.map(item => item.game));
     setBoard(restoredBoard);
     setError('');
@@ -1570,24 +1570,6 @@ export default function Home() {
     return () => { active = false; window.clearInterval(timer); };
   }, [date, board.length, league, readerEnabled, analysisEnabled]);
   useEffect(() => {
-    if (!readerEnabled || !analysisEnabled) return undefined;
-    const hash = readerStatus?.payloadHash || '';
-    const key = readerHashKey(date, hash);
-    if (!readerStatus?.fresh || !key || board.length || busy || autoAnalyzeHashRef.current === key || autoAnalyzePendingRef.current === key) return;
-    autoAnalyzePendingRef.current = key;
-    let started = false;
-    const timer = window.setTimeout(() => {
-      started = true;
-      Promise.resolve(oneClickAnalyze(key)).finally(() => {
-        if (autoAnalyzePendingRef.current === key) autoAnalyzePendingRef.current = '';
-      });
-    }, 600);
-    return () => {
-      window.clearTimeout(timer);
-      if (!started && autoAnalyzePendingRef.current === key) autoAnalyzePendingRef.current = '';
-    };
-  }, [readerStatus?.fresh, readerStatus?.payloadHash, board.length, busy, date, league, readerEnabled, analysisEnabled]);
-  useEffect(() => {
     if (!readerEnabled || !analysisEnabled || !board.length || restoredBoardNeedsValidationRef.current) return undefined;
     // Validate immediately after a page restore or completed analysis. Waiting
     // for the first interval meant every mobile refresh restarted the delay and
@@ -1596,28 +1578,6 @@ export default function Home() {
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [board.length, date, busy, league, readerEnabled, analysisEnabled]);
-  useEffect(() => {
-    if (!restoredBoardNeedsValidationRef.current || !board.length || busy || !readerStatus?.fresh) return undefined;
-    // A restored board intentionally contains completed games only. It is not
-    // the authoritative daily schedule, so repricing it directly can strand a
-    // mobile client with just the one result Safari managed to persist. Re-run
-    // the full slate bootstrap: it fetches the official schedule and current
-    // Reader board, preserves cached scores, and queues every open game.
-    let cancelled = false;
-    let timer;
-    const bootstrapFullSlate = () => {
-      if (cancelled) return;
-      if (operationBusyRef.current || readerPollBusyRef.current) {
-        timer = window.setTimeout(bootstrapFullSlate, 250);
-        return;
-      }
-      const key = readerHashKey(date, readerStatusRef.current?.payloadHash || readerStatus?.payloadHash);
-      restoredBoardNeedsValidationRef.current = false;
-      void oneClickAnalyze(key);
-    };
-    timer = window.setTimeout(bootstrapFullSlate, 250);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [board.length, busy, readerStatus?.fresh, readerStatus?.payloadHash, date, league]);
   const currentReaderKey = readerHashKey(date, readerStatus?.payloadHash);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
@@ -2261,6 +2221,8 @@ export default function Home() {
   async function oneClickAnalyzeAll() {
     if (allLeagueBusyRef.current || operationBusyRef.current || readerPollBusyRef.current || allLeagueRunning) return false;
     const targetDate = date;
+    for (const id of LEAGUE_IDS) manualAnalysisScopesRef.current.add(`${id}:${targetDate}`);
+    restoredBoardNeedsValidationRef.current = false;
     allLeagueBusyRef.current = true;
     setAllLeaguePreparing(true);
     setError('');
@@ -2367,6 +2329,8 @@ export default function Home() {
       return false;
     }
     if (!acquireOperation()) return false;
+    manualAnalysisScopesRef.current.add(`${league}:${date}`);
+    restoredBoardNeedsValidationRef.current = false;
     const requestedAutoKey = typeof automaticKey === 'string' ? automaticKey : '';
     const targetDate = date;
     const generation = analysisGenerationRef.current;
