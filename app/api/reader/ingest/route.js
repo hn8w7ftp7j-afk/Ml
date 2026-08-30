@@ -147,6 +147,7 @@ export async function POST(request) {
       if (!refreshed || !storage?.allRequiredWritesSucceeded) {
         return NextResponse.json({ ok: false, error: 'Reader 心跳未完成所有必要儲存寫入' }, { status: 503, headers });
       }
+      const closingTracking = await trackOpenBetClosingSnapshots(refreshed);
       return NextResponse.json({
         ok: true,
         league,
@@ -168,6 +169,7 @@ export async function POST(request) {
         pageActivityAt: refreshed.pageActivityAt,
         runtimeCache: Boolean(storage?.runtimeCache),
         allRequiredWritesSucceeded: true,
+        closingTracking,
         freshness: readerSnapshotStatus(refreshed, Date.now(), league),
       }, { headers });
     }

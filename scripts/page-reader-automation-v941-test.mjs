@@ -125,7 +125,7 @@ assert.match(betPricesRoute, /currentReaderPriceForBet/, 'price feed must match 
 assert.match(betPricesRoute, /current: status\.fresh \?/, 'stale Reader prices must not be presented as current');
 assert.match(betPricesRoute, /verifiedClosingPriceForBet/, 'Closing CLV must require a verified closing snapshot');
 assert.match(readerIngestRoute, /updateOpenCloudBetClosingSnapshots/, 'Reader ingest must overwrite the one prestart closing candidate for open bets');
-assert.doesNotMatch(readerIngestRoute, /trackOpenBetClosingSnapshots\(refreshed\)/, 'same-price Reader heartbeat must not query or rewrite the bet ledger');
+assert.match(readerIngestRoute, /trackOpenBetClosingSnapshots\(refreshed\)/, 'Reader heartbeat must initialize missing pre-v11.6.5 closing candidates without storing a history series');
 assert.match(readerIngestRoute, /trackOpenBetClosingSnapshots\(normalized\)/, 'changed Reader payloads must update the latest prestart contract');
 mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
 mustMatch(/此方向已經記錄；盤口或水位變動也不再新增/, 'single-position bet suppression text missing');
