@@ -4,10 +4,12 @@
     "app/api/analyze/route.js": { "maxDuration": 120 },
     "app/api/analysis-jobs/route.js": { "maxDuration": 60 },
     "app/api/cron/mlb-advanced-snapshots/route.js": { "maxDuration": 300 },
-    "app/api/cron/analysis-direction-settlements/route.js": { "maxDuration": 300 }
+    "app/api/cron/analysis-direction-settlements/route.js": { "maxDuration": 300 },
+    "app/api/cron/pit-retention-maintenance/route.js": { "maxDuration": 300 }
   },
   "crons": [
     { "path": "/api/cron/mlb-advanced-snapshots", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/analysis-direction-settlements", "schedule": "30 21 * * *" }
+    { "path": "/api/cron/analysis-direction-settlements", "schedule": "30 21 * * *" },
+    { "path": "/api/cron/pit-retention-maintenance", "schedule": "*/5 * * * *" }
   ]
 }
