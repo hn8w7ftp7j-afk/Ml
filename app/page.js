@@ -598,7 +598,7 @@ function markReaderBoardVerificationBlocked(item) {
   };
 }
 
-function betActionState({ latest = null, recordable = false, inactiveNotice = '', cloudLedgerUnavailable = false }) {
+function betActionState({ latest = null, cancelled = null, recordable = false, inactiveNotice = '', cloudLedgerUnavailable = false }) {
   if (latest?.status === 'OPEN') {
     const started = inactiveNotice.includes('開打') || inactiveNotice.includes('已開始');
     return {
@@ -608,12 +608,6 @@ function betActionState({ latest = null, recordable = false, inactiveNotice = ''
       disabled: started || cloudLedgerUnavailable,
     };
   }
-  if (latest?.status === 'CANCELLED') return {
-    kind: 'none',
-    text: '已取消',
-    title: '這筆下注已取消，原始證據仍保留',
-    disabled: true,
-  };
   if (latest) return {
     kind: 'none',
     text: '已下注 ✓',
@@ -622,9 +616,17 @@ function betActionState({ latest = null, recordable = false, inactiveNotice = ''
   };
   if (recordable) return {
     kind: 'record',
-    text: '紀錄實際下注',
-    title: '記錄目前實際下注盤口與水位',
+    text: cancelled ? '重新紀錄下注' : '紀錄實際下注',
+    title: cancelled
+      ? '先前下注已取消；以目前盤口、水位與最新PIT建立一筆新的實際下注紀錄'
+      : '記錄目前實際下注盤口與水位',
     disabled: false,
+  };
+  if (cancelled) return {
+    kind: 'none',
+    text: '已取消',
+    title: '舊下注已取消並保留；待Reader最新驗證完成且仍未開賽即可重新下注',
+    disabled: true,
   };
   if (cloudLedgerUnavailable) return {
     kind: 'none',
@@ -922,7 +924,7 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = f
   const probabilityDetail = `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
-  const action = betActionState({ latest, recordable, inactiveNotice, cloudLedgerUnavailable });
+  const action = betActionState({ latest, cancelled: betState?.cancelled || null, recordable, inactiveNotice, cloudLedgerUnavailable });
   return <div className="scoreRow">
     <div className={`score ${scoreClass}`} title={scoreTitle} aria-label={`S分數 ${scoreLabel}`}>
       <span style={{ display: 'block', fontSize: 9, lineHeight: 1.1 }}>S 分數</span>
@@ -1624,10 +1626,12 @@ export default function Home() {
   function getBetState(item, row) {
     const records = bets.filter(bet => betMatches(bet, date, item.game.gamePk, row, league))
       .sort((left, right) => Date.parse(right.placedAt || 0) - Date.parse(left.placedAt || 0));
+    const activeRecords = records.filter(bet => bet.status !== 'CANCELLED');
     return {
       records,
-      latest: records[0] || null,
-      exact: records.find(bet => betPriceMatches(bet, date, item.game.gamePk, row, league)) || null,
+      latest: activeRecords[0] || null,
+      exact: activeRecords.find(bet => betPriceMatches(bet, date, item.game.gamePk, row, league)) || null,
+      cancelled: records.find(bet => bet.status === 'CANCELLED') || null,
     };
   }
 
@@ -3212,7 +3216,7 @@ export default function Home() {
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
         const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerStatus.state !== 'unavailable');
-        const action = betActionState({ latest: betState.latest, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerUnavailable: cloudLedgerStatus.state === 'unavailable' });
+        const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerUnavailable: cloudLedgerStatus.state === 'unavailable' });
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const warnings = diagnosticWarnings(entry.row);
@@ -3229,7 +3233,7 @@ export default function Home() {
         {group.entries.map(entry => {
           const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
           const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerStatus.state !== 'unavailable');
-          const action = betActionState({ latest: betState.latest, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerUnavailable: cloudLedgerStatus.state === 'unavailable' });
+          const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerUnavailable: cloudLedgerStatus.state === 'unavailable' });
           const scoreText = entry.score.toFixed(1);
           const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const warnings = diagnosticWarnings(entry.row);

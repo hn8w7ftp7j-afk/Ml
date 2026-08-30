@@ -20,7 +20,7 @@ assert.ok(
 );
 assert.match(store, /TO_JSONB\(ranked\) - 'duplicate_rank' - 'canonical_bet_id'/, 'quarantine must retain the original row');
 assert.match(store, /EXCLUDED_DUPLICATE_POSITION_QUARANTINE/, 'duplicate history must fail closed for calibration');
-assert.match(store, /ON CONFLICT \(position_key\) DO NOTHING/, 'new tickets must use the position unique index atomically');
+assert.match(store, /ON CONFLICT \(position_key\) WHERE status <> 'CANCELLED' DO NOTHING/, 'new tickets must atomically suppress an active duplicate while permitting rebet after cancellation');
 assert.match(store, /ON CONFLICT DO NOTHING/, 'legacy merges must atomically respect both id and position uniqueness');
 assert.doesNotMatch(
   store,

@@ -60,7 +60,7 @@ assert.match(store, /crypto\.randomUUID\(\)/, '下注ID必須由伺服器產生'
 assert.match(store, /Date\.now\(\) >= Date\.parse\(verification\?\.officialGame\?\.gameDate/, 'PIT查核後、資料庫寫入前必須再次阻擋已開打賽事');
 assert.match(store, /if \(!prediction\.ok\)/, '不完整PIT prediction不得先寫入再由讀取時隔離');
 assert.match(store, /status: 'OPEN'/, '新下注初始狀態必須由伺服器鎖定');
-assert.match(store, /ON CONFLICT \(position_key\) DO NOTHING/, '新下注必須以資料庫唯一索引原子阻擋同方向競態加注');
+assert.match(store, /ON CONFLICT \(position_key\) WHERE status <> 'CANCELLED' DO NOTHING/, '新下注必須以部分唯一索引原子阻擋同方向有效單，同時允許取消後重下');
 assert.doesNotMatch(store, /SELECT id FROM baseball_private_bets_v2 WHERE (?:id = [^\n]+ OR )?position_key =/, '不得使用會產生TOCTOU競態的先查再寫');
 assert.match(store, /ON CONFLICT DO NOTHING/, '歷史合併同時以id與position_key的資料庫約束原子去重');
 const v2Schema = store.match(/CREATE TABLE IF NOT EXISTS baseball_private_bets_v2\s*\(([\s\S]*?)\n\s*\)\n\s*`;/)?.[1] || '';
