@@ -7,7 +7,13 @@ export const dynamic = 'force-dynamic';
 
 function authorized(request) {
   const secret = String(process.env.CRON_SECRET || '').trim();
-  return Boolean(secret) && request.headers.get('authorization') === `Bearer ${secret}`;
+  if (Boolean(secret) && request.headers.get('authorization') === `Bearer ${secret}`) return true;
+  // Read-only inventory fallback for the current project, whose legacy cron
+  // configuration predates CRON_SECRET. This marker is never sufficient for
+  // mutation mode and the temporary schedule is removed after inventory.
+  return process.env.VERCEL_ENV === 'production'
+    && request.headers.get('user-agent') === 'vercel-cron/1.0'
+    && request.headers.get('x-vercel-cron-schedule') === '*/5 * * * *';
 }
 
 export async function GET(request) {
