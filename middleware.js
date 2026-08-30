@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requestIsAuthenticated, siteAuthConfigured } from './lib/security.js';
 
-const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health', '/api/reader/pair', '/api/reader/ingest', '/api/reader/capture', '/api/reader/status', '/api/cron/mlb-advanced-snapshots', '/api/cron/analysis-direction-settlements', '/api/cron/pit-retention-maintenance']);
+const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health', '/api/reader/pair', '/api/reader/ingest', '/api/reader/capture', '/api/reader/status', '/api/cron/mlb-advanced-snapshots', '/api/cron/analysis-direction-settlements']);
 const PUBLIC_PWA_PATHS = new Set(['/manifest.webmanifest', '/sw.js']);
 
 export async function middleware(request) {
@@ -30,5 +30,5 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|\.well-known/workflow/).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|\\.well-known/workflow/).*)'],
 };
