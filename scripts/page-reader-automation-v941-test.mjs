@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate !== currentDateRef\.current\s*&& !hasCurrentPrestar
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.7.0', 'package/release identity must match the V11.7.0 durable all-league analysis release');
-assert.equal(packageLock.version, '11.7.0', 'package-lock release identity must match V11.7.0');
-assert.equal(packageLock.packages?.['']?.version, '11.7.0', 'root lockfile package must match V11.7.0');
-assert.equal(APP_VERSION, '11.7.0');
+assert.equal(packageJson.version, '11.7.1', 'package/release identity must match the V11.7.1 integration repair release');
+assert.equal(packageLock.version, '11.7.1', 'package-lock release identity must match V11.7.1');
+assert.equal(packageLock.packages?.['']?.version, '11.7.1', 'root lockfile package must match V11.7.1');
+assert.equal(APP_VERSION, '11.7.1');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -137,7 +137,8 @@ mustMatch(/每筆實際下注金額/, 'stake preset must be labelled as an actua
 assert.doesNotMatch(page, />1 Unit 金額</, 'formal Unit is disabled and must not appear as an active setting');
 assert.match(page, /unit: null/, 'actual ledger writes must not claim a model Unit');
 mustMatch(/不可變帳本/, 'ledger must disclose immutable evidence retention');
-mustMatch(/下注證據保留，不提供刪除/, 'ledger must not render a dead destructive action');
+mustMatch(/下注證據永久保留；取消只變更狀態，不會刪除/, 'ledger cancellation must preserve original evidence instead of deleting it');
+mustMatch(/action: 'cancel'/, 'prestart OPEN bet cancellation action missing');
 assert.doesNotMatch(page, /action: 'delete'|action: 'clearLeague'/, 'client must not call unsupported destructive ledger actions');
 assert.match(cloudLedgerSyncPolicy, /CLOUD_LEDGER_FAILURE_BACKOFF_MS/, 'DB失敗後必須停止每15秒重打雲端帳本');
 assert.match(page, /cloudLedgerAutomaticRefreshAllowed/, '帳本與結算輪詢必須共用可見分頁與退避政策');
