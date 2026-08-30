@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  cancelOpenCloudBet,
   cloudBetStats,
   listCloudBets,
   mergeCloudBets,
@@ -62,6 +63,7 @@ export async function POST(request) {
       }
       return response(await upsertCloudBet(body.bet, { verification }));
     }
+    if (body.action === 'cancel') return response(await cancelOpenCloudBet(body.id));
     if (body.action === 'settleOpen') {
       const bets = await settleOpenCloudBets({ league: body.league, limit: 500 });
       // The UI already invokes settleOpen automatically.  Use the same

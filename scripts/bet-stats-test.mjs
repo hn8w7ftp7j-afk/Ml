@@ -25,6 +25,7 @@ const ledger = [
   settled('4', 'NPB', '全場讓分', 'HALF_LOSS', -4925, { winFraction: 0, lossFraction: 0.5, grossLoss: -5000, rebate: 75 }),
   { id: '5', league: 'KBO', market: '上半大小', status: 'OPEN', stake: 10000 },
   { id: '6', league: 'CPBL', market: '全場大小', status: 'MANUAL_REVIEW', stake: 10000 },
+  { id: 'cancelled', league: 'NPB', market: '全場大小', status: 'CANCELLED', stake: 10000 },
   { id: 'legacy', league: 'MLB', market: '全場大小', status: 'SETTLED', stake: 99999,
     performanceEligibility: 'EXCLUDED_UNVERIFIABLE_LEGACY', settlement: { outcome: 'WIN', netProfit: 99999 } },
 ];
@@ -34,6 +35,7 @@ assert.equal(stats.overall.bets, 6);
 assert.equal(stats.overall.settled, 4);
 assert.equal(stats.overall.open, 1);
 assert.equal(stats.overall.manualReview, 1);
+assert.equal(stats.overall.cancelled, 1);
 assert.equal(stats.overall.quarantined, 1);
 assert.equal(stats.overall.placedStake, 60000);
 assert.equal(stats.overall.wins, 1);
