@@ -116,6 +116,13 @@ function formulaScoreValue(row) {
   return firstFiniteNumber(row?.formulaDiagnosticScore, row?.shadowDiagnosticScore);
 }
 
+function compactModelMetrics(row) {
+  const score = formulaScoreValue(row);
+  const weightedEV = modelEvValue(row);
+  const robustEV = robustEvValue(row);
+  return `S ${score == null ? '—' : score.toFixed(1)}｜W ${signedPct(weightedEV)}｜R ${signedPct(robustEV)}`;
+}
+
 function scoreIcon(score, qaPassed = true) {
   if (!qaPassed || score == null) return '⛔';
   if (score >= 8.5) return '🔥';
@@ -629,25 +636,31 @@ function PriceComparisonPanel({ title, referenceLabel, bet, reference, compariso
       <span>下注時盤口：{translateTeamText(bet?.pick)}｜{waterText(bet?.water)}</span>
       <span>{referenceLabel}：{translateTeamText(reference?.pick)}｜{waterText(reference?.water)}</span>
     </div>
+    {closing && <div className="priceComparisonModels">
+      <span>下注時分數：{compactModelMetrics(bet)}</span>
+      <span>最後盤分數：{compactModelMetrics(reference)}</span>
+    </div>}
     <small>{detail}</small>
+    {closing && <small>最後盤時間：{localTime(reference?.lineAsOf)}｜開賽後鎖定，不再覆蓋</small>}
     {comparison?.keyDifference?.text && <b>關鍵洞口差：{comparison.keyDifference.text}</b>}
-    {closing && <em>Closing CLV 依收盤逐比分 payoff 比較，洞口的 u 差不是 CLV 百分比。</em>}
+    {closing && <em>優／劣依開賽前最後盤逐比分 payoff 比較；洞口的 u 差不是 CLV 百分比。</em>}
   </div>;
 }
 
 function BetPriceComparison({ bet, currentRow = null, game = null, closingRow = null, readerChecked = false, showExactLabel = false }) {
   if (!bet) return null;
+  const gameStarted = Number.isFinite(Date.parse(bet?.gameDate || '')) && Date.now() >= Date.parse(bet.gameDate);
   const currentComparison = currentRow ? compareBetPrice({ bet, row: currentRow, game: game || bet, rebateRate: 0.015 }) : null;
   const verifiedClosing = closingRow || verifiedClosingPriceForBet(bet);
   const closingComparison = verifiedClosing
     ? compareBetPrice({ bet, row: verifiedClosing, game: game || bet, rebateRate: 0.015 })
     : null;
-  const showCurrent = currentComparison && currentComparison.exact !== true;
+  const showCurrent = !gameStarted && currentComparison && currentComparison.exact !== true;
   return <div className="priceComparisonStack">
-    {showExactLabel && currentComparison?.exact === true && <div className="priceComparisonExact">已下注 ✓</div>}
+    {!gameStarted && showExactLabel && currentComparison?.exact === true && <div className="priceComparisonExact">已下注 ✓</div>}
     {showCurrent && <PriceComparisonPanel title="即時 Reader 比較" referenceLabel="Reader目前盤口" bet={bet} reference={currentRow} comparison={currentComparison}/>} 
-    {!currentRow && readerChecked && bet.status === 'OPEN' && <div className="priceComparisonUnavailable">Reader目前盤口：等待該聯盟最新同步；不使用舊盤冒充目前盤。</div>}
-    {closingComparison && <PriceComparisonPanel title="Closing CLV" referenceLabel="Closing盤口" bet={bet} reference={verifiedClosing} comparison={closingComparison} closing/>}
+    {!gameStarted && !currentRow && readerChecked && bet.status === 'OPEN' && <div className="priceComparisonUnavailable">Reader目前盤口：等待該聯盟最新同步；不使用舊盤冒充目前盤。</div>}
+    {closingComparison && <PriceComparisonPanel title="開賽前最後盤｜Closing CLV" referenceLabel="最後盤口" bet={bet} reference={verifiedClosing} comparison={closingComparison} closing/>}
   </div>;
 }
 
@@ -780,7 +793,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, reportCloudLedgerFailure,
 
     <div className="ledgerSectionHead"><h3>3. 下注明細</h3><span>{filteredBets.length} 注｜不可變帳本</span></div>
     {filteredBets.length ? filteredBets.map(bet => <div className="betRow" key={bet.id}>
-      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜{String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : '模型分數未列入績效'}</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
+      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜下注時 {compactModelMetrics(bet)}｜{String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : '模型分數未列入績效'}</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
       <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '待結算'}</strong><small>下注證據保留，不提供刪除</small></div>
     </div>) : <div className="emptySmall">這個篩選範圍目前沒有下注紀錄。</div>}
   </section>;

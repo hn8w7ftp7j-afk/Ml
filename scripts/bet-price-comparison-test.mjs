@@ -103,9 +103,15 @@ const verifiedClosingBet = {
     pick: '小8+60',
     water: 0.94,
     lineAsOf: '2026-08-20T09:59:00.000Z',
+    metricStatus: 'CALCULATED',
+    formulaDiagnosticScore: 7.8,
+    weightedEV: 0.045,
+    robustEV: 0.021,
   },
 };
-assert.equal(verifiedClosingPriceForBet(verifiedClosingBet)?.pick, '小8+60');
+assert.equal(verifiedClosingPriceForBet(verifiedClosingBet, { now: Date.parse('2026-08-20T09:59:30.000Z') }), null, '開賽前只能稱最新盤，不可提前冒充最後盤');
+assert.equal(verifiedClosingPriceForBet(verifiedClosingBet, { now: Date.parse('2026-08-20T10:00:00.000Z') })?.pick, '小8+60');
+assert.equal(verifiedClosingPriceForBet(verifiedClosingBet, { now: Date.parse('2026-08-20T10:00:00.000Z') })?.formulaDiagnosticScore, 7.8);
 assert.equal(verifiedClosingPriceForBet({ ...verifiedClosingBet, closingContractSnapshot: { ...verifiedClosingBet.closingContractSnapshot, verified: false } }), null);
 assert.equal(verifiedClosingPriceForBet({ ...verifiedClosingBet, closingContractSnapshot: { ...verifiedClosingBet.closingContractSnapshot, lineAsOf: '2026-08-20T10:01:00.000Z' } }), null, 'post-start price must never be called Closing CLV');
 assert.equal(priceComparisonLabel('BETTER'), '原下注盤優');

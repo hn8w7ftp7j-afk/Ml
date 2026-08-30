@@ -8,6 +8,7 @@ const cloudLedgerSyncPolicy = fs.readFileSync('lib/cloud-ledger-sync-policy.js',
 const healthRoute = fs.readFileSync('app/api/health/route.js', 'utf8');
 const analyzeRoute = fs.readFileSync('app/api/analyze/route.js', 'utf8');
 const betPricesRoute = fs.readFileSync('app/api/bet-prices/route.js', 'utf8');
+const readerIngestRoute = fs.readFileSync('app/api/reader/ingest/route.js', 'utf8');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
@@ -18,10 +19,10 @@ mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.6.4', 'package/release identity must match the V11.6.4 latest-PIT bet attachment release');
-assert.equal(packageLock.version, '11.6.4', 'package-lock release identity must match V11.6.4');
-assert.equal(packageLock.packages?.['']?.version, '11.6.4', 'root lockfile package must match V11.6.4');
-assert.equal(APP_VERSION, '11.6.4');
+assert.equal(packageJson.version, '11.6.5', 'package/release identity must match the V11.6.5 closing-line tracking release');
+assert.equal(packageLock.version, '11.6.5', 'package-lock release identity must match V11.6.5');
+assert.equal(packageLock.packages?.['']?.version, '11.6.5', 'root lockfile package must match V11.6.5');
+assert.equal(APP_VERSION, '11.6.5');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -114,12 +115,18 @@ mustMatch(/下注時盤口/, 'placed line and water must remain visible in compa
 mustMatch(/Reader目前盤口/, 'current Reader line and water must remain visible in comparison UI');
 mustMatch(/Closing CLV/, 'verified Closing comparison must use a separate UI section');
 mustMatch(/洞口的 u 差不是 CLV 百分比/, 'key-hole payoff delta must not be mislabeled as CLV percent');
+mustMatch(/開賽前最後盤/, 'ledger must label the final verified prestart Reader contract');
+mustMatch(/下注時分數/, 'ledger must retain the placed S/W/R beside the closing S/W/R');
+mustMatch(/最後盤分數/, 'ledger must display closing S/W/R calculated from the frozen PIT distribution');
 mustMatch(/requestJSON\('\/api\/bet-prices'/, 'ledger must refresh Reader price comparisons independently');
 assert.match(betPricesRoute, /listCloudBetsByIds/, 'price feed must resolve only requested server-owned tickets');
 assert.match(betPricesRoute, /loadReaderSnapshot/, 'price feed must use the Reader snapshot authority');
 assert.match(betPricesRoute, /currentReaderPriceForBet/, 'price feed must match the same ticket position');
 assert.match(betPricesRoute, /current: status\.fresh \?/, 'stale Reader prices must not be presented as current');
 assert.match(betPricesRoute, /verifiedClosingPriceForBet/, 'Closing CLV must require a verified closing snapshot');
+assert.match(readerIngestRoute, /updateOpenCloudBetClosingSnapshots/, 'Reader ingest must overwrite the one prestart closing candidate for open bets');
+assert.doesNotMatch(readerIngestRoute, /trackOpenBetClosingSnapshots\(refreshed\)/, 'same-price Reader heartbeat must not query or rewrite the bet ledger');
+assert.match(readerIngestRoute, /trackOpenBetClosingSnapshots\(normalized\)/, 'changed Reader payloads must update the latest prestart contract');
 mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
 mustMatch(/此方向已經記錄；盤口或水位變動也不再新增/, 'single-position bet suppression text missing');
 assert.doesNotMatch(page, /加注目前盤/, 'same direction must never expose a reprice add-on action');

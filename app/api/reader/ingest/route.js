@@ -19,10 +19,20 @@ import {
 } from '../../../../lib/tai888-reader-parser-v2.js';
 import { leagueConfig, requestedLeagueId } from '../../../../lib/leagues.js';
 import { checkRateLimit, cleanText, rateLimitResponse, readJsonBody, validDateString } from '../../../../lib/security.js';
+import { updateOpenCloudBetClosingSnapshots } from '../../../../lib/cloud-bet-store.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+async function trackOpenBetClosingSnapshots(snapshot) {
+  try {
+    return await updateOpenCloudBetClosingSnapshots(snapshot);
+  } catch (error) {
+    console.error('[BET_CLOSING_LINE_UPDATE_FAILED]', String(error?.message || error));
+    return { configured: true, checked: 0, updated: 0, skipped: 0, failed: 1 };
+  }
+}
 
 function temporalError(message) {
   const error = new Error(message);
@@ -174,6 +184,7 @@ export async function POST(request) {
     if (!storage.allRequiredWritesSucceeded) {
       return NextResponse.json({ ok: false, error: 'Reader 快照未完成所有必要儲存寫入' }, { status: 503, headers });
     }
+    const closingTracking = await trackOpenBetClosingSnapshots(normalized);
     const status = readerSnapshotStatus(normalized, Date.now(), league);
     return NextResponse.json({
       ok: true,
@@ -196,6 +207,7 @@ export async function POST(request) {
       pageActivityAt: normalized.pageActivityAt,
       runtimeCache: storage.runtimeCache,
       allRequiredWritesSucceeded: true,
+      closingTracking,
       freshness: status,
     }, { headers });
   } catch (error) {

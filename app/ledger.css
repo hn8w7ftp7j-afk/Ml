@@ -261,6 +261,17 @@
   color: #c3d4e3;
 }
 
+.priceComparisonModels {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(143, 170, 194, 0.2);
+  color: #dcecff;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .priceComparison small,
 .priceComparison b,
 .priceComparison em {
