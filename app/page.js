@@ -335,10 +335,25 @@ function backgroundJobKey(league, date) {
   return `${String(league || '').toUpperCase()}|||${String(date || '')}`;
 }
 
+function allLeagueRunIsActive(run) {
+  return ['preparing', 'running'].includes(String(run?.state || ''));
+}
+
 function loadBackgroundJob(league, date) {
   try {
     const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
-    return jobs?.[backgroundJobKey(league, date)] || null;
+    const job = jobs?.[backgroundJobKey(league, date)] || null;
+    if (job?.batchMode === 'all-leagues') {
+      const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
+      const terminalRunMatches = run?.date === String(date || '')
+        && run?.runId === job.runId
+        && !allLeagueRunIsActive(run);
+      if (terminalRunMatches) {
+        clearBackgroundJob(league, date, job.runId);
+        return null;
+      }
+    }
+    return job;
   } catch { return null; }
 }
 
@@ -363,6 +378,11 @@ function clearBackgroundJob(league, date, runId = '') {
     const { [key]: omitted, ...remaining } = jobs;
     window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify(remaining));
   } catch {}
+}
+
+function clearAllLeagueBackgroundJobs(run) {
+  if (!run?.runId || !run?.date) return;
+  for (const id of LEAGUE_IDS) clearBackgroundJob(id, run.date, run.runId);
 }
 
 function loadAllLeagueAnalysisRun(date) {
@@ -1373,6 +1393,7 @@ export default function Home() {
       setAllLeagueRun(interrupted);
       return;
     }
+    if (saved && !allLeagueRunIsActive(saved)) clearAllLeagueBackgroundJobs(saved);
     setAllLeagueRun(saved);
   }, [date, storageReady]);
   useEffect(() => {
@@ -1403,6 +1424,7 @@ export default function Home() {
                   : '',
             });
           }
+          clearAllLeagueBackgroundJobs(completedRun);
           publishAllLeagueRun(completedRun);
           setBackgroundJobRevision(value => value + 1);
           return;
@@ -1484,14 +1506,17 @@ export default function Home() {
     if (!storageReady) return undefined;
     const saved = loadBackgroundJob(league, date);
     if (!saved?.runId) return undefined;
-    if (operationBusyRef.current) return undefined;
+    const locksForeground = saved.batchMode !== 'all-leagues';
+    if (locksForeground && operationBusyRef.current) return undefined;
     if (Array.isArray(saved.preparedBoard)) {
       setSchedule(saved.preparedBoard.map(item => item?.game).filter(Boolean));
       setBoard(current => mergePreparedLeagueBoard(current, saved.preparedBoard));
     }
     const generation = analysisGenerationRef.current;
-    operationBusyRef.current = true;
-    setBusy(true);
+    if (locksForeground) {
+      operationBusyRef.current = true;
+      setBusy(true);
+    }
     setProgress({ active: true, done: 0, running: 1, total: Number(saved.total) || 1, label: saved.batchMode === 'all-leagues' ? '四聯盟伺服器背景分析中｜可自由切換' : '伺服器背景分析中｜可離開App' });
     setNotice(saved.batchMode === 'all-leagues'
       ? `已接回 ${league} 的四聯盟背景工作；完成後分數會保存於各自聯盟。`
@@ -1506,7 +1531,7 @@ export default function Home() {
     }).catch(cause => {
       if (generation === analysisGenerationRef.current && currentDateRef.current === date) setError(String(cause?.message || cause));
     }).finally(() => {
-      if (generation === analysisGenerationRef.current && currentDateRef.current === date) {
+      if (locksForeground && generation === analysisGenerationRef.current && currentDateRef.current === date) {
         releaseOperation();
         setProgress(value => ({ ...value, active: false }));
       }
