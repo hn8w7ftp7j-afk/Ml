@@ -292,6 +292,32 @@ assert.deepEqual(
   inlineSource,
   'JSONB重新排列envelope鍵序後仍必須通過原始byte hash與大小驗證',
 );
+const adaptiveCompressedSource = {
+  leagueId: 'KBO',
+  repeatedFrozenContext: Array.from({ length: 600 }, (_, index) => ({
+    feature: `feature-${index % 12}`,
+    provider: 'OFFICIAL_PROVIDER',
+    status: 'CONFIRMED',
+  })),
+};
+const adaptiveCompressed = encodeAnalysisPitPayload(adaptiveCompressedSource, {
+  label: '中型凍結情境壓縮測試',
+  inlineLimitBytes: 256_000,
+  rawLimitBytes: 1_000_000,
+  compressedLimitBytes: 500_000,
+});
+assert.equal(adaptiveCompressed.encoding, 'GZIP_BASE64', '中型重複JSON不得因低於舊inline門檻而以Base64膨脹保存');
+assert.ok(adaptiveCompressed.base64Bytes < adaptiveCompressed.rawBytes, '自適應gzip必須實際降低資料庫payload大小');
+assert.deepEqual(decodeAnalysisPitPayload(adaptiveCompressed), adaptiveCompressedSource, '自適應gzip後仍必須byte-exact重播');
+const adaptiveAsyncCompressed = await encodeAnalysisPitPayloadAsync(adaptiveCompressedSource, {
+  label: '非同步中型凍結情境壓縮測試',
+  inlineLimitBytes: 256_000,
+  rawLimitBytes: 1_000_000,
+  compressedLimitBytes: 500_000,
+});
+assert.equal(adaptiveAsyncCompressed.encoding, 'GZIP_BASE64');
+assert.equal(adaptiveAsyncCompressed.payloadHash, adaptiveCompressed.payloadHash, '同步／非同步壓縮不得改變PIT原始內容hash');
+assert.deepEqual(decodeAnalysisPitPayload(adaptiveAsyncCompressed), adaptiveCompressedSource);
 const tamperedInline = {
   ...inline,
   data: `${inline.data[0] === 'A' ? 'B' : 'A'}${inline.data.slice(1)}`,
