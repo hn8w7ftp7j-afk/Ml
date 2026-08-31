@@ -12,6 +12,13 @@ import {
 import { compareBetPrice } from '../lib/bet-price-comparison.js';
 import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
 import { BET_PERIODS, filterBetLedgerByPeriod, summarizeBetLedger } from '../lib/bet-stats.js';
+import {
+  SCORE_BUCKETS,
+  SCORE_PERFORMANCE_MARKETS,
+  buildScorePerformanceReport,
+  filterScorePerformanceDetails,
+  scorePerformanceSampleLabel,
+} from '../lib/score-performance.js';
 import { teamNameZh, translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
@@ -865,6 +872,124 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, reportCloudLedgerFailure,
       <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜下注時 {compactModelMetrics(bet)}｜{String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : '模型分數未列入績效'}</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
       <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : bet.status === 'CANCELLED' ? '已取消' : '待結算'}</strong>{bet.status === 'OPEN' && Number.isFinite(Date.parse(bet.gameDate || '')) && Date.now() < Date.parse(bet.gameDate) && <button className="mini cancel" disabled={cloudLedgerStatus?.state === 'unavailable'} onClick={() => onCancel(bet)}>取消下注</button>}<small>下注證據永久保留；取消只變更狀態，不會刪除</small></div>
     </div>) : <div className="emptySmall">這個篩選範圍目前沒有下注紀錄。</div>}
+  </section>;
+}
+
+function ScorePerformanceMetrics({ summary, compact = false }) {
+  if (compact) return <>
+    <b>{summary?.bets ?? 0} 注</b>
+    <span>勝率 {pct(summary?.winRate)}</span>
+    <span>ROI {pct(summary?.roi)}</span>
+  </>;
+  const rows = [
+    ['下注數', summary?.bets ?? 0],
+    ['已結算', summary?.settled ?? 0],
+    ['勝', summary?.wins ?? 0],
+    ['敗', summary?.losses ?? 0],
+    ['走', summary?.pushes ?? 0],
+    ['勝半／輸半', `${summary?.halfWins ?? 0}／${summary?.halfLosses ?? 0}`],
+    ['有效勝率', pct(summary?.winRate)],
+    ['總本金', moneyText(summary?.totalStake)],
+    ['退水', moneyText(summary?.rebate)],
+    ['淨利', moneyText(summary?.netPnl)],
+    ['ROI', pct(summary?.roi)],
+  ];
+  return <div className="scoreBucketMetrics">{rows.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>;
+}
+
+function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
+  const [period, setPeriod] = useState('ALL');
+  const [selectedLeague, setSelectedLeague] = useState('ALL');
+  const [selectedMarket, setSelectedMarket] = useState('ALL');
+  const [selectedBucket, setSelectedBucket] = useState('ALL');
+  const report = useMemo(() => buildScorePerformanceReport(bets, {
+    period,
+    league: selectedLeague,
+    market: selectedMarket,
+  }), [bets, period, selectedLeague, selectedMarket]);
+  const details = useMemo(() => filterScorePerformanceDetails(bets, {
+    period,
+    league: selectedLeague,
+    market: selectedMarket,
+    bucketId: selectedBucket,
+  }), [bets, period, selectedLeague, selectedMarket, selectedBucket]);
+  const periodLabel = BET_PERIODS.find(item => item.id === period)?.label || '全部';
+  const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : selectedLeague;
+  const marketLabel = selectedMarket === 'ALL' ? '全部市場' : selectedMarket;
+  const bucketLabel = selectedBucket === 'ALL'
+    ? '全部分數區間'
+    : selectedBucket === 'NO_SCORE'
+      ? '無分數資料'
+      : selectedBucket === 'OUTSIDE_RANGE'
+        ? '不在指定區間'
+        : SCORE_BUCKETS.find(item => item.id === selectedBucket)?.label || '全部分數區間';
+  const choosePeriod = value => {
+    setPeriod(value);
+    setSelectedBucket('ALL');
+  };
+  const chooseLeague = value => {
+    setSelectedLeague(value);
+    setSelectedBucket('ALL');
+  };
+  const chooseMarket = value => {
+    setSelectedMarket(value);
+    setSelectedBucket('ALL');
+  };
+  const selectCell = (bucketId, market) => {
+    setSelectedBucket(bucketId);
+    setSelectedMarket(market);
+  };
+
+  return <section className="panel scorePerformancePanel">
+    <div className="panelHead"><div><span className="kicker">只讀實際下注帳本</span><h2>S 分數績效</h2></div><span className="state shadow">觀察介面｜不回寫模型</span></div>
+    <div className="scorePerformanceNotice">只使用每筆實際下注當下永久保存的 S 分數。未保存有效分數的舊資料不補值；本頁不會觸發結算、修改帳本或改變 S、W、R、EV、Robust EV。</div>
+    {cloudLedgerStatus?.state === 'unavailable' && <div className="errorBox" role="alert"><strong>永久雲端帳本目前無法讀取</strong><br/>{cloudLedgerStatus.message}<br/>目前畫面不會把讀取失敗冒充成 0 注。</div>}
+
+    <div className="periodTabs" aria-label="分數績效期間">
+      {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => choosePeriod(item.id)}>{item.label}</button>)}
+    </div>
+    <div className="leagueScopeTabs" aria-label="分數績效聯盟">
+      <button className={selectedLeague === 'ALL' ? 'active' : ''} onClick={() => chooseLeague('ALL')}>全部</button>
+      {LEAGUE_IDS.map(id => <button key={id} className={selectedLeague === id ? 'active' : ''} onClick={() => chooseLeague(id)}>{id}<small>{leagueConfig(id).shortLabel}</small></button>)}
+    </div>
+    <div className="scoreMarketTabs" aria-label="分數績效市場">
+      <button className={selectedMarket === 'ALL' ? 'active' : ''} onClick={() => chooseMarket('ALL')}>全部市場</button>
+      {SCORE_PERFORMANCE_MARKETS.map(market => <button key={market} className={selectedMarket === market ? 'active' : ''} onClick={() => chooseMarket(market)}>{market}</button>)}
+    </div>
+    <div className="ledgerPath">{periodLabel}｜{leagueLabel}｜{marketLabel}｜{bucketLabel}</div>
+
+    <div className="ledgerSectionHead"><h3>1. S 分數績效比較</h3><span>未結算只計下注數</span></div>
+    <div className="scoreBucketGrid">
+      {report.buckets.map(bucket => <button key={bucket.id} className={`scoreBucketCard ${selectedBucket === bucket.id ? 'active' : ''}`} onClick={() => setSelectedBucket(selectedBucket === bucket.id ? 'ALL' : bucket.id)}>
+        <div className="scoreBucketHead"><strong>{bucket.label}</strong><span>已結算 {bucket.summary.settled}</span></div>
+        <ScorePerformanceMetrics summary={bucket.summary}/>
+        {scorePerformanceSampleLabel(bucket.summary) && <em>樣本不足｜僅提示，不調整任何數值</em>}
+      </button>)}
+    </div>
+    <div className="scoreDataExceptions">
+      <button className={selectedBucket === 'NO_SCORE' ? 'active' : ''} onClick={() => setSelectedBucket(selectedBucket === 'NO_SCORE' ? 'ALL' : 'NO_SCORE')}><strong>無分數資料</strong><span>{report.noScore.recordCount} 筆｜不猜測、不補值、不納入四區間</span></button>
+      {report.outsideRange.recordCount > 0 && <button className={selectedBucket === 'OUTSIDE_RANGE' ? 'active' : ''} onClick={() => setSelectedBucket(selectedBucket === 'OUTSIDE_RANGE' ? 'ALL' : 'OUTSIDE_RANGE')}><strong>不在指定區間</strong><span>{report.outsideRange.recordCount} 筆有效分數｜不混入四區間</span></button>}
+    </div>
+
+    <div className="ledgerSectionHead"><h3>2. 四市場 × S 分數矩陣</h3><span>注數／勝率／ROI</span></div>
+    <div className="scoreMatrixDesktop">
+      <table><thead><tr><th>S 分數</th>{SCORE_PERFORMANCE_MARKETS.map(market => <th key={market}>{market}</th>)}<th>全部</th></tr></thead>
+        <tbody>{report.matrix.map(row => <tr key={row.id}><th>{row.label}</th>{SCORE_PERFORMANCE_MARKETS.map(market => <td key={market}><button className={selectedBucket === row.id && selectedMarket === market ? 'active' : ''} onClick={() => selectCell(row.id, market)}><ScorePerformanceMetrics summary={row.markets[market]} compact/></button></td>)}<td><button className={selectedBucket === row.id && selectedMarket === 'ALL' ? 'active' : ''} onClick={() => selectCell(row.id, 'ALL')}><ScorePerformanceMetrics summary={row.total} compact/></button></td></tr>)}</tbody>
+      </table>
+    </div>
+    <div className="scoreMatrixMobile">
+      {report.matrix.map(row => <article key={row.id}><h4>{row.label}</h4><div>{[...SCORE_PERFORMANCE_MARKETS, 'ALL'].map(market => {
+        const summary = market === 'ALL' ? row.total : row.markets[market];
+        const label = market === 'ALL' ? '全部' : market;
+        return <button key={market} className={selectedBucket === row.id && selectedMarket === market ? 'active' : ''} onClick={() => selectCell(row.id, market)}><strong>{label}</strong><ScorePerformanceMetrics summary={summary} compact/></button>;
+      })}</div></article>)}
+    </div>
+
+    <div className="ledgerSectionHead"><h3>3. 符合條件的下注明細</h3><span>{details.length} 筆｜直接讀取原帳本</span></div>
+    {details.length ? details.map(bet => <div className="betRow scorePerformanceBetRow" key={bet.id}>
+      <div><strong><span className="leagueBadge inline">{bet.league}</span>{bet.scoreStatus === 'FORMAL_VALIDATED' && Number.isFinite(Number(bet.score)) ? `S ${Number(bet.score).toFixed(1)}｜` : 'S —｜'}{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜本金 {moneyText(bet.stake)}｜下注時 {compactModelMetrics(bet)}</small></div>
+      <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '未列入已結算績效'}</strong><small>原始帳本唯讀顯示</small></div>
+    </div>) : <div className="emptySmall">目前篩選條件沒有可顯示的下注紀錄。</div>}
   </section>;
 }
 
@@ -3184,9 +3309,10 @@ export default function Home() {
 
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>
-      <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>全部方向</button>
-      <button className={tab === 'betOrder' ? 'active' : ''} onClick={() => setTab('betOrder')}>影子候選順序</button>
+      <button className={tab === 'ranking' || tab === 'betOrder' ? 'active' : ''} onClick={() => setTab('ranking')}>影子排名</button>
       <button className={tab === 'bets' ? 'active' : ''} onClick={() => setTab('bets')}>下注紀錄</button>
+      <button className={tab === 'scorePerformance' ? 'active' : ''} onClick={() => setTab('scorePerformance')}>分數績效</button>
+      <button className={tab === 'performanceStats' ? 'active' : ''} onClick={() => setTab('performanceStats')}>績效統計</button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
     </nav>
 
@@ -3210,7 +3336,7 @@ export default function Home() {
       {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerUnavailable={cloudLedgerStatus.state === 'unavailable'}/>) }
     </>}
 
-    {tab === 'ranking' && <section className="panel"><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
+    {tab === 'ranking' && <section className="panel"><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
       <div className="emptySmall">此處顯示這一版Reader快照中已開盤且成功完成分析的全部方向，先依固定S分數由高到低排列，同分再依W、R排序；負EV、R≤0、QA BLOCK與低分方向都不刪除。市場差距與極高EV只顯示WARNING，不取消分數或排名。尚未開盤或市場資料錯誤的固定槽位保留在各場今日盤口，不能與其他時點、其他盤口快照混合比較。</div>
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
@@ -3226,7 +3352,7 @@ export default function Home() {
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
-    {tab === 'betOrder' && <section className="panel"><div className="panelHead"><h2>影子候選順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
+    {tab === 'betOrder' && <section className="panel"><div className="rankingViewTabs" aria-label="影子排名檢視"><button onClick={() => setTab('ranking')}>全部方向</button><button className="active" onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>影子候選順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
       <div className="emptySmall">先按比賽開始時間由早到晚，再於同場依序排列全場讓分、全場大小、上半讓分、上半大小；同一市場有多個7.0分以上方向時，分數較高者排前。已下注項目保留標記，時間未定賽事排在最後。</div>
       {shadowBetOrderGames.length ? shadowBetOrderGames.map((group, gameIndex) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
@@ -3245,6 +3371,10 @@ export default function Home() {
     </section>}
 
     {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
+
+    {tab === 'scorePerformance' && <ScorePerformanceDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus}/>}
+
+    {tab === 'performanceStats' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
 
     {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>每場正反方向、讓分大小、全場與上半場共用一份PIT凍結聯合比分分布；Tai888只提供待評估的成交盤口與水位，不改寫模型概率。前台固定以S分數為主，W與R為次要資訊；Tai888差距、外部市場方向與極高EV只作WARNING，不影響S或排名。只有資料、合約、比分分布、正反鏡像與逐腿結算等實質QA錯誤才會BLOCK。此金額只供實際下注帳本紀錄；帳本仍依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
