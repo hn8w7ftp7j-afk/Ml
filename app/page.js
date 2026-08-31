@@ -17,6 +17,7 @@ import {
   SCORE_PERFORMANCE_MARKETS,
   buildScorePerformanceReport,
   filterScorePerformanceDetails,
+  scorePerformanceScoreForBet,
   scorePerformanceSampleLabel,
 } from '../lib/score-performance.js';
 import { teamNameZh, translateTeamText } from '../lib/i18n.js';
@@ -987,7 +988,7 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
 
     <div className="ledgerSectionHead"><h3>3. 符合條件的下注明細</h3><span>{details.length} 筆｜直接讀取原帳本</span></div>
     {details.length ? details.map(bet => <div className="betRow scorePerformanceBetRow" key={bet.id}>
-      <div><strong><span className="leagueBadge inline">{bet.league}</span>{bet.scoreStatus === 'FORMAL_VALIDATED' && Number.isFinite(Number(bet.score)) ? `S ${Number(bet.score).toFixed(1)}｜` : 'S —｜'}{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜本金 {moneyText(bet.stake)}｜下注時 {compactModelMetrics(bet)}</small></div>
+      <div><strong><span className="leagueBadge inline">{bet.league}</span>{scorePerformanceScoreForBet(bet) != null ? `S ${scorePerformanceScoreForBet(bet).toFixed(1)}｜` : 'S —｜'}{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜本金 {moneyText(bet.stake)}｜下注時 {compactModelMetrics(bet)}</small></div>
       <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : '未列入已結算績效'}</strong><small>原始帳本唯讀顯示</small></div>
     </div>) : <div className="emptySmall">目前篩選條件沒有可顯示的下注紀錄。</div>}
   </section>;

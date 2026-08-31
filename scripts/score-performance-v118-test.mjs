@@ -8,6 +8,7 @@ import {
   buildScorePerformanceReport,
   filterScorePerformanceDetails,
   scoreBucketIdForBet,
+  scorePerformanceScoreForBet,
 } from '../lib/score-performance.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,8 +23,9 @@ const settled = (id, league, market, score, outcome, netProfit, values = {}) => 
   water: values.water || 0.95,
   placedAt: values.placedAt || '2026-08-31T04:00:00.000Z',
   status: 'SETTLED',
-  score,
-  scoreStatus: values.scoreStatus || 'FORMAL_VALIDATED',
+  score: values.scoreStatus === 'FORMAL_VALIDATED' ? score : null,
+  formulaDiagnosticScore: values.scoreStatus === 'FORMAL_VALIDATED' ? null : score,
+  scoreStatus: values.scoreStatus || 'SHADOW_DIAGNOSTIC_NOT_FORMAL',
   weightedEV: values.weightedEV ?? 0.04,
   robustEV: values.robustEV ?? 0.02,
   stake: values.stake || 10000,
@@ -63,6 +65,10 @@ assert.equal(scoreBucketIdForBet({ score: 8.5, scoreStatus: 'FORMAL_VALIDATED' }
 assert.equal(scoreBucketIdForBet({ score: 8.6, scoreStatus: 'FORMAL_VALIDATED' }), 'S86_PLUS');
 assert.equal(scoreBucketIdForBet({ score: 8.9, scoreStatus: 'LEGACY_INVALID' }), 'NO_SCORE', '後補或無效分數不得進入績效區間');
 assert.equal(scoreBucketIdForBet({ score: null, scoreStatus: 'FORMAL_VALIDATED' }), 'NO_SCORE');
+assert.equal(scorePerformanceScoreForBet({ formulaDiagnosticScore: 8.1, scoreStatus: 'SHADOW_DIAGNOSTIC_NOT_FORMAL' }), 8.1, '必須讀取下注當下永久保存的實際S欄位');
+assert.equal(scoreBucketIdForBet({ formulaDiagnosticScore: 7.6, scoreStatus: 'SHADOW_DIAGNOSTIC_NOT_FORMAL' }), 'S76_80');
+assert.equal(scoreBucketIdForBet({ formulaDiagnosticScore: 8.8, scoreStatus: 'LEGACY_INVALID' }), 'NO_SCORE', '無效舊資料即使殘留數字也不得污染區間');
+assert.equal(scoreBucketIdForBet({ closingContractSnapshot: { formulaDiagnosticScore: 8.8 }, scoreStatus: 'SHADOW_DIAGNOSTIC_NOT_FORMAL' }), 'NO_SCORE', '不得用後來的收盤或重新分析分數補值');
 
 const immutableBefore = structuredClone(ledger);
 const originalStats = summarizeBetLedger(ledger);
