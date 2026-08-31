@@ -47,19 +47,36 @@ try {
   };
 
   const settled = await settleBetTicket({
-    id: 'forged-rebate-ticket', league: 'MLB', gamePk, date: '2099-08-21',
+    id: 'forged-rebate-ticket', league: 'MLB', gamePk,
+    // Asia/Taipei board date can be the next calendar day for an MLB game.
+    date: '2099-08-22', officialDate: '2099-08-21',
     market: '上半大小', pick: '大4平', away: '客隊', home: '主隊',
     water: 0.94, stake: 10_000, rebateRate: 0.10, status: 'OPEN',
   });
 
-  assert.equal(settled.status, 'SETTLED');
+  assert.equal(settled.status, 'SETTLED',
+    'MLB settlement must validate against officialDate instead of the Taipei board date');
+  assert.equal(settled.resultSnapshot.officialDate, '2099-08-21');
+  assert.equal(settled.resultSnapshot.selectedPeriod, 'FIRST5');
+  assert.equal(settled.resultSnapshot.selectedAwayRuns, 3);
+  assert.equal(settled.resultSnapshot.selectedHomeRuns, 2);
   assert.equal(settled.settlement.outcome, 'WIN');
   assert.equal(settled.settlement.rebate, 150,
     'A forged 10% ticket rebate must still settle at NT$150 per NT$10,000');
   assert.equal(settled.settlement.netProfit, 9_550);
   assert.equal(settled.settlement.roi, 0.955);
+
+  const legacySettled = await settleBetTicket({
+    id: 'legacy-without-official-date', league: 'MLB', gamePk,
+    date: '2099-08-22',
+    market: '上半大小', pick: '大4平', away: '客隊', home: '主隊',
+    water: 0.94, stake: 10_000, status: 'OPEN',
+  });
+  assert.equal(legacySettled.status, 'SETTLED',
+    'Legacy MLB tickets without officialDate must resolve by official gamePk instead of the Taipei board date');
+  assert.equal(legacySettled.resultSnapshot.officialDate, '2099-08-21');
 } finally {
   globalThis.fetch = originalFetch;
 }
 
-console.log('Server-owned analysis, reprice and settlement rebate integrity PASS');
+console.log('Server-owned analysis, reprice and settlement rebate/date integrity PASS');
