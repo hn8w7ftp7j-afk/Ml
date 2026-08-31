@@ -65,6 +65,16 @@ try {
     'A forged 10% ticket rebate must still settle at NT$150 per NT$10,000');
   assert.equal(settled.settlement.netProfit, 9_550);
   assert.equal(settled.settlement.roi, 0.955);
+
+  const legacySettled = await settleBetTicket({
+    id: 'legacy-without-official-date', league: 'MLB', gamePk,
+    date: '2099-08-22',
+    market: '上半大小', pick: '大4平', away: '客隊', home: '主隊',
+    water: 0.94, stake: 10_000, status: 'OPEN',
+  });
+  assert.equal(legacySettled.status, 'SETTLED',
+    'Legacy MLB tickets without officialDate must resolve by official gamePk instead of the Taipei board date');
+  assert.equal(legacySettled.resultSnapshot.officialDate, '2099-08-21');
 } finally {
   globalThis.fetch = originalFetch;
 }
