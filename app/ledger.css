@@ -332,6 +332,241 @@
   justify-self: start;
 }
 
+.rankingViewTabs,
+.scoreMarketTabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.rankingViewTabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rankingViewTabs button,
+.scoreMarketTabs button {
+  min-width: 0;
+  border: 1px solid #294b68;
+  background: #081a2b;
+  color: #dcecff;
+  border-radius: 11px;
+  padding: 9px 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rankingViewTabs button.active,
+.scoreMarketTabs button.active {
+  border-color: #51a7e8;
+  background: #1976c9;
+  color: #fff;
+}
+
+.scoreMarketTabs {
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.scorePerformancePanel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.scorePerformanceNotice {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #4f4675;
+  border-radius: 13px;
+  background: #17172e;
+  color: #c6c0e6;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.scoreBucketGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.scoreBucketCard {
+  min-width: 0;
+  border: 1px solid #304f6b;
+  border-radius: 15px;
+  background: #081a2b;
+  color: #edf6ff;
+  padding: 13px;
+  text-align: left;
+}
+
+.scoreBucketCard.active {
+  border-color: #a690e8;
+  background: #1c1b3b;
+  box-shadow: inset 0 0 0 1px rgba(166, 144, 232, .2);
+}
+
+.scoreBucketHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scoreBucketHead strong {
+  color: #d8c8ff;
+  font-size: 19px;
+}
+
+.scoreBucketHead span {
+  color: #91aac0;
+  font-size: 11px;
+}
+
+.scoreBucketMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.scoreBucketMetrics > div {
+  min-width: 0;
+  border-radius: 8px;
+  background: rgba(4, 16, 27, .7);
+  padding: 7px;
+}
+
+.scoreBucketMetrics span,
+.scoreBucketMetrics strong {
+  display: block;
+}
+
+.scoreBucketMetrics span {
+  color: #7f99b0;
+  font-size: 9px;
+}
+
+.scoreBucketMetrics strong {
+  margin-top: 3px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.scoreBucketCard em {
+  display: block;
+  margin-top: 10px;
+  color: #e7c879;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.scoreDataExceptions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.scoreDataExceptions button {
+  min-width: 0;
+  border: 1px solid #3a4e61;
+  border-radius: 11px;
+  background: #0b1927;
+  color: #d9e7f3;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.scoreDataExceptions button.active {
+  border-color: #a690e8;
+  background: #1c1b3b;
+}
+
+.scoreDataExceptions strong,
+.scoreDataExceptions span {
+  display: block;
+}
+
+.scoreDataExceptions span {
+  margin-top: 4px;
+  color: #849cb1;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.scoreMatrixDesktop {
+  width: 100%;
+  max-width: 100%;
+  margin-top: 12px;
+}
+
+.scoreMatrixDesktop table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 5px;
+}
+
+.scoreMatrixDesktop th {
+  color: #9db2c5;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.scoreMatrixDesktop tbody th {
+  color: #d8c8ff;
+  font-size: 12px;
+}
+
+.scoreMatrixDesktop td,
+.scoreMatrixDesktop th {
+  min-width: 0;
+  padding: 0;
+}
+
+.scoreMatrixDesktop td button {
+  width: 100%;
+  min-width: 0;
+  min-height: 77px;
+  border: 1px solid #294761;
+  border-radius: 10px;
+  background: #071522;
+  color: #dcecff;
+  padding: 7px 4px;
+}
+
+.scoreMatrixDesktop td button.active,
+.scoreMatrixMobile button.active {
+  border-color: #a690e8;
+  background: #1c1b3b;
+}
+
+.scoreMatrixDesktop td button b,
+.scoreMatrixDesktop td button span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.scoreMatrixDesktop td button b {
+  font-size: 11px;
+}
+
+.scoreMatrixDesktop td button span {
+  margin-top: 4px;
+  color: #89a2b8;
+  font-size: 9px;
+}
+
+.scoreMatrixMobile {
+  display: none;
+}
+
+.scorePerformanceBetRow {
+  min-width: 0;
+}
+
 @media (max-width: 720px) {
   .ledgerPanel {
     padding: 17px;
@@ -375,5 +610,97 @@
 
   .rankActionStack {
     grid-column: 2 / -1;
+  }
+
+  .rankingViewTabs,
+  .scoreMarketTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scorePerformancePanel .panelHead {
+    display: grid;
+    gap: 8px;
+  }
+
+  .scorePerformancePanel .panelHead .state {
+    justify-self: start;
+    white-space: normal;
+  }
+
+  .scoreBucketGrid,
+  .scoreDataExceptions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scoreBucketMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scoreMatrixDesktop {
+    display: none;
+  }
+
+  .scoreMatrixMobile {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .scoreMatrixMobile article {
+    min-width: 0;
+    border: 1px solid #294761;
+    border-radius: 13px;
+    background: #081a2b;
+    padding: 10px;
+  }
+
+  .scoreMatrixMobile h4 {
+    margin: 0 0 8px;
+    color: #d8c8ff;
+  }
+
+  .scoreMatrixMobile article > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .scoreMatrixMobile button {
+    min-width: 0;
+    border: 1px solid #294761;
+    border-radius: 9px;
+    background: #071522;
+    color: #e5f1fb;
+    padding: 9px 7px;
+    text-align: left;
+  }
+
+  .scoreMatrixMobile button > strong,
+  .scoreMatrixMobile button > b,
+  .scoreMatrixMobile button > span {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .scoreMatrixMobile button > strong {
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+
+  .scoreMatrixMobile button > b {
+    color: #cddce9;
+    font-size: 11px;
+  }
+
+  .scoreMatrixMobile button > span {
+    margin-top: 3px;
+    color: #829bb2;
+    font-size: 9px;
+  }
+
+  .scorePerformanceBetRow {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
