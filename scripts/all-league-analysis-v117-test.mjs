@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
+  allLeagueBoardDate,
   allLeagueAnalysisProgress,
+  allLeagueRunContainsDate,
   createAllLeagueAnalysisRun,
   mergePreparedLeagueBoard,
   summarizeAllLeagueBatchResult,
@@ -16,8 +18,11 @@ const workflow = read('workflows/analyze-board.js');
 let run = createAllLeagueAnalysisRun('2026-08-30', 1_777_777_777_000);
 assert.deepEqual(Object.keys(run.leagues), ['MLB', 'NPB', 'KBO', 'CPBL']);
 run = updateAllLeagueAnalysisLeague(run, 'MLB', { status: 'done', total: 2, completed: 2 });
-run = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'no_games' });
+run = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'no_games', boardDate: '2026-08-29' });
 assert.equal(allLeagueAnalysisProgress(run).terminal, 2);
+assert.equal(allLeagueBoardDate(run, 'MLB'), '2026-08-30');
+assert.equal(allLeagueBoardDate(run, 'NPB'), '2026-08-29');
+assert.equal(allLeagueRunContainsDate(run, '2026-08-29'), true);
 assert.deepEqual(summarizeAllLeagueBatchResult({
   total: 3,
   results: [{ ok: true }, { ok: false, status: 422 }, { ok: false, status: 500 }],
@@ -48,9 +53,11 @@ assert.match(route, /new Set\(leagues\)\.size === leagues\.length/, 'batch leagu
 assert.match(route, /requestedLeague[\s\S]*result\?\.batches[\s\S]*find\(value => value\?\.league === requestedLeague\)/, 'one league tab must retrieve only its own batch result');
 assert.match(route, /summaryOnly[\s\S]*result\.batches\.map[\s\S]*results: \(batch\.results \|\| \[\]\)\.map/, 'global progress polling must omit large per-game analysis payloads');
 assert.match(page, /一鍵分析全部聯盟/, 'the UI needs one all-league action');
-assert.match(page, /for \(const id of LEAGUE_IDS\)[\s\S]*prepareAllLeagueBatch\(id, targetDate\)/, 'official schedules and Reader boards must be prechecked for every league');
+assert.match(page, /for \(const id of LEAGUE_IDS\)[\s\S]*allLeagueTargetDate\(id,[\s\S]*prepareAllLeagueBatch\(id, batchDate\)/, 'every league must resolve and precheck its own Reader board date');
 assert.match(page, /mode: 'all-leagues'[\s\S]*batches: batches\.map/, 'the client must submit one isolated batch per prepared league');
-assert.match(page, /saveBackgroundJob\(\{[\s\S]*batchMode: 'all-leagues'[\s\S]*league: batch\.league[\s\S]*preparedBoard/, 'each league must retain reconnect metadata and its own prepared slate');
+assert.match(page, /league: batch\.league,[\s\S]*date: batch\.date,[\s\S]*emptyReason: batch\.emptyReason/, 'each submitted league batch must retain its own date');
+assert.match(route, /const batchDate = cleanText\(batch\?\.date, 20\)[\s\S]*date: batchDate/, 'the server must not replace every league date with the MLB outer date');
+assert.match(page, /saveBackgroundJob\(\{[\s\S]*batchMode: 'all-leagues'[\s\S]*league: batch\.league,[\s\S]*date: batch\.date,[\s\S]*preparedBoard/, 'each league must retain reconnect metadata, date and prepared slate');
 assert.match(page, /mergePreparedLeagueBoard\(current, saved\.preparedBoard\)/, 'switching to a league must restore its independent slate without deleting cached scores');
 assert.match(page, /analysis-jobs\?runId=\$\{encodeURIComponent\(runId\)\}&league=\$\{encodeURIComponent\(league\)\}/, 'visible polling must request only the selected league result');
 assert.match(page, /analysis-jobs\?runId=\$\{encodeURIComponent\(allLeagueRun\.runId\)\}&summary=1/, 'four-league progress polling must request the compact summary only');

@@ -58,10 +58,11 @@ export async function POST(request) {
       const batches = Array.isArray(body?.batches) ? body.batches : [];
       const normalizedBatches = batches.map((batch, batchIndex) => {
         const league = cleanText(batch?.league, 10).toUpperCase();
+        const batchDate = cleanText(batch?.date, 20);
         const tasks = Array.isArray(batch?.tasks) ? batch.tasks : [];
         return {
           league,
-          date,
+          date: batchDate,
           emptyReason: EMPTY_REASONS.has(batch?.emptyReason) ? batch.emptyReason : null,
           tasks: normalizeTasks(tasks, league, `${league}-${batchIndex}-`),
         };
@@ -70,7 +71,9 @@ export async function POST(request) {
       const valid = /^\d{4}-\d{2}-\d{2}$/.test(date)
         && normalizedBatches.length > 0
         && normalizedBatches.length <= 4
-        && normalizedBatches.every(batch => isLeagueId(batch.league) && batch.tasks.length <= 20)
+        && normalizedBatches.every(batch => isLeagueId(batch.league)
+          && /^\d{4}-\d{2}-\d{2}$/.test(batch.date)
+          && batch.tasks.length <= 20)
         && new Set(leagues).size === leagues.length;
       if (!valid) {
         return NextResponse.json({ ok: false, code: 'INVALID_ALL_LEAGUE_BACKGROUND_JOB', error: '四聯盟背景分析工作內容無效' }, { status: 400 });
