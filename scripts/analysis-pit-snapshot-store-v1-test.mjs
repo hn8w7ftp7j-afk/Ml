@@ -4,6 +4,7 @@ import {
   ANALYSIS_PIT_SNAPSHOT_SCHEMA_VERSION,
   analysisPitProductionPersistenceRequired,
   analysisPitSemanticIdentityHash,
+  assertCanonicalAnalysisPitRetryIdentity,
   assertAnalysisPitReplayIdentity,
   assertStoredAnalysisPitIdentity,
   buildAnalysisPitReplayBundle,
@@ -130,6 +131,27 @@ assert.notEqual(
   analysisPitSemanticIdentityHash(changedEvRecord),
   analysisPitSemanticIdentityHash(first),
   '實際分析數值不同時不得用冪等相容繞過永久PIT衝突',
+);
+assert.equal(
+  assertCanonicalAnalysisPitRetryIdentity(changedEvRecord, first),
+  true,
+  '相同不可變輸入的舊快照必須維持 canonical，新增診斷欄位不得讓重試失敗',
+);
+assert.throws(
+  () => assertCanonicalAnalysisPitRetryIdentity(changedEvRecord, {
+    ...first,
+    distributionHash: hash('9'),
+  }),
+  /(?:PIT快照重播識別雜湊不一致|canonical 重試識別衝突：distributionHash)/,
+  '比分分布不同時仍必須 fail-closed',
+);
+assert.throws(
+  () => assertCanonicalAnalysisPitRetryIdentity(changedEvRecord, {
+    ...first,
+    gameIdentity: { ...first.gameIdentity, gamePk: 990002 },
+  }),
+  /(?:PIT快照識別與聯盟／賽事／輸入不一致|PIT快照重播識別雜湊不一致|canonical 重試識別衝突：gamePk)/,
+  '場次不同時仍必須 fail-closed',
 );
 assert.doesNotThrow(() => validateAnalysisPitSnapshotRecord({
   ...first,

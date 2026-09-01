@@ -16,6 +16,7 @@ assert.match(page, /useLayoutEffect\([\s\S]*rankingScrollAnchorRef[\s\S]*data-ra
 assert.ok((page.match(/data-rank-key=\{entry\.stableKey\}/g) || []).length >= 2, 'both ranking views must use stable row identities');
 
 assert.match(pit, /analysisPitSemanticIdentityHash\(storedRecord\) !== analysisPitSemanticIdentityHash\(record\)/, 'PIT conflicts must compare semantic immutable evidence before accepting a retry');
+assert.match(pit, /assertCanonicalAnalysisPitRetryIdentity\(record, storedRecord\)/, 'legacy PIT payload differences must resolve to the canonical immutable row only after core identity verification');
 assert.match(pit, /loadAnalysisDirectionHistory\(record\.snapshotId\)/, 'an existing complete direction history must be verified instead of rebuilt with retry timestamps');
 assert.match(pit, /canonicalRecord\.marketAnalysisPayload/, 'a partial direction history retry must use the canonical stored PIT analysis');
 
