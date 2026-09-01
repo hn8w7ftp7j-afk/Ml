@@ -14,17 +14,17 @@ const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
 mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score output');
 mustMatch(/const hasCurrentPrestartGame = board\.some\(item => gameIsPrestartNow\(item\?\.game, stamp\)\)/, '跨盤日必須依是否仍有未開賽場次判斷，不得被昨日已完成快取卡片卡住');
-mustMatch(/latest\.boardDate !== currentDateRef\.current\s*&& !hasCurrentPrestartGame/, 'Reader已有新盤日且目前無未開賽場次時必須自動切換完整新盤日');
+mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectionRef\.current\.has\(league\)[\s\S]*&& !hasCurrentPrestartGame/, 'Reader只能在該聯盟未手選日期時向前切換新盤日');
 
 
 // Release identity and storage continuity. The storage key deliberately stays stable
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.1', 'package/release identity must match the V11.8.1 score-performance placement-score fix');
-assert.equal(packageLock.version, '11.8.1', 'package-lock release identity must match V11.8.1');
-assert.equal(packageLock.packages?.['']?.version, '11.8.1', 'root lockfile package must match V11.8.1');
-assert.equal(APP_VERSION, '11.8.1');
+assert.equal(packageJson.version, '11.8.2', 'package/release identity must match the V11.8.2 integrated stability fix');
+assert.equal(packageLock.version, '11.8.2', 'package-lock release identity must match V11.8.2');
+assert.equal(packageLock.packages?.['']?.version, '11.8.2', 'root lockfile package must match V11.8.2');
+assert.equal(APP_VERSION, '11.8.2');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -64,8 +64,9 @@ mustMatch(/readerStatusHighWaterRef/, 'Reader high-water state missing');
 mustMatch(/shouldAcceptReaderStatus/, 'Reader rollback rejection missing');
 mustMatch(/mergeReaderStatusHighWater/, 'Reader high-water merge missing');
 mustMatch(/\/api\/reader\/status\?league=\$\{encodeURIComponent\(league\)\}&date=\$\{encodeURIComponent\(date\)\}/, 'date-bound Reader status request missing');
-mustMatch(/latest\.boardDate !== currentDateRef\.current/, 'Reader date auto-switch guard missing');
-mustMatch(/setDate\(latest\.boardDate\)/, 'Reader date auto-switch missing');
+mustMatch(/latest\.boardDate > currentDateRef\.current/, 'Reader forward-only date auto-switch guard missing');
+mustMatch(/manualDateSelectionRef\.current\.has\(league\)/, 'Reader date auto-switch must respect per-league manual authority');
+mustMatch(/setLeagueBoardDate\(league, latest\.boardDate\)/, 'Reader date auto-switch missing');
 mustMatch(/<span className="kicker">v\{VERSION\} 四聯盟 PIT 影子驗證<\/span>/, 'visible model card must use the current app release instead of a stale hard-coded version');
 mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key must include date and payload hash');
 mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
@@ -149,7 +150,7 @@ assert.match(page, /盤口內容時間：/, 'Reader來源卡必須區分盤口�
 
 // Ranking rows must retain the original item/row and expose the same immutable
 // cloud-ledger action as the board instead of becoming a read-only desktop view.
-mustMatch(/return \{ item, row, gamePk:/, 'ranking entries must retain their source board item and actual market row');
+mustMatch(/return \{ item, row, (?:stableKey, )?gamePk:/, 'ranking entries must retain their source board item and actual market row');
 const rankingStart = page.indexOf("{tab === 'ranking' && <section");
 const rankingEnd = page.indexOf("{tab === 'betOrder' && <section", rankingStart);
 assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'ranking UI section missing');
@@ -247,7 +248,9 @@ mustMatch(/const currentBlockedMarkets = new Set\(\(item\.latestMarketCoverage \
 mustMatch(/function readerAnalysisRevisionReady\(item\)[\s\S]*item\?\.status === 'done'[\s\S]*restoredFromCache !== true[\s\S]*pendingReaderAnalysis !== true[\s\S]*analysisFailure == null/, 'only a fully committed, validated Reader revision may regain ranking or bet authority');
 mustMatch(/const currentAnalysisExecutable = readerAnalysisRevisionReady\(item\)[\s\S]*Boolean\(item\.readerPayloadHash\)[\s\S]*!preservedReaderAnalysis/, 'preserved analysis must never regain current ranking or bet authority');
 mustMatch(/const itemReaderExecutable = item =>[\s\S]*readerAnalysisRevisionReady\(item\)[\s\S]*item\.readerPayloadHash === readerStatus\?\.payloadHash/, 'cache-restored, queued, failed and partial revisions must stay fail-closed even when their saved hash matches the live Reader');
-mustMatch(/\.filter\(row => item\.actualSource\?\.provider === 'TAI888_READER_AUTO'\s*&& !preservedReaderAnalysis/, 'partial, missing or pending Reader revisions must stay on their game card but leave the current ranking list');
+const rankingDerivation = page.slice(page.indexOf('const shadowRanking = useMemo'), page.indexOf('const shadowBetOrder = useMemo'));
+const rankingFilter = rankingDerivation.slice(rankingDerivation.indexOf('.filter(row'), rankingDerivation.indexOf('.map(row'));
+assert.doesNotMatch(rankingFilter, /preservedReaderAnalysis/, 'partial, missing or pending Reader revisions must remain visible in ranking while staying non-executable');
 const scoreOnlyInvalidation = page.slice(
   page.indexOf('const invalidateShadowScoreRow'),
   page.indexOf('const invalidateReaderPriceRow'),

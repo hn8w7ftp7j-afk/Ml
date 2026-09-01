@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {
   ANALYSIS_PIT_SNAPSHOT_SCHEMA_VERSION,
   analysisPitProductionPersistenceRequired,
+  analysisPitSemanticIdentityHash,
   assertAnalysisPitReplayIdentity,
   assertStoredAnalysisPitIdentity,
   buildAnalysisPitReplayBundle,
@@ -105,6 +106,31 @@ assert.equal(first.snapshotId, duplicate.snapshotId, '相同PIT輸入必須產�
 assert.equal(first.replayIdentityHash, duplicate.replayIdentityHash, '相同PIT輸入必須冪等');
 assert.equal(asyncFirst.snapshotId, first.snapshotId, '非同步壓縮路徑不得改變snapshot id');
 assert.equal(asyncFirst.replayIdentityHash, first.replayIdentityHash, '非同步壓縮路徑必須完全可重播');
+const retryContext = {
+  ...context,
+  fetchedAt: '2099-08-25T08:01:00.000Z',
+  featureProvenance: context.featureProvenance.map(row => ({ ...row, fetchedAt: '2099-08-25T08:00:30.000Z' })),
+};
+const retryRecord = buildAnalysisPitSnapshotRecord({
+  ...input,
+  frozenContext: retryContext,
+  analysis: { ...analysis, dataAsOf: retryContext.fetchedAt, analysisAsOf: '2099-08-25T08:04:00.000Z' },
+});
+assert.notEqual(retryRecord.replayIdentityHash, first.replayIdentityHash, '精確PIT仍須保留不同抓取時間');
+assert.equal(
+  analysisPitSemanticIdentityHash(retryRecord),
+  analysisPitSemanticIdentityHash(first),
+  '同一模型輸入只差重試抓取時間時必須可安全辨識為冪等',
+);
+const changedEvRecord = buildAnalysisPitSnapshotRecord({
+  ...input,
+  analysis: { ...analysis, results: [{ ...analysis.results[0], weightedEV: 0.03 }] },
+});
+assert.notEqual(
+  analysisPitSemanticIdentityHash(changedEvRecord),
+  analysisPitSemanticIdentityHash(first),
+  '實際分析數值不同時不得用冪等相容繞過永久PIT衝突',
+);
 assert.doesNotThrow(() => validateAnalysisPitSnapshotRecord({
   ...first,
   gameIdentity: reverseKeys(first.gameIdentity),

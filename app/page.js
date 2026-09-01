@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { APP_VERSION } from '../lib/app-version.js';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
 import {
@@ -57,7 +57,9 @@ import {
   cloudLedgerRetryDelay,
 } from '../lib/cloud-ledger-sync-policy.js';
 import {
+  allLeagueBoardDate,
   allLeagueAnalysisProgress,
+  allLeagueRunContainsDate,
   allLeagueStatusLabel,
   createAllLeagueAnalysisRun,
   mergePreparedLeagueBoard,
@@ -353,7 +355,7 @@ function loadBackgroundJob(league, date) {
     const job = jobs?.[backgroundJobKey(league, date)] || null;
     if (job?.batchMode === 'all-leagues') {
       const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
-      const terminalRunMatches = run?.date === String(date || '')
+      const terminalRunMatches = allLeagueBoardDate(run, league) === String(date || '')
         && run?.runId === job.runId
         && !allLeagueRunIsActive(run);
       if (terminalRunMatches) {
@@ -390,13 +392,13 @@ function clearBackgroundJob(league, date, runId = '') {
 
 function clearAllLeagueBackgroundJobs(run) {
   if (!run?.runId || !run?.date) return;
-  for (const id of LEAGUE_IDS) clearBackgroundJob(id, run.date, run.runId);
+  for (const id of LEAGUE_IDS) clearBackgroundJob(id, allLeagueBoardDate(run, id, run.date), run.runId);
 }
 
 function loadAllLeagueAnalysisRun(date) {
   try {
     const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
-    return run?.date === String(date || '') ? run : null;
+    return allLeagueRunContainsDate(run, date) ? run : null;
   } catch { return null; }
 }
 
@@ -1292,8 +1294,12 @@ export default function Home() {
   const readerPollBusyRef = useRef(false);
   const autoAnalyzeHashRef = useRef('');
   const manualAnalysisScopesRef = useRef(new Set());
+  const manualDateSelectionRef = useRef(new Set());
   const currentDateRef = useRef(date);
   const currentLeagueRef = useRef(league);
+  const leagueDatesRef = useRef(Object.fromEntries(LEAGUE_IDS.map(id => [id, date])));
+  const rankingPanelRef = useRef(null);
+  const rankingScrollAnchorRef = useRef(null);
   const analysisGenerationRef = useRef(0);
   const readerStatusRef = useRef(null);
   const readerStatusHighWaterRef = useRef(null);
@@ -1310,9 +1316,8 @@ export default function Home() {
   const bettingEnabled = activeLeague.capabilities.bets === true;
   const shadowMode = activeLeague.status === 'shadow';
   const allLeagueProgress = allLeagueAnalysisProgress(allLeagueRun);
-  const allLeagueRunning = allLeagueRun?.date === date
-    && ['preparing', 'running'].includes(String(allLeagueRun?.state || ''));
-  const activeLeagueBatchStatus = allLeagueRun?.date === date
+  const allLeagueRunning = ['preparing', 'running'].includes(String(allLeagueRun?.state || ''));
+  const activeLeagueBatchStatus = allLeagueBoardDate(allLeagueRun, league) === date
     ? allLeagueRun?.leagues?.[league]?.status || 'idle'
     : 'idle';
   const readerCoverage = readerCoverageCounts(readerStatus);
@@ -1335,7 +1340,6 @@ export default function Home() {
       && !preservedReaderAnalysis;
     return analysisDirectionRows(directionAnalysis)
       .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
-        && !preservedReaderAnalysis
         && modelEvValue(row) != null
         && !currentBlockedMarkets.has(row.market)
         && (hasDirectionSlots || (row.sourceType === 'ACTUAL_TW_CREDIT' && row.provider === 'TAI888_READER_AUTO')))
@@ -1362,7 +1366,8 @@ export default function Home() {
       const rankingEligible = currentAnalysisExecutable
         && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
         && row.rankingQualified === true;
-      return { item, row, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
+      const stableKey = `${item.game.gamePk}|${row.slotId || `${row.market}|${row.direction || row.pick}`}`;
+      return { item, row, stableKey, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
         water: row.water, score, weightedEV: modelEvValue(row), robustEV: robustEvValue(row), qaPassed, qualified,
         currentReaderPrice, inactiveNotice, rankingEligible };
       });
@@ -1373,6 +1378,9 @@ export default function Home() {
   [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, date]);
   const shadowBetOrder = useMemo(() => buildBetOrderEntries(shadowRanking), [shadowRanking]);
   const shadowBetOrderGames = useMemo(() => groupBetOrderEntries(shadowBetOrder), [shadowBetOrder]);
+  const rankingLayoutRevision = useMemo(() => shadowRanking
+    .map(entry => `${entry.stableKey}:${entry.score ?? ''}:${entry.weightedEV ?? ''}:${entry.robustEV ?? ''}`)
+    .join('||'), [shadowRanking]);
   const rankingProvenance = useMemo(() => {
     const modelVersions = [...new Set(board.map(item => item.customData?.analysis?.modelVersion).filter(Boolean))];
     const lineTimes = board.flatMap(item => (item.customData?.analysis?.results || []).map(row => row.lineAsOf).filter(Boolean));
@@ -1381,6 +1389,36 @@ export default function Home() {
       latestLineAsOf: lineTimes.sort().at(-1) || null,
     };
   }, [board]);
+
+  useLayoutEffect(() => {
+    if (!['ranking', 'betOrder'].includes(tab)) {
+      rankingScrollAnchorRef.current = null;
+      return undefined;
+    }
+    const pending = rankingScrollAnchorRef.current;
+    const container = rankingPanelRef.current;
+    if (pending?.tab === tab && container) {
+      const target = [...container.querySelectorAll('[data-rank-key]')]
+        .find(element => element.dataset.rankKey === pending.key);
+      if (target) {
+        const delta = target.getBoundingClientRect().top - pending.top;
+        if (Math.abs(delta) > 1) window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+      }
+    }
+    rankingScrollAnchorRef.current = null;
+    return () => {
+      const current = rankingPanelRef.current;
+      if (!current) return;
+      const visible = [...current.querySelectorAll('[data-rank-key]')]
+        .map(element => ({ element, rect: element.getBoundingClientRect() }))
+        .find(({ rect }) => rect.bottom > 0 && rect.top < window.innerHeight);
+      if (visible) rankingScrollAnchorRef.current = {
+        tab,
+        key: visible.element.dataset.rankKey,
+        top: visible.rect.top,
+      };
+    };
+  }, [tab, rankingLayoutRevision]);
 
   function commitReaderStatus(value) {
     const highWater = readerStatusHighWaterRef.current;
@@ -1400,6 +1438,34 @@ export default function Home() {
   function publishAllLeagueRun(run) {
     setAllLeagueRun(run || null);
     if (run) saveAllLeagueAnalysisRun(run);
+  }
+
+  function setLeagueBoardDate(targetLeague, value, { manual = false } = {}) {
+    const id = normalizeLeagueId(targetLeague);
+    const nextDate = String(value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return false;
+    leagueDatesRef.current[id] = nextDate;
+    if (manual) manualDateSelectionRef.current.add(id);
+    if (currentLeagueRef.current === id) {
+      currentDateRef.current = nextDate;
+      setDate(nextDate);
+    }
+    return true;
+  }
+
+  function selectAnalysisDate(value) {
+    setLeagueBoardDate(league, value, { manual: true });
+  }
+
+  async function allLeagueTargetDate(targetLeague, selectedDate) {
+    if (targetLeague === 'MLB') return selectedDate;
+    try {
+      const latest = await requestJSON(`/api/reader/status?league=${encodeURIComponent(targetLeague)}&t=${Date.now()}`, {}, 20000);
+      const readerDate = String(latest?.boardDate || '').trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(readerDate) ? readerDate : selectedDate;
+    } catch {
+      return selectedDate;
+    }
   }
 
   function acquireOperation() {
@@ -1525,7 +1591,7 @@ export default function Home() {
     setAllLeagueRun(saved);
   }, [date, storageReady]);
   useEffect(() => {
-    if (!storageReady || !allLeagueRun?.runId || allLeagueRun.date !== date
+    if (!storageReady || !allLeagueRun?.runId
       || !['preparing', 'running'].includes(String(allLeagueRun.state || ''))) return undefined;
     let active = true;
     let timer;
@@ -1546,6 +1612,7 @@ export default function Home() {
             const batch = resultByLeague.get(id);
             if (!batch) continue;
             completedRun = updateAllLeagueAnalysisLeague(completedRun, id, {
+              boardDate: batch.date || allLeagueBoardDate(completedRun, id, completedRun.date),
               ...summarizeAllLeagueBatchResult(batch),
               message: batch.emptyReason === 'no_games' ? '今日沒有賽前場次'
                 : batch.emptyReason === 'no_open_markets' ? '今日盤口尚未開出'
@@ -1567,7 +1634,7 @@ export default function Home() {
                 status: 'failed', message: '四聯盟伺服器背景工作未完成',
               });
             }
-            clearBackgroundJob(id, date, allLeagueRun.runId);
+            clearBackgroundJob(id, allLeagueBoardDate(failedRun, id, failedRun.date), allLeagueRun.runId);
           }
           publishAllLeagueRun(failedRun);
           setBackgroundJobRevision(value => value + 1);
@@ -1612,6 +1679,7 @@ export default function Home() {
   useEffect(() => {
     currentDateRef.current = date;
     currentLeagueRef.current = league;
+    leagueDatesRef.current[league] = date;
     analysisGenerationRef.current += 1;
     snapshots.current.clear();
     creditRevisionRef.current = '';
@@ -1699,20 +1767,21 @@ export default function Home() {
         if (!active) return;
         if (latest?.fresh
           && /^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))
-          && latest.boardDate !== currentDateRef.current
+          && latest.boardDate > currentDateRef.current
+          && !manualDateSelectionRef.current.has(league)
           && !hasCurrentPrestartGame
           && !operationBusyRef.current
           && !readerPollBusyRef.current) {
           setNotice(`已依 ${league} Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
-          setDate(latest.boardDate);
+          setLeagueBoardDate(league, latest.boardDate);
           return;
         }
         commitReaderStatus(value);
         if (value?.fresh || hasCurrentPrestartGame || operationBusyRef.current || readerPollBusyRef.current) return;
         if (!active || !latest?.fresh || !/^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))) return;
-        if (latest.boardDate !== currentDateRef.current) {
+        if (latest.boardDate > currentDateRef.current && !manualDateSelectionRef.current.has(league)) {
           setNotice(`已依 Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
-          setDate(latest.boardDate);
+          setLeagueBoardDate(league, latest.boardDate);
         }
       } catch (cause) {
         if (active) invalidateReaderStatus(cause?.message || cause);
@@ -2375,8 +2444,7 @@ export default function Home() {
 
   async function oneClickAnalyzeAll() {
     if (allLeagueBusyRef.current || operationBusyRef.current || readerPollBusyRef.current || allLeagueRunning) return false;
-    const targetDate = date;
-    for (const id of LEAGUE_IDS) manualAnalysisScopesRef.current.add(`${id}:${targetDate}`);
+    const targetDate = leagueDatesRef.current.MLB || date;
     restoredBoardNeedsValidationRef.current = false;
     allLeagueBusyRef.current = true;
     setAllLeaguePreparing(true);
@@ -2387,10 +2455,15 @@ export default function Home() {
     const batches = [];
     try {
       for (const id of LEAGUE_IDS) {
-        run = updateAllLeagueAnalysisLeague(run, id, { status: 'preparing', message: '預查官方賽程與Reader盤口' });
+        const batchDate = await allLeagueTargetDate(id, id === 'MLB' ? targetDate : (leagueDatesRef.current[id] || date));
+        leagueDatesRef.current[id] = batchDate;
+        manualAnalysisScopesRef.current.add(`${id}:${batchDate}`);
+        run = updateAllLeagueAnalysisLeague(run, id, {
+          status: 'preparing', boardDate: batchDate, message: `預查 ${batchDate} 官方賽程與Reader盤口`,
+        });
         publishAllLeagueRun(run);
         try {
-          const batch = await prepareAllLeagueBatch(id, targetDate);
+          const batch = await prepareAllLeagueBatch(id, batchDate);
           batches.push(batch);
           run = updateAllLeagueAnalysisLeague(run, id, {
             status: batch.emptyReason || 'queued',
@@ -2424,6 +2497,7 @@ export default function Home() {
           date: targetDate,
           batches: batches.map(batch => ({
             league: batch.league,
+            date: batch.date,
             emptyReason: batch.emptyReason,
             tasks: batch.tasks,
           })),
@@ -2444,7 +2518,7 @@ export default function Home() {
           runId: job.runId,
           batchMode: 'all-leagues',
           league: batch.league,
-          date: targetDate,
+          date: batch.date,
           total: batch.tasks.length,
           gamePks: batch.tasks.map(task => Number(task?.game?.gamePk)).filter(Number.isFinite),
           preparedBoard: batch.preparedBoard,
@@ -3270,6 +3344,7 @@ export default function Home() {
   function selectLeague(value) {
     const nextLeague = normalizeLeagueId(value);
     if (nextLeague === league) return;
+    const nextDate = allLeagueBoardDate(allLeagueRun, nextLeague, leagueDatesRef.current[nextLeague] || date);
     // Analysis runs are durable server jobs. Switching the visible league only
     // detaches this screen from the old poll; it does not cancel the server run.
     // The saved job is reattached when the user returns to that league/date.
@@ -3279,6 +3354,8 @@ export default function Home() {
       setProgress(value => ({ ...value, active: false, running: 0 }));
     }
     currentLeagueRef.current = nextLeague;
+    currentDateRef.current = nextDate;
+    leagueDatesRef.current[nextLeague] = nextDate;
     analysisGenerationRef.current += 1;
     // Clear synchronously as well as in the league/date effect. Otherwise a
     // fast click can start the new league analysis with the previous league's
@@ -3290,6 +3367,7 @@ export default function Home() {
     setNotice('');
     setTab('board');
     setLeague(nextLeague);
+    if (nextDate !== date) setDate(nextDate);
   }
 
   return <main className="appShell">
@@ -3301,7 +3379,9 @@ export default function Home() {
     <nav className="leagueTabs" aria-label="聯盟切換">
       {LEAGUE_IDS.map(id => {
         const config = leagueConfig(id);
-        const batchStatus = allLeagueRun?.date === date ? allLeagueRun?.leagues?.[id]?.status || 'idle' : 'idle';
+        const batchStatus = allLeagueBoardDate(allLeagueRun, id) === (leagueDatesRef.current[id] || date)
+          ? allLeagueRun?.leagues?.[id]?.status || 'idle'
+          : 'idle';
         return <button key={id} className={league === id ? 'active' : ''} onClick={() => selectLeague(id)} aria-pressed={league === id}>
           <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small>
         </button>;
@@ -3324,12 +3404,15 @@ export default function Home() {
     {tab === 'board' && <>
       <section className="heroCard">
         <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型EV（W）與穩健EV（R）。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || allLeaguePreparing || allLeagueRunning} onChange={event => setDate(event.target.value)}/></label><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeagueProgress.terminal}/4` : allLeagueRunning ? `四聯盟分析中 ${allLeagueProgress.terminal}/4` : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeagueProgress.terminal}/4` : allLeagueRunning ? `四聯盟分析中 ${allLeagueProgress.terminal}/4` : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
           <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每5分鐘複核｜S分數、W與R完整顯示` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
         </div>
-        {allLeagueRun?.date === date && <div className="allLeagueState" aria-live="polite"><div><strong>四聯盟分析 {allLeagueProgress.terminal}/4</strong><span>目前聯盟：{activeLeague.id}｜{allLeagueStatusLabel(activeLeagueBatchStatus)}；各聯盟結果分開保存，切換不會清除。</span></div><div className="allLeaguePills">{LEAGUE_IDS.map(id => <span className={`batch-${allLeagueRun?.leagues?.[id]?.status || 'idle'}`} key={id}>{id} {allLeagueStatusLabel(allLeagueRun?.leagues?.[id]?.status)}</span>)}</div></div>}
+        {allLeagueRunContainsDate(allLeagueRun, date) && <div className="allLeagueState" aria-live="polite"><div><strong>四聯盟分析 {allLeagueProgress.terminal}/4</strong><span>目前聯盟：{activeLeague.id}｜盤日 {date}｜{allLeagueStatusLabel(activeLeagueBatchStatus)}；各聯盟依 Reader 盤日分開保存。</span></div><div className="allLeaguePills">{LEAGUE_IDS.map(id => {
+          const state = allLeagueRun?.leagues?.[id] || {};
+          return <span className={`batch-${state.status || 'idle'}`} title={state.message || ''} key={id}>{id} {state.boardDate || '—'}｜{allLeagueStatusLabel(state.status)}</span>;
+        })}</div>{LEAGUE_IDS.some(id => allLeagueRun?.leagues?.[id]?.status === 'failed') && <div className="allLeagueErrors">{LEAGUE_IDS.filter(id => allLeagueRun?.leagues?.[id]?.status === 'failed').map(id => <small key={id}>{id} {allLeagueRun.leagues[id].boardDate || '—'}：{allLeagueRun.leagues[id].message || '分析失敗'}</small>)}</div>}</div>}
       </section>
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && shadowMode && <LeagueShadowPanel config={activeLeague}/>}
@@ -3337,7 +3420,7 @@ export default function Home() {
       {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerUnavailable={cloudLedgerStatus.state === 'unavailable'}/>) }
     </>}
 
-    {tab === 'ranking' && <section className="panel"><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
+    {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
       <div className="emptySmall">此處顯示這一版Reader快照中已開盤且成功完成分析的全部方向，先依固定S分數由高到低排列，同分再依W、R排序；負EV、R≤0、QA BLOCK與低分方向都不刪除。市場差距與極高EV只顯示WARNING，不取消分數或排名。尚未開盤或市場資料錯誤的固定槽位保留在各場今日盤口，不能與其他時點、其他盤口快照混合比較。</div>
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
@@ -3349,11 +3432,11 @@ export default function Home() {
         const warnings = diagnosticWarnings(entry.row);
         const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
         const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{index + 1}</b><strong className={`rankScore ${entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div></div>;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{index + 1}</b><strong className={`rankScore ${entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div></div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
-    {tab === 'betOrder' && <section className="panel"><div className="rankingViewTabs" aria-label="影子排名檢視"><button onClick={() => setTab('ranking')}>全部方向</button><button className="active" onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>影子候選順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
+    {tab === 'betOrder' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button onClick={() => setTab('ranking')}>全部方向</button><button className="active" onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>影子候選順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
       <div className="emptySmall">先按比賽開始時間由早到晚，再於同場依序排列全場讓分、全場大小、上半讓分、上半大小；同一市場有多個7.0分以上方向時，分數較高者排前。已下注項目保留標記，時間未定賽事排在最後。</div>
       {shadowBetOrderGames.length ? shadowBetOrderGames.map((group, gameIndex) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
@@ -3366,7 +3449,7 @@ export default function Home() {
           const warnings = diagnosticWarnings(entry.row);
           const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
           const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} key={`${entry.gamePk}-${entry.market}-${entry.pick}`}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button></div>;
+          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button></div>;
         })}
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}

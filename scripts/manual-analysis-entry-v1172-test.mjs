@@ -25,8 +25,8 @@ assert.match(
 );
 assert.match(
   page,
-  /for \(const id of LEAGUE_IDS\) manualAnalysisScopesRef\.current\.add\(`\$\{id\}:\$\{targetDate\}`\)/,
-  'manual all-league analysis must enable Reader follow-up for all four leagues',
+  /for \(const id of LEAGUE_IDS\)[\s\S]*const batchDate = await allLeagueTargetDate\(id,[\s\S]*manualAnalysisScopesRef\.current\.add\(`\$\{id\}:\$\{batchDate\}`\)/,
+  'manual all-league analysis must enable Reader follow-up for all four leagues on each league board date',
 );
 
 console.log('Initial entry is manual-only while both analysis buttons remain available PASS');
