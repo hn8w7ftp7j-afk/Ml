@@ -4,6 +4,7 @@ import {
   ANALYSIS_PIT_SNAPSHOT_SCHEMA_VERSION,
   analysisPitProductionPersistenceRequired,
   analysisPitSemanticIdentityHash,
+  analysisPitSemanticIdentityDiff,
   assertAnalysisPitReplayIdentity,
   assertStoredAnalysisPitIdentity,
   buildAnalysisPitReplayBundle,
@@ -144,6 +145,11 @@ assert.notEqual(
   analysisPitSemanticIdentityHash(changedEvRecord),
   analysisPitSemanticIdentityHash(first),
   '實際分析數值不同時不得用冪等相容繞過永久PIT衝突',
+);
+assert.deepEqual(
+  analysisPitSemanticIdentityDiff(first, changedEvRecord),
+  ['marketAnalysis', 'calibrationContract'],
+  'PIT衝突診斷只能回報不同欄位名稱，不得輸出完整模型證據',
 );
 assert.doesNotThrow(() => validateAnalysisPitSnapshotRecord({
   ...first,
