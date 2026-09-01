@@ -122,6 +122,20 @@ assert.equal(
   analysisPitSemanticIdentityHash(first),
   '同一模型輸入只差重試抓取時間時必須可安全辨識為冪等',
 );
+const previousEncodingRecord = buildAnalysisPitSnapshotRecord({
+  ...input,
+  versions: { ...versions, pitPayloadEncodingVersion: 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0' },
+});
+assert.notEqual(
+  previousEncodingRecord.replayIdentityHash,
+  first.replayIdentityHash,
+  '不同PIT儲存編碼仍須保留精確重播差異',
+);
+assert.equal(
+  analysisPitSemanticIdentityHash(previousEncodingRecord),
+  analysisPitSemanticIdentityHash(first),
+  '只有PIT儲存編碼版本不同時不得誤判模型證據衝突',
+);
 const changedEvRecord = buildAnalysisPitSnapshotRecord({
   ...input,
   analysis: { ...analysis, results: [{ ...analysis.results[0], weightedEV: 0.03 }] },
