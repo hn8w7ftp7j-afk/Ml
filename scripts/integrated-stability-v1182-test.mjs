@@ -20,4 +20,4 @@ assert.match(pit, /assertCanonicalAnalysisPitRetryIdentity\(record, storedRecord
 assert.match(pit, /loadAnalysisDirectionHistory\(record\.snapshotId\)/, 'an existing complete direction history must be verified instead of rebuilt with retry timestamps');
 assert.match(pit, /canonicalRecord\.marketAnalysisPayload/, 'a partial direction history retry must use the canonical stored PIT analysis');
 
-console.log('V11.8.2 per-league dates, PIT idempotency and mobile ranking stability PASS');
+console.log('V11.8.3 per-league dates, canonical PIT retries and mobile ranking stability PASS');
