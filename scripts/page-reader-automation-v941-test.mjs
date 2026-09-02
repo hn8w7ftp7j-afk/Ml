@@ -21,10 +21,16 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.20', 'package/release identity must match the V11.8.20 reliability audit');
-assert.equal(packageLock.version, '11.8.20', 'package-lock release identity must match V11.8.20');
-assert.equal(packageLock.packages?.['']?.version, '11.8.20', 'root lockfile package must match V11.8.20');
-assert.equal(APP_VERSION, '11.8.20');
+assert.equal(packageJson.version, '11.8.21', 'package/release identity must match the V11.8.21 interaction fix');
+assert.equal(packageLock.version, '11.8.21', 'package-lock release identity must match V11.8.21');
+assert.equal(packageLock.packages?.['']?.version, '11.8.21', 'root lockfile package must match V11.8.21');
+assert.equal(APP_VERSION, '11.8.21');
+mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
+mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
+mustMatch(/queuedForCurrentBoard[\s\S]*void oneClickAnalyze\(\)/, 'queued analysis must start automatically after Reader polling finishes');
+mustMatch(/className="heroActionStatus" role="status" aria-live="polite"/, 'mobile controls must expose adjacent live progress feedback');
+assert.doesNotMatch(page, /disabled=\{busy \|\| readerPolling \|\| allLeaguePreparing \|\| allLeagueRunning \|\| !analysisEnabled\}/, 'Reader polling must not silently disable the manual analysis button');
+assert.match(css, /\.heroActionStatus/, 'queued and running analysis status must remain visible beside the button');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 mustMatch(/function requestJSONWithTransientRetry\([\s\S]*delaysMs = \[0, 1500, 4000\][\s\S]*transientAnalysisError\(error\)/, 'Safari transient fetch failures must retry before an all-league batch is marked failed');
 mustMatch(/AbortError'[\s\S]*timeoutError\.code = 'REQUEST_TIMEOUT'[\s\S]*function transientAnalysisError\(error\)[\s\S]*REQUEST_TIMEOUT'\) return true/, 'browser request timeouts must retain a stable transient retry code');
@@ -107,7 +113,7 @@ mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full anal
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
 mustMatch(/restoredBoardNeedsValidationRef\.current\) return undefined/, 'restored partial board must not race a single-board reader reprice');
 mustMatch(/missingReaderGameCount > 0[\s\S]*fullSlateRecoveryNeeded = true/, 'reader games missing from the rendered board must trigger full-slate recovery');
-mustMatch(/fullSlateRecoveryNeeded && stillCurrent\(\)[\s\S]*oneClickAnalyze\(\)/, 'full-slate recovery must run after releasing the reader poll lock');
+mustMatch(/\(fullSlateRecoveryNeeded \|\| queuedForCurrentBoard\) && stillCurrent\(\)[\s\S]*oneClickAnalyze\(\)/, 'full-slate recovery or a queued user tap must run after releasing the reader poll lock');
 assert.doesNotMatch(page, /verificationMarkets:\s*\[\]/, 'analyze/reprice must never hard-code an empty verification-market payload');
 mustMatch(/後台重新驗證中｜保留目前分數/, 'full refresh must retain completed scores on screen');
 mustMatch(/更新失敗｜保留上一版結果/, 'failed refresh must retain the previous completed result');

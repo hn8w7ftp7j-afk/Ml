@@ -1378,6 +1378,7 @@ export default function Home() {
   boardRef.current = board;
   const [readerStatus, setReaderStatus] = useState(null);
   const [readerPolling, setReaderPolling] = useState(false);
+  const [queuedAnalysis, setQueuedAnalysis] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ active: false, done: 0, total: 0, label: '' });
   const [allLeagueRun, setAllLeagueRun] = useState(null);
@@ -1396,6 +1397,7 @@ export default function Home() {
   const operationBusyRef = useRef(false);
   const allLeagueBusyRef = useRef(false);
   const readerPollBusyRef = useRef(false);
+  const queuedAnalysisRef = useRef(null);
   const autoAnalyzeHashRef = useRef('');
   const manualAnalysisScopesRef = useRef(new Set());
   const manualDateSelectionRef = useRef(new Set());
@@ -2617,7 +2619,14 @@ export default function Home() {
   }
 
   async function oneClickAnalyzeAll() {
-    if (allLeagueBusyRef.current || operationBusyRef.current || readerPollBusyRef.current || allLeagueRunning) return false;
+    if (readerPollBusyRef.current) {
+      setNotice('Reader 正在自動複核最新盤口；複核完成後請再按一次「一鍵分析全部聯盟」。');
+      return false;
+    }
+    if (allLeagueBusyRef.current || operationBusyRef.current || allLeagueRunning) {
+      setNotice('目前已有分析工作進行中；完成後即可重新分析全部聯盟。');
+      return false;
+    }
     const targetDate = leagueDatesRef.current.MLB || date;
     const previousRun = loadAllLeagueAnalysisRun(targetDate) || allLeagueRun;
     if (previousRun?.runId) clearAllLeagueBackgroundJobs(previousRun);
@@ -2741,10 +2750,22 @@ export default function Home() {
   }
 
   async function oneClickAnalyze(automaticKey = '') {
-    if (allLeagueRunning) return false;
+    if (allLeagueRunning) {
+      setNotice('四聯盟背景分析正在進行；完成後即可重新分析目前聯盟。');
+      return false;
+    }
+    if (readerPollBusyRef.current) {
+      const queued = { league, date };
+      queuedAnalysisRef.current = queued;
+      setQueuedAnalysis(queued);
+      setError('');
+      setNotice(`Reader 正在複核最新盤口；已排隊，複核完成後會自動開始 ${activeLeague.id} 分析。`);
+      return true;
+    }
     const savedBatchJob = loadBackgroundJob(league, date);
     if (savedBatchJob?.runId && savedBatchJob?.batchMode === 'all-leagues') {
       setBackgroundJobRevision(value => value + 1);
+      setNotice('這個聯盟已包含在四聯盟背景分析中；畫面會自動接續目前工作。');
       return false;
     }
     if (!analysisEnabled) {
@@ -2752,6 +2773,8 @@ export default function Home() {
       return false;
     }
     if (!acquireOperation()) return false;
+    queuedAnalysisRef.current = null;
+    setQueuedAnalysis(null);
     manualAnalysisScopesRef.current.add(`${league}:${date}`);
     restoredBoardNeedsValidationRef.current = false;
     const requestedAutoKey = typeof automaticKey === 'string' ? automaticKey : '';
@@ -3411,7 +3434,14 @@ export default function Home() {
       readerPollBusyRef.current = false;
       markAppOperationBusy(false);
       setReaderPolling(false);
-      if (fullSlateRecoveryNeeded && stillCurrent()) void oneClickAnalyze();
+      const queued = queuedAnalysisRef.current;
+      const queuedForCurrentBoard = queued?.league === currentLeagueRef.current
+        && queued?.date === currentDateRef.current;
+      if (queuedForCurrentBoard) {
+        queuedAnalysisRef.current = null;
+        setQueuedAnalysis(null);
+      }
+      if ((fullSlateRecoveryNeeded || queuedForCurrentBoard) && stillCurrent()) void oneClickAnalyze();
     }
   }
 
@@ -3602,6 +3632,8 @@ export default function Home() {
       setBusy(false);
       setProgress(value => ({ ...value, active: false, running: 0 }));
     }
+    queuedAnalysisRef.current = null;
+    setQueuedAnalysis(null);
     currentLeagueRef.current = nextLeague;
     currentDateRef.current = nextDate;
     leagueDatesRef.current[nextLeague] = nextDate;
@@ -3653,7 +3685,7 @@ export default function Home() {
     {tab === 'board' && <>
       <section className="heroCard">
         <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型EV（W）與穩健EV（R）。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : readerPolling ? 'Reader自動複核中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
           <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每5分鐘複核｜S分數、W與R完整顯示` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
