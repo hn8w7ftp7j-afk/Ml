@@ -509,6 +509,26 @@ async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplica
   }
 }
 
+async function requestJSONWithTransientRetry(url, options = {}, timeoutMs = 180000, {
+  allowApplicationFailure = false,
+  delaysMs = [0, 1500, 4000],
+} = {}) {
+  let failure;
+  for (const delay of delaysMs) {
+    if (delay) await new Promise(resolve => window.setTimeout(resolve, delay));
+    try {
+      return await requestJSON(url, options, timeoutMs, { allowApplicationFailure });
+    } catch (error) {
+      failure = error;
+      if (!transientAnalysisError(error)) throw error;
+    }
+  }
+  const error = new Error('網路暫時中斷；已自動重試仍無法載入，請按重新分析全部聯盟');
+  error.code = 'TRANSIENT_BROWSER_LOAD_FAILED';
+  error.cause = failure;
+  throw error;
+}
+
 function analysisFailureState(value) {
   const source = value && typeof value === 'object' ? value : { error: value };
   const message = String(source.error || source.message || value || '背景分析失敗');
@@ -1875,7 +1895,11 @@ export default function Home() {
   async function fetchScheduleForLeague(targetLeague, targetDate, { commit = false } = {}) {
     const config = leagueConfig(targetLeague);
     if (!config.scheduleEndpoint) throw new Error(`${config.label}正式賽程尚未接入，不能進行分析`);
-    const data = await requestJSON(`${config.scheduleEndpoint}?league=${encodeURIComponent(targetLeague)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`, {}, 40000);
+    const data = await requestJSONWithTransientRetry(
+      `${config.scheduleEndpoint}?league=${encodeURIComponent(targetLeague)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`,
+      {},
+      40000,
+    );
     const rows = Array.isArray(data.games) ? data.games.filter(game => gameIsPrestartNow(game, Date.now())) : [];
     if (commit && currentDateRef.current === targetDate && currentLeagueRef.current === targetLeague) setSchedule(rows);
     return rows;
@@ -2411,9 +2435,10 @@ export default function Home() {
     if (!games.length) {
       return { league: targetLeague, date: targetDate, tasks: [], preparedBoard: [], emptyReason: 'no_games' };
     }
-    const credit = await requestJSON('/api/credit-lines', {
+    const creditRequestId = uid();
+    const credit = await requestJSONWithTransientRetry('/api/credit-lines', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': creditRequestId },
       body: JSON.stringify({ league: targetLeague, date: targetDate, schedule: games }),
     }, 60000);
     if (credit?.code === 'NO_PRESTART_GAMES') {
