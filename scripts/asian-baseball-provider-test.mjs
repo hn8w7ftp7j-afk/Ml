@@ -8,6 +8,7 @@ import {
   parseCpblSchedulePayload,
   parseKboOfficialSchedulePayload,
   parseKboScheduleHtml,
+  parseNpbGameDetailHtml,
   parseNpbMonthHtml,
   parseNpbScheduleHtml,
 } from '../lib/asian-baseball.js';
@@ -362,6 +363,28 @@ const scoreOnlyNpbDay = parseNpbScheduleHtml(npbDay
 assert.equal(scoreOnlyNpbDay[0].statusCode, 'S', 'NPB 日程只有即時比分、沒有明確完賽狀態時不得自動視為終場');
 assert.equal(scoreOnlyNpbDay[0].awayScore, null);
 assert.equal(scoreOnlyNpbDay[0].homeScore, null);
+
+const npbFinalDetail = `
+<div id="gmdivinfo"><table><tr><td>Kyocera Dome</td><td>T - 3:06 ( 18:00 - 21:06 )</td></tr></table></div>
+<div id="gmdivscore"><table><tbody><tr><td class="gmboxrun">4</td></tr><tr><td class="gmboxrun">3</td></tr></tbody></table></div>
+<div id="gmdivresult"><table><tbody>
+<tr><td class="gmscorettl"></td><td class="gmscorettl">R</td><td class="gmscorettl">H</td><td class="gmscorettl">E</td></tr>
+<tr><td class="gmscoreteam">Yomiuri</td><td class="gmscore">1</td><td class="gmscore">1</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">-</td><td class="gmscore">3</td><td class="gmscore">5</td><td class="gmscore">0</td></tr>
+<tr><td class="gmscoreteam">DeNA</td><td class="gmscore">2</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1X</td><td class="gmscore">-</td><td class="gmscore">4</td><td class="gmscore">10</td><td class="gmscore">1</td></tr>
+</tbody></table></div>`;
+const parsedNpbDetail = parseNpbGameDetailHtml(npbFinalDetail, scoreOnlyNpbDay[0]);
+assert.equal(parsedNpbDetail.statusCode, 'F');
+assert.equal(parsedNpbDetail.innings, 9);
+assert.equal(parsedNpbDetail.awayScore, 3);
+assert.equal(parsedNpbDetail.homeScore, 4);
+assert.equal(parsedNpbDetail.awayFirst5, 3);
+assert.equal(parsedNpbDetail.homeFirst5, 3);
+assert.equal(parsedNpbDetail.first5Complete, true);
+assert.equal(
+  parseNpbGameDetailHtml(npbFinalDetail.replace('( 18:00 - 21:06 )', '18:00'), scoreOnlyNpbDay[0]).statusCode,
+  'S',
+  '沒有官方結束時間的進行中明細不得誤判為 Final',
+);
 
 const liveKbo = parseKboOfficialSchedulePayload({ rows: [{ row: [
   { Text: '08.18(화)', Class: 'day' }, { Text: '<b>18:00</b>', Class: 'time' },
