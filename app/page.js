@@ -1112,19 +1112,20 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
 function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   const weightedEV = modelEvValue(row);
   const robustEV = robustEvValue(row);
-  if (row?.evCalibration?.qualified !== true) return { icon: '⚠️', label: '模型評分阻擋', ranking: false, reason: row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過' };
+  const dataQualityWarningOnly = row?.scoreBreakdown?.dataQualityWarningOnly === true;
+  if (row?.evCalibration?.qualified !== true && !dataQualityWarningOnly) return { icon: '⚠️', label: '模型評分阻擋', ranking: false, reason: row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過' };
   if (formulaScore == null) return { icon: '⛔', label: '無法評分', ranking: false, reason: '缺少合法水位或雙EV' };
   if (!leagueValidated) return { icon: '⚠️', label: '聯盟模型未驗證', ranking: false, reason: '不列排名' };
-  if (!qaPassed) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
-  if (row?.evCalibration?.scenarioStable !== true) return { icon: '🟡', label: '模型情境不穩定', ranking: false, reason: 'W/R情境差距超過5%' };
+  if (!qaPassed && !dataQualityWarningOnly) return { icon: '⚠️', label: '資料QA阻擋', ranking: false, reason: '不列排名' };
   if (!Number.isFinite(weightedEV) || weightedEV <= 0) return { icon: '⚪', label: 'PASS', ranking: false, reason: '模型W未大於0' };
   if (!Number.isFinite(robustEV) || robustEV <= 0) return { icon: '🟡', label: '觀察', ranking: false, reason: '模型穩健R未大於0' };
   if (formulaScore < 7.2) return { icon: '⚪', label: 'PASS', ranking: false, reason: '公式分數未達7.2' };
   if (row?.rankingQualified === false) return { icon: '🟡', label: '影子候選未進排名', ranking: false, reason: row?.rankingQualificationReason || '後端排名Gate未通過' };
-  if (formulaScore >= 8.5) return { icon: '🔥', label: '8.5級模型方向', ranking: true, reason: '雙EV為正、達8.5且既定高分條件完成' };
-  if (formulaScore >= 8.0) return { icon: '🟢', label: '8.0級模型方向', ranking: true, reason: '雙EV為正且達8.0' };
-  if (formulaScore >= 7.5) return { icon: '🟢', label: '7.5級模型方向', ranking: true, reason: '雙EV為正且達7.5' };
-  return { icon: '🟢', label: '7.2級模型方向', ranking: true, reason: '雙EV為正且達7.2' };
+  const scenarioWarning = row?.evCalibration?.scenarioStable === false ? '；W/R情境差距超過5%列警告' : '';
+  if (formulaScore >= 8.5) return { icon: '🔥', label: '8.5級模型方向', ranking: true, reason: `雙EV為正、達8.5且既定高分條件完成${scenarioWarning}` };
+  if (formulaScore >= 8.0) return { icon: '🟢', label: '8.0級模型方向', ranking: true, reason: `雙EV為正且達8.0${scenarioWarning}` };
+  if (formulaScore >= 7.5) return { icon: '🟢', label: '7.5級模型方向', ranking: true, reason: `雙EV為正且達7.5${scenarioWarning}` };
+  return { icon: '🟢', label: '7.2級模型方向', ranking: true, reason: `雙EV為正且達7.2${scenarioWarning}` };
 }
 
 function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = false, now, inactiveNotice = '', cloudLedgerState = 'ready' }) {
@@ -1135,7 +1136,8 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = f
   const storedFormulaScore = formulaScoreValue(row);
   const qaPassed = directionQaPassed(row);
   const leagueValidated = row?.scoreStatus !== 'LEAGUE_MODEL_NOT_VALIDATED';
-  const calibrationBlocked = row?.evCalibration?.qualified !== true;
+  const dataQualityWarningOnly = row?.scoreBreakdown?.dataQualityWarningOnly === true;
+  const calibrationBlocked = row?.evCalibration?.qualified !== true && !dataQualityWarningOnly;
   const calibrationReason = row?.evCalibration?.reasons?.[0] || 'Reader、核心資料或數學未通過';
   const qaFailures = scoreQaFailures(row);
   const formulaScore = storedFormulaScore;

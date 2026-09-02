@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.24', 'package/release identity must match the V11.8.24 candidate-order fix');
-assert.equal(packageLock.version, '11.8.24', 'package-lock release identity must match V11.8.24');
-assert.equal(packageLock.packages?.['']?.version, '11.8.24', 'root lockfile package must match V11.8.24');
-assert.equal(APP_VERSION, '11.8.24');
+assert.equal(packageJson.version, '11.8.25', 'package/release identity must match the V11.8.25 QA warning-only policy');
+assert.equal(packageLock.version, '11.8.25', 'package-lock release identity must match V11.8.25');
+assert.equal(packageLock.packages?.['']?.version, '11.8.25', 'root lockfile package must match V11.8.25');
+assert.equal(APP_VERSION, '11.8.25');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
@@ -32,6 +32,9 @@ mustMatch(/queuedForCurrentBoard[\s\S]*void oneClickAnalyze\(\)/, 'queued analys
 mustMatch(/className="heroActionStatus" role="status" aria-live="polite"/, 'mobile controls must expose adjacent live progress feedback');
 assert.doesNotMatch(page, /disabled=\{busy \|\| readerPolling \|\| allLeaguePreparing \|\| allLeagueRunning \|\| !analysisEnabled\}/, 'Reader polling must not silently disable the manual analysis button');
 assert.match(css, /\.heroActionStatus/, 'queued and running analysis status must remain visible beside the button');
+assert.doesNotMatch(page, /if \(row\?\.evCalibration\?\.scenarioStable !== true\) return/, 'W/R scenario spread warning must not block the client ranking verdict');
+mustMatch(/const scenarioWarning = row\?\.evCalibration\?\.scenarioStable === false/, 'client ranking verdict must retain the W/R scenario-spread warning');
+mustMatch(/const dataQualityWarningOnly = row\?\.scoreBreakdown\?\.dataQualityWarningOnly === true/, 'cached low-quality analysis must be treated as warning-only in the client verdict');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 mustMatch(/function requestJSONWithTransientRetry\([\s\S]*delaysMs = \[0, 1500, 4000\][\s\S]*transientAnalysisError\(error\)/, 'Safari transient fetch failures must retry before an all-league batch is marked failed');
 mustMatch(/AbortError'[\s\S]*timeoutError\.code = 'REQUEST_TIMEOUT'[\s\S]*function transientAnalysisError\(error\)[\s\S]*REQUEST_TIMEOUT'\) return true/, 'browser request timeouts must retain a stable transient retry code');
