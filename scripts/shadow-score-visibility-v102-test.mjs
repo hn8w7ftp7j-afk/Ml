@@ -56,7 +56,8 @@ const unstableVisible = finalizeDeterministicAnalysis({
   game,
 }).results[0];
 assert.ok(unstableVisible.formulaDiagnosticScore > 7.1, 'W/R差距超過5%仍須保留固定公式算出的原始S，不得人工封頂7.1');
-assert.equal(unstableVisible.rankingQualified, false);
+assert.equal(unstableVisible.rankingQualified, true, 'W/R差距超過5%只能警告，不得取消符合S、W、R條件的排名');
+assert.match(unstableVisible.rankingQualificationReason, /列警告/);
 assert.ok(unstableVisible.scoreBreakdown.rawScore >= unstableVisible.formulaDiagnosticScore);
 assert.ok(unstableVisible.scoreBreakdown.caps.includes('SCENARIO_SPREAD_OVER_5_PERCENT'));
 
@@ -170,12 +171,13 @@ const dataQualityWarning = finalizeDeterministicAnalysis({
   },
   game: { ...game, leagueId: 'CPBL' },
 }).results[0];
-assert.equal(Number.isFinite(dataQualityWarning.formulaDiagnosticScore), true, '資料品質不足只可阻擋排名，不得清空固定S分數');
-assert.equal(dataQualityWarning.shadowDiagnosticScore, null, '資料品質不足仍不得取得QA合格排名分');
-assert.equal(dataQualityWarning.rankingQualified, false);
-assert.equal(dataQualityWarning.scoreAudit.ok, false);
+assert.equal(Number.isFinite(dataQualityWarning.formulaDiagnosticScore), true, '資料品質不足只可警告，不得清空固定S分數');
+assert.equal(Number.isFinite(dataQualityWarning.shadowDiagnosticScore), true, '僅資料品質低於0.85時仍須取得QA合格排名分');
+assert.equal(dataQualityWarning.rankingQualified, true, '資料品質與W/R情境差距都只警告，符合S、W、R時仍須排名');
+assert.equal(dataQualityWarning.scoreAudit.ok, true);
 assert.equal(dataQualityWarning.scoreBreakdown.dataQualityWarningOnly, true);
-assert.match(dataQualityWarning.tag, /QA BLOCK/);
+assert.doesNotMatch(dataQualityWarning.tag, /QA BLOCK/);
+assert.match(dataQualityWarning.diagnosticWarnings.join('｜'), /0\.81低於0\.85參考線.*保留評分與排名/);
 
 const rawModelAuditOnly = finalizeDeterministicAnalysis({
   analysis: {

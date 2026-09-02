@@ -254,7 +254,7 @@ assert.equal(optionalMissingDoesNotBlock.qualified, true, 'optional missing inpu
 assert.equal(optionalMissingDoesNotBlock.qualificationDataQuality, 0.97);
 assert.equal(optionalMissingDoesNotBlock.overallDataQuality, 0.71);
 
-const projectedCoreStillBlocks = qualifyEvV103({
+const projectedCoreWarnsButScores = qualifyEvV103({
   row: {
     water: 0.94,
     marketVerification: eligibleVerification(),
@@ -274,11 +274,12 @@ const projectedCoreStillBlocks = qualifyEvV103({
     ],
   },
 });
-assert.equal(projectedCoreStillBlocks.qualified, false, 'core baseball data quality must fail closed');
-assert.equal(projectedCoreStillBlocks.weightedEV, 0.045, '資料QA BLOCK仍保留數學已建立的W');
-assert.equal(projectedCoreStillBlocks.robustEV, 0.012);
-assert.ok(Math.abs(projectedCoreStillBlocks.qualificationDataQuality - 0.81) < 1e-12);
-assert.match(projectedCoreStillBlocks.reasons.join('｜'), /核心棒球資料品質0\.81低於0\.85/);
+assert.equal(projectedCoreWarnsButScores.qualified, true, 'projected core quality below 0.85 must warn without blocking score or ranking');
+assert.equal(projectedCoreWarnsButScores.weightedEV, 0.045);
+assert.equal(projectedCoreWarnsButScores.robustEV, 0.012);
+assert.ok(Math.abs(projectedCoreWarnsButScores.qualificationDataQuality - 0.81) < 1e-12);
+assert.doesNotMatch(projectedCoreWarnsButScores.reasons.join('｜'), /核心棒球資料品質/);
+assert.match(projectedCoreWarnsButScores.auditWarnings.join('｜'), /核心棒球資料品質0\.81低於0\.85參考線/);
 
 const unstableRawScenario = qualifyEvV103({
   row: {
