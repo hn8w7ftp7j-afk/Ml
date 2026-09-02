@@ -380,6 +380,24 @@ assert.equal(parsedNpbDetail.homeScore, 4);
 assert.equal(parsedNpbDetail.awayFirst5, 3);
 assert.equal(parsedNpbDetail.homeFirst5, 3);
 assert.equal(parsedNpbDetail.first5Complete, true);
+
+const npbFinalDetailWithoutDashClass = `
+<div id="gmdivinfo">Morioka T - 2:53 ( 18:31 - 21:24 ) Att. - 12,039</div>
+<div id="gmdivscore"><span class="gmboxrun">4</span><span class="gmboxrun">0</span></div>
+<div id="gmdivresult"><table><tbody>
+<tr><th>Team</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>R</th><th>H</th><th>E</th></tr>
+<tr><th class="gmscoreteam">Yomiuri</th><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscorerun">0</td><td>7</td><td>0</td></tr>
+<tr><th class="gmscoreteam">DeNA</th><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">2</td><td class="gmscore">0</td><td class="gmscore">2</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">X</td><td class="gmscorerun">4</td><td>8</td><td>0</td></tr>
+<!-- NPB responsive markup may repeat an identical score table. -->
+<tr><th class="gmscoreteam">Yomiuri</th><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>7</td><td>0</td></tr>
+<tr><th class="gmscoreteam">DeNA</th><td>0</td><td>0</td><td>2</td><td>0</td><td>2</td><td>0</td><td>0</td><td>0</td><td>X</td><td>4</td><td>8</td><td>0</td></tr>
+</tbody></table></div>`;
+const parsedNpbNoDash = parseNpbGameDetailHtml(npbFinalDetailWithoutDashClass, scoreOnlyNpbDay[0]);
+assert.equal(parsedNpbNoDash.statusCode, 'F', 'NPB 正式頁不把分隔符放在 gmscore 時仍須辨識終場');
+assert.deepEqual(
+  [parsedNpbNoDash.awayScore, parsedNpbNoDash.homeScore, parsedNpbNoDash.awayFirst5, parsedNpbNoDash.homeFirst5],
+  [0, 4, 0, 4],
+);
 assert.equal(
   parseNpbGameDetailHtml(npbFinalDetail.replace('( 18:00 - 21:06 )', '18:00'), scoreOnlyNpbDay[0]).statusCode,
   'S',
