@@ -92,6 +92,7 @@ const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 const BACKGROUND_JOB_START_TIMEOUT_MS = 75_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
 const READER_RECHECK_INTERVAL_MS = 30 * 1000;
+const REFERENCE_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const OFFICIAL_PRESTART_RECHECK_MS = 60 * 1000;
 const CORE_DATA_BLOCK_RECHECK_MS = 5 * 60 * 1000;
 const BET_PRICE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -1142,6 +1143,12 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = f
   const qaFailures = scoreQaFailures(row);
   const formulaScore = storedFormulaScore;
   const auditWarnings = diagnosticWarnings(row);
+  const externalAuditFresh = row?.marketVerification?.referencePriorEligible === true
+    && referenceEvidenceFreshNow(row, now);
+  const externalBookCount = Number(row?.marketVerification?.referenceConsensusBookCount || 0);
+  const externalAuditText = externalAuditFresh
+    ? `外部市場驗證：PASS｜${externalBookCount}家獨立莊家｜5分鐘內同賽事同期間同合約`
+    : `外部市場驗證：未通過｜${row?.marketVerification?.priorIneligibleReason || '目前沒有可安全配對的同合約價格'}`;
   const tai888Gap = row?.tai888MarketProbabilityGap == null
     ? row?.rawMarketProbabilityGap
     : row.tai888MarketProbabilityGap;
@@ -1178,6 +1185,7 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = f
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
       <div className="scoreMeta"><strong>模型EV W {signedPct(modelEV)}｜穩健EV R {signedPct(robustEV)}</strong>{robustEV != null && robustEV <= 0 ? '｜觀察／不排名' : ''}</div>
       <div className={`qaLine ${qaLabel === 'BLOCK' ? 'pending' : ''}`}>資料／數學 QA：{qaLabel}{qaReason ? `（${qaReason}）` : ''}</div>
+      <div className={`qaLine ${externalAuditFresh ? '' : 'pending'}`}>{externalAuditText}｜只作驗證，不改W/R</div>
       <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}</div>
       {inactiveNotice && <div className="scoreMeta">實際下注紀錄狀態：{inactiveNotice}</div>}
       <div className="scoreMeta">{probabilityDetail}</div>
@@ -1403,6 +1411,7 @@ export default function Home() {
   const [acknowledgedReaderKey, setAcknowledgedReaderKey] = useState('');
   const snapshots = useRef(new Map());
   const creditRevisionRef = useRef('');
+  const lastReferenceRefreshAtRef = useRef(0);
   const officialPrestartCheckedAtRef = useRef(0);
   const operationBusyRef = useRef(false);
   const allLeagueBusyRef = useRef(false);
@@ -2022,10 +2031,32 @@ export default function Home() {
   }
 
   async function fetchReferenceLines(games, targetDate = date, targetGames = []) {
-    void games;
-    void targetDate;
-    void targetGames;
-    return { ok: true, configured: false, games: [], failures: [], message: '目前未接外部同合約來源；不改比分分布或W/R，但缺少兩個獨立同約時8.5級最高封頂8.4。' };
+    if (!Array.isArray(games) || !games.length) {
+      return { ok: true, configured: false, games: [], failures: [], message: '今日沒有可配對的賽事' };
+    }
+    const targetLeague = normalizeLeagueId(games[0]?.leagueId || games[0]?.league || league);
+    if (targetLeague !== 'MLB') {
+      return { ok: true, league: targetLeague, configured: false, games: [], failures: [], message: `${targetLeague} 尚未設定同聯盟合法外部盤源` };
+    }
+    try {
+      const targets = (Array.isArray(targetGames) ? targetGames : []).map(row => ({
+        gamePk: Number(row?.gamePk || row?.game?.gamePk),
+        markets: (Array.isArray(row?.markets) ? row.markets : []).map(market => ({
+          market: String(market?.market || ''),
+          pick: String(market?.pick || ''),
+        })).filter(market => market.market && market.pick),
+      })).filter(row => row.gamePk && row.markets.length);
+      const result = await requestJSON('/api/reference-lines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ league: targetLeague, date: targetDate, schedule: games, targets }),
+      }, 60000);
+      lastReferenceRefreshAtRef.current = Date.now();
+      return result;
+    } catch (cause) {
+      lastReferenceRefreshAtRef.current = Date.now();
+      return { ok: false, configured: false, games: [], failures: [], message: `獨立外部市場取得失敗：${String(cause?.message || cause)}` };
+    }
   }
 
   async function confirmLiveReaderHash(targetDate, payloadHash, generation) {
@@ -3133,10 +3164,13 @@ export default function Home() {
       commitReaderStatus(status);
       const currentStatus = readerStatusRef.current;
       const statusRevision = readerHashKey(targetDate, currentStatus?.payloadHash);
+      const referenceRefreshDue = league === 'MLB'
+        && Date.now() - Number(lastReferenceRefreshAtRef.current || 0) >= REFERENCE_REFRESH_INTERVAL_MS;
       if (!currentStatus?.fresh || !statusRevision) return;
       if (statusRevision === creditRevisionRef.current
         && !blockedReaderHashRecheckDue(currentStatus.payloadHash)
         && !readerBoardNeedsCoreRefresh()
+        && !referenceRefreshDue
         && Date.now() - officialPrestartCheckedAtRef.current < OFFICIAL_PRESTART_RECHECK_MS) {
         setBoard(current => current.map(item => touchReaderHeartbeat(
           item,
@@ -3172,7 +3206,8 @@ export default function Home() {
       if (credit.provider !== 'TAI888_READER_AUTO' || !credit.readerFresh || !creditRevision) return;
       if (creditRevision === creditRevisionRef.current
         && !blockedReaderHashRecheckDue(credit.payloadHash)
-        && !readerBoardNeedsCoreRefresh()) {
+        && !readerBoardNeedsCoreRefresh()
+        && !referenceRefreshDue) {
         setBoard(current => current.map(item => touchReaderHeartbeat(item, credit.payloadHash, credit.pageActivityAt)));
         return;
       }

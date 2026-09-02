@@ -67,7 +67,7 @@ const odds = normalizeOddsApiReference([{
     bookmaker('book-c', '2026-08-11T20:02:00Z', 1.93, 1.85, 1.92, 1.86),
   ],
 }], schedule, { fetchedAt: '2026-08-11T20:02:30.000Z' });
-assert.match(REFERENCE_LINES_VERSION, /v1\.4\.0/);
+assert.match(REFERENCE_LINES_VERSION, /v1\.5\.0/);
 assert.equal(odds.games.length, 1);
 assert.deepEqual(odds.games[0].markets.map(row => row.pick), [
   '波士頓紅襪受讓1.5', '多倫多藍鳥讓1.5', '大8.5', '小8.5',
@@ -347,22 +347,27 @@ assert.equal(noProvider.configured, false);
 assert.equal(noProvider.consensusReady, false);
 assert.equal(jbotOnly.configured, true, 'JBot is still a configured reference provider');
 assert.equal(jbotOnly.primary, 'JBOT_TAIWAN_SPORTS_LOTTERY');
-assert.equal(jbotOnly.consensusReady, false, '外部國際市場稽核已停用');
-assert.equal(oddsOnly.configured, false, '未知來源的The Odds API key必須被忽略');
-assert.equal(oddsOnly.primary, null);
-assert.equal(oddsOnly.consensusReady, false);
+assert.equal(jbotOnly.consensusReady, false, 'JBot alone is not a fresh three-book international consensus');
+assert.equal(oddsOnly.configured, true, 'The Odds API key enables the audit-only external market source');
+assert.equal(oddsOnly.primary, 'THE_ODDS_API_CONSENSUS');
+assert.equal(oddsOnly.consensusReady, true);
+assert.equal(oddsOnly.externalAuditEnabled, true);
 assert.equal(bothProviders.configured, true);
-assert.equal(bothProviders.primary, 'JBOT_TAIWAN_SPORTS_LOTTERY');
-assert.equal(bothProviders.consensusReady, false, 'The Odds API key不得重新啟用外部市場稽核');
+assert.equal(bothProviders.primary, 'THE_ODDS_API_CONSENSUS');
+assert.equal(bothProviders.consensusReady, true, 'The Odds API enables audit-only consensus when JBot is also configured');
 
 const healthRoute = fs.readFileSync(new URL('../app/api/health/route.js', import.meta.url), 'utf8');
-assert.match(healthRoute, /referenceLinesEnabled:\s*false/, 'health必須明確標示外部市場未使用');
-assert.match(healthRoute, /referenceConsensusReady:\s*false/, 'health不得把未知The Odds API key標示為可用');
-assert.match(healthRoute, /externalMarketAuditEnabled:\s*false/, 'health必須公開外部市場稽核停用狀態');
+assert.match(healthRoute, /referenceLinesEnabled:\s*referenceStatus\.externalAuditEnabled/, 'health must expose the real audit-only source state');
+assert.match(healthRoute, /referenceConsensusReady:\s*referenceStatus\.consensusReady/, 'health must expose three-book consensus readiness');
+assert.match(healthRoute, /externalMarketAuditEnabled:\s*referenceStatus\.externalAuditEnabled/, 'health must expose external audit readiness');
 assert.match(healthRoute, /anyReferenceProviderConfigured:\s*referenceStatus\.anyConfigured/, 'health must separately expose whether any non-qualifying reference provider is configured');
+assert.match(healthRoute, /AUDIT_ONLY_THREE_UNIQUE_BOOKS_5M_FRESH_3M_SYNCHRONIZED_EXACT_CONTRACT/, 'health must state the audit-only contract without implying W/R feedback');
 
 const referenceRoute = fs.readFileSync(new URL('../app/api/reference-lines/route.js', import.meta.url), 'utf8');
-assert.doesNotMatch(referenceRoute, /THE_ODDS_API_KEY|api\.the-odds-api\.com|loadOddsApi/, 'reference route不得再呼叫The Odds API');
+assert.match(referenceRoute, /THE_ODDS_API_KEY|api\.the-odds-api\.com|loadOddsApi/, 'reference route must restore the authorized audit-only The Odds API path');
+assert.match(referenceRoute, /events\/\$\{safeEventId\}\/odds/, 'targeted Reader contracts must use the per-event endpoint');
+assert.match(referenceRoute, /targetByGamePk\.size\s*\?\s*oddsApiEventsUrl\(key, selectedWindow\)\s*:\s*oddsApiUrl\(key, selectedWindow\)/, 'targeted discovery must use the event list before per-event enrichment');
+assert.match(referenceRoute, /targetByGamePk\.size\s*\?\s*targetedEvents/, 'targeted verification must fail closed instead of using featured main lines');
 assert.match(referenceRoute, /filterReferenceGamesToTargets\(requestedGames, targets\)/, 'the route must bound alternate rows to Reader target contracts before signing');
 assert.match(referenceRoute, /body\.targets\.length\s*&&\s*!targets\.length/, 'malformed or unverified targets must not silently downgrade to the no-target featured fallback');
 

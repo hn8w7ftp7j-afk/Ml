@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import {
+  ODDS_API_EVENT_MARKETS,
   REFERENCE_LINES_VERSION,
   filterReferenceGamesToTargets,
+  matchReferenceScheduleGame,
   normalizeJbotReference,
+  normalizeOddsApiReference,
   referenceProviderStatus,
 } from '../../../lib/reference-lines.js';
+import { oddsApiWindow } from '../../../lib/reference-time.js';
 import { signMarketGames } from '../../../lib/market-integrity-v1.js';
 import { fetchLeagueTaipeiSlate, validateLeagueScheduleSubset } from '../../../lib/league-provider.js';
 import { requestedLeagueId } from '../../../lib/leagues.js';
@@ -28,6 +32,14 @@ globalThis.__MLB_REFERENCE_LINES_CACHE_V1043__ = cache;
 let lastJbotRequestAt = globalThis.__MLB_LAST_JBOT_REQUEST_AT__ || 0;
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+const TARGET_MARKET_KEYS = Object.freeze({
+  '全場讓分': ['spreads', 'alternate_spreads'],
+  '全場大小': ['totals', 'alternate_totals'],
+  '上半讓分': ['spreads_1st_5_innings', 'alternate_spreads_1st_5_innings'],
+  '上半大小': ['totals_1st_5_innings', 'alternate_totals_1st_5_innings'],
+});
+const allowedEventMarkets = new Set(ODDS_API_EVENT_MARKETS);
 
 function mergeReferenceResults(results) {
   const byGame = new Map();
@@ -88,16 +100,22 @@ function sanitizeTargets(rows, schedule) {
   for (const row of (Array.isArray(rows) ? rows : []).slice(0, 20)) {
     const gamePk = Number(row?.gamePk);
     if (!Number.isSafeInteger(gamePk) || gamePk <= 0 || !schedulePks.has(gamePk)) continue;
-    const current = targets.get(gamePk) || { gamePk, markets: [] };
+    const current = targets.get(gamePk) || { gamePk, markets: [], marketKeys: new Set() };
     for (const marketRow of (Array.isArray(row?.markets) ? row.markets : []).slice(0, 16)) {
       const market = cleanText(typeof marketRow === 'string' ? marketRow : marketRow?.market, 20);
       const pick = cleanText(typeof marketRow === 'object' ? marketRow?.pick : '', 120);
-      if (!['全場讓分', '全場大小', '上半讓分', '上半大小'].includes(market)) continue;
+      const keys = TARGET_MARKET_KEYS[market] || [];
+      if (!keys.length || !pick) continue;
       current.markets.push({ market, pick });
+      for (const key of keys) if (allowedEventMarkets.has(key)) current.marketKeys.add(key);
+      if (market === '全場讓分' && /(?:讓|受讓)0(?:平|[+-]\d+|$)/.test(pick) && allowedEventMarkets.has('h2h')) {
+        current.marketKeys.add('h2h');
+      }
     }
-    if (current.markets.length) targets.set(gamePk, current);
+    if (current.markets.length && current.marketKeys.size) targets.set(gamePk, current);
   }
   return [...targets.values()]
+    .map(row => ({ ...row, marketKeys: [...row.marketKeys].sort() }))
     .sort((left, right) => left.gamePk - right.gamePk);
 }
 
@@ -131,6 +149,118 @@ async function loadJbot(date, schedule) {
   const payload = await fetchJson(url, { headers: { 'X-JBot-Token': token, Accept: 'application/json' } });
   const fetchedAt = new Date().toISOString();
   return { ...normalizeJbotReference(payload, schedule, { fetchedAt }), provider: 'JBOT_TAIWAN_SPORTS_LOTTERY' };
+}
+
+function oddsApiUrl(key, window = null) {
+  const url = new URL('https://api.the-odds-api.com/v4/sports/baseball_mlb/odds');
+  url.searchParams.set('apiKey', key);
+  url.searchParams.set('regions', 'us');
+  url.searchParams.set('markets', 'spreads,totals');
+  url.searchParams.set('oddsFormat', 'decimal');
+  url.searchParams.set('dateFormat', 'iso');
+  if (window) {
+    url.searchParams.set('commenceTimeFrom', window.start);
+    url.searchParams.set('commenceTimeTo', window.end);
+  }
+  return url;
+}
+
+function oddsApiEventsUrl(key, window = null) {
+  const url = new URL('https://api.the-odds-api.com/v4/sports/baseball_mlb/events');
+  url.searchParams.set('apiKey', key);
+  url.searchParams.set('dateFormat', 'iso');
+  if (window) {
+    url.searchParams.set('commenceTimeFrom', window.start);
+    url.searchParams.set('commenceTimeTo', window.end);
+  }
+  return url;
+}
+
+function oddsApiEventUrl(key, eventId, marketKeys) {
+  const safeEventId = encodeURIComponent(cleanText(eventId, 120));
+  const url = new URL(`https://api.the-odds-api.com/v4/sports/baseball_mlb/events/${safeEventId}/odds`);
+  url.searchParams.set('apiKey', key);
+  url.searchParams.set('regions', 'us');
+  url.searchParams.set('markets', marketKeys.filter(market => allowedEventMarkets.has(market)).join(','));
+  url.searchParams.set('oddsFormat', 'decimal');
+  url.searchParams.set('dateFormat', 'iso');
+  return url;
+}
+
+function eventIdentity(raw) {
+  return cleanText(raw?.id, 120);
+}
+
+function mergeOddsEvent(featured, detail) {
+  return {
+    ...featured,
+    ...detail,
+    id: eventIdentity(detail) || eventIdentity(featured),
+    commence_time: detail?.commence_time || featured?.commence_time,
+    away_team: detail?.away_team || featured?.away_team,
+    home_team: detail?.home_team || featured?.home_team,
+    bookmakers: Array.isArray(detail?.bookmakers) ? detail.bookmakers : featured?.bookmakers,
+  };
+}
+
+async function loadOddsApi(date, schedule, targets = []) {
+  const key = process.env.THE_ODDS_API_KEY;
+  if (!key) return null;
+  const window = oddsApiWindow(date, schedule);
+  const targetByGamePk = new Map((Array.isArray(targets) ? targets : []).map(row => [Number(row.gamePk), row]));
+  const discoveryUrl = selectedWindow => targetByGamePk.size
+    ? oddsApiEventsUrl(key, selectedWindow)
+    : oddsApiUrl(key, selectedWindow);
+  let payload;
+  try {
+    payload = await fetchJson(discoveryUrl(window), { headers: { Accept: 'application/json' } });
+  } catch (error) {
+    if (!/commenceTime(?:From|To)|ISO 8601|timestamp/i.test(String(error?.message || error))) throw error;
+    payload = await fetchJson(discoveryUrl(null), { headers: { Accept: 'application/json' } });
+  }
+  const discoveredEvents = Array.isArray(payload) ? payload : [];
+  const targetedEvents = [];
+  const failures = [];
+  for (const raw of discoveredEvents) {
+    const game = matchReferenceScheduleGame({
+      away: raw?.away_team,
+      home: raw?.home_team,
+      time: raw?.commence_time,
+    }, schedule);
+    const target = targetByGamePk.get(Number(game?.gamePk));
+    if (target && eventIdentity(raw)) targetedEvents.push({ raw, target });
+  }
+  const matchedTargetPks = new Set(targetedEvents.map(row => Number(row.target.gamePk)));
+  for (const target of targetByGamePk.values()) {
+    if (!matchedTargetPks.has(Number(target.gamePk))) failures.push(`gamePk ${target.gamePk}：The Odds API 找不到可安全配對的事件ID`);
+  }
+
+  const eventPayloads = new Map();
+  await Promise.all(targetedEvents.map(async ({ raw, target }) => {
+    try {
+      const detail = await fetchJson(oddsApiEventUrl(key, raw.id, target.marketKeys), { headers: { Accept: 'application/json' } });
+      if (!detail || eventIdentity(detail) !== eventIdentity(raw)) throw new Error('逐場回傳事件ID不一致');
+      eventPayloads.set(eventIdentity(raw), mergeOddsEvent(raw, detail));
+    } catch (error) {
+      failures.push(`gamePk ${target.gamePk}：${String(error?.message || error)}`);
+    }
+  }));
+
+  // Targeted verification is fail-closed. A failed event-detail request must
+  // never fall back to a featured main line and masquerade as the requested
+  // Tai888 period/alternate contract.
+  const enrichedPayload = targetByGamePk.size
+    ? targetedEvents.map(({ raw }) => eventPayloads.get(eventIdentity(raw))).filter(Boolean)
+    : discoveredEvents;
+  const fetchedAt = new Date().toISOString();
+  return {
+    ...normalizeOddsApiReference(enrichedPayload, schedule, { fetchedAt }),
+    provider: 'THE_ODDS_API_CONSENSUS',
+    requestWindow: window,
+    targetedEventCount: targetedEvents.length,
+    enrichedEventCount: eventPayloads.size,
+    failures,
+  };
 }
 
 export async function GET(request) {
@@ -197,13 +327,13 @@ export async function POST(request) {
         providers: status.providers,
         games: [],
         unmatched: [],
-        message: '外部市場稽核未使用；不改比分分布或W/R，8.5級資格最高封頂8.4。',
+        message: 'Production 尚未設定外部市場 API 金鑰；不改比分分布或W/R，缺少外部同約驗證時8.5級最高封頂8.4。',
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     const fullSlateIdentity = fullOfficialSlate.map(game => `${game.gamePk}:${game.awayTeamId}:${game.homeTeamId}:${game.gameNumber}:${game.gameDate}`).join('|');
     const configuredProviders = status.providers.filter(provider => provider.configured).map(provider => provider.id).sort();
-    const targetIdentity = targets.map(target => `${target.gamePk}:${target.markets.map(row => `${row.market}/${row.pick}`).join('+')}`).join(',');
+    const targetIdentity = targets.map(target => `${target.gamePk}:${target.marketKeys.join('+')}:${target.markets.map(row => `${row.market}/${row.pick}`).join('+')}`).join(',');
     const key = `${league}:${configuredProviders.join('+')}:${date}:${fullSlateIdentity}:${schedule.map(game => game.gamePk).join(',')}:${targetIdentity}`;
     const cached = cache.get(key);
     if (cached && cached.expiresAt > Date.now()) return NextResponse.json({ ...cached.payload, cache: 'HIT' }, { headers: { 'Cache-Control': 'no-store' } });
@@ -213,6 +343,14 @@ export async function POST(request) {
     if (status.providers.find(provider => provider.id === 'JBOT_TAIWAN_SPORTS_LOTTERY')?.configured) {
       try { results.push(await loadJbot(date, fullOfficialSlate)); }
       catch (error) { failures.push(`JBot：${String(error?.message || error)}`); }
+    }
+    if (status.providers.find(provider => provider.id === 'THE_ODDS_API_CONSENSUS')?.configured) {
+      try {
+        const oddsResult = await loadOddsApi(date, fullOfficialSlate, targets);
+        failures.push(...(Array.isArray(oddsResult?.failures) ? oddsResult.failures.map(message => `The Odds API：${message}`) : []));
+        results.push(oddsResult);
+      }
+      catch (error) { failures.push(`The Odds API：${String(error?.message || error)}`); }
     }
     const result = mergeReferenceResults(results);
     if (!result.games.length && failures.length) {
@@ -239,7 +377,9 @@ export async function POST(request) {
       enrichedEventCount: results.reduce((sum, row) => sum + Number(row?.enrichedEventCount || 0), 0),
       fetchedAt: new Date().toISOString(),
       failures,
-      message: '外部市場稽核未使用；不改比分分布或W/R，8.5級資格最高封頂8.4。',
+      message: status.consensusReady
+        ? (signedGames.length ? '' : '已連線外部市場，但沒有找到可與目前 Tai888 同賽事、同期間、相鄰盤安全配對的價格。')
+        : '外部市場驗證金鑰未設定；不改比分分布或W/R，缺少外部同約驗證時8.5級最高封頂8.4。',
       cache: 'MISS',
     };
     cache.set(key, { payload, expiresAt: Date.now() + 3 * 60 * 1000 });
