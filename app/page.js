@@ -11,6 +11,7 @@ import {
 } from '../lib/bet-ledger.js';
 import { compareBetPrice } from '../lib/bet-price-comparison.js';
 import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
+import { summarizeOriginalBetPrices } from '../lib/bet-price-summary.js';
 import { BET_PERIODS, filterBetLedgerByPeriod, summarizeBetLedger } from '../lib/bet-stats.js';
 import {
   SCORE_BUCKETS,
@@ -856,7 +857,7 @@ function BetPriceComparison({ bet, currentRow = null, game = null, closingRow = 
   </div>;
 }
 
-function SummaryCards({ summary }) {
+function SummaryCards({ summary, originalPriceSummary }) {
   const values = [
     ['下注', summary?.bets ?? 0],
     ['已結算', summary?.settled ?? 0],
@@ -874,6 +875,7 @@ function SummaryCards({ summary }) {
   ];
   return <div className="ledgerSummary">
     {values.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+    <div className="originalPriceSummary"><span>原下注盤優劣</span><strong>總數 {originalPriceSummary?.total ?? 0}｜<b className="positive">優 {originalPriceSummary?.better ?? 0}</b>｜<b className="negative">劣 {originalPriceSummary?.worse ?? 0}</b></strong></div>
   </div>;
 }
 
@@ -899,6 +901,10 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
     ? leagueBets
     : leagueBets.filter(bet => bet?.market === selectedMarket), [leagueBets, selectedMarket]);
   const summary = useMemo(() => summarizeBetLedger(filteredBets).overall, [filteredBets]);
+  const originalPriceSummary = useMemo(
+    () => summarizeOriginalBetPrices(filteredBets, priceFeed),
+    [filteredBets, priceFeed],
+  );
   const priceBetIds = useMemo(() => filteredBets
     .filter(bet => bet?.status === 'OPEN' && bet?.id)
     .slice(0, 300)
@@ -968,7 +974,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
       {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => choosePeriod(item.id)}>{item.label}</button>)}
     </div>
     <div className="ledgerPath">{periodLabel}｜{leagueLabel}｜{marketLabel}</div>
-    <SummaryCards summary={summary}/>
+    <SummaryCards summary={summary} originalPriceSummary={originalPriceSummary}/>
 
     <div className="ledgerSectionHead"><h3>1. 選擇聯盟範圍</h3></div>
     <div className="leagueScopeTabs" aria-label="聯盟統計範圍">
