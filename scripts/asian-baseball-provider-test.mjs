@@ -370,7 +370,7 @@ const npbFinalDetail = `
 <div id="gmdivresult"><table><tbody>
 <tr><td class="gmscorettl"></td><td class="gmscorettl">R</td><td class="gmscorettl">H</td><td class="gmscorettl">E</td></tr>
 <tr><td class="gmscoreteam">Yomiuri</td><td class="gmscore">1</td><td class="gmscore">1</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">-</td><td class="gmscore">3</td><td class="gmscore">5</td><td class="gmscore">0</td></tr>
-<tr><td class="gmscoreteam">DeNA</td><td class="gmscore">2</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1X</td><td class="gmscore">-</td><td class="gmscore">4</td><td class="gmscore">10</td><td class="gmscore">1</td></tr>
+<tr><td class="gmscoreteam">DeNA</td><td class="gmscore">2</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1</td><td class="gmscore">0</td><td class="gmscore">0</td><td class="gmscore">1</td><td class="gmscore">X</td><td class="gmscore">-</td><td class="gmscore">4</td><td class="gmscore">10</td><td class="gmscore">1</td></tr>
 </tbody></table></div>`;
 const parsedNpbDetail = parseNpbGameDetailHtml(npbFinalDetail, scoreOnlyNpbDay[0]);
 assert.equal(parsedNpbDetail.statusCode, 'F');
