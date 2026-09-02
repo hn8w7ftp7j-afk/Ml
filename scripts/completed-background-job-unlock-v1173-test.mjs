@@ -5,13 +5,18 @@ const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8')
 
 assert.match(
   page,
-  /function loadBackgroundJob\(league, date\)[\s\S]*terminalRunMatches[\s\S]*batch\?\.resultLoaded !== true[\s\S]*saveBackgroundJob\(recovered\);[\s\S]*return recovered;/,
+  /function loadBackgroundJob\(league, date\)[\s\S]*terminalRunMatches[\s\S]*cachedResultLoaded[\s\S]*loadAnalysisBoardCache\(id, date\)[\s\S]*!cachedResultLoaded[\s\S]*saveBackgroundJob\(recovered\);[\s\S]*return recovered;/,
   'a terminal all-league run must recover each unconsumed league result, including after an overlapping individual job replaced its reconnect record',
 );
 assert.match(
   page,
-  /saved\.batchMode === 'all-leagues'[\s\S]*result\?\.detached !== true[\s\S]*resultLoaded: true/,
+  /resultActuallyLoaded = result\?\.detached !== true && result\?\.discarded !== true[\s\S]*saved\.batchMode === 'all-leagues'[\s\S]*resultActuallyLoaded[\s\S]*resultLoaded: true/,
   'a league result must be marked consumed only after its completed payload has loaded into that league board',
+);
+assert.match(
+  page,
+  /if \(!resultActuallyLoaded\)[\s\S]*結果保留待重新驗證載入[\s\S]*return;/,
+  'a discarded terminal payload must remain recoverable and must not claim that its rows were loaded',
 );
 assert.match(
   page,

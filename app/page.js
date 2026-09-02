@@ -360,7 +360,13 @@ function loadBackgroundJob(league, date) {
     const terminalRunMatches = run?.state === 'completed'
       && Boolean(run?.runId)
       && allLeagueBoardDate(run, id) === String(date || '');
-    if (terminalRunMatches && batch?.resultLoaded !== true && Number(batch?.total) > 0) {
+    // Older clients could mark a terminal batch as consumed even when its
+    // Reader re-attestation discarded every row before anything reached the
+    // board.  Do not trust that stale flag unless a calculated board really
+    // survived in the durable browser cache for this league/date.
+    const cachedResultLoaded = batch?.resultLoaded === true
+      && loadAnalysisBoardCache(id, date).some(item => analysisHasCalculatedDirections(item?.customData));
+    if (terminalRunMatches && !cachedResultLoaded && Number(batch?.total) > 0) {
       const completedAt = Date.parse(run.completedAt || '');
       const jobStartedAt = Date.parse(job?.startedAt || '');
       const differentNewerJob = job?.runId !== run.runId
@@ -381,7 +387,7 @@ function loadBackgroundJob(league, date) {
         return recovered;
       }
     }
-    if (terminalRunMatches && batch?.resultLoaded === true
+    if (terminalRunMatches && cachedResultLoaded
       && job?.batchMode === 'all-leagues' && job.runId === run.runId) {
       clearBackgroundJob(id, date, run.runId);
       return null;
@@ -1740,11 +1746,16 @@ export default function Home() {
       : '已接回尚未完成的伺服器背景分析；可以切換畫面，完成後會自動載入。');
     pollBackgroundJob(saved.runId, generation, date, saved.gamePks).then(result => {
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== date) return;
-      if (saved.batchMode === 'all-leagues' && result?.detached !== true) {
+      const resultActuallyLoaded = result?.detached !== true && result?.discarded !== true;
+      if (saved.batchMode === 'all-leagues' && resultActuallyLoaded) {
         const completedRun = loadAllLeagueAnalysisRun(date);
         if (completedRun?.runId === saved.runId) {
           publishAllLeagueRun(updateAllLeagueAnalysisLeague(completedRun, league, { resultLoaded: true }));
         }
+      }
+      if (!resultActuallyLoaded) {
+        setNotice('伺服器分析已完成；Reader盤口已更新，結果保留待重新驗證載入。');
+        return;
       }
       const rows = Array.isArray(result?.results) ? result.results : [];
       const completed = rows.filter(row => row?.ok).length;
