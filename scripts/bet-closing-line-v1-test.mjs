@@ -44,6 +44,35 @@ assert.equal(placed.version, BET_CLOSING_LINE_VERSION);
 assert.equal(placed.pick, '小8+50');
 assert.equal(placed.formulaDiagnosticScore, 8.1);
 
+const oldCapturedLine = '2026-08-30T07:20:00.000Z';
+const capturedReaderBet = {
+  ...bet,
+  lineAsOf: oldCapturedLine,
+  placedContractSnapshot: { ...bet.placedContractSnapshot, lineAsOf: oldCapturedLine },
+  readerEvidenceStatus: 'SERVER_VERIFIED_CAPTURED_READER',
+  serverEvidenceVersion: 'BASEBALL-BET-EVIDENCE-SERVER-VERIFICATION-v11.8.16',
+  serverEvidenceVerifiedAt: '2026-08-30T08:00:00.000Z',
+};
+const capturedPlaced = buildPlacedClosingContractSnapshot(capturedReaderBet);
+assert.equal(capturedPlaced?.lineAsOf, oldCapturedLine, '伺服器已驗證的擷取Reader盤即使早於下注超過10分鐘，仍可作為開賽前初始快照');
+
+assert.equal(buildPlacedClosingContractSnapshot({
+  ...capturedReaderBet,
+  readerEvidenceStatus: 'SERVER_VERIFIED_CURRENT_READER',
+}), null, '一般即時Reader證據不得繞過下注前10分鐘限制');
+assert.equal(buildPlacedClosingContractSnapshot({
+  ...capturedReaderBet,
+  serverEvidenceVersion: '',
+}), null, '只有具備伺服器驗證中繼資料的擷取Reader盤可放寬時間差');
+
+for (const lineAsOf of ['2026-08-30T10:00:00.000Z', '2026-08-30T10:00:01.000Z']) {
+  assert.equal(buildPlacedClosingContractSnapshot({
+    ...capturedReaderBet,
+    lineAsOf,
+    placedContractSnapshot: { ...capturedReaderBet.placedContractSnapshot, lineAsOf },
+  }), null, `伺服器已驗證的擷取Reader盤仍不得使用開賽時或之後盤口：${lineAsOf}`);
+}
+
 const readerSnapshot = {
   league: 'MLB',
   boardDate: '2026-08-30',

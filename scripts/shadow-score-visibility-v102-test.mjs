@@ -214,6 +214,49 @@ assert.equal(Number.isFinite(staleReaderMustNotScore.results[0].formulaDiagnosti
 assert.equal(staleReaderMustNotScore.results[0].shadowDiagnosticScore, null);
 assert.equal(staleReaderMustNotScore.results[0].rankingQualified, false);
 assert.equal(staleReaderMustNotScore.results[0].scoreAudit.ok, false);
+assert.equal(staleReaderMustNotScore.results[0].scoreBreakdown.dataQualityWarningOnly, false);
+assert.equal(staleReaderMustNotScore.results[0].scoreBreakdown.readerFreshnessWarningOnly, true);
+
+for (const hardFailure of [
+  {
+    name: '數值信賴下界跨0',
+    patch: { numericalQA: { passed: false, signStable: false } },
+  },
+  {
+    name: 'Robust EV高於Weighted EV',
+    patch: { weightedEV: 0.01, robustEV: 0.02 },
+  },
+  {
+    name: '盤口合約無法解析',
+    patch: { pick: '無效盤口' },
+  },
+]) {
+  const blocked = finalizeDeterministicAnalysis({
+    analysis: {
+      leagueId: 'CPBL',
+      alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
+      dataGateV10: { passedForShadowScore: true },
+      results: [{
+        ...direction('全場讓分', '味全龍受讓1+10', 0.08, 0.03),
+        lineFresh: false,
+        executable: false,
+        evCalibration: {
+          ...common.evCalibration,
+          qualified: false,
+          actualReaderEligible: false,
+          reasons: [
+            '核心棒球資料品質0.81低於0.85安全門檻',
+            'Tai888 Reader 實際盤已過期或尚未完成最新版本驗證；可追溯快照的原始模型W/R保留，但不得排名或下注',
+          ],
+        },
+        ...hardFailure.patch,
+      }],
+    },
+    game: { ...game, leagueId: 'CPBL' },
+  }).results[0];
+  assert.equal(blocked.formulaDiagnosticScore, null, `${hardFailure.name}是硬性錯誤，不得套用S分數顯示例外`);
+  assert.equal(blocked.scoreBreakdown.formulaDisplayWarningOnly, false);
+}
 
 const dataQualityAndStaleReaderWarning = finalizeDeterministicAnalysis({
   analysis: {
@@ -243,6 +286,45 @@ assert.equal(Number.isFinite(dataQualityAndStaleReaderWarning.formulaDiagnosticS
 assert.equal(dataQualityAndStaleReaderWarning.shadowDiagnosticScore, null);
 assert.equal(dataQualityAndStaleReaderWarning.rankingQualified, false);
 assert.equal(dataQualityAndStaleReaderWarning.scoreBreakdown.formulaDisplayWarningOnly, true);
+assert.equal(dataQualityAndStaleReaderWarning.scoreBreakdown.dataQualityWarningOnly, true);
+assert.equal(dataQualityAndStaleReaderWarning.scoreBreakdown.readerFreshnessWarningOnly, true);
+
+const pairQaInputs = [
+  direction('全場大小', '大9平', 0.08, 0.04, 0.70),
+  direction('全場大小', '小9平', -0.10, -0.15, 0.40),
+];
+const pairQaExpectedRawScores = pairQaInputs.map(input => finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'MLB',
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
+    dataGateV10: { passedForShadowScore: true },
+    results: [input],
+  },
+  game,
+}).results[0].formulaDiagnosticScore);
+const pairQaBlocked = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'MLB',
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
+    dataGateV10: { passedForShadowScore: true },
+    results: pairQaInputs,
+  },
+  game,
+});
+for (const [index, row] of pairQaBlocked.results.entries()) {
+  assert.equal(row.pairAudit.passed, false, '條件勝率不互補時市場成對QA必須失敗');
+  assert.equal(row.formulaDiagnosticScore, null, '市場成對硬BLOCK後不得保留頂層公式S');
+  assert.equal(row.shadowDiagnosticScore, null, '市場成對硬BLOCK後不得保留QA合格S');
+  assert.equal(row.scoreBreakdown.formulaDiagnosticScore, null, '市場成對硬BLOCK後breakdown公式S必須同步清空');
+  assert.equal(row.scoreBreakdown.qaQualifiedDiagnosticScore, null, '市場成對硬BLOCK後breakdown QA合格S必須同步清空');
+  assert.equal(row.scoreBreakdown.diagnosticScore, null, '市場成對硬BLOCK後breakdown診斷S必須同步清空');
+  assert.equal(row.scoreBreakdown.rawUnqualifiedScore, pairQaExpectedRawScores[index], '原始未合格公式分數必須保留供稽核');
+  assert.equal(row.scoreAudit.displayScoreAvailable, false, '市場成對硬BLOCK後不得宣告S可顯示');
+  assert.equal(row.scoreAudit.ok, false);
+  assert.equal(row.scoreStatus, 'BLOCKED');
+  assert.equal(row.rankingQualified, false);
+  assert.match(row.tag, /S分停用/);
+}
 
 const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true }, results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), water: null }] }, game });
 assert.equal(missingWater.results[0].formulaDiagnosticScore, null);

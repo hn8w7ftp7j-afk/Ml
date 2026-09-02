@@ -8,6 +8,7 @@ const register = read('app/pwa-register.js');
 const serviceWorker = read('public/sw.js');
 const nextConfig = read('next.config.mjs');
 const middleware = read('middleware.js');
+const ledgerCss = read('app/ledger.css');
 
 assert.match(layout, /appleWebApp:\s*\{[^}]*capable:\s*true/s, 'iOS standalone metadata missing');
 assert.match(layout, /viewportFit:\s*'cover'/, 'iOS safe-area viewport missing');
@@ -16,8 +17,14 @@ assert.match(manifest, /display:\s*'standalone'/, 'manifest must remove browser 
 assert.match(manifest, /app-icon-maskable-512\.png/, 'maskable install icon missing');
 assert.match(register, /navigator\.serviceWorker\.register\('\/sw\.js'\)/, 'service worker registration missing');
 assert.match(register, /加入主畫面/, 'iPhone install instructions missing');
+assert.match(register, /Promise\.race\([\s\S]*registration\.update\(\)[\s\S]*SERVICE_WORKER_UPDATE_TIMEOUT_MS/, 'service worker update must have a finite timeout');
+assert.match(register, /const capturePrompt = event => \{[\s\S]*window\.location\.pathname === '\/login'[\s\S]*event\.preventDefault\(\)[\s\S]*setVisible\(true\)/, 'install overlay must only be opened by beforeinstallprompt outside the login page');
+assert.doesNotMatch(register, /if \(!standaloneMode\(\)[^\n]*setVisible\(true\)/, 'install overlay must not open automatically before an install prompt');
 assert.match(register, /fetch\(`\/api\/health\?t=\$\{Date\.now\(\)\}`/, 'PWA must bypass cache when checking the deployed release version');
 assert.match(register, /latest\.version === APP_VERSION/, 'PWA update check must compare against the shared app version');
+assert.match(register, /operationStartedAt[\s\S]*Date\.now\(\) - operationStartedAt < 15 \* 60 \* 1000/, 'PWA update must defer reload while an analysis operation is saving its durable handle without leaving a permanent lock');
+assert.match(register, /reloadOperationStartedAt[\s\S]*Date\.now\(\) - reloadOperationStartedAt < 15 \* 60 \* 1000[\s\S]*setUpdating\(false\)[\s\S]*window\.location\.reload\(\)/, 'PWA must re-check the operation lock immediately before reloading');
+assert.doesNotMatch(read('app/globals.css'), /\.pwaInstall\{position:fixed/, 'the install prompt must stay in document flow instead of covering mobile action buttons');
 assert.match(register, /visibilitychange/, 'PWA must check for updates when it returns to the foreground');
 assert.match(register, /pageshow/, 'PWA must check for updates when iOS restores it from memory');
 assert.match(register, /window\.location\.reload\(\)/, 'PWA must automatically reload after detecting a newer release');
@@ -27,6 +34,8 @@ assert.doesNotMatch(serviceWorker, /caches\.(?:open|match)|cache\.put/, 'private
 assert.match(nextConfig, /Service-Worker-Allowed/, 'service worker scope header missing');
 assert.match(middleware, /PUBLIC_PWA_PATHS[\s\S]*manifest\.webmanifest[\s\S]*sw\.js/, 'PWA bootstrap files must remain public before app authentication');
 assert.match(middleware, /pathname\.startsWith\('\/icons\/'\)/, 'install icons must remain publicly readable');
+assert.match(ledgerCss, /\.rankActionStack\s*\{\s*grid-column:\s*4;/, 'desktop ranking actions must occupy the fourth grid column');
+assert.match(ledgerCss, /@media \(max-width: 720px\)[\s\S]*\.rankActionStack\s*\{\s*grid-column:\s*2 \/ -1;/, 'mobile ranking actions must keep spanning the content columns');
 
 for (const path of [
   'public/icons/app-icon-192.png',

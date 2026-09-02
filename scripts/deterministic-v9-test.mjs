@@ -18,7 +18,7 @@ const score = (weightedEV, robustEV, options = {}) => deterministicScore({
   ...options,
 });
 
-assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.9.0');
+assert.equal(SCORE_FORMULA_VERSION, 'DUAL-EV-BOTTLENECK-2026-08-v1.9.1');
 assert.equal(score(0, 0).score, 6.6);
 assert.equal(score(-0.001, 0.02).score, 6.6);
 assert.equal(score(-0.01, -0.02).score, 6.3);

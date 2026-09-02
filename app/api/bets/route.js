@@ -21,6 +21,25 @@ const response = (bets, extra = {}) => NextResponse.json({
   ...extra,
 }, { headers: { 'Cache-Control': 'no-store' } });
 
+// The browser may identify the exact Reader/PIT contract and choose a stake.
+// All durable ledger fields are rebuilt after server verification.
+function betUpsertCandidate(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    league: source.league,
+    date: source.date,
+    gamePk: source.gamePk,
+    market: source.market,
+    pick: source.pick,
+    water: source.water,
+    stake: source.stake,
+    readerPayloadHash: source.readerPayloadHash,
+    rawBoardHash: source.rawBoardHash,
+    readerRevision: source.readerRevision,
+    pitSnapshotId: source.pitSnapshotId,
+  };
+}
+
 function databaseFailureResponse(error, operation) {
   const failure = classifyDatabaseError(error);
   console.error(`[${operation}]`, databaseFailureLog(error, operation));
@@ -53,7 +72,8 @@ export async function POST(request) {
     const body = await readJsonBody(request, 500_000);
     if (body.action === 'merge') return response(await mergeCloudBets(body.bets));
     if (body.action === 'upsert') {
-      const verification = await verifyCloudBetEvidenceV110(body.bet);
+      const candidate = betUpsertCandidate(body.bet);
+      const verification = await verifyCloudBetEvidenceV110(candidate);
       if (verification.pitVerified !== true) {
         return NextResponse.json({
           ok: false,
@@ -61,7 +81,11 @@ export async function POST(request) {
           error: `目前下注找不到同場最新不可變PIT證據：${verification.pitError || 'PIT_UNVERIFIED'}`,
         }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
       }
-      return response(await upsertCloudBet(body.bet, { verification }));
+      const mutation = await upsertCloudBet(candidate, { verification });
+      return response(mutation.bets, {
+        created: mutation.created === true,
+        betId: mutation.betId || null,
+      });
     }
     if (body.action === 'cancel') return response(await cancelOpenCloudBet(body.id));
     if (body.action === 'settleOpen') {

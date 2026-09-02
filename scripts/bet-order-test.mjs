@@ -8,6 +8,7 @@ const entry = ({ gamePk, gameDate, market, pick, score }) => ({
   market,
   pick,
   score,
+  rankingEligible: true,
 });
 
 const ordered = buildBetOrderEntries([
@@ -39,4 +40,11 @@ assert.deepEqual(groups.map(group => group.gamePk), [1, 2, 3]);
 assert.deepEqual(groups.map(group => group.entries.length), [5, 1, 1]);
 assert.equal(groups[0].matchup, '客隊1 對 主隊1');
 
-console.log('Bet order: 7.0+ filter, start time, game grouping and market order PASS');
+const blockedCandidate = buildBetOrderEntries([{
+  ...entry({ gamePk: 5, gameDate: '2099-08-25T06:00:00.000Z', market: '全場讓分', pick: 'QA阻擋', score: 8.4 }),
+  rankingEligible: false,
+  qaPassed: false,
+}]);
+assert.deepEqual(blockedCandidate, [], '有數字但無排名資格的 QA BLOCK 方向不得進入候選順序');
+
+console.log('Bet order: ranking qualification, 7.0+ filter, start time, game grouping and market order PASS');
