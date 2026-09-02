@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.16', 'package/release identity must match the V11.8.16 exact direction-history binding diagnostic');
-assert.equal(packageLock.version, '11.8.16', 'package-lock release identity must match V11.8.16');
-assert.equal(packageLock.packages?.['']?.version, '11.8.16', 'root lockfile package must match V11.8.16');
-assert.equal(APP_VERSION, '11.8.16');
+assert.equal(packageJson.version, '11.8.17', 'package/release identity must match the V11.8.17 captured Reader recording policy');
+assert.equal(packageLock.version, '11.8.17', 'package-lock release identity must match V11.8.17');
+assert.equal(packageLock.packages?.['']?.version, '11.8.17', 'root lockfile package must match V11.8.17');
+assert.equal(APP_VERSION, '11.8.17');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -211,16 +211,16 @@ assert.doesNotMatch(page, /rawShadowScore != null && rawShadowScore >= 7\.2/, 'd
 assert.doesNotMatch(page, /Number\(row\?\.weightedEV\) <= 0 \? 'PASS'/, 'negative EV must still display the fixed numeric S score');
 mustMatch(/const score = formulaScoreValue\(row\)/, 'ranking must retain the canonical formula score so every analyzed direction can be displayed');
 mustMatch(/row\.provider === 'TAI888_READER_AUTO'/, 'ranking must accept only Reader-signed actual rows');
-mustMatch(/row\.evCalibration\?\.actualReaderEligible === true/, 'ranking must require the server-preserved fresh Reader qualification');
-mustMatch(/const currentReaderPrice = gamePrestart/, 'ranking must calculate current Reader execution eligibility separately from display');
+mustMatch(/row\.evCalibration\?\.actualReaderEligible === true/, 'ranking must require the server-preserved captured Reader qualification');
+mustMatch(/const currentReaderPrice = readerQualified && capturedReaderContractReady/, 'ranking must calculate captured Reader execution eligibility separately from display');
 mustMatch(/比賽已開始｜保留賽前分析與排名｜停止記錄新下注/, 'started games must retain their completed pregame score and ranking while execution is disabled');
-mustMatch(/Reader盤口等待最新驗證｜保留上一版分析/, 'stale Reader prices must retain their completed score while execution is disabled');
+mustMatch(/尚無已驗證的Reader盤口｜保留分析/, 'rows without captured Reader evidence must retain their completed score while execution is disabled');
 assert.doesNotMatch(page, /invalidateShadowScoreRow\(row, '獨立國際市場報價已超過5分鐘/, 'expired external consensus must remain audit-only');
 mustMatch(/clientReaderPriceCurrent: currentReaderPrice/, 'stale Reader rows must retain completed scores and current-price status');
-mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled, row\.clientReaderPriceCurrent, !cloudLedgerUnavailable\)\}/, 'bet recording must require the item hash, live Reader-price proof and writable durable ledger calculated by GameCard');
+mustMatch(/recordable=\{betRecordable\(item, row, now, betsEnabled, row\.clientReaderPriceCurrent, !cloudLedgerUnavailable\)\}/, 'bet recording must require captured Reader-price proof and a writable durable ledger calculated by GameCard');
 mustMatch(/\{actualLine && <div>/, 'actual Reader directions must retain a visible action even while recording is blocked');
 assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*acknowledgedReaderKey/, 'a successfully analyzed current item must not be blocked by an unrelated full-slate acknowledgement');
-mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash;/, 'ranking must use the fresh server Reader status and exact per-item content hash');
+mustMatch(/function capturedReaderContractReady\(item, row, now = Date\.now\(\)\)[\s\S]*retainedGameIsInactive\(item\)[\s\S]*actualReaderEligible === true/, 'recording must use a completed captured Reader contract while rejecting games removed from the official pregame slate');
 assert.doesNotMatch(page, /actualLineFreshNow\(/, 'the client must not re-expire a row after the current Reader hash has already proved identical content; the bet API performs the authoritative line-freshness check');
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
 mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning\]\);/, 'Reader polling must not restart on every board item update and must stop while all-league analysis runs');
@@ -230,7 +230,7 @@ mustMatch(/const previousByPk = new Map\(boardRef\.current\.map/, 'manual and au
 mustMatch(/shouldPreserveCalculatedAnalysis/, 'a partial or unopened Reader result must not downgrade completed W\/R');
 mustMatch(/const retainingPreviousRevision = preservePreviousReaderAnalysis \|\| pendingReaderAnalysis[\s\S]*customMarkets: resumed\?\.customMarkets \|\| \(retainingPreviousRevision \? previous\?\.customMarkets \|\| \[\]/, 'a changed Reader revision must keep the previously analyzed markets until its new distribution commits atomically');
 mustMatch(/readerPayloadHash: resumed\?\.readerPayloadHash \|\| null/, 'a queued Reader revision must remain non-executable until analysis succeeds');
-mustMatch(/const retainedFinishedItems = \[\.\.\.previousByPk\.values\(\)\][\s\S]*analysisHasCalculatedDirections[\s\S]*readerPayloadHash: null[\s\S]*const items = \[\.\.\.retainedFinishedItems, \.\.\.activeItems\]/, 'a full-slate refresh must retain completed early-game analysis while later games remain prestart');
+mustMatch(/const retainedFinishedItems = \[\.\.\.previousByPk\.values\(\)\][\s\S]*analysisHasCalculatedDirections[\s\S]*readerPayloadHash: null[\s\S]*const items = \[[\s\S]*\.\.\.activeItems\.sort\(byStartTime\)[\s\S]*\.\.\.retainedFinishedItems\.sort\(byStartTime\)/, 'a full-slate refresh must retain old analysis below the current official pregame slate');
 mustMatch(/readerResultIsStale/, 'late background results must be rejected when the live Reader hash has advanced');
 mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*readerEvidenceIsOlder\([\s\S]*currentItem\?\.actualSource,[\s\S]*currentItem\?\.latestReaderSource/, 'late success and failure results must respect the newest single-game Reader evidence time');
 mustMatch(/commitAnalysisFailure\(task, value\)[\s\S]*taskReaderStateIsStale\(task\)/, 'a late failed background job must not overwrite a newer Reader result');
@@ -247,7 +247,7 @@ mustMatch(/catch \(cause\) \{[\s\S]*taskReaderStateIsStale\(rebuildTask\)[\s\S]*
 mustMatch(/const currentBlockedMarkets = new Set\(\(item\.latestMarketCoverage \|\| item\.marketCoverage\)\?\.blockedMarkets \|\| \[\]\)/, 'current BLOCKED coverage must hide preserved directions from ranking');
 mustMatch(/function readerAnalysisRevisionReady\(item\)[\s\S]*item\?\.status === 'done'[\s\S]*restoredFromCache !== true[\s\S]*pendingReaderAnalysis !== true[\s\S]*analysisFailure == null/, 'only a fully committed, validated Reader revision may regain ranking or bet authority');
 mustMatch(/const currentAnalysisExecutable = readerAnalysisRevisionReady\(item\)[\s\S]*Boolean\(item\.readerPayloadHash\)[\s\S]*!preservedReaderAnalysis/, 'preserved analysis must never regain current ranking or bet authority');
-mustMatch(/const itemReaderExecutable = item =>[\s\S]*readerAnalysisRevisionReady\(item\)[\s\S]*item\.readerPayloadHash === readerStatus\?\.payloadHash/, 'cache-restored, queued, failed and partial revisions must stay fail-closed even when their saved hash matches the live Reader');
+mustMatch(/function capturedReaderContractReady\(item, row, now = Date\.now\(\)\)[\s\S]*item\?\.status === 'done'[\s\S]*item\?\.analysisFailure == null/, 'captured Reader recording must remain fail-closed for unfinished or failed analysis revisions');
 const rankingDerivation = page.slice(page.indexOf('const shadowRanking = useMemo'), page.indexOf('const shadowBetOrder = useMemo'));
 const rankingFilter = rankingDerivation.slice(rankingDerivation.indexOf('.filter(row'), rankingDerivation.indexOf('.map(row'));
 assert.doesNotMatch(rankingFilter, /preservedReaderAnalysis/, 'partial, missing or pending Reader revisions must remain visible in ranking while staying non-executable');
@@ -257,10 +257,10 @@ const scoreOnlyInvalidation = page.slice(
 );
 assert.doesNotMatch(scoreOnlyInvalidation, /lineFresh:\s*false|actualReaderEligible:\s*false|executable:\s*false/, 'external-reference expiry must not invalidate a still-fresh Reader price or hide actual-bet recording');
 assert.doesNotMatch(page, /invalidateReaderPriceRow/, 'client time progression must not destroy a completed immutable score');
-mustMatch(/recordable = betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice, cloudLedgerStatus\.state !== 'unavailable'\)/, 'ranking must enable bet recording only for a current Reader direction and writable durable ledger');
-mustMatch(/currentReaderPrice === true/, 'canonical bet gate must fail closed unless the caller supplies current Reader proof');
+mustMatch(/recordable = betRecordable\(entry\.item, entry\.row, clockNow, bettingEnabled, entry\.currentReaderPrice, cloudLedgerStatus\.state !== 'unavailable'\)/, 'ranking must enable bet recording only for a captured Reader direction and writable durable ledger');
+mustMatch(/currentReaderPrice === true/, 'canonical bet gate must fail closed unless the caller supplies captured Reader proof');
 mustMatch(/cloudLedgerWritable === true/, 'canonical bet gate must fail closed unless the durable ledger is writable');
-mustMatch(/const currentReaderPrice = itemReaderExecutable\(item\)/, 'recordBet must re-check board date, payload hash and Reader freshness at click time');
+mustMatch(/const currentReaderPrice = capturedReaderContractReady\(item, row, now\)/, 'recordBet must re-check captured Reader evidence and official prestart state at click time');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
 assert.match(css, /html,body\{width:100%;max-width:100%;overflow-x:hidden\}/, 'mobile document must never expand beyond the viewport');
