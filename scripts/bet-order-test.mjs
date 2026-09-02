@@ -45,6 +45,13 @@ const blockedCandidate = buildBetOrderEntries([{
   rankingEligible: false,
   qaPassed: false,
 }]);
-assert.deepEqual(blockedCandidate, [], '有數字但無排名資格的 QA BLOCK 方向不得進入候選順序');
+assert.equal(blockedCandidate.length, 1, '有7.0以上公式分數的方向即使 QA BLOCK 仍須出現在非推薦候選順序');
+assert.equal(blockedCandidate[0].rankingEligible, false, '候選順序不得改寫原始排名資格');
 
-console.log('Bet order: ranking qualification, 7.0+ filter, start time, game grouping and market order PASS');
+const missingScoreCandidate = buildBetOrderEntries([{
+  ...entry({ gamePk: 6, gameDate: '2099-08-25T05:00:00.000Z', market: '全場讓分', pick: '無公式分數', score: null }),
+  rankingEligible: false,
+}]);
+assert.deepEqual(missingScoreCandidate, [], '缺少公式分數的方向不得進入候選順序');
+
+console.log('Bet order: 7.0+ formula score, QA status preservation, start time, game grouping and market order PASS');
