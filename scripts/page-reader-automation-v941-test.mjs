@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.5', 'package/release identity must match the V11.8.5 background submission timeout fix');
-assert.equal(packageLock.version, '11.8.5', 'package-lock release identity must match V11.8.5');
-assert.equal(packageLock.packages?.['']?.version, '11.8.5', 'root lockfile package must match V11.8.5');
-assert.equal(APP_VERSION, '11.8.5');
+assert.equal(packageJson.version, '11.8.6', 'package/release identity must match the V11.8.6 completed result recovery fix');
+assert.equal(packageLock.version, '11.8.6', 'package-lock release identity must match V11.8.6');
+assert.equal(packageLock.packages?.['']?.version, '11.8.6', 'root lockfile package must match V11.8.6');
+assert.equal(APP_VERSION, '11.8.6');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
@@ -223,7 +223,7 @@ assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHa
 mustMatch(/item\.readerPayloadHash === readerStatus\?\.payloadHash;/, 'ranking must use the fresh server Reader status and exact per-item content hash');
 assert.doesNotMatch(page, /actualLineFreshNow\(/, 'the client must not re-expire a row after the current Reader hash has already proved identical content; the bet API performs the authoritative line-freshness check');
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
-mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled\]\);/, 'Reader polling must not restart on every board item update');
+mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning\]\);/, 'Reader polling must not restart on every board item update and must stop while all-league analysis runs');
 mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt, Date\.now\(\), \{[\s\S]*marketCoverage: foundCredit\.marketCoverage,[\s\S]*readerProvenance: foundCredit\.readerProvenance/, 'a mobile reload may resume only when current signed per-game markets and coverage evidence are unchanged');
 mustMatch(/return actual\?\.markets\?\.length && !item\.resumedCurrentReaderGame && !item\.preservedCurrentReaderGame/, 'only Reader games with actual market rows may enter the model queue');
 mustMatch(/const previousByPk = new Map\(boardRef\.current\.map/, 'manual and automatic refreshes must merge against the latest board instead of a stale React closure');
