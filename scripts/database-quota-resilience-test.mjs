@@ -43,6 +43,7 @@ assert.equal(CLOUD_LEDGER_FAILURE_BACKOFF_MS, 5 * 60 * 1000);
 assert.equal(CLOUD_LEDGER_MAX_BACKOFF_MS, 24 * 60 * 60 * 1000);
 assert.equal(cloudLedgerRetryDelay({ retryAfterMs: 6 * 60 * 60 * 1000 }), 6 * 60 * 60 * 1000);
 assert.equal(cloudLedgerAutomaticRefreshAllowed({ storageReady: true, tab: 'bets', visibilityState: 'visible', now: 100, retryAt: 99 }), true);
+assert.equal(cloudLedgerAutomaticRefreshAllowed({ storageReady: true, tab: 'performanceStats', visibilityState: 'visible', now: 100, retryAt: 99 }), true);
 assert.equal(cloudLedgerAutomaticRefreshAllowed({ storageReady: true, tab: 'bets', visibilityState: 'hidden', now: 100, retryAt: 0 }), false);
 assert.equal(cloudLedgerAutomaticRefreshAllowed({ storageReady: true, tab: 'board', visibilityState: 'visible', now: 100, retryAt: 0 }), false);
 assert.equal(cloudLedgerAutomaticRefreshAllowed({ storageReady: true, tab: 'bets', visibilityState: 'visible', now: 100, retryAt: 101 }), false);
