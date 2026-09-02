@@ -47,6 +47,7 @@ const context = {
   leagueId: 'MLB',
   game,
   fetchedAt: '2099-08-25T08:00:00.000Z',
+  featureSnapshotAsOf: '2099-08-25T08:00:05.000Z',
   modelVersion: 'MODEL-v1',
   rulesVersion: 'RULES-v1',
   dataVersion: 'DATA-v1',
@@ -110,6 +111,7 @@ assert.equal(asyncFirst.replayIdentityHash, first.replayIdentityHash, '非同步
 const retryContext = {
   ...context,
   fetchedAt: '2099-08-25T08:01:00.000Z',
+  featureSnapshotAsOf: '2099-08-25T08:01:05.000Z',
   featureProvenance: context.featureProvenance.map(row => ({ ...row, fetchedAt: '2099-08-25T08:00:30.000Z' })),
 };
 const retryRecord = buildAnalysisPitSnapshotRecord({
@@ -121,7 +123,7 @@ assert.notEqual(retryRecord.replayIdentityHash, first.replayIdentityHash, '精�
 assert.equal(
   analysisPitSemanticIdentityHash(retryRecord),
   analysisPitSemanticIdentityHash(first),
-  '同一模型輸入只差重試抓取時間時必須可安全辨識為冪等',
+  '同一模型輸入只差抓取／特徵組裝時間時必須可安全辨識為冪等',
 );
 const previousEncodingRecord = buildAnalysisPitSnapshotRecord({
   ...input,
