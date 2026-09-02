@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.25', 'package/release identity must match the V11.8.25 QA warning-only policy');
-assert.equal(packageLock.version, '11.8.25', 'package-lock release identity must match V11.8.25');
-assert.equal(packageLock.packages?.['']?.version, '11.8.25', 'root lockfile package must match V11.8.25');
-assert.equal(APP_VERSION, '11.8.25');
+assert.equal(packageJson.version, '11.8.26', 'package/release identity must match the V11.8.26 external-audit restoration');
+assert.equal(packageLock.version, '11.8.26', 'package-lock release identity must match V11.8.26');
+assert.equal(packageLock.packages?.['']?.version, '11.8.26', 'root lockfile package must match V11.8.26');
+assert.equal(APP_VERSION, '11.8.26');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
@@ -105,11 +105,12 @@ mustMatch(/saveBackgroundJob\(/, 'background workflow identity must survive an a
 mustMatch(/pollBackgroundJob\([\s\S]*job\.runId,[\s\S]*generation,[\s\S]*targetDate,[\s\S]*tasks\.map/, 'the app must reconnect to the server workflow result with its owned game scope');
 assert.doesNotMatch(page, /V10模擬次數|4000（固定）/, 'fake simulation setting must be removed from the UI');
 
-// External-market requests are disabled; analysis keeps an explicit empty audit payload.
+// External markets are fetched only as isolated verification evidence.
 mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetGames = \[\]\)/, 'target-aware reference-line loader missing');
-assert.doesNotMatch(page, /requestJSON\('\/api\/reference-lines'/, 'client must not request disabled external-market APIs');
-mustMatch(/缺少兩個獨立同約時8\.5級最高封頂8\.4/, 'disabled external-market status must disclose the 8.5 qualification cap without implying W\/R feedback');
-assert.doesNotMatch(page, /referenceRefreshDue/, 'disabled external references must not force same-hash Reader repricing');
+mustMatch(/requestJSON\('\/api\/reference-lines'/, 'client must request the audit-only reference-line API');
+mustMatch(/REFERENCE_REFRESH_INTERVAL_MS = 2 \* 60 \* 1000/, 'external evidence must refresh before its five-minute expiry');
+mustMatch(/referenceRefreshDue/, 'same-hash Reader polling must still refresh expiring external evidence');
+mustMatch(/只作驗證，不改W\/R/, 'the result row must visibly separate external verification from W/R');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
