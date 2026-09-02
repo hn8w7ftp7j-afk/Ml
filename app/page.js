@@ -455,7 +455,7 @@ function migrateLegacyLocalBets(values) {
   return (Array.isArray(values) ? values : []).slice(0, 5000).map(value => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
     const bet = value.league ? value : { ...value, league: 'MLB' };
-    if (bet.readerEvidenceStatus === 'SERVER_VERIFIED_CURRENT_READER'
+    if (['SERVER_VERIFIED_CURRENT_READER', 'SERVER_VERIFIED_CAPTURED_READER'].includes(bet.readerEvidenceStatus)
       && bet.pitEvidenceVerified === true
       && bet.pitPredictionStatus === 'IMMUTABLE_PIT_VERIFIED') return bet;
     return {
@@ -595,7 +595,7 @@ function betRecordable(item, row, now = Date.now(), betsEnabled = true, currentR
   return betsEnabled
     && cloudLedgerWritable === true
     && currentReaderPrice === true
-    && readerAnalysisRevisionReady(item)
+    && capturedReaderContractReady(item, row, now)
     && item?.customData?.pitPersistence?.confirmed === true
     && gameIsPrestartNow(item?.game, now)
     && item?.actualSource?.provider === 'TAI888_READER_AUTO'
@@ -615,6 +615,23 @@ function readerAnalysisRevisionReady(item) {
     && item?.latestMarketCoverage == null
     && item?.latestReaderSource == null
     && item?.analysisFailure == null;
+}
+
+function retainedGameIsInactive(item) {
+  return String(item?.statusLabel || '').includes('目前已不在官方賽前清單');
+}
+
+function capturedReaderContractReady(item, row, now = Date.now()) {
+  return item?.status === 'done'
+    && item?.analysisFailure == null
+    && !retainedGameIsInactive(item)
+    && gameIsPrestartNow(item?.game, now)
+    && item?.actualSource?.provider === 'TAI888_READER_AUTO'
+    && row?.sourceType === 'ACTUAL_TW_CREDIT'
+    && row?.provider === 'TAI888_READER_AUTO'
+    && row?.evCalibration?.actualReaderEligible === true
+    && hasActualWater(row?.water)
+    && row?.waterEstimated !== true;
 }
 
 function markReaderBoardVerificationBlocked(item) {
@@ -1138,8 +1155,7 @@ function DirectionSlotRow({ row, game }) {
   </div>;
 }
 
-function GameCard({ item, onBet, onCancel, getBetState, readerExecutable, now, betsEnabled = true, shadowMode = false, cloudLedgerUnavailable = false }) {
-  const readerBacked = item.actualSource?.provider === 'TAI888_READER_AUTO';
+function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerUnavailable = false }) {
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const latestCoverage = item.latestMarketCoverage || null;
   const coverage = latestCoverage || item.marketCoverage || {};
@@ -1163,20 +1179,16 @@ function GameCard({ item, onBet, onCancel, getBetState, readerExecutable, now, b
   const actualRows = analysisDirectionRows(directionAnalysis)
     .filter(row => hasDirectionSlots || row.sourceType === 'ACTUAL_TW_CREDIT')
     .map(row => {
-    const currentReaderPrice = readerBacked
-      && gamePrestart
-      && readerExecutable
-      && row?.provider === 'TAI888_READER_AUTO'
-      && row?.evCalibration?.actualReaderEligible === true;
+    const currentReaderPrice = capturedReaderContractReady(item, row, now);
     const inactiveNotice = !gamePrestart
       ? '已達官方預定開打時間｜保留賽前分析｜停止記錄新下注'
       : pitUnconfirmed
         ? 'PIT永久保存未確認｜保留模型分析與排名｜實際下注紀錄暫停'
       : !currentReaderPrice
-        ? 'Reader盤口等待最新驗證｜保留上一版分析與排名｜實際下注紀錄暫停'
+        ? '尚無已驗證的Reader盤口｜保留分析與排名｜實際下注紀錄暫停'
         : '';
-    // A line becoming stale or a game starting changes execution eligibility,
-    // never the immutable score that was completed before first pitch.
+    // A captured signed line remains recordable until first pitch. Switching
+    // Reader leagues never changes the immutable score or its stored contract.
     return { ...row, clientReaderPriceCurrent: currentReaderPrice, clientInactiveNotice: inactiveNotice };
   });
   const allDirectionsUnopened = blockedMarkets.size === 0 && actualRows.length > 0
@@ -1379,18 +1391,13 @@ export default function Home() {
       const readerQualified = row.evCalibration?.actualReaderEligible === true;
       const gamePrestart = gameIsPrestartNow(item.game, clockNow);
       const pitConfirmed = item.customData?.pitPersistence?.confirmed === true;
-      const currentReaderPrice = gamePrestart
-        && readerQualified
-        && readerStatus?.fresh === true
-        && readerStatus?.boardDate === date
-        && Boolean(item.readerPayloadHash)
-        && item.readerPayloadHash === readerStatus?.payloadHash;
+      const currentReaderPrice = readerQualified && capturedReaderContractReady(item, row, clockNow);
       const inactiveNotice = !gamePrestart
         ? '比賽已開始｜保留賽前分析與排名｜停止記錄新下注'
         : !pitConfirmed
           ? 'PIT永久保存未確認｜保留模型分析與排名｜實際下注紀錄暫停'
         : !currentReaderPrice
-          ? 'Reader盤口等待最新驗證｜保留上一版分析與排名｜實際下注紀錄暫停'
+          ? '尚無已驗證的Reader盤口｜保留分析與排名｜實際下注紀錄暫停'
           : '';
       const rankingEligible = currentAnalysisExecutable
         && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
@@ -1844,13 +1851,6 @@ export default function Home() {
     && readerStatus?.fresh === true
     && readerStatus?.boardDate === date
     && Boolean(currentReaderHashKey);
-  const itemReaderExecutable = item => readerEnabled
-    && readerStatus?.fresh === true
-    && readerStatus?.boardDate === date
-    && readerAnalysisRevisionReady(item)
-    && Boolean(item?.readerPayloadHash)
-    && item.readerPayloadHash === readerStatus?.payloadHash;
-
   const visibleBets = useMemo(
     () => bets.filter(bet => normalizeLeagueId(bet?.league) === league),
     [bets, league],
@@ -2757,8 +2757,11 @@ export default function Home() {
           statusLabel: '目前已不在官方賽前清單｜保留賽前分析與排名｜停止記錄新下注',
           error: '',
         }));
-      const items = [...retainedFinishedItems, ...activeItems]
-        .sort((left, right) => Date.parse(left?.game?.gameDate || '') - Date.parse(right?.game?.gameDate || ''));
+      const byStartTime = (left, right) => Date.parse(left?.game?.gameDate || '') - Date.parse(right?.game?.gameDate || '');
+      const items = [
+        ...activeItems.sort(byStartTime),
+        ...retainedFinishedItems.sort(byStartTime),
+      ];
       setBoard(items);
 
       const tasks = items.map(item => {
@@ -3262,10 +3265,7 @@ export default function Home() {
       return;
     }
     const now = Date.now();
-    const currentReaderPrice = itemReaderExecutable(item)
-      && item?.actualSource?.provider === 'TAI888_READER_AUTO'
-      && row?.provider === 'TAI888_READER_AUTO'
-      && row?.evCalibration?.actualReaderEligible === true;
+    const currentReaderPrice = capturedReaderContractReady(item, row, now);
     if (cloudLedgerStatus.state === 'unavailable') {
       setError('永久雲端帳本目前無法寫入；系統不會把未保存的下注顯示成成功');
       return;
@@ -3315,9 +3315,11 @@ export default function Home() {
         lineAsOf: row.lineAsOf || null,
       },
       lineAsOf: row.lineAsOf || null,
-      readerPayloadHash: readerStatus?.payloadHash || null,
-      rawBoardHash: readerStatus?.rawBoardHash || null,
-      readerRevision: currentReaderKey || null,
+      readerPayloadHash: row?.readerPayloadHash || item?.readerPayloadHash || item?.customData?.analysis?.readerPayloadHash || null,
+      rawBoardHash: row?.readerRawBoardHash || item?.customData?.analysis?.readerRawBoardHash || readerStatus?.rawBoardHash || null,
+      readerRevision: row?.readerBoardDate && row?.readerPayloadHash
+        ? `${row.readerBoardDate}:${row.readerPayloadHash}`
+        : item?.readerPayloadHash ? `${date}:${item.readerPayloadHash}` : currentReaderKey || null,
       snapshotId: item.customData?.analysis?.snapshotId || null,
       pitSnapshotId: item.customData?.analysis?.pitSnapshotId || null,
       pitPersistenceStatus: item.customData?.pitPersistence?.status || null,
@@ -3457,7 +3459,7 @@ export default function Home() {
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && shadowMode && <LeagueShadowPanel config={activeLeague}/>}
       {analysisEnabled && !board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
-      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} readerExecutable={itemReaderExecutable(item)} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerUnavailable={cloudLedgerStatus.state === 'unavailable'}/>) }
+      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerUnavailable={cloudLedgerStatus.state === 'unavailable'}/>) }
     </>}
 
     {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>

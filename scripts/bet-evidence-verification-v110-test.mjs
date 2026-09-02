@@ -260,12 +260,13 @@ await assert.rejects(
   }),
   error => error?.code === 'GAME_ALREADY_STARTED',
 );
-await assert.rejects(
-  () => verifyCloudBetEvidenceV110(candidate, {
-    ...dependencies,
-    wallClock: () => Date.parse(market.lineAsOf) + 5 * 60_000 + 1,
-  }),
-  error => error?.code === 'READER_LINE_STALE_AFTER_PIT',
-);
+const capturedBeforeStart = await verifyCloudBetEvidenceV110(candidate, {
+  ...dependencies,
+  now: Date.parse(market.lineAsOf) + 10 * 60_000,
+  wallClock: () => Date.parse(market.lineAsOf) + 10 * 60_000,
+});
+assert.equal(capturedBeforeStart.readerVerified, true);
+assert.equal(capturedBeforeStart.pitVerified, true);
+assert.equal(capturedBeforeStart.reader.captureFreshAtRecord, false, '已成功擷取並綁定PIT的盤口，離開Reader頁面後仍可在開賽前記錄');
 
-console.log('Server-side Reader contract/hash/prestart and immutable PIT bet evidence verification PASS');
+console.log('Server-side captured Reader contract/hash/prestart and immutable PIT bet evidence verification PASS');
