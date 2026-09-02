@@ -73,6 +73,11 @@
   overflow-wrap: anywhere;
 }
 
+.ledgerSummary .originalPriceSummary strong b {
+  display: inline;
+  font-size: inherit;
+}
+
 .ledgerSectionHead {
   display: flex;
   justify-content: space-between;

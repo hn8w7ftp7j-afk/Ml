@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { compareBetPrice, sameBetPrice } from '../lib/bet-price-comparison.js';
 import { currentReaderPriceForBet, priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
+import { summarizeOriginalBetPrices } from '../lib/bet-price-summary.js';
 
 const game = { away: '客隊', home: '主隊' };
 const baseBet = {
@@ -118,5 +119,27 @@ assert.equal(priceComparisonLabel('BETTER'), '原下注盤優');
 assert.equal(priceComparisonLabel('WORSE'), '原下注盤劣');
 assert.equal(priceComparisonLabel('EQUIVALENT'), '相同');
 assert.equal(priceComparisonLabel('MIXED'), '混合');
+
+const originalPriceSummary = summarizeOriginalBetPrices([
+  {
+    ...verifiedClosingBet,
+    id: 'better',
+    status: 'SETTLED',
+    pick: '小8+50',
+  },
+  {
+    ...verifiedClosingBet,
+    id: 'worse',
+    status: 'SETTLED',
+    pick: '小8+70',
+  },
+  {
+    ...verifiedClosingBet,
+    id: 'cancelled',
+    status: 'CANCELLED',
+    pick: '小8+50',
+  },
+], {}, { now: Date.parse('2026-08-20T10:00:00.000Z') });
+assert.deepEqual(originalPriceSummary, { total: 2, better: 1, worse: 1 });
 
 console.log('Placed-versus-current Taiwan price comparison, exact suppression and key-hole delta PASS');
