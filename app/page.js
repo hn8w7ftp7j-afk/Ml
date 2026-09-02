@@ -1826,7 +1826,7 @@ export default function Home() {
     return () => { active = false; window.clearTimeout(timer); };
   }, [storageReady, date, allLeagueRun?.runId, allLeagueRun?.state]);
   useEffect(() => {
-    if (!storageReady || tab !== 'bets' || cloudLedgerStatus.state !== 'ready') return undefined;
+    if (!storageReady || !['bets', 'performanceStats'].includes(tab) || cloudLedgerStatus.state !== 'ready') return undefined;
     refreshSettlements('');
     const onVisible = () => { if (document.visibilityState === 'visible') refreshSettlements(''); };
     const timer = window.setInterval(() => refreshSettlements(''), CLOUD_LEDGER_VISIBLE_REFRESH_MS);

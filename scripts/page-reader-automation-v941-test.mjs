@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.30', 'package/release identity must match the V11.8.30 original-price summary');
-assert.equal(packageLock.version, '11.8.30', 'package-lock release identity must match V11.8.30');
-assert.equal(packageLock.packages?.['']?.version, '11.8.30', 'root lockfile package must match V11.8.30');
-assert.equal(APP_VERSION, '11.8.30');
+assert.equal(packageJson.version, '11.8.31', 'package/release identity must match the V11.8.31 settlement-tab fix');
+assert.equal(packageLock.version, '11.8.31', 'package-lock release identity must match V11.8.31');
+assert.equal(packageLock.packages?.['']?.version, '11.8.31', 'root lockfile package must match V11.8.31');
+assert.equal(APP_VERSION, '11.8.31');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
@@ -159,6 +159,7 @@ mustMatch(/action: 'cancel'/, 'prestart OPEN bet cancellation action missing');
 assert.doesNotMatch(page, /action: 'delete'|action: 'clearLeague'/, 'client must not call unsupported destructive ledger actions');
 assert.match(cloudLedgerSyncPolicy, /CLOUD_LEDGER_FAILURE_BACKOFF_MS/, 'DB失敗後必須停止每15秒重打雲端帳本');
 assert.match(page, /cloudLedgerAutomaticRefreshAllowed/, '帳本與結算輪詢必須共用可見分頁與退避政策');
+assert.match(page, /!\['bets', 'performanceStats'\]\.includes\(tab\)/, '下注紀錄與績效統計頁都必須在帳本 ready 後自動觸發結算');
 assert.match(page, /模型分析完成｜PIT未保存、實際下注紀錄暫停/, 'PIT失敗必須保留模型分析並清楚停用 durable bet recording');
 assert.match(page, /PIT永久保存未確認｜保留模型分析與排名｜實際下注紀錄暫停/, 'PIT失敗不得取消已完成的模型排名');
 assert.match(page, /盤口內容時間：/, 'Reader來源卡必須區分盤口內容時間與服務心跳');
