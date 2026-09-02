@@ -210,10 +210,39 @@ const staleReaderMustNotScore = finalizeDeterministicAnalysis({
   },
   game,
 });
-assert.equal(staleReaderMustNotScore.results[0].formulaDiagnosticScore, null, 'stale Reader rows must lose even the visible formula score');
+assert.equal(Number.isFinite(staleReaderMustNotScore.results[0].formulaDiagnosticScore), true, 'a traceable stale Reader price must retain the visible fixed formula score');
 assert.equal(staleReaderMustNotScore.results[0].shadowDiagnosticScore, null);
-assert.equal(staleReaderMustNotScore.results[0].rankingQualified, undefined);
-assert.match(staleReaderMustNotScore.results[0].scoreAudit.reason, /Reader 實際盤已過期/);
+assert.equal(staleReaderMustNotScore.results[0].rankingQualified, false);
+assert.equal(staleReaderMustNotScore.results[0].scoreAudit.ok, false);
+
+const dataQualityAndStaleReaderWarning = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'CPBL',
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
+    dataGateV10: { passedForShadowScore: true },
+    results: [{
+      ...direction('全場讓分', '味全龍受讓1+10', 0.1796, 0.0778),
+      lineFresh: false,
+      executable: false,
+      evCalibration: {
+        ...common.evCalibration,
+        qualified: false,
+        actualReaderEligible: false,
+        rawScenarioSpread: 0.1018,
+        scenarioStable: false,
+        reasons: [
+          '核心棒球資料品質0.81低於0.85安全門檻',
+          'Tai888 Reader 實際盤已過期或尚未完成最新版本驗證；可追溯快照的原始模型W/R保留，但不得排名或下注',
+        ],
+      },
+    }],
+  },
+  game: { ...game, leagueId: 'CPBL' },
+}).results[0];
+assert.equal(Number.isFinite(dataQualityAndStaleReaderWarning.formulaDiagnosticScore), true, '品質警告與Reader過期並存時仍須顯示固定S');
+assert.equal(dataQualityAndStaleReaderWarning.shadowDiagnosticScore, null);
+assert.equal(dataQualityAndStaleReaderWarning.rankingQualified, false);
+assert.equal(dataQualityAndStaleReaderWarning.scoreBreakdown.formulaDisplayWarningOnly, true);
 
 const missingWater = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' }, dataGateV10: { passedForShadowScore: true }, results: [{ ...direction('全場大小', '大9平', 0.015, 0.004), water: null }] }, game });
 assert.equal(missingWater.results[0].formulaDiagnosticScore, null);
