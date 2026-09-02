@@ -424,8 +424,9 @@ assert.match(
   '八方向寫入只可忽略同一列識別的冪等衝突，其他唯一鍵衝突必須明確失敗',
 );
 
-assert.match(historySource, /date_trunc\('milliseconds', p\.analysis_as_of\) = i\.analysis_as_of/, '方向列寫入必須以毫秒等價連結資料庫父PIT分析時間');
-assert.match(historySource, /p\.analysis_as_of AS parent_analysis_as_of/, '方向列必須取得資料庫父PIT原始時間');
-assert.match(historySource, /parent_analysis_as_of AS analysis_as_of, parent_data_as_of AS data_as_of/, '方向列必須寫入父PIT的精確時間而不是JS截斷值');
+assert.match(historySource, /to_char\(analysis_as_of AT TIME ZONE 'UTC'/, '方向歷史必須先讀取資料庫凍結父PIT的微秒時間');
+assert.match(historySource, /canonicalRecord\.recordHash = sha256\(recordHashPayload\(canonicalRecord\)\)/, '父PIT時間正規化後必須重新簽章方向列');
+assert.match(historySource, /p\.analysis_as_of = i\.analysis_as_of/, '方向列與父PIT分析時間必須維持完全相等');
+assert.match(historySource, /parent_analysis_as_of AS analysis_as_of, parent_data_as_of AS data_as_of/, '方向列必須寫入父PIT的精確時間');
 
 console.log('analysis-direction-history-v1 tests passed');
