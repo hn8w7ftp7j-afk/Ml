@@ -2423,7 +2423,9 @@ export default function Home() {
                     if (previousIndex >= 0) next[previousIndex] = preserved;
                     else next.push(preserved);
                   }
-                  return next.sort(byStartTime);
+                  return next.sort((left, right) => (
+                    Date.parse(left?.game?.gameDate || '') - Date.parse(right?.game?.gameDate || '')
+                  ));
                 });
               }
               if (!applicableRows.length) {
