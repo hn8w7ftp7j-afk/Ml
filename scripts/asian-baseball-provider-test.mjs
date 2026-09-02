@@ -398,6 +398,71 @@ assert.deepEqual(
   [parsedNpbNoDash.awayScore, parsedNpbNoDash.homeScore, parsedNpbNoDash.awayFirst5, parsedNpbNoDash.homeFirst5],
   [0, 4, 0, 4],
 );
+
+const npbPregameWithoutOfficialLink = `
+<span class="link_box"><div class="unit">
+  <div class="team_name">DeNA</div><div class="score_text score_left">&nbsp;</div>
+  <div class="round">Yokohama<br>17:45</div>
+  <div class="score_text score_right">&nbsp;</div><div class="team_name">Yomiuri</div>
+</div></span>`;
+const legacyNpbGame = parseNpbScheduleHtml(npbPregameWithoutOfficialLink, '2099-08-18')[0];
+assert.match(legacyNpbGame.providerGameId, /^2099-08-18\|YOM\|YDB\|17:45\|1$/);
+
+const npbPostgameWithOfficialLink = `
+<a class="link_box" href="/bis/eng/2099/games/s2099081800001.html"><div class="unit">
+  <div class="team_name">DeNA</div><div class="score_text score_left">4</div>
+  <div class="round">Game 18<br>Yokohama</div>
+  <div class="score_text score_right">3</div><div class="team_name">Yomiuri</div>
+</div></a>`;
+const currentNpbGame = parseNpbScheduleHtml(npbPostgameWithOfficialLink, '2099-08-18')[0];
+assert.notEqual(currentNpbGame.gamePk, legacyNpbGame.gamePk,
+  '回歸前提：NPB 補上官方明細連結後，來源 gamePk 會與賽前 fallback 不同');
+
+const evolvingNpbFetch = async url => ({
+  ok: true,
+  status: 200,
+  text: async () => {
+    const value = String(url);
+    if (value.includes('/games/gm20990818.html')) return npbPostgameWithOfficialLink;
+    if (value.includes('/games/s2099081800001.html')) return npbFinalDetail;
+    return '';
+  },
+});
+const legacyNpbResult = await fetchAsianFinalResult('NPB', legacyNpbGame.gamePk, '2099-08-18', {
+  fetchImpl: evolvingNpbFetch,
+  timeoutMs: 1_000,
+  expectedAway: legacyNpbGame.away,
+  expectedHome: legacyNpbGame.home,
+  expectedGameNumber: legacyNpbGame.gameNumber,
+  expectedProviderGameId: legacyNpbGame.providerGameId,
+});
+assert.equal(legacyNpbResult.gamePk, legacyNpbGame.gamePk,
+  '永久帳本必須保留賽前 gamePk，不可被完賽後新增的 NPB 明細 id 改寫');
+assert.equal(legacyNpbResult.providerGameId, 's2099081800001');
+assert.equal(legacyNpbResult.final, true);
+assert.deepEqual(
+  [legacyNpbResult.awayRuns, legacyNpbResult.homeRuns, legacyNpbResult.awayFirst5, legacyNpbResult.homeFirst5],
+  [3, 4, 3, 3],
+  '賽前 fallback identity 必須能唯一連到完賽明細並取得全場／前五局比分',
+);
+
+const ambiguousNpbSchedule = npbPostgameWithOfficialLink
+  + npbPostgameWithOfficialLink.replaceAll('s2099081800001', 's2099081800002');
+await assert.rejects(
+  () => fetchAsianFinalResult('NPB', legacyNpbGame.gamePk, '2099-08-18', {
+    fetchImpl: async url => ({
+      ok: true,
+      status: 200,
+      text: async () => String(url).includes('/games/gm20990818.html') ? ambiguousNpbSchedule : '',
+    }),
+    timeoutMs: 1_000,
+    expectedAway: legacyNpbGame.away,
+    expectedHome: legacyNpbGame.home,
+    expectedProviderGameId: legacyNpbGame.providerGameId,
+  }),
+  error => error?.code === 'OFFICIAL_IDENTITY_AMBIGUOUS',
+  '同日同隊多場時不得猜測 NPB 場次或自動結算',
+);
 assert.equal(
   parseNpbGameDetailHtml(npbFinalDetail.replace('( 18:00 - 21:06 )', '18:00'), scoreOnlyNpbDay[0]).statusCode,
   'S',
