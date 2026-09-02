@@ -80,6 +80,11 @@ const ALL_LEAGUE_ANALYSIS_STORAGE = 'sports-positive-ev-all-league-analysis-v1';
 // reports an AbortController timeout as the unhelpful `Load failed`, so keep the
 // browser timeout above the 90 second server route ceiling.
 const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
+// Starting a durable workflow can consume the full 60 second route allowance on
+// a cold deployment. Keep the browser alive beyond that ceiling so iOS Safari
+// does not report a successfully accepted job as an all-league submission
+// failure while the server continues running it.
+const BACKGROUND_JOB_START_TIMEOUT_MS = 75_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
 const READER_RECHECK_INTERVAL_MS = 30 * 1000;
 const OFFICIAL_PRESTART_RECHECK_MS = 60 * 1000;
@@ -2299,7 +2304,7 @@ export default function Home() {
         date: targetDate,
         tasks: tasks.map(task => ({ ...task, requestId: uid(), generation: undefined })),
       }),
-    }, 30000);
+    }, BACKGROUND_JOB_START_TIMEOUT_MS);
     const reconnectSaved = saveBackgroundJob({
       runId: job.runId,
       league,
@@ -2502,7 +2507,7 @@ export default function Home() {
             tasks: batch.tasks,
           })),
         }),
-      }, 30000);
+      }, BACKGROUND_JOB_START_TIMEOUT_MS);
       run = {
         ...run,
         runId: job.runId,
