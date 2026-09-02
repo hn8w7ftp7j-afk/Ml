@@ -6,6 +6,7 @@ import {
   allLeagueRunContainsDate,
   createAllLeagueAnalysisRun,
   mergePreparedLeagueBoard,
+  preserveCompletedReaderResult,
   summarizeAllLeagueBatchResult,
   updateAllLeagueAnalysisLeague,
 } from '../lib/all-league-analysis-v117.js';
@@ -45,6 +46,21 @@ assert.equal(merged.length, 1);
 assert.equal(merged[0].status, 'running');
 assert.equal(merged[0].customData.analysis.results[0].modelEV, 0.02, 'a refresh must preserve the completed league score until replacement');
 
+const completedWhileReaderEmpty = preserveCompletedReaderResult(null, {
+  ok: true,
+  task: {
+    game: { gamePk: 11, gameDate: '2026-08-30T11:00:00Z', leagueId: 'MLB' },
+    readerPayloadHash: 'old-reader-board',
+    actualSource: { provider: 'TAI888_READER_AUTO' },
+    actualMarkets: [{ market: '全場讓分', water: 0.95 }],
+  },
+  payload: { analysis: { results: [{ modelEV: 0.17, scoreBreakdown: { rawScore: 8.1 } }] } },
+}, null);
+assert.equal(completedWhileReaderEmpty.customData.analysis.results[0].modelEV, 0.17, 'completed W/R must remain visible when Reader temporarily returns 0/0');
+assert.equal(completedWhileReaderEmpty.readerPayloadHash, null, 'a retained completed result must not keep stale Reader execution authority');
+assert.equal(completedWhileReaderEmpty.preservedCurrentReaderGame, true);
+assert.match(completedWhileReaderEmpty.statusLabel, /保留已完成分析/);
+
 assert.match(workflow, /export async function analyzeAllLeaguesWorkflow[\s\S]*'use workflow'/, 'all leagues need one durable server workflow');
 assert.match(workflow, /for \(const batch of input\.batches\)[\s\S]*for \(let offset = 0; offset < tasks\.length; offset \+= concurrency\)/, 'league batches must execute sequentially with bounded per-league concurrency');
 assert.match(workflow, /Promise\.allSettled[\s\S]*batches\.push/, 'one game or league failure must not stop later league groups');
@@ -61,6 +77,7 @@ assert.match(page, /league: batch\.league,[\s\S]*date: batch\.date,[\s\S]*emptyR
 assert.match(route, /const batchDate = cleanText\(batch\?\.date, 20\)[\s\S]*date: batchDate/, 'the server must not replace every league date with the MLB outer date');
 assert.match(page, /saveBackgroundJob\(\{[\s\S]*batchMode: 'all-leagues'[\s\S]*league: batch\.league,[\s\S]*date: batch\.date,[\s\S]*preparedBoard/, 'each league must retain reconnect metadata, date and prepared slate');
 assert.match(page, /mergePreparedLeagueBoard\(current, saved\.preparedBoard\)/, 'switching to a league must restore its independent slate without deleting cached scores');
+assert.match(page, /completedDisplayRows[\s\S]*preserveCompletedReaderResult/, 'a completed job must remain visible when Reader temporarily becomes empty or advances');
 assert.match(page, /analysis-jobs\?runId=\$\{encodeURIComponent\(runId\)\}&league=\$\{encodeURIComponent\(league\)\}/, 'visible polling must request only the selected league result');
 assert.match(page, /const expectedRunId = allLeagueRun\.runId[\s\S]*analysis-jobs\?runId=\$\{encodeURIComponent\(expectedRunId\)\}&summary=1/, 'four-league progress polling must request the compact summary for the captured run only');
 assert.doesNotMatch(page, /leagueTabs[\s\S]{0,900}disabled=\{(?:busy|allLeague)/, 'league tabs must remain switchable during all-league analysis');

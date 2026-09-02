@@ -64,6 +64,7 @@ import {
   allLeagueStatusLabel,
   createAllLeagueAnalysisRun,
   mergePreparedLeagueBoard,
+  preserveCompletedReaderResult,
   summarizeAllLeagueBatchResult,
   updateAllLeagueAnalysisLeague,
 } from '../lib/all-league-analysis-v117.js';
@@ -149,7 +150,14 @@ function robustEvValue(row) {
 }
 
 function formulaScoreValue(row) {
-  return firstFiniteNumber(row?.formulaDiagnosticScore, row?.shadowDiagnosticScore);
+  // QA and ranking gates must not erase an already calculated formula value.
+  // `rawScore` remains display-only when diagnostic release is blocked; the
+  // independent ranking and execution checks below stay fail-closed.
+  return firstFiniteNumber(
+    row?.formulaDiagnosticScore,
+    row?.shadowDiagnosticScore,
+    row?.scoreBreakdown?.rawScore,
+  );
 }
 
 function compactModelMetrics(row) {
@@ -2368,32 +2376,55 @@ export default function Home() {
                 }];
               });
               if (discardedReaderPks.size) {
-                setBoard(current => current.map(item => {
-                  const gamePk = Number(item?.game?.gamePk);
-                  if (!discardedReaderPks.has(gamePk) || obsoletePks.has(gamePk)) return item;
-                  const liveGame = currentReaderByPk.get(gamePk) || null;
-                  const liveOpen = Boolean(liveGame?.markets?.length);
-                  const preserve = analysisHasCalculatedDirections(item?.customData);
-                  return {
-                    ...item,
-                    readerPayloadHash: null,
-                    latestMarketCoverage: liveGame?.marketCoverage || null,
-                    latestReaderSource: liveGame?.source || null,
-                    pendingReaderAnalysis: preserve && liveOpen,
-                    preservedCurrentReaderGame: preserve && !liveOpen,
-                    readerWaitingHandled: !liveOpen,
-                    status: preserve ? 'done' : liveOpen ? 'queued' : 'unopened',
-                    statusLabel: liveOpen
-                      ? preserve
-                        ? 'Reader盤口已更新｜保留上一版分析｜等待重新計算'
-                        : 'Reader盤口已更新｜等待重新計算'
-                      : preserve
-                        ? 'Reader目前尚未完整開盤｜保留上一版分析'
-                        : 'Reader目前尚未完整開盤｜持續自動監看',
-                    analysisFailure: null,
-                    error: '',
-                  };
-                }));
+                const completedDisplayRows = rows.filter(row => (
+                  discardedReaderPks.has(Number(row?.task?.game?.gamePk))
+                  && row?.ok === true
+                  && row?.payload?.analysis
+                ));
+                setBoard(current => {
+                  let next = current.map(item => {
+                    const gamePk = Number(item?.game?.gamePk);
+                    if (!discardedReaderPks.has(gamePk) || obsoletePks.has(gamePk)) return item;
+                    const liveGame = currentReaderByPk.get(gamePk) || null;
+                    const liveOpen = Boolean(liveGame?.markets?.length);
+                    const preserve = analysisHasCalculatedDirections(item?.customData);
+                    return {
+                      ...item,
+                      readerPayloadHash: null,
+                      latestMarketCoverage: liveGame?.marketCoverage || null,
+                      latestReaderSource: liveGame?.source || null,
+                      pendingReaderAnalysis: preserve && liveOpen,
+                      preservedCurrentReaderGame: preserve && !liveOpen,
+                      readerWaitingHandled: !liveOpen,
+                      status: preserve ? 'done' : liveOpen ? 'queued' : 'unopened',
+                      statusLabel: liveOpen
+                        ? preserve
+                          ? 'Reader盤口已更新｜保留上一版分析｜等待重新計算'
+                          : 'Reader盤口已更新｜等待重新計算'
+                        : preserve
+                          ? 'Reader目前尚未完整開盤｜保留上一版分析'
+                          : 'Reader目前尚未完整開盤｜持續自動監看',
+                      analysisFailure: null,
+                      error: '',
+                    };
+                  });
+                  for (const row of completedDisplayRows) {
+                    const gamePk = Number(row?.task?.game?.gamePk);
+                    const liveGame = currentReaderByPk.get(gamePk) || null;
+                    const previousIndex = next.findIndex(item => Number(item?.game?.gamePk) === gamePk);
+                    const previous = previousIndex >= 0 ? next[previousIndex] : null;
+                    const preserved = preserveCompletedReaderResult(
+                      previous,
+                      row,
+                      liveGame,
+                      compactAnalysisData(row.payload),
+                    );
+                    if (!preserved) continue;
+                    if (previousIndex >= 0) next[previousIndex] = preserved;
+                    else next.push(preserved);
+                  }
+                  return next.sort(byStartTime);
+                });
               }
               if (!applicableRows.length) {
                 clearBackgroundJob(result.league || league, result.date || targetDate, runId);
