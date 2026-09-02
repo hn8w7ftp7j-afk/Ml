@@ -409,4 +409,8 @@ const historySource = fs.readFileSync(new URL('../lib/analysis-direction-history
 assert.match(historySource, /payloadLocation: 'record_payload'/, '完整方向payload只可傳輸一次');
 assert.doesNotMatch(historySource, /result_payload:\s*record\.resultPayload/, '不得把完整resultPayload重複寫入兩個JSONB欄位');
 
+assert.match(historySource, /ANALYSIS_DIRECTION_HISTORY_BOUND_MISMATCH/, '八方向靜默綁定失敗必須留下結構化診斷');
+assert.match(historySource, /bindingMismatches/, '八方向寫入未確認必須回傳失配欄位名稱');
+assert.match(historySource, /GAME_START_NOT_FUTURE/, '八方向診斷必須區分已過開賽時間');
+
 console.log('analysis-direction-history-v1 tests passed');
