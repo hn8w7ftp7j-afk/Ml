@@ -34,4 +34,15 @@ assert.match(
   'automatic Reader repricing must not create an individual workflow while the four-league workflow is active',
 );
 
+assert.match(
+  page,
+  /const resumed = hasOpenRows && !coverageRegression && previous && !previousBlocked[\s\S]{0,160}pitPersistence\?\.confirmed === true[\s\S]{0,160}advanceUnchangedReaderGame/,
+  'an unchanged Reader market may resume only after permanent PIT confirmation; failed PIT must be resubmitted',
+);
+assert.match(
+  page,
+  /const tasks = items\.map[\s\S]{0,500}!item\.resumedCurrentReaderGame && !item\.preservedCurrentReaderGame/,
+  'an unconfirmed PIT item must remain eligible for the durable analysis retry task',
+);
+
 console.log('Completed all-league jobs release stale storage and foreground controls PASS');
