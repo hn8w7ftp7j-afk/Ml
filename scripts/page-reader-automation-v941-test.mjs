@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.4', 'package/release identity must match the V11.8.4 background submission timeout fix');
-assert.equal(packageLock.version, '11.8.4', 'package-lock release identity must match V11.8.4');
-assert.equal(packageLock.packages?.['']?.version, '11.8.4', 'root lockfile package must match V11.8.4');
-assert.equal(APP_VERSION, '11.8.4');
+assert.equal(packageJson.version, '11.8.5', 'package/release identity must match the V11.8.5 background submission timeout fix');
+assert.equal(packageLock.version, '11.8.5', 'package-lock release identity must match V11.8.5');
+assert.equal(packageLock.packages?.['']?.version, '11.8.5', 'root lockfile package must match V11.8.5');
+assert.equal(APP_VERSION, '11.8.5');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 assert.match(healthRoute, /const version = APP_VERSION/, 'health endpoint must use the same shared release version as the website');
 assert.match(healthRoute, /gameDistributionCacheVersion: GAME_DISTRIBUTION_CACHE_VERSION/, 'health endpoint must expose the game-distribution cache contract');
