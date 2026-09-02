@@ -408,5 +408,25 @@ assert.match(migration, /before update or delete/i, '分析與結算歷史必須
 const historySource = fs.readFileSync(new URL('../lib/analysis-direction-history-v1.js', import.meta.url), 'utf8');
 assert.match(historySource, /payloadLocation: 'record_payload'/, '完整方向payload只可傳輸一次');
 assert.doesNotMatch(historySource, /result_payload:\s*record\.resultPayload/, '不得把完整resultPayload重複寫入兩個JSONB欄位');
+assert.match(
+  historySource,
+  /ANALYSIS_DIRECTION_HISTORY_WRITE_NOT_CONFIRMED[\s\S]*insertedCount[\s\S]*storedCount[\s\S]*missingSlotIds/,
+  '八方向不足8列時必須記錄新增列數、實際列數與缺少槽位',
+);
+assert.match(
+  historySource,
+  /diagnoseDirectionParentBinding[\s\S]*parentMismatchFields/,
+  '八方向不足8列時必須記錄父PIT失配欄位',
+);
+assert.match(
+  historySource,
+  /diagnoseDirectionParentBinding[\s\S]*game_start > NOW\(\) AS "preGame"/,
+  '八方向不足8列時必須區分父PIT綁定失配與已開賽拒寫',
+);
+assert.match(
+  historySource,
+  /parentFound: Boolean\(parent\)[\s\S]*preGame: parent \? parent\.preGame === true : null/,
+  '查無父PIT時不得誤診為已開賽',
+);
 
 console.log('analysis-direction-history-v1 tests passed');
