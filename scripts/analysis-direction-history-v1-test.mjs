@@ -411,9 +411,13 @@ assert.doesNotMatch(historySource, /result_payload:\s*record\.resultPayload/, '�
 
 assert.match(historySource, /ANALYSIS_DIRECTION_HISTORY_BOUND_MISMATCH/, '八方向靜默綁定失敗必須留下結構化診斷');
 assert.match(historySource, /bindingMismatches/, '八方向寫入未確認必須回傳失配欄位名稱');
-assert.match(historySource, /GAME_START_NOT_FUTURE/, '八方向診斷必須區分已過開賽時間');
 assert.equal(historySource.includes('jsonColumn('), false, '八方向診斷不得依賴其他模組的私有JSON helper');
-assert.match(historySource, /const storedJson = value =>/, '八方向診斷必須能自足解析資料庫JSON欄位');
+assert.match(
+  historySource,
+  /diagnoseDirectionParentBinding[\s\S]*game_start IS NOT DISTINCT FROM[\s\S]*versions->>'directionSlotContractVersion' IS NOT DISTINCT FROM[\s\S]*game_start > NOW\(\) AS "preGame"/,
+  '八方向診斷必須使用與實際bound相同的PostgreSQL比較語意',
+);
+assert.match(historySource, /missingSlotIds/, '八方向診斷必須列出缺少的方向槽位');
 assert.match(
   historySource,
   /ON CONFLICT \(direction_result_id\) DO NOTHING RETURNING direction_result_id/,
