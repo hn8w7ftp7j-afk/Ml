@@ -420,4 +420,7 @@ assert.match(
   '八方向寫入只可忽略同一列識別的冪等衝突，其他唯一鍵衝突必須明確失敗',
 );
 
+assert.match(historySource, /incomingCount/, '八方向零筆診斷必須確認SQL incoming列數');
+assert.match(historySource, /uniqueIndexNames/, '八方向零筆診斷必須列出資料庫唯一索引名稱');
+
 console.log('analysis-direction-history-v1 tests passed');
