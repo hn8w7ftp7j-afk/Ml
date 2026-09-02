@@ -152,6 +152,31 @@ assert.equal(calibrationBlocked.results[0].shadowDiagnosticScore, null);
 assert.equal(calibrationBlocked.results[0].scoreAudit.ok, false);
 assert.match(calibrationBlocked.results[0].tag, /模型評分未通過/);
 
+const dataQualityWarning = finalizeDeterministicAnalysis({
+  analysis: {
+    leagueId: 'CPBL',
+    alignmentAudit: { targetMarketCalibration: 'DISABLED_EXECUTION_PRICE_ONLY' },
+    dataGateV10: { passedForShadowScore: true },
+    results: [{
+      ...direction('全場讓分', '味全龍受讓1+10', 0.1796, 0.0778),
+      evCalibration: {
+        ...common.evCalibration,
+        qualified: false,
+        rawScenarioSpread: 0.1018,
+        scenarioStable: false,
+        reasons: ['核心棒球資料品質0.81低於0.85安全門檻'],
+      },
+    }],
+  },
+  game: { ...game, leagueId: 'CPBL' },
+}).results[0];
+assert.equal(Number.isFinite(dataQualityWarning.formulaDiagnosticScore), true, '資料品質不足只可阻擋排名，不得清空固定S分數');
+assert.equal(dataQualityWarning.shadowDiagnosticScore, null, '資料品質不足仍不得取得QA合格排名分');
+assert.equal(dataQualityWarning.rankingQualified, false);
+assert.equal(dataQualityWarning.scoreAudit.ok, false);
+assert.equal(dataQualityWarning.scoreBreakdown.dataQualityWarningOnly, true);
+assert.match(dataQualityWarning.tag, /QA BLOCK/);
+
 const rawModelAuditOnly = finalizeDeterministicAnalysis({
   analysis: {
     leagueId: 'MLB',
