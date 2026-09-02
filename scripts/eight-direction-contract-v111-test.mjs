@@ -75,6 +75,29 @@ assert.equal(qaBlockedSlot.modelEV, 0.032, 'QA BLOCK仍保留W');
 assert.equal(qaBlockedSlot.robustEV, -0.004, 'R≤0仍保留W與R');
 assert.equal(qaBlockedSlot.qa.status, 'BLOCK');
 
+const qualityWarning = '核心棒球資料品質0.81低於0.85安全門檻';
+const staleReaderWarning = 'Tai888 Reader 實際盤已過期或尚未完成最新版本驗證';
+const duplicatedWarningResult = {
+  ...resultFor(coverage.validRows[0], 0),
+  evCalibration: { qualified: false, reasons: [qualityWarning, staleReaderWarning], actualReaderEligible: false },
+  scoreAudit: {
+    ok: false,
+    baseQa: {
+      failures: [
+        qualityWarning,
+        staleReaderWarning,
+        `模型評分未通過：${qualityWarning}；${staleReaderWarning}`,
+      ],
+    },
+  },
+};
+const warningContract = attachEightDirectionContract({
+  ...analysis,
+  results: [duplicatedWarningResult, ...analysis.results.slice(1)],
+}, coverage, game);
+const warningReasons = warningContract.directionSlots[1].qa.reasons;
+assert.deepEqual(warningReasons, [qualityWarning, staleReaderWarning], '軟性QA警告不得再包一層「模型評分未通過」');
+
 const missingRobustResults = coverage.validRows.map(resultFor);
 missingRobustResults[0] = { ...missingRobustResults[0], rawRobustEV: null, robustEV: null };
 const missingRobust = attachEightDirectionContract({ ...analysis, results: missingRobustResults }, coverage, game);

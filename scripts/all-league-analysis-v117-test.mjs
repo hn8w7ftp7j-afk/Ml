@@ -62,7 +62,7 @@ assert.match(route, /const batchDate = cleanText\(batch\?\.date, 20\)[\s\S]*date
 assert.match(page, /saveBackgroundJob\(\{[\s\S]*batchMode: 'all-leagues'[\s\S]*league: batch\.league,[\s\S]*date: batch\.date,[\s\S]*preparedBoard/, 'each league must retain reconnect metadata, date and prepared slate');
 assert.match(page, /mergePreparedLeagueBoard\(current, saved\.preparedBoard\)/, 'switching to a league must restore its independent slate without deleting cached scores');
 assert.match(page, /analysis-jobs\?runId=\$\{encodeURIComponent\(runId\)\}&league=\$\{encodeURIComponent\(league\)\}/, 'visible polling must request only the selected league result');
-assert.match(page, /analysis-jobs\?runId=\$\{encodeURIComponent\(allLeagueRun\.runId\)\}&summary=1/, 'four-league progress polling must request the compact summary only');
+assert.match(page, /const expectedRunId = allLeagueRun\.runId[\s\S]*analysis-jobs\?runId=\$\{encodeURIComponent\(expectedRunId\)\}&summary=1/, 'four-league progress polling must request the compact summary for the captured run only');
 assert.doesNotMatch(page, /leagueTabs[\s\S]{0,900}disabled=\{(?:busy|allLeague)/, 'league tabs must remain switchable during all-league analysis');
 
 console.log('Durable isolated one-click analysis for MLB, NPB, KBO and CPBL PASS');

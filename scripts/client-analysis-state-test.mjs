@@ -10,6 +10,7 @@ import {
   liveReaderRevisionMatches,
   mergeReaderStatusHighWater,
   mergeRecognizedGameInputs,
+  readerCaptureForBet,
   readerCoverageCounts,
   readerHashKey,
   readerRevisionKey,
@@ -187,19 +188,42 @@ const sameGameMarkets = [
 const sameEvidenceRevision = {
   actualSource: { provider: 'TAI888_READER_AUTO', pageActivityAt: heartbeatAt },
   marketCoverage: { openMarkets: 1, availableMarkets: ['全場讓分'], blockedMarkets: [] },
-  readerProvenance: { readerGameMarketHash: SAME_GAME_EVIDENCE_HASH },
+  readerProvenance: {
+    readerGameMarketHash: SAME_GAME_EVIDENCE_HASH,
+    payloadHash: 'new-whole-board',
+    rawBoardHash: 'new-raw-board',
+    boardDate: '2026-08-15',
+  },
 };
 assert.equal(sameReaderGameMarkets(oldGameMarkets, sameGameMarkets), true, 'timestamps and row order must not change a single-game market revision');
 assert.equal(sameReaderGameMarkets(oldGameMarkets, [{ ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1]]), false, 'a changed price must require reprice');
 const advanced = advanceUnchangedReaderGame({
   ...heartbeatItem,
   readerPayloadHash: 'old-whole-board',
+  readerProvenance: {
+    readerGameMarketHash: SAME_GAME_EVIDENCE_HASH,
+    payloadHash: 'old-whole-board',
+    rawBoardHash: 'old-raw-board',
+    boardDate: '2026-08-15',
+  },
   latestMarketCoverage: { blockedMarkets: ['全場讓分'] },
   latestReaderSource: { pageActivityAt: '2026-08-15T07:58:00.000Z' },
   analysisFailure: { code: 'TEMPORARY' },
   preservedCurrentReaderGame: true,
   readerWaitingHandled: true,
   customMarkets: oldGameMarkets,
+  customData: {
+    ...heartbeatItem.customData,
+    analysis: {
+      ...heartbeatItem.customData.analysis,
+      results: heartbeatItem.customData.analysis.results.map((row, index) => index === 0 ? {
+        ...row,
+        readerPayloadHash: 'old-whole-board',
+        readerRawBoardHash: 'old-raw-board',
+        readerBoardDate: '2026-08-15',
+      } : row),
+    },
+  },
 }, sameGameMarkets, 'new-whole-board', heartbeatAt, NOW, sameEvidenceRevision);
 assert.equal(advanced.readerPayloadHash, 'new-whole-board', 'an unchanged game must advance across an unrelated whole-board revision');
 assert.equal(advanced.latestMarketCoverage, null, 'a current unchanged game must clear an older partial/blocked overlay');
@@ -211,6 +235,31 @@ assert.deepEqual(advanced.marketCoverage, sameEvidenceRevision.marketCoverage, '
 assert.deepEqual(advanced.readerProvenance, sameEvidenceRevision.readerProvenance, 'unchanged resume must install the current per-game evidence');
 assert.equal(advanced.customData.analysis.results[0].lineAsOf, sameBoardBeforeHeartbeat.pageActivityAt, '跨全盤revision但同場未變時仍保留原PIT盤口截點');
 assert.equal(advanced.customData.analysis.results[0].readerLiveAsOf, heartbeatAt);
+assert.equal(advanced.customData.analysis.results[0].readerPayloadHash, 'old-whole-board', '同場未變時不可改寫immutable PIT row的原始Reader hash');
+assert.deepEqual(
+  readerCaptureForBet(advanced, advanced.customData.analysis.results[0], '2026-08-15'),
+  {
+    payloadHash: 'new-whole-board',
+    rawBoardHash: 'new-raw-board',
+    boardDate: '2026-08-15',
+    revision: '2026-08-15:new-whole-board',
+  },
+  '其他場變動但本場未變時，下注必須使用item目前capture，不可被immutable row舊hash蓋回',
+);
+assert.deepEqual(
+  readerCaptureForBet({}, {
+    readerPayloadHash: 'captured-row',
+    readerRawBoardHash: 'captured-raw-board',
+    readerBoardDate: '2026-08-15',
+  }),
+  {
+    payloadHash: 'captured-row',
+    rawBoardHash: 'captured-raw-board',
+    boardDate: '2026-08-15',
+    revision: '2026-08-15:captured-row',
+  },
+  '沒有item目前capture時才可回退至immutable row',
+);
 assert.equal(advanceUnchangedReaderGame({ ...heartbeatItem, customMarkets: oldGameMarkets }, [
   { ...sameGameMarkets[0], water: 0.92 }, sameGameMarkets[1],
 ], 'new-whole-board', heartbeatAt, NOW, sameEvidenceRevision), null, 'changed game markets must not reuse old analysis');

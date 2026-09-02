@@ -29,6 +29,7 @@ import {
   gameIsPrestartNow,
   liveReaderHashMatches,
   mergeReaderStatusHighWater,
+  readerCaptureForBet,
   readerCoverageCounts,
   readerHashKey,
   shouldAcceptReaderStatus,
@@ -75,6 +76,9 @@ const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
 const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
 const ANALYSIS_JOB_STORAGE = 'sports-positive-ev-background-jobs-v1';
 const ALL_LEAGUE_ANALYSIS_STORAGE = 'sports-positive-ev-all-league-analysis-v1';
+const APP_OPERATION_BUSY_KEY = 'sports-positive-ev-operation-busy';
+let authRedirectStarted = false;
+let appOperationBusyDepth = 0;
 // A cold Production analysis can legitimately spend close to a minute fetching
 // point-in-time data and building the deterministic distribution. iOS Safari
 // reports an AbortController timeout as the unhelpful `Load failed`, so keep the
@@ -115,6 +119,14 @@ const signedPct = value => value == null || !Number.isFinite(Number(value))
 const waterText = value => hasActualWater(value) ? Number(value).toFixed(3) : '水位未提供';
 const moneyText = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value) >= 0 ? '+' : ''}${Math.round(Number(value)).toLocaleString()}元`;
 const matchup = game => `${translateTeamText(game?.away || '')} 對 ${translateTeamText(game?.home || '')}`;
+
+function markAppOperationBusy(active) {
+  try {
+    appOperationBusyDepth = Math.max(0, appOperationBusyDepth + (active ? 1 : -1));
+    if (appOperationBusyDepth > 0) window.sessionStorage.setItem(APP_OPERATION_BUSY_KEY, String(Date.now()));
+    else window.sessionStorage.removeItem(APP_OPERATION_BUSY_KEY);
+  } catch {}
+}
 
 function firstFiniteNumber(...values) {
   for (const value of values) {
@@ -400,10 +412,15 @@ function saveBackgroundJob(job) {
   try {
     const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
     const source = jobs && typeof jobs === 'object' && !Array.isArray(jobs) ? jobs : {};
-    window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify({
-      ...source,
-      [backgroundJobKey(job.league, job.date)]: job,
-    }));
+    const key = backgroundJobKey(job.league, job.date);
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const compact = Object.fromEntries(Object.entries({ ...source, [key]: job })
+      .filter(([entryKey, value]) => entryKey === key
+        || !Number.isFinite(Date.parse(value?.startedAt || ''))
+        || Date.parse(value.startedAt) >= cutoff)
+      .sort((left, right) => Date.parse(right[1]?.startedAt || 0) - Date.parse(left[1]?.startedAt || 0))
+      .slice(0, 12));
+    window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify(compact));
     return true;
   } catch { return false; }
 }
@@ -482,6 +499,12 @@ async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplica
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+    if (response.status === 401 && !authRedirectStarted && typeof window !== 'undefined'
+      && window.location.pathname !== '/login') {
+      authRedirectStarted = true;
+      const next = `${window.location.pathname}${window.location.search}`;
+      window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+    }
     const text = await response.text();
     let data;
     try { data = JSON.parse(text); }
@@ -502,7 +525,11 @@ async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplica
     }
     return data;
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('分析逾時，請稍後重試');
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error('請求逾時，請稍後重試');
+      timeoutError.code = 'REQUEST_TIMEOUT';
+      throw timeoutError;
+    }
     throw error;
   } finally {
     clearTimeout(timer);
@@ -571,8 +598,9 @@ function cloudLedgerFailureState(error, retryAt = 0) {
 
 function transientAnalysisError(error) {
   if (String(error?.code || '') === 'PIT_PERSISTENCE_REQUIRED') return false;
+  if (String(error?.code || '') === 'REQUEST_TIMEOUT') return true;
   if (Number.isFinite(Number(error?.status))) return Number(error.status) >= 500;
-  return /Load failed|Failed to fetch|NetworkError|network request failed|分析逾時/i.test(String(error?.message || error));
+  return /Load failed|Failed to fetch|NetworkError|network request failed|請求逾時|分析逾時/i.test(String(error?.message || error));
 }
 
 async function requestAnalysisWithResume(options) {
@@ -601,14 +629,20 @@ async function runPool(items, concurrency, worker) {
 }
 
 function scoreQaFailures(row) {
-  return [...new Set([
-    ...(row?.qa?.reasons || []),
+  const canonical = Array.isArray(row?.qa?.reasons)
+    ? row.qa.reasons.map(String).filter(Boolean)
+    : [];
+  const fallback = canonical.length ? [] : [
     ...(row?.scoreAudit?.baseQa?.failures || []),
-    ...(row?.scoreAudit?.boundary?.errors || []),
     ...(row?.scoreAudit?.thirdAudit?.failures || []),
+  ];
+  return [...new Set([
+    ...canonical,
+    ...fallback,
+    ...(row?.scoreAudit?.boundary?.errors || []),
     ...(row?.scoreAudit?.plausibility?.failures || []),
     ...(row?.pairAudit?.failures || []),
-  ].filter(Boolean))];
+  ].map(String).filter(reason => reason && reason !== 'baseQa'))];
 }
 
 function betRecordable(item, row, now = Date.now(), betsEnabled = true, currentReaderPrice = false, cloudLedgerWritable = true) {
@@ -674,14 +708,19 @@ function markReaderBoardVerificationBlocked(item) {
   };
 }
 
-function betActionState({ latest = null, cancelled = null, recordable = false, inactiveNotice = '', cloudLedgerUnavailable = false }) {
+function betActionState({ latest = null, cancelled = null, recordable = false, inactiveNotice = '', cloudLedgerState = 'ready' }) {
+  const cloudLedgerReady = cloudLedgerState === 'ready';
+  const cloudLedgerLabel = cloudLedgerState === 'loading' ? '帳本同步中' : '永久帳本暫停';
+  const cloudLedgerTitle = cloudLedgerState === 'loading'
+    ? '正在同步永久雲端帳本，完成後才可寫入'
+    : '永久雲端帳本目前無法寫入';
   if (latest?.status === 'OPEN') {
     const started = inactiveNotice.includes('開打') || inactiveNotice.includes('已開始');
     return {
-      kind: started || cloudLedgerUnavailable ? 'none' : 'cancel',
-      text: started ? '已開賽' : cloudLedgerUnavailable ? '永久帳本暫停' : '取消下注',
-      title: started ? '比賽已達官方預定開打時間，不能取消' : cloudLedgerUnavailable ? '永久雲端帳本目前無法寫入' : '取消這筆尚未開賽的實際下注；原始證據仍會保留',
-      disabled: started || cloudLedgerUnavailable,
+      kind: started || !cloudLedgerReady ? 'none' : 'cancel',
+      text: started ? '已開賽' : !cloudLedgerReady ? cloudLedgerLabel : '取消下注',
+      title: started ? '比賽已達官方預定開打時間，不能取消' : !cloudLedgerReady ? cloudLedgerTitle : '取消這筆尚未開賽的實際下注；原始證據仍會保留',
+      disabled: started || !cloudLedgerReady,
     };
   }
   if (latest) return {
@@ -704,10 +743,10 @@ function betActionState({ latest = null, cancelled = null, recordable = false, i
     title: '舊下注已取消並保留；待Reader最新驗證完成且仍未開賽即可重新下注',
     disabled: true,
   };
-  if (cloudLedgerUnavailable) return {
+  if (!cloudLedgerReady) return {
     kind: 'none',
-    text: '永久帳本暫停',
-    title: '永久雲端帳本目前無法寫入；恢復後會自動開放記錄',
+    text: cloudLedgerLabel,
+    title: cloudLedgerTitle,
     disabled: true,
   };
   if (inactiveNotice.includes('PIT')) return {
@@ -838,7 +877,7 @@ function BreakdownButton({ label, summary, active = false, onClick }) {
   </button>;
 }
 
-function BetLedgerDashboard({ bets, cloudLedgerStatus, reportCloudLedgerFailure, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, onCancel }) {
+function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCloudLedgerFailure, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, onCancel }) {
   const [priceFeed, setPriceFeed] = useState({});
   const [priceFeedChecked, setPriceFeedChecked] = useState(false);
   const priceFeedBusyRef = useRef(false);
@@ -914,7 +953,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, reportCloudLedgerFailure,
     return () => { disposed = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [priceRequestKey, cloudLedgerStatus?.state]);
   return <section className="panel ledgerPanel">
-    <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" onClick={() => refreshSettlements('', { force: true })}>更新全部賽果</button></div>
+    <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" disabled={cloudLedgerBusy || cloudLedgerStatus?.state !== 'ready'} onClick={() => refreshSettlements('', { force: true })}>{cloudLedgerBusy ? '帳本同步中…' : '更新全部賽果'}</button></div>
     {cloudLedgerStatus?.state === 'unavailable' && <div className="errorBox" role="alert"><strong>永久雲端帳本目前無法讀取</strong><br/>{cloudLedgerStatus.message}<br/>下方若顯示 0 注，只代表這台裝置沒有可用暫存，不代表資料庫內沒有紀錄；系統不會把失敗回應冒充空帳本。</div>}
     <div className="periodTabs" aria-label="下注期間">
       {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => choosePeriod(item.id)}>{item.label}</button>)}
@@ -938,8 +977,8 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, reportCloudLedgerFailure,
 
     <div className="ledgerSectionHead"><h3>3. 下注明細</h3><span>{filteredBets.length} 注｜不可變帳本</span></div>
     {filteredBets.length ? filteredBets.map(bet => <div className="betRow" key={bet.id}>
-      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜下注時 {compactModelMetrics(bet)}｜{String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : '模型分數未列入績效'}</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
-      <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : bet.status === 'CANCELLED' ? '已取消' : '待結算'}</strong>{bet.status === 'OPEN' && Number.isFinite(Date.parse(bet.gameDate || '')) && Date.now() < Date.parse(bet.gameDate) && <button className="mini cancel" disabled={cloudLedgerStatus?.state === 'unavailable'} onClick={() => onCancel(bet)}>取消下注</button>}<small>下注證據永久保留；取消只變更狀態，不會刪除</small></div>
+      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{statusText(bet.status)}{bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜下注時 {compactModelMetrics(bet)}｜{String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : '實際下注績效已收錄｜S分數僅作影子分組'}</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
+      <div className="betRowResult"><strong>{bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : bet.status === 'CANCELLED' ? '已取消' : '待結算'}</strong>{bet.status === 'OPEN' && Number.isFinite(Date.parse(bet.gameDate || '')) && Date.now() < Date.parse(bet.gameDate) && <button className="mini cancel" disabled={cloudLedgerBusy || cloudLedgerStatus?.state !== 'ready'} onClick={() => onCancel(bet)}>取消下注</button>}<small>下注證據永久保留；取消只變更狀態，不會刪除</small></div>
     </div>) : <div className="emptySmall">這個篩選範圍目前沒有下注紀錄。</div>}
   </section>;
 }
@@ -1080,7 +1119,7 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   return { icon: '🟢', label: '7.2級模型方向', ranking: true, reason: '雙EV為正且達7.2' };
 }
 
-function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = false, now, inactiveNotice = '', cloudLedgerUnavailable = false }) {
+function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = false, now, inactiveNotice = '', cloudLedgerState = 'ready' }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
   const modelEV = modelEvValue(row);
@@ -1118,7 +1157,7 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = f
   const probabilityDetail = `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
-  const action = betActionState({ latest, cancelled: betState?.cancelled || null, recordable, inactiveNotice, cloudLedgerUnavailable });
+  const action = betActionState({ latest, cancelled: betState?.cancelled || null, recordable, inactiveNotice, cloudLedgerState });
   return <div className="scoreRow">
     <div className={`score ${scoreClass}`} title={scoreTitle} aria-label={`S分數 ${scoreLabel}`}>
       <span style={{ display: 'block', fontSize: 9, lineHeight: 1.1 }}>S 分數</span>
@@ -1175,7 +1214,7 @@ function DirectionSlotRow({ row, game }) {
   </div>;
 }
 
-function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerUnavailable = false }) {
+function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready' }) {
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const latestCoverage = item.latestMarketCoverage || null;
   const coverage = latestCoverage || item.marketCoverage || {};
@@ -1278,7 +1317,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
             : marketAllUnopened
             ? <div className="marketPlaceholder">尚未開盤｜Reader持續監看</div>
             : rows.length ? rows.map((row, index) => directionStatus(row) === 'CALCULATED' || modelEvValue(row) != null
-              ? <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled, row.clientReaderPriceCurrent, !cloudLedgerUnavailable)} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice} cloudLedgerUnavailable={cloudLedgerUnavailable}/>
+              ? <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled, row.clientReaderPriceCurrent, cloudLedgerState === 'ready')} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice} cloudLedgerState={cloudLedgerState}/>
               : <DirectionSlotRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game}/>)
             : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
@@ -1330,6 +1369,7 @@ export default function Home() {
   const [betMarket, setBetMarket] = useState('ALL');
   const [storageReady, setStorageReady] = useState(false);
   const [cloudLedgerStatus, setCloudLedgerStatus] = useState({ state: 'loading', code: '', message: '' });
+  const [cloudLedgerBusy, setCloudLedgerBusy] = useState(true);
   const [tab, setTab] = useState('board');
   const [date, setDate] = useState(taipeiDate());
   const [schedule, setSchedule] = useState([]);
@@ -1337,9 +1377,12 @@ export default function Home() {
   const boardRef = useRef(board);
   boardRef.current = board;
   const [readerStatus, setReaderStatus] = useState(null);
+  const [readerPolling, setReaderPolling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ active: false, done: 0, total: 0, label: '' });
   const [allLeagueRun, setAllLeagueRun] = useState(null);
+  const allLeagueRunRef = useRef(allLeagueRun);
+  allLeagueRunRef.current = allLeagueRun;
   const [allLeaguePreparing, setAllLeaguePreparing] = useState(false);
   const [backgroundJobRevision, setBackgroundJobRevision] = useState(0);
   const [notice, setNotice] = useState('');
@@ -1366,6 +1409,7 @@ export default function Home() {
   const readerStatusHighWaterRef = useRef(null);
   const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
+  const betMutationBusyRef = useRef(false);
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
   const coreDataBlockRetryRef = useRef(new Map());
@@ -1377,7 +1421,11 @@ export default function Home() {
   const bettingEnabled = activeLeague.capabilities.bets === true;
   const shadowMode = activeLeague.status === 'shadow';
   const allLeagueProgress = allLeagueAnalysisProgress(allLeagueRun);
+  const allLeaguePrechecked = LEAGUE_IDS.filter(id => !['idle', 'preparing'].includes(
+    String(allLeagueRun?.leagues?.[id]?.status || 'idle'),
+  )).length;
   const allLeagueRunning = ['preparing', 'running'].includes(String(allLeagueRun?.state || ''));
+  const cloudLedgerActionState = cloudLedgerBusy ? 'loading' : cloudLedgerStatus.state;
   const activeLeagueBatchStatus = allLeagueBoardDate(allLeagueRun, league) === date
     ? allLeagueRun?.leagues?.[league]?.status || 'idle'
     : 'idle';
@@ -1492,6 +1540,7 @@ export default function Home() {
   }
 
   function publishAllLeagueRun(run) {
+    allLeagueRunRef.current = run || null;
     setAllLeagueRun(run || null);
     if (run) saveAllLeagueAnalysisRun(run);
   }
@@ -1516,7 +1565,12 @@ export default function Home() {
   async function allLeagueTargetDate(targetLeague, selectedDate) {
     if (targetLeague === 'MLB') return selectedDate;
     try {
-      const latest = await requestJSON(`/api/reader/status?league=${encodeURIComponent(targetLeague)}&t=${Date.now()}`, {}, 20000);
+      const latest = await requestJSONWithTransientRetry(
+        `/api/reader/status?league=${encodeURIComponent(targetLeague)}&t=${Date.now()}`,
+        {},
+        20000,
+        { delaysMs: [0, 1500, 4000] },
+      );
       const readerDate = String(latest?.boardDate || '').trim();
       return /^\d{4}-\d{2}-\d{2}$/.test(readerDate) ? readerDate : selectedDate;
     } catch {
@@ -1525,14 +1579,20 @@ export default function Home() {
   }
 
   function acquireOperation() {
-    if (operationBusyRef.current || readerPollBusyRef.current || allLeagueBusyRef.current) return false;
+    if (operationBusyRef.current || allLeagueBusyRef.current) return false;
+    if (readerPollBusyRef.current) {
+      setNotice('Reader 正在自動複核最新盤口；完成後即可再次操作。');
+      return false;
+    }
     operationBusyRef.current = true;
+    markAppOperationBusy(true);
     setBusy(true);
     return true;
   }
 
   function releaseOperation() {
     operationBusyRef.current = false;
+    markAppOperationBusy(false);
     setBusy(false);
   }
 
@@ -1543,8 +1603,9 @@ export default function Home() {
   }
 
   async function probeCloudLedgerRecovery() {
-    if (cloudSyncBusyRef.current || document.visibilityState !== 'visible') return;
+    if (cloudSyncBusyRef.current || betMutationBusyRef.current || document.visibilityState !== 'visible') return;
     cloudSyncBusyRef.current = true;
+    setCloudLedgerBusy(true);
     try {
       const data = await requestJSON('/api/bets', {}, 30000);
       if (!Array.isArray(data.bets)) throw new Error('雲端下注紀錄回傳格式錯誤');
@@ -1557,6 +1618,7 @@ export default function Home() {
       reportCloudLedgerFailure(cause);
     } finally {
       cloudSyncBusyRef.current = false;
+      setCloudLedgerBusy(false);
     }
   }
 
@@ -1569,8 +1631,9 @@ export default function Home() {
       now: Date.now(),
       retryAt: cloudSyncRetryAtRef.current,
     })) return;
-    if (cloudSyncBusyRef.current) return;
+    if (cloudSyncBusyRef.current || betMutationBusyRef.current) return;
     cloudSyncBusyRef.current = true;
+    setCloudLedgerBusy(true);
     try {
       const migrationComplete = cloudBetMigrationComplete();
       const data = await requestJSON('/api/bets', {
@@ -1593,6 +1656,7 @@ export default function Home() {
       // A temporary result-provider failure must not erase or rewrite the ledger.
     } finally {
       cloudSyncBusyRef.current = false;
+      setCloudLedgerBusy(false);
     }
   }
 
@@ -1605,6 +1669,7 @@ export default function Home() {
     setBets(migratedBets);
     setStorageReady(true);
     cloudSyncBusyRef.current = true;
+    setCloudLedgerBusy(true);
     const migrationComplete = cloudBetMigrationComplete();
     requestJSON('/api/bets', migrationComplete ? {} : {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: migratedBets }),
@@ -1619,7 +1684,10 @@ export default function Home() {
       setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
     }).catch(cause => {
       reportCloudLedgerFailure(cause);
-    }).finally(() => { cloudSyncBusyRef.current = false; });
+    }).finally(() => {
+      cloudSyncBusyRef.current = false;
+      setCloudLedgerBusy(false);
+    });
   }, []);
   useEffect(() => {
     betsRef.current = bets;
@@ -1650,10 +1718,13 @@ export default function Home() {
       || !['preparing', 'running'].includes(String(allLeagueRun.state || ''))) return undefined;
     let active = true;
     let timer;
+    const expectedRunId = allLeagueRun.runId;
+    const stillCurrentRun = () => active && allLeagueRunRef.current?.runId === expectedRunId;
     const pollSummary = async () => {
+      if (!stillCurrentRun()) return;
       try {
-        const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(allLeagueRun.runId)}&summary=1&t=${Date.now()}`, {}, 30000);
-        if (!active) return;
+        const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(expectedRunId)}&summary=1&t=${Date.now()}`, {}, 30000);
+        if (!stillCurrentRun()) return;
         if (state.status === 'completed') {
           const latest = loadAllLeagueAnalysisRun(date) || allLeagueRun;
           let completedRun = {
@@ -1675,6 +1746,7 @@ export default function Home() {
             });
           }
           publishAllLeagueRun(completedRun);
+          setProgress(value => ({ ...value, active: false, running: 0 }));
           setBackgroundJobRevision(value => value + 1);
           return;
         }
@@ -1688,17 +1760,40 @@ export default function Home() {
                 status: 'failed', message: '四聯盟伺服器背景工作未完成',
               });
             }
-            clearBackgroundJob(id, allLeagueBoardDate(failedRun, id, failedRun.date), allLeagueRun.runId);
+            clearBackgroundJob(id, allLeagueBoardDate(failedRun, id, failedRun.date), expectedRunId);
           }
           publishAllLeagueRun(failedRun);
+          setProgress(value => ({ ...value, active: false, running: 0, label: '四聯盟伺服器背景工作未完成' }));
           setBackgroundJobRevision(value => value + 1);
           return;
         }
-      } catch {
+      } catch (cause) {
+        if (!stillCurrentRun()) return;
+        const failure = analysisFailureState(cause);
+        if (failure.permanent) {
+          const latest = loadAllLeagueAnalysisRun(date) || allLeagueRun;
+          let failedRun = { ...latest, state: 'completed', completedAt: new Date().toISOString() };
+          for (const id of LEAGUE_IDS) {
+            if (!['done', 'partial', 'failed', 'no_games', 'no_open_markets'].includes(failedRun.leagues?.[id]?.status)) {
+              failedRun = updateAllLeagueAnalysisLeague(failedRun, id, {
+                status: 'failed',
+                message: failure.status === 404 ? '背景工作已失效，請重新執行' : failure.message,
+              });
+            }
+            clearBackgroundJob(id, allLeagueBoardDate(failedRun, id, failedRun.date), expectedRunId);
+          }
+          publishAllLeagueRun(failedRun);
+          setProgress(value => ({ ...value, active: false, running: 0, label: '四聯盟背景工作已停止' }));
+          setBackgroundJobRevision(value => value + 1);
+          setError(failure.status === 404
+            ? '先前的四聯盟背景工作已失效，按鈕已解鎖，請重新分析。'
+            : failure.message);
+          return;
+        }
         // The durable workflow keeps running when the browser temporarily
         // loses its connection. Poll again without resetting any league.
       }
-      if (active) timer = window.setTimeout(pollSummary, 2500);
+      if (stillCurrentRun()) timer = window.setTimeout(pollSummary, 2500);
     };
     void pollSummary();
     return () => { active = false; window.clearTimeout(timer); };
@@ -1765,6 +1860,7 @@ export default function Home() {
     const generation = analysisGenerationRef.current;
     if (locksForeground) {
       operationBusyRef.current = true;
+      markAppOperationBusy(true);
       setBusy(true);
     }
     setProgress({ active: true, done: 0, running: 1, total: Number(saved.total) || 1, label: saved.batchMode === 'all-leagues' ? '四聯盟伺服器背景分析中｜可自由切換' : '伺服器背景分析中｜可離開App' });
@@ -1836,13 +1932,16 @@ export default function Home() {
           && !manualDateSelectionRef.current.has(league)
           && !hasCurrentPrestartGame
           && !operationBusyRef.current
+          && !allLeagueRunning
+          && !allLeagueBusyRef.current
           && !readerPollBusyRef.current) {
           setNotice(`已依 ${league} Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
           setLeagueBoardDate(league, latest.boardDate);
           return;
         }
         commitReaderStatus(value);
-        if (value?.fresh || hasCurrentPrestartGame || operationBusyRef.current || readerPollBusyRef.current) return;
+        if (value?.fresh || hasCurrentPrestartGame || operationBusyRef.current
+          || allLeagueRunning || allLeagueBusyRef.current || readerPollBusyRef.current) return;
         if (!active || !latest?.fresh || !/^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))) return;
         if (latest.boardDate > currentDateRef.current && !manualDateSelectionRef.current.has(league)) {
           setNotice(`已依 Tai888 Reader 自動切換至 ${latest.boardDate} 盤口日期。`);
@@ -1855,9 +1954,11 @@ export default function Home() {
     refreshReader();
     const timer = window.setInterval(refreshReader, READER_RECHECK_INTERVAL_MS);
     return () => { active = false; window.clearInterval(timer); };
-  }, [date, board.length, league, readerEnabled, analysisEnabled]);
+  }, [date, board.length, league, readerEnabled, analysisEnabled, allLeagueRunning]);
   useEffect(() => {
     if (!readerEnabled || !analysisEnabled || !board.length || restoredBoardNeedsValidationRef.current) return undefined;
+    const pendingBatch = loadBackgroundJob(league, date);
+    if (pendingBatch?.runId && pendingBatch?.batchMode === 'all-leagues') return undefined;
     // Validate immediately after a page restore or completed analysis. Waiting
     // for the first interval meant every mobile refresh restarted the delay and
     // could leave otherwise-current bet buttons hidden indefinitely.
@@ -1865,7 +1966,6 @@ export default function Home() {
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [board.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning]);
-  const currentReaderKey = readerHashKey(date, readerStatus?.payloadHash);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
     && readerStatus?.fresh === true
@@ -1953,6 +2053,12 @@ export default function Home() {
   function commitAnalysisPayload(task, baseData) {
     const game = task?.game || baseData?.game;
     if (!game?.gamePk || !baseData?.analysis) return false;
+    const commitBoard = updater => {
+      const next = updater(boardRef.current);
+      boardRef.current = next;
+      setBoard(next);
+      if (storageReady) saveAnalysisBoardCache(league, currentDateRef.current, next);
+    };
     const actualMarkets = task?.actualMarkets || [];
     const currentItem = boardRef.current.find(item => Number(item?.game?.gamePk) === Number(game.gamePk)) || null;
     if (taskReaderStateIsStale(task)) return false;
@@ -1963,7 +2069,7 @@ export default function Home() {
     );
     const unopenedOnly = analysisIsUnopenedOnly(baseData);
     if (preservePrevious || unopenedOnly) {
-      setBoard(current => current.map(item => {
+      commitBoard(current => current.map(item => {
         if (Number(item?.game?.gamePk) !== Number(game.gamePk)) return item;
         const preserve = preservePrevious && analysisHasCalculatedDirections(item?.customData);
         const readerMissing = actualMarkets.length === 0;
@@ -1996,7 +2102,7 @@ export default function Home() {
     }
     coreDataBlockRetryRef.current.delete(coreDataBlockKey(league, currentDateRef.current, game.gamePk, readerGameEvidenceHash(task)));
     snapshots.current.set(game.gamePk, baseData.repriceSnapshot);
-    setBoard(current => {
+    commitBoard(current => {
       const previous = current.find(item => Number(item?.game?.gamePk) === Number(game.gamePk)) || {};
       const completed = {
         ...previous,
@@ -2131,6 +2237,7 @@ export default function Home() {
     const currentPoll = backgroundJobPollsRef.current.get(pollKey);
     if (currentPoll) return currentPoll;
     const poll = (async () => {
+      let readerWaitDelayMs = 2500;
       while (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
         try {
           const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&league=${encodeURIComponent(league)}&t=${Date.now()}`, {}, 30000);
@@ -2185,11 +2292,11 @@ export default function Home() {
                 setProgress({ active: false, done: 0, running: 0, total: Number(result.total) || rows.length, label: '背景結果已停止｜該批場次已開始、延期或取消' });
                 return { ...result, discarded: true, results: [] };
               }
-              const credit = await requestJSON('/api/credit-lines', {
+              const credit = await requestJSONWithTransientRetry('/api/credit-lines', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
                 body: JSON.stringify({ league, date: targetDate, schedule: officialGames }),
-              }, 60000);
+              }, 60000, { delaysMs: ANALYSIS_TRANSIENT_RETRY_DELAYS_MS });
               if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
                 return { detached: true, total: 0, completed: 0, results: [] };
               }
@@ -2218,7 +2325,8 @@ export default function Home() {
               }
               if (credit?.blocked === true || credit?.readerFresh !== true || !credit?.payloadHash) {
                 setNotice('伺服器分析已完成；正在等待 Reader 驗證同一份盤口後載入。');
-                await new Promise(resolve => window.setTimeout(resolve, 2500));
+                await new Promise(resolve => window.setTimeout(resolve, readerWaitDelayMs));
+                readerWaitDelayMs = Math.min(30000, readerWaitDelayMs * 2);
                 continue;
               }
               if (credit?.readerStatus) commitReaderStatus({
@@ -2333,6 +2441,9 @@ export default function Home() {
           if (cause?.backgroundFatal || [401, 403, 404].includes(Number(cause?.status))) {
             clearBackgroundJob(league, targetDate, runId);
             releaseTerminalBackgroundCards(gamePks, cause?.backgroundFatal ? 'failed' : 'unavailable');
+            if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
+              setProgress(value => ({ ...value, active: false, running: 0, label: '伺服器背景分析已停止' }));
+            }
             throw cause;
           }
           if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
@@ -2508,28 +2619,37 @@ export default function Home() {
   async function oneClickAnalyzeAll() {
     if (allLeagueBusyRef.current || operationBusyRef.current || readerPollBusyRef.current || allLeagueRunning) return false;
     const targetDate = leagueDatesRef.current.MLB || date;
+    const previousRun = loadAllLeagueAnalysisRun(targetDate) || allLeagueRun;
+    if (previousRun?.runId) clearAllLeagueBackgroundJobs(previousRun);
+    analysisGenerationRef.current += 1;
     restoredBoardNeedsValidationRef.current = false;
     allLeagueBusyRef.current = true;
+    markAppOperationBusy(true);
     setAllLeaguePreparing(true);
     setError('');
-    setNotice('正在依序預查四個聯盟的官方賽程與 Tai888 Reader 盤口。');
+    setNotice('正在並行預查四個聯盟的官方賽程與 Tai888 Reader 盤口。');
     let run = createAllLeagueAnalysisRun(targetDate);
+    for (const id of LEAGUE_IDS) {
+      run = updateAllLeagueAnalysisLeague(run, id, {
+        status: 'preparing',
+        boardDate: id === 'MLB' ? targetDate : (leagueDatesRef.current[id] || date),
+        message: '並行預查官方賽程與Reader盤口',
+      });
+    }
     publishAllLeagueRun(run);
     const batches = [];
     try {
-      for (const id of LEAGUE_IDS) {
-        const batchDate = await allLeagueTargetDate(id, id === 'MLB' ? targetDate : (leagueDatesRef.current[id] || date));
+      const prepared = await Promise.all(LEAGUE_IDS.map(async id => {
+        const selectedDate = id === 'MLB' ? targetDate : (leagueDatesRef.current[id] || date);
+        const batchDate = await allLeagueTargetDate(id, selectedDate);
+        clearBackgroundJob(id, batchDate);
         leagueDatesRef.current[id] = batchDate;
         manualAnalysisScopesRef.current.add(`${id}:${batchDate}`);
-        run = updateAllLeagueAnalysisLeague(run, id, {
-          status: 'preparing', boardDate: batchDate, message: `預查 ${batchDate} 官方賽程與Reader盤口`,
-        });
-        publishAllLeagueRun(run);
         try {
           const batch = await prepareAllLeagueBatch(id, batchDate);
-          batches.push(batch);
           run = updateAllLeagueAnalysisLeague(run, id, {
             status: batch.emptyReason || 'queued',
+            boardDate: batchDate,
             total: batch.tasks.length,
             completed: 0,
             blocked: 0,
@@ -2538,13 +2658,20 @@ export default function Home() {
               : batch.emptyReason === 'no_open_markets' ? 'Reader持續等待開盤'
                 : `已排入 ${batch.tasks.length} 場`,
           });
+          publishAllLeagueRun(run);
+          return { id, batchDate, batch };
         } catch (cause) {
           run = updateAllLeagueAnalysisLeague(run, id, {
             status: 'failed',
+            boardDate: batchDate,
             message: String(cause?.message || cause),
           });
+          publishAllLeagueRun(run);
+          return { id, batchDate, cause };
         }
-        publishAllLeagueRun(run);
+      }));
+      for (const result of prepared) {
+        if (result.batch) batches.push(result.batch);
       }
       if (!batches.length) {
         run = { ...run, state: 'completed', completedAt: new Date().toISOString() };
@@ -2571,13 +2698,14 @@ export default function Home() {
         runId: job.runId,
         state: 'running',
       };
+      let reconnectSaved = true;
       for (const batch of batches) {
         if (batch.tasks.length) {
           run = updateAllLeagueAnalysisLeague(run, batch.league, {
             status: 'running', message: `伺服器依序分析 ${batch.tasks.length} 場`,
           });
         }
-        saveBackgroundJob({
+        reconnectSaved = saveBackgroundJob({
           runId: job.runId,
           batchMode: 'all-leagues',
           league: batch.league,
@@ -2586,12 +2714,14 @@ export default function Home() {
           gamePks: batch.tasks.map(task => Number(task?.game?.gamePk)).filter(Number.isFinite),
           preparedBoard: batch.preparedBoard,
           startedAt: run.startedAt,
-        });
+        }) && reconnectSaved;
       }
       publishAllLeagueRun(run);
       setBackgroundJobRevision(value => value + 1);
       const failedPreparations = LEAGUE_IDS.filter(id => run.leagues?.[id]?.status === 'failed').length;
-      setNotice(`四聯盟背景分析已開始${failedPreparations ? `；${failedPreparations}個聯盟預查失敗，可稍後單獨重試` : ''}。現在可以自由切換聯盟或離開App。`);
+      setNotice(reconnectSaved
+        ? `四聯盟背景分析已開始${failedPreparations ? `；${failedPreparations}個聯盟預查失敗，可稍後單獨重試` : ''}。現在可以自由切換聯盟或離開App。`
+        : '四聯盟背景分析已開始，但此裝置無法保存工作編號；完成前請保持 App 開啟。');
       return true;
     } catch (cause) {
       for (const id of LEAGUE_IDS) {
@@ -2605,6 +2735,7 @@ export default function Home() {
       return false;
     } finally {
       allLeagueBusyRef.current = false;
+      markAppOperationBusy(false);
       setAllLeaguePreparing(false);
     }
   }
@@ -2648,9 +2779,9 @@ export default function Home() {
       }
 
       setProgress({ active: true, done: 0, running: 1, total: 1, label: '取得Tai888信用盤' });
-      const credit = await requestJSON('/api/credit-lines', {
+      const credit = await requestJSONWithTransientRetry('/api/credit-lines', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() }, body: JSON.stringify({ league, date: targetDate, schedule: games }),
-      }, 60000);
+      }, 60000, { delaysMs: ANALYSIS_TRANSIENT_RETRY_DELAYS_MS });
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
 
       if (credit?.readerStatus) commitReaderStatus({
@@ -2935,6 +3066,8 @@ export default function Home() {
     const generation = analysisGenerationRef.current;
     const stillCurrent = () => generation === analysisGenerationRef.current && currentDateRef.current === targetDate;
     readerPollBusyRef.current = true;
+    markAppOperationBusy(true);
+    setReaderPolling(true);
     let fullSlateRecoveryNeeded = false;
     try {
       const status = await requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`, {}, 20000);
@@ -2955,11 +3088,11 @@ export default function Home() {
         return;
       }
       const games = schedule.length ? schedule : boardRef.current.map(item => item.game);
-      const credit = await requestJSON('/api/credit-lines', {
+      const credit = await requestJSONWithTransientRetry('/api/credit-lines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
         body: JSON.stringify({ league, date: targetDate, schedule: games }),
-      }, 60000);
+      }, 60000, { delaysMs: ANALYSIS_TRANSIENT_RETRY_DELAYS_MS });
       if (!stillCurrent()) return;
       officialPrestartCheckedAtRef.current = Date.now();
       if (credit?.code === 'NO_PRESTART_GAMES') {
@@ -3232,6 +3365,7 @@ export default function Home() {
       });
       if (rebuildTasks.length && stillCurrent()) {
         operationBusyRef.current = true;
+        markAppOperationBusy(true);
         setBusy(true);
         try {
           const rebuilt = await runDurableAnalysisTasks(rebuildTasks, generation, targetDate, {
@@ -3275,6 +3409,8 @@ export default function Home() {
       if (stillCurrent()) invalidateReaderStatus(cause?.message || cause);
     } finally {
       readerPollBusyRef.current = false;
+      markAppOperationBusy(false);
+      setReaderPolling(false);
       if (fullSlateRecoveryNeeded && stillCurrent()) void oneClickAnalyze();
     }
   }
@@ -3291,8 +3427,18 @@ export default function Home() {
     }
     const now = Date.now();
     const currentReaderPrice = capturedReaderContractReady(item, row, now);
-    if (cloudLedgerStatus.state === 'unavailable') {
-      setError('永久雲端帳本目前無法寫入；系統不會把未保存的下注顯示成成功');
+    if (cloudLedgerStatus.state !== 'ready') {
+      setError(cloudLedgerStatus.state === 'loading'
+        ? '永久雲端帳本仍在同步；完成前不會送出下注紀錄'
+        : '永久雲端帳本目前無法寫入；系統不會把未保存的下注顯示成成功');
+      return;
+    }
+    if (cloudSyncBusyRef.current || cloudLedgerBusy) {
+      setNotice('永久雲端帳本正在同步；完成後才能記錄下注。');
+      return;
+    }
+    if (betMutationBusyRef.current) {
+      setNotice('上一筆帳本操作仍在確認中，請稍候。');
       return;
     }
     if (!betRecordable(item, row, now, bettingEnabled, currentReaderPrice, true)) {
@@ -3301,6 +3447,11 @@ export default function Home() {
     }
     const identity = betIdentity(date, item.game.gamePk, row, league);
     const positionIdentity = betPositionIdentity(date, item.game.gamePk, row, league);
+    const readerCapture = readerCaptureForBet(item, row, date);
+    if (!readerCapture.payloadHash || !readerCapture.revision) {
+      setError('目前 Reader 證據版本不一致；請先同步最新盤口再記錄下注');
+      return;
+    }
     const bet = {
       id: uid(),
       identity,
@@ -3340,11 +3491,9 @@ export default function Home() {
         lineAsOf: row.lineAsOf || null,
       },
       lineAsOf: row.lineAsOf || null,
-      readerPayloadHash: row?.readerPayloadHash || item?.readerPayloadHash || item?.customData?.analysis?.readerPayloadHash || null,
-      rawBoardHash: row?.readerRawBoardHash || item?.customData?.analysis?.readerRawBoardHash || readerStatus?.rawBoardHash || null,
-      readerRevision: row?.readerBoardDate && row?.readerPayloadHash
-        ? `${row.readerBoardDate}:${row.readerPayloadHash}`
-        : item?.readerPayloadHash ? `${date}:${item.readerPayloadHash}` : currentReaderKey || null,
+      readerPayloadHash: readerCapture.payloadHash,
+      rawBoardHash: readerCapture.rawBoardHash,
+      readerRevision: readerCapture.revision,
       snapshotId: item.customData?.analysis?.snapshotId || null,
       pitSnapshotId: item.customData?.analysis?.pitSnapshotId || null,
       pitPersistenceStatus: item.customData?.pitPersistence?.status || null,
@@ -3362,9 +3511,15 @@ export default function Home() {
       placedAt: new Date().toISOString(),
       status: 'OPEN',
     };
+    let reconcileAfterMutation = false;
+    betMutationBusyRef.current = true;
+    setCloudLedgerBusy(true);
+    markAppOperationBusy(true);
     try {
       const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', bet }) }, 30000);
-      if (!Array.isArray(data.bets)) throw new Error('雲端下注紀錄回傳格式錯誤');
+      if (!Array.isArray(data.bets) || data.created !== true || !data.betId) {
+        throw new Error('永久帳本未確認新增這筆下注');
+      }
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
@@ -3377,16 +3532,36 @@ export default function Home() {
         reportCloudLedgerFailure(cause);
       }
       setError(cause?.message || '雲端下注紀錄更新失敗');
+      reconcileAfterMutation = [409].includes(Number(cause?.status)) || /逾時/.test(String(cause?.message || ''));
+    } finally {
+      betMutationBusyRef.current = false;
+      setCloudLedgerBusy(false);
+      markAppOperationBusy(false);
     }
+    if (reconcileAfterMutation) await probeCloudLedgerRecovery();
   }
 
   async function cancelBet(bet) {
     if (!bet?.id || bet.status !== 'OPEN') return;
     if (!window.confirm(`確定取消這筆下注？\n${translateTeamText(bet.pick)}｜${waterText(bet.water)}`)) return;
-    if (cloudLedgerStatus.state === 'unavailable') {
-      setError('永久雲端帳本目前無法更新；取消尚未送出');
+    if (cloudLedgerStatus.state !== 'ready') {
+      setError(cloudLedgerStatus.state === 'loading'
+        ? '永久雲端帳本仍在同步；取消尚未送出'
+        : '永久雲端帳本目前無法更新；取消尚未送出');
       return;
     }
+    if (cloudSyncBusyRef.current || cloudLedgerBusy) {
+      setNotice('永久雲端帳本正在同步；完成後才能取消下注。');
+      return;
+    }
+    if (betMutationBusyRef.current) {
+      setNotice('上一筆帳本操作仍在確認中，請稍候。');
+      return;
+    }
+    let reconcileAfterMutation = false;
+    betMutationBusyRef.current = true;
+    setCloudLedgerBusy(true);
+    markAppOperationBusy(true);
     try {
       const data = await requestJSON('/api/bets', {
         method: 'POST',
@@ -3405,7 +3580,13 @@ export default function Home() {
         reportCloudLedgerFailure(cause);
       }
       setError(cause?.message || '取消下注失敗');
+      reconcileAfterMutation = [409].includes(Number(cause?.status)) || /逾時/.test(String(cause?.message || ''));
+    } finally {
+      betMutationBusyRef.current = false;
+      setCloudLedgerBusy(false);
+      markAppOperationBusy(false);
     }
+    if (reconcileAfterMutation) await probeCloudLedgerRecovery();
   }
 
   function selectLeague(value) {
@@ -3417,6 +3598,7 @@ export default function Home() {
     // The saved job is reattached when the user returns to that league/date.
     if (operationBusyRef.current) {
       operationBusyRef.current = false;
+      markAppOperationBusy(false);
       setBusy(false);
       setProgress(value => ({ ...value, active: false, running: 0 }));
     }
@@ -3471,7 +3653,7 @@ export default function Home() {
     {tab === 'board' && <>
       <section className="heroCard">
         <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型EV（W）與穩健EV（R）。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeagueProgress.terminal}/4` : allLeagueRunning ? `四聯盟分析中 ${allLeagueProgress.terminal}/4` : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? '執行中…' : readerPolling ? 'Reader自動複核中…' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
           <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每5分鐘複核｜S分數、W與R完整顯示` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
@@ -3484,7 +3666,7 @@ export default function Home() {
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && shadowMode && <LeagueShadowPanel config={activeLeague}/>}
       {analysisEnabled && !board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
-      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerUnavailable={cloudLedgerStatus.state === 'unavailable'}/>) }
+      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState}/>) }
     </>}
 
     {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
@@ -3492,8 +3674,8 @@ export default function Home() {
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-        const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerStatus.state !== 'unavailable');
-        const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerUnavailable: cloudLedgerStatus.state === 'unavailable' });
+        const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerActionState === 'ready');
+        const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerState: cloudLedgerActionState });
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const warnings = diagnosticWarnings(entry.row);
@@ -3509,8 +3691,8 @@ export default function Home() {
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
           const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-          const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerStatus.state !== 'unavailable');
-          const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerUnavailable: cloudLedgerStatus.state === 'unavailable' });
+          const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerActionState === 'ready');
+          const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerState: cloudLedgerActionState });
           const scoreText = entry.score.toFixed(1);
           const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const warnings = diagnosticWarnings(entry.row);
@@ -3521,11 +3703,11 @@ export default function Home() {
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
 
-    {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
+    {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
 
     {tab === 'scorePerformance' && <ScorePerformanceDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus}/>}
 
-    {tab === 'performanceStats' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
+    {tab === 'performanceStats' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
 
     {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>每場正反方向、讓分大小、全場與上半場共用一份PIT凍結聯合比分分布；Tai888只提供待評估的成交盤口與水位，不改寫模型概率。前台固定以S分數為主，W與R為次要資訊；Tai888差距、外部市場方向與極高EV只作WARNING，不影響S或排名。只有資料、合約、比分分布、正反鏡像與逐腿結算等實質QA錯誤才會BLOCK。此金額只供實際下注帳本紀錄；帳本仍依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 

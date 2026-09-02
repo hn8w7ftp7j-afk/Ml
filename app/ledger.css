@@ -322,7 +322,7 @@
 }
 
 .rankActionStack {
-  grid-column: 3;
+  grid-column: 4;
   display: grid;
   gap: 6px;
   min-width: 0;

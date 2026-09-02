@@ -41,6 +41,7 @@ const legacyAsianEntry = { ...entry, version: 1, league: 'KBO' };
 assert.deepEqual(restoreAnalysisBoardCache(legacyAsianEntry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'pre-V11 Asian fallback scores must never be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 2 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-V11 MLB advanced-policy snapshots must never be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 3 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-W-first snapshots must never be restored');
+assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 4 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-v1.9.1 score-display snapshots must not restore null warning scores');
 
 const store = upsertAnalysisBoardCache({}, entry);
 assert.equal(store[analysisBoardCacheKey('MLB', '2026-08-23')].board.length, 1);

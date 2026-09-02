@@ -38,6 +38,21 @@ assert.match(
   /async function pollReaderAndReprice\(\) \{[\s\S]{0,300}allLeagueBusyRef\.current[\s\S]{0,120}allLeagueRunning/,
   'automatic Reader repricing must not create an individual workflow while the four-league workflow is active',
 );
+assert.match(
+  page,
+  /if \(\['failed', 'cancelled'\]\.includes[\s\S]*publishAllLeagueRun\(failedRun\);\s*setProgress\(value => \(\{ \.\.\.value, active: false, running: 0/,
+  'a terminal four-league workflow failure must clear the global progress indicator',
+);
+assert.match(
+  page,
+  /cause\?\.backgroundFatal \|\| \[401, 403, 404\][\s\S]*setProgress\(value => \(\{ \.\.\.value, active: false, running: 0/,
+  'a fatal selected-league result poll must not leave the background progress line active',
+);
+assert.match(
+  page,
+  /const refreshReader = async \(\) => \{[\s\S]*!allLeagueRunning[\s\S]*!allLeagueBusyRef\.current[\s\S]*\}, \[date, board\.length, league, readerEnabled, analysisEnabled, allLeagueRunning\]\);/,
+  'Reader date rollover must stay pinned to the active four-league run until its durable handle is terminal',
+);
 
 assert.match(
   page,

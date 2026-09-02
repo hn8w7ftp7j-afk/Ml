@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
+  buildServerVerifiedCloudBet,
+  cancelOpenCloudBetAtomically,
   cloudBetCandidateCanWrite,
   cloudBetLeagueCanWrite,
+  insertVerifiedCloudBetAtomically,
   sanitizeCloudBet,
   upsertCloudBet,
 } from '../lib/cloud-bet-store.js';
@@ -42,6 +45,140 @@ await assert.rejects(() => upsertCloudBet({ ...bet, league: undefined }), /必�
 
 const formal = sanitizeCloudBet({ ...bet, id: 'formal-1', score: 8.2, scoreStatus: 'FORMAL_VALIDATED' });
 assert.equal(formal.score, 8.2);
+assert.equal(sanitizeCloudBet({ ...bet, id: 'oversized-stake', stake: 1_000_000_001 }), null, 'stake must remain within the server ledger limit');
+
+const hash = character => character.repeat(64);
+const verification = {
+  version: 'SERVER-EVIDENCE-v1',
+  readerVerified: true,
+  pitVerified: true,
+  verifiedAt: '2026-08-16T11:59:30.000Z',
+  officialGame: {
+    gamePk: 123,
+    gameDate: '2026-08-16T13:00:00.000Z',
+    officialDate: '2026-08-16',
+    gameNumber: 1,
+    away: '客隊',
+    home: '主隊',
+  },
+  reader: {
+    market: '全場大小',
+    pick: '小9+60',
+    water: 0.94,
+    lineAsOf: '2026-08-16T11:59:00.000Z',
+    payloadHash: hash('a'),
+    rawBoardHash: hash('b'),
+    revision: `2026-08-16:${hash('a')}`,
+    captureFreshAtRecord: false,
+  },
+  pit: {
+    verified: true,
+    snapshotId: `MLB:123:FULL:${hash('c')}`,
+    inputHash: hash('c'),
+    coreFingerprint: hash('d'),
+    distributionHash: hash('e'),
+    distributionId: 'distribution-1',
+    analysisAsOf: '2026-08-16T11:59:10.000Z',
+    dataAsOf: '2026-08-16T11:58:00.000Z',
+    weightedEV: 0.08,
+    robustEV: 0.03,
+    formulaDiagnosticScore: 8.1,
+    shadowDiagnosticScore: 8.1,
+    scoreStatus: 'SHADOW_DIAGNOSTIC_UNCALIBRATED',
+    readerGameMarketHash: hash('f'),
+    featureObservedAts: { coreSnapshot: '2026-08-16T11:58:00.000Z' },
+    modelVersion: 'MODEL-v1',
+    scoreFormulaVersion: 'SCORE-v1',
+    settlementRuleVersion: 'SETTLEMENT-v1',
+  },
+  calibrationEligibility: 'PENDING_SETTLEMENT_AND_LOCKED_OOS_GATE',
+};
+const serverBet = buildServerVerifiedCloudBet({
+  id: 'client-controlled-id',
+  identity: 'forged-identity',
+  league: 'MLB',
+  date: '2026-08-16',
+  gamePk: 999,
+  market: '全場讓分',
+  pick: '假隊讓99',
+  water: 5,
+  stake: 10_000,
+  rebateRate: 0.10,
+  status: 'SETTLED',
+  score: 9.9,
+  scoreStatus: 'FORMAL_VALIDATED',
+  settlement: { netProfit: 999_999 },
+  placedContractSnapshot: {
+    market: '全場大小', pick: '小7+50', water: 1.2, lineAsOf: '2026-08-16T11:59:20.000Z',
+  },
+}, verification, {
+  id: 'server-bet-id',
+  placedAt: '2026-08-16T12:00:00.000Z',
+});
+assert.ok(serverBet);
+assert.equal(serverBet.id, 'server-bet-id');
+assert.match(serverBet.identity, /^MLB\|\|\|2026-08-16\|\|\|123\|\|\|全場大小\|\|\|/);
+assert.equal(serverBet.gamePk, 123);
+assert.equal(serverBet.matchup, '客隊 對 主隊');
+assert.equal(serverBet.market, verification.reader.market);
+assert.equal(serverBet.pick, verification.reader.pick);
+assert.equal(serverBet.water, verification.reader.water);
+assert.equal(serverBet.stake, 10_000, 'stake is the only client-owned persisted bet value');
+assert.equal(serverBet.rebateRate, 0.015, 'rebate must use the server-owned Taiwan credit rule');
+assert.equal(serverBet.status, 'OPEN');
+assert.equal(serverBet.score, null);
+assert.equal(serverBet.scoreStatus, 'SHADOW_DIAGNOSTIC_NOT_FORMAL');
+assert.equal(serverBet.formulaDiagnosticScore, verification.pit.formulaDiagnosticScore);
+assert.equal(serverBet.settlement, null);
+assert.deepEqual(serverBet.placedContractSnapshot, {
+  pick: verification.reader.pick,
+  water: verification.reader.water,
+  market: verification.reader.market,
+  sourceType: 'ACTUAL_TW_CREDIT',
+  provider: 'TAI888_READER_AUTO',
+  lineAsOf: verification.reader.lineAsOf,
+});
+assert.equal(serverBet.readerEvidenceStatus, 'SERVER_VERIFIED_CAPTURED_READER');
+assert.equal(serverBet.pitSnapshotId, verification.pit.snapshotId);
+assert.equal(serverBet.inputHash, verification.pit.inputHash);
+
+let insertSql = '';
+const created = await insertVerifiedCloudBetAtomically(serverBet, {
+  database: async (strings, ...values) => {
+    insertSql = strings.reduce((text, part, index) => `${text}${part}${index < values.length ? '?' : ''}`, '');
+    return [{ created: true, id: serverBet.id, prestart: true }];
+  },
+});
+assert.deepEqual(created, { created: true, betId: serverBet.id });
+assert.match(insertSql, /WITH insertion_clock AS[\s\S]*SELECT NOW\(\) AS checked_at/);
+assert.match(insertSql, /INSERT INTO baseball_private_bets_v2[\s\S]*SELECT[\s\S]*FROM insertion_clock[\s\S]*WHERE \?::timestamptz > insertion_clock\.checked_at/);
+assert.match(insertSql, /ON CONFLICT \(position_key\) WHERE status <> 'CANCELLED' DO NOTHING[\s\S]*RETURNING id/);
+await assert.rejects(
+  () => insertVerifiedCloudBetAtomically(serverBet, {
+    database: async () => [{ created: false, id: null, prestart: true }],
+  }),
+  error => error?.code === 'BET_POSITION_ALREADY_OPEN' && error?.status === 409,
+  'an active-position conflict must never be reported as a successful current-price write',
+);
+await assert.rejects(
+  () => insertVerifiedCloudBetAtomically(serverBet, {
+    database: async () => [{ created: false, id: null, prestart: false }],
+  }),
+  error => error?.code === 'BET_ALREADY_STARTED' && error?.status === 409,
+  'the same database clock that gates INSERT must return an explicit post-start rejection',
+);
+
+let cancelSql = '';
+const cancelled = await cancelOpenCloudBetAtomically(serverBet.id, {
+  database: async (strings, ...values) => {
+    cancelSql = strings.reduce((text, part, index) => `${text}${part}${index < values.length ? '?' : ''}`, '');
+    return [{ id: serverBet.id }];
+  },
+});
+assert.deepEqual(cancelled, { cancelled: true, betId: serverBet.id });
+assert.match(cancelSql, /SET status = 'CANCELLED'[\s\S]*payload = payload \|\| JSONB_BUILD_OBJECT/);
+assert.doesNotMatch(cancelSql, /'closingContractSnapshot'/);
+assert.match(cancelSql, /NULLIF\(payload->>'gameDate', ''\)::timestamptz > NOW\(\)/);
 
 const route = fs.readFileSync(new URL('../app/api/bets/route.js', import.meta.url), 'utf8');
 const store = fs.readFileSync(new URL('../lib/cloud-bet-store.js', import.meta.url), 'utf8');
@@ -57,7 +194,7 @@ assert.match(store, /payload = payload \|\| JSONB_BUILD_OBJECT\([\s\S]*'closingC
 assert.match(store, /status = 'OPEN'[\s\S]*COALESCE\(payload->'closingContractSnapshot'->>'lineAsOf'/, '開賽後或較舊Reader盤不得覆蓋最後盤');
 assert.doesNotMatch(store, /readCachedBets|runtimeCache|LEGACY_CACHE_KEY|CACHE_KEY/, 'Runtime Cache不得冒充永久帳本讀取真值');
 assert.match(store, /crypto\.randomUUID\(\)/, '下注ID必須由伺服器產生');
-assert.match(store, /Date\.now\(\) >= Date\.parse\(verification\?\.officialGame\?\.gameDate/, 'PIT查核後、資料庫寫入前必須再次阻擋已開打賽事');
+assert.match(store, /WITH insertion_clock AS[\s\S]*SELECT NOW\(\) AS checked_at[\s\S]*WHERE \$\{bet\.gameDate\}::timestamptz > insertion_clock\.checked_at/, '下注寫入必須由同一個資料庫clock原子阻擋已開打賽事');
 assert.match(store, /if \(!prediction\.ok\)/, '不完整PIT prediction不得先寫入再由讀取時隔離');
 assert.match(store, /status: 'OPEN'/, '新下注初始狀態必須由伺服器鎖定');
 assert.match(store, /ON CONFLICT \(position_key\) WHERE status <> 'CANCELLED' DO NOTHING/, '新下注必須以部分唯一索引原子阻擋同方向有效單，同時允許取消後重下');
@@ -98,6 +235,10 @@ assert.match(route, /validateSameOrigin/);
 assert.match(route, /checkRateLimit/);
 assert.match(route, /action === 'merge'/);
 assert.match(route, /action === 'upsert'/);
+assert.match(route, /function betUpsertCandidate\(value\)[\s\S]*league: source\.league[\s\S]*stake: source\.stake[\s\S]*pitSnapshotId: source\.pitSnapshotId/, 'API只可把stake與Reader\/PIT驗證定位欄位送入下注寫入層');
+assert.doesNotMatch(route.match(/function betUpsertCandidate\(value\) \{([\s\S]*?)\n\}/)?.[1] || '', /\b(?:id|identity|status|score|settlement|rebateRate|placedContractSnapshot):/, 'API白名單不得接受伺服器擁有的帳本欄位');
+assert.match(route, /const candidate = betUpsertCandidate\(body\.bet\)[\s\S]*verifyCloudBetEvidenceV110\(candidate\)[\s\S]*upsertCloudBet\(candidate, \{ verification \}\)/, '驗證與持久化必須共用同一份白名單候選資料');
+assert.match(route, /created: mutation\.created === true[\s\S]*betId: mutation\.betId \|\| null/, '成功回應必須明示本次真的建立了哪一筆下注');
 assert.match(route, /action === 'cancel'/, '尚未開賽的OPEN下注必須可改標為CANCELLED');
 assert.match(route, /verification\.pitVerified !== true/, 'PIT未驗證的UI下注不得寫入永久帳本');
 assert.match(route, /PIT_EVIDENCE_REQUIRED/, 'PIT缺失必須回明確fail-closed狀態');
@@ -106,6 +247,7 @@ assert.doesNotMatch(route, /action === 'clearLeague'/);
 assert.match(route, /action === 'settleOpen'/);
 assert.match(store, /export async function cancelOpenCloudBet/);
 assert.match(store, /SET status = 'CANCELLED'[\s\S]*AND status = 'OPEN'[\s\S]*gameDate[\s\S]*> NOW\(\)/, '取消必須由資料庫原子限制為尚未開賽的OPEN下注');
+assert.match(store, /payload = payload \|\| JSONB_BUILD_OBJECT\([\s\S]*'USER_CANCELLED_PRESTART'/, '取消只能局部合併狀態欄位，不得覆蓋並行更新的Reader收盤證據');
 assert.match(store, /USER_CANCELLED_PRESTART/, '取消必須保留伺服器時間與原因，不得硬刪除');
 assert.match(store, /async function persistBetUpdates[\s\S]*WHERE id = \$\{bet\.id\} AND status = 'OPEN'/, '結算寫入不得把競態中已取消的下注覆蓋回SETTLED');
 assert.match(route, /settlePendingAnalysisDirections/, '自動結算必須覆蓋所有CALCULATED分析方向，不只是真實下注');
@@ -135,6 +277,13 @@ assert.match(page, /async function cancelBet/, '前端必須能取消尚未開�
 assert.match(page, /action: 'cancel'/, '取消必須呼叫保留證據的狀態轉換API');
 assert.match(page, /不可變帳本/, '帳本UI必須揭露不可變證據政策');
 assert.match(page, /下注證據永久保留；取消只變更狀態，不會刪除/, '帳本UI必須說明取消不會刪除原始證據');
+assert.match(page, /function BetLedgerDashboard\([\s\S]*disabled=\{cloudLedgerBusy \|\| cloudLedgerStatus\?\.state !== 'ready'\}[\s\S]*帳本同步中/, '帳本同步時更新賽果按鈕必須明確禁用');
+assert.match(page, /async function recordBet\([\s\S]*betMutationBusyRef\.current = true;[\s\S]{0,120}markAppOperationBusy\(true\);[\s\S]*finally \{\s*betMutationBusyRef\.current = false;[\s\S]{0,120}markAppOperationBusy\(false\);/, '下注寫入期間必須阻止PWA更新重載');
+assert.match(page, /async function cancelBet\([\s\S]*betMutationBusyRef\.current = true;[\s\S]{0,120}markAppOperationBusy\(true\);[\s\S]*finally \{\s*betMutationBusyRef\.current = false;[\s\S]{0,120}markAppOperationBusy\(false\);/, '取消寫入期間必須阻止PWA更新重載');
+assert.match(page, /async function probeCloudLedgerRecovery\(\)[\s\S]{0,180}cloudSyncBusyRef\.current \|\| betMutationBusyRef\.current/, '帳本恢復讀取不得與下注狀態寫入並行');
+assert.match(page, /async function refreshSettlements[\s\S]*if \(cloudSyncBusyRef\.current \|\| betMutationBusyRef\.current\) return;/, '賽果刷新不得與下注狀態寫入並行');
+assert.match(page, /const cloudLedgerActionState = cloudLedgerBusy \? 'loading' : cloudLedgerStatus\.state[\s\S]*cloudLedgerState=\{cloudLedgerActionState\}/, '任何帳本操作進行中都必須禁用盤口下注按鈕');
+assert.match(page, /reconcileAfterMutation[\s\S]*finally \{[\s\S]*betMutationBusyRef\.current = false;[\s\S]*if \(reconcileAfterMutation\) await probeCloudLedgerRecovery\(\);/, '不確定寫入的帳本復核必須在釋放mutation互斥後執行');
 const initialMergeStart = page.indexOf("body: JSON.stringify({ action: 'merge', bets: migratedBets })");
 const initialMergeEnd = page.indexOf('}, []);', initialMergeStart);
 assert.ok(initialMergeStart >= 0 && initialMergeEnd > initialMergeStart, 'initial cloud merge flow missing');

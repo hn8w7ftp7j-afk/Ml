@@ -4,11 +4,22 @@ import { useEffect, useRef, useState } from 'react';
 import { APP_VERSION } from '../lib/app-version.js';
 
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const SERVICE_WORKER_UPDATE_TIMEOUT_MS = 8000;
 const UPDATE_ATTEMPT_KEY = 'pwa-update-attempt-version';
+const APP_OPERATION_BUSY_KEY = 'sports-positive-ev-operation-busy';
 
 function standaloneMode() {
   return window.matchMedia?.('(display-mode: standalone)').matches === true
     || window.navigator.standalone === true;
+}
+
+function updateServiceWorker(registration) {
+  if (!registration?.update) return Promise.resolve();
+  let timer;
+  return Promise.race([
+    registration.update(),
+    new Promise(resolve => { timer = window.setTimeout(resolve, SERVICE_WORKER_UPDATE_TIMEOUT_MS); }),
+  ]).finally(() => window.clearTimeout(timer));
 }
 
 export default function PwaRegister() {
@@ -24,7 +35,7 @@ export default function PwaRegister() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(value => {
         registration = value;
-        return registration.update();
+        return updateServiceWorker(registration);
       }).catch(() => {});
     }
 
@@ -32,7 +43,7 @@ export default function PwaRegister() {
       if (!active || updateCheckRunning.current) return;
       updateCheckRunning.current = true;
       try {
-        await registration?.update();
+        await updateServiceWorker(registration);
         const response = await fetch(`/api/health?t=${Date.now()}`, {
           cache: 'no-store',
           credentials: 'same-origin',
@@ -43,10 +54,26 @@ export default function PwaRegister() {
           sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
           return;
         }
+        // Do not reload between a durable job request and saving its runId.
+        // The next visibility/interval check will apply the update safely.
+        const operationStartedAt = Number(sessionStorage.getItem(APP_OPERATION_BUSY_KEY));
+        if (Number.isFinite(operationStartedAt) && Date.now() - operationStartedAt < 15 * 60 * 1000) return;
+        sessionStorage.removeItem(APP_OPERATION_BUSY_KEY);
         if (sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === latest.version) return;
         sessionStorage.setItem(UPDATE_ATTEMPT_KEY, latest.version);
         setUpdating(true);
-        window.setTimeout(() => window.location.reload(), 650);
+        window.setTimeout(() => {
+          // Re-check at the exact reload boundary: an analysis or bet action may
+          // have started during the short update notice animation.
+          const reloadOperationStartedAt = Number(sessionStorage.getItem(APP_OPERATION_BUSY_KEY));
+          if (Number.isFinite(reloadOperationStartedAt)
+            && Date.now() - reloadOperationStartedAt < 15 * 60 * 1000) {
+            sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
+            setUpdating(false);
+            return;
+          }
+          window.location.reload();
+        }, 650);
       } catch {
         // Keep the current working version when the device is temporarily offline.
       } finally {
@@ -54,9 +81,10 @@ export default function PwaRegister() {
       }
     }
 
-    if (!standaloneMode() && sessionStorage.getItem('pwa-install-dismissed') !== '1') setVisible(true);
     const capturePrompt = event => {
+      if (standaloneMode() || window.location.pathname === '/login') return;
       event.preventDefault();
+      if (sessionStorage.getItem('pwa-install-dismissed') === '1') return;
       setInstallPrompt(event);
       setVisible(true);
     };
