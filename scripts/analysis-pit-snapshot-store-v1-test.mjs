@@ -137,6 +137,32 @@ assert.equal(
   analysisPitSemanticIdentityHash(first),
   '只有PIT儲存編碼版本不同時不得誤判模型證據衝突',
 );
+const laterClockRecord = buildAnalysisPitSnapshotRecord({
+  ...input,
+  analysis: {
+    ...analysis,
+    results: analysis.results.map(row => ({ ...row, lineAgeSeconds: 57 })),
+  },
+  markets: input.markets.map(row => ({ ...row, lineAgeSeconds: 57 })),
+});
+const earlierClockRecord = buildAnalysisPitSnapshotRecord({
+  ...input,
+  analysis: {
+    ...analysis,
+    results: analysis.results.map(row => ({ ...row, lineAgeSeconds: 42 })),
+  },
+  markets: input.markets.map(row => ({ ...row, lineAgeSeconds: 42 })),
+});
+assert.notEqual(
+  earlierClockRecord.replayIdentityHash,
+  laterClockRecord.replayIdentityHash,
+  '精確PIT必須保存分析當下的盤口年齡',
+);
+assert.equal(
+  analysisPitSemanticIdentityHash(earlierClockRecord),
+  analysisPitSemanticIdentityHash(laterClockRecord),
+  '只有可由時間鏈重算的lineAgeSeconds不同時必須安全冪等',
+);
 const changedEvRecord = buildAnalysisPitSnapshotRecord({
   ...input,
   analysis: { ...analysis, results: [{ ...analysis.results[0], weightedEV: 0.03 }] },
