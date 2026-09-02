@@ -414,5 +414,10 @@ assert.match(historySource, /bindingMismatches/, '八方向寫入未確認必須
 assert.match(historySource, /GAME_START_NOT_FUTURE/, '八方向診斷必須區分已過開賽時間');
 assert.equal(historySource.includes('jsonColumn('), false, '八方向診斷不得依賴其他模組的私有JSON helper');
 assert.match(historySource, /const storedJson = value =>/, '八方向診斷必須能自足解析資料庫JSON欄位');
+assert.match(
+  historySource,
+  /ON CONFLICT \(direction_result_id\) DO NOTHING RETURNING direction_result_id/,
+  '八方向寫入只可忽略同一列識別的冪等衝突，其他唯一鍵衝突必須明確失敗',
+);
 
 console.log('analysis-direction-history-v1 tests passed');
