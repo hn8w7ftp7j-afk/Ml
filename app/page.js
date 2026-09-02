@@ -350,23 +350,41 @@ function backgroundJobKey(league, date) {
   return `${String(league || '').toUpperCase()}|||${String(date || '')}`;
 }
 
-function allLeagueRunIsActive(run) {
-  return ['preparing', 'running'].includes(String(run?.state || ''));
-}
-
 function loadBackgroundJob(league, date) {
   try {
     const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
     const job = jobs?.[backgroundJobKey(league, date)] || null;
-    if (job?.batchMode === 'all-leagues') {
-      const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
-      const terminalRunMatches = allLeagueBoardDate(run, league) === String(date || '')
-        && run?.runId === job.runId
-        && !allLeagueRunIsActive(run);
-      if (terminalRunMatches) {
-        clearBackgroundJob(league, date, job.runId);
-        return null;
+    const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
+    const id = normalizeLeagueId(league);
+    const batch = run?.leagues?.[id] || null;
+    const terminalRunMatches = run?.state === 'completed'
+      && Boolean(run?.runId)
+      && allLeagueBoardDate(run, id) === String(date || '');
+    if (terminalRunMatches && batch?.resultLoaded !== true && Number(batch?.total) > 0) {
+      const completedAt = Date.parse(run.completedAt || '');
+      const jobStartedAt = Date.parse(job?.startedAt || '');
+      const differentNewerJob = job?.runId !== run.runId
+        && Number.isFinite(completedAt)
+        && Number.isFinite(jobStartedAt)
+        && jobStartedAt > completedAt;
+      if (!differentNewerJob && job?.runId !== run.runId) {
+        const recovered = {
+          runId: run.runId,
+          batchMode: 'all-leagues',
+          league: id,
+          date: String(date || ''),
+          total: Number(batch.total) || 0,
+          gamePks: [],
+          startedAt: run.startedAt || run.completedAt || new Date().toISOString(),
+        };
+        saveBackgroundJob(recovered);
+        return recovered;
       }
+    }
+    if (terminalRunMatches && batch?.resultLoaded === true
+      && job?.batchMode === 'all-leagues' && job.runId === run.runId) {
+      clearBackgroundJob(id, date, run.runId);
+      return null;
     }
     return job;
   } catch { return null; }
@@ -1592,7 +1610,6 @@ export default function Home() {
       setAllLeagueRun(interrupted);
       return;
     }
-    if (saved && !allLeagueRunIsActive(saved)) clearAllLeagueBackgroundJobs(saved);
     setAllLeagueRun(saved);
   }, [date, storageReady]);
   useEffect(() => {
@@ -1624,7 +1641,6 @@ export default function Home() {
                   : '',
             });
           }
-          clearAllLeagueBackgroundJobs(completedRun);
           publishAllLeagueRun(completedRun);
           setBackgroundJobRevision(value => value + 1);
           return;
@@ -1724,6 +1740,12 @@ export default function Home() {
       : '已接回尚未完成的伺服器背景分析；可以切換畫面，完成後會自動載入。');
     pollBackgroundJob(saved.runId, generation, date, saved.gamePks).then(result => {
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== date) return;
+      if (saved.batchMode === 'all-leagues' && result?.detached !== true) {
+        const completedRun = loadAllLeagueAnalysisRun(date);
+        if (completedRun?.runId === saved.runId) {
+          publishAllLeagueRun(updateAllLeagueAnalysisLeague(completedRun, league, { resultLoaded: true }));
+        }
+      }
       const rows = Array.isArray(result?.results) ? result.results : [];
       const completed = rows.filter(row => row?.ok).length;
       const blocked = rows.filter(row => !row?.ok && analysisFailureState(row).blocked).length;
@@ -1804,7 +1826,7 @@ export default function Home() {
     pollReaderAndReprice();
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [board.length, date, busy, league, readerEnabled, analysisEnabled]);
+  }, [board.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning]);
   const currentReaderKey = readerHashKey(date, readerStatus?.payloadHash);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
@@ -2867,7 +2889,8 @@ export default function Home() {
   }
 
   async function pollReaderAndReprice() {
-    if (operationBusyRef.current || readerPollBusyRef.current || !boardRef.current.length) return;
+    if (operationBusyRef.current || readerPollBusyRef.current || allLeagueBusyRef.current
+      || allLeagueRunning || !boardRef.current.length) return;
     const targetDate = date;
     const generation = analysisGenerationRef.current;
     const stillCurrent = () => generation === analysisGenerationRef.current && currentDateRef.current === targetDate;
