@@ -81,7 +81,7 @@ const dependencies = {
 const verified = await verifyCloudBetEvidenceV110(candidate, dependencies);
 assert.equal(verified.readerVerified, true);
 assert.equal(verified.pitVerified, true);
-assert.equal(verified.version, 'BASEBALL-BET-EVIDENCE-SERVER-VERIFICATION-v11.8.34');
+assert.equal(verified.version, 'BASEBALL-BET-EVIDENCE-SERVER-VERIFICATION-v11.8.35');
 assert.equal(verified.pit.weightedEV, 0.04);
 assert.equal(verified.pit.inputHash, inputHash);
 
@@ -101,6 +101,22 @@ assert.equal(
 );
 assert.equal(unrelatedGameMoveVerified.reader.payloadHash, unrelatedGameMovedSnapshot.payloadHash);
 assert.equal(unrelatedGameMoveVerified.reader.rawBoardHash, unrelatedGameMovedSnapshot.rawBoardHash);
+
+const currentBoardCandidate = {
+  ...candidate,
+  readerPayloadHash: unrelatedGameMovedSnapshot.payloadHash,
+  rawBoardHash: unrelatedGameMovedSnapshot.rawBoardHash,
+  readerRevision: `2026-08-25:${unrelatedGameMovedSnapshot.payloadHash}`,
+};
+const currentBoardCaptureVerified = await verifyCloudBetEvidenceV110(currentBoardCandidate, {
+  ...dependencies,
+  loadReader: async () => unrelatedGameMovedSnapshot,
+});
+assert.equal(
+  currentBoardCaptureVerified.pitVerified,
+  true,
+  'the current full-board capture must attach to an older PIT when this game content is unchanged',
+);
 
 const coverageReaderGame = {
   ...snapshot.games[0],
