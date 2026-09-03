@@ -81,8 +81,26 @@ const dependencies = {
 const verified = await verifyCloudBetEvidenceV110(candidate, dependencies);
 assert.equal(verified.readerVerified, true);
 assert.equal(verified.pitVerified, true);
+assert.equal(verified.version, 'BASEBALL-BET-EVIDENCE-SERVER-VERIFICATION-v11.8.34');
 assert.equal(verified.pit.weightedEV, 0.04);
 assert.equal(verified.pit.inputHash, inputHash);
+
+const unrelatedGameMovedSnapshot = {
+  ...snapshot,
+  payloadHash: '4'.repeat(64),
+  rawBoardHash: '5'.repeat(64),
+};
+const unrelatedGameMoveVerified = await verifyCloudBetEvidenceV110(candidate, {
+  ...dependencies,
+  loadReader: async () => unrelatedGameMovedSnapshot,
+});
+assert.equal(
+  unrelatedGameMoveVerified.pitVerified,
+  true,
+  'another game moving may change the full-board hashes but must not disable an unchanged verified game contract',
+);
+assert.equal(unrelatedGameMoveVerified.reader.payloadHash, unrelatedGameMovedSnapshot.payloadHash);
+assert.equal(unrelatedGameMoveVerified.reader.rawBoardHash, unrelatedGameMovedSnapshot.rawBoardHash);
 
 const coverageReaderGame = {
   ...snapshot.games[0],
@@ -135,6 +153,14 @@ await assert.rejects(
   () => verifyCloudBetEvidenceV110({ ...candidate, readerPayloadHash: 'f'.repeat(64) }, dependencies),
   error => error?.code === 'READER_HASH_MISMATCH',
 );
+const forgedCapturedBoard = await verifyCloudBetEvidenceV110({
+  ...candidate,
+  readerPayloadHash: 'f'.repeat(64),
+  readerRevision: `2026-08-25:${'f'.repeat(64)}`,
+}, dependencies);
+assert.equal(forgedCapturedBoard.readerVerified, true);
+assert.equal(forgedCapturedBoard.pitVerified, false);
+assert.match(forgedCapturedBoard.pitError, /Reader證據與不可變PIT擷取版本不一致/);
 await assert.rejects(
   () => verifyCloudBetEvidenceV110({ ...candidate, water: 0.95 }, dependencies),
   error => error?.code === 'READER_CONTRACT_MISMATCH',

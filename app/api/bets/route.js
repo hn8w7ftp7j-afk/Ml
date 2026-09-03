@@ -75,6 +75,11 @@ export async function POST(request) {
       const candidate = betUpsertCandidate(body.bet);
       const verification = await verifyCloudBetEvidenceV110(candidate);
       if (verification.pitVerified !== true) {
+        console.warn('[BET_LEDGER_REJECTED]', {
+          code: 'PIT_EVIDENCE_REQUIRED',
+          status: 409,
+          message: String(verification.pitError || 'PIT_UNVERIFIED').slice(0, 300),
+        });
         return NextResponse.json({
           ok: false,
           code: 'PIT_EVIDENCE_REQUIRED',
@@ -116,6 +121,11 @@ export async function POST(request) {
   } catch (error) {
     const message = String(error?.message || '');
     if (isDatabaseError(error)) return databaseFailureResponse(error, 'BET_LEDGER_WRITE_FAILED');
+    console.warn('[BET_LEDGER_REJECTED]', {
+      code: error?.code || 'BET_LEDGER_WRITE_FAILED',
+      status: Number(error?.status) || 400,
+      message: message.slice(0, 300),
+    });
     return NextResponse.json({ ok: false, code: error?.code || 'BET_LEDGER_WRITE_FAILED', error: message || '雲端下注紀錄更新失敗' }, { status: Number(error?.status) || 400 });
   }
 }
