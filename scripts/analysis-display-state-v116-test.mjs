@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   analysisHasCalculatedToBlockedTransition,
   analysisHasCalculatedDirections,
+  analysisDisplayRowsForCard,
   analysisIsUnopenedOnly,
   readerEvidenceIsOlder,
   readerMarketsHaveBlockingTransition,
@@ -73,6 +74,19 @@ const blockingTotalRow = {
 const fullMarkets = calculatedRows.map(row => ({ market: row.market }));
 
 assert.equal(analysisHasCalculatedDirections(calculated), true);
+const legacyPitAnalysis = {
+  analysis: {
+    calculatedDirectionCount: 2,
+    results: calculatedRows.slice(0, 2).map(({ sourceType, ...row }) => row),
+  },
+  pitPersistence: { confirmed: true },
+};
+assert.equal(analysisDisplayRowsForCard(legacyPitAnalysis, { pitConfirmed: true }).length, 2,
+  'confirmed legacy PIT results must remain visible when the newer sourceType field is absent');
+assert.equal(analysisDisplayRowsForCard(legacyPitAnalysis, { pitConfirmed: false }).length, 0,
+  'legacy rows without PIT confirmation must remain hidden');
+assert.equal(analysisDisplayRowsForCard(calculated, { pitConfirmed: true }).length, 8,
+  'the current eight-direction contract must render all direction slots unchanged');
 assert.equal(analysisIsUnopenedOnly(allUnopened), true);
 assert.equal(readerMarketsLoseCalculatedCoverage(calculated, []), true, '8→0 Reader coverage must be a regression');
 assert.equal(readerMarketsLoseCalculatedCoverage(calculated, runlineMarkets), true, '8→2 calculated coverage must be a regression');
