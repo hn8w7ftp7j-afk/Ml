@@ -25,7 +25,7 @@ import { teamNameZh, translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
   advanceUnchangedReaderGame,
-  bindVerifiedReaderContractForBet,
+  bindVerifiedReaderContractsForItem,
   coreSnapshotReusable,
   finalizeReaderBoardAtStart,
   gameIsPrestartNow,
@@ -71,6 +71,7 @@ import {
   summarizeAllLeagueBatchResult,
   updateAllLeagueAnalysisLeague,
 } from '../lib/all-league-analysis-v117.js';
+import { capturedReaderContractReady, evaluateBetAction } from '../lib/bet-action-state-v118.js';
 
 const VERSION = APP_VERSION;
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.19-VERIFIED-RESCAN.zip';
@@ -657,21 +658,6 @@ function scoreQaFailures(row) {
   ].map(String).filter(reason => reason && reason !== 'baseQa'))];
 }
 
-function betRecordable(item, row, now = Date.now(), betsEnabled = true, currentReaderPrice = false, cloudLedgerWritable = true) {
-  return betsEnabled
-    && cloudLedgerWritable === true
-    && currentReaderPrice === true
-    && capturedReaderContractReady(item, row, now)
-    && item?.customData?.pitPersistence?.confirmed === true
-    && gameIsPrestartNow(item?.game, now)
-    && item?.actualSource?.provider === 'TAI888_READER_AUTO'
-    && row?.sourceType === 'ACTUAL_TW_CREDIT'
-    && row?.provider === 'TAI888_READER_AUTO'
-    && row?.evCalibration?.actualReaderEligible === true
-    && hasActualWater(row?.water)
-    && row?.waterEstimated !== true;
-}
-
 function readerAnalysisRevisionReady(item) {
   return item?.status === 'done'
     && item?.restoredFromCache !== true
@@ -681,23 +667,6 @@ function readerAnalysisRevisionReady(item) {
     && item?.latestMarketCoverage == null
     && item?.latestReaderSource == null
     && item?.analysisFailure == null;
-}
-
-function retainedGameIsInactive(item) {
-  return String(item?.statusLabel || '').includes('目前已不在官方賽前清單');
-}
-
-function capturedReaderContractReady(item, row, now = Date.now()) {
-  return item?.status === 'done'
-    && item?.analysisFailure == null
-    && !retainedGameIsInactive(item)
-    && gameIsPrestartNow(item?.game, now)
-    && item?.actualSource?.provider === 'TAI888_READER_AUTO'
-    && row?.sourceType === 'ACTUAL_TW_CREDIT'
-    && row?.provider === 'TAI888_READER_AUTO'
-    && (row?.evCalibration?.actualReaderEligible === true || row?.clientVerifiedReaderContract === true)
-    && hasActualWater(row?.water)
-    && row?.waterEstimated !== true;
 }
 
 function markReaderBoardVerificationBlocked(item) {
@@ -717,73 +686,6 @@ function markReaderBoardVerificationBlocked(item) {
       ? 'Reader資料驗證未通過｜保留上一版分析｜停止下注'
       : 'Reader資料驗證未通過｜停止分析',
     error: '',
-  };
-}
-
-function betActionState({ latest = null, cancelled = null, recordable = false, inactiveNotice = '', cloudLedgerState = 'ready' }) {
-  const cloudLedgerReady = cloudLedgerState === 'ready';
-  const cloudLedgerLabel = cloudLedgerState === 'loading' ? '帳本同步中' : '永久帳本暫停';
-  const cloudLedgerTitle = cloudLedgerState === 'loading'
-    ? '正在同步永久雲端帳本，完成後才可寫入'
-    : '永久雲端帳本目前無法寫入';
-  if (latest?.status === 'OPEN') {
-    const started = inactiveNotice.includes('開打') || inactiveNotice.includes('已開始');
-    return {
-      kind: started || !cloudLedgerReady ? 'none' : 'cancel',
-      text: started ? '已開賽' : !cloudLedgerReady ? cloudLedgerLabel : '取消下注',
-      title: started ? '比賽已達官方預定開打時間，不能取消' : !cloudLedgerReady ? cloudLedgerTitle : '取消這筆尚未開賽的實際下注；原始證據仍會保留',
-      disabled: started || !cloudLedgerReady,
-    };
-  }
-  if (latest) return {
-    kind: 'none',
-    text: '已下注 ✓',
-    title: '此方向已經記錄；盤口或水位變動也不再新增',
-    disabled: true,
-  };
-  if (recordable) return {
-    kind: 'record',
-    text: cancelled ? '重新紀錄下注' : '紀錄實際下注',
-    title: cancelled
-      ? '先前下注已取消；以目前盤口、水位與最新PIT建立一筆新的實際下注紀錄'
-      : '記錄目前實際下注盤口與水位',
-    disabled: false,
-  };
-  if (cancelled) return {
-    kind: 'none',
-    text: '已取消',
-    title: '舊下注已取消並保留；待Reader最新驗證完成且仍未開賽即可重新下注',
-    disabled: true,
-  };
-  if (!cloudLedgerReady) return {
-    kind: 'none',
-    text: cloudLedgerLabel,
-    title: cloudLedgerTitle,
-    disabled: true,
-  };
-  if (inactiveNotice.includes('PIT')) return {
-    kind: 'none',
-    text: 'PIT未保存',
-    title: 'PIT永久保存尚未確認；確認後會自動開放記錄',
-    disabled: true,
-  };
-  if (inactiveNotice.includes('開打') || inactiveNotice.includes('已開始')) return {
-    kind: 'none',
-    text: '已開賽',
-    title: '已達官方預定開打時間，停止記錄新下注',
-    disabled: true,
-  };
-  if (inactiveNotice.includes('Reader')) return {
-    kind: 'none',
-    text: '等待Reader',
-    title: '等待Reader最新盤口驗證；完成後會自動開放記錄',
-    disabled: true,
-  };
-  return {
-    kind: 'none',
-    text: '暫不可記錄',
-    title: '目前未通過實際下注記錄條件',
-    disabled: true,
   };
 }
 
@@ -1137,7 +1039,7 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   return { icon: '🟢', label: '7.2級模型方向', ranking: true, reason: `雙EV為正且達7.2${scenarioWarning}` };
 }
 
-function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = false, now, inactiveNotice = '', cloudLedgerState = 'ready' }) {
+function ResultRow({ row, game, onBet, onCancel, betState = null, action, now, inactiveNotice = '' }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
   const modelEV = modelEvValue(row);
@@ -1182,7 +1084,6 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = f
   const probabilityDetail = `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
-  const action = betActionState({ latest, cancelled: betState?.cancelled || null, recordable, inactiveNotice, cloudLedgerState });
   return <div className="scoreRow">
     <div className={`score ${scoreClass}`} title={scoreTitle} aria-label={`S分數 ${scoreLabel}`}>
       <span style={{ display: 'block', fontSize: 9, lineHeight: 1.1 }}>S 分數</span>
@@ -1201,7 +1102,7 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, recordable = f
     </div>
     <div className="rowActions">
       {actualLine && <div>
-        <button className={`mini ${action.kind === 'cancel' ? 'cancel' : latest ? 'recorded' : recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? onCancel(latest) : onBet(row)}>{action.text}</button>
+        <button className={`mini ${action.kind === 'cancel' ? 'cancel' : latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? onCancel(latest) : onBet(row)}>{action.text}</button>
         {latest && <BetPriceComparison bet={latest} currentRow={row} game={game}/>} 
       </div>}
     </div>
@@ -1264,16 +1165,10 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   const displayRowIds = new Set(analysisDisplayRowsForCard(directionAnalysis, {
     pitConfirmed: pitPersistence?.confirmed === true,
   }).map(directionIdentity));
-  const verifiedCurrentReaderCapture = Boolean(item?.readerPayloadHash)
-    && item?.actualSource?.provider === 'TAI888_READER_AUTO'
-    && item?.readerProvenance?.provider === 'TAI888_READER_AUTO'
-    && item.readerProvenance.payloadHash === item.readerPayloadHash;
-  const actualRows = analysisDirectionRows(directionAnalysis)
-    .filter(row => displayRowIds.has(directionIdentity(row)))
-    .map(originalRow => {
-    const row = bindVerifiedReaderContractForBet(originalRow, item.customMarkets, {
-      verified: verifiedCurrentReaderCapture,
-    });
+  const actualRows = bindVerifiedReaderContractsForItem(
+    item,
+    analysisDirectionRows(directionAnalysis).filter(row => displayRowIds.has(directionIdentity(row))),
+  ).map(row => {
     const currentReaderPrice = capturedReaderContractReady(item, row, now);
     const inactiveNotice = !gamePrestart
       ? '已達官方預定開打時間｜保留賽前分析｜停止記錄新下注'
@@ -1353,7 +1248,11 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
             : marketAllUnopened
             ? <div className="marketPlaceholder">尚未開盤｜Reader持續監看</div>
             : rows.length ? rows.map((row, index) => directionStatus(row) === 'CALCULATED' || modelEvValue(row) != null
-              ? <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betsEnabled ? getBetState(item, row) : null} recordable={betRecordable(item, row, now, betsEnabled, row.clientReaderPriceCurrent, cloudLedgerState === 'ready')} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice} cloudLedgerState={cloudLedgerState}/>
+              ? (() => {
+                const betState = betsEnabled ? getBetState(item, row) : { latest: null, cancelled: null };
+                const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled });
+                return <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betState} action={action} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice}/>;
+              })()
               : <DirectionSlotRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game}/>)
             : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
         })}
@@ -1486,7 +1385,7 @@ export default function Home() {
     const currentAnalysisExecutable = readerAnalysisRevisionReady(item)
       && Boolean(item.readerPayloadHash)
       && !preservedReaderAnalysis;
-    return analysisDirectionRows(directionAnalysis)
+    return bindVerifiedReaderContractsForItem(item, analysisDirectionRows(directionAnalysis))
       .filter(row => item.actualSource?.provider === 'TAI888_READER_AUTO'
         && modelEvValue(row) != null
         && !currentBlockedMarkets.has(row.market)
@@ -1495,10 +1394,9 @@ export default function Home() {
       const score = formulaScoreValue(row);
       const qaPassed = directionQaPassed(row);
       const qualified = row.evCalibration?.qualified === true;
-      const readerQualified = row.evCalibration?.actualReaderEligible === true;
       const gamePrestart = gameIsPrestartNow(item.game, clockNow);
       const pitConfirmed = item.customData?.pitPersistence?.confirmed === true;
-      const currentReaderPrice = readerQualified && capturedReaderContractReady(item, row, clockNow);
+      const currentReaderPrice = capturedReaderContractReady(item, row, clockNow);
       const inactiveNotice = !gamePrestart
         ? '比賽已開始｜保留賽前分析與排名｜停止記錄新下注'
         : !pitConfirmed
@@ -3553,7 +3451,6 @@ export default function Home() {
       return;
     }
     const now = Date.now();
-    const currentReaderPrice = capturedReaderContractReady(item, row, now);
     if (cloudLedgerStatus.state !== 'ready') {
       setError(cloudLedgerStatus.state === 'loading'
         ? '永久雲端帳本仍在同步；完成前不會送出下注紀錄'
@@ -3568,8 +3465,17 @@ export default function Home() {
       setNotice('上一筆帳本操作仍在確認中，請稍候。');
       return;
     }
-    if (!betRecordable(item, row, now, bettingEnabled, currentReaderPrice, true)) {
-      setError('只有仍未開賽、Reader最新驗證完成且有實際信用盤水位的方向可以記錄');
+    const action = evaluateBetAction({
+      item,
+      row,
+      now,
+      betsEnabled: bettingEnabled,
+      cloudLedgerState: 'ready',
+      latest: state.latest,
+      cancelled: state.cancelled,
+    });
+    if (!action.recordable) {
+      setError(action.title || '目前未通過實際下注記錄條件');
       return;
     }
     const identity = betIdentity(date, item.game.gamePk, row, league);
@@ -3803,14 +3709,13 @@ export default function Home() {
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-        const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerActionState === 'ready');
-        const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerState: cloudLedgerActionState });
+        const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled });
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const warnings = diagnosticWarnings(entry.row);
         const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
         const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{index + 1}</b><strong className={`rankScore ${entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div></div>;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{index + 1}</b><strong className={`rankScore ${entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div></div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
@@ -3820,14 +3725,13 @@ export default function Home() {
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
           const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-          const recordable = betRecordable(entry.item, entry.row, clockNow, bettingEnabled, entry.currentReaderPrice, cloudLedgerActionState === 'ready');
-          const action = betActionState({ latest: betState.latest, cancelled: betState.cancelled, recordable, inactiveNotice: entry.inactiveNotice, cloudLedgerState: cloudLedgerActionState });
+          const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled });
           const scoreText = entry.score.toFixed(1);
           const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const warnings = diagnosticWarnings(entry.row);
           const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
           const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button></div>;
+          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button></div>;
         })}
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
