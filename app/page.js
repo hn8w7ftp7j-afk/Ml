@@ -46,6 +46,7 @@ import {
   upsertAnalysisBoardCache,
 } from '../lib/analysis-board-cache-v1.js';
 import {
+  analysisDisplayRowsForCard,
   analysisHasCalculatedDirections,
   analysisIsUnopenedOnly,
   readerEvidenceIsOlder,
@@ -1259,8 +1260,11 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
     : new Set((item.customMarkets || []).map(row => row.market)).size;
   const pitPersistence = item.customData?.pitPersistence || null;
   const pitUnconfirmed = pitPersistence?.confirmed !== true;
+  const displayRowIds = new Set(analysisDisplayRowsForCard(directionAnalysis, {
+    pitConfirmed: pitPersistence?.confirmed === true,
+  }).map(directionIdentity));
   const actualRows = analysisDirectionRows(directionAnalysis)
-    .filter(row => hasDirectionSlots || row.sourceType === 'ACTUAL_TW_CREDIT')
+    .filter(row => displayRowIds.has(directionIdentity(row)))
     .map(row => {
     const currentReaderPrice = capturedReaderContractReady(item, row, now);
     const inactiveNotice = !gamePrestart
