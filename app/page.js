@@ -25,6 +25,7 @@ import { teamNameZh, translateTeamText } from '../lib/i18n.js';
 import { LEAGUE_IDS, leagueConfig, normalizeLeagueId } from '../lib/leagues.js';
 import {
   advanceUnchangedReaderGame,
+  bindVerifiedReaderContractForBet,
   coreSnapshotReusable,
   finalizeReaderBoardAtStart,
   gameIsPrestartNow,
@@ -694,7 +695,7 @@ function capturedReaderContractReady(item, row, now = Date.now()) {
     && item?.actualSource?.provider === 'TAI888_READER_AUTO'
     && row?.sourceType === 'ACTUAL_TW_CREDIT'
     && row?.provider === 'TAI888_READER_AUTO'
-    && row?.evCalibration?.actualReaderEligible === true
+    && (row?.evCalibration?.actualReaderEligible === true || row?.clientVerifiedReaderContract === true)
     && hasActualWater(row?.water)
     && row?.waterEstimated !== true;
 }
@@ -1263,9 +1264,16 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   const displayRowIds = new Set(analysisDisplayRowsForCard(directionAnalysis, {
     pitConfirmed: pitPersistence?.confirmed === true,
   }).map(directionIdentity));
+  const verifiedCurrentReaderCapture = Boolean(item?.readerPayloadHash)
+    && item?.actualSource?.provider === 'TAI888_READER_AUTO'
+    && item?.readerProvenance?.provider === 'TAI888_READER_AUTO'
+    && item.readerProvenance.payloadHash === item.readerPayloadHash;
   const actualRows = analysisDirectionRows(directionAnalysis)
     .filter(row => displayRowIds.has(directionIdentity(row)))
-    .map(row => {
+    .map(originalRow => {
+    const row = bindVerifiedReaderContractForBet(originalRow, item.customMarkets, {
+      verified: verifiedCurrentReaderCapture,
+    });
     const currentReaderPrice = capturedReaderContractReady(item, row, now);
     const inactiveNotice = !gamePrestart
       ? '已達官方預定開打時間｜保留賽前分析｜停止記錄新下注'
@@ -2948,6 +2956,14 @@ export default function Home() {
             readerProvenance: foundCredit.readerProvenance,
           })
           : null;
+        const capturedHistoricalPit = !resumed
+          && hasOpenRows
+          && !coverageRegression
+          && previous?.customData?.pitPersistence?.confirmed === true
+          && foundCredit?.source?.provider === 'TAI888_READER_AUTO'
+          && foundCredit?.readerProvenance?.provider === 'TAI888_READER_AUTO'
+          && foundCredit.readerProvenance.payloadHash === credit.payloadHash
+          && foundCredit.readerProvenance.boardDate === targetDate;
         const pendingReaderAnalysis = Boolean(previous)
           && analysisHasCalculatedDirections(previous?.customData)
           && hasOpenRows
@@ -2968,18 +2984,19 @@ export default function Home() {
         return {
           game,
           mode: 'actual',
-          actualSource: resumed?.actualSource || (retainingPreviousRevision ? previous?.actualSource : foundCredit?.source) || previous?.actualSource || null,
+          actualSource: resumed?.actualSource || (capturedHistoricalPit ? foundCredit?.source : retainingPreviousRevision ? previous?.actualSource : foundCredit?.source) || previous?.actualSource || null,
           marketCoverage: retainingPreviousRevision ? previous?.marketCoverage || null : foundCredit?.marketCoverage || previous?.marketCoverage || null,
           latestMarketCoverage: waitingForReader || pendingReaderAnalysis ? currentMarketCoverage : null,
           latestReaderSource: waitingForReader || pendingReaderAnalysis ? foundCredit?.source || null : null,
-          readerProvenance: retainingPreviousRevision ? previous?.readerProvenance || null : foundCredit?.readerProvenance || previous?.readerProvenance || null,
-          readerPayloadHash: resumed?.readerPayloadHash || null,
-          customMarkets: resumed?.customMarkets || (retainingPreviousRevision ? previous?.customMarkets || [] : represented ? foundCredit.markets || [] : previous?.customMarkets || []),
+          readerProvenance: capturedHistoricalPit ? foundCredit.readerProvenance : retainingPreviousRevision ? previous?.readerProvenance || null : foundCredit?.readerProvenance || previous?.readerProvenance || null,
+          readerPayloadHash: resumed?.readerPayloadHash || (capturedHistoricalPit ? credit.payloadHash : null),
+          customMarkets: resumed?.customMarkets || (capturedHistoricalPit ? foundCredit.markets : retainingPreviousRevision ? previous?.customMarkets || [] : represented ? foundCredit.markets || [] : previous?.customMarkets || []),
           verificationMarkets: retainingPreviousRevision ? previous?.verificationMarkets || [] : foundReference?.markets || [],
           referenceSource: retainingPreviousRevision ? previous?.referenceSource || null : foundReference?.source || previous?.referenceSource || null,
-          status: resumed || preservePreviousReaderAnalysis ? 'done' : represented && hasOpenRows ? 'queued' : 'unopened',
+          status: resumed || capturedHistoricalPit || preservePreviousReaderAnalysis ? 'done' : represented && hasOpenRows ? 'queued' : 'unopened',
           statusLabel: represented
             ? resumed ? 'Tai888盤口未變｜接續完成'
+              : capturedHistoricalPit ? 'Reader最新盤已驗證｜背景更新分析'
               : preservePreviousReaderAnalysis ? `${waitingReason}｜保留上一版分析`
                 : hasOpenRows ? previous?.customData ? '後台更新中｜保留目前分數' : '等待分析'
                   : `${waitingReason}｜持續自動監看`

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   advanceUnchangedReaderGame,
+  bindVerifiedReaderContractForBet,
   actualLineFreshNow,
   coreSnapshotReusable,
   finalizeReaderBoardAtStart,
@@ -72,6 +73,26 @@ assert.deepEqual(
   readerCoverageCounts({ rawGameCount: 11, matchedGameCount: 8, unopenedGameCount: 3, scheduleGameCount: 11 }),
   { total: 11, captured: 11, open: 8, waiting: 3, locked: 3, notRendered: 0 },
 );
+
+const legacyPitRow = {
+  market: '全場大小', pick: '大9+10', water: 0.94,
+  weightedEV: 0.04, robustEV: 0.01,
+};
+const currentVerifiedMarket = {
+  market: '全場大小', pick: '大9+10', water: 0.94,
+  sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', executable: true,
+  lineAsOf: '2026-08-15T08:06:00.000Z',
+  readerVersion: '2.1.19', readerGameMarketHash: 'a'.repeat(64),
+  readerPayloadHash: 'b'.repeat(64), readerRawBoardHash: 'c'.repeat(64), readerBoardDate: '2026-08-15',
+};
+const boundLegacyPitRow = bindVerifiedReaderContractForBet(legacyPitRow, [currentVerifiedMarket], { verified: true });
+assert.equal(boundLegacyPitRow.clientVerifiedReaderContract, true,
+  'a confirmed historical PIT row must regain its action when the current verified Reader contract is exact');
+assert.equal(boundLegacyPitRow.sourceType, 'ACTUAL_TW_CREDIT');
+assert.equal(bindVerifiedReaderContractForBet(legacyPitRow, [{ ...currentVerifiedMarket, water: 0.93 }], { verified: true }), legacyPitRow,
+  'a changed current water must not bind to the historical PIT row');
+assert.equal(bindVerifiedReaderContractForBet(legacyPitRow, [currentVerifiedMarket], { verified: false }), legacyPitRow,
+  'an unverified Reader capture must never enable the historical PIT action');
 assert.deepEqual(
   readerCoverageCounts({ matchedGameCount: 8, scheduleGameCount: 11 }),
   { total: 11, captured: 8, open: 8, waiting: 3, locked: 0, notRendered: 3 },

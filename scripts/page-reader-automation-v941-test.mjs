@@ -21,10 +21,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.36', 'package/release identity must match the V11.8.36 legacy PIT display fix');
-assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.36');
-assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.36');
-assert.equal(APP_VERSION, '11.8.36');
+assert.equal(packageJson.version, '11.8.37', 'package/release identity must match the V11.8.37 verified Reader action restore');
+assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.37');
+assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.37');
+assert.equal(APP_VERSION, '11.8.37');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
@@ -241,11 +241,13 @@ assert.doesNotMatch(page, /actualLineFreshNow\(/, 'the client must not re-expire
 mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
 mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning\]\);/, 'Reader polling must not restart on every board item update and must stop while all-league analysis runs');
 mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt, Date\.now\(\), \{[\s\S]*marketCoverage: foundCredit\.marketCoverage,[\s\S]*readerProvenance: foundCredit\.readerProvenance/, 'a mobile reload may resume only when current signed per-game markets and coverage evidence are unchanged');
+mustMatch(/const capturedHistoricalPit = !resumed[\s\S]*pitPersistence\?\.confirmed === true[\s\S]*readerProvenance\?\.provider === 'TAI888_READER_AUTO'[\s\S]*readerProvenance\.payloadHash === credit\.payloadHash/, 'a confirmed historical PIT must receive current Reader capture authority before its background refresh finishes');
+mustMatch(/bindVerifiedReaderContractForBet\(originalRow, item\.customMarkets,[\s\S]*verified: verifiedCurrentReaderCapture/, 'historical display rows must bind only to the exact verified current Reader contract');
 mustMatch(/return actual\?\.markets\?\.length && !item\.resumedCurrentReaderGame && !item\.preservedCurrentReaderGame/, 'only Reader games with actual market rows may enter the model queue');
 mustMatch(/const previousByPk = new Map\(boardRef\.current\.map/, 'manual and automatic refreshes must merge against the latest board instead of a stale React closure');
 mustMatch(/shouldPreserveCalculatedAnalysis/, 'a partial or unopened Reader result must not downgrade completed W\/R');
-mustMatch(/const retainingPreviousRevision = preservePreviousReaderAnalysis \|\| pendingReaderAnalysis[\s\S]*customMarkets: resumed\?\.customMarkets \|\| \(retainingPreviousRevision \? previous\?\.customMarkets \|\| \[\]/, 'a changed Reader revision must keep the previously analyzed markets until its new distribution commits atomically');
-mustMatch(/readerPayloadHash: resumed\?\.readerPayloadHash \|\| null/, 'a queued Reader revision must remain non-executable until analysis succeeds');
+mustMatch(/const retainingPreviousRevision = preservePreviousReaderAnalysis \|\| pendingReaderAnalysis[\s\S]*customMarkets: resumed\?\.customMarkets \|\| \(capturedHistoricalPit \? foundCredit\.markets : retainingPreviousRevision \? previous\?\.customMarkets \|\| \[\]/, 'a changed Reader revision must retain prior analysis while exposing only the newly verified current contracts');
+mustMatch(/readerPayloadHash: resumed\?\.readerPayloadHash \|\| \(capturedHistoricalPit \? credit\.payloadHash : null\)/, 'a queued revision may regain execution only through a confirmed PIT plus the current signed Reader capture');
 mustMatch(/const retainedFinishedItems = \[\.\.\.previousByPk\.values\(\)\][\s\S]*analysisHasCalculatedDirections[\s\S]*readerPayloadHash: null[\s\S]*const items = \[[\s\S]*\.\.\.activeItems\.sort\(byStartTime\)[\s\S]*\.\.\.retainedFinishedItems\.sort\(byStartTime\)/, 'a full-slate refresh must retain old analysis below the current official pregame slate');
 mustMatch(/readerResultIsStale/, 'late background results must be rejected when the live Reader hash has advanced');
 mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*readerEvidenceIsOlder\([\s\S]*currentItem\?\.actualSource,[\s\S]*currentItem\?\.latestReaderSource/, 'late success and failure results must respect the newest single-game Reader evidence time');
