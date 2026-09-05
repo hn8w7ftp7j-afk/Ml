@@ -22,13 +22,14 @@ assert.match(register, /const capturePrompt = event => \{[\s\S]*window\.location
 assert.doesNotMatch(register, /if \(!standaloneMode\(\)[^\n]*setVisible\(true\)/, 'install overlay must not open automatically before an install prompt');
 assert.match(register, /fetch\(`\/api\/health\?t=\$\{Date\.now\(\)\}`/, 'PWA must bypass cache when checking the deployed release version');
 assert.match(register, /latest\.version === APP_VERSION/, 'PWA update check must compare against the shared app version');
-assert.match(register, /operationStartedAt[\s\S]*Date\.now\(\) - operationStartedAt < 15 \* 60 \* 1000/, 'PWA update must defer reload while an analysis operation is saving its durable handle without leaving a permanent lock');
-assert.match(register, /reloadOperationStartedAt[\s\S]*Date\.now\(\) - reloadOperationStartedAt < 15 \* 60 \* 1000[\s\S]*setUpdating\(false\)[\s\S]*window\.location\.reload\(\)/, 'PWA must re-check the operation lock immediately before reloading');
+assert.match(register, /function applyUpdate\(\)[\s\S]*operationStartedAt[\s\S]*Date\.now\(\) - operationStartedAt < 15 \* 60 \* 1000[\s\S]*window\.location\.reload\(\)/, 'explicit update must remain blocked while an analysis operation is saving its durable handle');
 assert.doesNotMatch(read('app/globals.css'), /\.pwaInstall\{position:fixed/, 'the install prompt must stay in document flow instead of covering mobile action buttons');
 assert.match(register, /visibilitychange/, 'PWA must check for updates when it returns to the foreground');
 assert.match(register, /pageshow/, 'PWA must check for updates when iOS restores it from memory');
-assert.match(register, /window\.location\.reload\(\)/, 'PWA must automatically reload after detecting a newer release');
-assert.match(register, /pwa-update-attempt-version/, 'PWA update reload must be guarded against an infinite loop');
+assert.match(register, /setUpdateAvailable\(latest\.version\)/, 'a newer release must show a non-destructive update prompt');
+assert.match(register, /onClick=\{applyUpdate\}>現在更新/, 'a release may only be applied from an explicit user action');
+assert.doesNotMatch(register, /window\.setTimeout\([\s\S]{0,500}window\.location\.reload\(\)/, 'a release must never force-reload an analysis screen');
+assert.match(register, /pwa-update-attempt-version/, 'dismissed release prompts must remain quiet for the current session');
 assert.match(serviceWorker, /fetch\(event\.request, \{ cache: 'no-store' \}\)/, 'private app navigation must remain network-only');
 assert.doesNotMatch(serviceWorker, /caches\.(?:open|match)|cache\.put/, 'private analysis pages must not be cached offline');
 assert.match(nextConfig, /Service-Worker-Allowed/, 'service worker scope header missing');
@@ -47,4 +48,4 @@ for (const path of [
   assert.deepEqual([...data.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], `${path}不是有效PNG`);
 }
 
-console.log('Installable standalone PWA metadata, automatic updates, icons, iOS instructions and private network-only service worker PASS');
+console.log('Installable standalone PWA metadata, user-controlled updates, icons, iOS instructions and private network-only service worker PASS');

@@ -1259,7 +1259,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
     {shadowMode && <div className="sourceBanner shadowBanner"><strong>🧪 {item.game.leagueId || item.game.league || 'MLB'} 聯合比分影子模型</strong><span>{preservingPreviousReaderAnalysis
-      ? `Reader最新已開 ${openMarketCount}/4 市場｜上一版已評 ${scoredDirectionCount}/${expectedDirectionCount}｜目前不進排名`
+      ? `Reader最新已開 ${openMarketCount}/4 市場｜保留上一版 ${scoredDirectionCount}/${expectedDirectionCount} 個分數與排序｜新結果完成後更新`
       : `已開 ${openMarketCount}/4 市場｜應評 ${expectedDirectionCount} 方向｜已評 ${scoredDirectionCount}/${expectedDirectionCount}｜進影子排名 ${rankingDirectionCount}；依固定S分數分析與排序`}</span></div>}
     {expectedRuns && <div className="sourceBanner"><strong>上游得分中心｜市場水位回灌：停用</strong><span>全場 {runCenter(expectedRuns.full)}｜前五局 {runCenter(expectedRuns.first5)}｜這份得分分布同時結算大／小與讓／受讓</span></div>}
     {(sourceStatusText || provenanceText) && <div className="sourceBanner dataStatusBanner"><strong>上游資料狀態</strong><span>{sourceStatusText || provenanceText}</span></div>}
@@ -1278,7 +1278,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
           const blocked = blockedMarkets.has(market) || rows.some(row => directionStatus(row) === 'BLOCKED');
           const marketState = blocked ? 'BLOCKED' : calculated ? 'AVAILABLE' : 'UNOPENED';
           const marketStateLabel = blocked && latestCoverage ? '資料異常｜停止評分'
-            : preservingPreviousReaderAnalysis ? '上一版分析｜停止下注'
+            : preservingPreviousReaderAnalysis ? '保留上一版分析｜背景更新中｜停止下注'
               : marketState === 'AVAILABLE' ? '已完成分析'
                 : marketState === 'BLOCKED' ? '資料異常'
               : '尚未開盤';
