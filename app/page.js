@@ -34,6 +34,7 @@ import {
   readerCaptureForBet,
   readerCoverageCounts,
   readerHashKey,
+  readerTaskGameRevisionIsStale,
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
   touchReaderHeartbeat,
@@ -1986,6 +1987,16 @@ export default function Home() {
   function taskReaderStateIsStale(task) {
     const gamePk = Number(task?.game?.gamePk);
     const currentItem = boardRef.current.find(item => Number(item?.game?.gamePk) === gamePk) || null;
+    const taskEvidenceHash = readerGameEvidenceHash(task);
+    const currentEvidenceHash = String(currentItem?.pendingReaderEvidenceHash
+      || readerGameEvidenceHash(currentItem)
+      || '').trim();
+    // Reader payloadHash and activity time cover the entire league board. A
+    // different NPB game can advance both while this game's signed market is
+    // unchanged. Once both sides have per-game evidence, that is the only
+    // revision boundary that may discard this game's completed work.
+    const gameRevisionStale = readerTaskGameRevisionIsStale(taskEvidenceHash, currentEvidenceHash);
+    if (gameRevisionStale != null) return gameRevisionStale;
     const liveReader = readerStatusRef.current || {};
     return readerResultIsStale({
       taskPayloadHash: task?.readerPayloadHash,
@@ -2005,8 +2016,7 @@ export default function Home() {
       || !gameIsPrestartNow(item.game, now)) return false;
     const expectedEvidenceHash = readerGameEvidenceHash(task);
     return Boolean(expectedEvidenceHash)
-      && item?.pendingReaderEvidenceHash === expectedEvidenceHash
-      && !readerEvidenceIsOlder(task?.actualSource, item?.actualSource, item?.latestReaderSource);
+      && item?.pendingReaderEvidenceHash === expectedEvidenceHash;
   }
 
   function commitAnalysisPayload(task, baseData) {

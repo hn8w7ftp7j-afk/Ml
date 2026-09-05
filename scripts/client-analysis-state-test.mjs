@@ -14,6 +14,7 @@ import {
   readerCaptureForBet,
   readerCoverageCounts,
   readerHashKey,
+  readerTaskGameRevisionIsStale,
   readerRevisionKey,
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
@@ -46,6 +47,9 @@ assert.equal(gameIsPrestartNow({ ...futureGame, statusCode: 'D', statusEnglish: 
 assert.equal(gameIsPrestartNow({ ...futureGame, statusCode: 'C', statusEnglish: 'Cancelled' }, NOW), false);
 assert.equal(gameIsPrestartNow({ ...futureGame, statusCode: 'S', statusEnglish: 'Game Postponed' }, NOW), false);
 assert.equal(gameIsPrestartNow({ ...futureGame, gameDate: '' }, NOW), false);
+assert.equal(readerTaskGameRevisionIsStale('same-game-hash', 'same-game-hash'), false, 'whole-board heartbeats must not stale an unchanged game task');
+assert.equal(readerTaskGameRevisionIsStale('old-game-hash', 'new-game-hash'), true, 'a changed game market must stale the old task');
+assert.equal(readerTaskGameRevisionIsStale('', 'new-game-hash'), null, 'missing per-game evidence must fall back to whole-board safety checks');
 
 const waitingItem = {
   game: futureGame,

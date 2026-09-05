@@ -19,7 +19,7 @@ const baseItem = {
   customData: { pitPersistence: { confirmed: true } },
 };
 
-assert.equal(BET_ACTION_STATE_VERSION, '11.8.39');
+assert.equal(BET_ACTION_STATE_VERSION, '11.8.40');
 const [boundRow] = bindVerifiedReaderContractsForItem(baseItem, [baseRow]);
 assert.equal(boundRow.clientVerifiedReaderContract, true, 'exact current signed Reader contract must bind to an immutable legacy PIT row');
 
@@ -62,4 +62,4 @@ const rebet = evaluateBetAction({ item: baseItem, row: boundRow, now, cancelled:
 assert.equal(rebet.text, '重新紀錄下注');
 assert.equal(rebet.recordable, true);
 
-console.log('bet action state v11.8.39 tests passed');
+console.log('bet action state v11.8.40 tests passed');
