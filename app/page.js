@@ -1182,7 +1182,7 @@ function DirectionSlotRow({ row, game }) {
   </div>;
 }
 
-function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready' }) {
+function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const latestCoverage = item.latestMarketCoverage || null;
   const coverage = latestCoverage || item.marketCoverage || {};
@@ -1210,7 +1210,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
     item,
     analysisDirectionRows(directionAnalysis).filter(row => displayRowIds.has(directionIdentity(row))),
   ).map(row => {
-    const currentReaderPrice = capturedReaderContractReady(item, row, now);
+    const currentReaderPrice = capturedReaderContractReady(item, row, now, readerAuthority);
     const inactiveNotice = !gamePrestart
       ? '已達官方預定開打時間｜保留賽前分析｜停止記錄新下注'
       : pitUnconfirmed
@@ -1291,7 +1291,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
             : rows.length ? rows.map((row, index) => directionStatus(row) === 'CALCULATED' || modelEvValue(row) != null
               ? (() => {
                 const betState = betsEnabled ? getBetState(item, row) : { latest: null, cancelled: null };
-                const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled });
+                const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled, readerAuthority });
                 return <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betState} action={action} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice}/>;
               })()
               : <DirectionSlotRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game}/>)
@@ -1410,6 +1410,12 @@ export default function Home() {
     : 'idle';
   const readerCoverage = readerCoverageCounts(readerStatus);
   const readerPendingText = coveragePendingText(readerCoverage);
+  const liveReaderAuthority = {
+    fresh: readerStatus?.fresh === true,
+    boardDate: readerStatus?.boardDate || null,
+    expectedBoardDate: date,
+    payloadHash: readerStatus?.payloadHash || null,
+  };
   const shadowRanking = useMemo(() => board.flatMap(item => {
     const analysis = item.customData?.analysis || {};
     const itemLeague = String(analysis.leagueId || item?.game?.leagueId || item?.game?.league || '').trim().toUpperCase();
@@ -1437,7 +1443,7 @@ export default function Home() {
       const qualified = row.evCalibration?.qualified === true;
       const gamePrestart = gameIsPrestartNow(item.game, clockNow);
       const pitConfirmed = item.customData?.pitPersistence?.confirmed === true;
-      const currentReaderPrice = capturedReaderContractReady(item, row, clockNow);
+      const currentReaderPrice = capturedReaderContractReady(item, row, clockNow, liveReaderAuthority);
       const inactiveNotice = !gamePrestart
         ? '比賽已開始｜保留賽前分析與排名｜停止記錄新下注'
         : !pitConfirmed
@@ -3509,6 +3515,7 @@ export default function Home() {
       cloudLedgerState: 'ready',
       latest: state.latest,
       cancelled: state.cancelled,
+      readerAuthority: liveReaderAuthority,
     });
     if (!action.recordable) {
       setError(action.title || '目前未通過實際下注記錄條件');
@@ -3581,6 +3588,7 @@ export default function Home() {
       status: 'OPEN',
     };
     let reconcileAfterMutation = false;
+    let refreshReaderAfterMutation = false;
     betMutationBusyRef.current = true;
     setCloudLedgerBusy(true);
     markAppOperationBusy(true);
@@ -3600,7 +3608,14 @@ export default function Home() {
       if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
         reportCloudLedgerFailure(cause);
       }
-      setError(cause?.message || '雲端下注紀錄更新失敗');
+      refreshReaderAfterMutation = ['READER_CONTRACT_MISMATCH', 'READER_HASH_MISMATCH', 'READER_GAME_MISSING']
+        .includes(String(cause?.code || ''));
+      if (refreshReaderAfterMutation) {
+        creditRevisionRef.current = '';
+        setError('Tai888盤口已更新；正在同步最新盤口，完成後請依新盤口記錄。原分析分數會保留。');
+      } else {
+        setError(cause?.message || '雲端下注紀錄更新失敗');
+      }
       reconcileAfterMutation = [409].includes(Number(cause?.status)) || /逾時/.test(String(cause?.message || ''));
     } finally {
       betMutationBusyRef.current = false;
@@ -3608,6 +3623,7 @@ export default function Home() {
       markAppOperationBusy(false);
     }
     if (reconcileAfterMutation) await probeCloudLedgerRecovery();
+    if (refreshReaderAfterMutation) await pollReaderAndReprice();
   }
 
   async function cancelBet(bet) {
@@ -3737,7 +3753,7 @@ export default function Home() {
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && shadowMode && <LeagueShadowPanel config={activeLeague}/>}
       {analysisEnabled && !board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
-      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState}/>) }
+      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={liveReaderAuthority}/>) }
     </>}
 
     {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
@@ -3745,7 +3761,7 @@ export default function Home() {
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-        const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled });
+        const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority });
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const warnings = diagnosticWarnings(entry.row);
@@ -3761,7 +3777,7 @@ export default function Home() {
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
           const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-          const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled });
+          const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority });
           const scoreText = entry.score.toFixed(1);
           const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const warnings = diagnosticWarnings(entry.row);

@@ -19,7 +19,7 @@ const baseItem = {
   customData: { pitPersistence: { confirmed: true } },
 };
 
-assert.equal(BET_ACTION_STATE_VERSION, '11.8.40');
+assert.equal(BET_ACTION_STATE_VERSION, '11.8.43');
 const [boundRow] = bindVerifiedReaderContractsForItem(baseItem, [baseRow]);
 assert.equal(boundRow.clientVerifiedReaderContract, true, 'exact current signed Reader contract must bind to an immutable legacy PIT row');
 
@@ -54,6 +54,27 @@ const [unboundRow] = bindVerifiedReaderContractsForItem(baseItem, [{ ...baseRow,
 assert.notEqual(unboundRow.clientVerifiedReaderContract, true, 'a different Reader price must remain blocked');
 assert.equal(evaluateBetAction({ item: baseItem, row: unboundRow, now }).reasonCode, 'READER_UNVERIFIED');
 
+const currentAuthority = {
+  fresh: true,
+  boardDate: '2026-09-03',
+  expectedBoardDate: '2026-09-03',
+  payloadHash: 'reader-board-hash',
+};
+assert.equal(evaluateBetAction({ item: baseItem, row: boundRow, now, readerAuthority: currentAuthority }).recordable, true,
+  'the current server Reader payload must keep an exactly-bound contract recordable');
+const advancedAuthority = { ...currentAuthority, payloadHash: 'newer-server-reader-hash' };
+const staleBrowserAction = evaluateBetAction({ item: baseItem, row: boundRow, now, readerAuthority: advancedAuthority });
+assert.equal(staleBrowserAction.reasonCode, 'READER_UNVERIFIED',
+  'a row bound to an older browser payload must be blocked when the server Reader payload advances');
+assert.equal(staleBrowserAction.text, '盤口更新中');
+assert.equal(staleBrowserAction.disabled, true);
+assert.equal(evaluateBetAction({
+  item: baseItem,
+  row: boundRow,
+  now,
+  readerAuthority: { ...currentAuthority, fresh: false },
+}).recordable, false, 'a stale Reader authority must never expose a clickable record button');
+
 const open = evaluateBetAction({ item: baseItem, row: boundRow, now, latest: { status: 'OPEN' } });
 assert.equal(open.kind, 'cancel');
 assert.equal(open.disabled, false);
@@ -62,4 +83,4 @@ const rebet = evaluateBetAction({ item: baseItem, row: boundRow, now, cancelled:
 assert.equal(rebet.text, '重新紀錄下注');
 assert.equal(rebet.recordable, true);
 
-console.log('bet action state v11.8.40 tests passed');
+console.log('bet action state v11.8.43 tests passed');
