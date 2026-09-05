@@ -26,6 +26,8 @@ export default function PwaRegister() {
   const [visible, setVisible] = useState(false);
   const [instructions, setInstructions] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [updateAvailable, setUpdateAvailable] = useState(null);
+  const [updateBlocked, setUpdateBlocked] = useState(false);
   const [updating, setUpdating] = useState(false);
   const updateCheckRunning = useRef(false);
 
@@ -52,28 +54,14 @@ export default function PwaRegister() {
         const latest = await response.json();
         if (!latest?.version || latest.version === APP_VERSION) {
           sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
+          setUpdateAvailable(null);
+          setUpdateBlocked(false);
           return;
         }
-        // Do not reload between a durable job request and saving its runId.
-        // The next visibility/interval check will apply the update safely.
-        const operationStartedAt = Number(sessionStorage.getItem(APP_OPERATION_BUSY_KEY));
-        if (Number.isFinite(operationStartedAt) && Date.now() - operationStartedAt < 15 * 60 * 1000) return;
-        sessionStorage.removeItem(APP_OPERATION_BUSY_KEY);
         if (sessionStorage.getItem(UPDATE_ATTEMPT_KEY) === latest.version) return;
-        sessionStorage.setItem(UPDATE_ATTEMPT_KEY, latest.version);
-        setUpdating(true);
-        window.setTimeout(() => {
-          // Re-check at the exact reload boundary: an analysis or bet action may
-          // have started during the short update notice animation.
-          const reloadOperationStartedAt = Number(sessionStorage.getItem(APP_OPERATION_BUSY_KEY));
-          if (Number.isFinite(reloadOperationStartedAt)
-            && Date.now() - reloadOperationStartedAt < 15 * 60 * 1000) {
-            sessionStorage.removeItem(UPDATE_ATTEMPT_KEY);
-            setUpdating(false);
-            return;
-          }
-          window.location.reload();
-        }, 650);
+        // Never replace a screen the user is actively reading. A release may be
+        // applied only from the explicit update button below.
+        setUpdateAvailable(latest.version);
       } catch {
         // Keep the current working version when the device is temporarily offline.
       } finally {
@@ -122,9 +110,31 @@ export default function PwaRegister() {
     setVisible(false);
   }
 
-  if (!visible && !updating) return null;
+  function applyUpdate() {
+    const operationStartedAt = Number(sessionStorage.getItem(APP_OPERATION_BUSY_KEY));
+    if (Number.isFinite(operationStartedAt) && Date.now() - operationStartedAt < 15 * 60 * 1000) {
+      setUpdateBlocked(true);
+      return;
+    }
+    sessionStorage.removeItem(APP_OPERATION_BUSY_KEY);
+    setUpdating(true);
+    window.location.reload();
+  }
+
+  function dismissUpdate() {
+    if (updateAvailable) sessionStorage.setItem(UPDATE_ATTEMPT_KEY, updateAvailable);
+    setUpdateAvailable(null);
+    setUpdateBlocked(false);
+  }
+
+  if (!visible && !updateAvailable && !updating) return null;
   return <>
-    {updating && <div className="pwaUpdating" role="status">新版已上線，正在自動更新…</div>}
+    {updating && <div className="pwaUpdating" role="status">正在載入新版…</div>}
+    {updateAvailable && !updating && <aside className="pwaUpdateAvailable" aria-label="網站新版提示">
+      <div><strong>新版已上線</strong><span>{updateBlocked ? '目前分析或下注操作尚未完成，請完成後再更新。' : '目前畫面會繼續保留；可在看完後自行更新。'}</span></div>
+      <button className="pwaInstallButton" onClick={applyUpdate}>現在更新</button>
+      <button className="pwaUpdateLater" onClick={dismissUpdate}>稍後</button>
+    </aside>}
     {visible && <aside className="pwaInstall" aria-label="安裝棒球EV App">
       <div className="pwaInstallIcon" aria-hidden="true">EV</div>
       <div><strong>安裝成獨立 App</strong><span>{instructions ? 'iPhone：按下方分享圖示，再選「加入主畫面」' : '加入主畫面後，不顯示 Safari 上下工具列'}</span></div>
