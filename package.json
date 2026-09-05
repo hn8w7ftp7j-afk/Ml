@@ -20,7 +20,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@neondatabase/serverless": "1.0.2",
+    "@neondatabase/serverless": "1.1.0",
     "@vercel/functions": "3.9.3",
     "cheerio": "1.2.0",
     "decimal.js": "10.6.0",
