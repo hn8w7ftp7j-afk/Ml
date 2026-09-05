@@ -22,10 +22,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.42', 'package/release identity must match the V11.8.42 stable analysis display release');
-assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.42');
-assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.42');
-assert.equal(APP_VERSION, '11.8.42');
+assert.equal(packageJson.version, '11.8.43', 'package/release identity must match the V11.8.43 current Reader bet-action release');
+assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.43');
+assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.43');
+assert.equal(APP_VERSION, '11.8.43');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
@@ -279,6 +279,9 @@ assert.doesNotMatch(scoreOnlyInvalidation, /lineFresh:\s*false|actualReaderEligi
 assert.doesNotMatch(page, /invalidateReaderPriceRow/, 'client time progression must not destroy a completed immutable score');
 assert.doesNotMatch(page, /function betRecordable|function betActionState/, 'page must not retain divergent bet-button gates');
 mustMatch(/const action = evaluateBetAction\(\{[\s\S]*item,[\s\S]*row,[\s\S]*now,[\s\S]*cloudLedgerState: 'ready'/, 'recordBet must re-check the canonical action state at click time');
+mustMatch(/const liveReaderAuthority = \{[\s\S]*fresh: readerStatus\?\.fresh === true[\s\S]*expectedBoardDate: date[\s\S]*payloadHash: readerStatus\?\.payloadHash/, 'all bet buttons must use the live server Reader payload as execution authority');
+mustMatch(/readerAuthority: liveReaderAuthority/, 'recordBet and visible bet actions must reject a stale browser Reader payload');
+mustMatch(/READER_CONTRACT_MISMATCH[\s\S]*creditRevisionRef\.current = ''[\s\S]*await pollReaderAndReprice\(\)/, 'a server contract mismatch must immediately force current Reader synchronization instead of leaving a useless green button');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
 assert.match(css, /html,body\{width:100%;max-width:100%;overflow-x:hidden\}/, 'mobile document must never expand beyond the viewport');
