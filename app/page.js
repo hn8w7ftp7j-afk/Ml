@@ -95,6 +95,7 @@ const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 // does not report a successfully accepted job as an all-league submission
 // failure while the server continues running it.
 const BACKGROUND_JOB_START_TIMEOUT_MS = 75_000;
+const BACKGROUND_JOB_RECOVERY_TIMEOUT_MS = 45_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
 const READER_RECHECK_INTERVAL_MS = 30 * 1000;
 const REFERENCE_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
@@ -470,6 +471,23 @@ function saveAllLeagueAnalysisRun(run) {
   } catch { return false; }
 }
 
+function clearAllLeagueAnalysisRun(run = null) {
+  try {
+    const saved = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
+    if (run?.startedAt && saved?.startedAt && saved.startedAt !== run.startedAt) return false;
+    window.localStorage.removeItem(ALL_LEAGUE_ANALYSIS_STORAGE);
+    return true;
+  } catch { return false; }
+}
+
+function isInterruptedPreSubmitRun(run) {
+  if (!run || run.runId) return false;
+  if (run.state === 'preparing') return true;
+  return run.state === 'completed' && LEAGUE_IDS.some(id => (
+    String(run.leagues?.[id]?.message || '').includes('送出伺服器背景工作前中斷')
+  ));
+}
+
 function recoverLocalBetCopies(primary, backup) {
   const result = [];
   const known = new Set();
@@ -615,6 +633,28 @@ function transientAnalysisError(error) {
   if (String(error?.code || '') === 'REQUEST_TIMEOUT') return true;
   if (Number.isFinite(Number(error?.status))) return Number(error.status) >= 500;
   return /Load failed|Failed to fetch|NetworkError|network request failed|請求逾時|分析逾時/i.test(String(error?.message || error));
+}
+
+async function startBackgroundAnalysisJob(payload) {
+  const requestId = uid();
+  const options = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId },
+    body: JSON.stringify(payload),
+  };
+  let job = await requestJSONWithTransientRetry('/api/analysis-jobs', options, BACKGROUND_JOB_START_TIMEOUT_MS, {
+    delaysMs: ANALYSIS_TRANSIENT_RETRY_DELAYS_MS,
+  });
+  if (job?.runId) return job;
+  const deadline = Date.now() + BACKGROUND_JOB_RECOVERY_TIMEOUT_MS;
+  while (job?.requestId && Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 1500));
+    job = await requestJSON(`/api/analysis-jobs?requestId=${encodeURIComponent(job.requestId)}&t=${Date.now()}`, {}, 15000);
+    if (job?.runId) return job;
+  }
+  const error = new Error('背景工作已送出，但暫時無法取得工作編號；請再按一次即可接回原工作');
+  error.code = 'BACKGROUND_JOB_RECOVERY_PENDING';
+  throw error;
 }
 
 async function requestAnalysisWithResume(options) {
@@ -1634,19 +1674,13 @@ export default function Home() {
   useEffect(() => {
     if (!storageReady) return;
     const saved = loadAllLeagueAnalysisRun(date);
-    if (saved?.state === 'preparing' && !saved?.runId) {
-      let interrupted = { ...saved, state: 'completed', completedAt: new Date().toISOString() };
-      for (const id of LEAGUE_IDS) {
-        const status = interrupted.leagues?.[id]?.status;
-        if (!['done', 'partial', 'failed', 'no_games', 'no_open_markets'].includes(status)) {
-          interrupted = updateAllLeagueAnalysisLeague(interrupted, id, {
-            status: 'failed',
-            message: '上次在送出伺服器背景工作前中斷，請重新執行',
-          });
-        }
-      }
-      saveAllLeagueAnalysisRun(interrupted);
-      setAllLeagueRun(interrupted);
+    if (isInterruptedPreSubmitRun(saved)) {
+      // Without a durable run id there is no server analysis failure to show.
+      // Remove the local-only interruption so reload always unlocks the buttons.
+      clearAllLeagueAnalysisRun(saved);
+      allLeagueRunRef.current = null;
+      setAllLeagueRun(null);
+      setProgress({ active: false, done: 0, running: 0, total: 0, label: '' });
       return;
     }
     setAllLeagueRun(saved);
@@ -2458,15 +2492,11 @@ export default function Home() {
   } = {}) {
     if (!Array.isArray(tasks) || !tasks.length) return { ok: true, total: 0, completed: 0, results: [] };
     setProgress({ active: true, done: 0, running: 0, total: tasks.length, label: progressLabel });
-    const job = await requestJSON('/api/analysis-jobs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
-      body: JSON.stringify({
-        league,
-        date: targetDate,
-        tasks: tasks.map(task => ({ ...task, requestId: uid(), generation: undefined })),
-      }),
-    }, BACKGROUND_JOB_START_TIMEOUT_MS);
+    const job = await startBackgroundAnalysisJob({
+      league,
+      date: targetDate,
+      tasks: tasks.map(task => ({ ...task, requestId: uid(), generation: undefined })),
+    });
     const reconnectSaved = saveBackgroundJob({
       runId: job.runId,
       league,
@@ -2680,20 +2710,16 @@ export default function Home() {
         setError('四個聯盟的賽程或Reader預查都失敗；可切到個別聯盟重新執行。');
         return false;
       }
-      const job = await requestJSON('/api/analysis-jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
-        body: JSON.stringify({
-          mode: 'all-leagues',
-          date: targetDate,
-          batches: batches.map(batch => ({
-            league: batch.league,
-            date: batch.date,
-            emptyReason: batch.emptyReason,
-            tasks: batch.tasks,
-          })),
-        }),
-      }, BACKGROUND_JOB_START_TIMEOUT_MS);
+      const job = await startBackgroundAnalysisJob({
+        mode: 'all-leagues',
+        date: targetDate,
+        batches: batches.map(batch => ({
+          league: batch.league,
+          date: batch.date,
+          emptyReason: batch.emptyReason,
+          tasks: batch.tasks,
+        })),
+      });
       run = {
         ...run,
         runId: job.runId,

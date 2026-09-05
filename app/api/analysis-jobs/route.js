@@ -11,6 +11,13 @@ import {
   validateSameOrigin,
 } from '../../../lib/security.js';
 import { isLeagueId } from '../../../lib/leagues.js';
+import {
+  claimAnalysisJobRequest,
+  completeAnalysisJobRequest,
+  failAnalysisJobRequest,
+  getAnalysisJobRequest,
+  validAnalysisJobRequestKey,
+} from '../../../lib/analysis-job-request-store.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,11 +54,27 @@ function normalizeTasks(tasks, league, prefix = '') {
 }
 
 export async function POST(request) {
+  let requestKey = '';
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     if (!validateSameOrigin(request)) return originErrorResponse();
     const rate = checkRateLimit(request, { id: 'analysis-job-start-v1', limit: 12, windowMs: 10 * 60 * 1000 });
     if (!rate.allowed) return rateLimitResponse(rate);
+    requestKey = cleanText(request.headers.get('idempotency-key'), 100);
+    let requestClaim = null;
+    if (validAnalysisJobRequestKey(requestKey)) {
+      try { requestClaim = await claimAnalysisJobRequest(requestKey); }
+      catch { requestClaim = null; }
+    }
+    if (requestClaim && !requestClaim.claimed) {
+      if (requestClaim.runId) {
+        return NextResponse.json({ ok: true, runId: requestClaim.runId, requestId: requestKey, recovered: true }, { status: 202 });
+      }
+      if (requestClaim.status === 'failed') {
+        return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_START_FAILED', error: requestClaim.error || '背景工作啟動失敗' }, { status: 503 });
+      }
+      return NextResponse.json({ ok: true, requestId: requestKey, status: 'starting', recovered: true }, { status: 202 });
+    }
     const body = await readJsonBody(request, 6_000_000);
     const date = cleanText(body?.date, 20);
     if (body?.mode === 'all-leagues') {
@@ -79,6 +102,10 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, code: 'INVALID_ALL_LEAGUE_BACKGROUND_JOB', error: '四聯盟背景分析工作內容無效' }, { status: 400 });
       }
       const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches }]);
+      if (requestClaim?.claimed) {
+        try { await completeAnalysisJobRequest(requestKey, run.runId); }
+        catch {}
+      }
       return NextResponse.json({
         ok: true,
         mode: 'all-leagues',
@@ -95,8 +122,16 @@ export async function POST(request) {
     }
     const normalizedTasks = normalizeTasks(tasks, league);
     const run = await start(analyzeBoardWorkflow, [{ league, date, tasks: normalizedTasks }]);
+    if (requestClaim?.claimed) {
+      try { await completeAnalysisJobRequest(requestKey, run.runId); }
+      catch {}
+    }
     return NextResponse.json({ ok: true, runId: run.runId, league, date, total: normalizedTasks.length }, { status: 202 });
   } catch (error) {
+    if (requestKey) {
+      try { await failAnalysisJobRequest(requestKey, error?.message || error); }
+      catch {}
+    }
     return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_START_FAILED', error: String(error?.message || error) }, { status: 500 });
   }
 }
@@ -105,6 +140,15 @@ export async function GET(request) {
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     const searchParams = new URL(request.url).searchParams;
+    const requestKey = cleanText(searchParams.get('requestId'), 100);
+    if (requestKey) {
+      if (!validAnalysisJobRequestKey(requestKey)) {
+        return NextResponse.json({ ok: false, error: '背景工作請求編號無效' }, { status: 400 });
+      }
+      const requestState = await getAnalysisJobRequest(requestKey);
+      if (!requestState) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_REQUEST_NOT_FOUND', error: '找不到背景工作請求' }, { status: 404 });
+      return NextResponse.json({ ok: requestState.status !== 'failed', ...requestState });
+    }
     const runId = searchParams.get('runId') || '';
     const requestedLeague = cleanText(searchParams.get('league'), 10).toUpperCase();
     const summaryOnly = searchParams.get('summary') === '1';

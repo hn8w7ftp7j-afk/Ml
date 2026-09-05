@@ -22,10 +22,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.40', 'package/release identity must match the V11.8.40 per-game background result gate');
-assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.38');
-assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.38');
-assert.equal(APP_VERSION, '11.8.40');
+assert.equal(packageJson.version, '11.8.41', 'package/release identity must match the V11.8.41 background recovery release');
+assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.41');
+assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.41');
+assert.equal(APP_VERSION, '11.8.41');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
@@ -101,7 +101,7 @@ assert.doesNotMatch(page, /void oneClickAnalyze\(key\)/, 'restored analysis must
 mustMatch(/JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'credit-line request must bind league, date and schedule');
 mustMatch(/provider === 'TAI888_READER_AUTO'/, 'Reader provider authority missing');
 mustMatch(/credit\?\.readerFresh === true/, 'fresh credit snapshot gate missing');
-mustMatch(/requestJSON\('\/api\/analysis-jobs'/, 'full-board analysis must start one durable server workflow');
+mustMatch(/requestJSONWithTransientRetry\('\/api\/analysis-jobs'/, 'full-board analysis must start one durable server workflow with mobile transport recovery');
 mustMatch(/saveBackgroundJob\(/, 'background workflow identity must survive an app close or reload');
 mustMatch(/tab !== 'bets' \\|\\| cloudLedgerStatus\\.state !== 'ready'[\\s\\S]*refreshSettlements\\(''\\)[\\s\\S]*\\[storageReady, tab, league, cloudLedgerStatus\\.state\\]/, 'bet ledger must retry automatic settlement after its initial cloud sync becomes ready');
 mustMatch(/pollBackgroundJob\([\s\S]*job\.runId,[\s\S]*generation,[\s\S]*targetDate,[\s\S]*tasks\.map/, 'the app must reconnect to the server workflow result with its owned game scope');

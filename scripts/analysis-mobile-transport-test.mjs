@@ -42,7 +42,8 @@ const pageSource = fs.readFileSync(new URL('../app/page.js', import.meta.url), '
 const analyzeRouteSource = fs.readFileSync(new URL('../app/api/analyze/route.js', import.meta.url), 'utf8');
 const workflowSource = fs.readFileSync(new URL('../workflows/analyze-board.js', import.meta.url), 'utf8');
 assert.match(pageSource, /ANALYSIS_REQUEST_TIMEOUT_MS = 120_000/);
-assert.match(pageSource, /requestJSON\('\/api\/analysis-jobs'/);
+assert.match(pageSource, /requestJSONWithTransientRetry\('\/api\/analysis-jobs'/);
+assert.match(pageSource, /startBackgroundAnalysisJob/);
 assert.match(pageSource, /伺服器背景分析中｜可離開App/);
 assert.match(pageSource, /pollBackgroundJob\([\s\S]*job\.runId,[\s\S]*generation,[\s\S]*targetDate,[\s\S]*tasks\.map/);
 assert.match(workflowSource, /'use workflow'/);
