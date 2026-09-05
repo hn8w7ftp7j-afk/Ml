@@ -72,7 +72,7 @@ assert.match(page, /一鍵分析全部聯盟/, 'the UI needs one all-league acti
 assert.match(page, /for \(const id of LEAGUE_IDS\)[\s\S]*allLeagueTargetDate\(id,[\s\S]*prepareAllLeagueBatch\(id, batchDate\)/, 'every league must resolve and precheck its own Reader board date');
 assert.match(page, /mode: 'all-leagues'[\s\S]*batches: batches\.map/, 'the client must submit one isolated batch per prepared league');
 assert.match(page, /const BACKGROUND_JOB_START_TIMEOUT_MS = 75_000/, 'workflow submission timeout must exceed the 60 second server route ceiling');
-assert.match(page, /mode: 'all-leagues'[\s\S]*\}, BACKGROUND_JOB_START_TIMEOUT_MS\)/, 'all-league submission must not abort before the server route ceiling');
+assert.match(page, /startBackgroundAnalysisJob\([\s\S]*requestJSONWithTransientRetry\('\/api\/analysis-jobs',[\s\S]*BACKGROUND_JOB_START_TIMEOUT_MS/, 'all-league submission must retry safely without aborting before the server route ceiling');
 assert.match(page, /league: batch\.league,[\s\S]*date: batch\.date,[\s\S]*emptyReason: batch\.emptyReason/, 'each submitted league batch must retain its own date');
 assert.match(route, /const batchDate = cleanText\(batch\?\.date, 20\)[\s\S]*date: batchDate/, 'the server must not replace every league date with the MLB outer date');
 assert.match(page, /saveBackgroundJob\(\{[\s\S]*batchMode: 'all-leagues'[\s\S]*league: batch\.league,[\s\S]*date: batch\.date,[\s\S]*preparedBoard/, 'each league must retain reconnect metadata, date and prepared slate');
