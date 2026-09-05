@@ -22,10 +22,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.39', 'package/release identity must match the V11.8.39 per-game Reader action gate');
+assert.equal(packageJson.version, '11.8.40', 'package/release identity must match the V11.8.40 per-game background result gate');
 assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.38');
 assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.38');
-assert.equal(APP_VERSION, '11.8.39');
+assert.equal(APP_VERSION, '11.8.40');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
@@ -251,7 +251,8 @@ mustMatch(/const retainingPreviousRevision = preservePreviousReaderAnalysis \|\|
 mustMatch(/readerPayloadHash: resumed\?\.readerPayloadHash \|\| \(capturedHistoricalPit \? credit\.payloadHash : null\)/, 'a queued revision may regain execution only through a confirmed PIT plus the current signed Reader capture');
 mustMatch(/const retainedFinishedItems = \[\.\.\.previousByPk\.values\(\)\][\s\S]*analysisHasCalculatedDirections[\s\S]*readerPayloadHash: null[\s\S]*const items = \[[\s\S]*\.\.\.activeItems\.sort\(byStartTime\)[\s\S]*\.\.\.retainedFinishedItems\.sort\(byStartTime\)/, 'a full-slate refresh must retain old analysis below the current official pregame slate');
 mustMatch(/readerResultIsStale/, 'late background results must be rejected when the live Reader hash has advanced');
-mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*readerEvidenceIsOlder\([\s\S]*currentItem\?\.actualSource,[\s\S]*currentItem\?\.latestReaderSource/, 'late success and failure results must respect the newest single-game Reader evidence time');
+mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*taskEvidenceHash[\s\S]*currentItem\?\.pendingReaderEvidenceHash[\s\S]*readerTaskGameRevisionIsStale/, 'late results must use the single-game Reader content revision before the whole-board hash or heartbeat time');
+mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*gameRevisionStale != null[\s\S]*readerResultIsStale/, 'whole-board staleness may be used only when per-game evidence is unavailable');
 mustMatch(/commitAnalysisFailure\(task, value\)[\s\S]*taskReaderStateIsStale\(task\)/, 'a late failed background job must not overwrite a newer Reader result');
 mustMatch(/commitAnalysisFailure\(task, value\)[\s\S]*readerPayloadHash: null/, 'a failed or terminal background job must immediately revoke Reader execution authority');
 mustMatch(/credit\?\.code === 'NO_PRESTART_GAMES'[\s\S]*finalizeReaderBoardAtStart/, 'the client must remove empty waiting cards across the official start boundary');
