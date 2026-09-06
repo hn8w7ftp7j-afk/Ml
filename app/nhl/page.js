@@ -34,16 +34,39 @@ function Source({ source }) {
   return <div className="nhlSource">來源：<a href={source.url} target="_blank" rel="noreferrer">{source.provider || 'NHL 官方'}</a>｜取得時間 {clock(source.fetchedAt || source.observedAt)}{source.contentHash && <details><summary>來源版本</summary><span>{source.contentHash}</span></details>}</div>;
 }
 function Stat({ label, value }) { return <div className="nhlStat"><span>{label}</span><strong>{number(value)}</strong></div>; }
+function SituationRatios({ value }) {
+  if (!value?.ok || value.metricScope !== 'OBSERVED_EVENTS_NOT_PREGAME_FEATURES') return null;
+  const percent = x => typeof x === 'number' && Number.isFinite(x) ? `${(x * 100).toFixed(2)}%` : '—';
+  return <div><h3>同情境射正與撲救｜描述性統計</h3>
+    <div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>情境／球隊</th><th>被射正</th><th>失球</th><th>射正占比</th><th>射門得分率</th><th>團隊撲救率</th></tr></thead>
+      <tbody>{[['fiveOnFive', '5v5'], ['powerPlay', 'PP'], ['shortHanded', 'PK']].flatMap(([key, label]) => ['away', 'home'].map(side => {
+        const row = value[side]?.[key];
+        return <tr key={`${key}:${side}`}><td>{label}／{side === 'away' ? '客隊' : '主隊'}</td><td>{number(row?.shotsOnGoalAgainst)}</td><td>{number(row?.goalsAgainst)}</td><td>{percent(row?.shotShare)}</td><td>{percent(row?.shootingPercent)}</td><td>{percent(row?.savePercent)}</td></tr>;
+      }))}</tbody></table></div>
+    <p className="nhlNote">PP 對照對手 PK，5v5 對照對手 5v5；不含空門與 Shootout。團隊撲救率不是個別門將評分，PP 射門得分率不是 PP 機會成功率。零分母或情境資料不完整時比例留空。只描述本次取得的比賽事件，不作為已驗證的賽前特徵。</p>
+    <Source source={value.source}/></div>;
+}
+function OfficialGameReport({ value }) {
+  if (!value) return null;
+  if (!value.ok) return <p className="nhlWarning">官方比賽報表 QA BLOCK：{value.issues?.join('、')}</p>;
+  const percent = x => typeof x === 'number' ? `${(x * 100).toFixed(2)}%` : '—';
+  return <details><summary>官方 PP／PK 與本場未出賽名單</summary>
+    <div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>球隊</th><th>PP 進球／機會</th><th>PP 成功率</th><th>PK 成功率</th></tr></thead>
+      <tbody>{['away', 'home'].map(side => <tr key={side}><td>{side === 'away' ? '客隊' : '主隊'}</td><td>{value[side].powerPlayGoals}／{value[side].powerPlayOpportunities}</td><td>{percent(value[side].powerPlayPercent)}</td><td>{percent(value[side].penaltyKillPercent)}</td></tr>)}</tbody></table></div>
+    {['away', 'home'].map(side => <p key={side}>{side === 'away' ? '客隊' : '主隊'} scratches：{value[side].scratches == null ? '來源尚未提供' : value[side].scratches.length === 0 ? '官方列出 0 人' : value[side].scratches.map(player => `${player.name || '姓名待核對'}（${player.playerId}）`).join('、')}</p>)}
+    <p className="nhlNote">Scratches 只表示本場未列入出賽名單，不代表傷病診斷，也不代表已取得賽前發布時間。這是本次取得的官方比賽報表，不回填為歷史賽前證據。</p><Source source={value.source}/></details>;
+}
 function Empty({ title, children }) { return <section className="emptyBoard"><h2>{title}</h2><p>{children}</p></section>; }
 function GameNotices({ detail }) {
   if (!detail) return null;
-  return <div className="nhlNote">{detail.warning && <p className="nhlWarning">{detail.warning}</p>}{detail.issues?.length > 0 && <p className="nhlWarning">部分資料尚未取得或未通過 QA：{detail.issues.join('、')}</p>}{detail.observation && <p>{detail.observation.persisted ? '來源快照已永久保存' : detail.observation.reason}</p>}</div>;
+  return <div className="nhlNote">{detail.warning && <p className="nhlWarning">{detail.warning}</p>}{detail.issues?.length > 0 && <p className="nhlWarning">部分資料尚未取得或未通過 QA：{detail.issues.join('、')}</p>}{detail.observation && <p>{detail.observation.persisted ? '來源快照已永久保存' : detail.observation.reason}</p>}<OfficialGameReport value={detail.game?.officialReport}/><SituationRatios value={detail.game?.observedSituationStatistics}/></div>;
 }
 function ScheduleContext({ value }) {
   return <div><p className="nhlNote">{value.message}</p><div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>球隊</th><th>休息日</th><th>背靠背</th><th>近 7 日含本場</th><th>旅行公里</th></tr></thead><tbody>{['away', 'home'].map(side => <tr key={side}><td>{side === 'away' ? '客隊' : '主隊'}{value[side]?.estimated ? '（預計）' : ''}</td><td>{number(value[side]?.restDays)}</td><td>{value[side]?.backToBack == null ? '待核對' : value[side].backToBack ? '是' : '否'}</td><td>{number(value[side]?.gamesIn7Days)}</td><td>{number(value[side]?.travelKm)}</td></tr>)}</tbody></table></div>{['away', 'home'].map(side => <Source key={side} source={value[side]?.source}/>)}</div>;
 }
 function SituationStatistics({ value }) {
-  if (!value?.ok) return null;
+  if (!value) return null;
+  if (!value.ok) return <p className="nhlWarning" role="alert">逐球統計未通過 QA：{value.issues?.join('、')}。不顯示可能衝突的情境數據。</p>;
   return <div><h3>官方逐球事件｜比賽情境</h3><div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>情境</th><th>客隊射正</th><th>主隊射正</th><th>客隊進球</th><th>主隊進球</th></tr></thead><tbody>{[['fiveOnFive', '5v5'], ['powerPlay', 'Power Play'], ['shortHanded', 'Short-handed']].map(([key, label]) => <tr key={key}><td>{label}</td><td>{number(value.away?.[key]?.shotsOnGoal)}</td><td>{number(value.home?.[key]?.shotsOnGoal)}</td><td>{number(value.away?.[key]?.goals)}</td><td>{number(value.home?.[key]?.goals)}</td></tr>)}</tbody></table></div><p className="nhlNote">依官方場上人數核對事件；不含空門及 Shootout。這些是事件次數，沒有 5v5 時間分母、xG 或 PP 機會數時，不推算每 60 分鐘效率。</p>{value.unknownSituationEvents > 0 && <p className="nhlWarning">{value.unknownSituationEvents} 筆事件情境未知，未計入分類。</p>}<Source source={value.source}/></div>;
 }
 function ClubStatistics({ value }) {

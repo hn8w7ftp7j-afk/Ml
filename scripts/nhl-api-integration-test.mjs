@@ -169,6 +169,7 @@ try {
       if (url.endsWith('/2023020001/landing')) return jsonResponse(landing);
       if (url.endsWith('/2023020001/boxscore')) return jsonResponse(boxscore);
       if (url.endsWith('/2023020001/play-by-play')) return jsonResponse({ error: 'fixture unavailable' }, 404);
+      if (url.endsWith('/2023020001/right-rail')) return jsonResponse(fixture('right-rail-2023020001.json'));
       throw new Error(`Unexpected fixture request: ${url}`);
     });
     const body = await checked(await getNhl(getRequest('action=game&gameId=2023020001')), 200);
@@ -182,7 +183,13 @@ try {
     assert.equal(body.game.advanced.xGF, null);
     assert.ok(body.game.playerStatistics.away.goalies.every(row => row.pregameConfirmed === false));
     assert.equal(body.observation.persisted, false, 'Successful read does not imply durable persistence');
-    assert.equal(requests.length, 3);
+    assert.equal(body.game.officialReport.ok, true);
+    assert.equal(body.game.officialReport.away.powerPlayOpportunities, 4);
+    assert.equal(body.game.officialReport.home.penaltyKillPercent, 0.75);
+    assert.equal(body.game.officialReport.away.scratches.length, 3);
+    assert.equal(body.game.officialReport.pregamePointInTimeVerified, false);
+    assert.equal(requests.length, 4);
+    assert.equal(requests.filter(url => url.endsWith('/right-rail')).length, 1);
   });
 
   await test('an unavailable official update falls back transparently to a matching archived real game', async () => {
