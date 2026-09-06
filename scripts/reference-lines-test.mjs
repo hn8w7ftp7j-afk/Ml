@@ -9,6 +9,25 @@ import {
   referenceProviderStatus,
 } from '../lib/reference-lines.js';
 import { applyIndependentMarketVerification } from '../lib/market-verification-v2.js';
+import { classifyReferenceFailure, recordReferenceSourceHealth, referenceSourceHealth } from '../lib/reference-source-health.js';
+
+for (const [message, category] of [
+  ['You have exceeded your usage quota', 'QUOTA_EXHAUSTED'],
+  ['Invalid API key', 'AUTHORIZATION_FAILED'], ['HTTP 429', 'RATE_LIMITED'],
+  ['operation aborted', 'TIMEOUT'], ['盤源回傳格式錯誤', 'SOURCE_FORMAT_ERROR'],
+  ['fetch failed', 'NETWORK_ERROR'], ['unrecognized provider failure', 'UPSTREAM_FAILURE_UNCLASSIFIED'],
+]) assert.equal(classifyReferenceFailure(message), category);
+const diagnosticClock = Date.parse('2026-09-06T12:00:00Z');
+const health = recordReferenceSourceHealth('MLB', ['Invalid API key SECRET_TEST_VALUE https://provider.invalid?apiKey=SECRET_TEST_VALUE'], { now: diagnosticClock });
+assert.equal(JSON.stringify(health).includes('SECRET_TEST_VALUE'), false);
+assert.equal(JSON.stringify(health).includes('provider.invalid'), false);
+health.reasons.length = 0;
+assert.deepEqual(referenceSourceHealth('MLB', { now: diagnosticClock }).reasons, ['AUTHORIZATION_FAILED']);
+assert.equal(referenceSourceHealth('NHL', { now: diagnosticClock }).status, 'NO_RECENT_PROCESS_OBSERVATION');
+assert.equal(recordReferenceSourceHealth('NHL', [], { now: diagnosticClock }), null);
+assert.equal(recordReferenceSourceHealth('MLB', [], { now: 1e20 }), null);
+assert.equal(referenceSourceHealth('MLB', { now: diagnosticClock + 600001 }).status, 'NO_RECENT_PROCESS_OBSERVATION');
+assert.equal(recordReferenceSourceHealth('MLB', [], { now: diagnosticClock, games: 2 }).status, 'SOURCE_RESPONDED');
 
 const schedule = [{
   gamePk: 123,

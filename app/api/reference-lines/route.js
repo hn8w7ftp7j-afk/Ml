@@ -12,6 +12,7 @@ import { oddsApiWindow } from '../../../lib/reference-time.js';
 import { signMarketGames } from '../../../lib/market-integrity-v1.js';
 import { fetchLeagueTaipeiSlate, validateLeagueScheduleSubset } from '../../../lib/league-provider.js';
 import { requestedLeagueId } from '../../../lib/leagues.js';
+import { recordReferenceSourceHealth, referenceSourceHealth } from '../../../lib/reference-source-health.js';
 import {
   checkRateLimit,
   cleanText,
@@ -277,7 +278,7 @@ export async function GET(request) {
       message: `${league} 尚未設定同聯盟合法參考盤源，禁止回落 MLB 盤源`,
     }, { headers: { 'Cache-Control': 'no-store' } });
   }
-  return NextResponse.json({ ok: true, league, version: REFERENCE_LINES_VERSION, ...referenceProviderStatus() }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ ok: true, league, version: REFERENCE_LINES_VERSION, ...referenceProviderStatus(), sourceHealth: referenceSourceHealth(league) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request) {
@@ -353,6 +354,8 @@ export async function POST(request) {
       catch (error) { failures.push(`The Odds API：${String(error?.message || error)}`); }
     }
     const result = mergeReferenceResults(results);
+    const sourceHealth = recordReferenceSourceHealth(league, failures, { games: result.games.length });
+    if (failures.length) console.warn('REFERENCE_SOURCE_HEALTH', sourceHealth);
     if (!result.games.length && failures.length) {
       return NextResponse.json({ ok: false, error: failures.join('；') || '沒有可用的合法參考盤來源' }, { status: 502 });
     }
