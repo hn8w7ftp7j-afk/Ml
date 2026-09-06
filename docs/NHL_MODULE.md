@@ -13,7 +13,7 @@ This module is part of the existing Next.js app and Vercel Production project. `
 
 ## Sources and factual gaps
 
-### Official game reports and situation statistics (11.9.6)
+### Official game reports and situation statistics (11.9.7)
 
 The same game-details request now additionally acquires NHL's official
 `gamecenter/{id}/right-rail`. The requested game must appear exactly once in
