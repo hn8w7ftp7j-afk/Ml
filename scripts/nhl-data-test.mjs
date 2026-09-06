@@ -216,6 +216,7 @@ await test('actual right-rail PP opportunities and scratches are game-specific, 
     x => { x.teamGameStats.find(r => r.category === 'powerPlay').awayValue = '5/4'; },
     x => { x.gameInfo.awayTeam.scratches.push(x.gameInfo.homeTeam.scratches[0]); },
     x => { x.gameInfo.awayTeam.scratches[0].id = 8475158; },
+    x => { x.gameInfo.awayTeam.scratches[0].id = 8476453; },
     x => { x.teamGameStats = {}; },
   ]) { const changed = structuredClone(report); mutate(changed); assert.equal(normalizeNhlGameReport(changed, game, origin).status, 'BLOCK'); }
   assert.equal(normalizeNhlGameReport(report, game, { ...origin, url: origin.url.replace('0001', '0002') }).status, 'BLOCK');
