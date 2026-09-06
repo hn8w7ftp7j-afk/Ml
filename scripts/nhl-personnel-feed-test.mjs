@@ -176,6 +176,16 @@ const retryTestUrl = 'https://www.nhl.com/news/retry-policy-test';
     assert.equal(result.code, value.url ? 'NHL_PERSONNEL_RESPONSE_URL_MISMATCH' : 'NHL_PERSONNEL_REDIRECT_NOT_FOLLOWED'); assert.equal(attempts, 1);
   }
 }
+for (const location of ['/errors/not-found', 'https://www.nhl.com/errors/not-found', 'https://attacker.invalid/errors/not-found', '/news/other-season']) {
+  let requests = 0;
+  const result = await fetchNhlPersonnelArticle(facts.sourceUrl, { fetchImpl: async () => {
+    requests++; return { ok: false, status: 302, headers: { get: key => key === 'location' ? location : null } };
+  } });
+  assert.equal(result.code, location === '/errors/not-found' || location === 'https://www.nhl.com/errors/not-found'
+    ? 'NHL_PERSONNEL_ARTICLE_NOT_FOUND' : 'NHL_PERSONNEL_REDIRECT_NOT_FOLLOWED');
+  assert.equal(requests, 1); assert.equal(result.ok, false); assert.equal(result.html, undefined);
+}
+assert.equal((await fetchNhlPersonnelArticle(facts.sourceUrl, { fetchImpl: async () => ({ ok: false, status: 404 }) })).code, 'NHL_PERSONNEL_ARTICLE_NOT_FOUND');
 const timeout = await fetchNhlPersonnelArticle(facts.sourceUrl, { fetchImpl: async () => new Promise(() => {}), timeoutMs: 5, now: () => now });
 assert.equal(timeout.code, 'NHL_PERSONNEL_TIMEOUT');
 const bodyTimeout = await fetchNhlPersonnelArticle(facts.sourceUrl, { fetchImpl: async () => ({ ok: true, text: () => new Promise(() => {}) }), timeoutMs: 5, now: () => now });

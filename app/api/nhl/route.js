@@ -21,10 +21,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 const response = (payload, status = 200) => NextResponse.json({ ...payload, league: 'NHL' }, { status, headers: { 'Cache-Control': 'no-store' } });
-const sourceError = result => Object.assign(new Error(result.code === 'NHL_SOURCE_FORBIDDEN'
+const sourceError = result => Object.assign(new Error(result.code === 'NHL_PERSONNEL_ARTICLE_NOT_FOUND'
+  ? '這個球季的官方陣容文章不存在；傷病與確認門將保持未知，已保留之前資料。歷史比分與研究仍可查看，不會套入其他球季陣容。'
+  : ['NHL_SOURCE_FORBIDDEN', 'NHL_PERSONNEL_FORBIDDEN'].includes(result.code)
   ? '官方資料來源拒絕目前伺服器的請求；已保留之前資料，歷史研究資料仍可查看。'
-  : result.code === 'NHL_SOURCE_RATE_LIMITED' ? '官方資料來源要求稍後重試；已保留之前資料。'
-    : result.code === 'NHL_SOURCE_TIMEOUT' ? '官方資料來源回應逾時；已保留之前資料。'
+  : ['NHL_SOURCE_RATE_LIMITED', 'NHL_PERSONNEL_RATE_LIMITED'].includes(result.code) ? '官方資料來源要求稍後重試；已保留之前資料。'
+    : ['NHL_SOURCE_TIMEOUT', 'NHL_PERSONNEL_TIMEOUT'].includes(result.code) ? '官方資料來源回應逾時；已保留之前資料。'
       : result.status === 'BLOCK' ? 'NHL 資料身分或比分核對未通過；已保留之前資料。' : 'NHL 官方來源暫時無法提供完整資料；已保留之前資料。'),
 { status: result.status === 'BLOCK' ? 422 : 503, code: result.code || 'NHL_SOURCE_UNAVAILABLE', issues: result.issues || [], upstreamStatus: result.httpStatus || null,
   retryAt: result.retryAt || null, retryAfter: result.retryAfter || null });
