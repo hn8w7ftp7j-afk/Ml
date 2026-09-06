@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { normalizePitchingV11 } from '../lib/mlb-context-v11.js';
 import { buildBullpenV13, buildGameContextV13, hydrateLineupBattingV13, parseOfficialLineupV13, starterOnlyGameLogV13 } from '../lib/mlb-context-v13.js';
 import { estimateRunProfileV13 } from '../lib/joint-score-v13.js';
+import { buildAnalysisDataAudit } from '../lib/analysis-data-audit-v1.js';
 
 const league = { era: 4.25, whip: 1.30, kPer9: 8.6, bbPer9: 3.2, hrPer9: 1.15 };
 const partialPitcher = normalizePitchingV11({ inningsPitched: '10.0', era: '5.40', whip: '1.50', earnedRuns: null, hits: '', baseOnBalls: undefined }, league);
@@ -113,9 +114,10 @@ for (const field of ['fatigueIndex', 'highLeverageAvailability']) {
 // Full context transport regression: even a populated live feed cannot bypass
 // the game-day active-roster endpoint or retain a departed pitcher.
 const contextCalls = [];
-const liveFeed = feed([...hitters, ...currentRoster.map(row => reliefPlayer(row.id)), reliefPlayer(99)], hitters.map((row, i) => batter(200 + i, i)), '2026-09-07T02:00:00Z');
+const liveFeed = feed([...hitters.map((row, i) => batter(row.person.id, i, fullStat)), ...currentRoster.map(row => reliefPlayer(row.id)), reliefPlayer(99)], hitters.map((row, i) => batter(200 + i, i)), '2026-09-07T02:00:00Z');
 liveFeed.gameData.datetime.officialDate = '2026-09-06';
-const context = await buildGameContextV13({ leagueId: 'MLB', gamePk: 800001, awayTeamId: 1, homeTeamId: 2, awayProbableId: 10, homeProbableId: 11, gameDate: '2026-09-07T02:00:00Z', officialDate: '2026-09-06', scheduledInnings: 9 }, {
+const contextGame = { leagueId: 'MLB', gamePk: 800001, awayTeamId: 1, homeTeamId: 2, awayProbableId: 10, homeProbableId: 11, gameDate: '2026-09-07T02:00:00Z', officialDate: '2026-09-06', scheduledInnings: 9 };
+const contextOptions = {
   timeoutMs: 100,
   fetchImpl: async input => {
     const url = new URL(input); contextCalls.push(url);
@@ -129,7 +131,8 @@ const context = await buildGameContextV13({ leagueId: 'MLB', gamePk: 800001, awa
     if (url.hostname === 'statsapi.mlb.com' && url.searchParams.get('group') === 'hitting') return Response.json({ stats: [{ splits: [{ stat: { ...fullStat, ops: 0.80, gamesPlayed: 20, runs: 90 } }] }] });
     return Response.json({ stats: [{ splits: [] }] });
   },
-});
+};
+const context = await buildGameContextV13(contextGame, contextOptions);
 assert.equal(context.away.lineup.metricCoverage, 1);
 assert.equal(context.away.lineup.identityStatus, 'CONFIRMED');
 assert.equal(context.away.bullpen.rosterComplete, true);
@@ -141,4 +144,44 @@ const datedStats = contextCalls.filter(url => url.searchParams.get('stats') === 
 assert.ok(datedStats.length > 10);
 assert.ok(datedStats.every(url => url.searchParams.get('endDate') === '2026-09-05'), 'MLB night games must use previous official baseball date consistently for pitcher/team/batter statistics');
 assert.equal(context.league.asOf, '2026-09-05');
-console.log(JSON.stringify({ ok: true, cases: ['missing_vs_zero_pitching', 'name_only_lineup_neutral', 'partial_coverage', 'official_pregame_hydration', 'failed_hydration_neutral', 'no_mixed_stat_blocks', 'departed_relief_excluded', 'indirect_usage_labels', 'official_day_timezone_cutoff', 'current_roster_transport'] }));
+const sourceAudit = buildAnalysisDataAudit(context);
+for (const side of ['away', 'home']) {
+  for (const category of ['starter', 'lineup', 'bullpen', 'splits']) {
+    const row = sourceAudit.rows.find(item => item.id === `${side}.${category}`);
+    assert.ok(row.observedAt, `${row.id}: transport acquisition time survives normalization`);
+    assert.ok(row.sources.some(source => source.observedAt && source.sourceRecord && source.rawPayloadHash), `${row.id}: timestamp retains its exact source and payload hash`);
+  }
+}
+assert.ok(!context.away.lineup.players.some(player => player.metricProvenance), 'full feed lineup exercises receipt propagation without the hydration fallback');
+const ownStarterSources = sourceAudit.rows.find(item => item.id === 'away.starter').sources.filter(source => source.sourceRecord?.includes('/people/'));
+assert.ok(ownStarterSources.every(source => source.sourceRecord.includes('/people/10/')), 'per-source receipts must not attach the other team starter transport');
+const contextWithoutNewReceipts = structuredClone(context);
+for (const side of ['away', 'home']) {
+  for (const category of ['starter', 'lineup', 'bullpen']) delete contextWithoutNewReceipts[side][category].sourceReceipts;
+  for (const split of ['vsLeft', 'vsRight']) {
+    delete contextWithoutNewReceipts[side][split].fetchedAt;
+    delete contextWithoutNewReceipts[side][split].source;
+  }
+}
+assert.deepEqual(estimateRunProfileV13(context), estimateRunProfileV13(contextWithoutNewReceipts), 'source receipts cannot change means, uncertainty, coefficients, or model-use declarations');
+const DateBeforeCacheTest = globalThis.Date;
+const laterClock = DateBeforeCacheTest.parse(context.fetchedAt) + 5000;
+try {
+  globalThis.Date = class extends DateBeforeCacheTest {
+    constructor(...args) { super(...(args.length ? args : [laterClock])); }
+    static now() { return laterClock; }
+  };
+  const cachedContext = await buildGameContextV13(contextGame, contextOptions);
+  const cachedAudit = buildAnalysisDataAudit(cachedContext);
+  assert.notEqual(cachedContext.fetchedAt, context.fetchedAt, 'new context assembly has a later clock');
+  for (const id of ['away.starter', 'away.lineup', 'away.bullpen', 'away.splits']) {
+    const original = sourceAudit.rows.find(row => row.id === id);
+    const cached = cachedAudit.rows.find(row => row.id === id);
+    assert.deepEqual(cached.sources, original.sources, `${id}: cache reuse cannot refresh source observation time`);
+    assert.equal(cached.observedAt, original.observedAt);
+    assert.notEqual(cached.observedAt, cachedContext.fetchedAt, 'context time is never substituted for source time');
+  }
+} finally {
+  globalThis.Date = DateBeforeCacheTest;
+}
+console.log(JSON.stringify({ ok: true, cases: ['missing_vs_zero_pitching', 'name_only_lineup_neutral', 'partial_coverage', 'official_pregame_hydration', 'failed_hydration_neutral', 'no_mixed_stat_blocks', 'departed_relief_excluded', 'indirect_usage_labels', 'official_day_timezone_cutoff', 'current_roster_transport', 'actual_source_timestamp_propagation', 'cached_acquisition_time_immutable'] }));

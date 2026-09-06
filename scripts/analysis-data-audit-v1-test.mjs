@@ -113,5 +113,16 @@ assert.equal(cpblRow.metrics.inningsPitched, null);
 assert.equal(cpblRow.metrics.estimatedInningsPitched, 95);
 assert.equal(cpblRow.source, 'CPBL_OFFICIAL_INDIVIDUAL_STARTER');
 assert.equal(cpblRow.observedAt, '2026-09-06T08:00:00.000Z');
+const transportReceipts = buildAnalysisDataAudit({ ...context, away: { lineup: {
+  ...context.away.lineup,
+  sourceReceipts: [
+    { source: 'MLB_GAME_LIVE_FEED', sourceRecord: 'https://statsapi.mlb.com/api/v1.1/game/123/feed/live', fetchedAt: '2026-09-06T12:01:00Z', rawPayloadHash: 'c'.repeat(64), purpose: 'CURRENT_LINEUP_IDENTITY', sourceGameId: 123, sourceGameDate: '2026-09-06' },
+    { source: 'MLB_GAME_LIVE_FEED', sourceRecord: 'https://statsapi.mlb.com/api/v1.1/game/122/feed/live', fetchedAt: '2026-09-06T10:00:00Z', rawPayloadHash: 'd'.repeat(64), sourceGameId: 122, sourceGameDate: '2026-09-05' },
+  ],
+} } });
+const transportRow = find(transportReceipts, 'away.lineup');
+assert.equal(transportRow.observedAt, '2026-09-06T12:01:00.000Z', 'summary uses latest actual source clock, never context assembly time');
+assert.equal(transportRow.sources.find(row => row.sourceGameId === '122').observedAt, '2026-09-06T10:00:00.000Z', 'older component acquisition remains independently visible');
+assert.equal(transportRow.sources.find(row => row.sourceGameId === '123').purpose, 'CURRENT_LINEUP_IDENTITY');
 assert.equal(receipt.summary.total, receipt.summary.observed + receipt.summary.projected + receipt.summary.missing + receipt.summary.stale);
 console.log('analysis-data-audit-v1-test: PASS');
