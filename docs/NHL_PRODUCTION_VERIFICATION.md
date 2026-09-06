@@ -39,6 +39,15 @@
 
 整合後完整 `npm test` 已通過並確認所有 suites 執行到結束，含實際頁面函式的 14 組恢復反例及 17 組收據／身分／版本反例；獨立 reviewer 亦重跑這兩組測試確認。v11.9.0／v11.9.1 已刪除工作編號的舊結果不能由新收據機制事後憑空找回，驗證須使用新版開始並保存的新工作。
 
+## v11.9.3 部署後實證與 v11.9.4 日期修正
+
+- PR #170 main `26bc301563b323dc1b1cfc40bce8c5f3f0cf4aa6`，main CI `34012055796` SUCCESS；同一 Production deployment `dpl_68WUapPfGFgZfT9oXjwzdsYYfAye` READY，alias 與 commit 核對一致。
+- CPBL 同步啟動三場背景工作，分析中以完整頁面導航前往 NHL，返回 CPBL 三場均呈現完成結果與 PIT 已保存。再次 CPBL → NHL → NBA modal → 關閉 → CPBL，三場的可見原始分數與 EV 文本逐項相同，Loading 正常結束。本次未操作實盤下注。
+- NHL 正式頁重新取得官方歷史賽程三場、NSH roster 18 人、歷史研究 20 場／14 個 retrospective folds／strict PIT 0。官方 Shootout game `2023020030` 再讀取確認 Regulation 1:1、終場 2:1、SO。
+- KBO 恢復後曾收到官方 game identity QA 的 409。舊 schedule 重新驗證是可能路徑，但沒有原始 request 證據可確定是哪個欄位變動；取得最新官方 schedule 後 preflight 正常。沒有放寬身分 QA，也不把 409 寫成成功。
+- 四聯盟一鍵實測發現另一個既有問題：從 CPBL／KBO 進站時，MLB 日期使用台灣今日 9/6，未採最新 Reader 盤日 9/7，導致 MLB 被列為無賽事。v11.9.4 將 MLB 納入相同的逐聯盟 Reader 盤日核對，僅接受新鮮、有效、向前的日期，並保留使用者手選日期。
+- 日期修正已以實際 resolver 與 one-click handler 的 VM 測試確認 hidden MLB 9/7 與其他聯盟 9/6 的隔離，含 stale、403／503、舊日期、無效日期及手選日期反例，共 6 組；獨立 reviewer 重跑通過。v11.9.4 的完整測試、部署與部署後證據記錄於對應發布 PR，不以本段 v11.9.3 實證替代。
+
 ## NHL 資料與實際操作
 
 | 項目 | 實測結果 | 驗證範圍 |

@@ -1611,7 +1611,7 @@ export default function Home() {
   }
 
   async function allLeagueTargetDate(targetLeague, selectedDate) {
-    if (targetLeague === 'MLB') return selectedDate;
+    if (manualDateSelectionRef.current.has(targetLeague)) return selectedDate;
     try {
       const latest = await requestJSONWithTransientRetry(
         `/api/reader/status?league=${encodeURIComponent(targetLeague)}&t=${Date.now()}`,
@@ -1620,7 +1620,12 @@ export default function Home() {
         { delaysMs: [0, 1500, 4000] },
       );
       const readerDate = String(latest?.boardDate || '').trim();
-      return /^\d{4}-\d{2}-\d{2}$/.test(readerDate) ? readerDate : selectedDate;
+      const readerTime = Date.parse(`${readerDate}T00:00:00Z`);
+      const validReaderDate = /^\d{4}-\d{2}-\d{2}$/.test(readerDate)
+        && Number.isFinite(readerTime)
+        && new Date(readerTime).toISOString().slice(0, 10) === readerDate;
+      return latest?.fresh === true && validReaderDate && readerDate > selectedDate
+        ? readerDate : selectedDate;
     } catch {
       return selectedDate;
     }
