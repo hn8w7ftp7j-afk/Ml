@@ -14,6 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  settlement-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: integration-test-only
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify append-only settlement recovery in PostgreSQL
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          cat database/tests/settlement-review-fixture.sql database/0010_analysis_direction_review_recovery.sql database/tests/settlement-review-assertions.sql | docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 25
