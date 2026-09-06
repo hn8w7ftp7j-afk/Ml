@@ -12,22 +12,24 @@ const row = values => ({ row: values.map(Text => ({ Text: String(Text) })) });
 const table = { headers: [row(Array.from({length:12}, (_, i) => i + 1))], rows: [
   row([0,1,0,0,0,0,1,0,0,'-','-','-']), row([0,0,0,2,0,0,0,0,1,'-','-','-']),
 ] };
-const result = parseKboResultLinescore({ nested: JSON.stringify(table) }, game);
+const payloadFor = table => ({ code: '100', END_TM: '21:48',
+  A_INITIAL_LK: '/2026/initial_HT_s.png', H_INITIAL_LK: '/2026/initial_NC_s.png',
+  table2: JSON.stringify(table), table3: JSON.stringify({rows:[row([2,6,1,5]),row([3,5,3,4])]}) });
+const result = parseKboResultLinescore(payloadFor(table), game);
 assert.equal(result.innings, 9);
 assert.equal(result.awayFirst5, 1);
 assert.equal(result.homeFirst5, 2);
 assert.equal(result.first5Complete, true);
-assert.throws(() => parseKboResultLinescore({table}, {...game, homeScore: 4}));
+assert.throws(() => parseKboResultLinescore(payloadFor(table), {...game, homeScore: 4}));
 const missing = structuredClone(table); missing.rows[0].row[2].Text = '';
-assert.throws(() => parseKboResultLinescore(missing, game));
+assert.throws(() => parseKboResultLinescore(payloadFor(missing), game));
 const illegalX = structuredClone(table); illegalX.rows[0].row[0].Text = 'X';
-assert.throws(() => parseKboResultLinescore(illegalX, game));
+assert.throws(() => parseKboResultLinescore(payloadFor(illegalX), game));
+assert.throws(() => parseKboResultLinescore({...payloadFor(table), END_TM:'-'}, game));
 const live = {...game, statusCode:'I'};
-assert.equal(parseKboResultLinescore({table}, live), live);
-const conflict = structuredClone(table);
-conflict.rows[0] = row([0,0,0,0,0,0,2,0,0,'-','-','-']);
-assert.throws(() => parseKboResultLinescore({table, conflict}, game));
-assert.throws(() => parseKboResultLinescore({table:{...table,rows:[...table.rows,table.rows[0]]}}, game));
+assert.equal(parseKboResultLinescore(payloadFor(table), live), live);
+assert.throws(() => parseKboResultLinescore({...payloadFor(table), A_INITIAL_LK:'/initial_HH_s.png'}, game));
+assert.throws(() => parseKboResultLinescore(payloadFor({...table,rows:[...table.rows,table.rows[0]]}), game));
 
 const options = {expectedAway:'KIA虎',expectedHome:'NC恐龍',expectedProviderGameId:'2026-09-02|KIA|NCD|18:30|창원|1|1'};
 const bound = resolveLegacyAsianResultGame('KBO', [game], 123, game.officialDate, options);
