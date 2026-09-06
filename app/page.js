@@ -56,6 +56,7 @@ import {
   findMissingCompletedAnalysisReceipt,
   upsertCompletedAnalysisReceipt,
 } from '../lib/analysis-completed-receipt-v1.js';
+import { isHistoricalIdentityConflict, reconcileOfficialBoardIdentity } from '../lib/official-board-identity-v1195.js';
 import {
   analysisDisplayRowsForCard,
   analysisHasCalculatedDirections,
@@ -90,6 +91,9 @@ const BET_BACKUP_STORAGE = 'sports-positive-ev-bets-backup-v2';
 const BET_CLOUD_MIGRATION_STORAGE = 'sports-positive-ev-bets-cloud-migrated-v1';
 const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
 const ANALYSIS_JOB_STORAGE = 'sports-positive-ev-background-jobs-v1';
+// A failed durable write must not strand a workflow while this tab stays open.
+const backgroundJobsInMemory = new Map();
+const supersededBackgroundRuns = new Set();
 const ALL_LEAGUE_ANALYSIS_STORAGE = 'sports-positive-ev-all-league-analysis-v1';
 const APP_OPERATION_BUSY_KEY = 'sports-positive-ev-operation-busy';
 let authRedirectStarted = false;
@@ -420,9 +424,16 @@ function backgroundJobKey(league, date) {
 }
 
 function loadBackgroundJob(league, date, visibleBoard = []) {
+  const memoryJob = backgroundJobsInMemory.get(backgroundJobKey(league, date)) || null;
   try {
     const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
-    const job = jobs?.[backgroundJobKey(league, date)] || null;
+    const storedCandidate = jobs?.[backgroundJobKey(league, date)] || null;
+    const storedJob = storedCandidate?.completedReceipt !== true
+      && supersededBackgroundRuns.has(`${backgroundJobKey(league, date)}|||${storedCandidate?.runId}`)
+      ? null : storedCandidate;
+    const storedAt = value => Date.parse(value?.startedAt || value?.completedAt || '');
+    const job = storedJob && memoryJob && storedAt(storedJob) > storedAt(memoryJob)
+      ? storedJob : memoryJob || storedJob;
     const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
     const id = normalizeLeagueId(league);
     const cachedBoard = loadAnalysisBoardCache(id, date);
@@ -453,7 +464,9 @@ function loadBackgroundJob(league, date, visibleBoard = []) {
       && [...cachedBoard, ...scopedVisibleBoard]
         .some(item => analysisHasCalculatedDirections(item?.customData))
       && !recovery;
-    if (terminalRunMatches && batch?.resultUnavailable !== true && !cachedResultLoaded && Number(batch?.total) > 0) {
+    if (terminalRunMatches && batch?.resultUnavailable !== true && batch?.resultSuperseded !== true
+      && !supersededBackgroundRuns.has(`${backgroundJobKey(id, date)}|||${run.runId}`)
+      && !cachedResultLoaded && Number(batch?.total) > 0) {
       const completedAt = Date.parse(run.completedAt || '');
       const jobStartedAt = Date.parse(job?.startedAt || '');
       const differentNewerJob = job?.runId !== run.runId
@@ -479,36 +492,107 @@ function loadBackgroundJob(league, date, visibleBoard = []) {
       clearBackgroundJob(id, date, run.runId);
       return recovery;
     }
-    if (terminalRunMatches && batch?.resultUnavailable === true && job?.runId === run.runId) return null;
+    if (terminalRunMatches && (batch?.resultUnavailable === true || batch?.resultSuperseded === true)
+      && job?.runId === run.runId) return null;
     return (job?.completedReceipt === true ? null : job) || recovery;
-  } catch { return null; }
+  } catch {
+    return memoryJob?.completedReceipt === true
+      ? findMissingCompletedAnalysisReceipt([memoryJob], { league, date, board: visibleBoard })
+      : memoryJob;
+  }
 }
 
 function saveBackgroundJob(job) {
   try {
-    const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
-    const source = jobs && typeof jobs === 'object' && !Array.isArray(jobs) ? jobs : {};
     const key = backgroundJobKey(job.league, job.date);
-    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
     const storedAt = value => Date.parse(value?.startedAt || value?.completedAt || '');
+    let stored = null;
+    try { stored = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null'); } catch {}
+    const source = stored && typeof stored === 'object' && !Array.isArray(stored) ? { ...stored } : {};
+    for (const [entryKey, value] of backgroundJobsInMemory) {
+      if (!source[entryKey] || !Number.isFinite(storedAt(source[entryKey]))
+        || !Number.isFinite(storedAt(value)) || storedAt(value) >= storedAt(source[entryKey])) source[entryKey] = value;
+    }
+    const previous = source[key] || null;
+    if (job.completedReceipt !== true && job.runId) {
+      for (const prior of [stored?.[key], backgroundJobsInMemory.get(key)]) {
+        if (prior?.runId && prior.runId !== job.runId && prior.completedReceipt !== true
+          && (!Number.isFinite(storedAt(prior)) || !Number.isFinite(storedAt(job)) || storedAt(job) >= storedAt(prior))) {
+          supersededBackgroundRuns.add(`${key}|||${prior.runId}`);
+        }
+      }
+    }
+    const lightweight = value => {
+      if (!Array.isArray(value?.preparedBoard) || value.completedReceipt === true) return value;
+      return { ...value, preparedBoard: value.preparedBoard.flatMap(item => !item?.game ? [] : [{
+        // Official normalized game identity and display values remain exact.
+        // Source evidence and market arrays are fetched again by the Reader;
+        // they are neither workflow handles nor completed analysis results.
+        game: item.game, mode: item.mode || 'actual', readerPayloadHash: null,
+        customMarkets: [],
+        status: item.status || 'queued', statusLabel: item.statusLabel || '等待伺服器背景分析', error: item.error || '',
+      }]) };
+    };
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
     const compact = Object.fromEntries(Object.entries({ ...source, [key]: job })
       .filter(([entryKey, value]) => entryKey === key
-        || !Number.isFinite(storedAt(value))
-        || storedAt(value) >= cutoff)
+        || ((value?.completedReceipt === true || !supersededBackgroundRuns.has(`${entryKey}|||${value?.runId}`))
+          && (!Number.isFinite(storedAt(value)) || storedAt(value) >= cutoff)))
       .sort((left, right) => Number(right[0] === key) - Number(left[0] === key)
         || (storedAt(right[1]) || 0) - (storedAt(left[1]) || 0))
-      .slice(0, 12));
-    window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify(compact));
-    return true;
+      .slice(0, 12).map(([entryKey, value]) => [entryKey, lightweight(value)]));
+    const persist = value => {
+      try {
+        const serialized = JSON.stringify(value);
+        window.localStorage.setItem(ANALYSIS_JOB_STORAGE, serialized);
+        return window.localStorage.getItem(ANALYSIS_JOB_STORAGE) === serialized;
+      } catch { return false; }
+    };
+    let durable = persist(compact);
+    if (!durable) {
+      // Quota recovery removes only reconstructible loading cards, retaining
+      // every retained run handle, game ID, result field and receipt fingerprint.
+      const handles = Object.fromEntries(Object.entries(compact).map(([entryKey, value]) => {
+        if (!Array.isArray(value?.preparedBoard) || value.completedReceipt === true) return [entryKey, value];
+        const { preparedBoard, ...handle } = value;
+        return [entryKey, handle];
+      }));
+      durable = persist(handles);
+    }
+    backgroundJobsInMemory.clear();
+    for (const [entryKey, value] of Object.entries(compact)) backgroundJobsInMemory.set(entryKey, value);
+    // A failed receipt write must leave the original pending reconnect handle
+    // available; an in-memory receipt never establishes durable consumption.
+    if (!durable && job.completedReceipt === true && previous) backgroundJobsInMemory.set(key, previous);
+    return durable;
   } catch { return false; }
 }
 
 function clearBackgroundJob(league, date, runId = '') {
+  const memoryKey = backgroundJobKey(league, date);
+  const memoryRunMatches = backgroundJobsInMemory.get(memoryKey)?.runId === runId;
+  if (!runId || memoryRunMatches) backgroundJobsInMemory.delete(memoryKey);
+  if (memoryRunMatches) {
+    try {
+      const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
+      const id = normalizeLeagueId(league);
+      if (run?.runId && run.runId !== runId && run?.leagues?.[id]
+        && allLeagueBoardDate(run, id) === date && supersededBackgroundRuns.has(`${memoryKey}|||${run.runId}`)) {
+        // Preserve other league summaries and all completed receipts. Only the
+        // superseded legacy pending reconnect must stop surviving a remount.
+        window.localStorage.setItem(ALL_LEAGUE_ANALYSIS_STORAGE, JSON.stringify({ ...run,
+          leagues: { ...run.leagues, [id]: { ...run.leagues[id], resultSuperseded: true } },
+        }));
+      }
+    } catch {}
+  }
   try {
     const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
     if (!jobs || typeof jobs !== 'object' || Array.isArray(jobs)) return;
     const key = backgroundJobKey(league, date);
-    if (runId && jobs[key]?.runId !== runId) return;
+    if (runId && jobs[key]?.runId !== runId
+      && !(memoryRunMatches && jobs[key]?.completedReceipt !== true
+        && supersededBackgroundRuns.has(`${key}|||${jobs[key]?.runId}`))) return;
     const { [key]: omitted, ...remaining } = jobs;
     window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify(remaining));
   } catch {}
@@ -1455,6 +1539,8 @@ export default function Home() {
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
   const completedRecoveryFailuresRef = useRef(new Set());
+  const officialIdentityEvidenceRef = useRef(new Map());
+  const [officialIdentityRevision, setOfficialIdentityRevision] = useState(0);
   const coreDataBlockRetryRef = useRef(new Map());
   const restoredBoardNeedsValidationRef = useRef(false);
   const activeLeague = leagueConfig(league);
@@ -1480,7 +1566,18 @@ export default function Home() {
     expectedBoardDate: date,
     payloadHash: readerStatus?.payloadHash || null,
   };
-  const shadowRanking = useMemo(() => board.flatMap(item => {
+  const identityBoard = useMemo(() => {
+    const evidence = officialIdentityEvidenceRef.current.get(`${league}:${date}`);
+    return evidence ? reconcileOfficialBoardIdentity(board, evidence) : board;
+  }, [board, league, date, officialIdentityRevision]);
+  const activeBoard = useMemo(() => identityBoard.filter(item => !isHistoricalIdentityConflict(item)), [identityBoard]);
+  const historicalIdentityBoard = useMemo(() => identityBoard.filter(isHistoricalIdentityConflict), [identityBoard]);
+  useEffect(() => {
+    if (identityBoard === board) return;
+    boardRef.current = identityBoard;
+    setBoard(identityBoard);
+  }, [identityBoard, board]);
+  const shadowRanking = useMemo(() => activeBoard.flatMap(item => {
     const analysis = item.customData?.analysis || {};
     const itemLeague = String(analysis.leagueId || item?.game?.leagueId || item?.game?.league || '').trim().toUpperCase();
     if (itemLeague !== league) return [];
@@ -1527,20 +1624,20 @@ export default function Home() {
     .sort((left, right) => Number(right.score ?? -Infinity) - Number(left.score ?? -Infinity)
       || Number(right.weightedEV ?? -Infinity) - Number(left.weightedEV ?? -Infinity)
       || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity)),
-  [board, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, date]);
+  [activeBoard, clockNow, readerStatus?.fresh, readerStatus?.boardDate, readerStatus?.payloadHash, date]);
   const shadowBetOrder = useMemo(() => buildBetOrderEntries(shadowRanking), [shadowRanking]);
   const shadowBetOrderGames = useMemo(() => groupBetOrderEntries(shadowBetOrder), [shadowBetOrder]);
   const rankingLayoutRevision = useMemo(() => shadowRanking
     .map(entry => `${entry.stableKey}:${entry.score ?? ''}:${entry.weightedEV ?? ''}:${entry.robustEV ?? ''}`)
     .join('||'), [shadowRanking]);
   const rankingProvenance = useMemo(() => {
-    const modelVersions = [...new Set(board.map(item => item.customData?.analysis?.modelVersion).filter(Boolean))];
-    const lineTimes = board.flatMap(item => (item.customData?.analysis?.results || []).map(row => row.lineAsOf).filter(Boolean));
+    const modelVersions = [...new Set(activeBoard.map(item => item.customData?.analysis?.modelVersion).filter(Boolean))];
+    const lineTimes = activeBoard.flatMap(item => (item.customData?.analysis?.results || []).map(row => row.lineAsOf).filter(Boolean));
     return {
       modelVersions,
       latestLineAsOf: lineTimes.sort().at(-1) || null,
     };
-  }, [board]);
+  }, [activeBoard]);
 
   useLayoutEffect(() => {
     if (!['ranking', 'betOrder'].includes(tab)) {
@@ -1775,7 +1872,8 @@ export default function Home() {
         const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(expectedRunId)}&summary=1&t=${Date.now()}`, {}, 30000);
         if (!stillCurrentRun()) return;
         if (state.status === 'completed') {
-          const latest = loadAllLeagueAnalysisRun(date) || allLeagueRun;
+          const saved = loadAllLeagueAnalysisRun(date);
+          const latest = saved?.runId === expectedRunId ? saved : allLeagueRunRef.current;
           let completedRun = {
             ...latest,
             state: 'completed',
@@ -1800,7 +1898,8 @@ export default function Home() {
           return;
         }
         if (['failed', 'cancelled'].includes(String(state.status || '').toLowerCase())) {
-          const latest = loadAllLeagueAnalysisRun(date) || allLeagueRun;
+          const saved = loadAllLeagueAnalysisRun(date);
+          const latest = saved?.runId === expectedRunId ? saved : allLeagueRunRef.current;
           let failedRun = { ...latest, state: 'completed', completedAt: new Date().toISOString() };
           for (const id of LEAGUE_IDS) {
             const status = failedRun.leagues?.[id]?.status;
@@ -1820,7 +1919,8 @@ export default function Home() {
         if (!stillCurrentRun()) return;
         const failure = analysisFailureState(cause);
         if (failure.permanent) {
-          const latest = loadAllLeagueAnalysisRun(date) || allLeagueRun;
+          const saved = loadAllLeagueAnalysisRun(date);
+          const latest = saved?.runId === expectedRunId ? saved : allLeagueRunRef.current;
           let failedRun = { ...latest, state: 'completed', completedAt: new Date().toISOString() };
           for (const id of LEAGUE_IDS) {
             if (!['done', 'partial', 'failed', 'no_games', 'no_open_markets'].includes(failedRun.leagues?.[id]?.status)) {
@@ -2058,6 +2158,20 @@ export default function Home() {
       40000,
     );
     const rows = Array.isArray(data.games) ? data.games.filter(game => gameIsPrestartNow(game, Date.now())) : [];
+    if (data.ok === true && data.league === targetLeague && data.date === targetDate
+      && Array.isArray(data.identitySlate) && typeof data.identityAsOf === 'string') {
+      const evidence = { league: targetLeague, date: targetDate,
+        identitySlate: data.identitySlate, identityAsOf: data.identityAsOf };
+      officialIdentityEvidenceRef.current.set(`${targetLeague}:${targetDate}`, evidence);
+      setOfficialIdentityRevision(value => value + 1);
+      if (currentDateRef.current === targetDate && currentLeagueRef.current === targetLeague) {
+        const reconciled = reconcileOfficialBoardIdentity(boardRef.current, evidence);
+        if (reconciled !== boardRef.current) {
+          boardRef.current = reconciled;
+          setBoard(reconciled);
+        }
+      }
+    }
     if (commit && currentDateRef.current === targetDate && currentLeagueRef.current === targetLeague) setSchedule(rows);
     return rows;
   }
@@ -3278,7 +3392,19 @@ export default function Home() {
         )));
         return;
       }
-      const games = schedule.length ? schedule : boardRef.current.map(item => item.game);
+      // A restored card is an immutable historical snapshot, not today's
+      // official request identity. Provider IDs may change as links appear or
+      // disappear, so every credit verification uses a freshly fetched slate.
+      const games = await fetchSchedule(targetDate);
+      if (!stillCurrent()) return;
+      if (!games.length) {
+        officialPrestartCheckedAtRef.current = Date.now();
+        creditRevisionRef.current = '';
+        setSchedule([]);
+        setBoard(current => finalizeReaderBoardAtStart(current, Date.now(), { noPrestartGames: true }));
+        setNotice('目前已無官方賽前場次；先前分析保留查閱，停止驗證新的下注盤口。');
+        return;
+      }
       const credit = await requestJSONWithTransientRetry('/api/credit-lines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
@@ -3317,14 +3443,14 @@ export default function Home() {
       if (!stillCurrent()) return;
       const currentBoard = boardRef.current;
       const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
-      const boardPks = new Set(currentBoard.map(item => Number(item.game.gamePk)));
+      const boardPks = new Set(currentBoard.filter(item => !isHistoricalIdentityConflict(item)).map(item => Number(item.game.gamePk)));
       const missingReaderGameCount = [...readerGameByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
       if (missingReaderGameCount > 0) {
         fullSlateRecoveryNeeded = true;
         setNotice(`Reader有 ${readerGameByPk.size} 場、目前畫面缺少 ${missingReaderGameCount} 場；正在自動補齊完整賽程。`);
         return;
       }
-      const expectedItems = currentBoard.filter(item => gameIsPrestartNow(item.game, Date.now())
+      const expectedItems = currentBoard.filter(item => !isHistoricalIdentityConflict(item) && gameIsPrestartNow(item.game, Date.now())
         && (readerGameByPk.has(Number(item.game.gamePk)) || item.actualSource?.provider === 'TAI888_READER_AUTO'));
       let failed = 0;
       let blocked = 0;
@@ -3334,6 +3460,7 @@ export default function Home() {
       const rebuildTasks = [];
       await runPool(currentBoard, 2, async item => {
         if (!stillCurrent()) return;
+        if (isHistoricalIdentityConflict(item)) return;
         if (!gameIsPrestartNow(item.game, Date.now())) return;
         const actual = readerGameByPk.get(Number(item.game.gamePk));
         if (!actual) {
@@ -3615,6 +3742,10 @@ export default function Home() {
   }
 
   async function recordBet(item, row) {
+    if (isHistoricalIdentityConflict(item)) {
+      setError('此分析屬於歷史場次識別，不能用來記錄目前 Reader 盤口。');
+      return;
+    }
     if (!bettingEnabled) {
       setError(`${activeLeague.label}目前不可寫入實際下注紀錄`);
       return;
@@ -3886,8 +4017,16 @@ export default function Home() {
       </section>
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && shadowMode && <LeagueShadowPanel config={activeLeague}/>}
-      {analysisEnabled && !board.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
-      {analysisEnabled && board.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={liveReaderAuthority}/>) }
+      {analysisEnabled && !activeBoard.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
+      {analysisEnabled && activeBoard.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={liveReaderAuthority}/>) }
+      {analysisEnabled && historicalIdentityBoard.length > 0 && <details className="panel historicalIdentityPanel">
+        <summary>歷史識別衝突｜{historicalIdentityBoard.length} 場原始分析保留</summary>
+        <p>官方最新清單使用另一個場次識別。以下原始分析僅供查閱，不列入今日盤口、影子排名或候選順序，也不能作為目前 Reader 的下注身分。原下注紀錄與 PIT 均保持原樣。</p>
+        {historicalIdentityBoard.map(item => <div key={`historical-${league}-${item.game.gamePk}`} data-historical-identity={item.game.gamePk}>
+          <div className="noticeBox">原場次 {item.game.gamePk}｜最新官方清單識別 {item.identityConflict.officialGamePk}｜歷史資料，不可建立新下注</div>
+          <GameCard item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={false} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={{ ...liveReaderAuthority, fresh: false }}/>
+        </div>)}
+      </details>}
     </>}
 
     {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>

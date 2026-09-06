@@ -2,7 +2,7 @@
 
 記錄日期：2026-09-06。本文件依本次主執行者提供的 Production 實際操作與測試結果整理；沒有操作證據的項目保留「待驗證」，不以 Build 成功代替實測。
 
-## 本次實測版本
+## 初次 Production 實測版本
 
 | 項目 | 已提供的證據 |
 | --- | --- |
@@ -47,6 +47,18 @@
 - KBO 恢復後曾收到官方 game identity QA 的 409。舊 schedule 重新驗證是可能路徑，但沒有原始 request 證據可確定是哪個欄位變動；取得最新官方 schedule 後 preflight 正常。沒有放寬身分 QA，也不把 409 寫成成功。
 - 四聯盟一鍵實測發現另一個既有問題：從 CPBL／KBO 進站時，MLB 日期使用台灣今日 9/6，未採最新 Reader 盤日 9/7，導致 MLB 被列為無賽事。v11.9.4 將 MLB 納入相同的逐聯盟 Reader 盤日核對，僅接受新鮮、有效、向前的日期，並保留使用者手選日期。
 - 日期修正已以實際 resolver 與 one-click handler 的 VM 測試確認 hidden MLB 9/7 與其他聯盟 9/6 的隔離，含 stale、403／503、舊日期、無效日期及手選日期反例，共 6 組；獨立 reviewer 重跑通過。v11.9.4 的完整測試、部署與部署後證據記錄於對應發布 PR，不以本段 v11.9.3 實證替代。
+
+## v11.9.4 與官方身分衝突修復
+
+PR #171 已合併：`fb668211cb813e3b02690456c44b3c5b958613a5`。同一 Production deployment `dpl_DxkNzCCGrjRxKTyng22vf7BmJtvd` READY，alias 與 main commit 一致；main CI `34012999808` SUCCESS。PR CI `34012842596` SUCCESS，包含完整測試、Production Build、audit 與 Reader package；本機亦完整重跑通過。此版修正四聯盟 Reader 盤日，沒有使用舊 main 覆蓋 NBA／NHL 的已合併修改。
+
+v11.9.4 正式一鍵實測：從 CPBL 進站，MLB 正確使用 `2026-09-07` 並提交 10 場；NPB／KBO／CPBL 各使用 `2026-09-06`，分別提交 3／4／3 場。場數依實際尚未開賽清單，不將已開賽場次算成失敗。完成後實際顯示四聯盟 4/4；切回 MLB 日期為 9/7，15 張卡中 10 場有真實盤的場次各顯示 4 個分數並有 PIT 保存確認，其餘 5 場鎖盤沒有假分數。
+
+同次實測收到「此裝置無法保存工作編號」提示：四聯盟 preparedBoard 仍帶入可重建的龐大 verification payload，與單聯盟輕量重連紀錄不一致。v11.9.5 另修復此儲存路徑；保存失敗不冒充成功。
+
+KBO 的另一個實際問題已由真實 parser 重現：同一官方資料列附帶 `gameId=20260906NCWO0` 時產生 `gamePk=1099424697962592`，移除該連結時 fallback 產生 `188899822811850`。兩者主客 Team IDs、UTC 開賽時間及場次相同；Production 恢復兩張卡後，舊 ID 又被當作目前官方 schedule 提交而遭 409。不能把此現象說成兩場不同比賽，也不能偷偷改寫原下注身份。
+
+v11.9.5 以官方完整賽程作唯讀身分核對：只有完整且唯一的同聯盟／同日／同主客 Team IDs／同開賽時間／同場次證據，才將舊識別卡隔離保存。舊 PK、PIT、分析與帳本不改寫；Reader 重驗使用重新取得的官方賽前清單。衝突舊卡保留於明確標示的歷史區，不混進目前賽事。隔離 helper 9 組、真實頁面／API runtime 7 組、工作紀錄儲存 8 組反例通過。儲存測試以明確標記的 provider-shaped 壓力 fixture 執行真實 prepareAllLeagueBatch／oneClick handler；不把 fixture 大小當成 Production localStorage 量測值。模型結果與 receipt fingerprints 保留，寫入成功須讀回核對；完全不能寫入時僅當頁可重連，仍回報未持久保存。此版完整測試及 Production 實證於發布 PR 分別記錄。
 
 ## NHL 資料與實際操作
 
@@ -122,11 +134,13 @@ NHL Tai888 介面目前為空的已驗證市場 manifest，畫面明確顯示：
 
 以下欄位尚未接通可信的實際 feed，仍為 unknown／缺資料：projected goalie、confirmed goalie、injuries、line combinations、defensive pairings、xG。未知狀態有被明確呈現，但不能把它記成該資料功能已完成驗證。
 
+人員與進階 feed 尚未接通仍屬未完成工程，不能僅寫成等待新球季就會自動就緒；足量歷史樣本及正式 calibration 也尚未完成。
+
 後續必須補上的具體驗證：
 
 - Mobile viewport／實機的主要操作與版面。
 - 若要宣告完整棒球 Regression，補齊尚未實際操作的流程證據，並與自動測試結果分開記錄。
-- 已發現的跨頁結果恢復問題修正，以及後續版本的完整測試、Build、部署識別與 Production 重測。
+- v11.9.3 已完成 CPBL 跨頁恢復實測；後續版本仍須以對應部署的實證核對日期與官方識別衝突修復。
 - 真實 NHL Tai888 市場、賽前門將／傷病／陣容快照、進階資料與足夠歷史資料出現後的正式驗證。
 
 本文件保留初次 Production 證據與未完成項目，不據此宣告所有完成標準已達成。
