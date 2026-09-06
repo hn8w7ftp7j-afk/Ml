@@ -20,6 +20,8 @@ assert.equal(result.first5Complete, true);
 assert.throws(() => parseKboResultLinescore({table}, {...game, homeScore: 4}));
 const missing = structuredClone(table); missing.rows[0].row[2].Text = '';
 assert.throws(() => parseKboResultLinescore(missing, game));
+const illegalX = structuredClone(table); illegalX.rows[0].row[0].Text = 'X';
+assert.throws(() => parseKboResultLinescore(illegalX, game));
 const live = {...game, statusCode:'I'};
 assert.equal(parseKboResultLinescore({table}, live), live);
 const conflict = structuredClone(table);
