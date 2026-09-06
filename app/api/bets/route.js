@@ -114,6 +114,7 @@ export async function POST(request) {
           reason: 'DIRECTION_SETTLEMENT_UNAVAILABLE',
           error: String(error?.message || error),
         };
+        console.error('[ANALYSIS_DIRECTION_SETTLEMENT_FAILED]', analysisDirectionSettlement);
       }
       return response(bets, { analysisDirectionSettlement });
     }
