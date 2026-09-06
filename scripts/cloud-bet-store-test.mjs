@@ -249,7 +249,8 @@ assert.match(store, /export async function cancelOpenCloudBet/);
 assert.match(store, /SET status = 'CANCELLED'[\s\S]*AND status = 'OPEN'[\s\S]*gameDate[\s\S]*> NOW\(\)/, '取消必須由資料庫原子限制為尚未開賽的OPEN下注');
 assert.match(store, /payload = payload \|\| JSONB_BUILD_OBJECT\([\s\S]*'USER_CANCELLED_PRESTART'/, '取消只能局部合併狀態欄位，不得覆蓋並行更新的Reader收盤證據');
 assert.match(store, /USER_CANCELLED_PRESTART/, '取消必須保留伺服器時間與原因，不得硬刪除');
-assert.match(store, /async function persistBetUpdates[\s\S]*WHERE id = \$\{bet\.id\} AND status = 'OPEN'/, '結算寫入不得把競態中已取消的下注覆蓋回SETTLED');
+assert.match(store, /async function persistBetUpdates[\s\S]*previousStatus = isRetryableResultGap\(previous\) \? 'MANUAL_REVIEW' : 'OPEN'[\s\S]*WHERE id = \$\{bet\.id\} AND status = \$\{previousStatus\}/, '結算寫入只可更新原狀態，不能覆蓋競態中已取消的下注');
+assert.match(store, /payload->>'settlementError' = \$\{previous\?\.settlementError/, '重查缺比分紀錄時仍須由DB核對原人工確認原因');
 assert.match(route, /settlePendingAnalysisDirections/, '自動結算必須覆蓋所有CALCULATED分析方向，不只是真實下注');
 
 const mergeFunction = store.match(/export async function mergeCloudBets\(values\) \{([\s\S]*?)\n\}\n\nexport async function deleteCloudBet/)?.[1] || '';
