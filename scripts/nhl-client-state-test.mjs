@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace } from '../lib/nhl/client-workspace.js';
 
 // Execute the actual client handlers, not copies of their state logic. The
 // controlled request promises exercise ordering without a browser/framework.
@@ -63,6 +64,7 @@ function harness(initial = {}) {
   };
   const calls = [];
   const context = {
+    preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace,
     ...state, inFlight: { current: new Set() }, activePlayerRequest: { current: null }, CACHE: 'test:nhl',
     localStorage: { getItem: () => initial.saved == null ? null : JSON.stringify(initial.saved) },
     request(action, args = {}) {
@@ -101,6 +103,7 @@ await test('same player double-click coalesces one request and still displays it
   h.calls[0].resolve(playerReply(847001));
   await Promise.all([first, second]);
   assert.equal(h.state.player.player.playerId, 847001);
+  assert.equal(h.state.error, '');
   assert.equal(h.state.busy['player:847001'], false);
 });
 
@@ -122,7 +125,7 @@ await test('switching teams invalidates an outstanding old-player response', asy
   const h = harness();
   const player = h.api.loadPlayer(847001);
   const team = h.api.loadTeam({ abbrev: 'NJD', teamId: 1 }, 20262027);
-  h.calls[1].resolve({ league: 'NHL', roster: { teamId: 1, players: [] } });
+  h.calls[1].resolve({ league: 'NHL', roster: { leagueId: 'NHL', teamId: 1, abbrev: 'NJD', season: 20262027, players: [] } });
   await team;
   h.calls[0].resolve(playerReply(847001));
   await player;
@@ -192,9 +195,10 @@ await test('hydration rejects another league nested under an NHL wrapper and wro
   const good = nhlGame();
   const baseball = { ...good, league: 'MLB' };
   const h = harness({ saved: { league: 'NHL', date: '2023-10-11', selectedGame: good.gameId, boards: {
-    '2023-10-11': { league: 'NHL', games: [good] },
-    '2023-10-12': { league: 'NHL', games: [{ ...baseball, taipeiDate: '2023-10-12' }] },
-    '2023-10-13': { league: 'NHL', games: [good] },
+    '2023-10-11': { league: 'NHL', date: '2023-10-11', games: [good] },
+    '2023-10-12': { league: 'NHL', date: '2023-10-12', games: [{ ...baseball, taipeiDate: '2023-10-12' }] },
+    '2023-10-13': { league: 'NHL', date: '2023-10-13', games: [good] },
+    '2026-02-30': { league: 'NHL', date: '2026-02-30', games: [] },
   }, details: {
     [good.gameId]: { league: 'NHL', game: good },
     '2023020002': { league: 'NHL', game: { ...baseball, gameId: '2023020002' } },

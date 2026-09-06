@@ -1,0 +1,811 @@
+{
+  "leagueId": "NHL",
+  "version": "NHL-HISTORY-COVERAGE-CHRONOLOGICAL-v1",
+  "season": 20232024,
+  "observedAt": "2026-09-06T20:15:26.367Z",
+  "requestedTeams": 32,
+  "acquiredTeams": 32,
+  "missingTeams": [],
+  "requestedRegularGames": 1312,
+  "acquiredOutcomes": 1511,
+  "acquiredRegularOutcomes": 1312,
+  "completeClubScheduleCoverage": true,
+  "completeOfficialRecordedRegularSeasonCoverage": true,
+  "coverageReference": "OFFICIAL_STANDINGS_RECORDED_GAMES_AT_REQUESTED_DATE",
+  "teamCoverage": [
+    {
+      "teamId": 3,
+      "abbrev": "NYR",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 25,
+      "abbrev": "DAL",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 12,
+      "abbrev": "CAR",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 52,
+      "abbrev": "WPG",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 13,
+      "abbrev": "FLA",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 23,
+      "abbrev": "VAN",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 6,
+      "abbrev": "BOS",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 21,
+      "abbrev": "COL",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 22,
+      "abbrev": "EDM",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 10,
+      "abbrev": "TOR",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 18,
+      "abbrev": "NSH",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 26,
+      "abbrev": "LAK",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 14,
+      "abbrev": "TBL",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 54,
+      "abbrev": "VGK",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 2,
+      "abbrev": "NYI",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 19,
+      "abbrev": "STL",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 15,
+      "abbrev": "WSH",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 17,
+      "abbrev": "DET",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 5,
+      "abbrev": "PIT",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 30,
+      "abbrev": "MIN",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 4,
+      "abbrev": "PHI",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 7,
+      "abbrev": "BUF",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 1,
+      "abbrev": "NJD",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 20,
+      "abbrev": "CGY",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 55,
+      "abbrev": "SEA",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 9,
+      "abbrev": "OTT",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 53,
+      "abbrev": "ARI",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 8,
+      "abbrev": "MTL",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 29,
+      "abbrev": "CBJ",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 24,
+      "abbrev": "ANA",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 16,
+      "abbrev": "CHI",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    },
+    {
+      "teamId": 28,
+      "abbrev": "SJS",
+      "gamesPlayed": 82,
+      "scheduleAcquired": true,
+      "scheduledRegularGames": 82,
+      "acquiredRegularOutcomes": 82,
+      "officialRecordedGames": 82,
+      "matchesOfficialRecordedGames": true
+    }
+  ],
+  "phases": {
+    "PRESEASON_SHADOW": {
+      "games": 111,
+      "outcomes": {
+        "REG": 87,
+        "OT": 17,
+        "SO": 7
+      }
+    },
+    "REGULAR": {
+      "games": 1312,
+      "outcomes": {
+        "REG": 1040,
+        "OT": 190,
+        "SO": 82
+      }
+    },
+    "PLAYOFFS": {
+      "games": 88,
+      "outcomes": {
+        "REG": 72,
+        "OT": 16,
+        "SO": 0
+      }
+    }
+  },
+  "invalid": [],
+  "attempts": [
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:41.629Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:41.964Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:43.753Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:45.736Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:47.780Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:49.766Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=700&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:51.751Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=800&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:53.791Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=900&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:55.807Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:57.811Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:15:59.798Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:01.799Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:03.796Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:05.798Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:07.801Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1700&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:09.799Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1800&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:11.799Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1900&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:13.808Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:15.818Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:17.842Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:19.833Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:21.838Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:23.826Z",
+      "retryAfter": null
+    },
+    {
+      "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "ok": true,
+      "code": null,
+      "httpStatus": null,
+      "fetchedAt": "2026-09-06T20:16:26.007Z",
+      "retryAfter": null
+    }
+  ],
+  "outcomeCorpusHash": "005643760a942935efdd28791e7fa75f5c8a8eec0d6d49581033150402555cb1",
+  "strictPointInTimeVerified": false,
+  "personnelHistoricalCoverageVerified": false,
+  "periodCoverageVerified": true,
+  "productionModelCalibrated": false,
+  "tai888HistoricalValidation": false,
+  "unresolvedTeamIdentities": [],
+  "registrySource": {
+    "provider": "NHL",
+    "url": "https://api-web.nhle.com/v1/standings/2024-04-18",
+    "fetchedAt": "2026-09-06T19:52:25.161Z",
+    "sourceUpdatedAt": null,
+    "contentHash": "036839f72705a094936d85b7f2cfbc197e4a1978f465004edd330d3bc37556ed"
+  },
+  "startedAt": "2026-09-06T20:15:26.155Z",
+  "blocked": false,
+  "completedAt": "2026-09-06T20:19:44.238Z",
+  "latestKnownSourceFailure": null,
+  "completePeriodGames": 1312,
+  "periodGamesRequested": 60,
+  "periodCorpusHash": "e6de4e67f4d19dab3356902400b96ec7688bf15b602a703814d9cfc4226bb64b",
+  "batchPeriodCoverage": {
+    "season": 20232024,
+    "gameType": 2,
+    "requestedGames": 1312,
+    "expectedReportRows": 2624,
+    "acquiredReportRows": 2624,
+    "completePeriodGames": 1312,
+    "missingGameIds": [],
+    "invalid": [],
+    "fullRequestedPeriodCoverage": true,
+    "sourcePages": [
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=0&limit=1000&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "fetchedAt": "2026-09-06T19:55:26.375Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "959bcf2a3b0400f69c22d6fdeb989e7ccd933027fca1d151be8ebb3ac5415710"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:28.492Z",
+        "fetchedAt": "2026-09-06T20:15:41.629Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a3fa0fcb7203ea2efd2dc14f6f1f821863c459faf8717b7b54e67ae4d88cf992"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:41.634Z",
+        "fetchedAt": "2026-09-06T20:15:41.964Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "293e225c7a546ed05e339f05bfbfff8d944f8701178ae76d85742b11d89a0a91"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:43.653Z",
+        "fetchedAt": "2026-09-06T20:15:43.753Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7789c5952e9256bbdedb398ad6942c7c16c46c2d3d17d2a57509cfa6461b6337"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:45.651Z",
+        "fetchedAt": "2026-09-06T20:15:45.736Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "340d7c6e15f8868acf8f88f067aaac5efdd48aa299e1a8523fde561d5d371b55"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:47.665Z",
+        "fetchedAt": "2026-09-06T20:15:47.780Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "6c91b74b6547e8ca3824b3f640180ac9ebc18628108b379b6a3087d0c037a601"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:49.674Z",
+        "fetchedAt": "2026-09-06T20:15:49.766Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4557ba461d7b3918594d22901c2708d9c3d5535e5d6a94d9434f8619828fb815"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=700&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:51.670Z",
+        "fetchedAt": "2026-09-06T20:15:51.751Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "88b06f6f42b08bb17c7a36897c1c26afbdfb8a8d67e28760c1d75d27be103a64"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=800&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:53.694Z",
+        "fetchedAt": "2026-09-06T20:15:53.791Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "cad234b377a199876410d07ccb1542ccaaadea5621107870b25c7110f61d4980"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=900&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:55.709Z",
+        "fetchedAt": "2026-09-06T20:15:55.807Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "2a138dd7cc04357a5b5e4068ac5b674496764b7fd49c3da80024fb77a8ee0ed7"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1000&limit=1000&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "fetchedAt": "2026-09-06T19:55:39.631Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "2855de135936b35aa6ffe4b9221e6837e6971c17ea018b5781e7b468d3eca97e"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:57.718Z",
+        "fetchedAt": "2026-09-06T20:15:57.811Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0bc45c881e152dad06eaa571dc6585237f5cff5bc56e48062f0bdc5bd2da6a9b"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:15:59.715Z",
+        "fetchedAt": "2026-09-06T20:15:59.798Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "9cf09a682b354a48fdd29166052491a2b0fce85dd8da82c44a2a17234e821c96"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:01.716Z",
+        "fetchedAt": "2026-09-06T20:16:01.799Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d7628c0a97705359c09954d334ce70c92023d99bf398e37c3e8d68b18d011cd1"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:03.718Z",
+        "fetchedAt": "2026-09-06T20:16:03.796Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "44c7dbd24c2b1d018b06f9a2e25c2f7f3299a07d35ba44f96a1a209fcdb6682d"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:05.720Z",
+        "fetchedAt": "2026-09-06T20:16:05.798Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "9e9c6efe8f3439602bb70d2ac035602f1349fc2b6bf549006f5e01ed1f0755ca"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:07.721Z",
+        "fetchedAt": "2026-09-06T20:16:07.801Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "6eaeb7ae60a785926b502010878a42fd0d14ebe0311e934e0cd87149b6a49153"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1700&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:09.723Z",
+        "fetchedAt": "2026-09-06T20:16:09.799Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c77c28391df4d32d0448ba26243e22170a74b5a98fc3fb452bda54e94226adaa"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1800&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:11.725Z",
+        "fetchedAt": "2026-09-06T20:16:11.799Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e617d3068939fa9190ebf9e96ef7c65e1ffb73581f00e2c0fc3f6a22744d7a22"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1900&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:13.728Z",
+        "fetchedAt": "2026-09-06T20:16:13.808Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c8212359535cbcd721ae7d90a28ff04eb57e630dae33a6049e40a1952fc18e92"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2000&limit=1000&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "fetchedAt": "2026-09-06T19:55:40.210Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "818ca20eeda322ab8b865709450e10e086d03b2440b190c6af3370d116185f3e"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:15.732Z",
+        "fetchedAt": "2026-09-06T20:16:15.818Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c5ddc40872029904fbb0f008935504fd4e1445eb82b605e9a9c115b55b734ffe"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:17.739Z",
+        "fetchedAt": "2026-09-06T20:16:17.842Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4474c752825e03b5a7da7002eee8a3accb7ef0c45d6c23e2c8399bb5ef1c104f"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:19.741Z",
+        "fetchedAt": "2026-09-06T20:16:19.833Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e6ac5c8379d3da2d931a0159d0a3b82fa517593e8c8af5dd9edefa0239bcf705"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:21.743Z",
+        "fetchedAt": "2026-09-06T20:16:21.838Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "282ed74c2ce0906851b40ddc1e082bc0d2b73744338f3d9ee3eb12362685f980"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:23.744Z",
+        "fetchedAt": "2026-09-06T20:16:23.826Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ea940f176c2ecdf0bbb0f2bb9ed6a4af1b26fbf8f34bb7e07a7727b5ae596b50"
+      },
+      {
+        "provider": "NHL",
+        "url": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+        "requestedAt": "2026-09-06T20:16:25.750Z",
+        "fetchedAt": "2026-09-06T20:16:26.007Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "edb58a11fbd6744e5b8da6862eef2833cf4794fab2a6fec521f0005c743f8ab6"
+      }
+    ],
+    "strictPointInTimeVerified": false
+  },
+  "periodGamesMissing": [],
+  "scoreValidationHash": "bb9787c121b588aaa50f082643403c1d01ac66ababd70bd22850203222f2f99f",
+  "playoffValidationHash": "5952425733bc4e872989d8131c045b7cd4b2e321dc69bb2225469a622aedb07a",
+  "periodConflictingGameIds": [],
+  "modelValidationHash": "f8bf9c784d70f450a1bce7aeb375f42c88d67c64387222f8202381e6649f2db0"
+}

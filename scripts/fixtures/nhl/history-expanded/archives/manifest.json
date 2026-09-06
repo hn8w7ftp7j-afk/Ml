@@ -1,0 +1,1034 @@
+{
+  "version": "NHL-OFFICIAL-SOURCE-CHECKPOINT-ARCHIVE-v1",
+  "leagueId": "NHL",
+  "compression": "GZIP_LEVEL9_BASE64_UTF8",
+  "originalCheckpointsRemoved": false,
+  "records": [
+    {
+      "file": "landing-2023020001.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "6678b5c69d40d54a48b289de75323c79d2f0fcd5043c92933c47b9a22f5c562d",
+      "sourceContentHash": "9b21d2acff3fb965bac6a1e83ca06ed101a7b189239f681ce85d5fd00467de46",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020001/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:51.383Z"
+    },
+    {
+      "file": "landing-2023020022.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "70e44cb17ea8577e8394d48e7dbc2dc26b1313062512e49fafdcdba26089467b",
+      "sourceContentHash": "d8fac49659a6b768af50b76a170ec9c2fb48f453bf7ded260ef4d5536b1dfa50",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020022/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:51.777Z"
+    },
+    {
+      "file": "landing-2023020044.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "76ad6f9d3e834c5d0e331223bd280153cc3e2035c6e27cb423164a4176ef39d2",
+      "sourceContentHash": "2ee0085719eedf17dfadbe550b245e990255fddb24f30062c96707ce251c579a",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020044/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:52.191Z"
+    },
+    {
+      "file": "landing-2023020066.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "2e0f1e838a97606d55b69ed37870b66276c0649baffe5eb7929476fd5ebf6f60",
+      "sourceContentHash": "19042f26b3c4a757d4fe6e61f322f02c6a29a1302378beb4fe2102197c560cb3",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020066/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:52.652Z"
+    },
+    {
+      "file": "landing-2023020089.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "433f2f259a5763a0827b2b1ab90a5459f597e9f5b190a25a0c38abe3adb41049",
+      "sourceContentHash": "2e6af0d296b8ff178f10504a3bd13185ca19f48796369fa54521b0b5abf0b035",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020089/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:53.049Z"
+    },
+    {
+      "file": "landing-2023020110.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "df9366e6026ed9914dd49a4a33f7b510f6d932138317a6a6b38650c4cae3b221",
+      "sourceContentHash": "b6e7ec96ba9993c14d828268e1dd0b1c35492a51d0e2da1419f4cc9c24fd3278",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020110/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:53.484Z"
+    },
+    {
+      "file": "landing-2023020132.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "33c229ac1dc0a3794cd1662703fa9a0108b8ab0e967216ac12e4f74acb982b57",
+      "sourceContentHash": "a9449a800ee15023ab38b0568031afa9ef31c2f8213c8049f457dde81c6044f4",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020132/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:53.908Z"
+    },
+    {
+      "file": "landing-2023020154.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "742d40192f78b312e4b9c2c866fe2ee05dff371bb5b38e93768597c669a816e1",
+      "sourceContentHash": "ea2de1395b3a95a99aa90f88ccf98691a12b4d200bd79893b4c011e8a47f0bc6",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020154/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:54.337Z"
+    },
+    {
+      "file": "landing-2023020175.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "78ce9ccb6ff2bcae64b71fb1da3140c95458a0b897dffbb4c545501037d43667",
+      "sourceContentHash": "cd0b52dc40a3e62844de5f54009c1b49717ea60112f769644ceada9eb9f60307",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020175/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:54.778Z"
+    },
+    {
+      "file": "landing-2023020198.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "4a1c5bc009552ef90d3b7eb123ecfd32be686a56d209b2dafd8abcc8cbb13955",
+      "sourceContentHash": "6dfd5a81d559bb38b78676c201e7727ce996120211abf2ee6a045df4283f5273",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020198/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:55.200Z"
+    },
+    {
+      "file": "landing-2023020219.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "cdcdb5e79cf4e04e01028afb427bd4bf07ba8839827d4bf826ce6297dc579c2a",
+      "sourceContentHash": "8eafc225a02784690c68219b3e6b18f18daf21bca2db431fad51d1f1d92cf1a3",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020219/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:55.669Z"
+    },
+    {
+      "file": "landing-2023020241.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "4fe4c0c20420d48baf7a6d104df254b6e946f1cfc6ad0e0a3126a76da0d7eed9",
+      "sourceContentHash": "fb1282f3e9000050914b97b00f902299dc0995c0ddb9ef8aeb43ccb8d83bd947",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020241/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:56.129Z"
+    },
+    {
+      "file": "landing-2023020263.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "5cdbcf0cfc705dfef71b390937afc1e2010aa54afdc1fa48ca44488482ff16a2",
+      "sourceContentHash": "fc8ee24f03f2eb0560327ff92fb00a28abb0924cad52232f36655246ce8b0b37",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020263/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:56.600Z"
+    },
+    {
+      "file": "landing-2023020285.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "02e56ff178ba2ec628de01dccb419d07880c71e33b8a576c394bf7e8b940cebc",
+      "sourceContentHash": "c5d0980a529bd7c39d1267b44ea691e00db388d993dd8bdc6d5b267c067ee685",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020285/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:57.045Z"
+    },
+    {
+      "file": "landing-2023020307.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "b651f79a4024905e47c97fe89e1fb4aba792be4cd7a2dfe7715688d8ca428749",
+      "sourceContentHash": "26d2fb3216e306b9c103c45cedb28fcff641d2871bb2d82ac916d4266ef4b067",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020307/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:57.525Z"
+    },
+    {
+      "file": "landing-2023020328.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "85b95caeafa5543fb9a812c4ef0a8bfdb759612b29f0fe0959246536e7aacf82",
+      "sourceContentHash": "5771ccc9b33ee72c8d8b63440b2336d4358fd98e49c6afce7f48eae3689cc953",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020328/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:57.993Z"
+    },
+    {
+      "file": "landing-2023020350.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "a7400b826033889b090987c0b544f3988729745b20374d1b1b2d4f0d1bf9db5e",
+      "sourceContentHash": "e4772fcca569cd18b690d70738e5bebf6aac8cbe1b1cb1b3863d8d900e8accd9",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020350/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:58.421Z"
+    },
+    {
+      "file": "landing-2023020372.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "84e1d9edc735e4030e0f20251430fde389b5def3ee698d27ff79f5bd58b83d00",
+      "sourceContentHash": "db07d3d277ce1a8e4a0d6a15626c03e437c1092cc2d6be0d4e47dd839c5b22ff",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020372/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:58.894Z"
+    },
+    {
+      "file": "landing-2023020394.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "8e76398106d7193a63a095c8121bd67c2a75d1b0736c768eb298852d7d2c39ed",
+      "sourceContentHash": "6b50854265b45e06912909bf1e1d9a6cf7f128aa2c3fc11ba77e703e06c6d2fc",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020394/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:59.357Z"
+    },
+    {
+      "file": "landing-2023020416.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "7fd5d8294985c196e5d56d3ad0ea1450e325194499a3746f0c3426c4d58c4eab",
+      "sourceContentHash": "850288d47e22a43162fddc9ff43f5a472ee25822ff6d362725f31f01f72a59b8",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020416/landing",
+      "sourceFetchedAt": "2026-09-06T19:52:59.785Z"
+    },
+    {
+      "file": "landing-2023020438.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "8283256d89971e5fa7322eeb3c4ca09a24fa3a518d981dc87569a08211169857",
+      "sourceContentHash": "f91276ec91bdac48d59d5ba83248fb9cc555a3d3c82aec2690f411d1cf5d5c65",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020438/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:00.237Z"
+    },
+    {
+      "file": "landing-2023020460.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "fed45a350105f70f3c430ffdab99e45bd2d0fdca8239e6f7f8e63b0fbf1c9c08",
+      "sourceContentHash": "fdac22c3e5ac250a42b5a70428a938b940567d24e238a6d01436cbb210f91e7f",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020460/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:00.653Z"
+    },
+    {
+      "file": "landing-2023020482.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "3d3df4f14688762f2e889d4855e3db153fc8482f3ee72d28b028eb4330b76525",
+      "sourceContentHash": "8cb153c9da89a57e42f401f2d25bad3f946c44327df876d2d0952512a33a585f",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020482/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:01.080Z"
+    },
+    {
+      "file": "landing-2023020504.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "300bb175bd10fbe01e56dd3bfe92a8c7e34232c19fce1e1d520f4b5d0bb53359",
+      "sourceContentHash": "989395e45fa38d8fcaa5e92209a920707b2ea6f34812e2989698f5867736eaac",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020504/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:01.531Z"
+    },
+    {
+      "file": "landing-2023020525.json",
+      "chunk": "sources-000.json.gz.b64",
+      "checkpointSha256": "48b269d06ab048f15ea385a9a66071c13935b696156ac616d3731ab989fada6e",
+      "sourceContentHash": "88240a9a4654a68458c404bd43958ec202dabe043d5fb868458636b13bc0e412",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020525/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:01.989Z"
+    },
+    {
+      "file": "landing-2023020547.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "e17a13dfbcd7fb4fb084f0b55620847c34fa1a772344c74504001fdb57953c5c",
+      "sourceContentHash": "dc175197ae0b193d663937c5c5fef0d68eaaa082d863c16484652a3ad5484457",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020547/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:02.433Z"
+    },
+    {
+      "file": "landing-2023020569.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "ca92bf279be90664af25394e175b04d64667e7a6982926b447edefc6f38977ff",
+      "sourceContentHash": "5afd7930d672b2a5298fc0e47a554f3b675892474a1ebd1ace1060ebc4508e95",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020569/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:02.912Z"
+    },
+    {
+      "file": "landing-2023020591.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "9e811f8ce5b85a23593e10fad30cd00e82734a9f1b19a1d27b13cbababacfcf4",
+      "sourceContentHash": "fee7c13245ba00a7288328e535d83b42fde63fdffe97024f5f488ff577215011",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020591/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:03.377Z"
+    },
+    {
+      "file": "landing-2023020608.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "cde351a03efe6b98d743e02e9312f8fee34c4213e579be39b9e5e3b9389bb079",
+      "sourceContentHash": "caa43fe885f17f7f0b69474c004f4cb232ae315a8c3405ae1497d0fdcabe1c53",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020608/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:03.790Z"
+    },
+    {
+      "file": "landing-2023020635.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "1383290b317dfe8b3f940091264439bc2f5369212b6aae16d0605726e766828a",
+      "sourceContentHash": "13bdd678595a5c3ce30c7a3448c83e72928a47686d53928f6036d4457960fd89",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020635/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:04.457Z"
+    },
+    {
+      "file": "landing-2023020657.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "512c3bfde2f0b7df9c64ede3581319a9b2b347a15e467aa4f1097632cd102718",
+      "sourceContentHash": "a4f844a393bbb13bf60f22e76e467176ac834b9a7a6f1568e3d1be62e665296e",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020657/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:04.924Z"
+    },
+    {
+      "file": "landing-2023020680.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "c054db8809f291789ba05327ab5b2a3599f543665cee580c0db53697d1645a0f",
+      "sourceContentHash": "10d9dfc1281cc76793071eef9697a88b21d2d40cb0606d0e244c7ef9bddcecd5",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020680/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:05.436Z"
+    },
+    {
+      "file": "landing-2023020700.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "f9cf7f068585a2012cd8318e1db929c8b88e4755b8c0eed7d85688a5887ecb96",
+      "sourceContentHash": "f81d1bcedea44d5bcf6d496e171db17411ee956fd1c9a0c8deb8093afa693396",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020700/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:05.886Z"
+    },
+    {
+      "file": "landing-2023020722.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "d174861eeaf8e44cfce8655067c65b8846db792edc873875814e6a27e5eb1af9",
+      "sourceContentHash": "0d05f24822d14ededc47ac19323e20c9499aad9a42ce79d02c6fff8b87b3ddd7",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020722/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:06.377Z"
+    },
+    {
+      "file": "landing-2023020744.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "29b02af648bd68d74a159cf2b95e61333f79604f47ebcb67fbec5428ce2549f0",
+      "sourceContentHash": "736de1682517744f06bb64f620e809c9a808a91e2d64359beeecd58c5f6700d5",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020744/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:06.819Z"
+    },
+    {
+      "file": "landing-2023020767.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "717843729cfc6b25f0d4e03c19429b96acdc9860356ae59e18130e368d745477",
+      "sourceContentHash": "d4a0b573f76f746b4f393b755be95e324564528a8c6cb6ff82bee176090d1585",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020767/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:07.444Z"
+    },
+    {
+      "file": "landing-2023020789.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "d328a5dafff9e7293328b53a3cdcbe6085449470846bba262a085f820f61fa40",
+      "sourceContentHash": "d70739c493cc158d0ae99c3b147df97e2db11e336c8aba340703e5ab22d8a03d",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020789/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:07.846Z"
+    },
+    {
+      "file": "landing-2023020810.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "5e47c6e29469957e74df1aec0f95dc91514f6f04ace7eb05db4ce0c58f798556",
+      "sourceContentHash": "f6e905bd7a2f39ca820a1d7d237b2f5bc6bb18553c887c4ffb016daf8526d34c",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020810/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:08.293Z"
+    },
+    {
+      "file": "landing-2023020831.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "16ae258b0c8c4b5542e3f9ee98cb0c6d152619f0d4328552f94cce18f275af9b",
+      "sourceContentHash": "ed1acc5906986afae4f7ca7a980e3441b7387fcf2b046106f4dc2fceda5b2dea",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020831/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:08.745Z"
+    },
+    {
+      "file": "landing-2023020852.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "706eefa41febfef779d9e9432d9fddc8730f1982f4ae03cc09a95a7359690b4b",
+      "sourceContentHash": "e2a263913b45bea4fdea2ea06a95270dc26d068af60a2cfe04d5494d939ab01e",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020852/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:09.193Z"
+    },
+    {
+      "file": "landing-2023020875.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "64a58f0fc9edf5d6f137b82b0fa5e14c6dde0669ffe35f2d0b5602efd1737db4",
+      "sourceContentHash": "9d124d772fc23a7b47a93435b4980452f15d4a1ab148e4f5a9f34c24148f4001",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020875/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:09.638Z"
+    },
+    {
+      "file": "landing-2023020897.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "62b02533b6a811635947b8d03a74ca33092d273c9a4b7207e0487fac427afd7d",
+      "sourceContentHash": "a45b075290f07596de15a2fb95fc22e9ddca318ed6f7ca8a4d6dee0af48c5bb9",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020897/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:10.071Z"
+    },
+    {
+      "file": "landing-2023020919.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "fb7233d6ef9d4f81188e054e6dc1bb023e10542866b7c671186c293089de7814",
+      "sourceContentHash": "da457dadba3ab1552217a4060dfadb2b8130fc21df0d0478bab4d3aa0fb5de16",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020919/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:10.505Z"
+    },
+    {
+      "file": "landing-2023020941.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "3a725b9927e8f66df20b64cdf1f8f58bfb72baac396a8b7fd1e144011aa61ff6",
+      "sourceContentHash": "3f5d6faf5cf127e9cb47e861b968f855594c1343a649ce7793e940afef4da321",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020941/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:10.946Z"
+    },
+    {
+      "file": "landing-2023020963.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "3dc18ecb27ddec45623be2fbaf5c1456078454852afb6613d5e1ba038414ec49",
+      "sourceContentHash": "0328a22a72d9161652688d7c6c99e19ec3ed7704a2b3dc7de73d27804bfeceeb",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020963/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:11.458Z"
+    },
+    {
+      "file": "landing-2023020985.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "8b7b061152089198c6accbd9758db48f14b312bcf38bb15d56f5e1259e10dd6b",
+      "sourceContentHash": "8164a7a9b0f98e9eeb676674e127151ba7f0d785b68a07c8372b9d9e1d61f951",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023020985/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:11.937Z"
+    },
+    {
+      "file": "landing-2023021006.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "46df531ab88cf01811713e4bf68a0ee3713a3ad4edac1f0a88b90abe7e4c82e7",
+      "sourceContentHash": "b78ba5144347f99871bc9b031d720df9b53dec1bb738ac7c3aa04a2a4367e544",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021006/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:12.384Z"
+    },
+    {
+      "file": "landing-2023021028.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "44eb1e3c3877669e40296032fe6d392fd96dd52573636aea4aba7fa33442bc1a",
+      "sourceContentHash": "7eafc9fd4d539a48035b12ac3ed98fd92ad189c0a43afc1082a5fdd81de28616",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021028/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:12.895Z"
+    },
+    {
+      "file": "landing-2023021051.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "1cc44e570dded5063fb3ca567c0f4aaa0bb3e6c652375b74e04cd59f31c62590",
+      "sourceContentHash": "9ffa81f451b0178298175bb3d4a9f5e648dfad90bbd4af32b985cadca5049fe8",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021051/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:13.378Z"
+    },
+    {
+      "file": "landing-2023021072.json",
+      "chunk": "sources-001.json.gz.b64",
+      "checkpointSha256": "383135c6f09e45299f466444f85cb35c8e8cb74729983af08d6157d297c0c88a",
+      "sourceContentHash": "319e3ca20bd4b6177835a86c5057e625e667cafb53bbf79c2dca62b5039fd6ab",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021072/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:13.809Z"
+    },
+    {
+      "file": "landing-2023021094.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "d693e3e0d2aee6fcb2c16a8291d396af640b92f160a1fe7b4d2a9149772739c7",
+      "sourceContentHash": "b87519f4cd84847ac1c3261eec116e41a6eff1c4e032210623258854da7d8b19",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021094/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:14.232Z"
+    },
+    {
+      "file": "landing-2023021116.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "8502971405eebf2f08594354af2b27c87aade0ce8748d962b3b9255311b9a04e",
+      "sourceContentHash": "6d50a33a534bfdcc5779f044cfb5489a7e551346ae904a7e0ed4c3f33548de9d",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021116/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:14.658Z"
+    },
+    {
+      "file": "landing-2023021138.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "b88714074fe96e1aaea0d4b062ad5e618c12a61bc7c9606109880c9c24edd6db",
+      "sourceContentHash": "ba750a884d304c23f75bd279f7a2bdb8958fc239188e1e3269f84d86ab6f047f",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021138/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:15.089Z"
+    },
+    {
+      "file": "landing-2023021159.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "67e225c3fbfd5692e9eca0dbd1514ae91b678e3017627d79648e4232d40e0669",
+      "sourceContentHash": "ba5943a054779727ec62c7cda04c5dc05230a3a5dd605eaaf438bee475dba7e7",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021159/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:15.527Z"
+    },
+    {
+      "file": "landing-2023021181.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "ac9423bf09df8b6ea7df14502e78fb4a1c519ec37f63139ab28e35fcad484378",
+      "sourceContentHash": "ada446c01a02e8e5bdbfd4915ec2df853ff2357dcd172e0d34cae3dd15e415b1",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021181/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:16.013Z"
+    },
+    {
+      "file": "landing-2023021203.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "c5f63e932ab5912e1a4c9f2e36fa3e28c9f07abeefe6fe26d233324d9abafcd1",
+      "sourceContentHash": "da1d1d04ee85137ac4d7d70c46245cf7eb99d6801ea3b535892f28d38d35afa4",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021203/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:16.470Z"
+    },
+    {
+      "file": "landing-2023021225.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "587680c4aa852d6ec7b75b14f42fcc2147c7c70bf71da34379903a72441e6c0d",
+      "sourceContentHash": "02252b6a4b2343bcd522905d4ed629a5d2f3d9d1ba761d1a8b0ae27fd35d6dd4",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021225/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:16.900Z"
+    },
+    {
+      "file": "landing-2023021247.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "38be54303379aeeb90fc04680e3ff8381a8c4ea90ade8e53da63777762babd6c",
+      "sourceContentHash": "5642b6a6b8ba448cd15be099e63afd1b01972f066cd1bd06526abab3d13e2b95",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021247/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:17.351Z"
+    },
+    {
+      "file": "landing-2023021269.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "7f9f47064180c007044f6e5cb67158873970d108838bc5fc2fd7aa4c1551664d",
+      "sourceContentHash": "b8ad1f6ec432aa9679c14ac7fb626a246df9db7609b8d04b00be3149e08edc85",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021269/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:17.816Z"
+    },
+    {
+      "file": "landing-2023021291.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "e5eeaa7658c1c70788600f8b9f4cea08c69fc2fcaf4c4a6d26d40f740ab381af",
+      "sourceContentHash": "856e10865f1ce9efe78f3203d1b31daafee90c809a10ac6a9583fa271cf5d96a",
+      "sourceUrl": "https://api-web.nhle.com/v1/gamecenter/2023021291/landing",
+      "sourceFetchedAt": "2026-09-06T19:53:18.242Z"
+    },
+    {
+      "file": "period-report-20232024-0.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "9ad15f78d08aa71b8af0f3aeabe6cb1ca9f600f89281ba4bed559f112d07b0d1",
+      "sourceContentHash": "959bcf2a3b0400f69c22d6fdeb989e7ccd933027fca1d151be8ebb3ac5415710",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=0&limit=1000&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T19:55:26.375Z"
+    },
+    {
+      "file": "period-report-20232024-1000.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "1c5020b367044e9677efc9c15ed3317b932989abde5d80eb3fb9d00cdc25f576",
+      "sourceContentHash": "2855de135936b35aa6ffe4b9221e6837e6971c17ea018b5781e7b468d3eca97e",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1000&limit=1000&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T19:55:39.631Z"
+    },
+    {
+      "file": "period-report-20232024-2000.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "e4fd68cdcdf3b102d656506847cd98600a7dd84d9c0e542a53e2e3fd935538e5",
+      "sourceContentHash": "818ca20eeda322ab8b865709450e10e086d03b2440b190c6af3370d116185f3e",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2000&limit=1000&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T19:55:40.210Z"
+    },
+    {
+      "file": "period-report-20232024-page100-100.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "d45b240de3540bec7d9e2fa0bbcef314f5f310bd240ea2f0f76496fd48ed35a5",
+      "sourceContentHash": "a3fa0fcb7203ea2efd2dc14f6f1f821863c459faf8717b7b54e67ae4d88cf992",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:41.629Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1100.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "08fb73c60c588bd8d6ad6ec11e45e033f6f5936764d6bd038400bca921d7ceb1",
+      "sourceContentHash": "0bc45c881e152dad06eaa571dc6585237f5cff5bc56e48062f0bdc5bd2da6a9b",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:57.811Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1200.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "6eb96b1bd7aef1746f8ab14636138ee2780509990e8078906534b051ba3c8a11",
+      "sourceContentHash": "9cf09a682b354a48fdd29166052491a2b0fce85dd8da82c44a2a17234e821c96",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:59.798Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1300.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "b86546b3e1190e4f62202c774a77a66a22f8470eb798dc1c93370b810eed56e6",
+      "sourceContentHash": "d7628c0a97705359c09954d334ce70c92023d99bf398e37c3e8d68b18d011cd1",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:01.799Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1400.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "d7ad59232c96104f9dd8765f5b63fdf8f958dcaab70451cca95321de96328fee",
+      "sourceContentHash": "44c7dbd24c2b1d018b06f9a2e25c2f7f3299a07d35ba44f96a1a209fcdb6682d",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:03.796Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1500.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "20f73c3e4f1bfa25d23217c219bc0c4bdc50b5ee587c2cd890601b0ddc254a6e",
+      "sourceContentHash": "9e9c6efe8f3439602bb70d2ac035602f1349fc2b6bf549006f5e01ed1f0755ca",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:05.798Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1600.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "45a84832e30505e023f002bfa234f3774161e4d4894b0a05f75939eba47a995c",
+      "sourceContentHash": "6eaeb7ae60a785926b502010878a42fd0d14ebe0311e934e0cd87149b6a49153",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:07.801Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1700.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "2b2cd96359893a8e9935c7221e60c737a9425f8a8e0f5238cfd7bdd69c48bdb0",
+      "sourceContentHash": "c77c28391df4d32d0448ba26243e22170a74b5a98fc3fb452bda54e94226adaa",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1700&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:09.799Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1800.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "6453a6d7338cd781b4ab896a557ba08da5b8f5edb9659874334e6ba661a96bf8",
+      "sourceContentHash": "e617d3068939fa9190ebf9e96ef7c65e1ffb73581f00e2c0fc3f6a22744d7a22",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1800&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:11.799Z"
+    },
+    {
+      "file": "period-report-20232024-page100-1900.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "83ad54d608d95f8cb2fc37cba5025bb2af8aeb819808118a6469e3352a7d0b6d",
+      "sourceContentHash": "c8212359535cbcd721ae7d90a28ff04eb57e630dae33a6049e40a1952fc18e92",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=1900&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:13.808Z"
+    },
+    {
+      "file": "period-report-20232024-page100-200.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "e2d5357edb8979a5cd054b0f202f10bf5d575831af104ea5d441ed91cf3b0fae",
+      "sourceContentHash": "293e225c7a546ed05e339f05bfbfff8d944f8701178ae76d85742b11d89a0a91",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:41.964Z"
+    },
+    {
+      "file": "period-report-20232024-page100-2100.json",
+      "chunk": "sources-002.json.gz.b64",
+      "checkpointSha256": "744495c9dea0a1ebe926bf1aed0b47ab3bef1eb87b379dc23a7e35d3d351786e",
+      "sourceContentHash": "c5ddc40872029904fbb0f008935504fd4e1445eb82b605e9a9c115b55b734ffe",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2100&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:15.818Z"
+    },
+    {
+      "file": "period-report-20232024-page100-2200.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "6b8aeb0d7c34728590d9986a4d4cb4d08dcc4f7ced885cd35e24b95a31bf5546",
+      "sourceContentHash": "4474c752825e03b5a7da7002eee8a3accb7ef0c45d6c23e2c8399bb5ef1c104f",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2200&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:17.842Z"
+    },
+    {
+      "file": "period-report-20232024-page100-2300.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "1a5c98ae3406b8fb2af6e73476a9398fee37157e5cb76b83178e32ff25edc053",
+      "sourceContentHash": "e6ac5c8379d3da2d931a0159d0a3b82fa517593e8c8af5dd9edefa0239bcf705",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:19.833Z"
+    },
+    {
+      "file": "period-report-20232024-page100-2400.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "71701b18c29d97c67b33171f6381ac364b0a5c8fb0fca9a9c576fd0a765443cd",
+      "sourceContentHash": "282ed74c2ce0906851b40ddc1e082bc0d2b73744338f3d9ee3eb12362685f980",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:21.838Z"
+    },
+    {
+      "file": "period-report-20232024-page100-2500.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "4ffe0ba0598d945c9bb18637ae0d8dc72e9d9820a60f58f7ad4d4453bef203f3",
+      "sourceContentHash": "ea940f176c2ecdf0bbb0f2bb9ed6a4af1b26fbf8f34bb7e07a7727b5ae596b50",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:23.826Z"
+    },
+    {
+      "file": "period-report-20232024-page100-2600.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "75acea0c2d861644347300c69fbd8c0426adf9544208ec47b30c31dc9e7e1c37",
+      "sourceContentHash": "edb58a11fbd6744e5b8da6862eef2833cf4794fab2a6fec521f0005c743f8ab6",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=2600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:16:26.007Z"
+    },
+    {
+      "file": "period-report-20232024-page100-300.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "2c1f3a0b11f87478604ddab5ff6cc87d64b55ca1289c1df338e7a7180f66bb6d",
+      "sourceContentHash": "7789c5952e9256bbdedb398ad6942c7c16c46c2d3d17d2a57509cfa6461b6337",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=300&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:43.753Z"
+    },
+    {
+      "file": "period-report-20232024-page100-400.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "1e4fa2f84e977a3fb7e6f33628b382beb2f3535609ed86a39c69a0167b324de2",
+      "sourceContentHash": "340d7c6e15f8868acf8f88f067aaac5efdd48aa299e1a8523fde561d5d371b55",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=400&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:45.736Z"
+    },
+    {
+      "file": "period-report-20232024-page100-500.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "1d264ddde346c3d6e266ee9c607ae8c28138c325732ac4dd0c7a0707de4b5c4d",
+      "sourceContentHash": "6c91b74b6547e8ca3824b3f640180ac9ebc18628108b379b6a3087d0c037a601",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=500&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:47.780Z"
+    },
+    {
+      "file": "period-report-20232024-page100-600.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "43339107b63d9b35856d91288d3c8d64964e2951c30efae2ebe6f9dfe2b44656",
+      "sourceContentHash": "4557ba461d7b3918594d22901c2708d9c3d5535e5d6a94d9434f8619828fb815",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=600&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:49.766Z"
+    },
+    {
+      "file": "period-report-20232024-page100-700.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "03135a12ef159d57bb795b8958b0d905fd051577a0c1dd2b5ef6606bf03cf74f",
+      "sourceContentHash": "88b06f6f42b08bb17c7a36897c1c26afbdfb8a8d67e28760c1d75d27be103a64",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=700&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:51.751Z"
+    },
+    {
+      "file": "period-report-20232024-page100-800.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "015ae91fb9f329cd5550b83e3717c8e2caeba1b18fd1c1e57dbf83a4410b27ba",
+      "sourceContentHash": "cad234b377a199876410d07ccb1542ccaaadea5621107870b25c7110f61d4980",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=800&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:53.791Z"
+    },
+    {
+      "file": "period-report-20232024-page100-900.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "795c25d6b5535cb468a20a0379ca712fd9642a5257df8d0c5d9bc96a6de78d65",
+      "sourceContentHash": "2a138dd7cc04357a5b5e4068ac5b674496764b7fd49c3da80024fb77a8ee0ed7",
+      "sourceUrl": "https://api.nhle.com/stats/rest/en/team/goalsbyperiod?isAggregate=false&isGame=true&start=900&limit=100&sort=%5B%7B%22property%22%3A%22gameId%22%2C%22direction%22%3A%22ASC%22%7D%2C%7B%22property%22%3A%22teamId%22%2C%22direction%22%3A%22ASC%22%7D%5D&cayenneExp=seasonId%3D20232024+and+gameTypeId%3D2",
+      "sourceFetchedAt": "2026-09-06T20:15:55.807Z"
+    },
+    {
+      "file": "schedule-ANA-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "476df0f57fe8847b06f0f70605089e5e23e8bacbef365a6a3501adfee4364225",
+      "sourceContentHash": "a6bbb0503f46503c81e3541cecfd0976bbcf8d6d8482ea285cc0a7045aff1343",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/ANA/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:48.863Z"
+    },
+    {
+      "file": "schedule-ARI-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "31b67b8cbd88f992db267212e13283a5af1d9e3b8ff1cbfd4e359ae370ad6533",
+      "sourceContentHash": "706198b756d7eec3ae92810b8070665e57831c02c6b1f9009d088a9622faddc9",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/ARI/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:47.889Z"
+    },
+    {
+      "file": "schedule-BOS-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "f33becc69ba35f00fecc4336ec9a5f080b66f8eb80151e4d11804cf3a29d8814",
+      "sourceContentHash": "15226f8327d4d6abbeab988f5bcc0078533f8ec78187b2007e22bfc9906e19bf",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/BOS/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:41.134Z"
+    },
+    {
+      "file": "schedule-BUF-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "1056c9dd296ef9c790746d7b3ea27551acbb68223ea9793b54a45c90a08d57fe",
+      "sourceContentHash": "538354ad3ee96fdca3f94bc40395a03a2721a6dcb97e37b195c0f7ed594aff65",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/BUF/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:46.227Z"
+    },
+    {
+      "file": "schedule-CAR-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "f9797baf70c58952f5bad38a708e893d999e7878e5582a3ce2dab5f77df2a0f1",
+      "sourceContentHash": "3d5e2e70f0429b5c2d3c588d51e30de0cb67c0b8159ab0ec4618efee7777ce36",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/CAR/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:39.778Z"
+    },
+    {
+      "file": "schedule-CBJ-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "68ca613575ebcb1112e4e8395c5c7dd5f006138602350b1c6c022efcc8c7b4e5",
+      "sourceContentHash": "26f402a9cf6f00d529e46f19a66fff160e976c4045df8aa5d9dbf5b49fde6826",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/CBJ/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:48.568Z"
+    },
+    {
+      "file": "schedule-CGY-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "4aaacd23fc8fd20dc2aa2cf4d05e46750cf0b75aa4256c9259f1b28caf692ced",
+      "sourceContentHash": "d533022079bbf5dd03529e9c562647b6ba55d0def2f8fe065d91632db26108ee",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/CGY/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:46.907Z"
+    },
+    {
+      "file": "schedule-CHI-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "e18b6300573c3a055315b06de1c268168f82dbaf7e288f53681cbd5f1eafba4f",
+      "sourceContentHash": "041a8cad77f1753ec76adc1fde6df11196153e88a6e6f31d28b055c45d820705",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/CHI/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:49.159Z"
+    },
+    {
+      "file": "schedule-COL-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "aaa2af6fcf9c3da4d2101d959a1d2c395700a5d6f848b85c698e0dd7d4c673b5",
+      "sourceContentHash": "98064cbf99fae62498858ce423e23bbda36a29fec45558b4d11497d166a8ed90",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/COL/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:41.481Z"
+    },
+    {
+      "file": "schedule-DAL-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "943e31857896b2804bae4d36f324fee2fdf9b50a0b642da1df397591137ecfff",
+      "sourceContentHash": "28353c09a7d90be6d002d33e4f95db7e712809bfc2f5260f4ab0da1c7258a79a",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/DAL/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:39.463Z"
+    },
+    {
+      "file": "schedule-DET-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "c07012876cb4195b807ad6cf08fb9ad712a50bba706cc9bf15a29bd18dc70fd6",
+      "sourceContentHash": "3ffff96ee0279f03cfd8ab83c46506ed4bc25702abc00622730a512dc0d7297e",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/DET/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:44.912Z"
+    },
+    {
+      "file": "schedule-EDM-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "7f4ce877f9affff7d881df69329a74ce5fd5a8b56b21f0fd74ff36b50f9e47db",
+      "sourceContentHash": "2ffe988c514908f0938bde1a60d1579448e77640faacabc1b16d350f8d5b7032",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/EDM/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:41.807Z"
+    },
+    {
+      "file": "schedule-FLA-20232024.json",
+      "chunk": "sources-003.json.gz.b64",
+      "checkpointSha256": "8f608d5481b1c07cb6d7cc906168dc528ba2da7375555a899e03613a8e0a5680",
+      "sourceContentHash": "53668f62c7fc4322a4950f28282a006b225ec4e8857aebf8c825f43f545a462d",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/FLA/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:40.461Z"
+    },
+    {
+      "file": "schedule-LAK-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "82521762ae8c6ba84bdfb74ab27d58cffa35cf0c2425941e9de37e1124b8b2ff",
+      "sourceContentHash": "822464b1c271440314856382058080b2999b68009e84b07056d7f6e885a2fe7c",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/LAK/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:42.836Z"
+    },
+    {
+      "file": "schedule-MIN-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "d0427374f27d35acacf663fcf9d89319b5c3d524f26223ae1288a7cbbd4172ac",
+      "sourceContentHash": "dd3857f0dc4963223ab1b95ab730a8df865a75a9c642bb7339b369873777709c",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/MIN/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:45.553Z"
+    },
+    {
+      "file": "schedule-MTL-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "5e55ecbf7e52dfead5cba5449165023c11f3956832ad63b5b61b624107b426c1",
+      "sourceContentHash": "b933bf5ae930f8bcbcf987727ea6b8ea46ed1a07a8cfa36a08b6179e5c896d8c",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/MTL/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:48.222Z"
+    },
+    {
+      "file": "schedule-NJD-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "8dd2646d37e62e8b13b219ef064fbe4058306215c91adebe9295c768dcbcd885",
+      "sourceContentHash": "2c58fa44f4e03875e4e39f849893cd82fffc05928b2d3d8db98af344489a1d55",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/NJD/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:46.575Z"
+    },
+    {
+      "file": "schedule-NSH-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "5614632f84bf9ccbe4524cef6c99d21e554a1f2a55ee41920c1a5621ba8d91c3",
+      "sourceContentHash": "982d5eb4b47d28b45551b0f31dc682e75dbc5ba3250597d05a664a24e64fa465",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/NSH/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:42.494Z"
+    },
+    {
+      "file": "schedule-NYI-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "1da0253c03ccce89800c13e0abb2407d0e37dc597953a828755dd6e3655c758b",
+      "sourceContentHash": "b0443cf8e9d77af3fb99d9cccbd99ddeb927c0465acfc9931cbf2be539f09f85",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/NYI/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:43.864Z"
+    },
+    {
+      "file": "schedule-NYR-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "1ab74983022c048feffc7be11e5be5b3fc400e35b1ce934154648989363226ea",
+      "sourceContentHash": "a1954fb8d1284696138ae9a948666c8969e7773de4821361aed1ffec68db5be9",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/NYR/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:39.095Z"
+    },
+    {
+      "file": "schedule-OTT-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "fabcc200f1b384a89106e104e23ecfcc7934e4da1e58c82d4c664be8eb1d866a",
+      "sourceContentHash": "3ed7ef3d441169768195e5921e3494b1f71f554095af69263d26d9ccfa68a252",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/OTT/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:47.585Z"
+    },
+    {
+      "file": "schedule-PHI-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "c3ac8911c3aacb6d5f0a390f7a5bc5f142194dbafbcc026aafe32ab3f4d77786",
+      "sourceContentHash": "fe2e50a72a14dc05dcf1ccc180d536ec495bbfd2cc39ac2925fb2e4a3646155f",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/PHI/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:45.921Z"
+    },
+    {
+      "file": "schedule-PIT-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "9a37307aff98cbacdfbcb7d0ed36cf250d52707b586c926d2cfe921dd609e62f",
+      "sourceContentHash": "5d968c197bcb05a583ba9847dbbaeff41dcdbcb8269d3801bd51240fd7dc47c4",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/PIT/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:45.263Z"
+    },
+    {
+      "file": "schedule-SEA-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "900c37e7cd12b4a7c768d265bdcae99fffdfa3df08efd7ca4a58b5294e956b1e",
+      "sourceContentHash": "a03ed3ea58d32a97b8abaf5d9037c984c8bc6007aef696dddedf28c2335e25ce",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/SEA/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:47.273Z"
+    },
+    {
+      "file": "schedule-SJS-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "a162962732c2e2c421b80c3714eb47b02c0e55b4bebf464198b8dbbc7f4e236f",
+      "sourceContentHash": "d7441faadaca66a04c6a77eff70e3c3de39ec05cf4b5c5d215da2a33d663d90b",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/SJS/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:49.451Z"
+    },
+    {
+      "file": "schedule-STL-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "21506d448d6016a8612bc26b3f92b24edb670b07c769f0782fb87aabea88dd04",
+      "sourceContentHash": "ba39a3487d2741e039bbac207df598f0e0acf485a5df4b9cb8f094eba9a0ad48",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/STL/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:44.206Z"
+    },
+    {
+      "file": "schedule-TBL-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "4e4af98059e08f2e05b6ad71064f091a864aebc5046ea3248395e90281d43498",
+      "sourceContentHash": "8b95f8087b3fc530e17797f86bf6476c21e0128de4b9da5e9240a053a7316b42",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/TBL/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:43.153Z"
+    },
+    {
+      "file": "schedule-TOR-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "f2384d8e566ff8da7566309afdf0b0babd219fb325553fdb93cc314b7cc6d9cd",
+      "sourceContentHash": "d17d71cae0abf54f00aebbedc9ad13e1186822cb41ceb3846f1a3983ded53d11",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/TOR/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:42.169Z"
+    },
+    {
+      "file": "schedule-VAN-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "a9338017fcd15a17473da436ffe47c4f3aae42e920ca62b427d5efeb56014888",
+      "sourceContentHash": "1d616fdd11ecf858ca3a3473ac6613b27914851b05969abe5566fb5b1307cae3",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/VAN/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:40.811Z"
+    },
+    {
+      "file": "schedule-VGK-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "27e0736c26ab2ddcebc19f1f822dfc47c5753bd84156d65da287ec40599fce02",
+      "sourceContentHash": "dbe483c38075e602e96f13b556b8eb986eabf036afbb442f05360d7af7d3d066",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/VGK/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:43.494Z"
+    },
+    {
+      "file": "schedule-WPG-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "27eceb90abfead09a976e0fcff4a2ca0a81f81ce6c973db4cb8b1d968a369555",
+      "sourceContentHash": "31cd75a354ebccc70a3a20d50cf2f886856a06e5cc5624531caf12cd8c1b41fc",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/WPG/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:40.187Z"
+    },
+    {
+      "file": "schedule-WSH-20232024.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "72e00da842da6c49aeb94107e46a4557ac9cc2011035a56c50976f61c70d7698",
+      "sourceContentHash": "586876eaead233c3ca19faba39de7674ab78f84d60a0983d970b18fc3a8dee84",
+      "sourceUrl": "https://api-web.nhle.com/v1/club-schedule-season/WSH/20232024",
+      "sourceFetchedAt": "2026-09-06T19:52:44.570Z"
+    },
+    {
+      "file": "standings-2024-04-18.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "2705ed420e80433df5b4ae993c5be483483b5af41f8d98b5423df5e1b51e480f",
+      "sourceContentHash": "036839f72705a094936d85b7f2cfbc197e4a1978f465004edd330d3bc37556ed",
+      "sourceUrl": "https://api-web.nhle.com/v1/standings/2024-04-18",
+      "sourceFetchedAt": "2026-09-06T19:52:25.161Z"
+    },
+    {
+      "file": "standings-2024-04-19.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "e8ed1422c83e0a9a6e077e10ff9a551ca4f347a7ab6622d5284d6c5fa808e9f1",
+      "sourceContentHash": "bfdb6d5fe55c263ba4aacff9e3c184c61f93522d33e775247e74ea3829f4efc6",
+      "sourceUrl": "https://api-web.nhle.com/v1/standings/2024-04-19",
+      "sourceFetchedAt": "2026-09-06T19:49:09.103Z"
+    },
+    {
+      "file": "standings-2024-07-01.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "8936e7d62997c898008074680c585b25b2a54c2bf2d10c8a8b3c371640554d38",
+      "sourceContentHash": "bfdb6d5fe55c263ba4aacff9e3c184c61f93522d33e775247e74ea3829f4efc6",
+      "sourceUrl": "https://api-web.nhle.com/v1/standings/2024-07-01",
+      "sourceFetchedAt": "2026-09-06T19:48:19.576Z"
+    },
+    {
+      "file": "standings-season-index.json",
+      "chunk": "sources-004.json.gz.b64",
+      "checkpointSha256": "728c96c77e15dcb2830336b1d01086568c8b685470dfdebdb350e1b67fc88221",
+      "sourceContentHash": "aab9e1d03071a693f38c4dff9a5e45dd6282f307a3411cb68d8e3bdeff74f18a",
+      "sourceUrl": "https://api-web.nhle.com/v1/standings-season",
+      "sourceFetchedAt": "2026-09-06T19:57:16.768Z"
+    }
+  ],
+  "chunks": [
+    {
+      "file": "sources-000.json.gz.b64",
+      "records": 25,
+      "fileBytes": 56781,
+      "payloadBytes": 652909,
+      "compressedSha256": "fac3d95f94957a880228413a482bd574c0e136a35590132f1236bc333ed48643",
+      "payloadSha256": "7fd8051070ca92fbe35829545acab2cabd574643c14e8d847560bd7aba5370e2"
+    },
+    {
+      "file": "sources-001.json.gz.b64",
+      "records": 25,
+      "fileBytes": 57629,
+      "payloadBytes": 656342,
+      "compressedSha256": "335e189ff901e0101790ad0014223dc1153a098e8a82778b8dfc9270b2fc0c74",
+      "payloadSha256": "3ff3c7726b2591abffae8778adda563182a5b4c07c25947ef1458c0ba6678c35"
+    },
+    {
+      "file": "sources-002.json.gz.b64",
+      "records": 25,
+      "fileBytes": 83673,
+      "payloadBytes": 1485576,
+      "compressedSha256": "b84e9bee88f951589d1493dbf2ae3a07f68bf8b797cca902d18f60abc58197f9",
+      "payloadSha256": "eb73d92d557f108782c181397de962d4fda42271dd3ddde4b99d66a881abb68c"
+    },
+    {
+      "file": "sources-003.json.gz.b64",
+      "records": 25,
+      "fileBytes": 345501,
+      "payloadBytes": 5342748,
+      "compressedSha256": "4fd05b9cfeed357e80f479ef8230d92966157fca8ebb5ed0f9e4986a0caf9592",
+      "payloadSha256": "b6c68d05bf56fd136206a802b2f3af78c1c4c72d96f4585b7bc819e0dd3cb3fa"
+    },
+    {
+      "file": "sources-004.json.gz.b64",
+      "records": 23,
+      "fileBytes": 440277,
+      "payloadBytes": 6176796,
+      "compressedSha256": "8a5791ac7543cc8c585d1e1cb3016174dafbfd2598cd1fcebaaeb890a5309c5b",
+      "payloadSha256": "a0dfc5b724cdd33bc1f0fccc99b557a5a6e4102ae649b832930b442de4837d94"
+    }
+  ]
+}
