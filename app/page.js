@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { APP_VERSION } from '../lib/app-version.js';
+import NbaEntry from './nba/entry.js';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
 import {
   betIdentity,
@@ -3724,6 +3725,7 @@ export default function Home() {
           <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small>
         </button>;
       })}
+      <NbaEntry/>
       <a className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球資料與研究</small></a>
     </nav>
 

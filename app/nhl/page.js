@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import NbaEntry from '../nba/entry.js';
 import { APP_VERSION } from '../../lib/app-version.js';
 import { LEAGUE_IDS, leagueConfig } from '../../lib/leagues.js';
 
@@ -77,6 +78,8 @@ export default function NhlWorkspace() {
     try {
       const saved = JSON.parse(localStorage.getItem(CACHE) || 'null');
       if (saved?.league === 'NHL') {
+        if (typeof saved.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(saved.date) && saved.boards?.[saved.date]?.league === 'NHL') setDate(saved.date);
+        if (saved.selectedGame && saved.details?.[saved.selectedGame]?.game?.league === 'NHL' && saved.details[saved.selectedGame].game.gameId === saved.selectedGame) setSelectedGame(saved.selectedGame);
         if (saved.boards && typeof saved.boards === 'object') setBoards(Object.fromEntries(Object.entries(saved.boards).filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && value?.league === 'NHL' && Array.isArray(value.games) && value.games.every(game => game.league === 'NHL' && game.taipeiDate === key))));
         if (saved.details && typeof saved.details === 'object') setDetails(Object.fromEntries(Object.entries(saved.details).filter(([key, value]) => value?.league === 'NHL' && value.game?.league === 'NHL' && value.game?.gameId === key)));
       }
@@ -87,9 +90,9 @@ export default function NhlWorkspace() {
   useEffect(() => {
     if (!ready) return;
     try {
-      localStorage.setItem(CACHE, JSON.stringify({ league: 'NHL', boards: Object.fromEntries(Object.entries(boards).slice(-8)), details: Object.fromEntries(Object.entries(details).slice(-12)) }));
+      localStorage.setItem(CACHE, JSON.stringify({ league: 'NHL', date, selectedGame, boards: Object.fromEntries(Object.entries(boards).slice(-8)), details: Object.fromEntries(Object.entries(details).slice(-12)) }));
     } catch { setError('這台裝置無法保存 NHL 顯示快照；目前結果仍保留在畫面，可重新載入官方資料。'); }
-  }, [boards, details, ready]);
+  }, [boards, details, date, selectedGame, ready]);
 
   async function run(key, operation) {
     if (inFlight.current.has(key)) return;
@@ -136,7 +139,7 @@ export default function NhlWorkspace() {
 
   return <main className="appShell nhlApp">
     <header className="appHeader"><div><div className="eyebrow">NHL DATA & SHADOW RESEARCH</div><h1>NHL｜冰球資料與研究</h1><p>官方賽程、球員與門將資訊。每筆資料保留來源、時間與身分核對結果。</p></div><div className="headerBadges"><span className="state shadow">獨立 NHL 模組</span><span className="version">v{APP_VERSION}</span></div></header>
-    <nav className="leagueTabs" aria-label="聯盟切換">{LEAGUE_IDS.map(id => <a className="sportModuleLink" key={id} href={`/?league=${id}`}><b>{id}</b><small>{leagueConfig(id).shortLabel}</small></a>)}<a className="sportModuleLink active" href="/nhl" aria-current="page"><b>NHL</b><small>冰球</small></a></nav>
+    <nav className="leagueTabs" aria-label="聯盟切換">{LEAGUE_IDS.map(id => <a className="sportModuleLink" key={id} href={`/?league=${id}`}><b>{id}</b><small>{leagueConfig(id).shortLabel}</small></a>)}<NbaEntry/><a className="sportModuleLink active" href="/nhl" aria-current="page"><b>NHL</b><small>冰球</small></a></nav>
     <nav className="mainTabs" aria-label="NHL 功能" role="tablist">{TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} aria-controls={`nhl-${id}`} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}</button>)}</nav>
     {error && <div className="errorBox global" role="alert"><strong>更新未完成</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {Object.values(busy).some(Boolean) && <div className="nhlProgress" role="status">正在載入 NHL 資料；可切換頁籤，已完成結果會保留。</div>}

@@ -191,7 +191,7 @@ await test('source failure and mismatched game/date leave previous completed dat
 await test('hydration rejects another league nested under an NHL wrapper and wrong game/date keys', async () => {
   const good = nhlGame();
   const baseball = { ...good, league: 'MLB' };
-  const h = harness({ saved: { league: 'NHL', boards: {
+  const h = harness({ saved: { league: 'NHL', date: '2023-10-11', selectedGame: good.gameId, boards: {
     '2023-10-11': { league: 'NHL', games: [good] },
     '2023-10-12': { league: 'NHL', games: [{ ...baseball, taipeiDate: '2023-10-12' }] },
     '2023-10-13': { league: 'NHL', games: [good] },
@@ -203,6 +203,8 @@ await test('hydration rejects another league nested under an NHL wrapper and wro
   h.hydrate();
   assert.deepEqual(Object.keys(h.state.boards), ['2023-10-11']);
   assert.deepEqual(Object.keys(h.state.details), [good.gameId]);
+  assert.equal(h.state.date, '2023-10-11', 'Returning from another league must reopen the saved historical board');
+  assert.equal(h.state.selectedGame, good.gameId, 'The previously selected completed detail remains visible');
   h.calls[0].resolve({ ok: true, league: 'NHL' });
   await h.calls[0].promise;
   assert.equal(h.state.ready, true);

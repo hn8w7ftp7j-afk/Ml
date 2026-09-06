@@ -51,7 +51,7 @@ export async function GET(request) {
         }
         return requireResult(live);
       }, { ttlMs: 60_000 });
-      let observation = { persisted: false, reason: '資料庫尚未設定' };
+      let observation = { persisted: false, reason: result.acquisition === 'ARCHIVED_OFFICIAL_HISTORICAL_SAMPLE' ? '顯示封存樣本，沒有新增本次即時來源版本。' : '資料庫尚未設定' };
       if (nhlPersistenceConfigured() && result.acquisition === 'OFFICIAL_LIVE_FETCH') {
         try { observation = await saveNhlObservation('GAME', gameId, { league: 'NHL', observedAt: result.game.source.fetchedAt, game: result.game }); }
         catch { observation = { persisted: false, reason: '永久來源快照寫入失敗；本次資料可查看，不能當成已永久保存。' }; }
