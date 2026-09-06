@@ -1,0 +1,33 @@
+{
+  "fixtureKind": "FACTUAL_EXTRACT_NOT_RAW_ARTICLE_OR_PREGAME_ARCHIVE",
+  "sourceUrl": "https://www.nhl.com/news/nhl-lineup-projections-2025-26-season",
+  "sourcePublishedAt": "2026-06-14T15:45:00Z",
+  "sourceUpdatedAt": "2026-06-14T15:54:51.163Z",
+  "captureDateUTC": "2026-09-06",
+  "game": {"league":"NHL","leagueId":"NHL","gameId":"2025030416","season":20252026,"gameType":3,"startTimeUTC":"2026-06-15T00:00:00Z","officialDate":"2026-06-14","northAmericaDate":"2026-06-14","awayTeamId":12,"homeTeamId":54,"away":{"teamId":12,"abbrev":"CAR","name":"Carolina Hurricanes"},"home":{"teamId":54,"abbrev":"VGK","name":"Vegas Golden Knights"}},
+  "scheduleSource":{"provider":"NHL","url":"https://api-web.nhle.com/v1/schedule/2026-06-14","fetchedAt":"2026-09-06T19:47:45.048Z","contentHash":"988be9b53edaf09321e320842a60808e3bf63e83b52aa625369199500281a25c"},
+  "away": {
+    "heading":"Hurricanes",
+    "lines":[["Andrei Svechnikov","Sebastian Aho","Jordan Martinook"],["Taylor Hall","Logan Stankoven","Jackson Blake"],["Nikolaj Ehlers","Jordan Staal","Seth Jarvis"],["William Carrier","Mark Jankowski","Eric Robinson"]],
+    "pairs":[["Jaccob Slavin","Jalen Chatfield"],["K'Andre Miller","Sean Walker"],["Shayne Gostisbehere","Alexander Nikishin"]],
+    "goalies":["Brandon Bussi","Frederik Andersen"],
+    "scratched":["Jesperi Kotkaniemi","Nicolas Deslauriers","Mike Reilly","Pyotr Kochetkov"],
+    "injured":[],
+    "rosterSource":{"provider":"NHL","url":"https://api-web.nhle.com/v1/roster/CAR/20252026","fetchedAt":"2026-09-06T19:46:42.703Z","contentHash":"e278c6e1a099281d612bc5825ec32d917b89d96c561d8080ae410698c0761f7c"},
+    "clubSource":{"provider":"NHL","url":"https://api-web.nhle.com/v1/club-stats/CAR/20252026/3","fetchedAt":"2026-09-06T19:47:45.063Z","contentHash":"4ded15a673583379d3531567a70d373a808b54c14ab0851da99bdae59bbb597d"},
+    "rosterPlayers":[[8478427,"Sebastian Aho","C"],[8482809,"Jackson Blake","R"],[8477478,"William Carrier","L"],[8475235,"Nicolas Deslauriers","L"],[8477940,"Nikolaj Ehlers","L"],[8475791,"Taylor Hall","L"],[8476873,"Mark Jankowski","L"],[8482093,"Seth Jarvis","R"],[8480829,"Jesperi Kotkaniemi","C"],[8476921,"Jordan Martinook","L"],[8480762,"Eric Robinson","L"],[8473533,"Jordan Staal","C"],[8482702,"Logan Stankoven","C"],[8480830,"Andrei Svechnikov","R"],[8478970,"Jalen Chatfield","D"],[8476906,"Shayne Gostisbehere","D"],[8480817,"K'Andre Miller","D"],[8482100,"Alexander Nikishin","D"],[8476958,"Jaccob Slavin","D"],[8480336,"Sean Walker","D"],[8483548,"Brandon Bussi","G"],[8481611,"Pyotr Kochetkov","G"]],
+    "additionalClubPlayers":[[8476422,"Mike Reilly","D"],[8475883,"Frederik Andersen","G"]]
+  },
+  "home": {
+    "heading":"Golden Knights",
+    "lines":[["Pavel Dorofeyev","Jack Eichel","Mark Stone"],["Brett Howden","Tomas Hertl","Mitch Marner"],["Ivan Barbashev","Colton Sissons","Reilly Smith"],["Cole Smith","Nic Dowd","Keegan Kolesar"]],
+    "pairs":[["Brayden McNabb","Shea Theodore"],["Noah Hanifin","Rasmus Andersson"],["Jeremy Lauzon","Dylan Coghlan"]],
+    "goalies":["Carter Hart","Adin Hill"],
+    "scratched":["Akira Schmid","Brandon Saad","Ben Hutton","Jaycob Megna","Braeden Bowman","Kaeden Korczak"],
+    "injured":[["William Karlsson","upper body"],["Jonas Rondbjerg","lower body"]],
+    "rosterSource":{"provider":"NHL","url":"https://api-web.nhle.com/v1/roster/VGK/20252026","fetchedAt":"2026-09-06T19:46:42.706Z","contentHash":"2feb8a283bdaa1b48368dfffb889b32b304aa5370f7e4168ee42d84f54120328"},
+    "clubSource":{"provider":"NHL","url":"https://api-web.nhle.com/v1/club-stats/VGK/20252026/3","fetchedAt":"2026-09-06T19:47:45.065Z","contentHash":"92f05d082378dff5bc63fb5edf6417731d117e0523e9b1e5b155a4430bc1b42b"},
+    "rosterPlayers":[[8477964,"Ivan Barbashev","L"],[8483890,"Braeden Bowman","R"],[8484803,"Trevor Connelly","L"],[8475343,"Nic Dowd","C"],[8478403,"Jack Eichel","C"],[8476881,"Tomas Hertl","C"],[8482125,"Alexander Holtz","R"],[8479353,"Brett Howden","C"],[8476448,"William Karlsson","C"],[8478434,"Keegan Kolesar","R"],[8478483,"Mitch Marner","R"],[8475913,"Mark Stone","R"],[8485251,"Kai Uchacz","C"],[8479602,"Jeremy Davies","D"],[8478396,"Noah Hanifin","D"],[8475188,"Brayden McNabb","D"],[8477034,"Jaycob Megna","D"],[8477447,"Shea Theodore","D"],[8478450,"Parker Wotherspoon","D"],[8479394,"Carter Hart","G"],[8478499,"Adin Hill","G"],[8482761,"Carl Lindbom","G"]],
+    "additionalClubPlayers":[[8475191,"Reilly Smith","R"],[8476438,"Brandon Saad","L"],[8476925,"Colton Sissons","C"],[8477018,"Ben Hutton","D"],[8478397,"Rasmus Andersson","D"],[8478468,"Jeremy Lauzon","D"],[8479639,"Dylan Coghlan","D"],[8481527,"Kaedan Korczak","D"],[8481604,"Pavel Dorofeyev","R"],[8482062,"Cole Smith","R"]]
+  }
+}

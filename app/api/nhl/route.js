@@ -9,6 +9,13 @@ import { nhlHistoricalResearch } from '../../../lib/nhl/research.js';
 import { NHL_HISTORICAL_SAMPLES } from '../../../lib/nhl/historical-samples.js';
 import { fetchNhlTeamSummary } from '../../../lib/nhl/data.js';
 import { validNhlTeamSummaryScope } from '../../../lib/nhl/team-summary.js';
+import { fetchNhlPersonnel, compareNhlPersonnelVersions, mergeNhlPersonnelIdentitySources } from '../../../lib/nhl/personnel-feed.js';
+import { makeNhlPersonnelObservation, nhlPersonnelFreshness } from '../../../lib/nhl/personnel-observation.js';
+import { loadBundledNhlHistoryValidation } from '../../../lib/nhl/history-validation.js';
+import { nhlShotResearchEvidence } from '../../../lib/nhl/shot-research-evidence.js';
+import { nhlFrozenShotResearchArtifacts } from '../../../lib/nhl/shot-research-frozen.js';
+import { scoreNhlObservedGameResearch } from '../../../lib/nhl/shot-research.js';
+import { fetchNhlJson } from '../../../lib/nhl/data.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +26,8 @@ const sourceError = result => Object.assign(new Error(result.code === 'NHL_SOURC
   : result.code === 'NHL_SOURCE_RATE_LIMITED' ? '官方資料來源要求稍後重試；已保留之前資料。'
     : result.code === 'NHL_SOURCE_TIMEOUT' ? '官方資料來源回應逾時；已保留之前資料。'
       : result.status === 'BLOCK' ? 'NHL 資料身分或比分核對未通過；已保留之前資料。' : 'NHL 官方來源暫時無法提供完整資料；已保留之前資料。'),
-{ status: result.status === 'BLOCK' ? 422 : 503, code: result.code || 'NHL_SOURCE_UNAVAILABLE', issues: result.issues || [], upstreamStatus: result.httpStatus || null });
+{ status: result.status === 'BLOCK' ? 422 : 503, code: result.code || 'NHL_SOURCE_UNAVAILABLE', issues: result.issues || [], upstreamStatus: result.httpStatus || null,
+  retryAt: result.retryAt || null, retryAfter: result.retryAfter || null });
 const requireResult = result => { if (!result?.ok) throw sourceError(result || {}); return { ...result, league: 'NHL' }; };
 const validGameId = value => /^(?:19|20)\d{2}0[123]\d{4}$/.test(value || '') && Number(value.slice(6)) > 0;
 
@@ -33,7 +41,9 @@ export async function GET(request) {
     if (action === 'status') return response({ ok: true, version: NHL_DATA_VERSION, sources: NHL_SOURCES,
       reader: { version: NHL_READER_INTERFACE_VERSION, status: 'WAITING_REAL_DATA', message: NHL_READER_WAITING_MESSAGE, verifiedMarketCount: 0 },
       persistenceConfigured: nhlPersistenceConfigured(), scope: 'NHL_DATA_AND_SHADOW_RESEARCH', realBetExecutionEnabled: false });
-    if (action === 'research') return response(await cachedNhlData('historical-research-v1', async () => nhlHistoricalResearch(), { ttlMs: 3600_000 }));
+    if (action === 'research') return response(await cachedNhlData(`historical-research-v2:${nhlShotResearchEvidence().fullReportHash}`, async () => ({
+      ...nhlHistoricalResearch(), expandedHistory: await loadBundledNhlHistoryValidation(), shotResearch: nhlShotResearchEvidence(),
+    }), { ttlMs: 3600_000 }));
     if (action === 'schedule') {
       const date = params.get('date');
       if (!validDateString(date)) return response({ ok: false, code: 'NHL_INVALID_DATE', error: '台灣日期格式無效' }, 400);
@@ -81,6 +91,56 @@ export async function GET(request) {
           message: '依本次官方完整球隊賽程推算；歷史查詢屬回溯資料，不代表當時可得的賽前快照。旅行距離須另有球場座標證據。' };
       }, { ttlMs: 5 * 60_000 }));
     }
+    if (action === 'observed-shot-research') {
+      const gameId = params.get('gameId');
+      if (!validGameId(gameId) || params.getAll('gameId').length !== 1) return response({ ok: false, code: 'NHL_INVALID_GAME_ID', error: 'NHL Game ID 無效' }, 400);
+      const artifact = nhlFrozenShotResearchArtifacts();
+      return response(await cachedNhlData(`observed-shots:${artifact.contentHash}:${gameId}`, async () => {
+        const { game } = requireResult(await fetchNhlGame(gameId, { retry: false }));
+        const pbp = requireResult(await fetchNhlJson(`${NHL_SOURCES.gamecenter.url}${gameId}/play-by-play`, { retry: false }));
+        const research = requireResult(scoreNhlObservedGameResearch(artifact, pbp.data, { source: pbp.source, expectedGame: game }));
+        return { ok: true, league: 'NHL', gameId, research };
+      }, { ttlMs: 60_000 }));
+    }
+    if (action === 'personnel') {
+      const gameId = params.get('gameId');
+      if (!validGameId(gameId) || params.getAll('gameId').length !== 1) return response({ ok: false, code: 'NHL_INVALID_GAME_ID', error: 'NHL Game ID 無效' }, 400);
+      const result = await cachedNhlData(`personnel-editorial-v1:${gameId}`, async () => {
+        const { game } = requireResult(await fetchNhlGame(gameId, { retry: false }));
+        const personnel = await fetchNhlPersonnel(game, { loadRoster: async (team, season, side) => {
+          const [roster, statistics] = await Promise.all([fetchNhlRoster(team, season, { retry: false }), fetchNhlTeamStatistics(team, season, game.gameType, { retry: false })]);
+          return mergeNhlPersonnelIdentitySources(roster, statistics, game, side);
+        } });
+        if (!personnel.ok) throw sourceError({ ...personnel, issues: personnel.qa?.issues || [personnel.code] });
+        return { ok: true, league: 'NHL', gameId, gameIdentity: game, personnel: { ...personnel, league: 'NHL' } };
+      }, { ttlMs: 60_000 });
+      let personnel = { ...result.personnel, freshness: nhlPersonnelFreshness(result.personnel) };
+      let observation = { persisted: false, reason: personnel.matched ? '永久來源快照資料庫尚未設定。' : '沒有本場相符的人員消息；不建立虛假的門將版本。' };
+      let change = null;
+      if (nhlPersistenceConfigured() && personnel.matched) {
+        try {
+          const previous = await loadNhlObservations('PERSONNEL', gameId, 1);
+          change = compareNhlPersonnelVersions(previous[0]?.personnel, personnel);
+          if (!change.ok) {
+            observation = { persisted: false, reason: '本次來源版本倒退，未寫入；顯示已保存的較新人員版本，來源時間維持原值。' };
+            if (previous[0]?.personnel) personnel = { ...previous[0].personnel, freshness: nhlPersonnelFreshness(previous[0].personnel) };
+          } else {
+            const candidate = makeNhlPersonnelObservation(result.gameIdentity, personnel);
+            if (previous[0]?.personnel?.revision === personnel.revision && previous[0]?.observedAt === candidate.observedAt)
+              observation = { persisted: true, revision: previous[0].revision, observedAt: previous[0].observedAt };
+            else observation = await saveNhlObservation('PERSONNEL', gameId, candidate);
+          }
+        } catch (error) {
+          observation = { persisted: false, reason: '人員來源快照保存未完成；本次可查看，不能當成已永久保存。', code: error.code || 'NHL_PERSONNEL_PERSISTENCE_FAILED' };
+        }
+      }
+      return response({ ok: true, gameId, personnel, observation, change, cache: result.cache });
+    }
+    if (action === 'personnel-versions') {
+      const gameId = params.get('gameId');
+      if (!validGameId(gameId) || params.getAll('gameId').length !== 1) return response({ ok: false, code: 'NHL_INVALID_GAME_ID', error: 'NHL Game ID 無效' }, 400);
+      return response({ ok: true, gameId, versions: await loadNhlObservations('PERSONNEL', gameId) });
+    }
     if (action === 'team-summary') {
       const teamId = Number(params.get('teamId')); const season = Number(params.get('season')); const gameType = Number(params.get('gameType'));
       if (!['teamId', 'season', 'gameType'].every(key => params.getAll(key).length === 1 && /^\d+$/.test(params.get(key) || '')) || !validNhlTeamSummaryScope(teamId, season, gameType))
@@ -113,11 +173,11 @@ export async function GET(request) {
     if (action === 'versions') {
       const gameId = params.get('gameId');
       if (!validGameId(gameId)) return response({ ok: false, error: 'NHL Game ID 無效' }, 400);
-      return response({ ok: true, versions: await loadNhlObservations('GAME', gameId) });
+      return response({ ok: true, gameId, versions: await loadNhlObservations('GAME', gameId) });
     }
     return response({ ok: false, error: '不支援的 NHL 資料操作' }, 400);
   } catch (error) {
     return response({ ok: false, code: error.code || 'NHL_DATA_ERROR', error: error.status ? error.message : 'NHL 資料服務暫時無法完成，請稍後重試。',
-      issues: error.issues || [], upstreamStatus: error.upstreamStatus || null }, error.status || 503);
+      issues: error.issues || [], upstreamStatus: error.upstreamStatus || null, retryAt: error.retryAt || null, retryAfter: error.retryAfter || null }, error.status || 503);
   }
 }

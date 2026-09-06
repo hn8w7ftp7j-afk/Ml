@@ -4,6 +4,7 @@ import { normalizeNhlGame, normalizeNhlSchedule, fetchNhlJson, fetchNhlSchedule,
 import { validateNhlIdentity, nhlDate, validNhlDate, normalizeNhlGoalieEvidence, detectNhlGoalieChange } from '../lib/nhl/identity.js';
 import { NHL_HISTORICAL_SAMPLES } from '../lib/nhl/historical-samples.js';
 import { normalizeNhlGameReport } from '../lib/nhl/game-report.js';
+import { nhlRetryAfterPolicy, nhlSourceCooldown, recordNhlSourceRateLimit } from '../lib/nhl/source-retry-policy.js';
 
 const load = name => JSON.parse(fs.readFileSync(new URL(`./fixtures/nhl/${name}`, import.meta.url), 'utf8'));
 const raw = load('landing-2023020001.json');
@@ -23,6 +24,13 @@ await test('real official scoring derives complete periods, preserving missing i
   assert.equal(game.goalie.away, null);
   assert.equal(game.outcomeAvailableAt, null);
   assert.equal(game.source.url, source.url);
+});
+
+await test('official acquisition timestamp is complete-body availability, not request initiation', async () => {
+  let now = Date.parse('2026-10-11T00:00:00Z');
+  const result = await fetchNhlJson(source.url, { now: () => now, fetchImpl: async () => ({ ok: true, headers: new Headers(), json: async () => { now += 2000; return raw; } }) });
+  assert.equal(result.source.requestedAt, '2026-10-11T00:00:00.000Z');
+  assert.equal(result.source.fetchedAt, '2026-10-11T00:00:02.000Z');
 });
 
 await test('missing scoring and changed scoring fail closed instead of splitting final score', () => {
@@ -77,6 +85,100 @@ await test('403 negative cache and 429 retry-after do not produce repeated reque
   const limited = async () => { limitedRequests += 1; return response(null, 429); };
   assert.equal((await fetchNhlJson(source.url, { fetchImpl: limited })).code, 'NHL_SOURCE_RATE_LIMITED');
   assert.equal(limitedRequests, 1);
+});
+
+await test('429 seconds govern every new URL on the same host through exact expiry, without automatic retry', async () => {
+  const start = Date.parse(source.fetchedAt); let clock = start; let requests = 0;
+  const fetchImpl = async (_url, options) => { requests++; assert.equal(options.redirect, 'manual'); return requests === 1 ? response(null, 429, { 'retry-after': '120' }) : response(raw); };
+  const options = { fetchImpl, now: () => clock };
+  const first = await fetchNhlJson(source.url, options);
+  assert.equal(first.retryAfter, '120'); assert.equal(first.retryAt, new Date(start + 120_000).toISOString());
+  assert.equal(first.rateLimitSourceUrl, source.url); assert.equal(first.attempts, 1);
+  clock += 31_000;
+  const second = await fetchNhlJson(source.url.replace('/landing', '/play-by-play'), options);
+  assert.equal(second.code, 'NHL_SOURCE_RATE_LIMITED'); assert.equal(second.hostCooldown, true); assert.equal(second.attempts, 0);
+  assert.equal(second.retryAt, first.retryAt); assert.equal(second.source.fetchedAt, undefined); assert.equal(requests, 1);
+  assert.equal((await fetchNhlJson(source.url, options)).cached, true);
+  clock = start + 120_000;
+  assert.equal(requests, 1, 'the passage of fake time must not initiate a request');
+  assert.equal((await fetchNhlJson(source.url, options)).ok, true); assert.equal(requests, 2);
+});
+
+await test('HTTP-date and invalid retry-after preserve source cooldown, isolated by transport', async () => {
+  const start = Date.parse(source.fetchedAt);
+  for (const [header, duration, policy] of [
+    [new Date(start + 90_000).toUTCString(), 90_000, 'OFFICIAL_RETRY_AFTER'],
+    [null, 60_000, 'CONSERVATIVE_60_SECOND_BACKOFF_HEADER_ABSENT_OR_INVALID'],
+    ['-1', 60_000, 'CONSERVATIVE_60_SECOND_BACKOFF_HEADER_ABSENT_OR_INVALID'],
+    ['1.5', 60_000, 'CONSERVATIVE_60_SECOND_BACKOFF_HEADER_ABSENT_OR_INVALID'],
+    ['not-a-date', 60_000, 'CONSERVATIVE_60_SECOND_BACKOFF_HEADER_ABSENT_OR_INVALID'],
+  ]) {
+    let clock = start; let requests = 0;
+    const fetchImpl = async () => { requests++; return response(null, 429, { 'retry-after': header }); };
+    const first = await fetchNhlJson(source.url, { fetchImpl, now: () => clock });
+    assert.equal(first.retryAt, new Date(start + duration).toISOString()); assert.equal(first.retryPolicy, policy);
+    clock += duration - 1;
+    assert.equal((await fetchNhlJson(source.url.replace('/landing', '/boxscore'), { fetchImpl, now: () => clock })).attempts, 0);
+    assert.equal(requests, 1);
+  }
+  assert.equal(nhlRetryAfterPolicy('0', start).retryAt, new Date(start).toISOString());
+  assert.equal(nhlRetryAfterPolicy(new Date(start - 1000).toUTCString(), start).retryAt, new Date(start).toISOString());
+  const independent = await fetchNhlJson(source.url, { fetchImpl: async () => response(raw), now: () => start });
+  assert.equal(independent.ok, true);
+});
+
+await test('fresh successful cache retains original evidence clock during host cooldown', async () => {
+  const start = Date.parse(source.fetchedAt); let clock = start; let requests = 0;
+  const fetchImpl = async url => { requests++; return url === source.url ? response(raw) : response(null, 429, { 'retry-after': '120' }); };
+  const options = { fetchImpl, now: () => clock, ttlMs: 180_000 };
+  const success = await fetchNhlJson(source.url, options);
+  clock += 1000;
+  await fetchNhlJson(source.url.replace('/landing', '/right-rail'), options);
+  clock += 30_000;
+  const cached = await fetchNhlJson(source.url, options);
+  assert.equal(cached.ok, true); assert.equal(cached.cached, true); assert.deepEqual(cached.source, success.source); assert.equal(requests, 2);
+});
+
+await test('parallel rate-limit responses cannot shorten or mutate the shared host deadline', () => {
+  const start = Date.parse(source.fetchedAt); const fetchImpl = async () => {};
+  const secondUrl = source.url.replace('/landing', '/boxscore');
+  const first = recordNhlSourceRateLimit(fetchImpl, source.url, { retryAfter: '120', now: start });
+  const shorter = recordNhlSourceRateLimit(fetchImpl, secondUrl, { retryAfter: '30', now: start + 1000 });
+  assert.equal(shorter.retryAt, first.retryAt); assert.equal(shorter.rateLimitSourceUrl, source.url);
+  shorter.retryAt = 'corrupt';
+  assert.equal(nhlSourceCooldown(fetchImpl, secondUrl, start + 31_000).retryAt, first.retryAt);
+  assert.equal(nhlSourceCooldown(fetchImpl, secondUrl, start + 120_000), null);
+});
+
+await test('concurrent 429 prevents another URL transient-failure automatic retry', async () => {
+  let finishTransient; let requests = 0;
+  const fetchImpl = async url => {
+    requests++;
+    if (url === source.url) return new Promise(resolve => { finishTransient = () => resolve(response(null, 500)); });
+    return response(null, 429, { 'retry-after': '120' });
+  };
+  const options = { fetchImpl, now: () => Date.parse(source.fetchedAt) };
+  const pending = fetchNhlJson(source.url, options);
+  await fetchNhlJson(source.url.replace('/landing', '/boxscore'), options);
+  finishTransient();
+  const stopped = await pending;
+  assert.equal(stopped.code, 'NHL_SOURCE_RATE_LIMITED'); assert.equal(stopped.attempts, 1); assert.equal(requests, 2);
+});
+
+await test('source allowlist rejects ports, credentials and fragments; redirects never follow or retry', async () => {
+  let requests = 0;
+  const never = async () => { requests++; return response(raw); };
+  for (const url of ['https://api-web.nhle.com:444/v1/test', 'https://secret@api-web.nhle.com/v1/test', 'https://@api-web.nhle.com/v1/test', `${source.url}#fragment`, `${source.url}#`]) {
+    assert.equal((await fetchNhlJson(url, { fetchImpl: never })).code, 'NHL_SOURCE_URL_NOT_ALLOWED');
+  }
+  assert.equal(requests, 0);
+  assert.equal((await fetchNhlJson(source.url.replace('.com/', '.com:443/'), { fetchImpl: never })).ok, true);
+  for (const value of [{ ...response(null, 302) }, { ...response(raw), redirected: true }, { ...response(raw), type: 'opaqueredirect' }, { ...response(raw), url: 'https://attacker.invalid/payload' }]) {
+    let attempts = 0;
+    const fetchImpl = async (_url, options) => { attempts++; assert.equal(options.redirect, 'manual'); return value; };
+    const result = await fetchNhlJson(source.url, { fetchImpl });
+    assert.equal(result.code, value.url ? 'NHL_SOURCE_RESPONSE_URL_MISMATCH' : 'NHL_SOURCE_REDIRECT_NOT_FOLLOWED'); assert.equal(attempts, 1);
+  }
 });
 
 await test('network retries and body timeout are bounded; untrusted source URLs never fetch', async () => {

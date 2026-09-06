@@ -6,3 +6,11 @@ node_modules
 /release/
 /release-obsolete/
 /.swc
+# Original NHL acquisition checkpoints remain local; verified lossless archives
+# are committed. Do not remove archives or treat missing live data as acquired.
+/scripts/fixtures/nhl/xg-research/pbp-*.json
+/scripts/fixtures/nhl/history-expanded/standings-*.json
+/scripts/fixtures/nhl/history-expanded/schedule-*.json
+/scripts/fixtures/nhl/history-expanded/landing-*.json
+/scripts/fixtures/nhl/history-expanded/period-report-*.json
+/scripts/fixtures/nhl/history-expanded/*.partial
