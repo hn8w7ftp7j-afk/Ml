@@ -5,6 +5,7 @@ import { NBA_MODULE_VERSION } from '../../lib/nba/config.js';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 import { nbaRequestKey, nbaScreenNeedsRefresh, readNbaScreen, requestNbaScreen } from '../../lib/nba/client-cache.js';
 import styles from './nba.module.css';
+import ShadowPanel from './shadow-panel.js';
 
 const VIEWS = [['schedule', '賽程與賽果'], ['teams', '球隊與球員'], ['injuries', '傷病狀態'], ['history', '歷史研究'], ['sources', '資料與 QA']];
 const typeLabel = value => ({ regular: '例行賽', preseason: '季前賽', postseason: '季後賽', unknown: '類型待確認' }[value] || value || '—');
@@ -56,8 +57,9 @@ function GameDetails({ data, onPlayer }) {
       <details><summary>比賽身分與來源</summary><p className={styles.mono}>{game.id}</p><p>ESPN 場次識別已核對；NBA 官方識別尚未交叉確認。</p></details>
       <div className={styles.twoColumns}>{[game.away, game.home].map(team => <section key={team.id}><h3>{teamName(team)}・各節</h3><div className={styles.periods}>{team.periodScores?.length ? team.periodScores.map((period, index) => <div key={index}><span>{(period.period || index + 1) <= 4 ? `Q${period.period || index + 1}` : `OT${(period.period || index + 1) - 4}`}</span><strong>{number(typeof period === 'object' ? period.value ?? period.score : period)}</strong></div>) : <p>各節比分尚未提供。</p>}</div><StatList rows={team.statistics} title="球隊單場統計"/></section>)}</div>
     </section>
+    <section className={styles.panel}><h2>籃球進階指標・估算</h2><p className={styles.muted}>由雙方 box score 推導，與 NBA 官方逐回合指標不同。包含延長賽的實際時間核對；缺欄位不補零。</p><dl className={styles.metrics}><div><dt>共同估算回合數</dt><dd>{number(data.basketball?.possessions)}</dd></div><div><dt>Pace／48 分鐘</dt><dd>{number(data.basketball?.pace)}</dd></div><div><dt>主隊進攻效率</dt><dd>{number(data.basketball?.home?.offensiveRating)}</dd></div><div><dt>客隊進攻效率</dt><dd>{number(data.basketball?.away?.offensiveRating)}</dd></div></dl><div className={styles.twoColumns}>{['away', 'home'].map(side => <section key={side}><h3>{teamName(game[side])}</h3><p>防守效率 {number(data.basketball?.[side]?.defensiveRating)}・Net Rating {number(data.basketball?.[side]?.netRating)}</p><p>eFG% {number(data.basketball?.[side]?.effectiveFieldGoalPct)}・進攻籃板率 {number(data.basketball?.[side]?.offensiveReboundPct)}%</p></section>)}</div><details><summary>計算方法與原始輸入</summary><p>雙方各自 FGA + 0.44 × FTA − 進攻籃板 + 球隊總失誤，再取平均作共同回合數。Pace 依完整分節換算每 48 分鐘；效率為每 100 個估算回合得分。</p><p>Usage 依球員出手、罰球、失誤與時間估算；來源分鐘可能已四捨五入，並非官方 Usage。</p>{data.basketball?.qa?.issues?.map(row => <p key={row.code}>{row.message}</p>)}</details></section>
     <section className={styles.panel}><h2>先發與球員單場統計</h2><p className={styles.muted}>{game.completed ? '以下為賽後記錄的實際先發，不能當作賽前已公布的資訊。' : '有來源確認才顯示先發；未公布不以預測名單代替。'}</p>
-      {players.length ? <div className={styles.playerGrid}>{players.map(player => <article className={styles.player} key={player.id}><div><strong>{player.name || player.displayName}</strong><span>{teamName(player.teamId === game.home.id ? game.home : game.away)}・{player.position || ''} {player.starterStatus === 'actual' ? '・實際先發' : player.starterStatus === 'reported' ? '・來源回報先發' : '・先發未確認'}</span></div><StatList rows={player.statistics} title="單場表現"/><button type="button" onClick={() => onPlayer(player)}>球員球季統計</button></article>)}</div> : <Empty>尚未取得先發及球員統計。</Empty>}
+      {players.length ? <div className={styles.playerGrid}>{players.map(player => <article className={styles.player} key={player.id}><div><strong>{player.name || player.displayName}</strong><span>{teamName(player.teamId === game.home.id ? game.home : game.away)}・{player.position || ''} {player.starterStatus === 'actual' ? '・實際先發' : player.starterStatus === 'reported' ? '・來源回報先發' : '・先發未確認'}</span></div><StatList rows={player.statistics} title="單場表現"/><p>估算 Usage：{number(data.basketball?.players?.find(row => row.playerId === player.id)?.usageEstimate)}%</p><button type="button" onClick={() => onPlayer(player)}>球員球季統計</button></article>)}</div> : <Empty>尚未取得先發及球員統計。</Empty>}
     </section>
     <section className={styles.panel}><h3>傷病時間核對</h3><p>歷史比賽不套用目前傷病清單。缺少當時已發布的傷病或先發快照時，保留為「未驗證」。</p></section>
   </div>;
@@ -79,7 +81,8 @@ function Research({ result, seasonType, onOpen }) {
   const report = result.research;
   const games = (result.data.games || []).filter(game => game.seasonType === seasonType);
   return <div className={styles.sections}>
-    <section className={styles.panel}><div className={styles.sectionHead}><h2>歷史統計研究</h2><span className={styles.badge}>Shadow・{typeLabel(seasonType)}</span></div>
+    <ShadowPanel games={games} teamId={result.data.team?.id} seasonType={seasonType}/>
+    <section className={styles.panel}><div className={styles.sectionHead}><h2>歷史統計基準</h2><span className={styles.badge}>Shadow・{typeLabel(seasonType)}</span></div>
       <p>使用已結束比賽，依時間順序檢查歷史得分基準。每次驗證只使用更早台灣日期的比賽；季前、例行與季後賽分開。</p>
       {report ? <><dl className={styles.metrics}><div><dt>有效歷史場數</dt><dd>{number(report.counts?.included ?? report.summary?.games)}</dd></div><div><dt>驗證場數</dt><dd>{number(report.counts?.validationGames)}</dd></div><div><dt>每隊得分 MAE</dt><dd>{number(report.validation?.mae)}</dd></div><div><dt>每隊得分 RMSE</dt><dd>{number(report.validation?.rmse)}</dd></div></dl>
         <p className={styles.muted}>MAE／RMSE 越小代表這份樣本的得分誤差越小。此為歷史得分基準研究，尚不具完整賽前傷病與先發快照。</p>
