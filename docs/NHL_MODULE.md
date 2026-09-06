@@ -41,4 +41,4 @@ The cross-review also fixed an existing settlement data bug: null/blank official
 
 `npm test` includes all existing MLB/NPB/KBO/CPBL tests and the NHL suite. `npm run build` builds the same Production app. `npm audit --omit=dev --audit-level=high` is the existing dependency gate. Production verification must additionally exercise the actual deployed routes, league navigation, data loading, persistence, error handling and console/runtime state. A successful build alone is not an end-to-end PASS.
 
-NBA was added concurrently in main cdc0d03 (PR #165) and safely merged into this release before deployment. Its complete data/research/API tests run alongside NHL in npm test. NHL also exposes the existing NBA dialog entry. This module does not create or deploy a second website, repository or Vercel project.
+NBA was added concurrently in main cdc0d03 (PR #165), followed by hydration fix 341fa7f (PR #167) and safely merged into this release before deployment. Its complete data/research/API tests run alongside NHL in npm test. NHL also exposes the existing NBA dialog entry. This module does not create or deploy a second website, repository or Vercel project.
