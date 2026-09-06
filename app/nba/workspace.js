@@ -176,7 +176,7 @@ export default function NbaWorkspace({ onClose }) {
   const visible = screen.key === key ? screen.result : null;
   const result = view === 'sources' ? lastData.current : visible;
   const data = result?.data;
-  const loading = screen.key === key && screen.loading;
+  const loading = !ready || (screen.key === key && screen.loading);
   const topView = view === 'game' ? 'schedule' : (view === 'team' || view === 'player') ? 'teams' : view;
   const years = Array.from({ length: 28 }, (_, index) => new Date().getUTCFullYear() + 1 - index);
 

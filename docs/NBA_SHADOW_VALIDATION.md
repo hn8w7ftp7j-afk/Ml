@@ -28,3 +28,9 @@ Run `npm test`, `npm run build`, `npm audit --omit=dev --audit-level=high` and a
 - Model superiority, league-wide calibration and prospective validation are not established.
 - Mobile physical-device verification is not claimed; browser tooling lacks a viewport/device-emulation capability.
 - NBA betting/recommendations/ranking are outside this narrowed change and remain absent. Existing wagering code stays untouched.
+
+## Post-deployment corrective pass
+
+v11.9.6 / PR #175 deployed to the same Production alias at main `2e1a5b453f18d3a5c18e10f8d6780917aed439d0`; health reported 11.9.6. Actual browser testing started the 82-game research run, switched to the team view, and returned to continuing progress with no source failures. The built-server HTTP boundary also verified authentication (401), foreign-league rejection (400), `/nba` (200), 22 actual player rows and shared 102.8 estimated possessions for game 401811042.
+
+The v11.9.7 correction makes initial hydration display Loading instead of an empty-state instruction next to a disabled button, counts the QA-blocked request as processed, and explicitly reports session-storage quota failure as memory-only persistence. Storage failures never trigger deletion of another league's data. Two additional storage-path tests bring NBA coverage to 80 groups (35 data + 14 baseline + 22 basketball/Shadow + 9 API/client). These corrections do not change model formulas or any existing wagering rule.
