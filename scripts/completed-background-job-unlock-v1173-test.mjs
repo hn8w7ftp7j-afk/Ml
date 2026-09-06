@@ -5,7 +5,7 @@ const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8')
 
 assert.match(
   page,
-  /function loadBackgroundJob\(league, date\)[\s\S]*terminalRunMatches[\s\S]*cachedResultLoaded[\s\S]*loadAnalysisBoardCache\(id, date\)[\s\S]*!cachedResultLoaded[\s\S]*saveBackgroundJob\(recovered\);[\s\S]*return recovered;/,
+  /function loadBackgroundJob\(league, date, visibleBoard = \[\]\)[\s\S]*cachedBoard = loadAnalysisBoardCache\(id, date\)[\s\S]*terminalRunMatches[\s\S]*cachedResultLoaded[\s\S]*!cachedResultLoaded[\s\S]*saveBackgroundJob\(recovered\);[\s\S]*return recovered;/,
   'a terminal all-league run must recover each unconsumed league result, including after an overlapping individual job replaced its reconnect record',
 );
 assert.match(

@@ -49,6 +49,14 @@ import {
   upsertAnalysisBoardCache,
 } from '../lib/analysis-board-cache-v1.js';
 import {
+  ANALYSIS_COMPLETED_RECEIPT_STORAGE_KEY,
+  analysisItemMatchesScope,
+  completedReceiptGameMatches,
+  createCompletedAnalysisReceipt,
+  findMissingCompletedAnalysisReceipt,
+  upsertCompletedAnalysisReceipt,
+} from '../lib/analysis-completed-receipt-v1.js';
+import {
   analysisDisplayRowsForCard,
   analysisHasCalculatedDirections,
   analysisIsUnopenedOnly,
@@ -349,52 +357,103 @@ function loadAnalysisBoardCache(league, date) {
   try {
     const store = safeParse(window.localStorage.getItem(ANALYSIS_BOARD_CACHE_STORAGE) || 'null');
     const entry = store?.[analysisBoardCacheKey(league, date)];
-    return restoreAnalysisBoardCache(entry, { league, date });
+    return restoreAnalysisBoardCache(entry, { league, date })
+      .filter(item => analysisItemMatchesScope(item, { league, date }));
   } catch {
     return [];
   }
 }
 
 function saveAnalysisBoardCache(league, date, board) {
-  const entry = createAnalysisBoardCacheEntry({ league, date, board });
+  const scopedBoard = (Array.isArray(board) ? board : [])
+    .filter(item => analysisItemMatchesScope(item, { league, date }));
+  const entry = createAnalysisBoardCacheEntry({ league, date, board: scopedBoard });
   if (!entry) return false;
   try {
     const current = safeParse(window.localStorage.getItem(ANALYSIS_BOARD_CACHE_STORAGE) || 'null');
     window.localStorage.setItem(ANALYSIS_BOARD_CACHE_STORAGE, JSON.stringify(upsertAnalysisBoardCache(current, entry)));
     return true;
   } catch {
-    // If older cached slates exhausted Safari's small quota, retain the current
-    // slate alone. Private mode may still reject it; live analysis continues.
-    try {
-      window.localStorage.setItem(ANALYSIS_BOARD_CACHE_STORAGE, JSON.stringify({
-        [analysisBoardCacheKey(league, date)]: entry,
-      }));
-      return true;
-    } catch { return false; }
+    // setItem is atomic. Keep the previous league snapshots when quota is
+    // exhausted; a compact completed-job receipt can recover missing results.
+    return false;
   }
+}
+
+function saveCompletedAnalysisReceipt(job, result) {
+  const receipt = createCompletedAnalysisReceipt(job, result);
+  if (!receipt) return { stored: false, completed: 0, retainJob: false };
+  try {
+    const saved = safeParse(window.localStorage.getItem(ANALYSIS_COMPLETED_RECEIPT_STORAGE_KEY) || 'null');
+    window.localStorage.setItem(ANALYSIS_COMPLETED_RECEIPT_STORAGE_KEY, JSON.stringify(upsertCompletedAnalysisReceipt(saved, receipt)));
+    return { stored: true, completed: receipt.total, retainJob: false };
+  } catch {
+    // Replacing a pending job's lightweight slate with a smaller completed
+    // receipt can still succeed when a separate storage key has no room.
+    const stored = saveBackgroundJob(receipt);
+    return { stored, completed: receipt.total, retainJob: stored };
+  }
+}
+
+function clearCompletedAnalysisReceipt(league, date, runId) {
+  try {
+    const saved = safeParse(window.localStorage.getItem(ANALYSIS_COMPLETED_RECEIPT_STORAGE_KEY) || 'null');
+    const rows = Array.isArray(saved) ? saved : saved && typeof saved === 'object' ? Object.values(saved) : [];
+    const retained = rows.filter(row => !(row?.league === league && row?.date === date && row?.runId === runId));
+    window.localStorage.setItem(ANALYSIS_COMPLETED_RECEIPT_STORAGE_KEY, JSON.stringify(retained));
+  } catch { /* The current page also suppresses this failed recovery run. */ }
+}
+
+function markBackgroundResultUnavailable(league, date, runId) {
+  try {
+    const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
+    const id = normalizeLeagueId(league);
+    if (run?.runId !== runId || allLeagueBoardDate(run, id) !== date || !run?.leagues?.[id]) return;
+    window.localStorage.setItem(ALL_LEAGUE_ANALYSIS_STORAGE, JSON.stringify({ ...run,
+      leagues: { ...run.leagues, [id]: { ...run.leagues[id], resultUnavailable: true } },
+    }));
+  } catch { /* The current page also suppresses this failed scoped run. */ }
 }
 
 function backgroundJobKey(league, date) {
   return `${String(league || '').toUpperCase()}|||${String(date || '')}`;
 }
 
-function loadBackgroundJob(league, date) {
+function loadBackgroundJob(league, date, visibleBoard = []) {
   try {
     const jobs = safeParse(window.localStorage.getItem(ANALYSIS_JOB_STORAGE) || 'null');
     const job = jobs?.[backgroundJobKey(league, date)] || null;
     const run = safeParse(window.localStorage.getItem(ALL_LEAGUE_ANALYSIS_STORAGE) || 'null');
     const id = normalizeLeagueId(league);
+    const cachedBoard = loadAnalysisBoardCache(id, date);
+    const scopedVisibleBoard = (Array.isArray(visibleBoard) ? visibleBoard : [])
+      .filter(item => analysisItemMatchesScope(item, { league: id, date }));
+    const receipts = safeParse(window.localStorage.getItem(ANALYSIS_COMPLETED_RECEIPT_STORAGE_KEY) || 'null');
+    const recoveryStore = job?.completedReceipt === true ? upsertCompletedAnalysisReceipt(receipts, job) : receipts;
+    const recovery = findMissingCompletedAnalysisReceipt(recoveryStore, {
+      league: id, date, board: [...cachedBoard, ...scopedVisibleBoard],
+    });
     const batch = run?.leagues?.[id] || null;
     const terminalRunMatches = run?.state === 'completed'
       && Boolean(run?.runId)
       && allLeagueBoardDate(run, id) === String(date || '');
+    if (recovery) {
+      const newerPendingJob = job?.completedReceipt !== true && job?.runId
+        && !(terminalRunMatches && job.runId === run.runId)
+        && Date.parse(job.startedAt || '') > Date.parse(recovery.completedAt);
+      // A completed receipt has exact per-game version evidence. Do not turn
+      // it into an older, unversioned all-league reconnect record.
+      return newerPendingJob ? job : recovery;
+    }
     // Older clients could mark a terminal batch as consumed even when its
     // Reader re-attestation discarded every row before anything reached the
     // board.  Do not trust that stale flag unless a calculated board really
     // survived in the durable browser cache for this league/date.
     const cachedResultLoaded = batch?.resultLoaded === true
-      && loadAnalysisBoardCache(id, date).some(item => analysisHasCalculatedDirections(item?.customData));
-    if (terminalRunMatches && !cachedResultLoaded && Number(batch?.total) > 0) {
+      && [...cachedBoard, ...scopedVisibleBoard]
+        .some(item => analysisHasCalculatedDirections(item?.customData))
+      && !recovery;
+    if (terminalRunMatches && batch?.resultUnavailable !== true && !cachedResultLoaded && Number(batch?.total) > 0) {
       const completedAt = Date.parse(run.completedAt || '');
       const jobStartedAt = Date.parse(job?.startedAt || '');
       const differentNewerJob = job?.runId !== run.runId
@@ -418,9 +477,10 @@ function loadBackgroundJob(league, date) {
     if (terminalRunMatches && cachedResultLoaded
       && job?.batchMode === 'all-leagues' && job.runId === run.runId) {
       clearBackgroundJob(id, date, run.runId);
-      return null;
+      return recovery;
     }
-    return job;
+    if (terminalRunMatches && batch?.resultUnavailable === true && job?.runId === run.runId) return null;
+    return (job?.completedReceipt === true ? null : job) || recovery;
   } catch { return null; }
 }
 
@@ -430,11 +490,13 @@ function saveBackgroundJob(job) {
     const source = jobs && typeof jobs === 'object' && !Array.isArray(jobs) ? jobs : {};
     const key = backgroundJobKey(job.league, job.date);
     const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const storedAt = value => Date.parse(value?.startedAt || value?.completedAt || '');
     const compact = Object.fromEntries(Object.entries({ ...source, [key]: job })
       .filter(([entryKey, value]) => entryKey === key
-        || !Number.isFinite(Date.parse(value?.startedAt || ''))
-        || Date.parse(value.startedAt) >= cutoff)
-      .sort((left, right) => Date.parse(right[1]?.startedAt || 0) - Date.parse(left[1]?.startedAt || 0))
+        || !Number.isFinite(storedAt(value))
+        || storedAt(value) >= cutoff)
+      .sort((left, right) => Number(right[0] === key) - Number(left[0] === key)
+        || (storedAt(right[1]) || 0) - (storedAt(left[1]) || 0))
       .slice(0, 12));
     window.localStorage.setItem(ANALYSIS_JOB_STORAGE, JSON.stringify(compact));
     return true;
@@ -1392,6 +1454,7 @@ export default function Home() {
   const betMutationBusyRef = useRef(false);
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
+  const completedRecoveryFailuresRef = useRef(new Set());
   const coreDataBlockRetryRef = useRef(new Map());
   const restoredBoardNeedsValidationRef = useRef(false);
   const activeLeague = leagueConfig(league);
@@ -1818,6 +1881,7 @@ export default function Home() {
     coreDataBlockRetryRef.current.clear();
     setAcknowledgedReaderKey('');
     const restoredBoard = storageReady ? loadAnalysisBoardCache(league, date) : [];
+    boardRef.current = restoredBoard;
     restoredBoardNeedsValidationRef.current = restoredBoard.length > 0
       && !manualAnalysisScopesRef.current.has(`${league}:${date}`);
     setSchedule(restoredBoard.map(item => item.game));
@@ -1830,8 +1894,9 @@ export default function Home() {
   }, [date, league, storageReady]);
   useEffect(() => {
     if (!storageReady) return undefined;
-    const saved = loadBackgroundJob(league, date);
+    const saved = loadBackgroundJob(league, date, boardRef.current);
     if (!saved?.runId) return undefined;
+    if (completedRecoveryFailuresRef.current.has(`${league}|||${date}|||${saved.runId}`)) return undefined;
     const locksForeground = saved.batchMode !== 'all-leagues';
     if (locksForeground && operationBusyRef.current) return undefined;
     if (Array.isArray(saved.preparedBoard)) {
@@ -1844,14 +1909,16 @@ export default function Home() {
       markAppOperationBusy(true);
       setBusy(true);
     }
-    setProgress({ active: true, done: 0, running: 1, total: Number(saved.total) || 1, label: saved.batchMode === 'all-leagues' ? '四聯盟伺服器背景分析中｜可自由切換' : '伺服器背景分析中｜可離開App' });
-    setNotice(saved.batchMode === 'all-leagues'
+    setProgress({ active: true, done: 0, running: 1, total: Number(saved.total) || 1, label: saved.completedReceipt === true ? '正在接回已完成的伺服器結果' : saved.batchMode === 'all-leagues' ? '四聯盟伺服器背景分析中｜可自由切換' : '伺服器背景分析中｜可離開App' });
+    setNotice(saved.completedReceipt === true
+      ? '正在接回已完成的伺服器結果；原始分數保留，最新 Reader 盤口會另行核對。'
+      : saved.batchMode === 'all-leagues'
       ? `已接回 ${league} 的四聯盟背景工作；完成後分數會保存於各自聯盟。`
       : '已接回尚未完成的伺服器背景分析；可以切換畫面，完成後會自動載入。');
-    pollBackgroundJob(saved.runId, generation, date, saved.gamePks).then(result => {
+    pollBackgroundJob(saved.runId, generation, date, saved.gamePks, { completedReceipt: saved.completedReceipt === true ? saved : null }).then(result => {
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== date) return;
       const resultActuallyLoaded = result?.detached !== true && result?.discarded !== true;
-      if (saved.batchMode === 'all-leagues' && resultActuallyLoaded) {
+      if (saved.batchMode === 'all-leagues' && resultActuallyLoaded && result?.recoveryPersisted === true) {
         const completedRun = loadAllLeagueAnalysisRun(date);
         if (completedRun?.runId === saved.runId) {
           publishAllLeagueRun(updateAllLeagueAnalysisLeague(completedRun, league, { resultLoaded: true }));
@@ -1865,6 +1932,10 @@ export default function Home() {
       const completed = rows.filter(row => row?.ok).length;
       const blocked = rows.filter(row => !row?.ok && analysisFailureState(row).blocked).length;
       const failed = Math.max(0, (Number(result?.total) || rows.length) - completed - blocked);
+      if (result?.restoredCompleted === true) {
+        setNotice(`已接回 ${completed} 場已完成的伺服器結果；原始分數已恢復，最新 Reader 盤口正在核對。`);
+        return;
+      }
       setNotice(`伺服器背景分析已載入：完成 ${completed} 場${blocked ? `｜資料不足 ${blocked} 場` : ''}${failed ? `｜暫時失敗 ${failed} 場` : ''}。`);
     }).catch(cause => {
       if (generation === analysisGenerationRef.current && currentDateRef.current === date) setError(String(cause?.message || cause));
@@ -1938,7 +2009,7 @@ export default function Home() {
   }, [date, board.length, league, readerEnabled, analysisEnabled, allLeagueRunning]);
   useEffect(() => {
     if (!readerEnabled || !analysisEnabled || !board.length || restoredBoardNeedsValidationRef.current) return undefined;
-    const pendingBatch = loadBackgroundJob(league, date);
+    const pendingBatch = loadBackgroundJob(league, date, boardRef.current);
     if (pendingBatch?.runId && pendingBatch?.batchMode === 'all-leagues') return undefined;
     // Validate immediately after a page restore or completed analysis. Waiting
     // for the first interval meant every mobile refresh restarted the delay and
@@ -2244,7 +2315,7 @@ export default function Home() {
     }), now));
   }
 
-  function pollBackgroundJob(runId, generation, targetDate, gamePks = []) {
+  function pollBackgroundJob(runId, generation, targetDate, gamePks = [], { completedReceipt = null } = {}) {
     const pollKey = `${runId}|||${generation}|||${targetDate}`;
     const currentPoll = backgroundJobPollsRef.current.get(pollKey);
     if (currentPoll) return currentPoll;
@@ -2259,6 +2330,45 @@ export default function Home() {
           if (state.status === 'completed') {
             const result = state.result || {};
             const rows = Array.isArray(result.results) ? result.results : [];
+            if (completedReceipt) {
+              const verified = createCompletedAnalysisReceipt(completedReceipt, result);
+              if (!verified || completedReceipt.gamePks.some(gamePk => !verified.gamePks.includes(gamePk)
+                || verified.gameVersions?.[gamePk]?.fingerprint !== completedReceipt.gameVersions?.[gamePk]?.fingerprint)) {
+                const failure = new Error('已完成背景結果與保存的聯盟／日期／賽事識別不符；未載入異常資料。');
+                failure.backgroundFatal = true;
+                throw failure;
+              }
+              const missing = new Set(completedReceipt.missingGamePks || completedReceipt.gamePks);
+              const restoredRows = rows.filter(row => row?.ok === true && missing.has(Number(row?.task?.game?.gamePk)));
+              const entry = createAnalysisBoardCacheEntry({ league, date: targetDate, board: restoredRows.map(row => (
+                preserveCompletedReaderResult(null, row, null, compactAnalysisData(row.payload))
+              )).filter(Boolean) });
+              const restored = restoreAnalysisBoardCache(entry, { league, date: targetDate });
+              const current = boardRef.current;
+              const byPk = new Map(current.map(item => [Number(item?.game?.gamePk), item]));
+              for (const item of restored) {
+                const previous = byPk.get(Number(item.game.gamePk));
+                if (!completedReceiptGameMatches(previous, completedReceipt, Number(item.game.gamePk))) {
+                  byPk.set(Number(item.game.gamePk), item);
+                }
+              }
+              const next = [...byPk.values()].sort((left, right) => Date.parse(left?.game?.gameDate || '') - Date.parse(right?.game?.gameDate || ''));
+              boardRef.current = next;
+              setBoard(next);
+              setSchedule(next.map(item => item.game));
+              saveAnalysisBoardCache(league, targetDate, next);
+              // Identical to an ordinary cache restore: retain immutable
+              // displayed values, then let the existing Reader poll validate
+              // current execution authority and refresh stale core inputs.
+              restoredBoardNeedsValidationRef.current = false;
+              return { ...result, results: restoredRows, restoredCompleted: true, recoveryPersisted: true };
+            }
+            const completedRecovery = saveCompletedAnalysisReceipt({ runId, league, date: targetDate }, result);
+            const clearCompletedJobAfterReceipt = () => {
+              if (!completedRecovery.completed || (completedRecovery.stored && !completedRecovery.retainJob)) {
+                clearBackgroundJob(result.league || league, result.date || targetDate, runId);
+              }
+            };
             let applicableRows = rows;
             const discardedReaderPks = new Set();
             const expectedReaderHashes = [...new Set(applicableRows
@@ -2294,13 +2404,13 @@ export default function Home() {
                 applicableRows = applicableRows.filter(row => !obsoletePks.has(Number(row?.task?.game?.gamePk)));
               }
               if (!officialGames.length) {
-                clearBackgroundJob(result.league || league, result.date || targetDate, runId);
+                clearCompletedJobAfterReceipt();
                 setBoard(current => finalizeReaderBoardAtStart(current, Date.now(), { noPrestartGames: true }));
                 setProgress({ active: false, done: 0, running: 0, total: Number(result.total) || rows.length, label: '背景結果已停止｜場次已開始、延期或取消' });
                 return { ...result, discarded: true, results: [] };
               }
               if (!applicableRows.length) {
-                clearBackgroundJob(result.league || league, result.date || targetDate, runId);
+                clearCompletedJobAfterReceipt();
                 setProgress({ active: false, done: 0, running: 0, total: Number(result.total) || rows.length, label: '背景結果已停止｜該批場次已開始、延期或取消' });
                 return { ...result, discarded: true, results: [] };
               }
@@ -2313,7 +2423,7 @@ export default function Home() {
                 return { detached: true, total: 0, completed: 0, results: [] };
               }
               if (credit?.code === 'NO_PRESTART_GAMES') {
-                clearBackgroundJob(result.league || league, result.date || targetDate, runId);
+                clearCompletedJobAfterReceipt();
                 const taskPks = new Set(applicableRows
                   .map(row => Number(row?.task?.game?.gamePk))
                   .filter(Number.isFinite));
@@ -2431,7 +2541,7 @@ export default function Home() {
                 });
               }
               if (!applicableRows.length) {
-                clearBackgroundJob(result.league || league, result.date || targetDate, runId);
+                clearCompletedJobAfterReceipt();
                 setProgress({ active: false, done: 0, running: 0, total: Number(result.total) || rows.length, label: '舊盤分析已逐場丟棄｜Reader已有新盤' });
                 return {
                   ...result,
@@ -2443,7 +2553,7 @@ export default function Home() {
               }
             }
             applicableRows.forEach(row => row?.ok ? commitAnalysisPayload(row.task, row.payload) : commitAnalysisFailure(row?.task, row));
-            clearBackgroundJob(result.league || league, result.date || targetDate, runId);
+            clearCompletedJobAfterReceipt();
             const total = Number(result.total) || rows.length;
             const succeeded = applicableRows.filter(row => row?.ok).length;
             const blocked = applicableRows.filter(row => analysisFailureState(row).blocked).length;
@@ -2457,6 +2567,7 @@ export default function Home() {
             const applicableByPk = new Map(applicableRows.map(row => [Number(row?.task?.game?.gamePk), row]));
             return {
               ...result,
+              recoveryPersisted: completedRecovery.stored,
               results: rows.map(row => {
                 const gamePk = Number(row?.task?.game?.gamePk);
                 if (discardedReaderPks.has(gamePk)) {
@@ -2475,7 +2586,15 @@ export default function Home() {
           }
           setProgress(value => ({ ...value, active: true, running: 1, label: '伺服器背景分析中｜可離開App' }));
         } catch (cause) {
+          if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
+            return { detached: true, total: 0, completed: 0, results: [] };
+          }
           if (cause?.backgroundFatal || [401, 403, 404].includes(Number(cause?.status))) {
+            completedRecoveryFailuresRef.current.add(`${league}|||${targetDate}|||${runId}`);
+            markBackgroundResultUnavailable(league, targetDate, runId);
+            if (completedReceipt) {
+              clearCompletedAnalysisReceipt(league, targetDate, runId);
+            }
             clearBackgroundJob(league, targetDate, runId);
             releaseTerminalBackgroundCards(gamePks, cause?.backgroundFatal ? 'failed' : 'unavailable');
             if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
@@ -2512,6 +2631,11 @@ export default function Home() {
       date: targetDate,
       total: tasks.length,
       gamePks: tasks.map(task => Number(task?.game?.gamePk)).filter(Number.isFinite),
+      preparedBoard: tasks.map(task => ({
+        game: task.game, mode: 'actual', readerPayloadHash: null,
+        customMarkets: [], status: 'queued',
+        statusLabel: '等待伺服器背景分析', error: '',
+      })),
       startedAt: new Date().toISOString(),
     });
     setNotice(reconnectSaved
@@ -2789,7 +2913,7 @@ export default function Home() {
       setNotice(`Reader 正在複核最新盤口；已排隊，複核完成後會自動開始 ${activeLeague.id} 分析。`);
       return true;
     }
-    const savedBatchJob = loadBackgroundJob(league, date);
+    const savedBatchJob = loadBackgroundJob(league, date, boardRef.current);
     if (savedBatchJob?.runId && savedBatchJob?.batchMode === 'all-leagues') {
       setBackgroundJobRevision(value => value + 1);
       setNotice('這個聯盟已包含在四聯盟背景分析中；畫面會自動接續目前工作。');

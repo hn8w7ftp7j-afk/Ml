@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.2', 'the NHL data integrity release has one shared app version');
+assert.equal(APP_VERSION, '11.9.3', 'the integrated NHL and league recovery release has one shared app version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -333,7 +333,7 @@ assert.doesNotMatch(page, /不顯示W\/R|不顯示為EV/, 'qualification failure
 // Batch analysis must leave the mobile lifecycle and reconnect to durable server work.
 mustMatch(/ANALYSIS_REQUEST_TIMEOUT_MS = 120_000/, 'Production-safe per-game deadline missing');
 mustMatch(/伺服器背景分析中｜可離開App/, 'background execution status must explicitly allow leaving the app');
-mustMatch(/loadBackgroundJob\(league, date\)/, 'app reopen must resume the active background job');
+mustMatch(/loadBackgroundJob\(league, date, boardRef\.current\)/, 'app reopen must resume the active background job using the current scoped board');
 mustMatch(/state\.status === 'completed'/, 'client must reload completed server workflow results');
 mustMatch(/running: 1, total: 1/, 'single-request phases must report one active request');
 mustMatch(/restoredBoardNeedsValidationRef\.current = restoredBoard\.length > 0[\s\S]*manualAnalysisScopesRef\.current\.has/, 'restored scores must wait for a manual analysis action before Reader repricing starts');

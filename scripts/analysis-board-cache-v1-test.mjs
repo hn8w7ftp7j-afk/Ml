@@ -29,11 +29,17 @@ assert.equal(entry.board[0].customData.analysis.results[0].formulaDiagnosticScor
 assert.equal(entry.board[0].customData.analysis.directionSlots[0].modelEV, 0.032, 'W必須通過手機續跑快取完整恢復');
 assert.equal(entry.board[0].customData.analysis.directionSlots[0].robustEV, -0.004, 'R≤0不得在快取中隱藏W/R');
 assert.equal(entry.board[0].customData.pitPersistence.confirmed, true, 'confirmed PIT persistence truth must survive mobile recovery');
+assert.equal(entry.board[0].referenceData, null, 'identical reference and actual payloads must be stored only once');
 
 const restored = restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 60_000 });
 assert.equal(restored.length, 1, 'completed analysis must survive a mobile page reload');
 assert.equal(restored[0].statusLabel, '已恢復上一版分析｜背景驗證中');
 assert.equal(restored[0].customData.analysis.results[0].formulaDiagnosticScore, 7.8, 'restoring must preserve the visible score');
+assert.deepEqual(restored[0].referenceData, restored[0].customData, 'the complete duplicate payload is restored without changing any value');
+const distinctReference = { ...board[0].customData, analysis: { ...board[0].customData.analysis, distributionHash: 'different-immutable-reference' } };
+const distinctEntry = createAnalysisBoardCacheEntry({ league: 'MLB', date: '2026-08-23', board: [{ ...board[0], referenceData: distinctReference }], savedAt: NOW });
+assert.equal(distinctEntry.board[0].referenceData.analysis.distributionHash, 'different-immutable-reference', 'a different immutable reference must not be deduplicated');
+assert.deepEqual(restoreAnalysisBoardCache(distinctEntry, { league: 'MLB', date: '2026-08-23', now: NOW })[0].referenceData.analysis, distinctReference.analysis);
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'league caches must remain isolated');
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 73 * 60 * 60 * 1000 }), [], 'expired recovery data must not be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 1 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-shared-distribution model snapshots must not survive the cache contract bump');
