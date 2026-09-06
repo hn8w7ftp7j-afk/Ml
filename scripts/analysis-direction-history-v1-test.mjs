@@ -313,6 +313,27 @@ const unchanged = buildChangedAnalysisDirectionSettlements([{
 }], officialResult);
 assert.equal(unchanged.events.length, 0, '相同正式賽果hash不得重複append結算');
 assert.equal(unchanged.skippedUnchanged, 1);
+const localizedHistory = buildAnalysisDirectionHistory({
+  snapshotRecord: {...snapshotRecord, gameIdentity: {...game, away: '紐約洋基', home: '波士頓紅襪'}},
+  analysis: {...analysis, directionSlots: allCalculatedSlots().map(slot=>({...slot,
+    pick: slot.pick.replaceAll('Away','紐約洋基').replaceAll('Home','波士頓紅襪')}))},
+});
+const englishResult = {...officialResult, away:'New York Yankees', home:'Boston Red Sox'};
+const localizedEvents = localizedHistory.records.map(record=>settleAnalysisDirectionRecord(record,englishResult));
+assert.ok(localizedEvents.every(event=>event.status==='SETTLED'), 'MLB官方英文與已保存中文隊名在四市場應一致');
+assert.equal(settleAnalysisDirectionRecord(localizedHistory.records[0],{...englishResult,awayTeamId:999}).status,'MANUAL_REVIEW');
+assert.equal(settleAnalysisDirectionRecord(localizedHistory.records[0],{...englishResult,away:'New York Mets'}).status,'MANUAL_REVIEW');
+const recovered = buildChangedAnalysisDirectionSettlements([{
+  record: localizedHistory.records[0], latestSettlementId: hash('d'),
+  latestOfficialResultHash: localizedEvents[0].officialResultHash, latestStatus:'MANUAL_REVIEW',
+}], englishResult);
+assert.equal(recovered.events.length,1,'驗證器修正後，同一正式賽果可追加取代人工確認事件');
+assert.equal(recovered.events[0].supersedesSettlementId,hash('d'));
+const recoveredRerun = buildChangedAnalysisDirectionSettlements([{
+  record: localizedHistory.records[0], latestSettlementId: recovered.events[0].settlementId,
+  latestOfficialResultHash: recovered.events[0].officialResultHash, latestStatus:'SETTLED',
+}],englishResult);
+assert.equal(recoveredRerun.events.length,0,'恢復成功後相同賽果不得重複結算');
 const correctedResult = { ...officialResult, awayRuns: 6, homeRuns: 5, providerRevision: 'CORRECTION-2' };
 const corrected = buildChangedAnalysisDirectionSettlements([{
   record: history.records[0],
