@@ -7,6 +7,8 @@ import { nhlPersistenceConfigured, saveNhlObservation, loadNhlObservations } fro
 import { NHL_READER_INTERFACE_VERSION, NHL_READER_WAITING_MESSAGE } from '../../../lib/nhl/reader.js';
 import { nhlHistoricalResearch } from '../../../lib/nhl/research.js';
 import { NHL_HISTORICAL_SAMPLES } from '../../../lib/nhl/historical-samples.js';
+import { fetchNhlTeamSummary } from '../../../lib/nhl/data.js';
+import { validNhlTeamSummaryScope } from '../../../lib/nhl/team-summary.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -78,6 +80,12 @@ export async function GET(request) {
         return { ok: true, league: 'NHL', gameId, ...sides, pregamePointInTimeVerified: false,
           message: '依本次官方完整球隊賽程推算；歷史查詢屬回溯資料，不代表當時可得的賽前快照。旅行距離須另有球場座標證據。' };
       }, { ttlMs: 5 * 60_000 }));
+    }
+    if (action === 'team-summary') {
+      const teamId = Number(params.get('teamId')); const season = Number(params.get('season')); const gameType = Number(params.get('gameType'));
+      if (!['teamId', 'season', 'gameType'].every(key => params.getAll(key).length === 1 && /^\d+$/.test(params.get(key) || '')) || !validNhlTeamSummaryScope(teamId, season, gameType))
+        return response({ ok: false, code: 'NHL_TEAM_SUMMARY_SCOPE_INVALID', error: '球隊、賽季或賽事類型無效' }, 400);
+      return response(await cachedNhlData(`team-summary-v1:${teamId}:${season}:${gameType}`, async () => requireResult(await fetchNhlTeamSummary(teamId, season, gameType)), { ttlMs: 5 * 60_000 }));
     }
     if (action === 'team') {
       const abbrev = params.get('team'); const teamId = Number(params.get('teamId')); const season = params.get('season');

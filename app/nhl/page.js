@@ -82,6 +82,8 @@ export default function NhlWorkspace() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [rosters, setRosters] = useState({});
+  const [teamSummaries, setTeamSummaries] = useState({});
+  const [summaryType, setSummaryType] = useState(2);
   const [player, setPlayer] = useState(null);
   const [contexts, setContexts] = useState({});
   const [versions, setVersions] = useState({});
@@ -96,6 +98,8 @@ export default function NhlWorkspace() {
   const game = selectedGame ? details[selectedGame]?.game || board?.games?.find(row => row.gameId === selectedGame) : null;
   const rosterKey = selectedTeam ? `${selectedTeam.abbrev}:${selectedTeam.season || 'current'}` : '';
   const roster = rosters[rosterKey];
+  const summaryKey = selectedTeam ? `${selectedTeam.teamId}:${selectedTeam.season}:${summaryType}` : '';
+  const teamSummary = teamSummaries[summaryKey];
 
   useEffect(() => {
     try {
@@ -156,6 +160,16 @@ export default function NhlWorkspace() {
       if (id === activePlayerRequest.current) setPlayer(result);
     });
   }
+  function loadTeamSummary(team, gameType) {
+    const season = Number(team.season);
+    const key = `${team.teamId}:${season}:${gameType}`;
+    return run(`team-summary:${key}`, async () => {
+      const result = await request('team-summary', { teamId: String(team.teamId), season: String(season), gameType: String(gameType) });
+      if (result.league !== 'NHL' || result.teamId !== team.teamId || result.season !== season || result.gameType !== gameType)
+        throw new Error('球隊統計的球隊、賽季或賽事類型不符，已保留先前結果。');
+      setTeamSummaries(value => ({ ...value, [key]: result }));
+    });
+  }
   function loadContext(id) { return run(`context:${id}`, async () => { const result = await request('context', { gameId: id }); if (result.gameId !== id) throw new Error('賽程身分不符'); setContexts(value => ({ ...value, [id]: result })); }); }
   function loadVersions(id) { return run(`versions:${id}`, async () => { const result = await request('versions', { gameId: id }); setVersions(value => ({ ...value, [id]: result.versions })); }); }
   function loadResearch() { return run('research', async () => setResearch(await request('research'))); }
@@ -167,6 +181,19 @@ export default function NhlWorkspace() {
     {error && <div className="errorBox global" role="alert"><strong>更新未完成</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {Object.values(busy).some(Boolean) && <div className="nhlProgress" role="status">正在載入 NHL 資料；可切換頁籤，已完成結果會保留。</div>}
     <div role="tabpanel" id={`nhl-${tab}`}>
+    {tab === 'team' && selectedTeam && <section className="panel">
+      <h2>官方球隊賽季統計</h2><p>{selectedTeam.name || selectedTeam.abbrev}｜{selectedTeam.season}｜球隊 ID {selectedTeam.teamId}</p>
+      <div className="nhlToolbar"><label>統計賽事類型<select value={summaryType} onChange={event => setSummaryType(Number(event.target.value))}><option value={1}>季前賽｜獨立 Shadow</option><option value={2}>例行賽</option><option value={3}>季後賽</option></select></label>
+        <button className="secondary" disabled={busy[`team-summary:${summaryKey}`]} onClick={() => loadTeamSummary(selectedTeam, summaryType)}>{busy[`team-summary:${summaryKey}`] ? '讀取球隊統計中…' : '讀取官方球隊統計'}</button></div>
+      <p className="nhlNote">依所選賽季與類型分開查詢，不與下方例行賽球員總表混用。這是本次取得的賽季累計，不是當時可得的賽前快照；不加入歷史賽前模型。切換頁籤保留本頁結果，重新進入網站可再次讀取。</p>
+      {!teamSummary && <p className="nhlNote">尚未讀取這個賽季／類型的球隊統計。</p>}
+      {teamSummary && <><p className="nhlNote">{phase(teamSummary.seasonPhase)}｜資料 QA {teamSummary.status}｜{teamSummary.cache?.hit ? '快取資料' : '本次取得'}</p>
+        {teamSummary.status === 'EMPTY' ? <p className="nhlNote">官方未回傳此球隊、賽季與類型的統計；不是全零戰績。</p> : <div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>項目</th><th>官方數值</th></tr></thead><tbody>
+          {[['gamesPlayed', '出賽'], ['wins', '勝'], ['losses', '敗'], ['otLosses', '延長／點球敗'], ['points', '積分'], ['goalsFor', '進球'], ['goalsAgainst', '失球'], ['goalsForPerGame', '場均進球'], ['goalsAgainstPerGame', '場均失球'], ['shotsForPerGame', '場均射正'], ['shotsAgainstPerGame', '場均被射正'], ['powerPlayPct', 'PP 成功率'], ['penaltyKillPct', 'PK 成功率'], ['faceoffWinPct', '爭球勝率']].map(([key, label]) => <tr key={key}><td>{label}</td><td>{key.endsWith('Pct') && typeof teamSummary.statistics?.[key] === 'number' ? `${(teamSummary.statistics[key] * 100).toFixed(2)}%` : number(teamSummary.statistics?.[key])}</td></tr>)}
+        </tbody></table></div>}
+        {teamSummary.issues?.length > 0 && <p className="nhlNote nhlWarning">{teamSummary.issues.join('；')}</p>}<Source source={teamSummary.source}/>
+      </>}
+    </section>}
     {tab === 'schedule' && <>
       <section className="panel"><div className="nhlToolbar"><label>台灣日期<input type="date" value={date} onChange={event => { if (event.target.value) { setDate(event.target.value); setSelectedGame(null); } }}/></label><button className="primary" disabled={busy[`schedule:${date}`]} onClick={() => loadSchedule()}>{busy[`schedule:${date}`] ? '取得官方賽程中…' : '載入 NHL 賽程'}</button><button className="secondary" onClick={() => { const today = taipeiDay(); setDate(today); setSelectedGame(null); }}>回到今天</button></div><p className="nhlNote">按鈕手動更新，不會自動重跑或清除已讀資料。北美晚間比賽通常列在台灣隔天。</p>{board && <><div className="nhlNote">{board.sampleOnly ? '歷史樣本，非完整當日賽程｜' : ''}台灣 {date}｜{board.games?.length || 0} 場｜{board.cache?.hit ? '快取資料' : '本次取得'}。下方保留的資料以來源時間為準。</div><Source source={board.source}/></>}</section>
       {!board && <Empty title="尚未載入這天的 NHL 賽程">選擇台灣日期，再按「載入 NHL 賽程」。</Empty>}

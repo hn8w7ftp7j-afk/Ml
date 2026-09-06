@@ -353,6 +353,37 @@ try {
     assert.notEqual(unsaved.persisted, true);
     assert.equal(requests.length, 0);
   });
+  await test('team summary API requires authentication and strict team-season-phase scope', async () => {
+    installFetch(() => { throw new Error('Invalid scope must not access upstream'); });
+    await checked(await getNhl(getRequest('action=team-summary&teamId=18&season=20232024&gameType=2', { authenticated: false })), 401);
+    for (const query of ['teamId=18&season=20232025&gameType=2', 'teamId=18&season=20232024', 'teamId=18&season=20232024&gameType=4', 'teamId=18.0&season=20232024&gameType=2', 'teamId=18&teamId=10&season=20232024&gameType=2'])
+      await checked(await getNhl(getRequest(`action=team-summary&${query}`)), 400);
+    assert.equal(requests.length, 0);
+  });
+  await test('official team season statistics are isolated from preseason empty data and player totals', async () => {
+    installFetch(url => {
+      const query = new URL(url).searchParams.get('cayenneExp');
+      assert.ok(url.startsWith('https://api.nhle.com/stats/rest/en/team/summary?'));
+      if (query === 'seasonId=20232024 and gameTypeId=2 and teamId=18') return jsonResponse(fixture('team-summary-NSH-20232024-2.json'));
+      if (query === 'seasonId=20232024 and gameTypeId=1 and teamId=18') return jsonResponse({ data: [], total: 0 }); // labelled empty-state counterexample
+      throw new Error('Unexpected scope');
+    });
+    const regular = await checked(await getNhl(getRequest('action=team-summary&teamId=18&season=20232024&gameType=2')), 200);
+    const preseason = await checked(await getNhl(getRequest('action=team-summary&teamId=18&season=20232024&gameType=1')), 200);
+    assert.equal(regular.statistics.gamesPlayed, 82); assert.equal(regular.gameType, 2);
+    assert.equal(regular.pregamePointInTimeVerified, false); assert.equal(regular.fiveOnFive, null);
+    assert.equal(preseason.seasonPhase, 'PRESEASON_SHADOW'); assert.equal(preseason.status, 'EMPTY'); assert.equal(preseason.statistics, null);
+    const cached = await checked(await getNhl(getRequest('action=team-summary&teamId=18&season=20232024&gameType=2')), 200);
+    assert.equal(cached.statistics.gamesPlayed, 82); assert.equal(cached.cache.hit, true); assert.equal(requests.length, 2);
+  });
+  await test('team summary identity conflicts and source rejection remain HTTP failures', async () => {
+    installFetch(() => jsonResponse(fixture('team-summary-NSH-20232024-2.json')));
+    const conflict = await checked(await getNhl(getRequest('action=team-summary&teamId=10&season=20232024&gameType=2')), 422);
+    assert.ok(conflict.issues.includes('NHL_TEAM_SUMMARY_IDENTITY_CONFLICT'));
+    installFetch(() => jsonResponse({}, 429));
+    const failure = await checked(await getNhl(getRequest('action=team-summary&teamId=18&season=20232024&gameType=3')), 503);
+    assert.equal(failure.upstreamStatus, 429); assert.equal(failure.ok, false);
+  });
 } finally {
   globalThis.fetch = originalFetch;
 }

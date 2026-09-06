@@ -13,6 +13,32 @@ This module is part of the existing Next.js app and Vercel Production project. `
 
 ## Sources and factual gaps
 
+### Official team season statistics (11.9.10)
+
+`team-summary.js` and authenticated `action=team-summary` acquire NHL's
+`api.nhle.com/stats/rest/en/team/summary` with explicit team ID, consecutive
+season ID, game type, non-aggregate season mode and a bounded row count.
+Source query identity, exact row cardinality, team/season identity and numeric
+integrity are checked before display. This endpoint omits gameTypeId in its
+rows, so phase provenance is explicitly the exact official request scope.
+Regular season, playoffs and preseason use separate cache and UI keys.
+
+The team page exposes official wins/losses/OT losses/points, goals for/against,
+per-game goal and shot rates, PP/PK and faceoff fractions. Empty official rows
+are EMPTY, not a zero record; malformed or conflicting data return HTTP 422.
+Missing metrics remain null with WARNING. Failed refreshes retain existing
+results; concurrent phase requests and repeated clicks are tested against the
+actual UI handlers. These team summaries are page-session data; route reloads
+can re-fetch them and are not described as permanently saved observations.
+
+The retained NSH 2023–24 regular-season fixture was fetched from the official
+URL on 2026-09-06T17:43:13.041Z (HTTP 200): 82 GP, 47 W, 30 L, 5 OTL, 99 points,
+PP 0.215613 and PK 0.769231. It is a real season-total response, not a
+contemporary pregame snapshot. Season summaries never enter strict historical
+PIT training. No rounded shot rates are converted to exact shot totals; no
+goalie save percentages, 5v5 rates, xG or high-danger data are fabricated from
+all-situation season totals. Existing player totals remain separately labelled.
+
 ### Official game reports and situation statistics (11.9.7)
 
 The same game-details request now additionally acquires NHL's official
