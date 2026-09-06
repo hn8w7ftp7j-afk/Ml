@@ -149,6 +149,21 @@ try {
     assert.ok(invalidIdentity.issues.includes('NHL_TEAM_IDENTITY_INVALID'));
   });
 
+  await test('malformed roster identities surface HTTP 422 rather than a successful partial team', async () => {
+    const invalidRoster = structuredClone(roster);
+    delete invalidRoster.forwards[0].id;
+    installFetch(url => {
+      if (url.includes('/club-schedule-season/')) return jsonResponse({ games: [] });
+      if (url.includes('/roster/')) return jsonResponse(invalidRoster);
+      if (url.includes('/club-stats/')) return jsonResponse(statistics);
+      throw new Error(`Unexpected fixture request: ${url}`);
+    });
+    const body = await checked(await getNhl(getRequest('action=team&team=TOR&teamId=10&season=20232024')), 422);
+    assert.equal(body.ok, false);
+    assert.equal(body.code, 'NHL_ROSTER_IDENTITY_INVALID');
+    assert.ok(body.issues.includes('NHL_ROSTER_IDENTITY_INVALID'));
+  });
+
   await test('live official landing and boxscore retain missing optional data without inventing confirmation', async () => {
     installFetch(url => {
       if (url.endsWith('/2023020001/landing')) return jsonResponse(landing);

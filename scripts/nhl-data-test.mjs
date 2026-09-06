@@ -148,4 +148,45 @@ await test('schedule rest context handles DST, prior history and unknown travel 
   assert.equal(complete.away.backToBack, true); assert.equal(complete.away.restDays, 0); assert.equal(complete.away.elapsedHours, 23); assert.equal(complete.away.gamesPast7Days, 1);
 });
 
+await test('source cache callers cannot mutate another caller or the retained source evidence', async () => {
+  let requests = 0;
+  const fetchImpl = async () => { requests++; return response(structuredClone(raw)); };
+  const first = await fetchNhlJson(source.url, { fetchImpl });
+  const originalHash = first.source.contentHash;
+  first.data.awayTeam.id = 999;
+  first.source.contentHash = 'changed-by-consumer';
+  const second = await fetchNhlJson(source.url, { fetchImpl });
+  assert.equal(second.data.awayTeam.id, raw.awayTeam.id);
+  assert.equal(second.source.contentHash, originalHash);
+  second.data.homeTeam.id = 998;
+  const third = await fetchNhlJson(source.url, { fetchImpl });
+  assert.equal(third.data.homeTeam.id, raw.homeTeam.id);
+  assert.equal(requests, 1);
+});
+
+await test('coalesced source requests share network work but not mutable payload references', async () => {
+  let requests = 0;
+  const fetchImpl = async () => { requests++; await new Promise(resolve => setTimeout(resolve, 5)); return response(structuredClone(roster)); };
+  const url = 'https://api-web.nhle.com/v1/roster/TOR/20232024';
+  const [first, second] = await Promise.all([fetchNhlJson(url, { fetchImpl }), fetchNhlJson(url, { fetchImpl })]);
+  first.data.forwards[0].id = 999;
+  assert.equal(second.data.forwards[0].id, roster.forwards[0].id);
+  assert.equal(requests, 1);
+});
+
+await test('invalid and duplicate roster identities block instead of silently dropping or duplicating players', async () => {
+  for (const kind of ['missing', 'duplicate', 'conflicting-fields']) {
+    const payload = structuredClone(roster);
+    if (kind === 'missing') delete payload.forwards[0].id;
+    if (kind === 'duplicate') payload.defensemen.push(structuredClone(payload.forwards[0]));
+    if (kind === 'conflicting-fields') payload.forwards[0].playerId = payload.forwards[0].id + 1;
+    const result = await fetchNhlRoster({ abbrev: 'TOR', teamId: 10 }, 20232024, { fetchImpl: async () => response(payload) });
+    assert.equal(result.ok, false, kind);
+    assert.equal(result.status, 'BLOCK', kind);
+    assert.equal(result.code, 'NHL_ROSTER_IDENTITY_INVALID', kind);
+    assert.deepEqual(result.players, [], kind);
+    assert.ok(result.source.contentHash, kind);
+  }
+});
+
 console.log(`NHL data tests: ${passed} groups passed (real official fixtures plus labelled counterexamples).`);

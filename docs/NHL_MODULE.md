@@ -37,6 +37,17 @@ The cross-review also fixed an existing settlement data bug: null/blank official
 
 ## Verification commands
 
+### Source integrity repair (11.9.1)
+
+Source-cache hits, misses and coalesced reads return independent deep copies so
+consumer mutations cannot alter another request or the retained source hash.
+Rosters containing a missing ID, duplicate player ID across position groups,
+or contradictory `id`/`playerId` now return `NHL_ROSTER_IDENTITY_INVALID` with
+BLOCK/HTTP 422; invalid players are not silently omitted from a successful
+roster. Normalized runtime cache uses namespace v2 to avoid reusing pre-fix
+rosters. No wagering, settlement, scoring, model or database schema changes.
+The data and API tests include pre-fix failing counterexamples for these cases.
+
 `npm run test:nhl` runs data, identity/timezone, goalie/context/cache, independent score distribution, contract mathematics, actual historical evidence and authenticated API integration tests. API fixtures are isolated tests; they are never represented as Production acquisition.
 
 `npm test` includes all existing MLB/NPB/KBO/CPBL tests and the NHL suite. `npm run build` builds the same Production app. `npm audit --omit=dev --audit-level=high` is the existing dependency gate. Production verification must additionally exercise the actual deployed routes, league navigation, data loading, persistence, error handling and console/runtime state. A successful build alone is not an end-to-end PASS.
