@@ -534,6 +534,36 @@ assert.equal(missingMlbFirst5.awayFirst5, null);
 assert.equal(missingMlbFirst5.homeFirst5, null);
 assert.equal(validateLeagueFinalResult('MLB', mlbGamePk, missingMlbFirst5).first5Complete, false);
 
+for (const missingScore of [null, undefined, '', ' ', NaN]) {
+  for (const side of ['away', 'home']) {
+    const missingFinalFeed = structuredClone(mlbFeed);
+    missingFinalFeed.liveData.linescore.teams[side].runs = missingScore;
+    assert.throws(
+      () => normalizeMlbFinalResult(missingFinalFeed, mlbGamePk),
+      error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+      `MLB ${side} final score ${String(missingScore)} must not become zero`,
+    );
+    const missingPeriodFeed = structuredClone(mlbFeed);
+    missingPeriodFeed.liveData.linescore.innings[2][side].runs = missingScore;
+    const missingPeriodResult = normalizeMlbFinalResult(missingPeriodFeed, mlbGamePk);
+    assert.equal(missingPeriodResult.final, true, 'A missing half-inning does not invalidate a complete final score');
+    assert.equal(missingPeriodResult.first5Complete, false, `MLB missing ${side} half-inning cannot certify first-five completion`);
+    assert.equal(missingPeriodResult.awayFirst5, null);
+    assert.equal(missingPeriodResult.homeFirst5, null);
+  }
+}
+const shutoutMlbFeed = structuredClone(mlbFeed);
+shutoutMlbFeed.liveData.linescore.teams.away.runs = 0;
+shutoutMlbFeed.liveData.linescore.teams.home.runs = 1;
+shutoutMlbFeed.liveData.linescore.innings = Array.from({ length: 9 }, (_, index) => ({
+  away: { runs: 0 }, home: { runs: index === 5 ? 1 : 0 },
+}));
+const shutoutMlbResult = normalizeMlbFinalResult(shutoutMlbFeed, mlbGamePk);
+assert.equal(shutoutMlbResult.awayRuns, 0, 'An official shutout is a valid zero');
+assert.equal(shutoutMlbResult.first5Complete, true);
+assert.equal(shutoutMlbResult.awayFirst5, 0);
+assert.equal(shutoutMlbResult.homeFirst5, 0, 'Verified scoreless first five remains complete');
+
 assert.throws(
   () => normalizeMlbFinalResult(mlbFeed, mlbGamePk + 1),
   error => error?.code === 'OFFICIAL_IDENTITY_MISMATCH',
@@ -580,6 +610,63 @@ const kboFinalGame = {
 const kboResult = normalizeAsianFinalResult('KBO', kboFinalGame.gamePk, '2099-08-18', kboFinalGame);
 const cpblFinalGame = cpbl.find(game => game.statusCode === 'F');
 const cpblResult = normalizeAsianFinalResult('CPBL', cpblFinalGame.gamePk, '2099-08-18', cpblFinalGame);
+
+for (const [league, finalGame] of [['NPB', npbFinalGame], ['KBO', kboFinalGame], ['CPBL', cpblFinalGame]]) {
+  for (const missingScore of [null, undefined, '', ' ', NaN]) {
+    for (const side of ['awayScore', 'homeScore']) {
+      assert.throws(
+        () => normalizeAsianFinalResult(league, finalGame.gamePk, '2099-08-18', { ...finalGame, [side]: missingScore }),
+        error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+        `${league} ${side}=${String(missingScore)} must not become a final zero`,
+      );
+    }
+    for (const side of ['awayFirst5', 'homeFirst5']) {
+      assert.throws(
+        () => normalizeAsianFinalResult(league, finalGame.gamePk, '2099-08-18', {
+          ...finalGame, first5Complete: true, awayFirst5: 0, homeFirst5: 0, [side]: missingScore,
+        }),
+        error => error?.code === 'OFFICIAL_FIRST5_RESULT_INVALID',
+        `${league} first5Complete cannot certify a missing ${side}`,
+      );
+    }
+  }
+  const shutout = normalizeAsianFinalResult(league, finalGame.gamePk, '2099-08-18', {
+    ...finalGame, awayScore: 0, homeScore: 1, innings: 9,
+    first5Complete: true, awayFirst5: 0, homeFirst5: 0,
+  });
+  assert.equal(shutout.awayRuns, 0, `${league} official shutout zero is retained`);
+  assert.equal(shutout.first5Complete, true);
+  assert.equal(shutout.awayFirst5, 0);
+  assert.equal(shutout.homeFirst5, 0);
+}
+for (const result of [mlbResult, npbResult, kboResult, cpblResult]) {
+  for (const missingScore of [null, undefined, '', ' ', NaN]) {
+    for (const side of ['awayRuns', 'homeRuns']) {
+      assert.throws(
+        () => validateLeagueFinalResult(result.league, result.gamePk, { ...result, [side]: missingScore }),
+        error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+        `${result.league} provider boundary must reject missing ${side}`,
+      );
+    }
+    for (const side of ['awayFirst5', 'homeFirst5']) {
+      assert.throws(
+        () => validateLeagueFinalResult(result.league, result.gamePk, {
+          ...result, first5Complete: true, awayFirst5: 0, homeFirst5: 0, [side]: missingScore,
+        }),
+        error => error?.code === 'OFFICIAL_FIRST5_RESULT_INVALID',
+        `${result.league} provider boundary must reject a completion flag with missing ${side}`,
+      );
+    }
+  }
+  const verifiedZero = validateLeagueFinalResult(result.league, result.gamePk, {
+    ...result, awayRuns: 0, homeRuns: 1, innings: 9,
+    first5Complete: true, awayFirst5: 0, homeFirst5: 0,
+  });
+  assert.equal(verifiedZero.awayRuns, 0);
+  assert.equal(verifiedZero.first5Complete, true);
+  assert.equal(verifiedZero.awayFirst5, 0);
+  assert.equal(verifiedZero.homeFirst5, 0);
+}
 
 for (const result of [npbResult, kboResult, cpblResult]) {
   assert.ok(['NPB', 'KBO', 'CPBL'].includes(result.league));
