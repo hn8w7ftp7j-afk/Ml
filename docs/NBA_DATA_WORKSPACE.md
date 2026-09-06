@@ -54,6 +54,14 @@ The UI's explicit start action retrieves each historical game through the existi
 
 Validation compares model and simple baseline on **identical** folds. Paired same-game residual covariance and historical max-absolute-error rectangular coverage preserve the two-score relationship. These are aggregate diagnostics, not a callable future-game probability distribution or a calibration guarantee. Current two-season validation does not establish predictive superiority; see `NBA_SHADOW_VALIDATION.md`.
 
+### Resumable research (NBA-DATA-1.1.1)
+
+Each successfully processed game now saves a normalized box-score checkpoint, exact research key and original source metadata to the existing NBA-only session store. Reload converts a saved running task to paused; only an explicit Continue action resumes it. Cancelled and partially unavailable tasks can also resume. Previously verified games are reused only after game/date/season/team/score and basketball arithmetic revalidation. Identity conflicts BLOCK and clear the unusable checkpoint. Failed source reads are retried, not counted as successfully recovered data. Starting again remains a separate full rerun action.
+
+Checkpoints expire 24 hours after the first saved game (continuing does not extend old source freshness), have a 2,000,000-character serialized storage budget, and expose storage failures without deleting other league data. Completed reports release their bulky checkpoint. This is document/session persistence, not a server background service: closing the tab may lose session storage. No automatic model run, future prediction, wagering change or official identity claim is introduced.
+
+Source follow-up on 2026-09-06: an ordinary request to the official 2025–26 injury-report page returned HTTP 200, but its report container had no linked report files. Search identified real archived official PDFs. An empty index is not proof of healthy players; official report row ingestion and historical player/game crosswalk remain unimplemented, and this release does not mark them verified.
+
 ## Verification
 
 `npm run test:nba` executes data/cache counterexamples, historical chronological validation and API/client integration tests. Existing behavioral assertions remain unchanged; release-identity assertions track the new site version and synchronized lockfile metadata. The existing `npm test` suite runs first; its posttest now also invokes NBA tests. Fixtures are synthetic unless a live-source probe is specifically described; synthetic fixtures are never presented as observed NBA games or market evidence.
