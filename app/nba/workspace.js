@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NBA_MODULE_VERSION } from '../../lib/nba/config.js';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
+import { ESPN_NBA_TEAMS } from '../../lib/nba/identity.js';
 import { nbaRequestKey, nbaScreenNeedsRefresh, readNbaScreen, requestNbaScreen } from '../../lib/nba/client-cache.js';
 import styles from './nba.module.css';
 import ShadowPanel from './shadow-panel.js';
@@ -109,7 +110,9 @@ export default function NbaWorkspace({ onClose }) {
   const [gameId, setGameId] = useState('');
   const [playerId, setPlayerId] = useState('');
   const [seasonType, setSeasonType] = useState('regular');
-  const [teams, setTeams] = useState([]);
+  // The verified identity registry supplies names while the live team request
+  // loads; this is not a roster/statistics fallback or an invented source row.
+  const [teams, setTeams] = useState(() => Object.entries(ESPN_NBA_TEAMS).map(([sourceId, abbreviation]) => ({ id: `nba:espn:team:${sourceId}`, sourceId, abbreviation })));
   const [screen, setScreen] = useState({ key: '', result: null, loading: false, error: '', retained: false });
   const [ready, setReady] = useState(false);
   const activeKey = useRef('');
@@ -176,7 +179,7 @@ export default function NbaWorkspace({ onClose }) {
   const visible = screen.key === key ? screen.result : null;
   const result = view === 'sources' ? lastData.current : visible;
   const data = result?.data;
-  const loading = !ready || (screen.key === key && screen.loading);
+  const loading = !ready || Boolean(key && screen.key !== key) || (screen.key === key && screen.loading);
   const topView = view === 'game' ? 'schedule' : (view === 'team' || view === 'player') ? 'teams' : view;
   const years = Array.from({ length: 28 }, (_, index) => new Date().getUTCFullYear() + 1 - index);
 
