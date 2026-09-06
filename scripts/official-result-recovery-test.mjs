@@ -31,6 +31,19 @@ assert.equal(parseKboResultLinescore(payloadFor(table), live), live);
 assert.throws(() => parseKboResultLinescore({...payloadFor(table), A_INITIAL_LK:'/initial_HH_s.png'}, game));
 assert.throws(() => parseKboResultLinescore(payloadFor({...table,rows:[...table.rows,table.rows[0]]}), game));
 
+// Official English scoreboard independently shows LG 8–3 Lotte after seven
+// innings on 2026-08-29. These are observed inning values in an API-layout
+// fixture, not an archived API response and not authorization to settle it.
+const shortened = { ...game, officialDate: '2026-08-29', providerGameId: '20260829LGLT0', awayScore: 8, homeScore: 3 };
+const shortenedTable = { headers: [row(Array.from({length:12}, (_, i) => i + 1))], rows: [
+  row([0,3,0,0,5,0,0,'-','-','-','-','-']),
+  row([0,1,1,0,0,1,0,'-','-','-','-','-']),
+] };
+const shortenedPayload = { ...payloadFor(shortenedTable), A_INITIAL_LK: '/2026/initial_LG_s.png', H_INITIAL_LK: '/2026/initial_LT_s.png',
+  table3: JSON.stringify({rows:[row([8,11,1,7]),row([3,5,0,3])]}) };
+assert.throws(() => parseKboResultLinescore(shortenedPayload, shortened), /僅完成 7 局.*等待人工確認/,
+  'A verified shortened game must explain its rule hold without becoming a normal nine-inning settlement');
+
 const options = {expectedAway:'KIA虎',expectedHome:'NC恐龍',expectedProviderGameId:'2026-09-02|KIA|NCD|18:30|창원|1|1'};
 const bound = resolveLegacyAsianResultGame('KBO', [game], 123, game.officialDate, options);
 assert.equal(bound.gamePk,123);

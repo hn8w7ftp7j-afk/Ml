@@ -35,6 +35,7 @@ import {
   persistAnalysisPitSnapshotForResponse,
 } from '../../../lib/analysis-pit-snapshot-store-v1.js';
 import { enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
+import { assessRepriceSnapshotCompatibilityV1 } from '../../../lib/reprice-snapshot-compatibility-v1.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -238,6 +239,19 @@ export async function POST(request) {
     if (!(await verifyRepriceSnapshot(league, game, snapshot))) {
       return NextResponse.json({ ok: false, error: '凍結快照簽章無效或內容已被修改，必須完整重算' }, { status: 409 });
     }
+    const contract = leagueAnalysisContract(league);
+    const snapshotCompatibility = assessRepriceSnapshotCompatibilityV1(snapshot, {
+      modelVersion: contract.modelVersion,
+      dataVersion: DATA_VERSION,
+    });
+    if (!snapshotCompatibility.compatible) {
+      return NextResponse.json({
+        ok: false,
+        code: 'CORE_REFRESH_REQUIRED',
+        error: '資料或模型版本已更新，必須重新取得核心資料並完整分析；原始歷史快照保留',
+        snapshotCompatibility,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+    }
     const coreFreshness = assessCoreSnapshotFreshnessV109(context);
     if (!coreFreshness.fresh) {
       return NextResponse.json({
@@ -277,7 +291,6 @@ export async function POST(request) {
     );
     const deterministic = attachEightDirectionContract(deterministicCore, marketCoverage, game, readerProvenance);
     const { distributionSnapshot: omitted, ...analysisWithoutDistribution } = deterministic;
-    const contract = leagueAnalysisContract(league);
     const versions = {
       modelVersion: context.modelVersion || contract.modelVersion || MODEL_VERSION,
       rulesVersion: context.rulesVersion || contract.rulesVersion || RULES_VERSION,

@@ -1330,6 +1330,27 @@ function DirectionSlotRow({ row, game }) {
   </div>;
 }
 
+function AnalysisDataAudit({ audit }) {
+  if (!audit?.rows?.length) return <div className="sourceBanner dataStatusBanner"><strong>資料查核明細尚未建立</strong><span>這份舊分析未保存逐欄取得與使用紀錄；重新分析後才能查核，不代表資料完整。</span></div>;
+  const labels = { observed: '實際取得', projected: '預測替代', missing: '缺失', stale: '舊資料' };
+  const explanations = { observed: '有取得紀錄，仍須核對下列來源與統計範圍。', projected: '包含預測名單或替代數據，不能視為今日完整實績。', missing: '必要的身分或統計證據不足；中性預設值不代表實際能力。', stale: '來源已標示過期，不能當作最新資料。' };
+  const summary = audit.summary || {};
+  return <details className="details dataAudit">
+    <summary>核心人員資料與模型使用｜實際 {summary.observed || 0}・替代 {summary.projected || 0}・缺失 {summary.missing || 0}・舊資料 {summary.stale || 0}</summary>
+    <p className="muted">{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'} 各項詳細覆蓋情形如下。</p>
+    <div className="dataAuditRows">{audit.rows.map(row => <div className="dataAuditRow" key={row.id || row.key}>
+      <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
+      <p>{explanations[row.status]}</p>
+      <p><b>模型使用：</b>{row.usageStatus === 'UNVERIFIED' ? '尚無逐欄使用紀錄' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || '未進入計算／僅供診斷'}{row.status !== 'observed' && row.usedInMean ? '（包含既有替代值）' : ''}</p>
+      <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}｜統計截至 {row.asOf || '未提供'}</p>
+      {row.coverage && <p><b>覆蓋：</b>{row.category === 'lineup' ? `名單 ${row.coverage.identityCount ?? '未知'}/${row.coverage.expectedCount || 9} 人；統計 ${row.coverage.metricCoverage == null ? '未確認' : `${Math.round(row.coverage.metricCoverage * 100)}%`}` : `有效名單 ${row.coverage.rosterCount ?? '未知'} 人；名單完整性${row.coverage.rosterComplete ? '已確認' : '未確認'}`}</p>}
+      {row.substitutions?.length > 0 && <p><b>替代依據：</b>此項含替代或估計處理，展開明細可查原始依據。</p>}
+      <details><summary>身分、數據與來源明細</summary><pre>{JSON.stringify({ identity: row.identity, coverage: row.coverage, metrics: row.metrics, sources: row.sources, substitutions: row.substitutions, statusReason: row.statusReason, usage: row.usage }, null, 2)}</pre></details>
+    </div>)}</div>
+    {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><p>此處只列模型是否使用，不代表來源完整或功能已通過歷史驗證。</p><pre>{JSON.stringify(audit.otherUsage, null, 2)}</pre></details>}
+  </details>;
+}
+
 function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const latestCoverage = item.latestMarketCoverage || null;
@@ -1411,6 +1432,8 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
       : `已開 ${openMarketCount}/4 市場｜應評 ${expectedDirectionCount} 方向｜已評 ${scoredDirectionCount}/${expectedDirectionCount}｜進影子排名 ${rankingDirectionCount}；依固定S分數分析與排序`}</span></div>}
     {expectedRuns && <div className="sourceBanner"><strong>上游得分中心｜市場水位回灌：停用</strong><span>全場 {runCenter(expectedRuns.full)}｜前五局 {runCenter(expectedRuns.first5)}｜這份得分分布同時結算大／小與讓／受讓</span></div>}
     {(sourceStatusText || provenanceText) && <div className="sourceBanner dataStatusBanner"><strong>上游資料狀態</strong><span>{sourceStatusText || provenanceText}</span></div>}
+    {analysisHasCalculatedDirections(item.customData) && <AnalysisDataAudit audit={analysis.dataAudit}/>}
+    {preservingPreviousReaderAnalysis && <div className="sourceBanner shadowBanner"><strong>保留的分析版本</strong><span>分析時間：{localTime(analysis.analysisAsOf || analysis.createdAt)}｜資料截至：{localTime(analysis.dataAsOf)}｜盤口時間：{localTime(analysis.lineAsOf)}｜模型：{analysis.modelVersion || '未記錄'}｜Reader：{(analysis.results || []).find(row => row.readerVersion)?.readerVersion || '未記錄'}｜此處時間與版本屬於保留結果</span></div>}
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT永久保存已確認' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
@@ -2124,6 +2147,18 @@ export default function Home() {
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [board.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning]);
+  useEffect(() => {
+    // A previous league's poll may release the shared Reader lock after this
+    // league queued a manual click. Drain from the active render so the old
+    // closure cannot either lose that click or run it for the wrong league.
+    if (!queuedAnalysis || readerPolling || busy || allLeaguePreparing || allLeagueRunning
+      || !analysisEnabled || readerPollBusyRef.current || operationBusyRef.current
+      || queuedAnalysisRef.current !== queuedAnalysis
+      || queuedAnalysis.league !== league || queuedAnalysis.date !== date) return;
+    queuedAnalysisRef.current = null;
+    setQueuedAnalysis(null);
+    void oneClickAnalyze();
+  }, [queuedAnalysis, readerPolling, busy, allLeaguePreparing, allLeagueRunning, analysisEnabled, league, date]);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
     && readerStatus?.fresh === true
@@ -3317,6 +3352,7 @@ export default function Home() {
       }
       return allSucceeded;
     } catch (cause) {
+      if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
       setBoard(current => current.map(item => item.customData && ['running', 'queued'].includes(item.status)
         ? { ...item, status: 'failed', statusLabel: '更新失敗｜保留上一版結果' }
         : item));
@@ -3666,12 +3702,29 @@ export default function Home() {
           updated += 1;
           completed += 1;
         } catch (cause) {
+          if (!stillCurrent()) return;
           const currentDirectItem = boardRef.current.find(current => (
             Number(current?.game?.gamePk) === Number(item.game.gamePk)
           )) || null;
           if (taskReaderStateIsStale(rebuildTask)
             || !directRepriceAuthorityMatches(currentDirectItem, rebuildTask)) {
             failed += 1;
+            return;
+          }
+          if (Number(cause?.status) === 409 && cause?.code === 'CORE_REFRESH_REQUIRED') {
+            // A server-confirmed expired or incompatible frozen core cannot
+            // be repriced again. Rebuild from current sources through the
+            // existing durable analysis path, preserving the prior display.
+            snapshots.current.delete(item.game.gamePk);
+            updateBoard(item.game.gamePk, current => !stillCurrent() ? current : ({
+              ...current,
+              readerPayloadHash: null,
+              pendingReaderAnalysis: true,
+              status: 'running',
+              statusLabel: '資料或模型版本已更新｜重新取得資料中｜保留上一版分析',
+              error: '',
+            }));
+            rebuildTasks.push(rebuildTask);
             return;
           }
           const failure = analysisFailureState(cause);
@@ -3702,7 +3755,7 @@ export default function Home() {
           failed += rebuiltFailed;
         } catch (cause) {
           failed += rebuildTasks.length;
-          setError(`伺服器背景重建暫時失敗：${String(cause?.message || cause)}；已保留上一版分數。`);
+          if (stillCurrent()) setError(`伺服器背景重建暫時失敗：${String(cause?.message || cause)}；已保留上一版分數。`);
         } finally {
           if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) releaseOperation();
         }
@@ -3734,11 +3787,9 @@ export default function Home() {
       const queued = queuedAnalysisRef.current;
       const queuedForCurrentBoard = queued?.league === currentLeagueRef.current
         && queued?.date === currentDateRef.current;
-      if (queuedForCurrentBoard) {
-        queuedAnalysisRef.current = null;
-        setQueuedAnalysis(null);
-      }
-      if ((fullSlateRecoveryNeeded || queuedForCurrentBoard) && stillCurrent()) void oneClickAnalyze();
+      // Queued manual work is drained by the active render's effect. A
+      // detached old poll must never consume another league's queued click.
+      if (fullSlateRecoveryNeeded && !queuedForCurrentBoard && stillCurrent()) void oneClickAnalyze();
     }
   }
 

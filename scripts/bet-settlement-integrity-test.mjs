@@ -50,6 +50,28 @@ assert.equal(verifiedZeroFirstFive.resultSnapshot.selectedAwayRuns, 0);
 assert.equal(verifiedZeroFirstFive.resultSnapshot.selectedHomeRuns, 0);
 assert.equal(verifiedZeroFirstFive.settlement.netProfit, 9_650, 'Verified zero-score result retains the existing water and per-leg rebate rules');
 
+// Re-running settlement must preserve a completed/cancelled ticket byte for
+// byte, including its original timestamps, and must not even request a score.
+const terminalTickets = ['SETTLED', 'VOID', 'CANCELLED'].map(status => ({
+  ...incompleteScoreBet,
+  id: `terminal-${status}`,
+  status,
+  updatedAt: '2026-09-01T01:00:00Z',
+  ...(status === 'SETTLED' ? { settlement: verifiedZeroFirstFive.settlement } : {}),
+}));
+try {
+  globalThis.fetch = async () => { throw new Error('Terminal tickets must not request official results'); };
+  for (const ticket of terminalTickets) {
+    assert.equal(settleBetTicketFromResult(ticket, completeScoreResult), ticket);
+    assert.equal(settleBetTicketFromResult(ticket, { final: false }), ticket);
+    assert.equal(await settleBetTicket(ticket), ticket);
+  }
+  const terminalBatch = await settleBetTickets(terminalTickets);
+  terminalBatch.forEach((ticket, index) => assert.equal(ticket, terminalTickets[index]));
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
 try {
   globalThis.fetch = async url => {
     fetchCalls += 1;

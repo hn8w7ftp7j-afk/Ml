@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   baseballInnings,
+  buildAsianProductionFeatureSnapshot,
   bullpenSnapshot,
   detailSide,
   extractAsianStarterEvidence,
@@ -10,10 +11,13 @@ import {
   parseKboGameListPayload,
   parseKboStarterAnalysisPayload,
   matchNpbStarterStats,
+  matchNpbHitterStats,
+  parseNpbBattingStatsHtml,
   parseNpbGameDetailHtml,
   parseNpbPitchingStatsHtml,
   projectedLineup,
   rotationPrediction,
+  starterSnapshot,
   validateAsianTeamFeatureOwnership,
 } from '../lib/asian-production-features-v1.js';
 import { parseNpbProbableStartersHtml, parseNpbScheduleDetailStartersHtml } from '../lib/asian-baseball.js';
@@ -21,6 +25,43 @@ import { extraInningsKernelV13 } from '../lib/joint-score-v13.js';
 
 assert.equal(baseballInnings('5', '.2'), 5 + 2 / 3);
 assert.equal(baseballInnings('4.1'), 4 + 1 / 3);
+for (const missing of [null, undefined, '', '  ', '--']) assert.equal(baseballInnings(missing), null, '缺局數不得變成0');
+assert.equal(baseballInnings('0'), 0, '真實零局數必須保留');
+
+const starterArgs = {
+  leagueId: 'CPBL', game: { awayTeamId: 701, homeTeamId: 702 }, side: 'away',
+  identity: { id: 'real-pitcher', name: '實際投手', source: 'OFFICIAL' }, referenceEra: 4,
+  recentStarts: [{ inningsPitched: 5.5 }],
+};
+const independentAbility = [0.8, 1, 1.3, 1.45].map(qualityFactor => starterSnapshot({
+  ...starterArgs, stats: { battersFaced: 500, qualityFactor, woba: qualityFactor * 0.3, leagueWoba: 0.3, performanceMetric: 'WOBA_ALLOWED_RELATIVE_TO_OFFICIAL_PITCHER_SAMPLE' },
+}));
+assert.equal(new Set(independentAbility.map(row => row.qualityFactor)).size, 4, '四組獨立wOBA能力不能全部被空ERA轉成同一偏強值');
+assert.ok(independentAbility.every((row, i) => i === 0 || row.qualityFactor > independentAbility[i - 1].qualityFactor));
+assert.ok(independentAbility.every(row => row.season.era === null && row.season.whip === null && row.season.inningsPitched === null));
+assert.equal(independentAbility[1].qualityFactor, 1);
+assert.equal(starterSnapshot({ ...starterArgs, stats: { battersFaced: 500, era: '', whip: null } }), null, '無能力資料不得變成零ERA明星投手');
+const genuineZero = starterSnapshot({ ...starterArgs, stats: { battersFaced: 500, era: 0, whip: 0 } });
+assert.equal(genuineZero.season.era, 0);
+assert.equal(genuineZero.season.whip, 0);
+assert.equal(starterSnapshot({ ...starterArgs, stats: { battersFaced: 500, era: 4, whip: '' } }).performanceMetric, 'ERA');
+const blankKbo = parseKboStarterAnalysisPayload({ rows: [{ row: [{ Text: '<span class="name">缺值投手</span>' }, { Text: '' }, { Text: '' }, { Text: '' }, { Text: '' }, { Text: '' }, { Text: '' }] }] });
+assert.equal(blankKbo[0].era, null);
+assert.equal(blankKbo[0].whip, null);
+
+const hitterTable = parseNpbBattingStatsHtml(`<table><tr><th>Player</th><th>PA</th><th>AB</th><th>H</th><th>AVG</th><th>SLG</th><th>OBP</th></tr>
+<tr><td><a href="/bis/eng/players/1001.html">* Measured, Hitter</a></td><td>120</td><td>100</td><td>30</td><td>.300</td><td>.500</td><td>.400</td></tr>
+<tr><td>Missing, Stats</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Zero, Sample</td><td>0</td><td>0</td><td>0</td><td>.000</td><td>.000</td><td>.000</td></tr>
+<tr><td>Actual, Zero</td><td>20</td><td>20</td><td>0</td><td>.000</td><td>.000</td><td>.000</td></tr></table>`);
+assert.equal(hitterTable[0].officialPlayerId, '1001');
+assert.equal(hitterTable[0].ops, 0.9);
+assert.equal(hitterTable[1].battingAverage, null);
+assert.equal(hitterTable[2].battingAverage, null, '0打數的.000不是有效能力樣本');
+assert.equal(hitterTable[3].battingAverage, 0, '真實20打數0安打須保留0');
+assert.equal(matchNpbHitterStats(hitterTable, { name: 'Measured' })?.officialPlayerId, '1001');
+assert.equal(matchNpbHitterStats([...hitterTable, { name: 'Measured, Another' }], { name: 'Measured' }), null, '同姓打者不能猜測身分');
+assert.equal(matchNpbHitterStats(hitterTable, { name: 'Measured', officialPlayerId: 'conflicting-id' }), null);
 
 const cpblRotation = projectCpblRotationStarter([
   {
@@ -192,10 +233,23 @@ const isolatedRotation = rotationPrediction(isolationDetails, 701, '2026-08-29T1
 assert.deepEqual(isolatedRotation.candidates.map(row => row.id).sort(), ['P1', 'P2'], '不得混入他隊或昨日才先發的投手');
 assert.ok(isolatedRotation.candidates.every(row => row.teamId === 701));
 const isolatedLineup = projectedLineup(isolationDetails, 701, 'CPBL');
-assert.equal(isolatedLineup.asOfGamePk, 'own-1');
+assert.equal(isolatedLineup.asOfGamePk, 'yesterday', '預測打線應按比賽時間選最新一場，不依賴傳入陣列順序');
 assert.ok(isolatedLineup.players.every(row => row.teamId === 701 && row.officialPlayerId.startsWith('701-')));
+assert.equal(isolatedLineup.statsCoverage, 0, '只有姓名與無樣本分母的AVG不得顯示完整能力');
+assert.equal(isolatedLineup.rosterConfirmedToday, false);
+assert.equal(isolatedLineup.offensiveIndexIsFallback, true);
+const nineHitters = Array.from({ length: 9 }, (_, index) => ({ name: `Hitter${index}`, id: `H${index}` }));
+const observedHitting = nineHitters.map((row, index) => ({
+  ...row, atBats: index === 0 ? 100 : 10, hits: index === 0 ? 30 : 0,
+  battingAverage: index === 0 ? 0.3 : 0, battingStatsScope: 'CURRENT_SEASON',
+}));
+const measuredLineup = projectedLineup([{ game: { gamePk: 'recent', gameDate: '2026-08-28T10:00:00Z', awayTeamId: 701, homeTeamId: 702 }, detail: { away: { lineup: nineHitters } } }], 701, 'NPB', observedHitting, '2026-08-29T00:00:00Z');
+assert.equal(measuredLineup.statsCoverage, 1);
+assert.equal(measuredLineup.observedBattingAverage, 30 / 180, '率值須由真實安打及打數合計，不可直接平均不等樣本率值');
+assert.equal(measuredLineup.battingStatsObservedAt, '2026-08-29T00:00:00Z');
 const isolatedBullpen = bullpenSnapshot(isolationDetails, 701, 'CPBL', 4.3, '2026-08-29T10:00:00Z');
 assert.ok(isolatedBullpen.pitcherIds.every(id => id.startsWith('701-')));
+assert.equal(bullpenSnapshot([{ game: { awayTeamId: 701, homeTeamId: 702 }, detail: { away: { pitchers: [{ starter: false, inningsPitched: 20, earnedRuns: null }] } } }], 701, 'CPBL', 4.3, '2026-08-29T10:00:00Z'), null, '缺失自責分不能當成0ERA牛棚');
 validateAsianTeamFeatureOwnership({
   away: { starter: isolatedRotation, lineup: isolatedLineup, bullpen: isolatedBullpen },
   home: { starter: { teamId: 702, id: 'Q1', candidates: [{ teamId: 702, officialPlayerId: 'Q1' }] }, lineup: { teamId: 702, players: [] }, bullpen: { teamId: 702, pitcherIds: [] } },
@@ -238,5 +292,57 @@ assert.equal(extra.maximumInnings, 3);
 assert.equal(extra.allowDrawAtLimit, true);
 assert.ok(extra.cells.some(row => row.awayRuns === row.homeRuns && row.probability > 0), '亞洲12局上限必須保留和局機率');
 assert.ok(Math.abs(extra.cells.reduce((sum, row) => sum + row.probability, 0) - 1) < 1e-12);
+
+const pastGame = {
+  gamePk: 'historical-integrity-audit', providerGameId: 's200101020001', officialDate: '2001-01-02',
+  gameDate: '2001-01-02T10:00:00Z', awayTeamId: 701, homeTeamId: 702,
+  awayCode: 'YOM', homeCode: 'HAN', venue: 'Tokyo Dome',
+};
+const historicalOptions = {
+  leagueId: 'NPB', game: pastGame,
+  history: [
+    { ...pastGame, gamePk: 'before', providerGameId: 's200101010001', gameDate: '2001-01-01T10:00:00Z', awayScore: 3, homeScore: 2 },
+    { ...pastGame, gamePk: 'after', providerGameId: 's200101030001', gameDate: '2001-01-03T10:00:00Z', awayScore: 30, homeScore: 20 },
+  ],
+  fetchImpl: async () => ({ ok: true, text: async () => '', json: async () => ({}) }),
+};
+const observedHistory = (await buildAsianProductionFeatureSnapshot(historicalOptions)).featureSnapshot;
+assert.ok(Date.parse(observedHistory.asOf) > Date.parse(pastGame.gameDate), '現在抓年度數據不得把時間偽裝成過去開賽前1秒');
+assert.equal(observedHistory.temporalProvenance.historicalReplayEligible, false);
+assert.equal(observedHistory.away.teamStrength.currentSeasonGames, 1, '歷史日期後的賽果不得流入賽前特徵');
+const cachedHistory = (await buildAsianProductionFeatureSnapshot(historicalOptions)).featureSnapshot;
+assert.equal(cachedHistory.asOf, observedHistory.asOf, '快取必須保留真正讀取時間，不能刷新成虛構新時間');
+assert.ok(cachedHistory.sourceObservations.every(row => row.fromCache));
+
+const cpblGame = {
+  gamePk: 'cpbl-fallback-integrity', providerGameId: 'cpbl-fallback-integrity',
+  officialDate: '2026-08-31', gameDate: '2026-08-31T10:00:00Z',
+  awayTeamId: 701, homeTeamId: 702, awayCode: 'CTB', homeCode: 'FUB', venue: '大巨蛋',
+};
+const cpblHistory = Array.from({ length: 6 }, (_, i) => ({
+  ...cpblGame, providerGameId: `cpbl-fallback-past-${i}`, gamePk: `cpbl-fallback-past-${i}`,
+  gameDate: `2026-08-${29 - i}T10:00:00Z`, awayScore: 3, homeScore: 2,
+}));
+const cpblStarterPayload = { Data: { Game: {
+  Visiting: { Team: { Code: 'ACN011' }, Pitchers: [{ PitcherAcnt: 'AUDIT-A', PitcherName: '真實客投', RoleType: '先發', InningPitchedCnt: 5, InningPitchedDiv3Cnt: 0, PlateAppearances: 22, EarnedRunCnt: 2, HittingCnt: 5, BasesONBallsCnt: 1 }] },
+  Home: { Team: { Code: 'AEO011' }, Pitchers: [{ PitcherAcnt: 'AUDIT-H', PitcherName: '真實主投', RoleType: '先發', InningPitchedCnt: 5, InningPitchedDiv3Cnt: 0, PlateAppearances: 25, EarnedRunCnt: 4, HittingCnt: 8, BasesONBallsCnt: 2 }] },
+} } };
+const cpblFallbackSnapshot = (await buildAsianProductionFeatureSnapshot({
+  leagueId: 'CPBL', game: cpblGame, history: cpblHistory,
+  fetchImpl: async url => ({ ok: true, json: async () => {
+    if (url.includes('/games/')) return cpblStarterPayload;
+    if (url.includes('/players/AUDIT-')) {
+      const away = url.endsWith('AUDIT-A');
+      return { Data: { Player: { Basic: { Acnt: away ? 'AUDIT-A' : 'AUDIT-H', Team: { Code: away ? 'ACN011' : 'AEO011' }, PitchingHabbit: 'R', IsForeign: '1' } } } };
+    }
+    return { Data: [] };
+  } }),
+})).featureSnapshot;
+assert.equal(cpblFallbackSnapshot.away.starter.season.era, 3.6, 'wOBA缺失時應用官方球員ID對上真實近期先發資料');
+assert.equal(cpblFallbackSnapshot.home.starter.season.era, 7.2);
+assert.notEqual(cpblFallbackSnapshot.away.starter.qualityFactor, cpblFallbackSnapshot.home.starter.qualityFactor);
+assert.equal(cpblFallbackSnapshot.away.starter.performanceSource, 'CPBL_OFFICIAL_RECENT_INDIVIDUAL_STARTS_REGRESSED');
+assert.equal(cpblFallbackSnapshot.rules.foreignPlayerConstraint.status, 'DIAGNOSTIC_ONLY');
+assert.equal(cpblFallbackSnapshot.rules.foreignPlayerConstraint.pitcherExitLineupTransitionModeled, false);
 
 console.log('Asian official PIT parsers, relief-only split, starter evidence validation and draw-cap kernel PASS');
