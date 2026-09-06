@@ -38,7 +38,7 @@ assert.match(page, /catch \(cause\) \{[\s\S]*taskReaderStateIsStale\(rebuildTask
 assert.match(page, /function releaseTerminalBackgroundCards\(gamePks = \[\], workflowStatus = 'failed'\)[\s\S]*\['queued', 'running'\]\.includes\(item\?\.status\)[\s\S]*!gameIsPrestartNow[\s\S]*!analysisHasCalculatedDirections[\s\S]*status: 'failed'/, 'fatal workflow states must release queued and running cards even when they have no previous analysis');
 assert.match(page, /\['failed', 'cancelled'\]\.includes[\s\S]*clearBackgroundJob[\s\S]*releaseTerminalBackgroundCards\(gamePks, state\.status\)/, 'failed and cancelled durable runs must clear their persisted identity and release their cards');
 assert.match(page, /saveBackgroundJob\(\{[\s\S]*gamePks: tasks\.map[\s\S]*pollBackgroundJob\([\s\S]*tasks\.map/, 'durable reconnect metadata must scope fatal card cleanup to the games owned by that run');
-assert.match(page, /pollBackgroundJob\(saved\.runId, generation, date, saved\.gamePks\)/, 'app reopen must restore the saved game scope when reconnecting to a durable run');
+assert.match(page, /pollBackgroundJob\(saved\.runId, generation, date, saved\.gamePks, \{ completedReceipt: saved\.completedReceipt === true \? saved : null \}\)/, 'app reopen must restore the saved game scope and distinguish completed immutable recovery from pending work');
 assert.match(nextConfig, /withWorkflow\(nextConfig\)/, 'Next.js must compile workflow directives');
 assert.match(middleware, /well-known\/workflow/, 'authentication middleware must not intercept Workflow internal callbacks');
 assert.ok(vercel.functions['app/api/analyze/route.js'].maxDuration >= 120, 'per-game background analysis needs enough server duration');
