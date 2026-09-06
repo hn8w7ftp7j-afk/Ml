@@ -43,7 +43,7 @@
 
 - PR #170 main `26bc301563b323dc1b1cfc40bce8c5f3f0cf4aa6`，main CI `34012055796` SUCCESS；同一 Production deployment `dpl_68WUapPfGFgZfT9oXjwzdsYYfAye` READY，alias 與 commit 核對一致。
 - CPBL 同步啟動三場背景工作，分析中以完整頁面導航前往 NHL，返回 CPBL 三場均呈現完成結果與 PIT 已保存。再次 CPBL → NHL → NBA modal → 關閉 → CPBL，三場的可見原始分數與 EV 文本逐項相同，Loading 正常結束。本次未操作實盤下注。
-- NHL 正式頁重新取得官方歷史賽程三場、NSH roster 18 人、歷史研究 20 場／14 個 retrospective folds／strict PIT 0。官方 Shootout game `2023020030` 再讀取確認 Regulation 1:1、終場 2:1、SO。
+- NHL 正式頁重新取得官方歷史賽程三場、NSH 球隊 ID 18（原文誤將 Team ID 寫成名單人數；最新重測官方 roster 回覆 15 列）、歷史研究 20 場／14 個 retrospective folds／strict PIT 0。官方 Shootout game `2023020030` 再讀取確認 Regulation 1:1、終場 2:1、SO。
 - KBO 恢復後曾收到官方 game identity QA 的 409。舊 schedule 重新驗證是可能路徑，但沒有原始 request 證據可確定是哪個欄位變動；取得最新官方 schedule 後 preflight 正常。沒有放寬身分 QA，也不把 409 寫成成功。
 - 四聯盟一鍵實測發現另一個既有問題：從 CPBL／KBO 進站時，MLB 日期使用台灣今日 9/6，未採最新 Reader 盤日 9/7，導致 MLB 被列為無賽事。v11.9.4 將 MLB 納入相同的逐聯盟 Reader 盤日核對，僅接受新鮮、有效、向前的日期，並保留使用者手選日期。
 - 日期修正已以實際 resolver 與 one-click handler 的 VM 測試確認 hidden MLB 9/7 與其他聯盟 9/6 的隔離，含 stale、403／503、舊日期、無效日期及手選日期反例，共 6 組；獨立 reviewer 重跑通過。v11.9.4 的完整測試、部署與部署後證據記錄於對應發布 PR，不以本段 v11.9.3 實證替代。
@@ -59,6 +59,22 @@ v11.9.4 正式一鍵實測：從 CPBL 進站，MLB 正確使用 `2026-09-07` 並
 KBO 的另一個實際問題已由真實 parser 重現：同一官方資料列附帶 `gameId=20260906NCWO0` 時產生 `gamePk=1099424697962592`，移除該連結時 fallback 產生 `188899822811850`。兩者主客 Team IDs、UTC 開賽時間及場次相同；Production 恢復兩張卡後，舊 ID 又被當作目前官方 schedule 提交而遭 409。不能把此現象說成兩場不同比賽，也不能偷偷改寫原下注身份。
 
 v11.9.5 以官方完整賽程作唯讀身分核對：只有完整且唯一的同聯盟／同日／同主客 Team IDs／同開賽時間／同場次證據，才將舊識別卡隔離保存。舊 PK、PIT、分析與帳本不改寫；Reader 重驗使用重新取得的官方賽前清單。衝突舊卡保留於明確標示的歷史區，不混進目前賽事。隔離 helper 9 組、真實頁面／API runtime 7 組、工作紀錄儲存 8 組反例通過。儲存測試以明確標記的 provider-shaped 壓力 fixture 執行真實 prepareAllLeagueBatch／oneClick handler；不把 fixture 大小當成 Production localStorage 量測值。模型結果與 receipt fingerprints 保留，寫入成功須讀回核對；完全不能寫入時僅當頁可重連，仍回報未持久保存。此版完整測試及 Production 實證於發布 PR 分別記錄。
+
+## v11.9.5 最終功能部署實測
+
+- 功能 commit：`e092fb71635aba74b5fc9a80a596e8b5cdabf249`（PR #172）。原 Production deployment `dpl_GyY9Zmb3wFxcwJxYWViRQ1TJmkUg` READY，主網址 alias 與 main commit 一致；main CI `34014084157` SUCCESS，PR CI `34013947229` SUCCESS。
+- 最終本機完整 `npm test` 與 Production Build 通過，沒有略過 NBA／NHL 或既有棒球 suites。新 identity 9、runtime 7、storage 8 組與既有 recovery 14／receipt 17／date 6 組通過；獨立交叉審查重跑。Build 保留既有 NBA CSS `end` 的 autoprefixer 相容性警告；不是 build failure，也未改動 NBA CSS。
+- Production KBO API 回覆 5 場完整身分證據與 4 場賽前 games；主板 5 張有效身分卡，預設收合歷史區 1 張。展開舊 ID `1099424697962592`，其 PIT、S 分數與 W/R 文本與部署前 DOM 記錄逐項相同；最新官方 ID 為 `188899822811850`。原帳本不改寫，舊卡沒有新下注控制。Reader 實際複核 4/4 正常，未重現舊卡造成的 409。
+- 從 CPBL 啟動四聯盟：MLB `2026-09-07` 10 場，NPB／KBO／CPBL `2026-09-06` 分別 3／4／3 場。分析中完整導航至 NHL，再回 CPBL，成功接回工作，最終四聯盟 4/4 完成，CPBL 3 場各 8 個分數且 PIT 確認。Pending 卡只有載入狀態時不記為結果 PASS；以最後實際載入結果為準。
+- 完成後再 CPBL → NHL → CPBL，3 場原 PIT、S 與 W/R 可見文本逐項相同。Reader 因資料時效啟動背景更新時仍顯示上一版分數；沒有把更新中狀態誤寫成全部更新已完成。
+- NPB 日期 9/6，4 張已保存結果各 8 個分數／PIT 確認（含先前已開始的保留卡）；新工作只處理 3 場賽前場次。MLB 日期 9/7，15 張卡中 10 場有盤各 4 個分數／PIT 確認，5 場鎖盤沒有假分數。
+- NHL v11.9.5 官方歷史賽程重新讀回台灣 `2023-10-11` 三場，來源取得時間 13:31（台灣）；北美／台灣日期、Game/Team ID 正確。NSH 顯示 Team ID 18、官方 roster 回覆 15 列、club player statistics 30 列；這些是實際回覆列數，非完整歷史名單已獨立驗證。Juuse Saros `8477424` 重複點選正常，賽季統計各自標出球季。
+- 官方門將名單保留備用門將 `00:00`，不冒充賽前 confirmed goalie。來源快照 `persisted: true`，版本紀錄按鈕實際讀回最新 `4d849320998944e7c768c1ce0dbed7094e9df70b02a51518e489074ecb6f8f78` 及過去版本。
+- 真實 OT game `2023020069`：Regulation 2:2、終場 2:3；真實 SO game `2023020030`：Regulation 1:1、終場 2:1。兩者是 `OFFICIAL_LIVE_FETCH`，快照 `persisted: true`。SO revision `87076c2387d4b88db561d9d4a5b845cb587468d0df7e8e621dbb167804569ff2`；OT revision `3bfa2b2419661e1e7660d54b9f0977aa68f870355fca362397e1a89ae427f499`。
+- NHL 歷史研究再次顯示 20 場／14 retrospective folds／strict PIT 0；Brier 1.096、比分平方誤差 6.727，小樣本沒有通過正式預測效力或 calibration。沒有以賽後門將／傷病資訊補成歷史賽前資料。
+- NHL → NBA modal → 關閉正常，NBA 9/6 來源回覆 0 場及 QA WARNING，返回 NHL 原資料保留。NHL API 無效日期 `2026-02-30` 回覆 `NHL_INVALID_DATE`；今天 9/6 官方正常回覆 0 場，同日再讀實測 `cache.hit: true`、`tier: memory` 且到期時間一致。NHL Reader GET 保持 `verifiedMarkets: []`、`executable: false` 與「等待真實 Tai888 NHL 盤驗證」。
+- NHL 及棒球 Desktop 實測 `clientWidth = scrollWidth = 1348`，此輪網站本身 Console／Runtime error 觀察為 0；API 預期的無效日期拒絕與瀏覽器 extension 訊息不混成網站 regression。
+- Mobile viewport／實機、真實新增／取消／再次下注與新場次自動結算沒有執行，不列為 Production 全流程 PASS。人員／進階 feed 接入與足量歷史 calibration 仍未完成工程；不能因目前已部署而宣告整份需求全部完成。
 
 ## NHL 資料與實際操作
 
