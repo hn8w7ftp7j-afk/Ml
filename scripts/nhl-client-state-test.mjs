@@ -38,7 +38,7 @@ function declaration(name) {
   assert.ok(bodyStart > match.index, `Cannot locate ${name} body`);
   return source.slice(match.index, bodyStart) + blockAt(bodyStart);
 }
-const handlers = ['run', 'loadSchedule', 'loadGame', 'loadTeam', 'loadPlayer', 'loadContext', 'loadVersions', 'loadResearch'];
+const handlers = ['run', 'loadSchedule', 'loadGame', 'loadTeam', 'loadPlayer', 'loadContext', 'loadVersions', 'loadResearch', 'loadTeamSummary'];
 const historicalMarker = 'onClick={() => { setDate(row.taipeiDate);';
 const historicalStart = source.indexOf(historicalMarker);
 assert.ok(historicalStart >= 0, 'Historical detail click must be extracted from its actual JSX');
@@ -57,7 +57,7 @@ function deferred() {
 
 function harness(initial = {}) {
   const state = {
-    date: '2026-09-06', busy: {}, error: '', boards: {}, details: {}, rosters: {}, player: null,
+    date: '2026-09-06', busy: {}, error: '', boards: {}, details: {}, rosters: {}, player: null, teamSummaries: {},
     contexts: {}, versions: {}, status: null, selectedGame: null, selectedTeam: null, tab: 'schedule', ready: false,
     ...initial,
   };
@@ -71,7 +71,7 @@ function harness(initial = {}) {
       return request.promise;
     },
   };
-  for (const key of ['date', 'busy', 'error', 'boards', 'details', 'rosters', 'player', 'contexts', 'versions', 'status', 'selectedGame', 'selectedTeam', 'tab', 'ready']) {
+  for (const key of ['date', 'busy', 'error', 'boards', 'details', 'rosters', 'player', 'contexts', 'versions', 'status', 'selectedGame', 'selectedTeam', 'tab', 'ready', 'teamSummaries']) {
     context[`set${key[0].toUpperCase()}${key.slice(1)}`] = next => {
       state[key] = typeof next === 'function' ? next(state[key]) : next;
       context[key] = state[key];
@@ -226,4 +226,23 @@ await test('the actual HTTP boundary rejects failed responses and foreign league
   assert.deepEqual(plain(await actualRequest(body)('game')), body);
 });
 
+await test('team summary duplicate clicks coalesce and out-of-order phases never overwrite another scope', async () => {
+  const h = harness(); const team = { teamId: 18, season: 20232024 };
+  const regular = h.api.loadTeamSummary(team, 2); h.api.loadTeamSummary(team, 2);
+  const preseason = h.api.loadTeamSummary(team, 1); assert.equal(h.calls.length, 2);
+  h.calls[1].resolve({ league: 'NHL', ...team, gameType: 1, statistics: null }); await preseason;
+  h.calls[0].resolve({ league: 'NHL', ...team, gameType: 2, statistics: { gamesPlayed: 82 } }); await regular;
+  assert.equal(h.state.teamSummaries['18:20232024:2'].statistics.gamesPlayed, 82);
+  assert.equal(h.state.teamSummaries['18:20232024:1'].statistics, null);
+  assert.ok(Object.values(h.state.busy).every(value => value === false));
+});
+await test('team summary mismatch and failed refresh preserve previous results and release loading', async () => {
+  const prior = { league: 'NHL', teamId: 18, season: 20232024, gameType: 2, statistics: { gamesPlayed: 82 } };
+  const h = harness({ teamSummaries: { '18:20232024:2': prior } });
+  const first = h.api.loadTeamSummary(prior, 2); h.calls[0].resolve({ ...prior, teamId: 10 }); await first;
+  assert.equal(h.state.teamSummaries['18:20232024:2'].teamId, 18); assert.match(h.state.error, /不符/);
+  const retry = h.api.loadTeamSummary(prior, 2); h.calls[1].reject(new Error('source timeout')); await retry;
+  assert.equal(h.state.teamSummaries['18:20232024:2'].statistics.gamesPlayed, 82);
+  assert.equal(h.state.busy['team-summary:18:20232024:2'], false);
+});
 console.log(`NHL client: ${groups} actual-handler async/state regression groups passed.`);
