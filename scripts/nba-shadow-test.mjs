@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { deriveNbaBoxscore } from '../lib/nba/basketball.js';
 import { analyzeNbaShadow, nbaScheduleContext } from '../lib/nba/shadow.js';
-import { cancelNbaShadow, nbaShadowKey, readNbaShadow, runNbaShadow } from '../lib/nba/shadow-client.js';
+import { cancelNbaShadow, canResumeNbaShadow, nbaShadowKey, readNbaShadow, runNbaShadow } from '../lib/nba/shadow-client.js';
 let checks = 0;
 async function test(name, action) { await action(); checks += 1; console.log(`PASS ${name}`); }
 const stat = (name, displayValue) => ({ name, displayValue: String(displayValue) });
@@ -147,5 +147,66 @@ await test('completed report explicitly confirms successful session storage', as
     const job = await runNbaShadow([games[0]], options.teamId, 'regular', { request: async () => response(games[0]) });
     assert.equal(job.persistence, 'session_storage'); assert.equal(saved[0].job.persistence, 'session_storage'); assert.equal(saved[0].job.league, 'NBA');
   } finally { if (previous === undefined) delete globalThis.sessionStorage; else globalThis.sessionStorage = previous; }
+});
+await test('cancelled research resumes only missing games and retains source provenance', async () => {
+  const input = games.slice(10, 14); const key = nbaShadowKey(input, options.teamId, 'regular');
+  const request = async query => response(input.find(g => g.sourceId === new URLSearchParams(query).get('id')));
+  const stopped = await runNbaShadow(input, options.teamId, 'regular', { request, pause: async () => cancelNbaShadow(key) });
+  assert.equal(stopped.checkpoint.length, 1);
+  let calls = 0;
+  const done = await runNbaShadow(input, options.teamId, 'regular', { resume: true, pause: async () => {}, request: async query => { calls++; return request(query); } });
+  assert.equal(calls, 3); assert.equal(done.resumed, 1); assert.equal(done.status, 'completed');
+  assert.equal(done.sources.length, 4); assert.equal(done.checkpoint.length, 0);
+});
+await test('a reloaded running checkpoint becomes paused without auto-start and can resume', async () => {
+  const previous = globalThis.sessionStorage; let saved = '[]'; let checkpoint;
+  globalThis.sessionStorage = { getItem: () => saved, setItem: (key, value) => { saved = value; } };
+  try {
+    const input = games.slice(20, 23); const key = nbaShadowKey(input, options.teamId, 'regular');
+    await runNbaShadow(input, options.teamId, 'regular', { request: async () => response(input[0]), pause: async () => { checkpoint = saved; cancelNbaShadow(key); } });
+    saved = checkpoint;
+    const fresh = await import('../lib/nba/shadow-client.js?reload-checkpoint-test');
+    assert.equal(fresh.readNbaShadow(key).status, 'paused'); assert.equal(fresh.nbaShadowIsBusy(), false);
+    let calls = 0;
+    const done = await fresh.runNbaShadow(input, options.teamId, 'regular', { resume: true, pause: async () => {}, request: async query => { calls++; return response(input.find(g => g.sourceId === new URLSearchParams(query).get('id'))); } });
+    assert.equal(calls, 2); assert.equal(done.status, 'completed'); assert.equal(done.resumed, 1);
+  } finally { if (previous === undefined) delete globalThis.sessionStorage; else globalThis.sessionStorage = previous; }
+});
+await test('tampered checkpoint identity and box-score arithmetic BLOCK before network reads', async () => {
+  for (const mutate of [g => { g.league = 'MLB'; }, g => { g.home.statistics[0].displayValue = '99-80'; }]) {
+    const input = games.slice(30, 33); const key = nbaShadowKey(input, options.teamId, 'regular');
+    const stopped = await runNbaShadow(input, options.teamId, 'regular', { request: async () => response(structuredClone(input[0])), pause: async () => cancelNbaShadow(key) });
+    mutate(stopped.checkpoint[0]); let calls = 0;
+    const done = await runNbaShadow(input, options.teamId, 'regular', { resume: true, request: async () => { calls++; } });
+    assert.equal(done.status, 'blocked'); assert.equal(done.report, null); assert.equal(calls, 0); assert.equal(done.checkpoint.length, 0);
+  }
+});
+await test('partial research retries failed games without carrying obsolete transport errors', async () => {
+  const input = games.slice(40, 42);
+  const partial = await runNbaShadow(input, options.teamId, 'regular', { pause: async () => {}, request: async query => {
+    if (new URLSearchParams(query).get('id') === input[1].sourceId) throw new Error('temporary unavailable');
+    return response(input[0]);
+  } });
+  assert.equal(partial.status, 'partial'); let calls = 0;
+  const done = await runNbaShadow(input, options.teamId, 'regular', { resume: true, request: async () => { calls++; return response(input[1]); } });
+  assert.equal(calls, 1); assert.equal(done.errors.length, 0); assert.equal(done.status, 'completed');
+});
+await test('expired and future checkpoints are not resumable, even in the same document', async () => {
+  const input = games.slice(50, 52); const key = nbaShadowKey(input, options.teamId, 'regular');
+  const stopped = await runNbaShadow(input, options.teamId, 'regular', { request: async () => response(input[0]), pause: async () => cancelNbaShadow(key) });
+  assert.equal(canResumeNbaShadow(stopped), true);
+  assert.equal(canResumeNbaShadow(stopped, Date.parse(stopped.checkpointAt) - 1), false);
+  stopped.checkpointAt = new Date(Date.now() - 86400001).toISOString();
+  assert.equal(canResumeNbaShadow(stopped), false); let calls = 0;
+  const done = await runNbaShadow(input, options.teamId, 'regular', { resume: true, pause: async () => {}, request: async query => { calls++; return response(input.find(g => g.sourceId === new URLSearchParams(query).get('id'))); } });
+  assert.equal(calls, 2); assert.equal(done.resumed, 0); assert.equal(done.status, 'completed');
+});
+await test('missing or foreign provenance never enters a reusable checkpoint', async () => {
+  const input = games.slice(55, 56);
+  const missing = await runNbaShadow(input, options.teamId, 'regular', { request: async () => ({ ...response(input[0]), sources: [] }) });
+  assert.equal(missing.status, 'partial'); assert.equal(missing.checkpoint.length, 0); assert.equal(missing.report.counts.missing, 1);
+  const foreign = response(input[0]); foreign.sources[0].url = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=999';
+  const blocked = await runNbaShadow(input, options.teamId, 'regular', { request: async () => foreign });
+  assert.equal(blocked.status, 'blocked'); assert.equal(blocked.report, null);
 });
 console.log(`NBA basketball/Shadow: ${checks} checks passed.`);
