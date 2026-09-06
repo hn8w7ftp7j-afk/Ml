@@ -17,6 +17,7 @@ export default function ShadowPanel({ games, teamId, seasonType }) {
     <p className={styles.muted}>一個球季需逐場讀取，可能花數分鐘。切換 NBA 頁籤或返回原聯盟不會中斷；關閉／重新整理整個瀏覽器頁面會停止尚未完成的讀取，完成報告則保留於此分頁。</p>
     <div className={styles.toolbar}><button type="button" disabled={!games.length || nbaShadowIsBusy()} onClick={() => { void runNbaShadow(games, teamId, seasonType); }}>{job ? '重新執行歷史驗證' : '執行籃球 Shadow 驗證'}</button>{running && <button type="button" onClick={() => cancelNbaShadow(key)}>停止讀取</button>}{nbaShadowIsBusy() && !running && <span>另一份 NBA 研究正在執行，完成後可開始。</span>}</div>
     {job && <p role="status">{labels[job.status] || job.status}・已處理 {job.completed}／{job.total} 場・來源失敗 {job.errors.length} 場</p>}
+    {job?.persistence === 'memory_only' && <p role="alert" className={styles.error}>瀏覽器儲存空間不足或禁止儲存；結果目前只保留在這個頁面的記憶體，重新整理會遺失。其他聯盟資料未刪除。</p>}
     {report && <>
       <p className={styles.muted}>報告完成時間：{job.reportBuiltAt || '未完成'}{running || job.status === 'cancelled' ? '（目前保留上次報告，並非本次尚未完成的結果）' : ''}</p>
       <p>研究狀態：{report.status}・QA {report.qa.status}・完整 box score {report.counts.features} 場・缺漏 {report.counts.missing} 場・驗證 {report.counts.validation} 場</p>

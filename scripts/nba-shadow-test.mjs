@@ -124,11 +124,28 @@ await test('client identity BLOCK and conflicting source scores never degrade to
   for (const result of [{ ...response(games[0]), qa: { status: 'BLOCK' } }, response(games[1])]) {
     const job = await runNbaShadow([games[0]], options.teamId, 'regular', { pause: async () => {}, request: async () => result });
     assert.equal(job.status, 'blocked'); assert.equal(job.report, null);
+    assert.equal(job.completed, 1);
   }
 });
 await test('invalid history preflight never calls a provider', async () => {
   let calls = 0;
   const job = await runNbaShadow([{ ...games[0], league: 'MLB' }], options.teamId, 'regular', { request: async () => { calls += 1; } });
   assert.equal(job.status, 'blocked'); assert.equal(calls, 0);
+});
+await test('storage quota failure is visible and never removes another league', async () => {
+  const previous = globalThis.sessionStorage; let removals = 0;
+  globalThis.sessionStorage = { getItem: () => '[]', setItem: () => { throw new Error('QuotaExceededError'); }, removeItem: () => { removals += 1; } };
+  try {
+    const job = await runNbaShadow([games[0]], options.teamId, 'regular', { request: async () => response(games[0]) });
+    assert.equal(job.persistence, 'memory_only'); assert.equal(job.report.counts.features, 1); assert.equal(removals, 0);
+  } finally { if (previous === undefined) delete globalThis.sessionStorage; else globalThis.sessionStorage = previous; }
+});
+await test('completed report explicitly confirms successful session storage', async () => {
+  const previous = globalThis.sessionStorage; let saved;
+  globalThis.sessionStorage = { getItem: () => '[]', setItem: (key, value) => { saved = JSON.parse(value); } };
+  try {
+    const job = await runNbaShadow([games[0]], options.teamId, 'regular', { request: async () => response(games[0]) });
+    assert.equal(job.persistence, 'session_storage'); assert.equal(saved[0].job.persistence, 'session_storage'); assert.equal(saved[0].job.league, 'NBA');
+  } finally { if (previous === undefined) delete globalThis.sessionStorage; else globalThis.sessionStorage = previous; }
 });
 console.log(`NBA basketball/Shadow: ${checks} checks passed.`);
