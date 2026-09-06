@@ -1,6 +1,6 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.9.10",
+  "version": "11.9.11",
   "private": true,
   "type": "module",
   "engines": {
@@ -18,8 +18,10 @@
     "e2e:reader": "node scripts/local-reader-e2e-v202.mjs",
     "verify": "npm test && npm run build && npm audit --omit=dev --audit-level=high && npm run package:reader",
     "start": "next start",
-    "test:nhl": "node scripts/nhl-data-test.mjs && node scripts/nhl-team-summary-test.mjs && node scripts/nhl-context-test.mjs && node scripts/nhl-model-test.mjs && node scripts/nhl-contract-test.mjs && node scripts/nhl-historical-validation-test.mjs && node scripts/nhl-api-integration-test.mjs && node scripts/nhl-client-state-test.mjs",
+    "test:nhl": "node scripts/nhl-data-test.mjs && node scripts/nhl-team-summary-test.mjs && node scripts/nhl-context-test.mjs && node scripts/nhl-model-test.mjs && node scripts/nhl-contract-test.mjs && node scripts/nhl-historical-validation-test.mjs && node scripts/nhl-personnel-feed-test.mjs && node scripts/nhl-personnel-api-test.mjs && node scripts/nhl-history-validation-runner-test.mjs && node scripts/nhl-shot-research-test.mjs && node scripts/nhl-observed-shot-api-test.mjs && node scripts/nhl-api-integration-test.mjs && node scripts/nhl-client-state-test.mjs && node scripts/nhl-boundary-regression-test.mjs",
     "nhl:download-history": "node scripts/nhl-download-history.mjs",
+    "nhl:validate-history": "node scripts/nhl-history-validation-runner.mjs",
+    "nhl:shot-research": "node scripts/nhl-shot-research-run.mjs",
     "test:nba": "node scripts/nba-data-test.mjs && node scripts/nba-research-test.mjs && node scripts/nba-shadow-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-integration-test.mjs",
     "nba:shadow-history": "node scripts/nba-shadow-history.mjs"
   },

@@ -1,15 +1,26 @@
-file:///workspace/scratch/00210295d43e/Ml/[eval1]:1
-import fs from 'node:fs';import {createHash} from 'node:crypto';console.log(JSON.stringify({recordedAt:new Date().toISOString(),pregamePointInTime:false,files:['pbp-2023020001.json','right-rail-2023020001.json'].map(file=>({file,url:'https://api-web.nhle.com/v1/gamecenter/2023020001/'+(file.startsWith('pbp')?'play-by-play':'right-rail'),sha256:createHash('sha256').update(fs.readFileSync('scripts/fixtures/nhl/'+file)).digest('hex'),sourcePublishedAt:null}))},null,2)))
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      ^
-
-SyntaxError: Unexpected token ')'
-    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
-    at ModuleLoader.createModuleWrap (node:internal/modules/esm/loader:210:12)
-    at ModuleLoader.eval (node:internal/modules/esm/loader:248:23)
-    at node:internal/process/execution:77:24
-    at asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:11)
-    at Object.runEntryPointWithESMLoader (node:internal/modules/run_main:123:19)
-    at evalModuleEntryPoint (node:internal/process/execution:76:47)
-    at node:internal/main/eval_string:37:3
-
-Node.js v24.19.0
+{
+  "recordedAt": "2026-09-06T19:47:26.003Z",
+  "pregamePointInTime": false,
+  "originalAcquisitionTimestampRecoverable": false,
+  "repairNote": "The inherited manifest contained a Node syntax-error log. Both retained JSON payloads were re-fetched from the official endpoint and verified identical. fetchedAt below records that new verification, not the unknown original acquisition.",
+  "files": [
+    {
+      "file": "pbp-2023020001.json",
+      "url": "https://api-web.nhle.com/v1/gamecenter/2023020001/play-by-play",
+      "sha256": "4eec9c34d6da3590899b39038afd21ae8ba5cdac0a4f928eb64aafb390263e9b",
+      "contentHash": "a9e87fc286b5df3c4abfad62d0532ba9958808c0d3ce7eb51b7300ae02fb8f13",
+      "fetchedAt": "2026-09-06T19:43:45.311Z",
+      "sourcePublishedAt": null,
+      "officialPayloadReverified": true
+    },
+    {
+      "file": "right-rail-2023020001.json",
+      "url": "https://api-web.nhle.com/v1/gamecenter/2023020001/right-rail",
+      "sha256": "d2cc68c647b009c08c239316f8c32a5d4aa190154723757c689c3b5bf1278346",
+      "contentHash": "902b3afdafc4b3d03db6b1d3d109fbdbef2073d505233d42e19396b1ef7c7ce6",
+      "fetchedAt": "2026-09-06T19:43:59.477Z",
+      "sourcePublishedAt": null,
+      "officialPayloadReverified": true
+    }
+  ]
+}

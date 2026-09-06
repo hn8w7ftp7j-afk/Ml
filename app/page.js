@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { APP_VERSION } from '../lib/app-version.js';
 import NbaEntry from './nba/entry.js';
+import Link from 'next/link';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
 import {
   betIdentity,
@@ -3986,7 +3987,7 @@ export default function Home() {
         </button>;
       })}
       <NbaEntry/>
-      <a className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球資料與研究</small></a>
+      <Link prefetch={false} className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球資料與研究</small></Link>
     </nav>
 
     <nav className="mainTabs">

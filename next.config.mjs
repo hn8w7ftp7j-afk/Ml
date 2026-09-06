@@ -30,6 +30,16 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  outputFileTracingIncludes: {
+    '/api/nhl': [
+      './scripts/fixtures/nhl/history-expanded/coverage.json',
+      './scripts/fixtures/nhl/history-expanded/score-validation.json',
+      './scripts/fixtures/nhl/history-expanded/playoff-score-validation.json',
+      './scripts/fixtures/nhl/history-expanded/model-validation.json',
+      './scripts/fixtures/nhl/history-expanded/outcomes.json',
+      './scripts/fixtures/nhl/history-expanded/period-games.json',
+    ],
+  },
   images: { dangerouslyAllowSVG: false, remotePatterns: [] },
   async headers() {
     return [

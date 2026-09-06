@@ -1,0 +1,2761 @@
+{
+  "leagueId": "NHL",
+  "startedAt": "2026-09-06T20:25:57.048Z",
+  "updatedAt": "2026-09-06T20:25:58.362Z",
+  "requestedGames": 1312,
+  "retainedResponses": 201,
+  "eligibleGames": 199,
+  "providerStopped": false,
+  "paceMs": 2000,
+  "concurrency": 1,
+  "previousStoppedRun": null,
+  "acquired": [
+    {
+      "gameId": "2023020002",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020002/play-by-play",
+        "fetchedAt": "2026-09-06T19:49:55.657Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "45cba9263c6e85be2e1fcc79c03ce33955fe0bb1cea0ec5a53b790ccefeefe54"
+      },
+      "qaStatus": "OK",
+      "rows": 109,
+      "code": null
+    },
+    {
+      "gameId": "2023020003",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020003/play-by-play",
+        "fetchedAt": "2026-09-06T19:50:12.502Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "bf1119fa8768365bee9bef0d32e40dd95aee67ee96ac0dca960ac87b27b17bbb"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020004",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020004/play-by-play",
+        "requestedAt": "2026-09-06T20:17:16.925Z",
+        "fetchedAt": "2026-09-06T20:17:30.909Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a76a2c7b29b8ce8731783780fab4139973eda2d7edb8786cc5c49b16bd315f3c"
+      },
+      "qaStatus": "OK",
+      "rows": 106,
+      "code": null
+    },
+    {
+      "gameId": "2023020005",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020005/play-by-play",
+        "requestedAt": "2026-09-06T20:17:30.932Z",
+        "fetchedAt": "2026-09-06T20:17:31.250Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e5fa4f1eccaefbbb875f47b5187dc03cca6ef3c20bd7283651ed93347df023eb"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020006",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020006/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:11.878Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "fff156823673240607f53e8b89a41bd1cb9ee82112be0ca966da95f484ef6d28"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020007",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020007/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:11.883Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "61d1ee5bc8c2e8c2ce8a77055765608875a068de7b6c8291dead1e8f46a0cb4f"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020008",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020008/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:23.242Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "af9d78b9aa1836e5bc506afd2f03ee365dcfb0e8ea1ffb1ec9d10b13c472ded2"
+      },
+      "qaStatus": "OK",
+      "rows": 95,
+      "code": null
+    },
+    {
+      "gameId": "2023020009",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020009/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:23.244Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e7625dad11ea45242803db26b9dc5da9d5844c80307116a895bf1f16d8da565b"
+      },
+      "qaStatus": "OK",
+      "rows": 83,
+      "code": null
+    },
+    {
+      "gameId": "2023020010",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020010/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:34.429Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a57e35f09ec65186128ffdf8d552db7b31aca894ef19b7e16749ab6e203b7be9"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020011",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020011/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:34.429Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a3eb176c0b3b2f7e7c62590137e5ce9c8e70189064384d84909b6d963edb02f8"
+      },
+      "qaStatus": "OK",
+      "rows": 93,
+      "code": null
+    },
+    {
+      "gameId": "2023020012",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020012/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:34.779Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "76632610c03c0f19ea253f92ee74486333bae837a847ac6bbacc8be9723580dc"
+      },
+      "qaStatus": "OK",
+      "rows": 98,
+      "code": null
+    },
+    {
+      "gameId": "2023020013",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020013/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:34.788Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c74f16f2ece7e973214956a6b4464d8d7fbe582f2f224d8b3c86b53df3436d81"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020014",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020014/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:35.023Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "22ca260989fcfc06232fd4b372ed1874f9eb97938fa8da5190f77cfef697c59f"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020015",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020015/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:35.076Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b8ecac602823545e1c94a2fb8fc9c16c509beb7716aa635fafc81a2a4b6e0229"
+      },
+      "qaStatus": "OK",
+      "rows": 94,
+      "code": null
+    },
+    {
+      "gameId": "2023020016",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020016/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:35.345Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e333ef7cd4a4c50ce3645ddaff926c7cf09114160faf34d32caac58415daacc9"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020017",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020017/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:35.399Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "eecf76531cc62c2038aaf8048ce2f63c1d77462953bb67bb9c776ffbbcce2996"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020018",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020018/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:35.616Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "524aa3bbdef882e1f1e8144a48f7c6a0f5b91812e5c1980678881d0ca2238bb5"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020019",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020019/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:35.681Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4dd3a9019ef6db317e574b8de3a5c1bc9494b264a259eb5e0c09eba1f885e3c5"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020020",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020020/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.085Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e302e6047cf7b2002c37155cf62272d2d51cc9241592ccb541d9521f211a0209"
+      },
+      "qaStatus": "OK",
+      "rows": 95,
+      "code": null
+    },
+    {
+      "gameId": "2023020021",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020021/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.085Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "07349a1a5e3fbd3b73ae122938c4b27db50d1b8eba180ff8b17bd81a53e11a16"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020022",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020022/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.374Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "56bbe2b94c9749520c8bbc32b0222bb2a4ed7361b93fc0430ebfa8e1c40c9422"
+      },
+      "qaStatus": "OK",
+      "rows": 99,
+      "code": null
+    },
+    {
+      "gameId": "2023020023",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020023/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.383Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "300c9acd2149eaaa806fab337f2e2c29c3849591b96fe2ebc80f1f78b60e899d"
+      },
+      "qaStatus": "OK",
+      "rows": 95,
+      "code": null
+    },
+    {
+      "gameId": "2023020024",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020024/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.679Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "596f40ba3bff96523b0d2696dee192ce273499bb19493dfbbeb763c7a3b2b85a"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020025",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020025/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.689Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "07b4c0acc64ed2dfc3a240d9a75fa466c5ea7c8090b08ff7a819d02954c39acf"
+      },
+      "qaStatus": "OK",
+      "rows": 97,
+      "code": null
+    },
+    {
+      "gameId": "2023020026",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020026/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.962Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7e3d7728494b39e60437ecffb3e3b505a7db21ea0a39dcf10dc11aa71e41edb9"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020027",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020027/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:36.970Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a2648117611a7b77d7742a8ddbe9e89bbb1273639c116bc28c99d7aa787032ef"
+      },
+      "qaStatus": "OK",
+      "rows": 77,
+      "code": null
+    },
+    {
+      "gameId": "2023020028",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020028/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:37.247Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7c410f036842088e0c6d41b5617525176ae2a443a1233f34e70d93dc3ccdd9f6"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020029",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020029/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:37.283Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "6fc34afe298a7bdd60b4d7c8b828d6ae91d5b82a09272d092f96ae8b7a7dbbaa"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020030",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020030/play-by-play",
+        "fetchedAt": "2026-09-06T19:50:12.847Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "521328497ed85125e83a124e58ffcf7f970e274a4b88318a4d8d493ed0c230b3"
+      },
+      "qaStatus": "OK",
+      "rows": 119,
+      "code": null
+    },
+    {
+      "gameId": "2023020031",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020031/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:37.523Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0eb0429f46a104d8953e481818a0af19976c3fda2a28ab4a12d23bfc669f2934"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020032",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020032/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:37.583Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a5b918a02663a4b14ae3e30bce8a84583946b6d6033b52cd7c828f89d5bed6ee"
+      },
+      "qaStatus": "OK",
+      "rows": 74,
+      "code": null
+    },
+    {
+      "gameId": "2023020033",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020033/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:37.873Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "871fb87ad5fb90e72a8ab248e6ca1c82d3919c7f7c49003ed88d0eab465e430c"
+      },
+      "qaStatus": "OK",
+      "rows": 78,
+      "code": null
+    },
+    {
+      "gameId": "2023020034",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020034/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:37.889Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d085564b7880340f119fc65457f08278d919c9becbcd2816f34dfbcc740de076"
+      },
+      "qaStatus": "OK",
+      "rows": 96,
+      "code": null
+    },
+    {
+      "gameId": "2023020035",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020035/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:38.121Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "81a13b157cb236c9942086d140be42f97f9104d8550cc8e9e7f1ea14b29e2fac"
+      },
+      "qaStatus": "OK",
+      "rows": 72,
+      "code": null
+    },
+    {
+      "gameId": "2023020036",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020036/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:38.203Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "585b71903ee2c5f588e94dd14b1876c7254cea8e61551cbc45e18359521f4f7a"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020037",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020037/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:38.431Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "9004084818dcdc207cd1dd70e2a03b535b86334e0502294fa437a59de6c3200c"
+      },
+      "qaStatus": "OK",
+      "rows": 83,
+      "code": null
+    },
+    {
+      "gameId": "2023020038",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020038/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:38.498Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "2fbfc44f5965b87209b5e30b0a848adf2ffd61c2058bf4c6a408f0ea81b5b15a"
+      },
+      "qaStatus": "OK",
+      "rows": 99,
+      "code": null
+    },
+    {
+      "gameId": "2023020039",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020039/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:38.727Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "851e74625268cad618950ccc401bf85ed3a0c9d6c6ebf3a43d831c44d3ac6161"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020042",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020042/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:38.818Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7fbb79f64847cb37054b49e0adf17e6399b3d77845f8df8b922adfa095b9738b"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020041",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020041/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:39.042Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "31f837f0c9345fd00cf3e7a5a7734e46781edd134dd46effbf3b8062efd75e3e"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020040",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020040/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:39.091Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "6024527c05f3ffb0dc74a554e3ebe4cb144636569ef2d3c4327f47201b335a15"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020043",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020043/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:39.326Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "858bfa0d42655ba10ff214fa5fd1f62bbcc441b2dad90d2d547fbc3304002c55"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020044",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020044/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:39.362Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0961f58d113eabd24a21a5dac07bf2f8c29b58325d1b66d87e1b84bc46308a55"
+      },
+      "qaStatus": "OK",
+      "rows": 96,
+      "code": null
+    },
+    {
+      "gameId": "2023020045",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020045/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:39.612Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4c93554679bc6b02cb56bbc142fa364789e9ad16afbec159cf22aca3cd278c0e"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020046",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020046/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:39.639Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e3a24eefea2a81f7e703e18bc67c6071357af4dd315f585bc7d4b7bc92961862"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020047",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020047/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:39.907Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "2933897df7ddf8b26e4ea9b22e3ade37a3a603332be490727990381860d23a53"
+      },
+      "qaStatus": "OK",
+      "rows": 79,
+      "code": null
+    },
+    {
+      "gameId": "2023020048",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020048/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:40.100Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "eb627c016b827f0c5afc66032c4e79c62a14b30a7cc205eaf7471dfdaec2a535"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020049",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020049/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:40.222Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e990fad1e216443dc562edc2c5e0b8f76f578c2eea67cc23fe037ef2b2395d30"
+      },
+      "qaStatus": "OK",
+      "rows": 74,
+      "code": null
+    },
+    {
+      "gameId": "2023020050",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020050/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:40.380Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "6b79320e2793d08ff559b30a4a8e392d0a62e28fdf2ba2d76a49dcfb0c352506"
+      },
+      "qaStatus": "OK",
+      "rows": 86,
+      "code": null
+    },
+    {
+      "gameId": "2023020051",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020051/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:40.489Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7326adbae6cb812c83996a2bba0edb1aa11034e566234385cb5b175a4e3ffa29"
+      },
+      "qaStatus": "OK",
+      "rows": 93,
+      "code": null
+    },
+    {
+      "gameId": "2023020052",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020052/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:40.649Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "760f3ab371ca8e757db210e2759fb9cd674d6323630b71cd5e0056e9f4262f81"
+      },
+      "qaStatus": "OK",
+      "rows": 77,
+      "code": null
+    },
+    {
+      "gameId": "2023020053",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020053/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:40.761Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "5207c5cfa1af6421eb4aa6687642a762d4e7b51830b94ae64051b80869b1e600"
+      },
+      "qaStatus": "OK",
+      "rows": 74,
+      "code": null
+    },
+    {
+      "gameId": "2023020055",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020055/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:40.963Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "caeb6bd1a6d604ba2b9168ffd3af7e16a1b66139132cf1d0da5e08736329150d"
+      },
+      "qaStatus": "OK",
+      "rows": 77,
+      "code": null
+    },
+    {
+      "gameId": "2023020054",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020054/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:41.032Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e4e45049b892769a4eb9ba7737f7d87c5f7b216e4ac679d84b1ed9be951ff4cb"
+      },
+      "qaStatus": "OK",
+      "rows": 74,
+      "code": null
+    },
+    {
+      "gameId": "2023020056",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020056/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:41.223Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "45e95a6b650e2e9f2c4bb1f26c7c9aa84c1a0342458e42a1c3382d5736f38932"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020057",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020057/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:41.291Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "9dea354efe444a363d733bb2a5c3b725bbd3e0a492c94a87b9f49eb1f4ea5ff1"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020058",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020058/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:41.515Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0c42529ec062567e8ad82d4b1478227b90b91ec345ef70edf5381d5d55d820dd"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020059",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020059/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:41.556Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7cfb79ccd2a2e7d2a4a294fc4c6dff9cbee1feb35530f369713db223dc17d333"
+      },
+      "qaStatus": "OK",
+      "rows": 79,
+      "code": null
+    },
+    {
+      "gameId": "2023020060",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020060/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:41.809Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "f7c7cc2004b4c2f520f396a8dbb527e059b95515822e1a45de6cc692f960f76d"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020061",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020061/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:41.818Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "1d4ad02f139c1a6ad5f6354a74e26326b6543417ffacd44c98105f1111948eb8"
+      },
+      "qaStatus": "OK",
+      "rows": 79,
+      "code": null
+    },
+    {
+      "gameId": "2023020062",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020062/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:42.086Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "29de7188d7e4ee2ff861191564a2630d427420ce96291e75e970e07676798c51"
+      },
+      "qaStatus": "OK",
+      "rows": 94,
+      "code": null
+    },
+    {
+      "gameId": "2023020063",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020063/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:42.116Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c043148eb10829dded20873f2b4343feca6890c93567cd8aff0987b1cf3893cf"
+      },
+      "qaStatus": "OK",
+      "rows": 98,
+      "code": null
+    },
+    {
+      "gameId": "2023020064",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020064/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:42.393Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "f2a987e1e5164506283504512000984fa021016ac515d3daf9e62e6013ac8f33"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020065",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020065/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:42.453Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7ca05e22d6a41cc8ee63143a206b9c3cb3af916aad4b5cb8aba56faa8bed8d42"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020066",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020066/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:42.648Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0df834432c7d95a2f371102662aefa225efa98ea0dbdded898e613eac385cdca"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020067",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020067/play-by-play",
+        "fetchedAt": "2026-09-06T19:57:42.711Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "df79ddf1d911d43910247277a5ab266a2f9895dec17a633c1ddf793d56c6e4cd"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020068",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020068/play-by-play",
+        "requestedAt": "2026-09-06T20:17:31.663Z",
+        "fetchedAt": "2026-09-06T20:17:33.365Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c4ab515f1c3f81b07fe95fd1eed8dae894cec928c762448deea3d8fcf79377d7"
+      },
+      "qaStatus": "BLOCK",
+      "rows": 0,
+      "code": "NHL_SHOT_FINAL_EVENT_TOTALS_MISMATCH"
+    },
+    {
+      "gameId": "2023020069",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020069/play-by-play",
+        "fetchedAt": "2026-09-06T19:50:13.134Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "95ba1237d5047f9881228045b91176c05acf3e3eea2c220271d3326cc4cd0458"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020070",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020070/play-by-play",
+        "requestedAt": "2026-09-06T20:17:33.381Z",
+        "fetchedAt": "2026-09-06T20:17:35.189Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "de902f6dbf13d3a40e980d6ab22793adcfbf33a9ffacbe61f326fe9896a69bd5"
+      },
+      "qaStatus": "OK",
+      "rows": 109,
+      "code": null
+    },
+    {
+      "gameId": "2023020071",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020071/play-by-play",
+        "requestedAt": "2026-09-06T20:17:35.221Z",
+        "fetchedAt": "2026-09-06T20:17:37.172Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c787efb5d303f1ff97d694eec302538bfd82d4cfde77f5d449e8e328c4c38f65"
+      },
+      "qaStatus": "OK",
+      "rows": 65,
+      "code": null
+    },
+    {
+      "gameId": "2023020072",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020072/play-by-play",
+        "requestedAt": "2026-09-06T20:17:37.183Z",
+        "fetchedAt": "2026-09-06T20:17:39.153Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "5d03fc7b76db3972276e620a1cb347a0d5de6c6e8673e6e79165d08f19e03ff0"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020073",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020073/play-by-play",
+        "requestedAt": "2026-09-06T20:17:39.164Z",
+        "fetchedAt": "2026-09-06T20:17:41.169Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "83c5fded40c7a19db050322ada3d76cb56731d96c7136c816fe83522d1e767e6"
+      },
+      "qaStatus": "OK",
+      "rows": 108,
+      "code": null
+    },
+    {
+      "gameId": "2023020074",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020074/play-by-play",
+        "requestedAt": "2026-09-06T20:17:41.183Z",
+        "fetchedAt": "2026-09-06T20:17:43.167Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0f6a3fd8800d17107e3982d9b03eea50d728fe17db87727e3f99b90c9fd6f1bf"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020075",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020075/play-by-play",
+        "requestedAt": "2026-09-06T20:17:43.189Z",
+        "fetchedAt": "2026-09-06T20:17:45.173Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d3081626820a43d1f0a553c6e7794e13f6b339282eac8c5a8eda2a936caff680"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020076",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020076/play-by-play",
+        "requestedAt": "2026-09-06T20:17:45.183Z",
+        "fetchedAt": "2026-09-06T20:17:47.219Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4d69d2feef0e4cb09ae9de4e5f2e8a3a9d319fdbb42db28bf27f8b58049dbc94"
+      },
+      "qaStatus": "OK",
+      "rows": 86,
+      "code": null
+    },
+    {
+      "gameId": "2023020077",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020077/play-by-play",
+        "requestedAt": "2026-09-06T20:17:47.250Z",
+        "fetchedAt": "2026-09-06T20:17:49.182Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "51a4d083153bb4a4961e84848544d0c4e3494bf3b9b2dfe5d4be55701a8c4dfc"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020078",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020078/play-by-play",
+        "requestedAt": "2026-09-06T20:17:49.196Z",
+        "fetchedAt": "2026-09-06T20:17:51.171Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4ecf586aeeb3fc0d6cee21cfd0396369c0a462c0637a3f12b130632b18cc49a1"
+      },
+      "qaStatus": "OK",
+      "rows": 74,
+      "code": null
+    },
+    {
+      "gameId": "2023020079",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020079/play-by-play",
+        "requestedAt": "2026-09-06T20:17:51.178Z",
+        "fetchedAt": "2026-09-06T20:17:53.188Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "77547dff4d6dd4c168210e79dcff7b83af34f12e353b5ee1164d5097dbc7e5b3"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020080",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020080/play-by-play",
+        "requestedAt": "2026-09-06T20:17:53.200Z",
+        "fetchedAt": "2026-09-06T20:17:55.170Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "efc64047c0851a8f7220f9fad554367a7c6a06e54c334c7f21794e143b073705"
+      },
+      "qaStatus": "OK",
+      "rows": 83,
+      "code": null
+    },
+    {
+      "gameId": "2023020081",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020081/play-by-play",
+        "requestedAt": "2026-09-06T20:17:55.187Z",
+        "fetchedAt": "2026-09-06T20:17:57.236Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "43edfb49e883024ca74d3f131ec54df4f8a42301759a8d0c057ce1490743455a"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020082",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020082/play-by-play",
+        "requestedAt": "2026-09-06T20:17:57.253Z",
+        "fetchedAt": "2026-09-06T20:17:59.192Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "2eb69ff72545131a42adcb3d9e2485f2b9733d52d48f831bc705b5bc707be266"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020083",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020083/play-by-play",
+        "requestedAt": "2026-09-06T20:17:59.200Z",
+        "fetchedAt": "2026-09-06T20:18:01.220Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "36227ee7d531876de8877d227c0dab0cf39c7ed3acb52e6cee9528c0e36e8a07"
+      },
+      "qaStatus": "OK",
+      "rows": 74,
+      "code": null
+    },
+    {
+      "gameId": "2023020085",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020085/play-by-play",
+        "requestedAt": "2026-09-06T20:18:01.227Z",
+        "fetchedAt": "2026-09-06T20:18:03.226Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0d9225eda4b0abc80ee588a0649bdda709d96c1b895dcbeabf84553a7424c4be"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020086",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020086/play-by-play",
+        "requestedAt": "2026-09-06T20:18:03.234Z",
+        "fetchedAt": "2026-09-06T20:18:05.234Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "664b42a9375e34105cfcd6b21be97e343007e16ea6a5c43bc18da799c9a11eed"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020087",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020087/play-by-play",
+        "requestedAt": "2026-09-06T20:18:05.243Z",
+        "fetchedAt": "2026-09-06T20:18:07.233Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "2a8c18930e291de1daa658ccaa81966ebee2b229b27300e125a378fb85493c60"
+      },
+      "qaStatus": "OK",
+      "rows": 93,
+      "code": null
+    },
+    {
+      "gameId": "2023020088",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020088/play-by-play",
+        "requestedAt": "2026-09-06T20:18:07.242Z",
+        "fetchedAt": "2026-09-06T20:18:09.220Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "1f3dabbbee1ec26a6bffc8512b9a6f4bd032502efc64ba15814a7bb4031eafe1"
+      },
+      "qaStatus": "OK",
+      "rows": 104,
+      "code": null
+    },
+    {
+      "gameId": "2023020089",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020089/play-by-play",
+        "requestedAt": "2026-09-06T20:18:09.226Z",
+        "fetchedAt": "2026-09-06T20:18:11.217Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b5ff7d8f588be165108dbf939161c78857bc84e2a5fa9544f4d16cc00938a1e2"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020090",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020090/play-by-play",
+        "requestedAt": "2026-09-06T20:18:11.224Z",
+        "fetchedAt": "2026-09-06T20:18:13.234Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "cce0c53760b7209a5feb912f2c0c526da12a51e2ecd16d50e63e84fee5bbbeb5"
+      },
+      "qaStatus": "BLOCK",
+      "rows": 0,
+      "code": "NHL_SHOT_FINAL_EVENT_TOTALS_MISMATCH"
+    },
+    {
+      "gameId": "2023020091",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020091/play-by-play",
+        "requestedAt": "2026-09-06T20:18:13.242Z",
+        "fetchedAt": "2026-09-06T20:18:15.232Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ec68539edd09a6951920928758c4b96c81b991f22c94bfa6912dd053c38f7301"
+      },
+      "qaStatus": "OK",
+      "rows": 103,
+      "code": null
+    },
+    {
+      "gameId": "2023020084",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020084/play-by-play",
+        "requestedAt": "2026-09-06T20:18:15.241Z",
+        "fetchedAt": "2026-09-06T20:18:17.333Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "482ef18525f35c62c16d5c7da4c9e6db0270fedba12c79395ffa815c5ae383c6"
+      },
+      "qaStatus": "OK",
+      "rows": 101,
+      "code": null
+    },
+    {
+      "gameId": "2023020092",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020092/play-by-play",
+        "requestedAt": "2026-09-06T20:18:17.342Z",
+        "fetchedAt": "2026-09-06T20:18:19.241Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a7b74c46da062e83f4f072c3d767e56d09847155a1dbd7c15c097f33be75ff6c"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020093",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020093/play-by-play",
+        "requestedAt": "2026-09-06T20:18:19.262Z",
+        "fetchedAt": "2026-09-06T20:18:21.245Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "fc6c5add40a0f4f2b74e367eecf330eec050572c8807e103cb21afad6dfaa4c4"
+      },
+      "qaStatus": "OK",
+      "rows": 70,
+      "code": null
+    },
+    {
+      "gameId": "2023020094",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020094/play-by-play",
+        "requestedAt": "2026-09-06T20:18:21.257Z",
+        "fetchedAt": "2026-09-06T20:18:23.243Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "84e7551628275f0fa9d8aa1da6e12db56c637cc675463b70f4486346300a0420"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020095",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020095/play-by-play",
+        "requestedAt": "2026-09-06T20:18:23.253Z",
+        "fetchedAt": "2026-09-06T20:18:25.349Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "159d633754bf26a3b5ee522967b6c199cf40624370b499d43c022d4b46990996"
+      },
+      "qaStatus": "OK",
+      "rows": 69,
+      "code": null
+    },
+    {
+      "gameId": "2023020096",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020096/play-by-play",
+        "requestedAt": "2026-09-06T20:18:25.393Z",
+        "fetchedAt": "2026-09-06T20:18:27.234Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b8d7063152779028f828ff98118289915bd5487a178b66970a59556e780060f2"
+      },
+      "qaStatus": "OK",
+      "rows": 70,
+      "code": null
+    },
+    {
+      "gameId": "2023020097",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020097/play-by-play",
+        "requestedAt": "2026-09-06T20:18:27.242Z",
+        "fetchedAt": "2026-09-06T20:18:29.277Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "3779e9f94ad1dc7f096643b41d94a9b7a770d004d5ea79a5c5e31542c9edaa8a"
+      },
+      "qaStatus": "OK",
+      "rows": 72,
+      "code": null
+    },
+    {
+      "gameId": "2023020098",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020098/play-by-play",
+        "requestedAt": "2026-09-06T20:18:29.289Z",
+        "fetchedAt": "2026-09-06T20:18:31.274Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "8f7122ed2a85d7f07c2767ecce33fde971c56002626fd2107d9621fe3a213b12"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020099",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020099/play-by-play",
+        "requestedAt": "2026-09-06T20:18:31.290Z",
+        "fetchedAt": "2026-09-06T20:18:33.274Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "2fd90fe06622f0cdf4084a17f6531a89834fa40fe8978cf11e28f4ba0f6aa551"
+      },
+      "qaStatus": "OK",
+      "rows": 71,
+      "code": null
+    },
+    {
+      "gameId": "2023020100",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020100/play-by-play",
+        "requestedAt": "2026-09-06T20:18:33.282Z",
+        "fetchedAt": "2026-09-06T20:18:35.267Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c8efba171ae89ae613ede9f121c3294336354208e72dde041db1377c00c5b30f"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020101",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020101/play-by-play",
+        "requestedAt": "2026-09-06T20:18:35.277Z",
+        "fetchedAt": "2026-09-06T20:18:37.302Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "013f5a0430fed43a62ea8d488219fc75f92742ba15b19c60d0bdce5315d9c593"
+      },
+      "qaStatus": "OK",
+      "rows": 97,
+      "code": null
+    },
+    {
+      "gameId": "2023020102",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020102/play-by-play",
+        "requestedAt": "2026-09-06T20:18:37.327Z",
+        "fetchedAt": "2026-09-06T20:18:39.244Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a682ed975c1993286a2bfccf419909e10d75550225201edc3c271ec64936af42"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020103",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020103/play-by-play",
+        "requestedAt": "2026-09-06T20:18:39.255Z",
+        "fetchedAt": "2026-09-06T20:18:41.253Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "5accf926a5540d39cc46bf2e4946df3517fcd5b742371bf14b886a5b245be1f8"
+      },
+      "qaStatus": "OK",
+      "rows": 94,
+      "code": null
+    },
+    {
+      "gameId": "2023020105",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020105/play-by-play",
+        "requestedAt": "2026-09-06T20:18:41.271Z",
+        "fetchedAt": "2026-09-06T20:18:43.470Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a89883177a4fb8b1b8fdf5551b0fb0570d11d0b8259f8b72d26ba2f45efa4bf2"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020106",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020106/play-by-play",
+        "requestedAt": "2026-09-06T20:18:43.501Z",
+        "fetchedAt": "2026-09-06T20:18:45.268Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "1c80b5cb14022dc03036c5067375c8eb305ad134b848c029fafcb169516b7593"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020104",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020104/play-by-play",
+        "requestedAt": "2026-09-06T20:18:45.277Z",
+        "fetchedAt": "2026-09-06T20:18:47.259Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "82fd332a45dde8800d7ed9f363e8740e6ecf0d9a6b3f1964ca7b6316a6291a20"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020107",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020107/play-by-play",
+        "requestedAt": "2026-09-06T20:18:47.269Z",
+        "fetchedAt": "2026-09-06T20:18:49.303Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "10498bc91744fa545c29de58fbe28ee849f6bb559927d39008fb27f179f4da86"
+      },
+      "qaStatus": "OK",
+      "rows": 102,
+      "code": null
+    },
+    {
+      "gameId": "2023020108",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020108/play-by-play",
+        "requestedAt": "2026-09-06T20:18:49.310Z",
+        "fetchedAt": "2026-09-06T20:18:51.275Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "decb48dfc0a47b890b6006a8fe81356e62b0bc2c620a08fcd223a22ce046e191"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020109",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020109/play-by-play",
+        "requestedAt": "2026-09-06T20:18:51.288Z",
+        "fetchedAt": "2026-09-06T20:18:53.311Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e59e5e23e41cf24574b59b026bc7640c2da18877b437644ddca11960ad68bd83"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020110",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020110/play-by-play",
+        "requestedAt": "2026-09-06T20:18:53.330Z",
+        "fetchedAt": "2026-09-06T20:18:55.287Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b3a5c3b97fa3dc299d34270bca6ac82205cce1e41c6f9a1f8337ccddddaff7de"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020111",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020111/play-by-play",
+        "requestedAt": "2026-09-06T20:18:55.295Z",
+        "fetchedAt": "2026-09-06T20:18:57.264Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ac40a7d780a43ca6ba2df77cded9851eefebd48d85e0ef94b5244da1b6c62cdf"
+      },
+      "qaStatus": "OK",
+      "rows": 73,
+      "code": null
+    },
+    {
+      "gameId": "2023020112",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020112/play-by-play",
+        "requestedAt": "2026-09-06T20:18:57.278Z",
+        "fetchedAt": "2026-09-06T20:18:59.298Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b607a3c981695e84b58432e6c710ca6be08d2a384a92dbbdf08c2d48ec1daf9e"
+      },
+      "qaStatus": "OK",
+      "rows": 95,
+      "code": null
+    },
+    {
+      "gameId": "2023020113",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020113/play-by-play",
+        "requestedAt": "2026-09-06T20:18:59.308Z",
+        "fetchedAt": "2026-09-06T20:19:01.295Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "9fb771488ea9d19c158efec9b4855c4dbedde1949fd477fc3587443e5196eb12"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020114",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020114/play-by-play",
+        "requestedAt": "2026-09-06T20:19:01.304Z",
+        "fetchedAt": "2026-09-06T20:19:03.309Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "685ebe2ab2229697b05909e535557aa01cf3a4bef2580eb5a05276adbcb32bcf"
+      },
+      "qaStatus": "OK",
+      "rows": 94,
+      "code": null
+    },
+    {
+      "gameId": "2023020115",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020115/play-by-play",
+        "requestedAt": "2026-09-06T20:19:03.320Z",
+        "fetchedAt": "2026-09-06T20:19:05.291Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "5fe1b0d5efa3e632d8d57f11fb5720609d8cede2dc2c66ba5e1719873d4c5722"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020116",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020116/play-by-play",
+        "requestedAt": "2026-09-06T20:19:05.303Z",
+        "fetchedAt": "2026-09-06T20:19:07.344Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "08d6d98992671e79c6c060819e3fb68f91a9cc6de59ea0aa9451bb27f765368a"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020117",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020117/play-by-play",
+        "requestedAt": "2026-09-06T20:19:07.372Z",
+        "fetchedAt": "2026-09-06T20:19:09.319Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4fcf9e76fbb43bb327bf064996eeb5717aa68b7c9451f87ebc6449bc563f8071"
+      },
+      "qaStatus": "OK",
+      "rows": 80,
+      "code": null
+    },
+    {
+      "gameId": "2023020118",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020118/play-by-play",
+        "requestedAt": "2026-09-06T20:19:09.329Z",
+        "fetchedAt": "2026-09-06T20:19:11.335Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "1deb728555875c639e583e344f581a160971218b503b3e4d6d04db0a57429fa5"
+      },
+      "qaStatus": "OK",
+      "rows": 101,
+      "code": null
+    },
+    {
+      "gameId": "2023020119",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020119/play-by-play",
+        "requestedAt": "2026-09-06T20:19:11.350Z",
+        "fetchedAt": "2026-09-06T20:19:13.314Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b5177506cfd89ba8e323bf3178f039c7fb648ee749ad15e19a2d6291b77048d1"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020120",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020120/play-by-play",
+        "requestedAt": "2026-09-06T20:19:13.337Z",
+        "fetchedAt": "2026-09-06T20:19:15.298Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "f1f5513340ab29194f07d604351185b98f92bf888aac44ddf3d57651596691ec"
+      },
+      "qaStatus": "OK",
+      "rows": 106,
+      "code": null
+    },
+    {
+      "gameId": "2023020121",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020121/play-by-play",
+        "requestedAt": "2026-09-06T20:19:15.511Z",
+        "fetchedAt": "2026-09-06T20:19:17.341Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d42d0bf01da001337373c0b1bffdd53fdca1e738aff049445b6493c87057f059"
+      },
+      "qaStatus": "OK",
+      "rows": 95,
+      "code": null
+    },
+    {
+      "gameId": "2023020122",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020122/play-by-play",
+        "requestedAt": "2026-09-06T20:19:17.363Z",
+        "fetchedAt": "2026-09-06T20:19:19.393Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "74e45a9cbc722c75087132669cabc355de8814cfe1c08d78b0d751405f871de0"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020123",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020123/play-by-play",
+        "requestedAt": "2026-09-06T20:19:19.405Z",
+        "fetchedAt": "2026-09-06T20:19:21.345Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c880f06e289f7670354777c95f19acb32be8c7de20fc81f79b1b2c1969ea2146"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020124",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020124/play-by-play",
+        "requestedAt": "2026-09-06T20:19:21.363Z",
+        "fetchedAt": "2026-09-06T20:19:23.370Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d85690ea60b16ea85a83d3af56add7ab275c3fed1ae71d0880baf5a74a43b15c"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020125",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020125/play-by-play",
+        "requestedAt": "2026-09-06T20:19:23.385Z",
+        "fetchedAt": "2026-09-06T20:19:25.409Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "484218d003fdcafac0abf0b06c8b683dab2419f99b3a597b981cfd985845a257"
+      },
+      "qaStatus": "OK",
+      "rows": 115,
+      "code": null
+    },
+    {
+      "gameId": "2023020126",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020126/play-by-play",
+        "requestedAt": "2026-09-06T20:19:25.422Z",
+        "fetchedAt": "2026-09-06T20:19:27.536Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c3b33d063f1285df3efcd54eb98095089ccd3a451602a571e482bfdf65c47b22"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020127",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020127/play-by-play",
+        "requestedAt": "2026-09-06T20:19:27.546Z",
+        "fetchedAt": "2026-09-06T20:19:29.377Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "98e8efa96b4c13371efc34a3b76271c787884a7494b2213c00e7b103b030adb5"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020128",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020128/play-by-play",
+        "requestedAt": "2026-09-06T20:19:29.394Z",
+        "fetchedAt": "2026-09-06T20:19:31.578Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "cbc0669283dc44c04f3b12e39af0b49547f41037edf70037f1048af46666f8d7"
+      },
+      "qaStatus": "OK",
+      "rows": 93,
+      "code": null
+    },
+    {
+      "gameId": "2023020129",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020129/play-by-play",
+        "requestedAt": "2026-09-06T20:19:31.591Z",
+        "fetchedAt": "2026-09-06T20:19:33.348Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a39bd2e4e21199ecc22fb64c32b89ac0d746adcbe4baebac1beba46163152dbd"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020130",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020130/play-by-play",
+        "requestedAt": "2026-09-06T20:19:33.366Z",
+        "fetchedAt": "2026-09-06T20:19:35.343Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7cf59f1f19dd876ba210431b840d36cc554f27073064855d1b2ebac58074fcdf"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020131",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020131/play-by-play",
+        "requestedAt": "2026-09-06T20:19:35.353Z",
+        "fetchedAt": "2026-09-06T20:19:37.397Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d34a57a5b5cbf4302588cea3a0dcf77bde8c8167d40a74ccd2065b025954acf1"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020132",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020132/play-by-play",
+        "requestedAt": "2026-09-06T20:19:37.415Z",
+        "fetchedAt": "2026-09-06T20:19:39.369Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "88090b39b8980259e4eefde9cf2c3d4f116f4a27ca1e1e3c2a1e324f6ac5ce03"
+      },
+      "qaStatus": "OK",
+      "rows": 106,
+      "code": null
+    },
+    {
+      "gameId": "2023020133",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020133/play-by-play",
+        "requestedAt": "2026-09-06T20:19:39.383Z",
+        "fetchedAt": "2026-09-06T20:19:41.391Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ea6628dcd1a83d8c31674355d38d67a54950f411bd2db2044e03038900b7af6f"
+      },
+      "qaStatus": "OK",
+      "rows": 116,
+      "code": null
+    },
+    {
+      "gameId": "2023020134",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020134/play-by-play",
+        "requestedAt": "2026-09-06T20:19:41.409Z",
+        "fetchedAt": "2026-09-06T20:19:43.396Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "f0757e3834404ee74eab48615d3a36e5147688ed98e8d7755ebd9b7f080f3147"
+      },
+      "qaStatus": "OK",
+      "rows": 111,
+      "code": null
+    },
+    {
+      "gameId": "2023020135",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020135/play-by-play",
+        "requestedAt": "2026-09-06T20:19:43.410Z",
+        "fetchedAt": "2026-09-06T20:19:45.364Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a6f45c4136928c038d5fd749bcc56a80fc0de34fd9ddbb61fdfaf5b896526254"
+      },
+      "qaStatus": "OK",
+      "rows": 85,
+      "code": null
+    },
+    {
+      "gameId": "2023020136",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020136/play-by-play",
+        "requestedAt": "2026-09-06T20:19:45.378Z",
+        "fetchedAt": "2026-09-06T20:19:47.402Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c5ebcc19c6e8daff9882b187f7cd6a40a61e69652aa689bcef4e33e4f2e7c246"
+      },
+      "qaStatus": "OK",
+      "rows": 96,
+      "code": null
+    },
+    {
+      "gameId": "2023020137",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020137/play-by-play",
+        "requestedAt": "2026-09-06T20:19:47.446Z",
+        "fetchedAt": "2026-09-06T20:19:49.401Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0a8c94e53754dce715e527f6f4b47e0342d17d471f34633eb2b3a44f8170050d"
+      },
+      "qaStatus": "OK",
+      "rows": 97,
+      "code": null
+    },
+    {
+      "gameId": "2023020138",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020138/play-by-play",
+        "requestedAt": "2026-09-06T20:19:49.411Z",
+        "fetchedAt": "2026-09-06T20:19:51.409Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "cfcf8c611eeac544b832a203f1c6cbc09f3b9972d09fb9bb58a087ef3e2afe94"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020139",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020139/play-by-play",
+        "requestedAt": "2026-09-06T20:19:51.433Z",
+        "fetchedAt": "2026-09-06T20:19:53.384Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a114eac9eaad7771b7bd8ddc197e5ee2ff029a39dd15af67aced0156f0c83a1c"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020140",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020140/play-by-play",
+        "requestedAt": "2026-09-06T20:19:53.392Z",
+        "fetchedAt": "2026-09-06T20:19:55.382Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "996039a2bb3bb7c15f876a0942dfa9f0848af0fc1c7ef45faff2ef1b9e0dade7"
+      },
+      "qaStatus": "OK",
+      "rows": 83,
+      "code": null
+    },
+    {
+      "gameId": "2023020141",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020141/play-by-play",
+        "requestedAt": "2026-09-06T20:19:55.390Z",
+        "fetchedAt": "2026-09-06T20:19:57.383Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0c29be37e5cb09994be05d5e7bd8b385001b18ad58fe5599a5743924e049408c"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020142",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020142/play-by-play",
+        "requestedAt": "2026-09-06T20:19:57.388Z",
+        "fetchedAt": "2026-09-06T20:19:59.405Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "6544a1c690a25114aa061906ea92f38e6030ccf3c6fff5423ab8264e07047900"
+      },
+      "qaStatus": "OK",
+      "rows": 114,
+      "code": null
+    },
+    {
+      "gameId": "2023020143",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020143/play-by-play",
+        "requestedAt": "2026-09-06T20:19:59.414Z",
+        "fetchedAt": "2026-09-06T20:20:01.365Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a9196acabe94f2be960743f54297fbb5ee38ea673adc5ba14c3896d26a593c70"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020144",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020144/play-by-play",
+        "requestedAt": "2026-09-06T20:20:01.373Z",
+        "fetchedAt": "2026-09-06T20:20:03.378Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "1b67d654face75167a5a0b4a69492b51aa6295c80226217e3c367c2e58396f39"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020146",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020146/play-by-play",
+        "requestedAt": "2026-09-06T20:20:03.386Z",
+        "fetchedAt": "2026-09-06T20:20:05.387Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c4edfafba2106c8142b6b2f51471252c7d9b2b75e07b975df80279d2d2e2f74a"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020147",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020147/play-by-play",
+        "requestedAt": "2026-09-06T20:20:05.394Z",
+        "fetchedAt": "2026-09-06T20:20:07.373Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ba4881b715c135fa40e206f0940cb323928d01b6b48aa49e13508670b2192c8b"
+      },
+      "qaStatus": "OK",
+      "rows": 79,
+      "code": null
+    },
+    {
+      "gameId": "2023020148",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020148/play-by-play",
+        "requestedAt": "2026-09-06T20:20:07.382Z",
+        "fetchedAt": "2026-09-06T20:20:09.381Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d70f53d73dd6bde25d8660ed4789a8ac4c454745a5a846529120b2455cffff3d"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020149",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020149/play-by-play",
+        "requestedAt": "2026-09-06T20:20:09.391Z",
+        "fetchedAt": "2026-09-06T20:20:11.409Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a1541a638631e89bcc7cb4e49b02cc029f7049e6b46346b83dbad78ce7dfd3de"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020150",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020150/play-by-play",
+        "requestedAt": "2026-09-06T20:20:11.418Z",
+        "fetchedAt": "2026-09-06T20:20:13.393Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ce297da0681aeebf4e4f1eebf6f3b4269ff51d135809b1f9dcfa0ab5c4442319"
+      },
+      "qaStatus": "OK",
+      "rows": 93,
+      "code": null
+    },
+    {
+      "gameId": "2023020145",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020145/play-by-play",
+        "requestedAt": "2026-09-06T20:20:13.400Z",
+        "fetchedAt": "2026-09-06T20:20:15.428Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "65242ead555a9ab3e2d413dbc50221e16bc70fb3e9127b2fc59820551355291a"
+      },
+      "qaStatus": "OK",
+      "rows": 109,
+      "code": null
+    },
+    {
+      "gameId": "2023020151",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020151/play-by-play",
+        "requestedAt": "2026-09-06T20:20:15.451Z",
+        "fetchedAt": "2026-09-06T20:20:17.444Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "63b30dc5cef55efefad693215214b25f86ac76a048b31777cae18cfa7c9c5606"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020152",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020152/play-by-play",
+        "requestedAt": "2026-09-06T20:20:17.469Z",
+        "fetchedAt": "2026-09-06T20:20:19.669Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "33486d14e73ed00762a120923b22dadf4987fb4e023a0adb0bd2c2e029882449"
+      },
+      "qaStatus": "OK",
+      "rows": 101,
+      "code": null
+    },
+    {
+      "gameId": "2023020153",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020153/play-by-play",
+        "requestedAt": "2026-09-06T20:20:19.678Z",
+        "fetchedAt": "2026-09-06T20:20:21.462Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "f621a235899115955c2eba2bc3cab69b9a48ce5837b8114e064d7a81eff13572"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020154",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020154/play-by-play",
+        "requestedAt": "2026-09-06T20:20:21.480Z",
+        "fetchedAt": "2026-09-06T20:20:23.454Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7f751e04709d38392b37bf64bf40b5401257c095da33d4728b6789b26a142c9d"
+      },
+      "qaStatus": "OK",
+      "rows": 87,
+      "code": null
+    },
+    {
+      "gameId": "2023020155",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020155/play-by-play",
+        "requestedAt": "2026-09-06T20:20:23.465Z",
+        "fetchedAt": "2026-09-06T20:20:25.423Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b8f440a2a946e52f714a4a86fbacc87a32bed4ba69e37afdc81d156194a4853c"
+      },
+      "qaStatus": "OK",
+      "rows": 81,
+      "code": null
+    },
+    {
+      "gameId": "2023020156",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020156/play-by-play",
+        "requestedAt": "2026-09-06T20:20:25.443Z",
+        "fetchedAt": "2026-09-06T20:20:27.427Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "887bcad24b70808aed105ccfb2a3d07c4267b5882a9dc56da88e82a00d83e178"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020157",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020157/play-by-play",
+        "requestedAt": "2026-09-06T20:20:27.434Z",
+        "fetchedAt": "2026-09-06T20:20:29.452Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "064c20b5c21b77eca124bfed48dce1ecc0ca1d8aa59b53d9faf30f230ef95d65"
+      },
+      "qaStatus": "OK",
+      "rows": 69,
+      "code": null
+    },
+    {
+      "gameId": "2023020158",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020158/play-by-play",
+        "requestedAt": "2026-09-06T20:20:29.458Z",
+        "fetchedAt": "2026-09-06T20:20:31.515Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "026134434a4e7f6939102f409cbda8cab46e2f8830243c7af023fcfc7b9a5445"
+      },
+      "qaStatus": "OK",
+      "rows": 101,
+      "code": null
+    },
+    {
+      "gameId": "2023020159",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020159/play-by-play",
+        "requestedAt": "2026-09-06T20:20:31.531Z",
+        "fetchedAt": "2026-09-06T20:20:33.503Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "545dbace579faab2acd602548f21a45cda062cd83798213906c85aa6aeb34765"
+      },
+      "qaStatus": "OK",
+      "rows": 91,
+      "code": null
+    },
+    {
+      "gameId": "2023020160",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020160/play-by-play",
+        "requestedAt": "2026-09-06T20:20:33.520Z",
+        "fetchedAt": "2026-09-06T20:20:35.581Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "14f95f3f058fbda09448d845060eb5fbfe870b25f8e8d4c296c7d1f4619eaee9"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020161",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020161/play-by-play",
+        "requestedAt": "2026-09-06T20:20:35.594Z",
+        "fetchedAt": "2026-09-06T20:20:37.529Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "37efe65e666f2e11f5255c84cb7eb08a7ad44d66491f5c7501151d8cb036c1b5"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020162",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020162/play-by-play",
+        "requestedAt": "2026-09-06T20:20:37.545Z",
+        "fetchedAt": "2026-09-06T20:20:39.492Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "279badf0db49b223cadb4e44c3495cde9efd3032e685d9cfd91c06ff103a952d"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020164",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020164/play-by-play",
+        "requestedAt": "2026-09-06T20:20:39.505Z",
+        "fetchedAt": "2026-09-06T20:20:41.512Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "32c59e86cb7bf5b84b86e64eb3aef930a64f3061b2fafd3d9162f16e9dad0420"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020165",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020165/play-by-play",
+        "requestedAt": "2026-09-06T20:20:41.530Z",
+        "fetchedAt": "2026-09-06T20:20:43.617Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "efb55b9b7df337a1a77799a93da9501288357de90ea7dcca339a795dcd41379a"
+      },
+      "qaStatus": "OK",
+      "rows": 93,
+      "code": null
+    },
+    {
+      "gameId": "2023020166",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020166/play-by-play",
+        "requestedAt": "2026-09-06T20:20:43.637Z",
+        "fetchedAt": "2026-09-06T20:20:45.628Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "3ee81e540e5a00adce3565148c2839cec874737d0f24cf1efe785b671e2bc5a6"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020163",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020163/play-by-play",
+        "requestedAt": "2026-09-06T20:20:45.640Z",
+        "fetchedAt": "2026-09-06T20:20:47.668Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "757b8bc1d8949e66e1f7631373bbe4c0235901dd3e2f0a0fdb27f815309dfafd"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020167",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020167/play-by-play",
+        "requestedAt": "2026-09-06T20:20:47.682Z",
+        "fetchedAt": "2026-09-06T20:20:49.688Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a7510c2135b676b09a93f6c24e4c9e4e0ed629cf0b3e4aae195b6ae9903eed76"
+      },
+      "qaStatus": "OK",
+      "rows": 103,
+      "code": null
+    },
+    {
+      "gameId": "2023020168",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020168/play-by-play",
+        "requestedAt": "2026-09-06T20:20:49.704Z",
+        "fetchedAt": "2026-09-06T20:20:51.708Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "20edb538951ca1c21a5a59f6f6627f408cca0148b50f5003d3bdc3b0d1cb76da"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020169",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020169/play-by-play",
+        "requestedAt": "2026-09-06T20:20:51.726Z",
+        "fetchedAt": "2026-09-06T20:20:53.707Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "553c0c1aa8fbd2e0227210e2db5970d3fff6a2f93db2ddf52c098124391a98b2"
+      },
+      "qaStatus": "OK",
+      "rows": 90,
+      "code": null
+    },
+    {
+      "gameId": "2023020170",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020170/play-by-play",
+        "requestedAt": "2026-09-06T20:20:53.729Z",
+        "fetchedAt": "2026-09-06T20:20:55.693Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7181d5b6a4f0817fd5b15d6273fed02daaf86651aef72c0f9960cdad5e219d53"
+      },
+      "qaStatus": "OK",
+      "rows": 71,
+      "code": null
+    },
+    {
+      "gameId": "2023020171",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020171/play-by-play",
+        "requestedAt": "2026-09-06T20:20:55.721Z",
+        "fetchedAt": "2026-09-06T20:20:57.685Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "481185aac202f3b16e4f77de3542b33963ad4eb99cb2591cc9a4b54787e83aa8"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020172",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020172/play-by-play",
+        "requestedAt": "2026-09-06T20:20:57.698Z",
+        "fetchedAt": "2026-09-06T20:20:59.698Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7e54bbc3fd02a7f5880fc45252862f33566b03b12bb97cc25d37d7240afdbcbd"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020173",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020173/play-by-play",
+        "requestedAt": "2026-09-06T20:20:59.712Z",
+        "fetchedAt": "2026-09-06T20:21:01.760Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d72517c5bbad20d867c0d003d5d5298d9d947c679310ab61ed58a2c499aa0242"
+      },
+      "qaStatus": "OK",
+      "rows": 99,
+      "code": null
+    },
+    {
+      "gameId": "2023020174",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020174/play-by-play",
+        "requestedAt": "2026-09-06T20:21:01.777Z",
+        "fetchedAt": "2026-09-06T20:21:03.709Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "9a3deb7a856e0ca7693c786d484aaa894963cbac289b8df18d6b62c6983cfce7"
+      },
+      "qaStatus": "OK",
+      "rows": 94,
+      "code": null
+    },
+    {
+      "gameId": "2023020175",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020175/play-by-play",
+        "requestedAt": "2026-09-06T20:21:03.721Z",
+        "fetchedAt": "2026-09-06T20:21:05.707Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0692c950790c46023ad3e03ecd66a628273783c6660657b1126744ca60877411"
+      },
+      "qaStatus": "OK",
+      "rows": 83,
+      "code": null
+    },
+    {
+      "gameId": "2023020176",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020176/play-by-play",
+        "requestedAt": "2026-09-06T20:21:05.739Z",
+        "fetchedAt": "2026-09-06T20:21:07.893Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "63455400a93ee390020e4c12f6f669d740552a59d6f62f7aa2016fc6988f86d1"
+      },
+      "qaStatus": "OK",
+      "rows": 102,
+      "code": null
+    },
+    {
+      "gameId": "2023020177",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020177/play-by-play",
+        "requestedAt": "2026-09-06T20:21:07.914Z",
+        "fetchedAt": "2026-09-06T20:21:09.815Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "11c801857ebb4912965a9dddf57d2b80b4472a74341636a3edaf6577ab335d22"
+      },
+      "qaStatus": "OK",
+      "rows": 80,
+      "code": null
+    },
+    {
+      "gameId": "2023020178",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020178/play-by-play",
+        "requestedAt": "2026-09-06T20:21:09.838Z",
+        "fetchedAt": "2026-09-06T20:21:11.845Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "32d8503e9ce92f05f2cba433618c995892ad7d9802df764ed5cea62cd4fce549"
+      },
+      "qaStatus": "OK",
+      "rows": 93,
+      "code": null
+    },
+    {
+      "gameId": "2023020179",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020179/play-by-play",
+        "requestedAt": "2026-09-06T20:21:11.861Z",
+        "fetchedAt": "2026-09-06T20:21:13.836Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "bd225b7b4fbb7f7052b2584b230fbcab670b93f2d2b6da2b48a07e89a2d8e3c5"
+      },
+      "qaStatus": "OK",
+      "rows": 102,
+      "code": null
+    },
+    {
+      "gameId": "2023020180",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020180/play-by-play",
+        "requestedAt": "2026-09-06T20:21:13.855Z",
+        "fetchedAt": "2026-09-06T20:21:15.819Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ee1cc30eb16ecd78801610e19ee78be74e3b60798f7417e57399a3efc04f63ce"
+      },
+      "qaStatus": "OK",
+      "rows": 80,
+      "code": null
+    },
+    {
+      "gameId": "2023020181",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020181/play-by-play",
+        "requestedAt": "2026-09-06T20:21:15.834Z",
+        "fetchedAt": "2026-09-06T20:21:17.905Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d9f9a6e92823d30e83630c7b1fe056edac36e444aee4ceb7f32e7587bd9a277c"
+      },
+      "qaStatus": "OK",
+      "rows": 84,
+      "code": null
+    },
+    {
+      "gameId": "2023020182",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020182/play-by-play",
+        "requestedAt": "2026-09-06T20:21:17.922Z",
+        "fetchedAt": "2026-09-06T20:21:19.869Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "a726d7800345a68656da1a9579a9d146e2bc84fe340189467e531df872406963"
+      },
+      "qaStatus": "OK",
+      "rows": 92,
+      "code": null
+    },
+    {
+      "gameId": "2023020183",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020183/play-by-play",
+        "requestedAt": "2026-09-06T20:21:19.884Z",
+        "fetchedAt": "2026-09-06T20:21:21.908Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "dc1bef1698743d56eede3283e07c07eeb2698b1afe1be805ffaf9eb2b4f220c5"
+      },
+      "qaStatus": "OK",
+      "rows": 97,
+      "code": null
+    },
+    {
+      "gameId": "2023020184",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020184/play-by-play",
+        "requestedAt": "2026-09-06T20:21:21.923Z",
+        "fetchedAt": "2026-09-06T20:21:23.930Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "cf790118f8f324ca59d887666ae5463969fd6ee76b87fa0bc9b70fbe0a3c0796"
+      },
+      "qaStatus": "OK",
+      "rows": 80,
+      "code": null
+    },
+    {
+      "gameId": "2023020185",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020185/play-by-play",
+        "requestedAt": "2026-09-06T20:21:23.960Z",
+        "fetchedAt": "2026-09-06T20:21:25.920Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "8a6485c76638174b19fd79f7befb41145c1ea87fa48f779d6f94959acbdee357"
+      },
+      "qaStatus": "OK",
+      "rows": 100,
+      "code": null
+    },
+    {
+      "gameId": "2023020186",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020186/play-by-play",
+        "requestedAt": "2026-09-06T20:21:25.938Z",
+        "fetchedAt": "2026-09-06T20:21:27.954Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "7a4a0694cb8e389202c7769cc29c2ce5c86952a86e657bdcd20362b4534b44e5"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020187",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020187/play-by-play",
+        "requestedAt": "2026-09-06T20:21:27.974Z",
+        "fetchedAt": "2026-09-06T20:21:29.949Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "8fb55e996a951ff7acdae4238d04cd7df8dc4bb8edf5fcf41024083612d26364"
+      },
+      "qaStatus": "OK",
+      "rows": 80,
+      "code": null
+    },
+    {
+      "gameId": "2023020188",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020188/play-by-play",
+        "requestedAt": "2026-09-06T20:21:29.973Z",
+        "fetchedAt": "2026-09-06T20:21:31.896Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "d8dc89cce91ef5d614c6f409df3cc8056e91297c18cfc969a2d52b7b1b587ecb"
+      },
+      "qaStatus": "OK",
+      "rows": 78,
+      "code": null
+    },
+    {
+      "gameId": "2023020189",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020189/play-by-play",
+        "requestedAt": "2026-09-06T20:21:31.909Z",
+        "fetchedAt": "2026-09-06T20:21:33.917Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "157f820484af982a55ac0464b2ebe709966b4dadcf9c222aacc94ab095c5facb"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020190",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020190/play-by-play",
+        "requestedAt": "2026-09-06T20:21:33.931Z",
+        "fetchedAt": "2026-09-06T20:21:35.958Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "724516485582113b6c85adadfaaa086a84416acdff022a2faade104c5f263e18"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020191",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020191/play-by-play",
+        "requestedAt": "2026-09-06T20:21:35.986Z",
+        "fetchedAt": "2026-09-06T20:21:37.937Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "e81f9332292573cf29733f5d2eda3683450bdf3f6764a1615eb14afe3bb24d2b"
+      },
+      "qaStatus": "OK",
+      "rows": 72,
+      "code": null
+    },
+    {
+      "gameId": "2023020192",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020192/play-by-play",
+        "requestedAt": "2026-09-06T20:21:37.947Z",
+        "fetchedAt": "2026-09-06T20:21:39.967Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "ef24c6e0f78aabad26498faa9d4098e6401f4c51d356d73abe25f143b6e8f808"
+      },
+      "qaStatus": "OK",
+      "rows": 96,
+      "code": null
+    },
+    {
+      "gameId": "2023020193",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020193/play-by-play",
+        "requestedAt": "2026-09-06T20:21:39.988Z",
+        "fetchedAt": "2026-09-06T20:21:41.965Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "3a68f92de479850803d3ec6f764e09e9e4d2be930deb5841501689dbd8642b6b"
+      },
+      "qaStatus": "OK",
+      "rows": 88,
+      "code": null
+    },
+    {
+      "gameId": "2023020195",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020195/play-by-play",
+        "requestedAt": "2026-09-06T20:21:41.986Z",
+        "fetchedAt": "2026-09-06T20:21:43.973Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4c44679d7d5563780be55750f991489602a7aca51ecdbc6cfaf893f7acede429"
+      },
+      "qaStatus": "OK",
+      "rows": 86,
+      "code": null
+    },
+    {
+      "gameId": "2023020196",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020196/play-by-play",
+        "requestedAt": "2026-09-06T20:21:43.982Z",
+        "fetchedAt": "2026-09-06T20:21:45.974Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "777be8c6dd05bce232a9b3f582c04351c1e37c7ab91f38f263ffd1db63045c46"
+      },
+      "qaStatus": "OK",
+      "rows": 89,
+      "code": null
+    },
+    {
+      "gameId": "2023020197",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020197/play-by-play",
+        "requestedAt": "2026-09-06T20:21:45.990Z",
+        "fetchedAt": "2026-09-06T20:21:47.950Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "0fba7366f9b2b90532a4ca8519d10c68c68dab132d361924b753831c9dbaf0ce"
+      },
+      "qaStatus": "OK",
+      "rows": 64,
+      "code": null
+    },
+    {
+      "gameId": "2023020198",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020198/play-by-play",
+        "requestedAt": "2026-09-06T20:21:47.957Z",
+        "fetchedAt": "2026-09-06T20:21:49.942Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "4e49b7a34c19f26a2d3d6b6f6de6525d3cf8faa71ed004df9031628db7182eca"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020194",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020194/play-by-play",
+        "requestedAt": "2026-09-06T20:21:49.951Z",
+        "fetchedAt": "2026-09-06T20:21:51.980Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "19d397751a6c961d45e6ac97693b49de360c71a0abdb2a9d9007eae174dd6172"
+      },
+      "qaStatus": "OK",
+      "rows": 97,
+      "code": null
+    },
+    {
+      "gameId": "2023020199",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020199/play-by-play",
+        "requestedAt": "2026-09-06T20:21:51.997Z",
+        "fetchedAt": "2026-09-06T20:21:53.960Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "b2e331fd6713c0bc875eaae1a8012dddbfb628bebe2bca1011f960e5fb51d9ad"
+      },
+      "qaStatus": "OK",
+      "rows": 76,
+      "code": null
+    },
+    {
+      "gameId": "2023020200",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020200/play-by-play",
+        "requestedAt": "2026-09-06T20:21:53.975Z",
+        "fetchedAt": "2026-09-06T20:21:55.953Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "c60c788c39b84212e5ea8fbc2ac5facf9f059d8c6076833230ebcf9887a14da2"
+      },
+      "qaStatus": "OK",
+      "rows": 82,
+      "code": null
+    },
+    {
+      "gameId": "2023020201",
+      "source": {
+        "provider": "NHL",
+        "url": "https://api-web.nhle.com/v1/gamecenter/2023020201/play-by-play",
+        "requestedAt": "2026-09-06T20:21:55.960Z",
+        "fetchedAt": "2026-09-06T20:21:58.036Z",
+        "sourceUpdatedAt": null,
+        "contentHash": "edf4d37ef4f13c6405a2730dea78a183fa3d3bf7e3695c5b0a458a96844079a8"
+      },
+      "qaStatus": "OK",
+      "rows": 80,
+      "code": null
+    }
+  ],
+  "attempts": [
+    {
+      "gameId": "2023020068",
+      "ok": false,
+      "code": "NHL_SHOT_FINAL_EVENT_TOTALS_MISMATCH"
+    },
+    {
+      "gameId": "2023020090",
+      "ok": false,
+      "code": "NHL_SHOT_FINAL_EVENT_TOTALS_MISMATCH"
+    }
+  ]
+}
