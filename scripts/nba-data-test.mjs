@@ -105,6 +105,16 @@ await test('wrong game returned by summary blocks, regardless of HTTP 200', asyn
   const result = await loadNbaData({ view: 'game', id: '900002' }, { fetchImpl: fetchValue({ header: { ...event(), league } }), now });
   assert.equal(result.qa.status, 'BLOCK'); assert.equal(result.data.game, null);
 });
+await test('optional On/Off event conflict is quarantined without erasing independently verified scores', async () => {
+  const raw = { header: { ...event(), league }, plays: [{ id: '7777', sequenceNumber: '1' }], boxscore: { players: ['5', '18'].map((id, side) => ({ team: team(id), statistics: [{ keys: ['minutes', 'points'], athletes: Array.from({ length: 5 }, (_, i) => {
+    const playerId = String(1000 + side * 10 + i);
+    return { athlete: { id: playerId, uid: `s:40~l:46~a:${playerId}`, displayName: `Synthetic ${playerId}` }, starter: true, didNotPlay: false, stats: ['48', '0'] };
+  }) }] })) } };
+  const result = await loadNbaData({ view: 'game', id: '900001' }, { fetchImpl: fetchValue(raw), now });
+  assert.equal(result.status, 'ready'); assert.equal(result.qa.status, 'WARNING'); assert.equal(result.data.game.home.score, 104);
+  assert.equal(result.data.onOff.status, 'blocked'); assert.equal(result.data.onOff.qa.status, 'BLOCK'); assert.deepEqual(result.data.onOff.players, []);
+  assert.equal(result.data.onOff.source.hash, result.sources[0].hash); assert.equal(result.data.availability.playerOnOff, 'blocked');
+});
 await test('misaligned player statistic arrays block instead of shifting values', async () => {
   const raw = { header: { ...event(), league }, boxscore: { players: [{ team: team(), statistics: [{ keys: ['points', 'minutes'], athletes: [{ athlete, stats: ['5'] }] }] }] } };
   const result = await loadNbaData({ view: 'game', id: '900001' }, { fetchImpl: fetchValue(raw), now });
