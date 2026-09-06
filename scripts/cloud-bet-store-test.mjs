@@ -224,8 +224,8 @@ assert.match(uniquenessMigration, /lock table baseball_private_bets_v2 in share 
 assert.match(uniquenessMigration, /row_number\(\) over[\s\S]*order by placed_at asc, updated_at asc, id asc/i);
 assert.match(uniquenessMigration, /create unique index if not exists uq_baseball_private_bets_v2_position_key_v110/i);
 assert.doesNotMatch(uniquenessMigration, /\b(?:delete|truncate|drop)\b/i, '遷移不得刪除或捨棄任何歷史下注資料');
-assert.match(store, /bet\.status === 'OPEN'/, '只重試真正待賽果的OPEN下注，人工確認不得阻塞舊單');
-assert.match(store, /Date\.parse\(left\?\.placedAt/, '待結算必須由最舊下注開始補，避免新賽事餓死歷史下注');
+assert.match(store, /status = 'OPEN'[\s\S]*status = 'MANUAL_REVIEW'[\s\S]*payload->>'settlementError' IN/, '只重試OPEN與缺正式比分的人工確認下注');
+assert.match(store, /ORDER BY COALESCE\([\s\S]*lastResultCheckAt[\s\S]*\) ASC, placed_at ASC, id ASC/, '先補最久未查的下注，再依最舊下注排序，未完賽不得餓死後續歷史下注');
 assert.match(store, /Math\.min\(500/, '單次補結算上限必須足以涵蓋歷史帳本');
 assert.match(route, /limit: 500/, '前端舊版即使送limit=40，伺服器也必須完整補結算');
 assert.match(store, /settleOpenCloudBets/);
