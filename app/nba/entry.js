@@ -21,11 +21,13 @@ export default function NbaEntry() {
   const dialog = useRef(null);
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
-    if (opened && dialog.current && !dialog.current.open) dialog.current.showModal();
-  }, [opened]);
+    // Hydration can commit the portal after an early open request. Recheck
+    // once mounted so that request cannot leave the dialog silently closed.
+    if (mounted && opened && dialog.current && !dialog.current.open) dialog.current.showModal();
+  }, [opened, mounted]);
   function close() { dialog.current?.close(); setOpened(false); }
   return <>
-    <button type="button" onClick={() => setOpened(true)} aria-haspopup="dialog"><span className="leagueDot"/><b>NBA</b><small>籃球資料</small></button>
+    <button type="button" onClick={() => setOpened(true)} disabled={!mounted} aria-busy={!mounted} aria-haspopup="dialog"><span className="leagueDot"/><b>NBA</b><small>籃球資料</small></button>
     {mounted && createPortal(<dialog className={styles.dialog} ref={dialog} aria-label="NBA 籃球資料" onClose={() => setOpened(false)}>
       <div className={styles.closeBar}><button type="button" onClick={close} aria-label="關閉 NBA">關閉 NBA ×</button></div>
       {opened && <NbaErrorBoundary><NbaWorkspace onClose={close}/></NbaErrorBoundary>}
