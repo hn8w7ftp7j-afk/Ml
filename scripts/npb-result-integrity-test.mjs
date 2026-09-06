@@ -67,6 +67,12 @@ assert.equal(awayWinner.first5Complete, true);
 const spacedNine = parse({ layoutSpacers: true });
 assert.deepEqual([spacedNine.innings, spacedNine.awayFirst5, spacedNine.homeFirst5], [9, 3, 3]);
 assert.equal(normalizeAsianFinalResult('NPB', game.gamePk, date, spacedNine).final, true);
+const unknownBlank = detailHtml({ layoutSpacers: true }).replace('class="gmscspan"', 'class="unknown-spacer"');
+assert.throws(() => parseNpbGameDetailHtml(unknownBlank, game), error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'An unrecognized blank cell remains unverified instead of being silently discarded');
+const ambiguousScore = detailHtml({ layoutSpacers: true }).replace('class="gmscspan"', 'class="gmscspan gmscore"');
+assert.throws(() => parseNpbGameDetailHtml(ambiguousScore, game), error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
+  'A score cell is never discarded solely because it also carries a spacer class');
 const tenInningTie = [1, ...Array(9).fill(0)];
 const spacedTen = parse({
   layoutSpacers: true, away: tenInningTie, home: tenInningTie, awayRuns: 1, homeRuns: 1,
@@ -123,6 +129,8 @@ assert.equal(game.statusCode, 'S');
 for (const innings of [10, 12]) {
   const tiedLine = [1, ...Array(innings - 1).fill(0)];
   const tied = parse({ away: tiedLine, home: tiedLine, awayRuns: 1, homeRuns: 1 });
+  const spacedTie = parse({ layoutSpacers: true, away: tiedLine, home: tiedLine, awayRuns: 1, homeRuns: 1 });
+  assert.equal(spacedTie.innings, innings);
   if (innings === 12) {
     assert.equal(normalizeAsianFinalResult('NPB', game.gamePk, date, tied).final, true);
   } else {
@@ -130,6 +138,8 @@ for (const innings of [10, 12]) {
       () => normalizeAsianFinalResult('NPB', game.gamePk, date, tied),
       error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID',
     );
+    assert.throws(() => normalizeAsianFinalResult('NPB', game.gamePk, date, spacedTie),
+      error => error?.code === 'OFFICIAL_FINAL_RESULT_INVALID', 'Verified spacer layout cannot bypass the locked shortened-draw rule');
   }
 }
 

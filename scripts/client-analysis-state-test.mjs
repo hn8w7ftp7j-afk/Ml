@@ -107,6 +107,10 @@ const h2 = { fresh: true, boardDate: '2026-08-15', payloadHash: 'h2', receivedAt
 assert.equal(shouldAcceptReaderStatus(h1, h2), true);
 assert.equal(shouldAcceptReaderStatus(h2, h1), false);
 assert.equal(shouldAcceptReaderStatus(h2, { fresh: false, message: 'stale' }), true);
+assert.equal(shouldAcceptReaderStatus(h2, { ...h1, fresh: false }), false,
+  'a delayed stale response must not replace a newer accepted Reader capture');
+assert.equal(shouldAcceptReaderStatus(h1, { ...h2, fresh: false }), true,
+  'genuinely newer unavailable evidence must still invalidate the visible status');
 assert.equal(shouldAcceptReaderStatus({ ...h2, fresh: false }, h1), false);
 const missing = { fresh: false, boardDate: '2026-08-15', payloadHash: null, receivedAt: null, message: 'missing' };
 const highWaterAfterMissing = mergeReaderStatusHighWater(h2, missing);

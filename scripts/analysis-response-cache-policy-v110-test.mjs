@@ -34,6 +34,9 @@ assert.match(assessAnalysisCacheEntryV110(entry, {
 assert.match(assessAnalysisCacheEntryV110({ ...entry, payload: { ...payload, context: { ...payload.context, fetchedAt: new Date(now - 10 * 60_000).toISOString() } } }, {
   league: 'MLB', gamePk: 123, now,
 }).reasons.join('|'), /CORE_SNAPSHOT_TTL_EXPIRED/);
+assert.match(assessAnalysisCacheEntryV110({ ...entry, payload: { ...payload, context: { ...payload.context, fetchedAt: new Date(now + 24 * 60 * 60_000).toISOString() } } }, {
+  league: 'MLB', gamePk: 123, now,
+}).reasons.join('|'), /CORE_FETCH_TIME_IN_FUTURE/, 'a newly cached response must not hide future-dated model inputs');
 assert.match(assessAnalysisCacheEntryV110({ ...entry, payload: { ...payload, analysis: { results: [{ sourceType: 'ACTUAL_TW_CREDIT', lineAsOf: new Date(now - 6 * 60_000).toISOString() }] } } }, {
   league: 'MLB', gamePk: 123, now,
 }).reasons.join('|'), /ACTUAL_LINE_TTL_EXPIRED/);

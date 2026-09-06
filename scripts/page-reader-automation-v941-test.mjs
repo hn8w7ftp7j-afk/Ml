@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.13', 'the integrated NBA observed On/Off QA release has one shared app version');
+assert.equal(APP_VERSION, '11.9.14', 'data integrity, NBA checkpoint and NHL personnel use one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -120,7 +120,8 @@ mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full anal
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
 mustMatch(/restoredBoardNeedsValidationRef\.current\) return undefined/, 'restored partial board must not race a single-board reader reprice');
 mustMatch(/missingReaderGameCount > 0[\s\S]*fullSlateRecoveryNeeded = true/, 'reader games missing from the rendered board must trigger full-slate recovery');
-mustMatch(/\(fullSlateRecoveryNeeded \|\| queuedForCurrentBoard\) && stillCurrent\(\)[\s\S]*oneClickAnalyze\(\)/, 'full-slate recovery or a queued user tap must run after releasing the reader poll lock');
+mustMatch(/fullSlateRecoveryNeeded && !queuedForCurrentBoard && stillCurrent\(\)[\s\S]*oneClickAnalyze\(\)/, 'full-slate recovery must run after releasing the Reader lock without competing with a queued manual click');
+mustMatch(/if \(!queuedAnalysis \|\| readerPolling[\s\S]*queuedAnalysisRef\.current !== queuedAnalysis[\s\S]*queuedAnalysis\.league !== league \|\| queuedAnalysis\.date !== date[\s\S]*queuedAnalysisRef\.current = null;[\s\S]*void oneClickAnalyze\(\)/, 'a queued manual click must drain exactly once from the active league/date render after the Reader lock is released');
 assert.doesNotMatch(page, /verificationMarkets:\s*\[\]/, 'analyze/reprice must never hard-code an empty verification-market payload');
 mustMatch(/後台重新驗證中｜保留目前分數/, 'full refresh must retain completed scores on screen');
 mustMatch(/更新失敗｜保留上一版結果/, 'failed refresh must retain the previous completed result');
