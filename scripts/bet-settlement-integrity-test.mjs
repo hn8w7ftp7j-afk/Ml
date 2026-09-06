@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { settleBetTicket, settleBetTickets } from '../lib/bet-settlement-service.js';
+import { settleBetTicket, settleBetTickets, settleBetTicketFromResult } from '../lib/bet-settlement-service.js';
 import { stableAsianGamePk } from '../lib/asian-baseball.js';
 
 for (const route of ['app/api/analyze/route.js', 'app/api/reprice/route.js']) {
@@ -14,6 +14,41 @@ for (const route of ['app/api/analyze/route.js', 'app/api/reprice/route.js']) {
 const originalFetch = globalThis.fetch;
 const gamePk = 987654321;
 let fetchCalls = 0;
+
+const incompleteScoreBet = {
+  id: 'incomplete-official-score', league: 'MLB', gamePk,
+  market: '上半大小', pick: '小4平', away: '客隊', home: '主隊',
+  water: 0.95, stake: 10_000, status: 'OPEN',
+};
+const completeScoreResult = {
+  final: true, awayRuns: 3, homeRuns: 2,
+  awayFirst5: 0, homeFirst5: 0, first5Complete: true,
+};
+for (const missing of [null, undefined, '', ' ', NaN]) {
+  for (const side of ['awayFirst5', 'homeFirst5']) {
+    const unresolved = settleBetTicketFromResult(incompleteScoreBet, { ...completeScoreResult, [side]: missing });
+    assert.equal(unresolved.status, 'MANUAL_REVIEW', `${side}=${String(missing)} must not fabricate a zero-score first five`);
+    assert.equal(unresolved.settlement, undefined, 'Incomplete official scores must not create a financial settlement');
+  }
+  for (const side of ['awayRuns', 'homeRuns']) {
+    const unresolved = settleBetTicketFromResult(
+      { ...incompleteScoreBet, market: '全場大小' },
+      { ...completeScoreResult, [side]: missing },
+    );
+    assert.equal(unresolved.status, 'MANUAL_REVIEW', `${side}=${String(missing)} must not fabricate a full-game score`);
+    assert.equal(unresolved.settlement, undefined);
+  }
+}
+for (const first5Complete of [false, undefined, null]) {
+  const unresolved = settleBetTicketFromResult(incompleteScoreBet, { ...completeScoreResult, first5Complete });
+  assert.equal(unresolved.status, 'MANUAL_REVIEW', 'Numeric first-five scores require explicit official period completion');
+  assert.equal(unresolved.settlement, undefined);
+}
+const verifiedZeroFirstFive = settleBetTicketFromResult(incompleteScoreBet, completeScoreResult);
+assert.equal(verifiedZeroFirstFive.status, 'SETTLED', 'An explicitly verified 0-0 first five remains a valid official score');
+assert.equal(verifiedZeroFirstFive.resultSnapshot.selectedAwayRuns, 0);
+assert.equal(verifiedZeroFirstFive.resultSnapshot.selectedHomeRuns, 0);
+assert.equal(verifiedZeroFirstFive.settlement.netProfit, 9_650, 'Verified zero-score result retains the existing water and per-leg rebate rules');
 
 try {
   globalThis.fetch = async url => {

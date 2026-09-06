@@ -1648,7 +1648,9 @@ export default function Home() {
   useEffect(() => {
     const initial = loadCompactStore();
     const migratedBets = migrateLegacyLocalBets(initial.bets);
-    setLeague(initial.activeLeague);
+    // Same-site sport routes can return to a particular baseball league.
+    const requestedLeague = new URLSearchParams(window.location.search).get('league');
+    setLeague(LEAGUE_IDS.includes(requestedLeague) ? requestedLeague : initial.activeLeague);
     setSettings(initial.settings);
     betsRef.current = migratedBets;
     setBets(migratedBets);
@@ -3724,6 +3726,7 @@ export default function Home() {
         </button>;
       })}
       <NbaEntry/>
+      <a className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球資料與研究</small></a>
     </nav>
 
     <nav className="mainTabs">

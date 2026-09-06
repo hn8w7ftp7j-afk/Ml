@@ -1,6 +1,7 @@
 import './globals.css';
 import './security.css';
 import './ledger.css';
+import './nhl/nhl.css';
 import PwaRegister from './pwa-register.js';
 
 export const dynamic = 'force-dynamic';
