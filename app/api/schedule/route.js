@@ -34,6 +34,22 @@ export async function GET(request) {
       league,
       date,
       games,
+      // Identity-only evidence includes finished games so the UI can keep an
+      // old provider ID as historical without sending it back for execution.
+      // The executable games list above remains strictly prestart.
+      identityAsOf: new Date().toISOString(),
+      identitySlate: slate.map(game => ({
+        league: game.league,
+        leagueId: game.leagueId,
+        gamePk: game.gamePk,
+        providerGameId: game.providerGameId || null,
+        gameDate: game.gameDate,
+        officialDate: game.officialDate,
+        taipeiDate: game.taipeiDate,
+        gameNumber: game.gameNumber,
+        awayTeamId: game.awayTeamId,
+        homeTeamId: game.homeTeamId,
+      })),
       provider: provider.scheduleProvider,
       analysisMode: provider.analysisMode,
       betEligible: provider.betEligible,

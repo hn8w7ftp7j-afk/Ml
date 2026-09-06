@@ -65,6 +65,7 @@ function sandbox(storage = new MemoryStorage()) {
   const context = vm.createContext({ ...cache, ...receipts, normalizeLeagueId, allLeagueBoardDate, analysisHasCalculatedDirections,
     preserveCompletedReaderResult, console, Date, Map, Set, Number, JSON, Array, String,
     window: { localStorage: storage, setTimeout, clearTimeout },
+    backgroundJobsInMemory: new Map(), supersededBackgroundRuns: new Set(),
     safeParse: value => { try { return JSON.parse(value); } catch { return null; } },
     ANALYSIS_BOARD_CACHE_STORAGE: BOARD_KEY, ANALYSIS_JOB_STORAGE: JOB_KEY, ALL_LEAGUE_ANALYSIS_STORAGE: RUN_KEY,
   });
