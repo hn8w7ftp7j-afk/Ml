@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { normalizeNhlGame, normalizeNhlSchedule, fetchNhlJson, fetchNhlSchedule, fetchNhlRoster, fetchNhlTeamStatistics, fetchNhlGame, fetchNhlPlayer, deriveNhlEventStatistics, buildNhlScheduleContext } from '../lib/nhl/data.js';
 import { validateNhlIdentity, nhlDate, validNhlDate, normalizeNhlGoalieEvidence, detectNhlGoalieChange } from '../lib/nhl/identity.js';
 import { NHL_HISTORICAL_SAMPLES } from '../lib/nhl/historical-samples.js';
+import { normalizeNhlGameReport } from '../lib/nhl/game-report.js';
 
 const load = name => JSON.parse(fs.readFileSync(new URL(`./fixtures/nhl/${name}`, import.meta.url), 'utf8'));
 const raw = load('landing-2023020001.json');
@@ -137,6 +138,87 @@ await test('event situations separate 5v5/PP/empty net/SO and never pretend coun
   const events = [make(1, '1551', 'goal', 18), make(2, '1541', 'shot-on-goal', 18), make(3, '0551', 'goal', 14), make(4, '1551', 'goal', 18, 'SO'), make(5, null, 'shot-on-goal', 18)];
   const stats = deriveNhlEventStatistics({ ...base, plays: [...events, events[0]] }, source);
   assert.equal(stats.away.fiveOnFive.goals, 1); assert.equal(stats.away.fiveOnFive.shotsOnGoal, 1); assert.equal(stats.away.powerPlay.shotsOnGoal, 1); assert.equal(stats.home.fiveOnFive.goals, 0); assert.equal(stats.unknownSituationEvents, 1); assert.equal(stats.xGF, null); assert.equal(stats.timeOnIce5v5, null); assert.equal(stats.powerPlayOpportunities, null);
+});
+
+await test('situation ratios pair PP against PK, not opponent PP, and preserve zero denominators', () => {
+  const make = (eventId, team, situationCode, typeDescKey = 'shot-on-goal') => ({ eventId, situationCode, typeDescKey, periodDescriptor: { periodType: 'REG' }, details: { eventOwnerTeamId: team } });
+  const stats = deriveNhlEventStatistics({ awayTeam: { id: 18 }, homeTeam: { id: 14 }, plays: [
+    make(1, 18, '1541', 'goal'), make(2, 18, '1541'), make(3, 14, '1541'),
+    make(4, 14, '1451', 'goal'), make(5, 18, '1551', 'missed-shot'),
+  ] });
+  assert.equal(stats.ok, true);
+  assert.equal(stats.away.powerPlay.shotsOnGoalAgainst, 1);
+  assert.equal(stats.away.powerPlay.goalsAgainst, 0);
+  assert.equal(stats.away.powerPlay.shotShare, 2 / 3);
+  assert.equal(stats.away.powerPlay.shootingPercent, 0.5);
+  assert.equal(stats.away.powerPlay.savePercent, 1);
+  assert.equal(stats.home.shortHanded.savePercent, 0.5);
+  assert.equal(stats.away.shortHanded.goalsAgainst, 1);
+  assert.equal(stats.away.fiveOnFive.savePercent, null);
+  assert.equal(stats.away.fiveOnFive.shotShare, null);
+  assert.equal(stats.away.fiveOnFive.unblockedAttempts, 1);
+  assert.equal(stats.home.fiveOnFive.unblockedAttemptsAgainst, 1);
+  assert.equal(stats.metricScope, 'OBSERVED_EVENTS_NOT_PREGAME_FEATURES');
+  assert.equal(stats.rateMetrics, null);
+});
+
+await test('event conflicts block irrespective of order; identical duplicates do not inflate shots', () => {
+  const event = { eventId: 1, situationCode: '1551', typeDescKey: 'goal', periodDescriptor: { periodType: 'REG' }, details: { eventOwnerTeamId: 18 } };
+  const base = { awayTeam: { id: 18 }, homeTeam: { id: 14 } };
+  assert.equal(deriveNhlEventStatistics({ ...base, plays: [event, structuredClone(event)] }).away.fiveOnFive.goals, 1);
+  for (const broken of [{ ...event, eventId: null }, { ...event, periodDescriptor: {} }, { ...event, details: { eventOwnerTeamId: 999 } }]) {
+    assert.equal(deriveNhlEventStatistics({ ...base, plays: [broken] }).status, 'BLOCK');
+  }
+  const changed = { ...event, typeDescKey: 'shot-on-goal' };
+  for (const plays of [[event, changed, event], [changed, event]]) {
+    const result = deriveNhlEventStatistics({ ...base, plays });
+    assert.equal(result.status, 'BLOCK'); assert.equal(result.away, undefined);
+    assert.ok(result.issues.includes('NHL_PBP_EVENT_REVISION_CONFLICT'));
+  }
+  assert.equal(deriveNhlEventStatistics({ ...base, homeTeam: { id: 18 }, plays: [] }).status, 'BLOCK');
+  const incomplete = deriveNhlEventStatistics({ ...base, plays: [event, { ...event, eventId: 2, situationCode: null }] });
+  assert.equal(incomplete.status, 'WARNING'); assert.equal(incomplete.away.fiveOnFive.goals, 1);
+  assert.equal(incomplete.away.fiveOnFive.shootingPercent, null);
+});
+
+await test('actual official PBP resolves blocked shot actors and source-derived ratios', () => {
+  const pbp = load('pbp-2023020001.json');
+  const stats = deriveNhlEventStatistics(pbp, { ...source, url: source.url.replace('/landing', '/play-by-play') });
+  assert.equal(stats.ok, true); assert.equal(stats.unknownSituationEvents, 0); assert.equal(stats.unresolvedBlocks, 0);
+  assert.equal(stats.away.fiveOnFive.shotShare, 18 / 40);
+  assert.equal(stats.away.fiveOnFive.savePercent, 21 / 22);
+  assert.equal(stats.away.fiveOnFive.blockedShots, 7);
+  assert.equal(stats.away.fiveOnFive.blockedShotAttempts, 14);
+  assert.equal(stats.home.fiveOnFive.blockedShots, 13);
+  assert.equal(stats.away.fiveOnFive.teammateBlockedAttempts, 1);
+  assert.equal(stats.home.fiveOnFive.teammateBlockedAttempts, 1);
+  assert.equal(stats.away.fiveOnFive.shotAttempts, 37);
+  const missingRoster = deriveNhlEventStatistics({ ...pbp, rosterSpots: [] });
+  assert.equal(missingRoster.away.fiveOnFive.blockedShots, null);
+  assert.equal(missingRoster.away.fiveOnFive.shotAttempts, null);
+  assert.ok(missingRoster.unresolvedBlocks > 0);
+});
+
+await test('actual right-rail PP opportunities and scratches are game-specific, not injury or PIT evidence', () => {
+  const report = load('right-rail-2023020001.json');
+  const game = normalizeNhlGame(raw, { source, boxscore: load('boxscore-2023020001.json') });
+  const origin = { ...source, url: source.url.replace('/landing', '/right-rail') };
+  const result = normalizeNhlGameReport(report, game, origin);
+  assert.equal(result.ok, true); assert.equal(result.away.powerPlayOpportunities, 4);
+  assert.equal(result.home.powerPlayOpportunities, 5); assert.equal(result.away.powerPlayPercent, 1 / 4);
+  assert.equal(result.away.penaltyKillPercent, 1 - 2 / 5); assert.equal(result.home.penaltyKillPercent, 1 - 1 / 4);
+  assert.equal(result.away.scratches.length, 3); assert.equal(result.away.scratches[0].playerId, 8477446);
+  assert.equal(result.away.scratches[0].sourcePublishedAt, null); assert.equal(result.pregamePointInTimeVerified, false);
+  assert.equal(result.seasonSeries, undefined);
+  for (const mutate of [
+    x => { x.seasonSeries[0].homeTeam.id = 18; },
+    x => { x.teamGameStats.push(x.teamGameStats[0]); },
+    x => { x.teamGameStats.find(r => r.category === 'powerPlay').awayValue = '5/4'; },
+    x => { x.gameInfo.awayTeam.scratches.push(x.gameInfo.homeTeam.scratches[0]); },
+    x => { x.gameInfo.awayTeam.scratches[0].id = 8475158; },
+    x => { x.teamGameStats = {}; },
+  ]) { const changed = structuredClone(report); mutate(changed); assert.equal(normalizeNhlGameReport(changed, game, origin).status, 'BLOCK'); }
+  assert.equal(normalizeNhlGameReport(report, game, { ...origin, url: origin.url.replace('0001', '0002') }).status, 'BLOCK');
 });
 
 await test('schedule rest context handles DST, prior history and unknown travel honestly', () => {

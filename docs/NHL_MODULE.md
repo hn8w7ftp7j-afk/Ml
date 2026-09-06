@@ -13,6 +13,38 @@ This module is part of the existing Next.js app and Vercel Production project. `
 
 ## Sources and factual gaps
 
+### Official game reports and situation statistics (11.9.6)
+
+The same game-details request now additionally acquires NHL's official
+`gamecenter/{id}/right-rail`. The requested game must appear exactly once in
+`seasonSeries` with matching season, type, teams and start time. Other series
+games and series wins are not imported, avoiding future-outcome leakage.
+Validated game-specific PP goals/opportunities provide PP and opponent-derived
+PK percentages. Zero opportunities yield null percentages. Official scratches
+retain NHL player/team IDs, source and observation time, but no invented injury
+reason, publication time or pregame confirmation. Duplicate players, an active
+player listed as scratched, malformed ratios and conflicting game identities
+block this optional report while preserving independently valid game results.
+
+PBP situation statistics now pair PP against the opponent's PK and 5v5 against
+5v5 for shots against, goals against, saves, shot share and descriptive shooting
+and team save percentages. Unknown situations suppress ratios, not manufacture
+zeros. These are observed-event ratios, not per-60 rates or verified pregame
+features. Duplicate conflicting event IDs block the event statistics.
+
+Actual official 2023020001 PBP revealed that a blocked-shot event belongs to
+the shooting team and can be explicitly `teammate-blocked`. Both player IDs are
+resolved against the game roster. Defensive blocks, blocked shooting attempts
+and teammate blocks are distinct; unresolved actor identity leaves those totals
+null. The retained 328-event official response and right-rail response are real
+historical fixtures, acquired on 2026-09-06, not contemporary pregame snapshots.
+The source responses are retained verbatim as JSON evidence, with SHA-256 in
+`scripts/fixtures/nhl/observed-report-provenance.json`.
+
+No injury feed, projected/confirmed-goalie feed, line-combination feed, xG feed
+or 5v5 exposure-time feed is newly enabled by this release. No wagering,
+scoring, settlement, calibration or model formula changes are included.
+
 Official live adapters use `https://api-web.nhle.com/v1/`: `schedule/{date}`, `club-schedule-season/{team}/{season}`, `gamecenter/{id}/landing`, `.../boxscore`, `.../play-by-play`, `roster/{team}/{season}`, `player/{id}/landing`, and `club-stats/{team}/{season}/{type}`. Upstream errors are displayed, not converted to successful empty boards. An unavailable historical game can use only the exact archived official sample and must display the original acquisition time and archive warning. Archived samples never replace a live schedule.
 
 Club statistics are individual player totals, not team possession rates. Raw play-by-play can supply situation event counts, but does not itself supply xG, high-danger classification, 5v5 exposure minutes or PP opportunity counts. These metrics are null until an appropriate source is connected. MoneyPuck is not automatically scraped or enabled without a suitable permitted data arrangement. A new season alone does not resolve these source gaps.
