@@ -427,6 +427,9 @@ assert.match(migration, /validate_baseball_analysis_direction_settlement_insert/
 assert.match(migration, /before update or delete/i, '分析與結算歷史必須append-only');
 
 const historySource = fs.readFileSync(new URL('../lib/analysis-direction-history-v1.js', import.meta.url), 'utf8');
+const recoveryMigration = fs.readFileSync(new URL('../database/0010_analysis_direction_review_recovery.sql', import.meta.url), 'utf8');
+const triggerSql = source => source.match(/CREATE OR REPLACE FUNCTION validate_baseball_analysis_direction_settlement_insert\(\)[\s\S]*?END \$\$/)[0].replace(/\s+/g,' ').trim();
+assert.equal(triggerSql(historySource),triggerSql(recoveryMigration),'PostgreSQL integration gate must exercise the exact runtime trigger');
 assert.match(historySource, /payloadLocation: 'record_payload'/, '完整方向payload只可傳輸一次');
 assert.doesNotMatch(historySource, /result_payload:\s*record\.resultPayload/, '不得把完整resultPayload重複寫入兩個JSONB欄位');
 
