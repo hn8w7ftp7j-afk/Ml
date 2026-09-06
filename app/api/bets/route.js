@@ -94,7 +94,7 @@ export async function POST(request) {
     }
     if (body.action === 'cancel') return response(await cancelOpenCloudBet(body.id));
     if (body.action === 'settleOpen') {
-      const bets = await settleOpenCloudBets({ league: body.league, limit: 500 });
+      const bets = await settleOpenCloudBets({ league: body.league, limit: 500, timeBudgetMs: 15_000 });
       // The UI already invokes settleOpen automatically.  Use the same
       // authenticated trigger to settle every persisted CALCULATED analysis
       // direction, including negative-EV/non-ranked rows that were never bets.

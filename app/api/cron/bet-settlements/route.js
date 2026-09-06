@@ -21,7 +21,7 @@ export async function GET(request) {
     // Settlement must not depend on a user opening the ledger page. Process all
     // leagues from the durable OPEN ledger; each ticket is still settled only
     // from its verified official final result and the versioned Tai888 contract.
-    const bets = await settleOpenCloudBets({ limit: 500 });
+    const bets = await settleOpenCloudBets({ limit: 500, timeBudgetMs: 240_000 });
     const summary = bets.reduce((acc, bet) => {
       const status = String(bet?.status || 'UNKNOWN').toUpperCase();
       acc[status] = (acc[status] || 0) + 1;

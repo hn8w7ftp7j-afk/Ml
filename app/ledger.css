@@ -196,6 +196,15 @@
   white-space: nowrap;
 }
 
+.betRowResult small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.settlementPendingReason {
+  max-width: 28em;
+}
+
 .betRow > div:first-child {
   flex: 1;
   min-width: 0;
@@ -607,6 +616,8 @@
 
   .betRowResult {
     text-align: left;
+    min-width: 0;
+    white-space: normal;
   }
 
   .rowActions .priceComparisonStack {
