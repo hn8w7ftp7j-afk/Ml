@@ -22,10 +22,10 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(packageJson.version, '11.8.43', 'package/release identity must match the V11.8.43 current Reader bet-action release');
-assert.equal(packageLock.version, '11.8.34', 'package-lock dependency graph remains unchanged by V11.8.43');
-assert.equal(packageLock.packages?.['']?.version, '11.8.34', 'root lockfile dependency graph remains unchanged by V11.8.43');
-assert.equal(APP_VERSION, '11.8.43');
+assert.equal(packageJson.version, '11.8.44', 'package/release identity must match the V11.8.44 NBA data workspace release');
+assert.equal(packageLock.version, '11.8.44', 'lockfile release metadata must match the package release');
+assert.equal(packageLock.packages?.['']?.version, '11.8.44', 'root lockfile release metadata must match the package release');
+assert.equal(APP_VERSION, '11.8.44');
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
