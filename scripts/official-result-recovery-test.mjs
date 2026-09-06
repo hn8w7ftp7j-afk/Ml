@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { parseKboResultLinescore } from '../lib/kbo-result-linescore.js';
-import { resolveLegacyAsianResultGame } from '../lib/asian-baseball.js';
+import { resolveLegacyAsianResultGame, parseNpbScheduleHtml } from '../lib/asian-baseball.js';
 import { isRetryableResultGap } from '../lib/bet-settlement-service.js';
 
 const game = { league: 'KBO', leagueId: 'KBO', statusCode: 'F', officialDate: '2026-09-02',
@@ -40,6 +40,16 @@ assert.throws(() => resolveLegacyAsianResultGame('KBO',[game,{...game,gamePk:124
 assert.equal(resolveLegacyAsianResultGame('KBO',[game],123,'2026-09-03',{}),null);
 assert.throws(() => resolveLegacyAsianResultGame('KBO',[game],123,game.officialDate,{...options,expectedAway:'韓華鷹'}));
 assert.equal(resolveLegacyAsianResultGame('KBO',[{...game,league:'NPB',leagueId:'NPB'}],123,game.officialDate,options),null);
+
+// Regression for the official card's round field: a postponement is a state,
+// not a venue or an unstarted game. Scores must remain absent.
+for (const state of ['Postponed', 'Canceled', 'Suspended']) {
+  const [postponed] = parseNpbScheduleHtml(`<div class="unit"><span class="team_name">Tokyo Yakult Swallows</span><span class="team_name">Chunichi Dragons</span><div class="round">${state}<br>18:00</div></div>`, '2026-09-06');
+  assert.equal(postponed.statusCode, 'D');
+  assert.notEqual(postponed.venue, state);
+  assert.equal(postponed.awayScore, null);
+  assert.equal(postponed.homeScore, null);
+}
 
 const gap = {status:'MANUAL_REVIEW',settlementError:'缺少可驗證的前五局正式賽果',resultSnapshot:{final:true}};
 assert.equal(isRetryableResultGap(gap),true);
