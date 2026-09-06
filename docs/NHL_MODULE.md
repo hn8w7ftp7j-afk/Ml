@@ -37,7 +37,7 @@ The cross-review also fixed an existing settlement data bug: null/blank official
 
 ## Verification commands
 
-### Source integrity repair (11.9.1)
+### Source integrity repair (11.9.2)
 
 Source-cache hits, misses and coalesced reads return independent deep copies so
 consumer mutations cannot alter another request or the retained source hash.
