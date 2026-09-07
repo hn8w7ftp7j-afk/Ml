@@ -11,7 +11,7 @@ const stats = { inningsPitched: 60, gamesPitched: 50, gamesStarted: 0, era: 3, w
 const roster = Array.from({ length: 6 }, (_, index) => ({ id: 20 + index, name: `fixture-${index}`, position: 'RP', ...stats }));
 function makeFeed(pitches) {
   const player = { person: { id: 20, fullName: 'fixture-0' }, stats: { pitching: { numberOfPitches: pitches } } };
-  const home = { pitchers: [99, 20], players: { ID20: player } };
+  const home = { pitchers: [99, 20], players: { ID20: player, ID99: { person: { id: 99 }, stats: { pitching: { numberOfPitches: 90 } } } } };
   return { gamePk: 100, gameData: { status: { abstractGameState: 'Final' }, datetime: { dateTime: '2026-09-06T02:10:00Z', officialDate: '2026-09-05' }, teams: { home: { id: 119 }, away: { id: 120 } } }, liveData: { boxscore: { teams: { home } } } };
 }
 const expectedRecentGames = [{ gamePk: 100, officialDate: '2026-09-05' }];
@@ -106,3 +106,15 @@ backup.teams.home.team.id = 999;
 const wrong = await recoverRecentPitchCountsV13(input, { fetchImpl: async () => Response.json(backup) });
 check('wrong backup team cannot fill missing pitches', () => assert.equal(wrong.data.liveData.boxscore.teams.home.players.ID20.stats.pitching.numberOfPitches, null));
 console.log(JSON.stringify({ suite: 'bullpen-evidence-v11917', cases, ok: true }));
+check('current reliever yesterday started: workload counted without importing starter quality', () => {
+  const feed = makeFeed(0);
+  feed.liveData.boxscore.teams.home.pitchers = [20];
+  feed.liveData.boxscore.teams.home.players.ID20.stats.pitching.numberOfPitches = 90;
+  const result = run(0, { recentFeeds: [feed] });
+  const pitcher = result.relievers.find(row => row.id === 20);
+  assert.equal(pitcher.pitchesLast1, 90);
+  assert.equal(pitcher.availability, 0.25);
+  assert.equal(pitcher.inningsPitched, stats.inningsPitched);
+  delete feed.liveData.boxscore.teams.home.players.ID20.stats.pitching.numberOfPitches;
+  assert.equal(run(0, { recentFeeds: [feed] }).usageAvailable, false);
+});

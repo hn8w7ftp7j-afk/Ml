@@ -103,7 +103,7 @@ check('archive requests exclude unsupported probability variable', () => { asser
 check('null advanced measurements stay missing and unpromoted', () => {
   const zone = buildCatcherUmpireZoneV2({ catcherFraming: { pitches: 1000 }, umpire: { id: 521889, status: 'CONFIRMED', catcherNeutralRunsPerGame: null } });
   assert.equal(zone.status, 'MISSING'); assert.equal(zone.catcherNeutralRunsPerGame, null); assert.equal(zone.appliedValue.runsPerGame, 0);
-  const injury = buildInjuryRunValueV2({ injuredRoster: { available: true, roster: [{ person: { id: 1 }, stat: { ops: null, plateAppearances: 300 } }] }, lineup: { official: true } });
+  const injury = buildInjuryRunValueV2({ injuredRoster: { available: true, roster: [{ status: { code: 'D10' }, person: { id: 1 }, stat: { ops: null, plateAppearances: 300 } }] }, lineup: { official: true } });
   assert.equal(injury.absentPlayers.length, 0); assert.equal(injury.coverage.playersWithBattingMetrics, 0); assert.equal(injury.appliedValue.absentRunsPerGame, 0);
 });
 console.log(JSON.stringify({ ok: true, suite: 'mlb-coverage-completion-v11916', cases }));

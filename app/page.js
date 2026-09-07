@@ -1426,7 +1426,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   const sourceStatusLabels = {
     starters: '先發', lineups: '打線', bullpen: '純牛棚', parkFactor: '球場', weather: '天氣',
     catcherFraming: '捕手Framing', defenseFRV: '守備FRV', injuryRunValue: '傷停', pitchTypeMatchup: '球種對戰',
-    umpireZone: '主審Zone', parkWindOrientation: '球場風向',
+    umpire: '主審效果', umpireZone: '主審Zone', parkWindOrientation: '球場風向',
   };
   const sourceStatusText = Object.entries(analysis.sourceStatuses || {})
     .filter(([, value]) => value != null && String(value).trim())
