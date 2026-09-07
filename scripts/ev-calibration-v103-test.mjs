@@ -1,3 +1,4 @@
+import { currentWrWarnings } from '../lib/wr-gap-warning.js';
 import assert from 'node:assert/strict';
 import { estimateRunProfileV103, MLB_RUN_MODEL_V103_VERSION } from '../lib/mlb-run-model-v103.js';
 import {
@@ -295,7 +296,22 @@ const unstableRawScenario = qualifyEvV103({
 assert.equal(unstableRawScenario.qualified, true, 'unstable scenarios remain visible but cannot rank');
 assert.ok(unstableRawScenario.rawScenarioSpread > MAX_RAW_SCENARIO_EV_SPREAD);
 assert.equal(unstableRawScenario.scenarioStable, false);
-assert.match(unstableRawScenario.auditWarnings.join('｜'), /情境差距/);
+assert.match(unstableRawScenario.auditWarnings.join('｜'), /W\/R差距/);
+
+// Regression: subtraction at the exact 5pp boundary used to warn depending
+// on the EV magnitude and sign. Do not round away a real 5.004pp difference.
+for (const w of [0.2382, -0.2572, 0.0542, -0.0823, 0.072, -0.1066]) {
+  for (const gap of [0.05, 0.04996, 0.05004]) {
+    const r = w - gap;
+    const checked = qualifyEvV103({ row: { water: 0.95 }, rawWeightedEV: w, rawRobustEV: r, modelProbability: 0.5, gate });
+    assert.equal(checked.wrGapExceedsReference, gap > 0.05);
+    assert.equal(checked.scenarioStable, gap <= 0.05);
+    assert.equal(checked.auditWarnings.some(x => x.includes('模型W/R差距')), gap > 0.05);
+    assert.equal(checked.weightedEV, w, 'warning correction must not change W');
+    assert.equal(checked.robustEV, r, 'warning correction must not change R');
+    if (gap > 0.05) assert.match(checked.auditWarnings.join('｜'), /5\.0040個百分點/);
+  }
+}
 
 const unstableConsensus = qualifyEvV103({
   row: {
@@ -495,3 +511,9 @@ console.log(JSON.stringify({
   neutralMeans: neutral.full,
   strongLongMeans: strongLongStarter.full,
 }, null, 2));
+
+const savedWarnings = Object.freeze(['other warning', '模型W/R情境差距5.0個百分點']);
+assert.deepEqual(currentWrWarnings(savedWarnings, 0.05000000000000002), ['other warning']);
+assert.equal(savedWarnings.length, 2);
+assert.match(currentWrWarnings(savedWarnings, 0.05004)[1], /5.0040/);
+assert.equal(currentWrWarnings(savedWarnings, null), savedWarnings);

@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/performance-evidence-v1.js';
 import { APP_VERSION } from '../lib/app-version.js';
+import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
 import NbaEntry from './nba/entry.js';
 import Link from 'next/link';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
@@ -201,7 +202,7 @@ function diagnosticWarnings(row) {
   const canonical = Array.isArray(row?.scoreAudit?.diagnosticWarnings)
     ? row.scoreAudit.diagnosticWarnings.filter(Boolean)
     : Array.isArray(row?.diagnosticWarnings) ? row.diagnosticWarnings.filter(Boolean) : [];
-  if (canonical.length) return [...new Set(canonical)];
+  if (canonical.length) return currentWrWarnings([...new Set(canonical)], row?.evCalibration?.rawScenarioSpread);
   const gap = firstFiniteNumber(row?.tai888MarketProbabilityGap, row?.rawMarketProbabilityGap);
   const warnings = [
     ...(gap != null && gap > 0.10 ? [`模型／Tai888去水機率高度分歧 ${(gap * 100).toFixed(2)}pp`] : []),
@@ -211,7 +212,7 @@ function diagnosticWarnings(row) {
     ...(row?.scoreAudit?.extremeEvReview?.auditWarnings || []),
     ...(row?.evCalibration?.auditWarnings || []),
   ];
-  return [...new Set(warnings.filter(Boolean))];
+  return currentWrWarnings([...new Set(warnings.filter(Boolean))], row?.evCalibration?.rawScenarioSpread);
 }
 
 function directionStatus(row) {
@@ -1237,7 +1238,7 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   if (!Number.isFinite(robustEV) || robustEV <= 0) return { icon: '🟡', label: '觀察', ranking: false, reason: '模型穩健R未大於0' };
   if (formulaScore < 7.2) return { icon: '⚪', label: 'PASS', ranking: false, reason: '公式分數未達7.2' };
   if (row?.rankingQualified === false) return { icon: '🟡', label: '影子候選未進排名', ranking: false, reason: row?.rankingQualificationReason || '後端排名Gate未通過' };
-  const scenarioWarning = row?.evCalibration?.scenarioStable === false ? '；W/R情境差距超過5%列警告' : '';
+  const scenarioWarning = wrGapExceedsReference(row?.evCalibration?.rawScenarioSpread) ? '；W/R差距超過5個百分點列警告' : '';
   if (formulaScore >= 8.5) return { icon: '🔥', label: '8.5級模型方向', ranking: true, reason: `雙EV為正、達8.5且既定高分條件完成${scenarioWarning}` };
   if (formulaScore >= 8.0) return { icon: '🟢', label: '8.0級模型方向', ranking: true, reason: `雙EV為正且達8.0${scenarioWarning}` };
   if (formulaScore >= 7.5) return { icon: '🟢', label: '7.5級模型方向', ranking: true, reason: `雙EV為正且達7.5${scenarioWarning}` };
@@ -1286,7 +1287,7 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, action, now, i
     ? `是（${verdict.label}）`
     : `否（${verdict.reason}）`;
   const scoreTitle = `S分數 ${scoreLabel}｜模型EV W ${signedPct(modelEV)}｜穩健EV R ${signedPct(robustEV)}｜資料／數學QA ${qaLabel}｜排名資格 ${rankText}`;
-  const probabilityDetail = `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜情境差距 ${pct(row.evCalibration?.rawScenarioSpread)}${marketGapText}`;
+  const probabilityDetail = `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜W/R差距 ${pct(row.evCalibration?.rawScenarioSpread)}（含資料風險扣減）${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   return <div className="scoreRow">

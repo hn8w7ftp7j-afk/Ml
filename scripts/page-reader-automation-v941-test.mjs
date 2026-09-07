@@ -34,7 +34,7 @@ mustMatch(/className="heroActionStatus" role="status" aria-live="polite"/, 'mobi
 assert.doesNotMatch(page, /disabled=\{busy \|\| readerPolling \|\| allLeaguePreparing \|\| allLeagueRunning \|\| !analysisEnabled\}/, 'Reader polling must not silently disable the manual analysis button');
 assert.match(css, /\.heroActionStatus/, 'queued and running analysis status must remain visible beside the button');
 assert.doesNotMatch(page, /if \(row\?\.evCalibration\?\.scenarioStable !== true\) return/, 'W/R scenario spread warning must not block the client ranking verdict');
-mustMatch(/const scenarioWarning = row\?\.evCalibration\?\.scenarioStable === false/, 'client ranking verdict must retain the W/R scenario-spread warning');
+mustMatch(/const scenarioWarning = wrGapExceedsReference\(row\?\.evCalibration\?\.rawScenarioSpread\)/, 'client ranking verdict must retain the W/R scenario-spread warning');
 mustMatch(/const dataQualityWarningOnly = row\?\.scoreBreakdown\?\.dataQualityWarningOnly === true/, 'cached low-quality analysis must be treated as warning-only in the client verdict');
 mustMatch(/className="appRefreshButton"[^>]*onClick=\{\(\) => window\.location\.reload\(\)\}>↻ 更新<\//, 'header must provide a one-tap manual update button');
 mustMatch(/function requestJSONWithTransientRetry\([\s\S]*delaysMs = \[0, 1500, 4000\][\s\S]*transientAnalysisError\(error\)/, 'Safari transient fetch failures must retry before an all-league batch is marked failed');
@@ -323,7 +323,7 @@ mustMatch(/模型EV（W）/, 'raw distribution EV must use the fixed public W la
 mustMatch(/穩健EV R \{signedPct\(robustEV\)\}/, 'robust EV must be secondary to S and use the fixed public R label');
 mustMatch(/function modelEvValue\(row\)[\s\S]*row\?\.rawWeightedEV/, 'W display must fall back to the raw distribution EV when qualification fields are null');
 mustMatch(/function robustEvValue\(row\)[\s\S]*row\?\.rawRobustEV/, 'R display must fall back to the raw robust EV when qualification fields are null');
-mustMatch(/情境差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
+mustMatch(/W\/R差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
 mustMatch(/S分數、W與R完整顯示/, 'provider status must report S-first display mode');
 mustMatch(/Tai888與外部市場都不回灌模型概率/, 'Tai888 and external markets must remain execution/audit inputs only');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
