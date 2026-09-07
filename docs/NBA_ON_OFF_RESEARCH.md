@@ -1,5 +1,17 @@
 # Observed On/Off reconstruction
 
+## v2 correction — 2026-09-07 UTC
+
+The v1 investigation below is historical and its unresolved-attribution conclusion is superseded for the three archived samples. The root cause was our attribution logic, not proven bad source data: free-throw plus-minus belongs to the lineup at the originating foul, while actual playing time continues to follow substitution events. See the primary implementation documentation for [pbpstats FreeThrow.event_for_efficiency_stats](https://pbpstats.readthedocs.io/en/latest/_modules/pbpstats/resources/enhanced_pbp/free_throw.html). Defensive three-seconds is also a technical-foul origin ([NBA Rule 10](https://official.nba.com/rule-no-10-violations-and-penalties/)).
+
+`nba-observed-on-off-v2` snapshots those lineups and links each free throw to the preceding matching foul class, same period/clock, opposing team, identified shooter and consecutive complete attempt sequence. It does not move events, change minutes, replace box-score numbers or relax the exact plus-minus comparison. Unknown/repeated/incomplete attempts, unmatched origins and identity conflicts remain BLOCK. Exceptional source corrections or replacement attempts require explicit support and are not guessed. This remains descriptive research, not an official NBA possession-normalized statistic or a Shadow-model input.
+
+All three previously acquired real samples now pass every available player plus-minus comparison with no tolerance. The v1 engine stopped at the first discrepancy; the defects were not limited to one player or one point. Full normalized event/box-score subsets (excluding wagering fields) are retained in `scripts/fixtures/nba-onoff-*.json`, with the original response hashes and observed date, not fabricated publication timestamps. Tests include these three real regressions as well as separate synthetic missing-foul, wrong-clock/team/shooter, missing/duplicate/incomplete-trip, substitution-between-shots and technical-foul cases. UI exposes the event-to-foul attribution IDs for inspection.
+
+Acceptance is now **THREE_ARCHIVED_SAMPLES_RECONCILED**; it is not broad league/season certification, official On/Off integration, prospective injury/lineup verification or physical-device/Production UI certification. No new sample download was needed for this correction.
+
+## Historical v1 investigation (superseded where noted above)
+
 `nba-observed-on-off-v1` is independent, descriptive, completed-game research. It consumes the already fetched ESPN summary; no additional Production source request, database, wagering operation or model coefficient is introduced. It is not NBA's official possession-normalized On/Off and is not used by the current Shadow model.
 
 The engine verifies NBA/game/player/team identity, five known starters per side, duplicate/revised event identities, each period's actual clock length, every period-end and final score, substitution membership and entering/leaving names, DNP contradictions, five-player time totals, score-attribution totals, and each supplied player plus-minus. Overtime uses five extra minutes per verified period. Missing denominators remain null. No probability, score, rate or QA discrepancy is capped or patched to fit.
