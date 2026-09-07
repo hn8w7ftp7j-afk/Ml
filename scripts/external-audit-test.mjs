@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import { inspectSource, quoteState, normalizeNetSnapshot, normalizePapiQuotes } from '../lib/external-audit.js';
+const now = Date.parse('2026-09-07T08:00:00Z');
+const base = { league: 'NPB', date: '2026-09-07', now, env: { ODDS_API_NET_KEY: 'test-secret' } };
+const event = { event_id: 'npb-1', sport: 'baseball', league: 'Japan NPB', start_time: now / 1000, home_team: 'Home', away_team: 'Away' };
+const snapshot = { event_id: 'npb-1', complete: true, as_of_ts_ms: now, bookmaker_as_of_ts_ms: { book: now - 300001 }, items: [{ event_id: 'npb-1', bookmaker: 'book', market_key: 'total', period: '5_innings', side: 'over', odds: 1.9, is_available: true }] };
+let calls = [];
+const mock = responses => async (url, options) => {
+  calls.push({ url: String(url), options });
+  const data = responses.shift();
+  assert.ok(data, 'Unexpected request');
+  return { ok: true, json: async () => data };
+};
+assert.equal(quoteState(null, now, true, now), 'INVALID_PRICE');
+assert.equal(quoteState(Infinity, now, true, now), 'INVALID_PRICE');
+assert.equal(quoteState(1.9, null, true, now), 'MISSING_TIMESTAMP');
+assert.equal(quoteState(1.9, now + 1, true, now), 'FUTURE_TIMESTAMP');
+assert.equal(quoteState(1.9, now - 300000, true, now), 'FRESH');
+assert.equal(quoteState(1.9, now - 300001, true, now), 'STALE');
+assert.equal(quoteState(1.9, now, false, now), 'UNAVAILABLE');
+assert.equal(normalizeNetSnapshot(snapshot, 'npb-1', now)[0].state, 'STALE');
+assert.equal(normalizeNetSnapshot({ ...snapshot, bookmaker_as_of_ts_ms: {} }, 'npb-1', now)[0].state, 'MISSING_TIMESTAMP');
+assert.equal(normalizeNetSnapshot({ ...snapshot, items: [{ ...snapshot.items[0], event_id: 'other' }] }, 'npb-1', now)[0].state, 'EVENT_MISMATCH');
+assert.throws(() => normalizeNetSnapshot(snapshot, 'wrong', now), /SCHEMA_MISMATCH/);
+for (const league of ['CPBL', 'NPB', 'KBO']) {
+  const result = await inspectSource({ ...base, league, env: {}, fetcher: async () => assert.fail('Missing key must not call upstream') });
+  assert.equal(result.status, 'NOT_CONFIGURED');
+  assert.equal(result.verified, false);
+}
+await assert.rejects(inspectSource({ ...base, league: '__proto__' }), /UNKNOWN_LEAGUE/);
+await assert.rejects(inspectSource({ ...base, date: '2026-02-30' }), /INVALID_DATE/);
+let result = await inspectSource({ ...base, eventId: 'npb-1', fetcher: mock([{ items: [event, { ...event, event_id: 'wrong-league', league: 'Korean KBO' }] }, snapshot]) });
+assert.equal(result.status, 'QUOTES_RECEIVED_NOT_VERIFIED');
+assert.equal(result.verified, false);
+assert.equal(result.events.length, 1);
+assert.equal(result.quotes[0].state, 'STALE');
+assert.equal(result.identityStatus, 'NOT_MATCHED_TO_OFFICIAL_SCHEDULE');
+assert.equal(result.policy, 'INSPECTION_ONLY_NO_SCORING');
+assert.equal(JSON.stringify(result).includes('test-secret'), false);
+assert.equal(calls[0].options.headers['X-API-Key'], 'test-secret');
+assert.equal(calls[0].options.redirect, 'error');
+calls = [];
+result = await inspectSource({ ...base, eventId: 'foreign', fetcher: mock([{ items: [event] }]) });
+assert.equal(result.status, 'EVENT_NOT_FOUND');
+assert.equal(calls.length, 1);
+for (const [status, expected] of [[401, 'SOURCE_AUTH_FAILED'], [403, 'SOURCE_ACCESS_DENIED'], [429, 'SOURCE_RATE_LIMITED'], [500, 'SOURCE_HTTP_ERROR']]) {
+  let count = 0;
+  result = await inspectSource({ ...base, fetcher: async () => { count++; return { ok: false, status }; } });
+  assert.equal(result.status, expected);
+  assert.equal(count, 1, 'No retry of blocked source');
+}
+result = await inspectSource({ ...base, fetcher: async () => { throw new Error('https://source/?key=test-secret'); } });
+assert.equal(result.status, 'SOURCE_UNAVAILABLE');
+assert.equal(JSON.stringify(result).includes('test-secret'), false);
+result = await inspectSource({ ...base, fetcher: mock([{ items: [event], next_cursor: 'more' }]) });
+assert.equal(result.partial, true);
+const fixture = { fixtureId: 42, tournamentId: 32233, participant1Id: 1, participant2Id: 2, startTime: new Date(now).toISOString(), bookmakerOdds: { pinnacle: { bookmakerIsActive: true, markets: { 1: { outcomes: { 2: { players: { 0: { price: 1.91, active: true, changedAt: new Date(now).toISOString() } } } } } } } } };
+const quote = normalizePapiQuotes(fixture, now)[0];
+assert.equal(quote.period, 'UNMAPPED');
+assert.equal(quote.timestampBasis, 'PRICE_CHANGED_AT_NOT_OBSERVATION');
+result = await inspectSource({ ...base, league: 'CPBL', eventId: '42', env: { ODDSPAPI_API_KEY: 'test-secret' }, fetcher: mock([[fixture]]) });
+assert.equal(result.quotes.length, 1);
+assert.equal(result.verified, false);
+assert.equal(result.events[0].home, undefined, 'Do not assume participant order means home/away');
+console.log('external-audit: transport, freshness, isolation, redaction and fail-closed tests passed');
