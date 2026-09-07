@@ -50,7 +50,7 @@ assert.equal(receipt.gameId, '123');
 assert.equal(receipt.league, 'MLB');
 assert.deepEqual(receipt.otherUsage, profile.dataUsage.slice(-4), 'ungrouped declarations preserve all original fields without invented source status');
 assert.equal(receipt.summary.otherUsageCount, 4);
-assert.equal(receipt.summary.label, '核心人員資料完整度');
+assert.equal(receipt.summary.label, '核心人員資料取得概況');
 const representedKeys = new Set([...receipt.rows.flatMap(row => row.usage.map(item => item.key)), ...receipt.otherUsage.map(item => item.key)]);
 assert.deepEqual([...representedKeys].sort(), profile.dataUsage.map(item => item.key).sort(), 'every declared model-use key is represented');
 assert.ok(receipt.otherUsage.every(item => !Object.hasOwn(item, 'status')), 'unclassified extra declarations cannot imply acquisition completeness');
