@@ -1,0 +1,21 @@
+{
+  "revision": "53d2522cc47b0ebdbed069d8af3f1391eadcd40c",
+  "purpose": "Read-only original model reproduction; never used for current predictions",
+  "files": {
+    "lib/snapshot-v9.js": "c2d2cd08b096b60d1ddfb35e08e51505e85ae689b33a647faf07ce521f6a3418",
+    "lib/leagues.js": "91cce098eb348e7978527eaab3c74e3c71e1341f532bc55bb6836612ebbfea0e",
+    "lib/asian-league-readiness.js": "14e0012646d628e012de3ead1b4c5cc804cfa5c3d642f7fc651d1ad92dffbb92",
+    "lib/analysis-v11.js": "24768c708b8758f66cf7327bf4f89e4313c4a744df321e3c44045383d9be694f",
+    "lib/ev-calibration-v103.js": "dbc72f60b5ab1b3a4b62c5690abc7103c00994344b87befafa85d748ab0e556d",
+    "lib/markets.js": "4c554f4bc0f85fedace7f0ae3955f2397f10dbcb57886e6c777ec6b269c9174e",
+    "lib/taiwan-settlement-v9.js": "7ddc99f8827599c4294f06f687551933281ce23133e4fdb6471a7f5bf4b23372",
+    "lib/asian-joint-score-v1.js": "503fc7cc3bb70c75f4a3393c4230525c4b59dd195569422f9160e8363898c0af",
+    "lib/joint-score-v13.js": "b4c9ed0825a25e83edb2766a1445207b4ce82c9cb5fea71cec4758466122e3af",
+    "lib/mlb-advanced-features-v2.js": "cb391a093f8475297888fbee05a27a4458d8007feee0a7cebd1875901d4365ae",
+    "lib/mlb-advanced-runtime-policy-v110.js": "2d289e467b15d0d820d4390e7d5f2292c9b8fc973ddb4028fcd553f6dd26c236",
+    "lib/mlb-advanced-promotion-policy-v2.js": "941655ac96163b8791117895f2860a66f5cc648db534980174721ad33d4242a6",
+    "lib/mlb-advanced-promotion-gate-v109.js": "6cb0f77883890c413400c61bd512638920e37994332a8b9bf5d3c2a1f3ed1a37",
+    "lib/mlb-run-model-v103.js": "fc784b624b10345c39e32904881b48c07896a4d6dc9c3053c475121e825aa8a4",
+    "lib/joint-score-v11.js": "0e224f6d9621e79b69edb7c4f6ae90c43919e0630e2ae2b02761ffbb67aec74a"
+  }
+}

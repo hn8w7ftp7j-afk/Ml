@@ -185,3 +185,9 @@ try {
   globalThis.Date = DateBeforeCacheTest;
 }
 console.log(JSON.stringify({ ok: true, cases: ['missing_vs_zero_pitching', 'name_only_lineup_neutral', 'partial_coverage', 'official_pregame_hydration', 'failed_hydration_neutral', 'no_mixed_stat_blocks', 'departed_relief_excluded', 'indirect_usage_labels', 'official_day_timezone_cutoff', 'current_roster_transport', 'actual_source_timestamp_propagation', 'cached_acquisition_time_immutable'] }));
+
+for (const row of context.featureProvenance.filter(row => !['weather', 'parkWindOrientation'].includes(row.featureName))) {
+  assert.ok(row.fetchedAt, `feature-level receipt time: ${row.featureName}`);
+  assert.ok(row.dependencyReceipts.length > 0);
+  assert.ok(row.dependencyReceipts.every(source => Date.parse(source.fetchedAt) <= Date.parse(row.fetchedAt)));
+}

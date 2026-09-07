@@ -79,3 +79,12 @@ for (const counter of isolatedCalls) {
 }
 
 console.log(JSON.stringify({ ok: true, distinctRequests: calls.size, duplicateRequests: 0, transportIsolation: true }, null, 2));
+
+// Cache reuse must retain the actual receipt time instead of stamping a new one.
+const cachedAgain = await buildGameContextV11(game, { fetchImpl, timeoutMs: 1000 });
+for (const row of left.featureProvenance.filter(row => row.featureName !== 'weather')) {
+  assert.ok(row.fetchedAt, `missing receipt time: ${row.featureName}`);
+  assert.equal(row.fetchedAt, cachedAgain.featureProvenance.find(r => r.featureName === row.featureName).fetchedAt);
+  assert.ok(row.dependencyReceipts.every(r => Date.parse(r.fetchedAt) <= Date.parse(row.fetchedAt)));
+}
+assert.equal(left.featureProvenance.find(r => r.featureName === 'weather').providerObservedAt, undefined);
