@@ -371,3 +371,14 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
 }
 
 console.log('shadow-score-visibility-v102-test: PASS');
+
+for (const gap of [0.05, 0.05000000000000002, 0.05004]) {
+  const row = { ...direction('全場大小', '大8平', .2382, .2382 - gap),
+    evCalibration: { ...common.evCalibration, rawScenarioSpread: gap, scenarioStable: false,
+      auditWarnings: ['模型W/R情境差距5.0個百分點'] } };
+  const value = finalizeDeterministicAnalysis({ analysis: { leagueId: 'MLB', results: [row] }, game }).results[0];
+  assert.equal(value.scoreBreakdown.scenarioStable, gap <= .050000000001);
+  assert.equal(value.weightedEV, .2382);
+  assert.equal(value.robustEV, .2382 - gap);
+  assert.equal(value.diagnosticWarnings.some(w => /^模型W\/R/.test(w)), gap > .050000000001);
+}

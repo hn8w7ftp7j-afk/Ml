@@ -25,7 +25,8 @@
     "nhl:shot-research": "node scripts/nhl-shot-research-run.mjs",
     "test:nba": "node scripts/nba-official-test.mjs && node scripts/nba-pregame-test.mjs && node scripts/nba-pregame-db-test.mjs && node scripts/nba-data-test.mjs && node scripts/nba-research-test.mjs && node scripts/nba-shadow-test.mjs && node scripts/nba-on-off-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-integration-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-evidence-api-test.mjs",
     "nba:shadow-history": "node scripts/nba-shadow-history.mjs",
-    "compare:frozen": "node scripts/compare-frozen-analyses.mjs"
+    "compare:frozen": "node scripts/compare-frozen-analyses.mjs",
+    "test:pit-audit": "node scripts/saved-pit-model-audit-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/pit-model-audit-route-test.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.0.2",
