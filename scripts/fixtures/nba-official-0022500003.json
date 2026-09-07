@@ -1,0 +1,316 @@
+{
+  "kind": "real_official_normalized_subset",
+  "sources": [
+    {
+      "url": "https://www.nba.com/games?date=2025-10-22",
+      "hash": "e8ad4340efbe2a0d0371d330be9cdcf8856d231845d56c9225ce40ed51657866",
+      "fetchedAt": "2026-09-07T21:47:10.074Z"
+    },
+    {
+      "url": "https://www.nba.com/game/cle-vs-nyk-0022500003/box-score",
+      "hash": "1eae32c8f635eec27ed1f07610c3d1ac9ad12cb1ee6eb24bf0ed6ff0c3ea1910",
+      "fetchedAt": "2026-09-07T21:46:01.653Z"
+    }
+  ],
+  "schedule": {
+    "selectedDate": "2025-10-22",
+    "gameCardFeed": {
+      "modules": [
+        {
+          "cards": [
+            {
+              "cardData": {
+                "gameId": "0022500003",
+                "leagueId": "00",
+                "gameTimeUtc": "2025-10-22T23:00:00Z",
+                "seasonType": "Regular Season",
+                "shareUrl": "https://www.nba.com/game/cle-vs-nyk-0022500003",
+                "homeTeam": {
+                  "teamId": 1610612752,
+                  "teamTricode": "NYK"
+                },
+                "awayTeam": {
+                  "teamId": 1610612739,
+                  "teamTricode": "CLE"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "game": {
+    "gameId": "0022500003",
+    "gameTimeUTC": "2025-10-22T23:00:00Z",
+    "homeTeamId": 1610612752,
+    "awayTeamId": 1610612739,
+    "gameStatus": 3,
+    "homeTeam": {
+      "teamId": 1610612752,
+      "teamTricode": "NYK",
+      "score": 119,
+      "periods": [
+        {
+          "period": 1,
+          "periodType": "REGULAR",
+          "score": 33
+        },
+        {
+          "period": 2,
+          "periodType": "REGULAR",
+          "score": 32
+        },
+        {
+          "period": 3,
+          "periodType": "REGULAR",
+          "score": 22
+        },
+        {
+          "period": 4,
+          "periodType": "REGULAR",
+          "score": 32
+        }
+      ],
+      "players": [
+        {
+          "personId": 1628384,
+          "firstName": "OG",
+          "familyName": "Anunoby",
+          "statistics": {
+            "points": 24
+          }
+        },
+        {
+          "personId": 1626157,
+          "firstName": "Karl-Anthony",
+          "familyName": "Towns",
+          "statistics": {
+            "points": 19
+          }
+        },
+        {
+          "personId": 1630574,
+          "firstName": "Ariel",
+          "familyName": "Hukporti",
+          "statistics": {
+            "points": 2
+          }
+        },
+        {
+          "personId": 1628969,
+          "firstName": "Mikal",
+          "familyName": "Bridges",
+          "statistics": {
+            "points": 16
+          }
+        },
+        {
+          "personId": 1628973,
+          "firstName": "Jalen",
+          "familyName": "Brunson",
+          "statistics": {
+            "points": 23
+          }
+        },
+        {
+          "personId": 1627824,
+          "firstName": "Guerschon",
+          "familyName": "Yabusele",
+          "statistics": {
+            "points": 0
+          }
+        },
+        {
+          "personId": 1630540,
+          "firstName": "Miles",
+          "familyName": "McBride",
+          "statistics": {
+            "points": 15
+          }
+        },
+        {
+          "personId": 1641998,
+          "firstName": "Trey",
+          "familyName": "Jemison III",
+          "statistics": {
+            "points": 0
+          }
+        },
+        {
+          "personId": 1629013,
+          "firstName": "Landry",
+          "familyName": "Shamet",
+          "statistics": {
+            "points": 9
+          }
+        },
+        {
+          "personId": 203903,
+          "firstName": "Jordan",
+          "familyName": "Clarkson",
+          "statistics": {
+            "points": 4
+          }
+        },
+        {
+          "personId": 1642278,
+          "firstName": "Tyler",
+          "familyName": "Kolek",
+          "statistics": {
+            "points": 7
+          }
+        },
+        {
+          "personId": 1642359,
+          "firstName": "Pacôme",
+          "familyName": "Dadiet",
+          "statistics": {
+            "points": 0
+          }
+        },
+        {
+          "personId": 1642885,
+          "firstName": "Mohamed",
+          "familyName": "Diawara",
+          "statistics": {
+            "points": 0
+          }
+        }
+      ]
+    },
+    "awayTeam": {
+      "teamId": 1610612739,
+      "teamTricode": "CLE",
+      "score": 111,
+      "periods": [
+        {
+          "period": 1,
+          "periodType": "REGULAR",
+          "score": 23
+        },
+        {
+          "period": 2,
+          "periodType": "REGULAR",
+          "score": 27
+        },
+        {
+          "period": 3,
+          "periodType": "REGULAR",
+          "score": 37
+        },
+        {
+          "period": 4,
+          "periodType": "REGULAR",
+          "score": 24
+        }
+      ],
+      "players": [
+        {
+          "personId": 1630596,
+          "firstName": "Evan",
+          "familyName": "Mobley",
+          "statistics": {
+            "points": 22
+          }
+        },
+        {
+          "personId": 1642281,
+          "firstName": "Jaylon",
+          "familyName": "Tyson",
+          "statistics": {
+            "points": 5
+          }
+        },
+        {
+          "personId": 1628386,
+          "firstName": "Jarrett",
+          "familyName": "Allen",
+          "statistics": {
+            "points": 4
+          }
+        },
+        {
+          "personId": 1630241,
+          "firstName": "Sam",
+          "familyName": "Merrill",
+          "statistics": {
+            "points": 19
+          }
+        },
+        {
+          "personId": 1628378,
+          "firstName": "Donovan",
+          "familyName": "Mitchell",
+          "statistics": {
+            "points": 31
+          }
+        },
+        {
+          "personId": 1629731,
+          "firstName": "Dean",
+          "familyName": "Wade",
+          "statistics": {
+            "points": 10
+          }
+        },
+        {
+          "personId": 1628366,
+          "firstName": "Lonzo",
+          "familyName": "Ball",
+          "statistics": {
+            "points": 3
+          }
+        },
+        {
+          "personId": 1641854,
+          "firstName": "Craig",
+          "familyName": "Porter Jr.",
+          "statistics": {
+            "points": 2
+          }
+        },
+        {
+          "personId": 1626204,
+          "firstName": "Larry",
+          "familyName": "Nance Jr.",
+          "statistics": {
+            "points": 10
+          }
+        },
+        {
+          "personId": 1642878,
+          "firstName": "Tyrese",
+          "familyName": "Proctor",
+          "statistics": {
+            "points": 5
+          }
+        },
+        {
+          "personId": 1628418,
+          "firstName": "Thomas",
+          "familyName": "Bryant",
+          "statistics": {
+            "points": 0
+          }
+        },
+        {
+          "personId": 1641772,
+          "firstName": "Nae'Qwan",
+          "familyName": "Tomlin",
+          "statistics": {
+            "points": 0
+          }
+        },
+        {
+          "personId": 1631247,
+          "firstName": "Luke",
+          "familyName": "Travers",
+          "statistics": {
+            "points": 0
+          }
+        }
+      ]
+    }
+  }
+}

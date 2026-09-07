@@ -90,6 +90,16 @@ for (const statement of ['Andersen will not start in goal tonight.', 'Andersen c
 const twoConfirmed = parseNhlLineupArticle(article(facts, 'Andersen will start in goal. Bussi will start in goal.'), opts);
 assert.equal(twoConfirmed.goalies.away.status, 'UNKNOWN');
 
+// Questions and uncertain prefixes must not become affirmative declarations
+// after punctuation removal or matching only a trailing player-name clause.
+for (const statement of ['Andersen will start in goal tonight?', 'Andersen will start in goal tonight？', 'Perhaps Andersen will start in goal tonight.', 'Unconfirmed: Andersen will start in goal tonight.', 'Rumor: Andersen will start in goal tonight.']) {
+  assert.equal(parseNhlLineupArticle(article(facts, statement), opts).goalies.away.status, 'PROJECTED', statement);
+}
+for (const statement of ['Andersen will start in goal tonight!', 'Andersen will start in goal tonight。', 'Who starts? Andersen will start in goal tonight.']) {
+  assert.equal(parseNhlLineupArticle(article(facts, statement), opts).goalies.away.status, 'CONFIRMED', statement);
+}
+console.log('PASS goalie confirmation: 5 question/uncertainty counterexamples and 3 direct-declaration regressions');
+
 // Completing acquisition after puck drop cannot be turned into PIT evidence by
 // stamping the HTTP request start as the fetch time.
 let clock = Date.parse('2026-06-14T23:59:59Z');
