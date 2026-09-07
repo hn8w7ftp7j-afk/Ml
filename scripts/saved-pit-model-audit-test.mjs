@@ -45,9 +45,13 @@ const bundle = {
   distributionHash: distribution.distributionHash,
   marketAnalysis: { ...analysis, suppliedMarkets: input.markets },
 };
+bundle.gameIdentity = context.game;
+bundle.databasePersistedAt = snapshotAsOf;
+bundle.distributionDatabasePersistedAt = snapshotAsOf;
 const before = JSON.stringify(bundle);
 const audit = auditSavedPitModel(bundle);
 assert.equal(audit.status, 'DISTRIBUTION_REPRODUCED');
+assert.equal(audit.captureTiming.savedBeforeGame, true);
 assert.equal(audit.evMatchesUnderStatedSettings, true);
 assert.equal(audit.predictiveAccuracyValidated, false);
 assert.equal(JSON.stringify(bundle), before);
@@ -55,6 +59,8 @@ assert.equal(auditSavedPitModel({ ...bundle, distributionHash: 'bad' }).status, 
 const old = structuredClone(bundle); old.versions.modelVersion = 'unavailable';
 assert.equal(auditSavedPitModel(old).status, 'ORIGINAL_ENGINE_UNAVAILABLE');
 const future = structuredClone(bundle);
+future.databasePersistedAt = '2099-01-01T00:00:00.000Z';
+assert.equal(auditSavedPitModel(future).captureTiming.savedBeforeGame, false);
 future.frozenContext.featureProvenance[0].observedAt = '2099-01-01T00:00:00.000Z';
 assert.equal(auditSavedPitModel(future).pregameEvidence.ok, false);
 console.log('Saved PIT audit: frozen inputs preserved, distribution and EV compared, incompatible engine and future evidence rejected');
