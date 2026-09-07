@@ -15,7 +15,7 @@ async function handle(request, capture) {
     const [game, injuries] = await Promise.all([loadNbaData({ view: 'game', id }), loadNbaData({ view: 'injuries' })]);
     const snapshot = buildNbaPregame(game, injuries);
     const receipt = await saveNbaPregame(snapshot);
-    return NextResponse.json({ league: 'NBA', snapshot, receipt }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ league: 'NBA', snapshot: { ...snapshot, capturedAt: receipt.capturedAt, revision: receipt.revision }, receipt }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) { return NextResponse.json({ league: 'NBA', error: error.code === 'PREGAME_INVALID' ? error.message : 'NBA 永久快照暫時無法讀寫；未標記保存成功。' }, { status: error.code === 'PREGAME_INVALID' ? 422 : 503, headers: { 'Cache-Control': 'no-store' } }); }
 }
 export const GET = request => handle(request, false);
