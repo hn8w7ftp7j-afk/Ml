@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { deriveNbaOnOff } from '../lib/nba/on-off.js';
 // Synthetic, deliberately simple low-scoring fixtures, never real-game data.
 function fixture() {
@@ -13,7 +14,8 @@ function fixture() {
     seq++; homeScore += homeDelta; awayScore += awayDelta;
     plays.push({ id: `900001${seq}`, sequenceNumber: String(seq), period: { number: period }, clock: { displayValue: clock }, type: { text: type }, homeScore, awayScore });
   };
-  for (let period = 1; period <= 4; period++) { add(period, '11:00', 'Jump Shot', 2); add(period, '10:00', 'Free Throw - 1 of 1', 0, 1); add(period, '0.0', 'End Period'); }
+  // Abstract score deltas test conservation; actual FT semantics are covered below.
+  for (let period = 1; period <= 4; period++) { add(period, '11:00', 'Jump Shot', 2); add(period, '10:00', 'Synthetic score delta', 0, 1); add(period, '0.0', 'End Period'); }
   add(4, '0.0', 'End Game'); return { game, players, plays };
 }
 const run = f => deriveNbaOnOff(f.game, f.players, f.plays);
@@ -73,8 +75,53 @@ test('overtime uses five actual extra minutes rather than a regulation-only deno
   for (let i = 0; i < f.plays.length; i++) f.plays[i].awayScore = Math.floor((i + 2) / 3) * 2;
   // Before each quarter's away score, only previous quarters have scored.
   for (let i = 0; i < 4; i++) f.plays[i * 3].awayScore = i * 2;
-  for (const [i, clock, type, homeScore, awayScore] of [[14, '4:00', 'Jump Shot', 10, 8], [15, '3:00', 'Free Throw - 1 of 1', 10, 9], [16, '0.0', 'End Period', 10, 9], [17, '0.0', 'End Game', 10, 9]]) f.plays.push({ id: `900001${i}`, sequenceNumber: String(i), period: { number: 5 }, clock: { displayValue: clock }, type: { text: type }, homeScore, awayScore });
+  for (const [i, clock, type, homeScore, awayScore] of [[14, '4:00', 'Jump Shot', 10, 8], [15, '3:00', 'Synthetic score delta', 10, 9], [16, '0.0', 'End Period', 10, 9], [17, '0.0', 'End Game', 10, 9]]) f.plays.push({ id: `900001${i}`, sequenceNumber: String(i), period: { number: 5 }, clock: { displayValue: clock }, type: { text: type }, homeScore, awayScore });
   for (const player of f.players) player.statistics[0].displayValue = String(player.starter ? player.teamId === f.game.home.id ? 1 : -1 : 0);
   const r = run(f); assert.equal(r.status, 'ready'); assert.equal(r.durationSeconds, 3180); assert.equal(r.players[0].onNetPer48, 48 / 53);
 });
-console.log(`NBA observed On/Off: ${count} groups passed; synthetic fixtures are not real source verification.`);
+function freeThrowFixture() {
+  const f = fixture(); const score = f.plays[1];
+  score.type.text = 'Free Throw - 2 of 2'; score.team = { id: '18' }; score.participants = [{ athlete: { id: '110' } }];
+  const event = (id, type) => ({ ...structuredClone(score), id: `900001${id}`, sequenceNumber: String(id), type: { text: type }, awayScore: 0 });
+  const foul = event(90, 'Shooting Foul'); foul.team.id = '5'; foul.participants[0].athlete.id = '100';
+  const miss = event(91, 'Free Throw - 1 of 2');
+  const sub = event(92, 'Substitution'); sub.team.id = '5'; sub.participants = [{ athlete: { id: '105' } }, { athlete: { id: '100' } }]; sub.text = 'Synthetic Player 105 enters the game for Synthetic Player 100';
+  f.plays.splice(1, 0, foul, miss, sub);
+  f.players[0].statistics[0].displayValue = '1'; f.players[5].statistics[0].displayValue = '3';
+  return f;
+}
+test('free-throw points stay with originating foul lineup while minutes follow substitutions', () => {
+  const r = run(freeThrowFixture()); assert.equal(r.status, 'ready');
+  assert.equal(r.players[0].plusMinus, 1); assert.equal(r.players[5].plusMinus, 3);
+  assert.equal(r.players[0].onSeconds, 120); assert.equal(r.players[5].onSeconds, 2760);
+  assert.equal(r.freeThrowAttributions.length, 2); assert.equal(r.freeThrowAttributions[1].foulEventId, '90000190');
+  assert.equal(r.freeThrowAttributions[0].points, 0);
+});
+test('missing, wrong-clock, cross-team and unknown free-throw evidence BLOCK', () => {
+  for (const mutate of [f => f.plays.splice(1, 1), f => { f.plays[1].clock.displayValue = '10:01'; }, f => { f.plays[1].team.id = '18'; }, f => { f.plays[2].participants[0].athlete.id = '999'; }, f => { f.plays[2].type.text = 'Free Throw - Unknown'; }]) {
+    const f = freeThrowFixture(); mutate(f); const r = run(f); assert.equal(r.status, 'blocked'); assert.equal(r.qa.code, 'FT_ATTRIBUTION_INVALID'); assert.deepEqual(r.players, []);
+  }
+});
+test('missing attempts, changed shooter, duplicate attempt and unfinished trips BLOCK', () => {
+  for (const mutate of [f => f.plays.splice(2, 1), f => { f.plays[4].participants[0].athlete.id = '111'; }, f => { f.plays[4].type.text = 'Free Throw - 1 of 2'; }, f => { f.plays[2].type.text = 'Free Throw - 1 of 3'; f.plays[4].type.text = 'Free Throw - 2 of 3'; }]) {
+    const f = freeThrowFixture(); mutate(f); assert.equal(run(f).qa.code, 'FT_ATTRIBUTION_INVALID');
+  }
+});
+test('defensive three-seconds and technical foul penalties have explicit origins', () => {
+  for (const type of ['Technical Foul', 'Defensive 3-Seconds Technical']) {
+    const f = freeThrowFixture(); f.plays[1].type.text = type; f.plays.splice(2, 1); f.plays[3].type.text = 'Free Throw - Technical';
+    const r = run(f); assert.equal(r.status, 'ready'); assert.equal(r.players[0].plusMinus, 1);
+    assert.equal(r.freeThrowAttributions[0].foulEventId, '90000190');
+  }
+});
+for (const id of ['401811042', '401809234', '401809944']) test(`archived real ESPN game ${id}: every player plus-minus reconciles`, () => {
+  const f = JSON.parse(fs.readFileSync(new URL(`./fixtures/nba-onoff-${id}.json`, import.meta.url), 'utf8'));
+  assert.equal(f.source.kind, 'real_source_normalized_subset'); assert.match(f.source.originalResponseSha256, /^[a-f0-9]{64}$/);
+  const r = run(f); assert.equal(r.status, 'ready', JSON.stringify(r.qa)); assert.equal(r.qa.status, 'PASS');
+  assert.ok(r.players.length >= 10); assert.ok(r.players.every(row => row.plusMinusVerified));
+  assert.ok(r.freeThrowAttributions.length > 0);
+  for (const row of r.players) { const player = f.players.find(p => p.id === row.playerId); assert.equal(row.plusMinus, Number(player.statistics.find(s => s.name === 'plusMinus').displayValue)); }
+  // Source box-score changes must still block; not a replacement for attribution.
+  f.players.find(p => !p.didNotPlay).statistics.find(s => s.name === 'plusMinus').displayValue = '999'; assert.equal(run(f).status, 'blocked');
+});
+console.log(`NBA observed On/Off: ${count} groups passed (15 synthetic, 3 archived real-source regressions); not Production UI verification.`);
