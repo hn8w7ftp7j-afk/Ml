@@ -280,7 +280,8 @@ assert.equal(kboOutdoor.weather.meanRunFactor, 1);
 const kboDh2Game = gameFor('KBO', { gameNumber: 2, doubleHeader: 'Y' });
 const kboDh2Blocked = await contextFor('KBO', kboDh2Game, featuresFor('KBO'));
 assert.equal(kboDh2Blocked.dataGateV10.rows.find(row => row.name === 'kboDoubleheaderState').status, 'PROJECTED');
-assert.equal(kboDh2Blocked.leagueRuleState.kbo.doubleheader.uncertaintyExpanded, true);
+assert.equal(kboDh2Blocked.leagueRuleState.kbo.doubleheader.uncertaintyExpanded, false, '未校準的雙重賽負荷不可宣稱已擴大模型不確定性');
+assert.equal(kboDh2Blocked.leagueRuleState.kbo.doubleheader.modelUsage, 'DIAGNOSTIC_ONLY_NO_CALIBRATED_DOUBLEHEADER_EFFECT');
 const kboDh2Features = featuresFor('KBO');
 kboDh2Features.rules.doubleheader = { secondGameBullpenRecomputed: true };
 const kboDh2Ready = await contextFor('KBO', kboDh2Game, kboDh2Features);
@@ -306,7 +307,9 @@ assert.ok(cpblBlocked.dataGateV10.blocking.includes('cpblForeignPlayerConstraint
 cpblIncompleteTransition.rules.foreignPlayerConstraint.pitcherExitLineupTransitionModeled = true;
 cpblIncompleteTransition.rules.foreignPlayerConstraint.first5FullDifferentiated = true;
 const cpblModeled = await contextFor('CPBL', gameFor('CPBL'), cpblIncompleteTransition);
-assert.equal(cpblModeled.leagueRuleState.cpbl.foreignPlayerConstraint.status, 'MODELED');
+assert.equal(cpblModeled.leagueRuleState.cpbl.foreignPlayerConstraint.status, 'DIAGNOSTIC_FOREIGN_STATUS_TRANSITION_UNMODELED', '來源宣稱MODELED不能冒充比分引擎已實作洋將替換路徑');
+assert.equal(cpblModeled.leagueRuleState.cpbl.foreignPlayerConstraint.pitcherExitLineupTransitionModeled, false);
+assert.equal(cpblModeled.leagueRuleState.cpbl.foreignPlayerConstraint.first5FullDifferentiated, false);
 assert.equal(cpblModeled.dataGateV10.passedForShadowScore, true);
 
 console.log('Asian league-specific identity, handedness, park, lineup, bullpen and rule gates PASS');

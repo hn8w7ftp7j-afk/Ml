@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/performance-evidence-v1.js';
 import { APP_VERSION } from '../lib/app-version.js';
 import NbaEntry from './nba/entry.js';
 import Link from 'next/link';
@@ -1118,17 +1119,22 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
   const [selectedLeague, setSelectedLeague] = useState('ALL');
   const [selectedMarket, setSelectedMarket] = useState('ALL');
   const [selectedBucket, setSelectedBucket] = useState('ALL');
+  const [modelVersion, setModelVersion] = useState('ALL');
+  const [dataVersion, setDataVersion] = useState('ALL');
+  const [dataQuality, setDataQuality] = useState('ALL');
   const report = useMemo(() => buildScorePerformanceReport(bets, {
     period,
     league: selectedLeague,
     market: selectedMarket,
-  }), [bets, period, selectedLeague, selectedMarket]);
+    modelVersion, dataVersion, dataQuality,
+  }), [bets, period, selectedLeague, selectedMarket, modelVersion, dataVersion, dataQuality]);
   const details = useMemo(() => filterScorePerformanceDetails(bets, {
     period,
     league: selectedLeague,
     market: selectedMarket,
+    modelVersion, dataVersion, dataQuality,
     bucketId: selectedBucket,
-  }), [bets, period, selectedLeague, selectedMarket, selectedBucket]);
+  }), [bets, period, selectedLeague, selectedMarket, selectedBucket, modelVersion, dataVersion, dataQuality]);
   const periodLabel = BET_PERIODS.find(item => item.id === period)?.label || '全部';
   const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : selectedLeague;
   const marketLabel = selectedMarket === 'ALL' ? '全部市場' : selectedMarket;
@@ -1172,6 +1178,16 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
       <button className={selectedMarket === 'ALL' ? 'active' : ''} onClick={() => chooseMarket('ALL')}>全部市場</button>
       {SCORE_PERFORMANCE_MARKETS.map(market => <button key={market} className={selectedMarket === market ? 'active' : ''} onClick={() => chooseMarket(market)}>{market}</button>)}
     </div>
+    <div className="performanceEvidenceFilters">
+      <label>模型版本<select aria-label="績效模型版本" value={modelVersion} onChange={event => { setModelVersion(event.target.value); setSelectedBucket('ALL'); }}><option value="ALL">全部模型版本</option>{report.availableVersions.modelVersion.map(value => <option key={value} value={value}>{value === 'UNKNOWN' ? '未保存版本' : value}</option>)}</select></label>
+      <label>資料版本<select aria-label="績效資料版本" value={dataVersion} onChange={event => { setDataVersion(event.target.value); setSelectedBucket('ALL'); }}><option value="ALL">全部資料版本</option>{report.availableVersions.dataVersion.map(value => <option key={value} value={value}>{value === 'UNKNOWN' ? '未保存版本' : value}</option>)}</select></label>
+      <label>資料品質<select aria-label="績效資料品質" value={dataQuality} onChange={event => { setDataQuality(event.target.value); setSelectedBucket('ALL'); }}><option value="ALL">全部品質狀態</option>{Object.entries(QUALITY_GROUPS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+    </div>
+    <details className="details performanceAttribution"><summary>版本與資料品質績效比較</summary>
+      <p>使用目前篩選內所有合格實際下注，包含無 S 分數紀錄。品質分類只涵蓋核心人員資料；未保存證據的舊紀錄列為未知。同場多筆下注另列比賽數，不能視為獨立樣本。分組差異不代表因果或新版已改善。</p>
+      <h4>模型與資料版本</h4><div className="performanceEvidenceGrid">{report.attribution.versions.map(row => <article key={row.key}><strong>{row.modelVersion === 'UNKNOWN' ? '未保存模型版本' : row.modelVersion}</strong><small>資料：{row.dataVersion === 'UNKNOWN' ? '未保存版本' : row.dataVersion}｜{row.uniqueGames} 場比賽</small><ScorePerformanceMetrics summary={row.summary}/></article>)}</div>
+      <h4>資料品質</h4><div className="performanceEvidenceGrid">{report.attribution.quality.map(row => <article key={row.key}><strong>{row.label}</strong><small>{row.uniqueGames} 場比賽</small><ScorePerformanceMetrics summary={row.summary}/></article>)}</div>
+    </details>
     <div className="ledgerPath">{periodLabel}｜{leagueLabel}｜{marketLabel}｜{bucketLabel}</div>
 
     <div className="ledgerSectionHead"><h3>1. S 分數績效比較</h3><span>未結算只計下注數</span></div>
@@ -1204,7 +1220,7 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
     <div className="ledgerSectionHead"><h3>3. 符合條件的下注明細</h3><span>{details.length} 筆｜直接讀取原帳本</span></div>
     {details.length ? details.map(bet => <div className="betRow scorePerformanceBetRow" key={bet.id}>
       <div><strong><span className="leagueBadge inline">{bet.league}</span>{scorePerformanceScoreForBet(bet) != null ? `S ${scorePerformanceScoreForBet(bet).toFixed(1)}｜` : 'S —｜'}{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : statusText(bet.status)}{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) && bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜本金 {moneyText(bet.stake)}｜下注時 {compactModelMetrics(bet)}</small></div>
-      <div className="betRowResult"><strong>{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) ? moneyText(bet.settlement?.netProfit) : '未列入已結算績效'}</strong><small>原始帳本唯讀顯示</small></div>
+      <div className="betRowResult"><strong>{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) ? moneyText(bet.settlement?.netProfit) : '未列入已結算績效'}</strong><small>原始帳本唯讀顯示</small><small>模型：{savedVersionForBet(bet) === 'UNKNOWN' ? '未保存版本' : savedVersionForBet(bet)}</small><small>資料：{savedVersionForBet(bet, 'dataVersion') === 'UNKNOWN' ? '未保存版本' : savedVersionForBet(bet, 'dataVersion')}｜{QUALITY_GROUPS[qualityGroupForBet(bet)]}</small></div>
     </div>) : <div className="emptySmall">目前篩選條件沒有可顯示的下注紀錄。</div>}
   </section>;
 }
@@ -1330,6 +1346,31 @@ function DirectionSlotRow({ row, game }) {
   </div>;
 }
 
+function AnalysisDataAudit({ audit }) {
+  if (!audit?.rows?.length) return <div className="sourceBanner dataStatusBanner"><strong>資料查核明細尚未建立</strong><span>這份舊分析未保存逐欄取得與使用紀錄；重新分析後才能查核，不代表資料完整。</span></div>;
+  const labels = { observed: '實際取得', projected: '預測替代', missing: '缺失', stale: '舊資料' };
+  const explanations = { observed: '有取得紀錄，仍須核對下列來源與統計範圍。', projected: '包含預測名單或替代數據，不能視為今日完整實績。', missing: '必要的身分或統計證據不足；中性預設值不代表實際能力。', stale: '來源已標示過期，不能當作最新資料。' };
+  const summary = audit.summary || {};
+  return <details className="details dataAudit">
+    <summary>核心人員資料與模型使用｜實際 {summary.observed || 0}・替代 {summary.projected || 0}・缺失 {summary.missing || 0}・舊資料 {summary.stale || 0}</summary>
+    <p className="muted">{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'} 各項詳細覆蓋情形如下。</p>
+    <div className="dataAuditRows">{audit.rows.map(row => <div className="dataAuditRow" key={row.id || row.key}>
+      <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
+      <p>{explanations[row.status]}</p>
+      {row.temporalNote && <p>{row.temporalNote}</p>}
+      <p><b>模型使用：</b>{row.usageStatus === 'UNVERIFIED' ? '尚無逐欄使用紀錄' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || '未進入計算／僅供診斷'}{row.status !== 'observed' && row.usedInMean ? '（包含既有替代值）' : ''}</p>
+      <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}｜統計截至 {row.asOf || '未提供'}</p>
+      {row.coverage && <p><b>覆蓋：</b>{row.category === 'lineup' ? `名單 ${row.coverage.identityCount ?? '未知'}/${row.coverage.expectedCount || 9} 人；統計 ${row.coverage.metricCoverage == null ? '未確認' : `${Math.round(row.coverage.metricCoverage * 100)}%`}` : `有效名單 ${row.coverage.rosterCount ?? '未知'} 人；名單完整性${row.coverage.rosterComplete ? '已確認' : '未確認'}`}</p>}
+      {row.category === 'bullpen' && <p><b>能力統計：</b>{row.coverage?.qualityCount ?? '未確認'}/{row.coverage?.rosterCount ?? '未知'} 人完整{row.players?.some(player => !player.qualityComplete) ? `；缺項球員：${row.players.filter(player => !player.qualityComplete).map(player => player.name || player.id).join('、')}` : ''}。可出賽程度仍是依近期用量估計。</p>}
+      {row.category === 'bullpen' && <p><b>近期用球紀錄：</b>{row.coverage?.usage ? `完整 ${row.coverage.usage.completeGames}/${row.coverage.usage.expectedGames} 場；取得 ${row.coverage.usage.fetchedGames} 場` : '未保存逐場覆蓋證據'}{row.coverage?.usage?.missingGames?.length > 0 ? `；缺項：${row.coverage.usage.missingGames.map(game => `${game.date || game.gamePk}${game.missingPlayers?.length ? `（${game.missingPlayers.map(player => player.name || player.id).join('、')}用球數）` : '（紀錄未確認）'}`).join('、')}` : ''}。缺值不代表 0 球或充分休息。</p>}
+      {row.substitutions?.length > 0 && <p><b>替代依據：</b>此項含替代或估計處理，展開明細可查原始依據。</p>}
+      <details><summary>身分、數據與來源明細</summary><pre>{JSON.stringify({ identity: row.identity, coverage: row.coverage, metrics: row.metrics, modelUsageInputs: row.modelUsageInputs, players: row.players, sources: row.sources, substitutions: row.substitutions, exclusions: row.exclusions, diagnostic: row.diagnostic, modelStatuses: row.modelStatuses, statusReason: row.statusReason, usage: row.usage }, null, 2)}</pre></details>
+    </div>)}</div>
+    {audit.supportingData?.length > 0 && <details className="dataAuditRow"><summary>本季、近期與環境資料的取得及使用</summary><p>列出統計期間、實際取得欄位與模型使用。近期打擊保留小樣本收縮；整隊投球與主審身分另作查核，不能當成已啟用的得分效果。以下項目未併入上方核心人員數量。</p><pre>{JSON.stringify(audit.supportingData, null, 2)}</pre></details>}
+    {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><p>此處只列模型是否使用，不代表來源完整或功能已通過歷史驗證。</p><pre>{JSON.stringify(audit.otherUsage, null, 2)}</pre></details>}
+  </details>;
+}
+
 function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const latestCoverage = item.latestMarketCoverage || null;
@@ -1411,6 +1452,8 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
       : `已開 ${openMarketCount}/4 市場｜應評 ${expectedDirectionCount} 方向｜已評 ${scoredDirectionCount}/${expectedDirectionCount}｜進影子排名 ${rankingDirectionCount}；依固定S分數分析與排序`}</span></div>}
     {expectedRuns && <div className="sourceBanner"><strong>上游得分中心｜市場水位回灌：停用</strong><span>全場 {runCenter(expectedRuns.full)}｜前五局 {runCenter(expectedRuns.first5)}｜這份得分分布同時結算大／小與讓／受讓</span></div>}
     {(sourceStatusText || provenanceText) && <div className="sourceBanner dataStatusBanner"><strong>上游資料狀態</strong><span>{sourceStatusText || provenanceText}</span></div>}
+    {analysisHasCalculatedDirections(item.customData) && <AnalysisDataAudit audit={analysis.dataAudit}/>}
+    {(preservingPreviousReaderAnalysis || item.restoredFromCache === true) && <div className="sourceBanner shadowBanner"><strong>保留的分析版本</strong><span>分析時間：{localTime(analysis.analysisAsOf || analysis.createdAt)}｜資料截至：{localTime(analysis.dataAsOf)}｜盤口時間：{localTime(analysis.lineAsOf)}｜模型：{analysis.modelVersion || '未記錄'}｜Reader：{(analysis.results || []).find(row => row.readerVersion)?.readerVersion || '未記錄'}｜此處時間與版本屬於保留結果</span></div>}
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT永久保存已確認' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
@@ -2124,6 +2167,18 @@ export default function Home() {
     const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [board.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning]);
+  useEffect(() => {
+    // A previous league's poll may release the shared Reader lock after this
+    // league queued a manual click. Drain from the active render so the old
+    // closure cannot either lose that click or run it for the wrong league.
+    if (!queuedAnalysis || readerPolling || busy || allLeaguePreparing || allLeagueRunning
+      || !analysisEnabled || readerPollBusyRef.current || operationBusyRef.current
+      || queuedAnalysisRef.current !== queuedAnalysis
+      || queuedAnalysis.league !== league || queuedAnalysis.date !== date) return;
+    queuedAnalysisRef.current = null;
+    setQueuedAnalysis(null);
+    void oneClickAnalyze();
+  }, [queuedAnalysis, readerPolling, busy, allLeaguePreparing, allLeagueRunning, analysisEnabled, league, date]);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
     && readerStatus?.fresh === true
@@ -3317,6 +3372,7 @@ export default function Home() {
       }
       return allSucceeded;
     } catch (cause) {
+      if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
       setBoard(current => current.map(item => item.customData && ['running', 'queued'].includes(item.status)
         ? { ...item, status: 'failed', statusLabel: '更新失敗｜保留上一版結果' }
         : item));
@@ -3666,12 +3722,29 @@ export default function Home() {
           updated += 1;
           completed += 1;
         } catch (cause) {
+          if (!stillCurrent()) return;
           const currentDirectItem = boardRef.current.find(current => (
             Number(current?.game?.gamePk) === Number(item.game.gamePk)
           )) || null;
           if (taskReaderStateIsStale(rebuildTask)
             || !directRepriceAuthorityMatches(currentDirectItem, rebuildTask)) {
             failed += 1;
+            return;
+          }
+          if (Number(cause?.status) === 409 && cause?.code === 'CORE_REFRESH_REQUIRED') {
+            // A server-confirmed expired or incompatible frozen core cannot
+            // be repriced again. Rebuild from current sources through the
+            // existing durable analysis path, preserving the prior display.
+            snapshots.current.delete(item.game.gamePk);
+            updateBoard(item.game.gamePk, current => !stillCurrent() ? current : ({
+              ...current,
+              readerPayloadHash: null,
+              pendingReaderAnalysis: true,
+              status: 'running',
+              statusLabel: '資料或模型版本已更新｜重新取得資料中｜保留上一版分析',
+              error: '',
+            }));
+            rebuildTasks.push(rebuildTask);
             return;
           }
           const failure = analysisFailureState(cause);
@@ -3702,7 +3775,7 @@ export default function Home() {
           failed += rebuiltFailed;
         } catch (cause) {
           failed += rebuildTasks.length;
-          setError(`伺服器背景重建暫時失敗：${String(cause?.message || cause)}；已保留上一版分數。`);
+          if (stillCurrent()) setError(`伺服器背景重建暫時失敗：${String(cause?.message || cause)}；已保留上一版分數。`);
         } finally {
           if (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) releaseOperation();
         }
@@ -3734,11 +3807,9 @@ export default function Home() {
       const queued = queuedAnalysisRef.current;
       const queuedForCurrentBoard = queued?.league === currentLeagueRef.current
         && queued?.date === currentDateRef.current;
-      if (queuedForCurrentBoard) {
-        queuedAnalysisRef.current = null;
-        setQueuedAnalysis(null);
-      }
-      if ((fullSlateRecoveryNeeded || queuedForCurrentBoard) && stillCurrent()) void oneClickAnalyze();
+      // Queued manual work is drained by the active render's effect. A
+      // detached old poll must never consume another league's queued click.
+      if (fullSlateRecoveryNeeded && !queuedForCurrentBoard && stillCurrent()) void oneClickAnalyze();
     }
   }
 
@@ -3988,6 +4059,7 @@ export default function Home() {
       })}
       <NbaEntry/>
       <Link prefetch={false} className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球資料與研究</small></Link>
+      <Link prefetch={false} className="sportModuleLink" href="/external-audit"><b>外部來源</b><small>獨立稽核，不改評分</small></Link>
     </nav>
 
     <nav className="mainTabs">

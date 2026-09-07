@@ -154,6 +154,16 @@ assert.equal(hasUnverifiedFirst5Settlement({ ...legacyWithoutSnapshot, resultSna
 for (const side of ['awayFirst5', 'homeFirst5']) {
   assert.equal(hasUnverifiedFirst5Settlement({ ...legacyWithoutSnapshot,
     resultSnapshot: { selectedPeriod: 'FIRST5', [side]: null } }), true, '明確缺少任一方前五局比分須排除');
+  for (const value of ['', ' ', undefined, false, true, [], {}, -1, 0.5, Infinity]) {
+    assert.equal(hasUnverifiedFirst5Settlement({ ...legacyWithoutSnapshot,
+      resultSnapshot: { selectedPeriod: 'FIRST5', first5Complete: true, [side]: value } }), true,
+    'An explicit invalid official score cannot become verified solely through first5Complete');
+  }
+  for (const value of [0, '0', 3, '3']) {
+    assert.equal(hasUnverifiedFirst5Settlement({ ...legacyWithoutSnapshot,
+      resultSnapshot: { selectedPeriod: 'FIRST5', first5Complete: true, [side]: value } }), false,
+    'Genuine numeric official scores remain valid');
+  }
 }
 for (const status of ['OPEN', 'MANUAL_REVIEW', 'VOID', 'CANCELLED']) {
   assert.equal(hasUnverifiedFirst5Settlement({ ...unverifiedFirst5Bets[0], status }), false);
@@ -176,3 +186,14 @@ assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'LAST_WEEK', periodNow).m
 assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'THIS_MONTH', periodNow).map(row => row.id), ['today', 'yesterday', 'last-week', 'this-month']);
 assert.deepEqual(filterBetLedgerByPeriod(periodLedger, 'LAST_MONTH', periodNow).map(row => row.id), ['last-month']);
 assert.equal(BET_PERIODS.map(row => row.id).join(','), 'TODAY,YESTERDAY,THIS_WEEK,LAST_WEEK,THIS_MONTH,LAST_MONTH,ALL');
+
+const midnightBoundary = [
+  { id: 'before', placedAt: '2026-12-31T15:59:59.999Z' },
+  { id: 'after', placedAt: '2026-12-31T16:00:00.000Z' },
+  { id: 'missing', placedAt: null },
+  { id: 'invalid', placedAt: '' },
+];
+assert.deepEqual(filterBetLedgerByPeriod(midnightBoundary, 'TODAY', '2026-12-31T16:00:00Z').map(row => row.id), ['after']);
+assert.deepEqual(filterBetLedgerByPeriod(midnightBoundary, 'LAST_MONTH', '2026-12-31T16:00:00Z').map(row => row.id), ['before']);
+assert.deepEqual(filterBetLedgerByPeriod([{ id: 'missing', placedAt: null }], 'TODAY', '1970-01-01T01:00:00Z'), [],
+  'An absent placement date cannot be interpreted as the Unix epoch');

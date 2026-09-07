@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { analyzeMarkets, buildDistributionSnapshot, independentMinimumWater, MODEL_VERSION, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
+import { MLB_STATE_RUN_MODEL_V13_VERSION } from '../lib/joint-score-v13.js';
 
 const team = (runsPerGame, ops, era, scoringMean, scoringVariance) => ({
   hitting: { available: true, status: 'CONFIRMED', games: 120, runsPerGame, ops },
@@ -45,7 +46,7 @@ assert.equal(snapshot.legacyDistributionUsed, false);
 assert.equal(snapshot.exactDistribution, true);
 assert.equal(snapshot.scenarios.length, 27);
 assert.ok(Math.abs(snapshot.scenarioWeight - 1) < 1e-12);
-assert.match(String(snapshot.runProfileVersion || ''), /v11\.0\.0/);
+assert.equal(snapshot.runProfileVersion, MLB_STATE_RUN_MODEL_V13_VERSION);
 assert.equal(snapshot.stateAwareBottomNinth, true);
 assert.equal(snapshot.stateAwareWalkoff, true);
 assert.equal(snapshot.linkedSegmentPath, true);

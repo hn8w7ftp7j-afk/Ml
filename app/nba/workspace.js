@@ -7,6 +7,7 @@ import { ESPN_NBA_TEAMS } from '../../lib/nba/identity.js';
 import { nbaRequestKey, nbaScreenNeedsRefresh, readNbaScreen, requestNbaScreen } from '../../lib/nba/client-cache.js';
 import styles from './nba.module.css';
 import ShadowPanel from './shadow-panel.js';
+import OnOffPanel from './on-off-panel.js';
 
 const VIEWS = [['schedule', '賽程與賽果'], ['teams', '球隊與球員'], ['injuries', '傷病狀態'], ['history', '歷史研究'], ['sources', '資料與 QA']];
 const typeLabel = value => ({ regular: '例行賽', preseason: '季前賽', postseason: '季後賽', unknown: '類型待確認' }[value] || value || '—');
@@ -62,6 +63,7 @@ function GameDetails({ data, onPlayer }) {
     <section className={styles.panel}><h2>先發與球員單場統計</h2><p className={styles.muted}>{game.completed ? '以下為賽後記錄的實際先發，不能當作賽前已公布的資訊。' : '有來源確認才顯示先發；未公布不以預測名單代替。'}</p>
       {players.length ? <div className={styles.playerGrid}>{players.map(player => <article className={styles.player} key={player.id}><div><strong>{player.name || player.displayName}</strong><span>{teamName(player.teamId === game.home.id ? game.home : game.away)}・{player.position || ''} {player.starterStatus === 'actual' ? '・實際先發' : player.starterStatus === 'reported' ? '・來源回報先發' : '・先發未確認'}</span></div><StatList rows={player.statistics} title="單場表現"/><p>估算 Usage：{number(data.basketball?.players?.find(row => row.playerId === player.id)?.usageEstimate)}%</p><button type="button" onClick={() => onPlayer(player)}>球員球季統計</button></article>)}</div> : <Empty>尚未取得先發及球員統計。</Empty>}
     </section>
+    <OnOffPanel report={data.onOff} players={players}/>
     <section className={styles.panel}><h3>傷病時間核對</h3><p>歷史比賽不套用目前傷病清單。缺少當時已發布的傷病或先發快照時，保留為「未驗證」。</p></section>
   </div>;
 }

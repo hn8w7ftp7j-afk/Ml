@@ -28,3 +28,21 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 
 /* Mobile navigation and game headers must never create a hidden horizontal canvas. */
 @media(max-width:720px){.leagueTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;margin-right:0;padding-right:0}.leagueTabs button{min-width:0;width:100%}.mainTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.mainTabs button{min-width:0;white-space:normal;overflow-wrap:anywhere}.gameHead{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}.gameHead .state{justify-self:start;max-width:100%;white-space:normal;line-height:1.4;overflow-wrap:anywhere;word-break:break-word}}
+.dataAudit { margin: 12px 0; min-width: 0; }
+.dataAudit > summary { line-height: 1.65; }
+.dataAuditRows { display: grid; gap: 10px; margin-top: 12px; }
+.dataAuditRow { padding: 12px; border: 1px solid #334155; border-radius: 10px; min-width: 0; }
+.dataAuditRow p { margin: 6px 0; line-height: 1.6; overflow-wrap: anywhere; font-size: 12px; }
+.dataAuditHeading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.dataAuditStatus { font-size: 12px; color: #cbd5e1; }
+.dataAuditStatus.projected, .dataAuditStatus.missing, .dataAuditStatus.stale { color: #fbbf24; }
+.dataAuditRow pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; max-height: 320px; overflow-y: auto; }
+
+.performanceEvidenceFilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; margin: 12px 0; }
+.performanceEvidenceFilters label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
+.performanceEvidenceFilters select { width: 100%; min-width: 0; min-height: 44px; padding: 8px; color: inherit; background: #111827; border: 1px solid #475569; border-radius: 8px; }
+.performanceEvidenceGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.performanceEvidenceGrid article { min-width: 0; border: 1px solid #334155; padding: 12px; border-radius: 8px; }
+.performanceEvidenceGrid strong, .performanceEvidenceGrid small, .scorePerformanceBetRow small { overflow-wrap: anywhere; }
+.performanceEvidenceGrid article > small { display: block; margin-top: 6px; }
+.performanceAttribution p { font-size: 13px; line-height: 1.6; }
