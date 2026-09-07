@@ -1341,12 +1341,15 @@ function AnalysisDataAudit({ audit }) {
     <div className="dataAuditRows">{audit.rows.map(row => <div className="dataAuditRow" key={row.id || row.key}>
       <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
       <p>{explanations[row.status]}</p>
+      {row.temporalNote && <p>{row.temporalNote}</p>}
       <p><b>模型使用：</b>{row.usageStatus === 'UNVERIFIED' ? '尚無逐欄使用紀錄' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || '未進入計算／僅供診斷'}{row.status !== 'observed' && row.usedInMean ? '（包含既有替代值）' : ''}</p>
       <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}｜統計截至 {row.asOf || '未提供'}</p>
       {row.coverage && <p><b>覆蓋：</b>{row.category === 'lineup' ? `名單 ${row.coverage.identityCount ?? '未知'}/${row.coverage.expectedCount || 9} 人；統計 ${row.coverage.metricCoverage == null ? '未確認' : `${Math.round(row.coverage.metricCoverage * 100)}%`}` : `有效名單 ${row.coverage.rosterCount ?? '未知'} 人；名單完整性${row.coverage.rosterComplete ? '已確認' : '未確認'}`}</p>}
+      {row.category === 'bullpen' && <p><b>能力統計：</b>{row.coverage?.qualityCount ?? '未確認'}/{row.coverage?.rosterCount ?? '未知'} 人完整{row.players?.some(player => !player.qualityComplete) ? `；缺項球員：${row.players.filter(player => !player.qualityComplete).map(player => player.name || player.id).join('、')}` : ''}。可出賽程度仍是依近期用量估計。</p>}
       {row.substitutions?.length > 0 && <p><b>替代依據：</b>此項含替代或估計處理，展開明細可查原始依據。</p>}
-      <details><summary>身分、數據與來源明細</summary><pre>{JSON.stringify({ identity: row.identity, coverage: row.coverage, metrics: row.metrics, sources: row.sources, substitutions: row.substitutions, statusReason: row.statusReason, usage: row.usage }, null, 2)}</pre></details>
+      <details><summary>身分、數據與來源明細</summary><pre>{JSON.stringify({ identity: row.identity, coverage: row.coverage, metrics: row.metrics, players: row.players, sources: row.sources, substitutions: row.substitutions, exclusions: row.exclusions, diagnostic: row.diagnostic, modelStatuses: row.modelStatuses, statusReason: row.statusReason, usage: row.usage }, null, 2)}</pre></details>
     </div>)}</div>
+    {audit.supportingData?.length > 0 && <details className="dataAuditRow"><summary>本季、近期與環境資料的取得及使用</summary><p>列出統計期間、實際取得欄位與模型使用。近期打擊保留小樣本收縮；整隊投球與主審身分另作查核，不能當成已啟用的得分效果。以下項目未併入上方核心人員數量。</p><pre>{JSON.stringify(audit.supportingData, null, 2)}</pre></details>}
     {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><p>此處只列模型是否使用，不代表來源完整或功能已通過歷史驗證。</p><pre>{JSON.stringify(audit.otherUsage, null, 2)}</pre></details>}
   </details>;
 }
