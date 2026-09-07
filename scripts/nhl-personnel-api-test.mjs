@@ -64,14 +64,14 @@ function mockClubStats(side) {
   return result;
 }
 function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } }); }
-function installFetch({ html = mockArticle(), articleStatus = 200, landing = mockLanding(), transformRoster, transformStats } = {}) {
+function installFetch({ html = mockArticle(), articleStatus = 200, articleLocation = null, landing = mockLanding(), transformRoster, transformStats } = {}) {
   requests.length = 0;
   globalThis.fetch = async (input, options) => {
     const url = String(input);
     assert.ok(url.startsWith('https://api-web.nhle.com/') || url === facts.sourceUrl, `Unexpected network destination: ${url}`);
     requests.push({ url, method: options?.method || 'GET', redirect: options?.redirect });
     if (url === `https://api-web.nhle.com/v1/gamecenter/${facts.game.gameId}/landing`) return json(landing);
-    if (url === facts.sourceUrl) return new Response(articleStatus === 200 ? html : 'local upstream failure fixture', { status: articleStatus, headers: { 'Content-Type': 'text/html' } });
+    if (url === facts.sourceUrl) return new Response(articleStatus === 200 ? html : 'local upstream failure fixture', { status: articleStatus, headers: { 'Content-Type': 'text/html', ...(articleLocation ? { Location: articleLocation } : {}) } });
     for (const side of ['away', 'home']) {
       if (url === facts[side].rosterSource.url) return json(transformRoster ? transformRoster(mockRoster(side), side) : mockRoster(side));
       if (url === facts[side].clubSource.url) return json(transformStats ? transformStats(mockClubStats(side), side) : mockClubStats(side));
@@ -181,6 +181,17 @@ try {
       assert.equal(requests.filter(row => row.url === facts.sourceUrl).length, 1);
     });
   }
+
+  await test('retired season article is explicit absence, not temporary failure or another season lineup', async () => {
+    for (const articleStatus of [302, 404]) {
+      installFetch({ articleStatus, articleLocation: articleStatus === 302 ? '/errors/not-found' : null });
+      const result = await body(personnelQuery, 503);
+      assert.equal(result.code, 'NHL_PERSONNEL_ARTICLE_NOT_FOUND');
+      assert.equal(result.upstreamStatus, articleStatus); assert.match(result.error, /文章不存在/);
+      assert.doesNotMatch(result.error, /暫時/); assert.equal(result.personnel, undefined);
+      assert.equal(requests.length, 2); assert.equal(requests.filter(row => row.url.includes('/roster/')).length, 0);
+    }
+  });
 
   await test('an identity mismatch is 422 and cannot inherit previously cached personnel', async () => {
     const landing = mockLanding(); landing.id = 2025030415;
