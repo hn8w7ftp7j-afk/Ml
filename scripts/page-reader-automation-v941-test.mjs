@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.14', 'data integrity, NBA checkpoint and NHL personnel use one shared release version');
+assert.equal(APP_VERSION, '11.9.15', 'data integrity, NBA checkpoint and NHL personnel use one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');

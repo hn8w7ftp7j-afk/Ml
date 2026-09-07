@@ -19,6 +19,24 @@ const baseBet = {
 assert.equal(sameBetPrice(baseBet, { pick: '小8+50', water: 0.94 }), true);
 assert.equal(sameBetPrice(baseBet, { pick: '小8+50', water: 0.93 }), false);
 
+for (const missingWater of [null, undefined, '', '  ', false, true, [], {}, NaN, Infinity]) {
+  const missing = { ...baseBet, water: missingWater };
+  const zero = { ...baseBet, water: 0 };
+  for (const [bet, row] of [[missing, zero], [zero, missing], [missing, missing]]) {
+    assert.equal(sameBetPrice(bet, row), false, 'missing or nonnumeric water cannot equal a reported zero or another missing value');
+    const comparison = compareBetPrice({ bet, row, game });
+    assert.equal(comparison.comparable, false, 'missing water must not enter payoff comparison');
+    assert.equal(comparison.exact, false);
+    assert.equal(comparison.combinedStatus, 'UNKNOWN');
+  }
+}
+for (const zeroWater of [0, '0', ' 0 ']) {
+  const zeroBet = { ...baseBet, water: zeroWater };
+  const zeroRow = { ...baseBet, water: 0 };
+  assert.equal(sameBetPrice(zeroBet, zeroRow), true, 'genuine numeric zero remains a reported value');
+  assert.equal(compareBetPrice({ bet: zeroBet, row: zeroRow, game }).exact, true);
+}
+
 const worseCurrent = compareBetPrice({
   bet: baseBet,
   row: { market: '全場大小', pick: '小8+60', water: 0.94 },
