@@ -23,6 +23,9 @@ for (const league of ['CPBL', 'NPB', 'KBO']) {
   assert.equal(body.verified, false);
 }
 let last;
+const sx = await POST(request({provider:'SX_PUBLIC',league:'CPBL',date:'2026-09-07'}));
+assert.equal((await sx.json()).status,'LEAGUE_NOT_MAPPED');
+assert.equal((await POST(request({provider:'INVALID',league:'CPBL',date:'2026-09-07'}))).status,400);
 for (let i = 0; i < 13; i++) last = await POST(request({ league: 'NPB', date: '2026-09-07' }));
 assert.equal(last.status, 429);
 console.log('external-audit route: authentication, origin, input validation, missing settings and rate limit passed');
