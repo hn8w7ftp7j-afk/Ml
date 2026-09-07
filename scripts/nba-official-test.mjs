@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { parseNbaPage, findOfficialGame, crosswalkOfficialGame, loadOfficialNbaEvidence } from '../lib/nba/official.js';
+const raw = JSON.parse(fs.readFileSync(new URL('./fixtures/nba-official-0022500003.json', import.meta.url)));
+const espn = JSON.parse(fs.readFileSync(new URL('./fixtures/nba-onoff-401809234.json', import.meta.url)));
+const card = findOfficialGame(raw.schedule, espn.game, '2025-10-22');
+const verify = (official = raw.game, players = espn.players) => crosswalkOfficialGame(official, card, espn.game, players);
+const good = verify(); assert.equal(good.status, 'ready'); assert.equal(good.players.length, 26); assert.equal(good.officialGameId, '0022500003'); assert.equal(good.pregameLineupVerified, false);
+assert.equal(good.players.find(p => p.name === 'Jarrett Allen').officialSourceId, '1628386');
+assert.throws(() => parseNbaPage('<html>Access denied</html>'));
+assert.throws(() => findOfficialGame(raw.schedule, espn.game, '2025-10-23'));
+assert.throws(() => findOfficialGame({ ...raw.schedule, gameCardFeed: { modules: [raw.schedule.gameCardFeed.modules[0], raw.schedule.gameCardFeed.modules[0]] } }, espn.game, '2025-10-22'));
+for (const mutate of [g => g.gameId = '0022500004', g => g.gameTimeUTC = '2025-10-23T23:00:00Z', g => g.homeTeam.score++, g => g.homeTeam.periods[0].score++, g => g.homeTeam.teamTricode = 'CLE', g => g.homeTeam.players.push(g.homeTeam.players[0]), g => g.homeTeam.players[0].statistics.points++]) { const bad = structuredClone(raw.game); mutate(bad); assert.throws(() => verify(bad)); }
+assert.throws(() => verify(raw.game, [...espn.players, espn.players[0]]));
+const absent = structuredClone(raw.game); absent.homeTeam.players.pop(); assert.equal(verify(absent).status, 'partial');
+const blocked = await loadOfficialNbaEvidence(espn.game, espn.players, { fetchImpl: async () => new Response('denied', { status: 403 }) }); assert.equal(blocked.status, 'unavailable'); assert.equal(blocked.players.length, 0);
+let calls = 0;
+const liveShape = await loadOfficialNbaEvidence(espn.game, espn.players, { fetchImpl: async url => { calls++; const value = url.includes('/games?') ? raw.schedule : { game: raw.game }; return new Response(`<script id="__NEXT_DATA__">${JSON.stringify({ props: { pageProps: value } })}</script>`); } });
+assert.equal(liveShape.status, 'ready'); assert.equal(calls, 2); assert.equal(liveShape.sources.length, 2); assert.ok(liveShape.sources.every(s => /^[a-f0-9]{64}$/.test(s.hash) && s.publishedAt === null));
+console.log('NBA official crosswalk: real 26-player match, mismatch, absence, source and temporal tests passed');

@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NBA_MODULE_VERSION } from '../../lib/nba/config.js';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
-import { ESPN_NBA_TEAMS } from '../../lib/nba/identity.js';
+import { ESPN_NBA_TEAMS, validDate } from '../../lib/nba/identity.js';
 import { nbaRequestKey, nbaScreenNeedsRefresh, readNbaScreen, requestNbaScreen } from '../../lib/nba/client-cache.js';
 import styles from './nba.module.css';
 import ShadowPanel from './shadow-panel.js';
 import OnOffPanel from './on-off-panel.js';
+import OfficialPanel from './official-panel.js';
+import PregamePanel from './pregame-panel.js';
+import VerifiedResearchPanel from './verified-research-panel.js';
 
 const VIEWS = [['schedule', '賽程與賽果'], ['teams', '球隊與球員'], ['injuries', '傷病狀態'], ['history', '歷史研究'], ['sources', '資料與 QA']];
 const typeLabel = value => ({ regular: '例行賽', preseason: '季前賽', postseason: '季後賽', unknown: '類型待確認' }[value] || value || '—');
@@ -63,8 +66,10 @@ function GameDetails({ data, onPlayer }) {
     <section className={styles.panel}><h2>先發與球員單場統計</h2><p className={styles.muted}>{game.completed ? '以下為賽後記錄的實際先發，不能當作賽前已公布的資訊。' : '有來源確認才顯示先發；未公布不以預測名單代替。'}</p>
       {players.length ? <div className={styles.playerGrid}>{players.map(player => <article className={styles.player} key={player.id}><div><strong>{player.name || player.displayName}</strong><span>{teamName(player.teamId === game.home.id ? game.home : game.away)}・{player.position || ''} {player.starterStatus === 'actual' ? '・實際先發' : player.starterStatus === 'reported' ? '・來源回報先發' : '・先發未確認'}</span></div><StatList rows={player.statistics} title="單場表現"/><p>估算 Usage：{number(data.basketball?.players?.find(row => row.playerId === player.id)?.usageEstimate)}%</p><button type="button" onClick={() => onPlayer(player)}>球員球季統計</button></article>)}</div> : <Empty>尚未取得先發及球員統計。</Empty>}
     </section>
+    <OfficialPanel key={game.id} game={game}/>
+    <PregamePanel key={`pregame:${game.id}`} game={game}/>
     <OnOffPanel report={data.onOff} players={players}/>
-    <section className={styles.panel}><h3>傷病時間核對</h3><p>歷史比賽不套用目前傷病清單。缺少當時已發布的傷病或先發快照時，保留為「未驗證」。</p></section>
+    <section className={styles.panel}><h3>傷病時間核對</h3><p>歷史比賽不套用目前傷病清單。缺少當時已發布的傷病或先發快照時，保留為「未驗證」。</p>{data.injuryArchive && <><p>已補取得官方歷史報告；不是系統當時保存的賽前快照，未加入模型。</p><p>報告頁首：{data.injuryArchive.source.reportHeader}（時區尚未獨立確認）・取得 {data.injuryArchive.source.fetchedAt}</p><a href={data.injuryArchive.source.url} target="_blank" rel="noreferrer">查看官方傷病 PDF 第 6–7 頁 ↗</a><details><summary>官方報告 {data.injuryArchive.rows.length} 筆狀態</summary>{data.injuryArchive.rows.map(row => <p key={`${row.teamId}:${row.name}`}>{row.name}：{row.status}・{row.playerId || '球員 ID 尚未對應'}</p>)}<p className={styles.mono}>{data.injuryArchive.source.hash}</p></details></>}</section>
   </div>;
 }
 
@@ -84,6 +89,7 @@ function Research({ result, seasonType, onOpen }) {
   const report = result.research;
   const games = (result.data.games || []).filter(game => game.seasonType === seasonType);
   return <div className={styles.sections}>
+    <VerifiedResearchPanel/>
     <ShadowPanel games={games} teamId={result.data.team?.id} seasonType={seasonType}/>
     <section className={styles.panel}><div className={styles.sectionHead}><h2>歷史統計基準</h2><span className={styles.badge}>Shadow・{typeLabel(seasonType)}</span></div>
       <p>使用已結束比賽，依時間順序檢查歷史得分基準。每次驗證只使用更早台灣日期的比賽；季前、例行與季後賽分開。</p>
@@ -124,7 +130,7 @@ export default function NbaWorkspace({ onClose }) {
     mounted.current = true;
     let preferences;
     try { preferences = JSON.parse(sessionStorage.getItem('sports-data:nba:v1:preferences') || 'null'); } catch { /* optional */ }
-    setDate(preferences?.date && /^\d{4}-\d{2}-\d{2}$/.test(preferences.date) ? preferences.date : taipeiDate());
+    setDate(validDate(preferences?.date) ? preferences.date : taipeiDate());
     setSeason(preferences?.season || String(new Date().getUTCFullYear()));
     setTeamId(preferences?.teamId || '');
     setReady(true);
@@ -189,7 +195,7 @@ export default function NbaWorkspace({ onClose }) {
     <header className={styles.header}><div><p className={styles.eyebrow}>NBA・BASKETBALL DATA</p><h1>NBA 籃球資料</h1><p>賽程、球員狀態與歷史統計，同一個網站接著看。</p></div><div className={styles.headerActions}>{onClose ? <button type="button" onClick={onClose}>返回原本聯盟</button> : <a href="/">返回網站</a>}<span>{NBA_MODULE_VERSION}</span></div></header>
     <nav className={styles.tabs} aria-label="NBA 資料頁籤">{VIEWS.map(([id, label]) => <button type="button" key={id} aria-pressed={topView === id} className={topView === id ? styles.active : ''} onClick={() => setView(id)}>{label}</button>)}</nav>
     <div className={styles.toolbar}>
-      {view === 'schedule' && <><label>台灣日期<input type="date" value={date} onChange={event => { if (event.target.value) setDate(event.target.value); }}/></label><button type="button" onClick={() => setDate(taipeiDate())}>今天</button></>}
+      {view === 'schedule' && <><label>台灣日期<input type="date" value={date} onInput={event => { if (validDate(event.currentTarget.value)) setDate(event.currentTarget.value); }} onChange={event => { if (validDate(event.target.value)) setDate(event.target.value); }}/></label><button type="button" onClick={() => setDate(taipeiDate())}>今天</button></>}
       {(view === 'team' || view === 'history') && <><label>球隊<select value={teamId} onChange={event => setTeamId(event.target.value)}><option value="">選擇球隊</option>{teams.length ? teams.map(team => <option key={team.id} value={team.sourceId || shortId(team.id)}>{teamName(team)}</option>) : teamId && <option value={teamId}>已選球隊 {teamId}</option>}</select></label><label>球季<select value={season} onChange={event => setSeason(event.target.value)}>{years.map(year => <option key={year} value={year}>{year - 1}–{String(year).slice(-2)}</option>)}</select></label>{view === 'history' && <label>賽事類型<select value={seasonType} onChange={event => setSeasonType(event.target.value)}><option value="regular">例行賽</option><option value="preseason">季前賽（獨立）</option><option value="postseason">季後賽（獨立）</option></select></label>}</>}
       {view === 'game' && <button type="button" onClick={() => setView('schedule')}>← 返回賽程</button>}
       {view === 'player' && <><button type="button" onClick={() => setView('teams')}>← 返回球隊</button><label>球季<select value={season} onChange={event => setSeason(event.target.value)}>{years.map(year => <option key={year} value={year}>{year - 1}–{String(year).slice(-2)}</option>)}</select></label><label>賽事類型<select value={seasonType} onChange={event => setSeasonType(event.target.value)}><option value="regular">例行賽</option><option value="preseason">季前賽（獨立）</option><option value="postseason">季後賽（獨立）</option></select></label></>}
