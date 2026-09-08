@@ -10,6 +10,7 @@ import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
 import { analysisSourceStatusDisplay } from '../lib/npb-identity-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
 import NbaEntry from './nba/entry.js';
+import GameAnalysisCopy from './game-analysis-copy.js';
 import Link from 'next/link';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
 import {
@@ -1401,6 +1402,7 @@ function BullpenEvidence({ row, league }) {
 }
 
 function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
+  const analysisCardRef = useRef(null);
   const displayedGame = analysisDisplayGame(item);
   const displayedItem = { ...item, game: displayedGame };
   const gamePrestart = gameIsPrestartNow(item.game, now);
@@ -1473,11 +1475,12 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
       ? `客 ${away.toFixed(2)}／主 ${home.toFixed(2)}／合計 ${(away + home).toFixed(2)}`
       : '資料不足';
   };
-  return <section className="gameCard">
+  return <section className="gameCard" ref={analysisCardRef}>
     <div className="gameHead">
       <div><h2>{matchup(displayedGame)}</h2><p>{localTime(displayedGame.gameDate)}｜{analysisStarterDisplay(displayedItem, 'away')} 對 {analysisStarterDisplay(displayedItem, 'home')}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
+    <GameAnalysisCopy key={`${displayedGame.leagueId || displayedGame.league}:${displayedGame.gamePk}:${pitPersistence?.snapshotId || analysis.inputHash || analysis.analysisAsOf || 'pending'}`} cardRef={analysisCardRef} matchup={matchup(displayedGame)} available={Object.keys(analysis).length > 0} receipt={{ game: displayedGame, analysis, persistence: pitPersistence, appVersion: APP_VERSION, retained: preservingPreviousReaderAnalysis || item.restoredFromCache === true }}/>
     {shadowMode && <div className="sourceBanner shadowBanner"><strong>🧪 {item.game.leagueId || item.game.league || 'MLB'} 聯合比分影子模型</strong><span>{preservingPreviousReaderAnalysis
       ? `Reader最新已開 ${openMarketCount}/4 市場｜保留上一版 ${scoredDirectionCount}/${expectedDirectionCount} 個分數與排序｜新結果完成後更新`
       : `已開 ${openMarketCount}/4 市場｜應評 ${expectedDirectionCount} 方向｜已評 ${scoredDirectionCount}/${expectedDirectionCount}｜進影子排名 ${rankingDirectionCount}；依固定S分數分析與排序`}</span></div>}
