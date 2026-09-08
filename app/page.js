@@ -1,4 +1,5 @@
 'use client';
+import { runExplanationDisplay, externalVerificationExplanation } from '../lib/mlb-diagnostic-display-v1.js';
 
 import { analysisDisplayGame, analysisGameIdentity, sameAnalysisGame } from '../lib/analysis-game-identity-v1.js';
 
@@ -1307,6 +1308,7 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, action, now, i
       <div className="scoreMeta"><strong>模型EV W {signedPct(modelEV)}｜穩健EV R {signedPct(robustEV)}</strong>{robustEV != null && robustEV <= 0 ? '｜觀察／不排名' : ''}</div>
       <div className={`qaLine ${qaLabel === 'BLOCK' ? 'pending' : ''}`}>資料／數學 QA：{qaLabel}{qaReason ? `（${qaReason}）` : ''}</div>
       <div className={`qaLine ${externalAuditFresh ? '' : 'pending'}`}>{externalAuditText}｜只作驗證，不改W/R</div>
+      {!externalAuditFresh && <details className="details"><summary>外部驗證原因</summary><p>{externalVerificationExplanation(row?.marketVerification, externalAuditFresh)}</p></details>}
       <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}</div>
       {inactiveNotice && <div className="scoreMeta">實際下注紀錄狀態：{inactiveNotice}</div>}
       <div className="scoreMeta">{probabilityDetail}</div>
@@ -1370,6 +1372,7 @@ function AnalysisDataAudit({ audit, persistence }) {
       <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
       <p>{explanations[row.status]}</p>
       {row.temporalNote && <p>{row.temporalNote}</p>}
+      {row.category === 'starter' && Number.isFinite(row.inningsEstimate?.value ?? row.metrics?.expectedInnings) && <p><b>預估投球局數：</b>{(row.inningsEstimate?.value ?? row.metrics.expectedInnings).toFixed(2)} 局（推估）｜{row.inningsEstimate?.note || '歷史資料取得狀態不代表未來出賽局數已確認；此舊紀錄未保存推估分支明細。'}</p>}
       <p><b>模型使用：</b>{row.usageStatus === 'UNVERIFIED' ? '尚無逐欄使用紀錄' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || '未進入計算／僅供診斷'}{row.status !== 'observed' && row.usedInMean ? '（包含既有替代值）' : ''}</p>
       <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}｜統計截至 {row.asOf || '未提供'}</p>
       {row.coverage && <p><b>覆蓋：</b>{row.category === 'lineup' ? `名單 ${row.coverage.identityCount ?? '未知'}/${row.coverage.expectedCount || 9} 人；統計 ${row.coverage.metricCoverage == null ? '未確認' : `${Math.round(row.coverage.metricCoverage * 100)}%`}` : `有效名單 ${row.coverage.rosterCount ?? '未知'} 人；名單完整性${row.coverage.rosterComplete ? '已確認' : '未確認'}`}</p>}
@@ -1377,7 +1380,7 @@ function AnalysisDataAudit({ audit, persistence }) {
       {row.category === 'bullpen' && <p><b>近期用球紀錄：</b>{row.coverage?.usage ? `完整 ${row.coverage.usage.completeGames}/${row.coverage.usage.expectedGames} 場；取得 ${row.coverage.usage.fetchedGames} 場` : '未保存逐場覆蓋證據'}{row.coverage?.usage?.missingGames?.length > 0 ? `；缺項：${row.coverage.usage.missingGames.map(game => `${game.date || game.gamePk}${game.missingPlayers?.length ? `（${game.missingPlayers.map(player => player.name || player.id).join('、')}用球數）` : '（紀錄未確認）'}`).join('、')}` : ''}。缺值不代表 0 球或充分休息。</p>}
       {row.featureDefinition && <p><b>指數定義：</b>{row.featureDefinition.description}｜基準 OPS {row.featureDefinition.baselineOps ?? '未提供'}</p>}
       {row.substitutions?.length > 0 && <p><b>替代依據：</b>此項含替代或估計處理，展開明細可查原始依據。</p>}
-      <details><summary>身分、數據與來源明細</summary><pre>{JSON.stringify({ featureDefinition: row.featureDefinition, evidenceStatus: row.evidenceStatus, identity: row.identity, coverage: row.coverage, metrics: row.metrics, modelUsageInputs: row.modelUsageInputs, players: row.players, sources: row.sources, substitutions: row.substitutions, exclusions: row.exclusions, diagnostic: row.diagnostic, modelStatuses: row.modelStatuses, statusReason: row.statusReason, usage: row.usage }, null, 2)}</pre></details>
+      <details><summary>身分、數據與來源明細</summary><pre>{JSON.stringify({ inningsEstimate: row.inningsEstimate, featureDefinition: row.featureDefinition, evidenceStatus: row.evidenceStatus, identity: row.identity, coverage: row.coverage, metrics: row.metrics, modelUsageInputs: row.modelUsageInputs, players: row.players, sources: row.sources, substitutions: row.substitutions, exclusions: row.exclusions, diagnostic: row.diagnostic, modelStatuses: row.modelStatuses, statusReason: row.statusReason, usage: row.usage }, null, 2)}</pre></details>
     </div>)}</div>
     {audit.supportingData?.length > 0 && <details className="dataAuditRow"><summary>本季、近期與環境資料的取得及使用</summary><p>列出統計期間、實際取得欄位與模型使用。近期打擊保留小樣本收縮；整隊投球與主審身分另作查核，不能當成已啟用的得分效果。以下項目未併入上方核心人員數量。</p><pre>{JSON.stringify(audit.supportingData, null, 2)}</pre></details>}
     {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><p>此處只列模型是否使用，不代表來源完整或功能已通過歷史驗證。</p><pre>{JSON.stringify(audit.otherUsage, null, 2)}</pre></details>}
@@ -1469,7 +1472,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
     {(sourceStatusText || provenanceText) && <div className="sourceBanner dataStatusBanner"><strong>上游資料狀態</strong><span>{sourceStatusText || provenanceText}</span></div>}
     {analysisHasCalculatedDirections(item.customData) && <AnalysisDataAudit audit={analysis.dataAudit} persistence={item.customData?.pitPersistence}/>}
     {(preservingPreviousReaderAnalysis || item.restoredFromCache === true) && <div className="sourceBanner shadowBanner"><strong>保留的分析版本</strong><span>分析時間：{localTime(analysis.analysisAsOf || analysis.createdAt)}｜資料截至：{localTime(analysis.dataAsOf)}｜盤口時間：{localTime(analysis.lineAsOf)}｜模型：{analysis.modelVersion || '未記錄'}｜Reader：{(analysis.results || []).find(row => row.readerVersion)?.readerVersion || '未記錄'}｜此處時間與版本屬於保留結果</span></div>}
-    {analysis.runExplanation && <details className="details"><summary>得分計算過程與局部敏感度</summary><p>以下是既定局數、終局處理前的得分中心。敏感度不等於特徵貢獻，也不是重新估算的 EV。</p><pre>{JSON.stringify(analysis.runExplanation, null, 2)}</pre></details>}
+    {analysis.runExplanation && <details className="details"><summary>得分計算過程與局部敏感度</summary><p>以下是既定局數、終局處理前的得分中心。敏感度不等於特徵貢獻，也不是重新估算的 EV。OPS 同時是左右拆分倍率的分母；固定拆分資料時，OPS 單項斜率可能為負。</p><pre>{JSON.stringify(runExplanationDisplay(analysis.runExplanation), null, 2)}</pre></details>}
     {analysis.distributionQA && <details className="details"><summary>比分矩陣分期間 QA</summary><p>列出機率總和、平局與勝分差；終局矩陣檢查不等於逐路徑合法性或歷史準確度驗證。</p><pre>{JSON.stringify(analysis.distributionQA, null, 2)}</pre></details>}
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT快照保存已確認（不等於資料全數驗證）' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}</span></div>}
