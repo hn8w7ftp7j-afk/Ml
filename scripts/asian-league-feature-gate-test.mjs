@@ -1,3 +1,4 @@
+import { auditSavedAsianPit } from '../lib/saved-asian-pit-audit.js';
 import assert from 'node:assert/strict';
 import { buildAsianGameContext } from '../lib/asian-baseball.js';
 import { analyzeMarkets, buildDistributionSnapshot } from '../lib/analysis-v11.js';
@@ -156,6 +157,17 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(distribution.scenarios.length, 27);
   const analysis = analyzeMarkets({ context, markets: eightMarkets(context.game), settings: { rebateRate: 0.015 } });
   assert.equal(analysis.results.length, 8, `${league}必須由同一份獨立分布計算八方向`);
+  const bundle = { frozenContext: context, marketAnalysis: { ...analysis, suppliedMarkets: eightMarkets(context.game) }, distributionSnapshot: distribution, distributionHash: distribution.distributionHash, gameIdentity: context.game };
+  const frozen = JSON.stringify(bundle);
+  const audit = auditSavedAsianPit(bundle);
+  assert.equal(audit.currentEngineDistributionMatches, true);
+  assert.equal(audit.matrixReplay, 'MATCH');
+  assert.equal(audit.pointInTimeValidity.status, 'PENDING');
+  assert.equal(audit.originalEngineReplay, 'UNAVAILABLE_NO_ARCHIVED_ASIAN_ENGINE');
+  assert.equal(JSON.stringify(bundle), frozen);
+  const noSettings = structuredClone(bundle); delete noSettings.marketAnalysis.calculationSettings;
+  assert.equal(auditSavedAsianPit(noSettings).status, 'SAVED_CALCULATION_SETTINGS_MISSING');
+
   assert.equal(new Set(analysis.results.map(row => row.distributionId)).size, 1);
   for (const row of analysis.results) {
     assert.ok(Number.isFinite(row.weightedEV), `${league} ${row.pick} W必須可計算`);
