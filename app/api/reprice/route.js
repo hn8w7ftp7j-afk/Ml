@@ -12,6 +12,8 @@ import {
 } from '../../../lib/direction-slots-v1.js';
 import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
+import { verifyReferenceReceipt } from '../../../lib/market-integrity-v1.js';
+import { replayEnvironmentEvidence } from '../../../lib/replay-environment-evidence.js';
 import {
   attestIncomingMarketRows,
   normalizeSignedReaderProvenance,
@@ -272,7 +274,9 @@ export async function POST(request) {
     const suppliedMarkets = await prepareMarkets(league, game, body.markets, MAX_SUPPLIED_MARKET_ROWS);
     const readerProvenance = await verifiedReaderProvenance(league, game, body.readerProvenance, suppliedMarkets);
     const verificationMarkets = await prepareMarkets(league, game, body.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS);
-    const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
+    const acquisition = await verifyReferenceReceipt(body.referenceEvidence, league, game);
+    const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets).map(row => ({ ...row,
+      marketVerification: { ...row.marketVerification, acquisition } }));
     const previousMarkets = await prepareMarkets(league, game, body.previousMarkets, MAX_PREVIOUS_MARKET_ROWS);
     const marketCoverage = assessEightDirectionMarketCoverage(markets, game);
     const activeMarkets = marketCoverage.validRows;
@@ -346,6 +350,7 @@ export async function POST(request) {
         || analysisAsOf,
       analysisAsOf, snapshotId: fingerprints.inputHash, pitSnapshotId,
     };
+    finalized.replayEnvironment = replayEnvironmentEvidence(finalized, league, versions);
     const unsignedRepriceSnapshot = {
       ...compactRepriceSnapshot(snapshot),
       priceFingerprint: fingerprints.priceFingerprint,

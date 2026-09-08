@@ -50,6 +50,7 @@ jobs:
       - run: npm run test:pit-audit
       - run: npm run test:asian-evidence
       - run: npm run test:external-audit
+      - run: npm run test:evidence-completion
       - run: npm test
       - run: npm run build
       - run: node scripts/package-reader.mjs release

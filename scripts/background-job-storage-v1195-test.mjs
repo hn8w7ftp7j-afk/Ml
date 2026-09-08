@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
 import * as cache from '../lib/analysis-board-cache-v1.js';
 import * as receipts from '../lib/analysis-completed-receipt-v1.js';
 import { analysisHasCalculatedDirections } from '../lib/analysis-display-state-v116.js';
@@ -68,7 +69,7 @@ const verificationMarkets = Array.from({ length: 120 }, (_, index) => ({
 }));
 
 function sandbox(storage = new MemoryStorage()) {
-  const context = vm.createContext({ ...cache, ...receipts, analysisHasCalculatedDirections,
+  const context = vm.createContext({ ...cache, ...receipts, analysisHasCalculatedDirections, referenceGameMap,
     allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, LEAGUE_IDS, normalizeLeagueId,
     Date, Map, Set, Number, String, Array, JSON, encodeURIComponent,
     backgroundJobsInMemory: new Map(), supersededBackgroundRuns: new Set(), window: { localStorage: storage },

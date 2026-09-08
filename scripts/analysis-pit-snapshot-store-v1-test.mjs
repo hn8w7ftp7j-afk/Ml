@@ -83,8 +83,10 @@ const analysis = {
   lineAsOf: '2099-08-25T08:02:00.000Z',
   analysisAsOf: '2099-08-25T08:03:00.000Z',
   expectedRuns: { full: { away: 4.1, home: 4.2 } },
+  replayEnvironment: { version: 'REPLAY-ENVIRONMENT-EVIDENCE-v1', sourceArtifact: { content: 'fixture-only', sourceSha256: hash('1') }, modelValidation: { status: 'NOT_REGISTERED' } },
   dataAudit: { schemaVersion: 'analysis-data-audit-v2', rows: [{ key: 'away.starter', roleEvidence: { starterSampleStatus: 'NO_STARTER_SAMPLE', inningsFallback: 3 }, modelBattingInputs: [] }] },
-  results: [{ market: '全場大小', pick: '大8平', weightedEV: 0.02, robustEV: 0.01 }],
+  results: [{ market: '全場大小', pick: '大8平', weightedEV: 0.02, robustEV: 0.01,
+    marketVerification: { acquisition: { status: 'SIGNATURE_VERIFIED', attempts: [{ reasonCode: 'QUOTA_EXHAUSTED' }] } } }],
 };
 const distributionSnapshot = {
   distributionId: analysis.distributionId,
@@ -191,6 +193,8 @@ assert.equal(typeof first.frozenContextPayload.data, 'string', '新內嵌PIT pay
 assert.equal(Object.hasOwn(first.frozenContextPayload, 'value'), false, '新payload不得再把可重排物件直接寫入JSONB');
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).results[0].pick, '大8平');
 assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).dataAudit, analysis.dataAudit, 'full evidence receipt survives immutable PIT persistence, not only its quality summary');
+assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).replayEnvironment, analysis.replayEnvironment, 'replay contents survive exact PIT payload round trip');
+assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).results[0].marketVerification, analysis.results[0].marketVerification, 'external failure evidence survives exact PIT payload round trip');
 assert.deepEqual(decodeAnalysisPitPayload(first.marketAnalysisPayload).directionSlots, [], '舊輸入仍必須有可重播的八方向槽位容器');
 assert.equal(decodeAnalysisPitPayload(first.marketAnalysisPayload).marketCoverage, null);
 assert.equal(decodeAnalysisPitPayload(first.distributionPayload).distributionHash, analysis.distributionHash);
