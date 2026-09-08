@@ -1,5 +1,5 @@
 'use client';
-import { runExplanationDisplay, externalVerificationExplanation } from '../lib/mlb-diagnostic-display-v1.js';
+import { runExplanationDisplay, externalVerificationExplanation, sourceStatusLabel, bullpenEvidenceDisplay } from '../lib/mlb-diagnostic-display-v1.js';
 
 import { analysisDisplayGame, analysisGameIdentity, sameAnalysisGame } from '../lib/analysis-game-identity-v1.js';
 
@@ -1365,6 +1365,7 @@ function AnalysisDataAudit({ audit, persistence }) {
   return <details className="details dataAudit">
     <summary>核心人員資料與模型使用｜實際 {summary.observed || 0}・替代 {summary.projected || 0}・缺失 {summary.missing || 0}・舊資料 {summary.stale || 0}</summary>
     {snapshotLink}
+    <p className="muted">保存確認、快照完整性、比分分布與 W/R 重播、原始來源核驗、歷史預測成效是不同查核。此頁不因保存成功而宣告其他項目通過；各項結果請見快照稽核。高 EV 與重播一致均不代表勝率已驗證可靠。</p>
     <p className="muted">{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'} 各項詳細覆蓋情形如下。</p>
     {sourceTimeAudit && <div className="dataAuditRow"><strong>來源內容與取得時點核對：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[sourceTimeAudit.status] || '未核對'}</strong><p>輸入鎖定：{sourceTimeAudit.inputCutoffAt || '未保存'}。此項只核對綁定來源內容與取得時間，不代表資料可用或特徵映射已驗證。缺失與未接入狀態請看逐項證據；均不代表預測效果已驗證。</p><p>特徵可用性與映射：</p>{sourceTimeAudit.rows?.map(row => <p key={row.featureName}>{row.featureName}｜{({ NOT_CONNECTED: '未接入來源', MISSING: '資料缺失', PROJECTED: '含推估資料', REPORTED: '有輸入紀錄', UNKNOWN: '未記錄' })[row.availability] || '舊快照未記錄可用性'}｜{row.mapping?.status === 'MAPPED_PATHS_PRESENT' ? '來源欄位存在；推導結果尚未重播驗證' : '欄位映射證據不足'}</p>)}<details><summary>逐項時間證據</summary><pre>{JSON.stringify(sourceTimeAudit.rows, null, 2)}</pre></details></div>}
     {audit.leagueLimitations?.map(note => <p key={note}>{note}</p>)}
@@ -1374,10 +1375,11 @@ function AnalysisDataAudit({ audit, persistence }) {
       {row.temporalNote && <p>{row.temporalNote}</p>}
       {row.category === 'starter' && Number.isFinite(row.inningsEstimate?.value ?? row.metrics?.expectedInnings) && <p><b>預估投球局數：</b>{(row.inningsEstimate?.value ?? row.metrics.expectedInnings).toFixed(2)} 局（推估）｜{row.inningsEstimate?.note || '歷史資料取得狀態不代表未來出賽局數已確認；此舊紀錄未保存推估分支明細。'}</p>}
       <p><b>模型使用：</b>{row.usageStatus === 'UNVERIFIED' ? '尚無逐欄使用紀錄' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || '未進入計算／僅供診斷'}{row.status !== 'observed' && row.usedInMean ? '（包含既有替代值）' : ''}</p>
-      <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}｜統計截至 {row.asOf || '未提供'}</p>
+      <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}{row.category !== 'bullpen' && `｜統計截至 ${row.asOf || '未提供'}`}</p>
+      {row.category === 'bullpen' && <BullpenEvidence row={row} league={audit.league}/>}
       {row.coverage && <p><b>覆蓋：</b>{row.category === 'lineup' ? `名單 ${row.coverage.identityCount ?? '未知'}/${row.coverage.expectedCount || 9} 人；統計 ${row.coverage.metricCoverage == null ? '未確認' : `${Math.round(row.coverage.metricCoverage * 100)}%`}` : `有效名單 ${row.coverage.rosterCount ?? '未知'} 人；名單完整性${row.coverage.rosterComplete ? '已確認' : '未確認'}`}</p>}
       {row.category === 'lineup' && row.coverage?.rateStatsCoverage > 0 && <p><b>官方個人比率：</b>{Math.round(row.coverage.rateStatsCoverage * 9)}/9 人取得打擊率及打席；不等於模型所需打數與安打數完整，僅供診斷。</p>}
-      {row.category === 'bullpen' && <p><b>能力統計：</b>{row.coverage?.qualityCount ?? '未確認'}/{row.coverage?.rosterCount ?? '未知'} 人完整{row.players?.some(player => !player.qualityComplete) ? `；缺項球員：${row.players.filter(player => !player.qualityComplete).map(player => player.name || player.id).join('、')}` : ''}。可出賽程度仍是依近期用量估計。</p>}
+      {row.category === 'bullpen' && <p><b>能力統計：</b>{row.coverage?.qualityCount ?? '未確認'}/{row.coverage?.rosterCount ?? '未知'} 人必要欄位完整{row.players?.some(player => !player.qualityComplete) ? `；缺項球員：${row.players.filter(player => !player.qualityComplete).map(player => player.name || player.id).join('、')}` : ''}。欄位覆蓋不代表樣本充足或能力估計已驗證。可出賽程度仍是依近期用量估計。</p>}
       {row.category === 'bullpen' && <p><b>近期用球紀錄：</b>{row.coverage?.usage ? `完整 ${row.coverage.usage.completeGames}/${row.coverage.usage.expectedGames} 場；取得 ${row.coverage.usage.fetchedGames} 場` : '未保存逐場覆蓋證據'}{row.coverage?.usage?.missingGames?.length > 0 ? `；缺項：${row.coverage.usage.missingGames.map(game => `${game.date || game.gamePk}${game.missingPlayers?.length ? `（${game.missingPlayers.map(player => player.name || player.id).join('、')}用球數）` : '（紀錄未確認）'}`).join('、')}` : ''}。缺值不代表 0 球或充分休息。</p>}
       {row.featureDefinition && <p><b>指數定義：</b>{row.featureDefinition.description}｜基準 OPS {row.featureDefinition.baselineOps ?? '未提供'}</p>}
       {row.substitutions?.length > 0 && <p><b>替代依據：</b>此項含替代或估計處理，展開明細可查原始依據。</p>}
@@ -1386,6 +1388,16 @@ function AnalysisDataAudit({ audit, persistence }) {
     {audit.supportingData?.length > 0 && <details className="dataAuditRow"><summary>本季、近期與環境資料的取得及使用</summary><p>列出統計期間、實際取得欄位與模型使用。近期打擊保留小樣本收縮；整隊投球與主審身分另作查核，不能當成已啟用的得分效果。以下項目未併入上方核心人員數量。</p><pre>{JSON.stringify(audit.supportingData, null, 2)}</pre></details>}
     {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><p>此處只列模型是否使用，不代表來源完整或功能已通過歷史驗證。</p><pre>{JSON.stringify(audit.otherUsage, null, 2)}</pre></details>}
   </details>;
+}
+
+function BullpenEvidence({ row, league }) {
+  const evidence = bullpenEvidenceDisplay(row);
+  return <div>
+    <p>名單基準日：{evidence.rosterDates}｜個人能力統計截至：{evidence.metricDates}{evidence.metricDatesIncomplete ? '（部分日期未保存）' : ''}｜已列用量最新比賽日：{evidence.latestUsageDate}。最新紀錄日不等於完整覆蓋截止日。</p>
+    <p>疲勞與可用性分開計算；可用性 1 不是官方確認，也不是 100% 出賽機率。候選名單與歷史後援出賽不等於當日角色已核驗。</p>
+    {league === 'MLB' && <p>用量天數依比賽時間差換算並取整，不直接等同日曆上的昨日；請核對逐場 daysAgo 與權重。原始時間與推導紀錄未保存時，不補造。</p>}
+    <details><summary>後援能力樣本局數（十進位）</summary>{evidence.samples.map((player, index) => <p key={index}>{player.name}：{player.innings == null ? '未保存' : player.innings.toFixed(2)} 局；小樣本需搭配該版本收縮與角色證據解讀。</p>)}</details>
+  </div>;
 }
 
 function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
@@ -1448,7 +1460,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   };
   const sourceStatusText = Object.entries(analysisSourceStatusDisplay(item))
     .filter(([, value]) => value != null && String(value).trim())
-    .map(([key, value]) => `${sourceStatusLabels[key] || key}：${value}`)
+    .map(([key, value]) => sourceStatusLabel(key, value) || `${sourceStatusLabels[key] || key}：${value}`)
     .join('｜');
   const provenanceText = (Array.isArray(analysis.featureProvenance) ? analysis.featureProvenance : [])
     .slice(0, 10)
