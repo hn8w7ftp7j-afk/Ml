@@ -891,11 +891,12 @@ function compactAnalysisData(data) {
 }
 
 function calibrationFeatureTimes(context) {
-  const fallback = context?.fetchedAt;
+  const asian = ['NPB', 'KBO', 'CPBL'].includes(context?.leagueId || context?.game?.leagueId);
+  const fallback = asian ? null : context?.fetchedAt;
   const rows = {};
   for (const item of context?.featureProvenance || []) {
-    const name = String(item?.featureName || '').trim();
-    const value = item?.observedAt || item?.asOf || fallback;
+    const name = String(item?.featureName || item?.feature || '').trim();
+    const value = asian ? item?.fetchedAt : item?.observedAt || item?.asOf || fallback;
     if (name && Number.isFinite(Date.parse(String(value || '')))) rows[name] = new Date(value).toISOString();
   }
   if (!Object.keys(rows).length && Number.isFinite(Date.parse(String(fallback || '')))) rows.coreSnapshot = new Date(fallback).toISOString();
@@ -1347,14 +1348,19 @@ function DirectionSlotRow({ row, game }) {
   </div>;
 }
 
-function AnalysisDataAudit({ audit }) {
-  if (!audit?.rows?.length) return <div className="sourceBanner dataStatusBanner"><strong>資料查核明細尚未建立</strong><span>這份舊分析未保存逐欄取得與使用紀錄；重新分析後才能查核，不代表資料完整。</span></div>;
+function AnalysisDataAudit({ audit, persistence }) {
+  const snapshotLink = persistence?.snapshotId && <p>快照保存：{persistence.confirmed ? '已確認保存' : '尚未確認保存'}。<a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(persistence.snapshotId)}`} target="_blank" rel="noreferrer">查看保存快照稽核</a></p>;
+  if (!audit?.rows?.length) return <div className="sourceBanner dataStatusBanner"><strong>資料查核明細尚未建立｜時點證據不足</strong><span>這份舊分析未保存逐欄取得與使用紀錄；新分析會另存新快照，不會替舊分析補造證據。</span>{snapshotLink}</div>;
+  const sourceTimeAudit = audit.sourceTimeAudit || (['NPB', 'KBO', 'CPBL'].includes(audit.league || persistence?.snapshotId?.split(':')[0]) ? { status: 'PENDING', rows: [], inputCutoffAt: null } : null);
   const labels = { observed: '實際取得', projected: '預測替代', missing: '缺失', stale: '舊資料' };
   const explanations = { observed: '有取得紀錄，仍須核對下列來源與統計範圍。', projected: '包含預測名單或替代數據，不能視為今日完整實績。', missing: '必要的身分或統計證據不足；中性預設值不代表實際能力。', stale: '來源已標示過期，不能當作最新資料。' };
   const summary = audit.summary || {};
   return <details className="details dataAudit">
     <summary>核心人員資料與模型使用｜實際 {summary.observed || 0}・替代 {summary.projected || 0}・缺失 {summary.missing || 0}・舊資料 {summary.stale || 0}</summary>
+    {snapshotLink}
     <p className="muted">{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'} 各項詳細覆蓋情形如下。</p>
+    {sourceTimeAudit && <div className="dataAuditRow"><strong>資料時點核對：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[sourceTimeAudit.status] || '未核對'}</strong><p>輸入鎖定：{sourceTimeAudit.inputCutoffAt || '未保存'}。快照保存與資料時點分開核對；均不代表預測效果已驗證。</p><details><summary>逐項時間證據</summary><pre>{JSON.stringify(sourceTimeAudit.rows, null, 2)}</pre></details></div>}
+    {audit.leagueLimitations?.map(note => <p key={note}>{note}</p>)}
     <div className="dataAuditRows">{audit.rows.map(row => <div className="dataAuditRow" key={row.id || row.key}>
       <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
       <p>{explanations[row.status]}</p>
@@ -1454,7 +1460,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
       : `已開 ${openMarketCount}/4 市場｜應評 ${expectedDirectionCount} 方向｜已評 ${scoredDirectionCount}/${expectedDirectionCount}｜進影子排名 ${rankingDirectionCount}；依固定S分數分析與排序`}</span></div>}
     {expectedRuns && <div className="sourceBanner"><strong>上游得分中心｜市場水位回灌：停用</strong><span>全場 {runCenter(expectedRuns.full)}｜前五局 {runCenter(expectedRuns.first5)}｜這份得分分布同時結算大／小與讓／受讓</span></div>}
     {(sourceStatusText || provenanceText) && <div className="sourceBanner dataStatusBanner"><strong>上游資料狀態</strong><span>{sourceStatusText || provenanceText}</span></div>}
-    {analysisHasCalculatedDirections(item.customData) && <AnalysisDataAudit audit={analysis.dataAudit}/>}
+    {analysisHasCalculatedDirections(item.customData) && <AnalysisDataAudit audit={analysis.dataAudit} persistence={item.customData?.pitPersistence}/>}
     {(preservingPreviousReaderAnalysis || item.restoredFromCache === true) && <div className="sourceBanner shadowBanner"><strong>保留的分析版本</strong><span>分析時間：{localTime(analysis.analysisAsOf || analysis.createdAt)}｜資料截至：{localTime(analysis.dataAsOf)}｜盤口時間：{localTime(analysis.lineAsOf)}｜模型：{analysis.modelVersion || '未記錄'}｜Reader：{(analysis.results || []).find(row => row.readerVersion)?.readerVersion || '未記錄'}｜此處時間與版本屬於保留結果</span></div>}
     {analysis.runExplanation && <details className="details"><summary>得分計算過程與局部敏感度</summary><p>以下是既定局數、終局處理前的得分中心。敏感度不等於特徵貢獻，也不是重新估算的 EV。</p><pre>{JSON.stringify(analysis.runExplanation, null, 2)}</pre></details>}
     {analysis.distributionQA && <details className="details"><summary>比分矩陣分期間 QA</summary><p>列出機率總和、平局與勝分差；終局矩陣檢查不等於逐路徑合法性或歷史準確度驗證。</p><pre>{JSON.stringify(analysis.distributionQA, null, 2)}</pre></details>}
@@ -2381,7 +2387,7 @@ export default function Home() {
         statusLabel: Number(baseData?.analysis?.calculatedDirectionCount || 0) === 0
           ? '八方向槽位已保存｜目前尚未開盤或市場資料異常'
           : baseData.pitPersistence?.confirmed
-            ? 'Tai888盤口分析完成｜PIT已確認'
+            ? 'Tai888盤口分析完成｜快照保存已確認'
             : '模型分析完成｜PIT未保存、實際下注紀錄暫停',
         customMarkets: actualMarkets,
         verificationMarkets: task?.verificationMarkets || previous.verificationMarkets || [],

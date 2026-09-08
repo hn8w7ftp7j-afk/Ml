@@ -313,6 +313,9 @@ assert.equal(observedHistory.away.teamStrength.currentSeasonGames, 1, '歷史日
 const cachedHistory = (await buildAsianProductionFeatureSnapshot(historicalOptions)).featureSnapshot;
 assert.equal(cachedHistory.asOf, observedHistory.asOf, '快取必須保留真正讀取時間，不能刷新成虛構新時間');
 assert.ok(cachedHistory.sourceObservations.every(row => row.fromCache));
+assert.deepEqual(cachedHistory.sourceObservations.map(row => row.id), observedHistory.sourceObservations.map(row => row.id));
+assert.ok(Object.keys(observedHistory.sourceEvidence.contents).length > 0);
+assert.ok(observedHistory.sourceObservations.every(row => row.publishedAt === null && row.dataCutoff === null));
 
 const cpblGame = {
   gamePk: 'cpbl-fallback-integrity', providerGameId: 'cpbl-fallback-integrity',

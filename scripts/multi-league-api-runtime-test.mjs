@@ -40,7 +40,7 @@ try {
       return {
         ok: true,
         status: 200,
-        text: async () => fixtures[league],
+        text: async () => typeof fixtures[league] === 'string' ? fixtures[league] : JSON.stringify(fixtures[league]),
         json: async () => fixtures[league],
       };
     };

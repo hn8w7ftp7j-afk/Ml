@@ -32,6 +32,15 @@ assert.ok(Buffer.byteLength(JSON.stringify(compactContext)) < 5_000, 'blocked As
 assert.equal(compactContext.game.gamePk, game.gamePk);
 const compact = compactRepriceSnapshot({ frozenContext, inputHash: 'x'.repeat(64) });
 assert.equal(compact.distributionSnapshot, undefined);
+const inline = { frozenContext: { sourceEvidence: { contents: { abc: { data: 'raw-proof' } }, events: [] } } };
+const inlineBefore = JSON.stringify(inline);
+assert.deepEqual(compactRepriceSnapshot(inline).frozenContext.sourceEvidence.contents, inline.frozenContext.sourceEvidence.contents, 'unpersisted evidence must survive price-only transport');
+assert.equal(compactRepriceSnapshot(inline).frozenContext.sourceEvidence.contentStorage, undefined, 'transport cannot claim database persistence');
+assert.equal(JSON.stringify(inline), inlineBefore);
+const stored = structuredClone(inline);
+stored.frozenContext.sourceEvidence.contentStorage = 'IMMUTABLE_SOURCE_STORE_V1';
+assert.deepEqual(compactRepriceSnapshot(stored).frozenContext.sourceEvidence.contents, {});
+assert.deepEqual(compactRepriceSnapshot(stored).frozenContext.sourceEvidence.contentHashes, ['abc']);
 
 assert.equal(initialAnalysisConcurrency('MLB'), 2);
 assert.equal(initialAnalysisConcurrency('NPB'), 1);
