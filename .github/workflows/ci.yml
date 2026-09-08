@@ -48,6 +48,7 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - run: node scripts/score-model-integrity-v102-test.mjs
       - run: npm run test:pit-audit
+      - run: npm run test:asian-evidence
       - run: npm run test:external-audit
       - run: npm test
       - run: npm run build
