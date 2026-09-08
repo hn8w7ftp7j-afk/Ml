@@ -24,7 +24,8 @@ export async function GET(request){
  ORDER BY d.direction_result_id LIMIT 1001`;
  const records=rows.slice(0,1000).map(row=>{
  try{
-  const record=validateAnalysisDirectionRecord(row.record_payload);
+  const payload=typeof row.record_payload==='string'?JSON.parse(row.record_payload):row.record_payload;
+  const record=validateAnalysisDirectionRecord({...payload,recordHash:row.record_hash});
   if(record.recordHash!==row.record_hash)throw Error('HASH_MISMATCH');
   return {ok:true,record,createdAt:row.created_at,resultSnapshot:row.result_snapshot,settlementStatus:row.settlement_status,resultSavedAt:row.result_saved_at};
  }catch{return {ok:false,directionResultId:row.direction_result_id,code:'DIRECTION_INTEGRITY_FAILED'};}
