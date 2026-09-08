@@ -13,6 +13,8 @@ export async function GET(request){
  const auth=await requireApiAuth(request);if(auth)return auth;
  const rate=checkRateLimit(request,{id:'history-direction-export',limit:120,windowMs:600000});if(!rate.allowed)return rateLimitResponse(rate);
  const p=new URL(request.url).searchParams,after=p.get('after')||'',until=p.get('until')||'';
+ const size=Number(p.get('limit')||500);
+ if(!Number.isSafeInteger(size)||size<1||size>500)return NextResponse.json({ok:false,code:'INVALID_PAGE_SIZE'},{status:400,headers});
  if((after&&!/^[a-f0-9]{64}$/.test(after))||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(until)||!Number.isFinite(Date.parse(until))||Date.parse(until)>Date.now()+60000)return NextResponse.json({ok:false,code:'INVALID_QUERY'},{status:400,headers});
  try{
  const sql=neon(durableDatabaseUrl());
@@ -21,8 +23,8 @@ export async function GET(request){
  FROM baseball_analysis_direction_results d
  LEFT JOIN LATERAL(SELECT result_snapshot,status,created_at FROM baseball_analysis_direction_settlements WHERE direction_result_id=d.direction_result_id AND created_at<=${until}::timestamptz ORDER BY created_at DESC,settled_at DESC,settlement_id DESC LIMIT 1)s ON true
  WHERE d.created_at<=${until}::timestamptz AND d.direction_result_id>${after}
- ORDER BY d.direction_result_id LIMIT 1001`;
- const records=rows.slice(0,1000).map(row=>{
+ ORDER BY d.direction_result_id LIMIT ${size+1}`;
+ const records=rows.slice(0,size).map(row=>{
  try{
   const payload=typeof row.record_payload==='string'?JSON.parse(row.record_payload):row.record_payload;
   const record=validateAnalysisDirectionRecord({...payload,recordHash:row.record_hash});
@@ -30,7 +32,7 @@ export async function GET(request){
   return {ok:true,record,createdAt:row.created_at,resultSnapshot:row.result_snapshot,settlementStatus:row.settlement_status,resultSavedAt:row.result_saved_at};
  }catch{return {ok:false,directionResultId:row.direction_result_id,code:'DIRECTION_INTEGRITY_FAILED'};}
  });
- const raw=Buffer.from(JSON.stringify({schema:'all-history-directions-v1',until,records,nextAfter:rows.length>1000?rows[999].direction_result_id:null,productionWrites:false}));
+ const raw=Buffer.from(JSON.stringify({schema:'all-history-directions-v1',until,records,nextAfter:rows.length>size?rows[size-1].direction_result_id:null,productionWrites:false}));
  const payload=gzipSync(raw).toString('base64');
  if(payload.length>2800000)return NextResponse.json({ok:false,code:'PAGE_TOO_LARGE'},{status:413,headers});
  return NextResponse.json({ok:true,encoding:'gzip-base64',sha256:createHash('sha256').update(raw).digest('hex'),payload},{headers});
