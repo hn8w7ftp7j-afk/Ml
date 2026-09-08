@@ -41,12 +41,14 @@ function normalizeTasks(tasks, league, prefix = '') {
       readerProvenance: task?.readerProvenance || null,
       readerPayloadHash: cleanText(task?.readerPayloadHash, 64) || null,
       verificationMarkets: Array.isArray(task?.verificationMarkets) ? task.verificationMarkets : [],
+      referenceEvidence: task?.referenceEvidence || null,
       body: {
         league,
         game: task?.game || null,
         markets: Array.isArray(task?.actualMarkets) ? task.actualMarkets : [],
         readerProvenance: task?.readerProvenance || null,
         verificationMarkets: Array.isArray(task?.verificationMarkets) ? task.verificationMarkets : [],
+        referenceEvidence: task?.referenceEvidence || null,
         settings: { rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
       },
     };

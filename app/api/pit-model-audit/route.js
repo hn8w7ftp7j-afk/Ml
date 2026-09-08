@@ -18,6 +18,11 @@ export async function GET(request) {
   if (!rate.allowed) return rateLimitResponse(rate);
   try {
     const bundle = await loadAnalysisPitReplay({ league: match[1], snapshotId, expected: { gamePk: Number(match[2]) } });
+    if (new URL(request.url).searchParams.get('artifact') === 'source') {
+      const artifact = bundle.marketAnalysis?.replayEnvironment?.sourceArtifact;
+      return artifact ? json({ ok: true, snapshotId, artifact, originalSnapshotModified: false })
+        : json({ ok: false, code: 'HISTORICAL_ARTIFACT_NOT_RECORDED' }, 404);
+    }
     if (match[1] === 'MLB') return json({ ok: true, audit: auditSavedPitModel(bundle) });
     let frozenContext = bundle.frozenContext;
     try { frozenContext = await hydrateAsianSourceEvidence(frozenContext); }

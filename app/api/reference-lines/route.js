@@ -9,7 +9,8 @@ import {
   referenceProviderStatus,
 } from '../../../lib/reference-lines.js';
 import { oddsApiWindow } from '../../../lib/reference-time.js';
-import { signMarketGames } from '../../../lib/market-integrity-v1.js';
+import { signMarketGames, signReferenceReceipt } from '../../../lib/market-integrity-v1.js';
+import { referenceAttempt, referenceFailureCode } from '../../../lib/reference-acquisition-evidence.js';
 import { fetchLeagueTaipeiSlate, validateLeagueScheduleSubset } from '../../../lib/league-provider.js';
 import { requestedLeagueId } from '../../../lib/leagues.js';
 import { recordReferenceSourceHealth, referenceSourceHealth } from '../../../lib/reference-source-health.js';
@@ -128,8 +129,8 @@ async function fetchJson(url, options, timeoutMs = 25000) {
     const text = await response.text();
     let data;
     try { data = JSON.parse(text); }
-    catch { throw new Error(`盤源回傳格式錯誤（${response.status}）`); }
-    if (!response.ok) throw new Error(data?.message || data?.error || `盤源請求失敗（${response.status}）`);
+    catch { throw Object.assign(new Error(`盤源回傳格式錯誤（${response.status}）`), { code: 'INVALID_JSON', httpStatus: response.status }); }
+    if (!response.ok) throw Object.assign(new Error(data?.message || data?.error || `盤源請求失敗（${response.status}）`), { httpStatus: response.status });
     return data;
   } finally {
     clearTimeout(timer);
@@ -204,7 +205,7 @@ function mergeOddsEvent(featured, detail) {
   };
 }
 
-async function loadOddsApi(date, schedule, targets = []) {
+async function loadOddsApi(date, schedule, targets = [], attempts = []) {
   const key = process.env.THE_ODDS_API_KEY;
   if (!key) return null;
   const window = oddsApiWindow(date, schedule);
@@ -216,10 +217,12 @@ async function loadOddsApi(date, schedule, targets = []) {
   try {
     payload = await fetchJson(discoveryUrl(window), { headers: { Accept: 'application/json' } });
   } catch (error) {
+    attempts.push(referenceAttempt('THE_ODDS_API_CONSENSUS', 'DISCOVERY', { status: 'FAILED', reasonCode: referenceFailureCode(error), httpStatus: error.httpStatus || null }));
     if (!/commenceTime(?:From|To)|ISO 8601|timestamp/i.test(String(error?.message || error))) throw error;
     payload = await fetchJson(discoveryUrl(null), { headers: { Accept: 'application/json' } });
   }
   const discoveredEvents = Array.isArray(payload) ? payload : [];
+  attempts.push(referenceAttempt('THE_ODDS_API_CONSENSUS', 'DISCOVERY'));
   const targetedEvents = [];
   const failures = [];
   for (const raw of discoveredEvents) {
@@ -233,17 +236,22 @@ async function loadOddsApi(date, schedule, targets = []) {
   }
   const matchedTargetPks = new Set(targetedEvents.map(row => Number(row.target.gamePk)));
   for (const target of targetByGamePk.values()) {
-    if (!matchedTargetPks.has(Number(target.gamePk))) failures.push(`gamePk ${target.gamePk}：The Odds API 找不到可安全配對的事件ID`);
+    if (!matchedTargetPks.has(Number(target.gamePk))) {
+      failures.push(`gamePk ${target.gamePk}：The Odds API 找不到可安全配對的事件ID`);
+      attempts.push(referenceAttempt('THE_ODDS_API_CONSENSUS', 'EVENT_MATCH', { gamePk: target.gamePk, status: 'UNMATCHED', reasonCode: 'EVENT_NOT_MATCHED' }));
+    }
   }
 
   const eventPayloads = new Map();
   await Promise.all(targetedEvents.map(async ({ raw, target }) => {
     try {
       const detail = await fetchJson(oddsApiEventUrl(key, raw.id, target.marketKeys), { headers: { Accept: 'application/json' } });
-      if (!detail || eventIdentity(detail) !== eventIdentity(raw)) throw new Error('逐場回傳事件ID不一致');
+      if (!detail || eventIdentity(detail) !== eventIdentity(raw)) throw Object.assign(new Error('逐場回傳事件ID不一致'), { code: 'EVENT_ID_MISMATCH' });
       eventPayloads.set(eventIdentity(raw), mergeOddsEvent(raw, detail));
+      attempts.push(referenceAttempt('THE_ODDS_API_CONSENSUS', 'EVENT_PRICES', { gamePk: target.gamePk }));
     } catch (error) {
       failures.push(`gamePk ${target.gamePk}：${String(error?.message || error)}`);
+      attempts.push(referenceAttempt('THE_ODDS_API_CONSENSUS', 'EVENT_PRICES', { gamePk: target.gamePk, status: 'FAILED', reasonCode: referenceFailureCode(error), httpStatus: error.httpStatus || null }));
     }
   }));
 
@@ -300,6 +308,10 @@ export async function POST(request) {
     const fullOfficialSlate = await fetchLeagueTaipeiSlate(league, date);
     const schedule = validateLeagueScheduleSubset(league, requestedSchedule, fullOfficialSlate, date);
     const targets = sanitizeTargets(body?.targets, schedule);
+    const receiptsFor = async attempts => Promise.all(schedule.map(async game => ({ gamePk: game.gamePk,
+      receipt: await signReferenceReceipt(league, game, { attempts: attempts.filter(row => row.gamePk == null || Number(row.gamePk) === Number(game.gamePk)),
+        capturedAt: new Date().toISOString(), requestedMarkets: targets.find(row => row.gamePk === game.gamePk)?.markets || [],
+        scope: 'ACQUISITION_ONLY_NOT_PRICE_VALIDATION', cacheStatus: 'MISS' }) })));
     if (Array.isArray(body?.targets) && body.targets.length && !targets.length) {
       return NextResponse.json({ ok: false, error: 'Reader target 不是今日已驗證賽事或未包含有效市場，禁止回落一般 featured 盤' }, { status: 400 });
     }
@@ -315,6 +327,7 @@ export async function POST(request) {
         games: [],
         unmatched: [],
         referencePolicy: 'NO_MLB_FALLBACK',
+        receipts: await receiptsFor([referenceAttempt('LEAGUE_REGISTRY', 'CONFIGURATION', { status: 'NOT_CONFIGURED', reasonCode: 'NO_SAME_LEAGUE_SOURCE' })]),
         message: `${league} 尚未設定同聯盟合法參考盤源；外部市場稽核未使用`,
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
@@ -326,6 +339,7 @@ export async function POST(request) {
         configured: false,
         version: REFERENCE_LINES_VERSION,
         providers: status.providers,
+        receipts: await receiptsFor([referenceAttempt('PROVIDER_REGISTRY', 'CONFIGURATION', { status: 'NOT_CONFIGURED', reasonCode: 'NO_SOURCE' })]),
         games: [],
         unmatched: [],
         message: 'Production 尚未設定外部市場 API 金鑰；不改比分分布或W/R，缺少外部同約驗證時8.5級最高封頂8.4。',
@@ -337,32 +351,41 @@ export async function POST(request) {
     const targetIdentity = targets.map(target => `${target.gamePk}:${target.marketKeys.join('+')}:${target.markets.map(row => `${row.market}/${row.pick}`).join('+')}`).join(',');
     const key = `${league}:${configuredProviders.join('+')}:${date}:${fullSlateIdentity}:${schedule.map(game => game.gamePk).join(',')}:${targetIdentity}`;
     const cached = cache.get(key);
-    if (cached && cached.expiresAt > Date.now()) return NextResponse.json({ ...cached.payload, cache: 'HIT' }, { headers: { 'Cache-Control': 'no-store' } });
+    if (cached && cached.expiresAt > Date.now()) {
+      const receipts = await Promise.all((cached.payload.receipts || []).map(async row => ({ ...row,
+        receipt: await signReferenceReceipt(league, schedule.find(game => Number(game.gamePk) === Number(row.gamePk)),
+          { ...row.receipt.payload.evidence, cacheStatus: 'HIT', servedAt: new Date().toISOString() }) })));
+      return NextResponse.json({ ...cached.payload, receipts, cache: 'HIT' }, { headers: { 'Cache-Control': 'no-store' } });
+    }
 
     const failures = [];
+    const attempts = status.providers.filter(provider => !provider.configured).map(provider => referenceAttempt(provider.id, 'CONFIGURATION', { status: 'NOT_CONFIGURED', reasonCode: 'NO_SOURCE' }));
     const results = [];
     if (status.providers.find(provider => provider.id === 'JBOT_TAIWAN_SPORTS_LOTTERY')?.configured) {
-      try { results.push(await loadJbot(date, fullOfficialSlate)); }
-      catch (error) { failures.push(`JBot：${String(error?.message || error)}`); }
+      try { results.push(await loadJbot(date, fullOfficialSlate)); attempts.push(referenceAttempt('JBOT_TAIWAN_SPORTS_LOTTERY', 'PRICES')); }
+      catch (error) { failures.push(`JBot：${String(error?.message || error)}`); attempts.push(referenceAttempt('JBOT_TAIWAN_SPORTS_LOTTERY', 'PRICES', { status: 'FAILED', reasonCode: referenceFailureCode(error), httpStatus: error.httpStatus || null })); }
     }
     if (status.providers.find(provider => provider.id === 'THE_ODDS_API_CONSENSUS')?.configured) {
       try {
-        const oddsResult = await loadOddsApi(date, fullOfficialSlate, targets);
+        const oddsResult = await loadOddsApi(date, fullOfficialSlate, targets, attempts);
         failures.push(...(Array.isArray(oddsResult?.failures) ? oddsResult.failures.map(message => `The Odds API：${message}`) : []));
         results.push(oddsResult);
       }
-      catch (error) { failures.push(`The Odds API：${String(error?.message || error)}`); }
+      catch (error) { failures.push(`The Odds API：${String(error?.message || error)}`); attempts.push(referenceAttempt('THE_ODDS_API_CONSENSUS', 'PROVIDER', { status: 'FAILED', reasonCode: referenceFailureCode(error), httpStatus: error.httpStatus || null })); }
     }
     const result = mergeReferenceResults(results);
     const sourceHealth = recordReferenceSourceHealth(league, failures, { games: result.games.length });
     if (failures.length) console.warn('REFERENCE_SOURCE_HEALTH', sourceHealth);
     if (!result.games.length && failures.length) {
-      return NextResponse.json({ ok: false, error: failures.join('；') || '沒有可用的合法參考盤來源' }, { status: 502 });
+      return NextResponse.json({ ok: false, games: [], receipts: await receiptsFor(attempts), error: failures.join('；') || '沒有可用的合法參考盤來源' }, { status: 502 });
     }
 
     const requestedGamePks = new Set((targets.length ? targets : schedule).map(game => Number(game.gamePk)));
     const requestedGames = (Array.isArray(result.games) ? result.games : []).filter(row => requestedGamePks.has(Number(row.gamePk)));
     const filteredGames = filterReferenceGamesToTargets(requestedGames, targets);
+    for (const game of schedule) if (!filteredGames.some(row => Number(row.gamePk) === Number(game.gamePk) && row.markets?.length)) {
+      attempts.push(referenceAttempt('REFERENCE_MATCHER', 'CONTRACT_MATCH', { gamePk: game.gamePk, status: 'UNMATCHED', reasonCode: 'NO_MATCHED_CONTRACT' }));
+    }
     const signedGames = await signMarketGames(league, filteredGames);
     const payload = {
       ok: true,
@@ -373,6 +396,7 @@ export async function POST(request) {
       provider: configuredProviders.join('+') || null,
       providers: status.providers,
       games: signedGames,
+      receipts: await receiptsFor(attempts),
       unmatched: result.unmatched,
       requestWindow: results.find(row => row?.requestWindow)?.requestWindow || null,
       targetCount: targets.length,

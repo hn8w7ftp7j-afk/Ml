@@ -31,6 +31,10 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   outputFileTracingIncludes: {
+    '/api/analyze': ['./.generated/replay-artifact.json'],
+    '/api/reprice': ['./.generated/replay-artifact.json'],
+    '/api/analysis-jobs': ['./.generated/replay-artifact.json'],
+    '/.well-known/workflow/v1/step': ['./.generated/replay-artifact.json'],
     '/api/nhl': [
       './scripts/fixtures/nhl/history-expanded/coverage.json',
       './scripts/fixtures/nhl/history-expanded/score-validation.json',

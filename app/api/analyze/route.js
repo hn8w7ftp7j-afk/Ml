@@ -30,6 +30,8 @@ import {
   assessAnalysisCacheEntryV110,
 } from '../../../lib/analysis-response-cache-policy-v110.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
+import { verifyReferenceReceipt } from '../../../lib/market-integrity-v1.js';
+import { replayEnvironmentEvidence } from '../../../lib/replay-environment-evidence.js';
 import { persistMlbAdvancedSnapshotBestEffort } from '../../../lib/mlb-advanced-snapshot-store-v2.js';
 import {
   ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION,
@@ -331,7 +333,9 @@ export async function POST(request) {
     const suppliedMarkets = await prepareMarketRows(league, game, body.markets, MAX_SUPPLIED_MARKET_ROWS);
     const readerProvenance = await verifiedReaderProvenance(league, game, body.readerProvenance, suppliedMarkets);
     const verificationMarkets = await prepareMarketRows(league, game, body.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS);
-    const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets);
+    const acquisition = await verifyReferenceReceipt(body.referenceEvidence, league, game);
+    const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets).map(row => ({ ...row,
+      marketVerification: { ...row.marketVerification, acquisition } }));
     const previousMarkets = await prepareMarketRows(league, game, body.previousMarkets, MAX_PREVIOUS_MARKET_ROWS);
     const marketCoverage = assessEightDirectionMarketCoverage(markets, game);
     const activeMarkets = marketCoverage.validRows;
@@ -523,6 +527,7 @@ export async function POST(request) {
       dataAsOf: frozenContext.fetchedAt || analysisAsOf, lineAsOf, analysisAsOf, snapshotId: fingerprints.inputHash,
       pitSnapshotId,
     };
+    finalized.replayEnvironment = replayEnvironmentEvidence(finalized, league, versions);
     // The full frozen distribution can approach one megabyte for an Asian game.
     // Sending four of them to a phone at once made Safari terminate otherwise
     // successful 200 responses. Keep the signed inputs and distribution hash;

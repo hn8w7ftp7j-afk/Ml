@@ -1,6 +1,7 @@
 'use client';
+import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
 import { runExplanationDisplay, externalVerificationExplanation, sourceStatusLabel, bullpenEvidenceDisplay, lineupCoverageDisplay } from '../lib/mlb-diagnostic-display-v1.js';
-import { evidenceJSON, settlementEvidence } from '../lib/analysis-evidence-export-v2.js';
+import { evidenceJSON, settlementEvidence, replayEvidenceView } from '../lib/analysis-evidence-export-v2.js';
 
 import { analysisDisplayGame, analysisGameIdentity, sameAnalysisGame } from '../lib/analysis-game-identity-v1.js';
 
@@ -703,6 +704,7 @@ async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplica
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
       error.code = data.code || '';
+      error.referenceReceipts = Array.isArray(data.receipts) ? data.receipts : [];
       error.blocking = Array.isArray(data.blocking) ? data.blocking : [];
       error.warnings = Array.isArray(data.warnings) ? data.warnings : [];
       const retryAfterHeader = Number(response.headers.get('retry-after'));
@@ -1493,6 +1495,10 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
     {analysis.runExplanation && <details className="details"><summary>得分計算過程與局部敏感度</summary><p>以下是既定局數、終局處理前的得分中心。敏感度不等於特徵貢獻，也不是重新估算的 EV。OPS 同時是左右拆分倍率的分母；固定拆分資料時，OPS 單項斜率可能為負。</p><pre>{JSON.stringify(runExplanationDisplay(analysis.runExplanation), null, 2)}</pre></details>}
     {analysis.distributionQA && <details className="details"><summary>比分矩陣分期間 QA</summary><p>列出機率總和、平局與勝分差；終局矩陣檢查不等於逐路徑合法性或歷史準確度驗證。</p><pre>{evidenceJSON(analysis.distributionQA)}</pre></details>}
     <details className="details"><summary>完整精度結算欄位（保存結果，未獨立重播）</summary><pre>{evidenceJSON(settlementEvidence(analysis))}</pre></details>
+    <details className="details"><summary>重播環境與模型版本驗收</summary><p>保存、資料完整性、分布重播、W/R 重播、S 重播及來源核驗分開判定；歷史成效屬模型版本／樣本群，不屬單場即時驗收。</p><pre>{evidenceJSON(replayEvidenceView(analysis.replayEnvironment))}</pre>
+      {analysis.replayEnvironment?.modelValidation?.url && <a href={analysis.replayEnvironment.modelValidation.url} target="_blank" rel="noreferrer">所屬模型版本歷史成效驗收</a>}
+      {pitPersistence?.confirmed && analysis.replayEnvironment?.sourceArtifact && <p><a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(pitPersistence.snapshotId)}&artifact=source`} target="_blank" rel="noreferrer">讀取此快照保存的重播來源封存</a></p>}
+    </details>
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT快照保存已確認（不等於資料全數驗證）' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}（卡片來源紀錄）｜分析記錄盤口時間：{localTime(analysis.lineAsOf)}；兩者各依原欄位顯示，逐方向盤口時間與版本請見完整分析匯出。</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
@@ -2311,9 +2317,6 @@ export default function Home() {
       return { ok: true, configured: false, games: [], failures: [], message: '今日沒有可配對的賽事' };
     }
     const targetLeague = normalizeLeagueId(games[0]?.leagueId || games[0]?.league || league);
-    if (targetLeague !== 'MLB') {
-      return { ok: true, league: targetLeague, configured: false, games: [], failures: [], message: `${targetLeague} 尚未設定同聯盟合法外部盤源` };
-    }
     try {
       const targets = (Array.isArray(targetGames) ? targetGames : []).map(row => ({
         gamePk: Number(row?.gamePk || row?.game?.gamePk),
@@ -2331,7 +2334,7 @@ export default function Home() {
       return result;
     } catch (cause) {
       lastReferenceRefreshAtRef.current = Date.now();
-      return { ok: false, configured: false, games: [], failures: [], message: `獨立外部市場取得失敗：${String(cause?.message || cause)}` };
+      return { ok: false, configured: false, games: [], receipts: cause?.referenceReceipts || [], failures: [], message: `獨立外部市場取得失敗：${String(cause?.message || cause)}` };
     }
   }
 
@@ -2453,6 +2456,7 @@ export default function Home() {
             : '模型分析完成｜PIT未保存、實際下注紀錄暫停',
         customMarkets: actualMarkets,
         verificationMarkets: task?.verificationMarkets || previous.verificationMarkets || [],
+        referenceEvidence: task?.referenceEvidence || null,
         customData: compactAnalysisData(baseData),
         restoredFromCache: false,
         analysisFailure: null,
@@ -2925,6 +2929,7 @@ export default function Home() {
           markets: actualMarkets,
           readerProvenance: task.readerProvenance || null,
           verificationMarkets: task.verificationMarkets || [],
+          referenceEvidence: task.referenceEvidence || null,
           settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
         }),
       });
@@ -2972,8 +2977,7 @@ export default function Home() {
       && credit?.readerFresh === true
       && credit?.blocked !== true;
     const references = await fetchReferenceLines(games, targetDate, credit.games || []);
-    const referenceByPk = new Map((references.games || [])
-      .map(row => [Number(row.gamePk), row]));
+    const referenceByPk = referenceGameMap(references);
     const openByPk = new Map((readerReady ? credit.games || [] : [])
       .map(row => [Number(row.gamePk), row]));
     const unopenedByPk = new Map((readerReady ? credit.unopenedGames || [] : [])
@@ -2997,6 +3001,7 @@ export default function Home() {
         readerPayloadHash: null,
         customMarkets: [],
         verificationMarkets: referenceByPk.get(Number(game.gamePk))?.markets || [],
+        referenceEvidence: referenceByPk.get(Number(game.gamePk))?.referenceEvidence || null,
         status: hasOpenMarkets ? 'queued' : hasPrevious ? 'done' : 'unopened',
         statusLabel: hasOpenMarkets
           ? hasPrevious ? '四聯盟背景更新中｜保留目前分數' : '等待四聯盟背景分析'
@@ -3015,6 +3020,7 @@ export default function Home() {
         readerProvenance: readerGame.readerProvenance,
         readerPayloadHash: credit.payloadHash,
         verificationMarkets: referenceByPk.get(Number(game.gamePk))?.markets || [],
+        referenceEvidence: referenceByPk.get(Number(game.gamePk))?.referenceEvidence || null,
       }];
     });
     return {
@@ -3251,7 +3257,7 @@ export default function Home() {
       setProgress({ active: true, done: 0, running: 1, total: 1, label: '取得獨立國際市場同合約參考盤' });
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
-      const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
+      const referenceByPk = referenceGameMap(references);
 
       const readerCreditReady = credit?.provider === 'TAI888_READER_AUTO'
         && credit?.readerFresh === true
@@ -3315,6 +3321,7 @@ export default function Home() {
           readerPayloadHash: resumed?.readerPayloadHash || (capturedHistoricalPit ? credit.payloadHash : null),
           customMarkets: resumed?.customMarkets || (capturedHistoricalPit ? foundCredit.markets : retainingPreviousRevision ? previous?.customMarkets || [] : represented ? foundCredit.markets || [] : previous?.customMarkets || []),
           verificationMarkets: retainingPreviousRevision ? previous?.verificationMarkets || [] : foundReference?.markets || [],
+          referenceEvidence: retainingPreviousRevision ? previous?.referenceEvidence || null : foundReference?.referenceEvidence || null,
           referenceSource: retainingPreviousRevision ? previous?.referenceSource || null : foundReference?.source || previous?.referenceSource || null,
           status: resumed || capturedHistoricalPit || preservePreviousReaderAnalysis ? 'done' : represented && hasOpenRows ? 'queued' : 'unopened',
           statusLabel: represented
@@ -3371,6 +3378,7 @@ export default function Home() {
           readerPayloadHash: credit.payloadHash,
           unavailableReason: actual.unavailableReason || null,
           verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
+          referenceEvidence: referenceByPk.get(Number(item.game.gamePk))?.referenceEvidence || null,
           generation,
         } : null;
       }).filter(Boolean);
@@ -3590,7 +3598,7 @@ export default function Home() {
       const references = await fetchReferenceLines(games, targetDate, credit.games || []);
       if (!stillCurrent()) return;
       const currentBoard = boardRef.current;
-      const referenceByPk = new Map((references.games || []).map(row => [Number(row.gamePk), row]));
+      const referenceByPk = referenceGameMap(references);
       const boardPks = new Set(currentBoard.filter(item => !isHistoricalIdentityConflict(item)).map(item => Number(item.game.gamePk)));
       const missingReaderGameCount = [...readerGameByPk.keys()].filter(gamePk => !boardPks.has(gamePk)).length;
       if (missingReaderGameCount > 0) {
@@ -3672,6 +3680,7 @@ export default function Home() {
           readerProvenance: actual.readerProvenance,
           readerPayloadHash: credit.payloadHash,
           verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
+          referenceEvidence: referenceByPk.get(Number(item.game.gamePk))?.referenceEvidence || null,
           generation,
         };
         const priorFailure = analysisFailureState(item.analysisFailure || {});
@@ -3768,6 +3777,7 @@ export default function Home() {
               readerProvenance: actual.readerProvenance || null,
               previousMarkets: item.customMarkets || [],
               verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
+              referenceEvidence: referenceByPk.get(Number(item.game.gamePk))?.referenceEvidence || null,
               settings: { ...settings, rebateRate: 0.015, candidateThreshold: 7.2, strongestThreshold: 8.5, expertMode: 'off' },
             }),
           }, 120000);
@@ -3797,6 +3807,7 @@ export default function Home() {
               readerPayloadHash: credit.payloadHash,
               customMarkets: actual.markets || [],
               verificationMarkets: referenceByPk.get(Number(item.game.gamePk))?.markets || item.verificationMarkets || [],
+              referenceEvidence: referenceByPk.get(Number(item.game.gamePk))?.referenceEvidence || null,
               referenceSource: referenceByPk.get(Number(item.game.gamePk))?.source || item.referenceSource || null,
               customData: compactAnalysisData(data),
               restoredFromCache: false,

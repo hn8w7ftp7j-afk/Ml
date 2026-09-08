@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
 import { register } from 'node:module';
 import { parseKboOfficialSchedulePayload } from '../lib/asian-baseball.js';
 import { LEAGUE_IDS, leagueConfig } from '../lib/leagues.js';
@@ -59,7 +60,7 @@ function functionSource(name) {
 function clientHarness(scheduleBody) {
   const posted = [];
   const calls = [];
-  const context = vm.createContext({ Date, Number, String, encodeURIComponent, leagueConfig, gameIsPrestartNow,
+  const context = vm.createContext({ Date, Number, String, encodeURIComponent, leagueConfig, gameIsPrestartNow, referenceGameMap,
     isHistoricalIdentityConflict, reconcileOfficialBoardIdentity,
     league: 'KBO', date: DATE, boardRef: { current: originalBoard }, currentLeagueRef: { current: 'KBO' },
     currentDateRef: { current: DATE }, analysisGenerationRef: { current: 1 },

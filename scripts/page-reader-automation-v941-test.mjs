@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.26', 'Diagnostic presentation release retains one shared release version');
+assert.equal(APP_VERSION, '11.9.27', 'Diagnostic presentation release retains one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -114,7 +114,7 @@ mustMatch(/REFERENCE_REFRESH_INTERVAL_MS = 2 \* 60 \* 1000/, 'external evidence 
 mustMatch(/referenceRefreshDue/, 'same-hash Reader polling must still refresh expiring external evidence');
 mustMatch(/只作驗證，不改W\/R/, 'the result row must visibly separate external verification from W/R');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
-mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated by official gamePk');
+mustMatch(/const referenceByPk = referenceGameMap\(references\)/, 'reference markets and signed failure receipts must be isolated by official gamePk');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
 mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full analyze request must send matched reference markets');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');

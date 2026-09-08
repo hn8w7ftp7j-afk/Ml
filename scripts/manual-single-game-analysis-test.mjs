@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
 
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 const source = page.slice(page.indexOf('  async function oneClickAnalyze('), page.indexOf('  function blockedReaderHashRecheckDue('));
@@ -19,6 +20,7 @@ async function exercise(selected, options = {}) {
   const requests = [], batches = [], errors = [];
   const noop = () => {};
   const context = {
+    referenceGameMap,
     allLeagueRunning: false, readerPollBusyRef: { current: !!options.queue }, league: 'MLB', date: '2026-09-09',
     queuedAnalysisRef: {}, setQueuedAnalysis: noop, setError: value => errors.push(value), setNotice: noop,
     activeLeague: { id: 'MLB', shortLabel: '美棒' }, loadBackgroundJob: () => null, boardRef: { current: board },
