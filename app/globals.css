@@ -50,3 +50,5 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .performanceEvidenceGrid .scoreBucketMetrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr)); }
 .performanceEvidenceGrid .scoreBucketMetrics strong { font-variant-numeric: tabular-nums; }
 .performanceAttribution p { font-size: 13px; line-height: 1.6; }
+
+.analysisCopy{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;max-width:100%}.analysisCopyButton{min-height:44px;font-size:13px}.analysisCopyStatus{font-size:12px;color:#9ae4bd;overflow-wrap:anywhere}.analysisCopyFallback{display:block;flex-basis:100%;min-width:0;font-size:13px;color:#c2d8ec}.analysisCopyFallback textarea{display:block;width:100%;min-height:220px;margin-top:8px;padding:12px;background:#071522;border:1px solid #355674;border-radius:10px;color:#eff6ff;font-size:16px;line-height:1.5}
