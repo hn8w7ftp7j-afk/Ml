@@ -7,6 +7,7 @@ Implemented:
 - New analyses retain actual settlement-event buckets with independent probability, settlement fractions and per-leg profit/rebate calculation, plus R scenario/downside trace. No reconstruction is applied to old results.
 - Preserve non-finite numbers as error objects in the new evidence export; this is not a replacement for engine QA or a retroactive repair of already serialized nulls.
 - Expose existing flattened batter metrics, sample PA, reliability, declared usage and provenance. Missing provenance is not filled from a different timestamp.
+- Persist the full data audit receipt in new market-analysis payloads, alongside the existing compact quality summary; old saved payloads are untouched.
 - Distinguish zero-start individual pitching samples from starter-only statistics; expose actual innings fallback and source branch.
 - Show both sides' saved innings statuses, and framing summary versus calculation-input status without guessing source semantics.
 - Export actual model FIP rates, constant, clamps and formula through the same calculation function. The numerical model and existing distribution output are unchanged.
