@@ -18,7 +18,11 @@ export async function GET(request) {
   if (!rate.allowed) return rateLimitResponse(rate);
   try {
     const bundle = await loadAnalysisPitReplay({ league: match[1], snapshotId, expected: { gamePk: Number(match[2]) } });
-    return json({ ok: true, audit: match[1] === 'MLB' ? auditSavedPitModel(bundle) : auditSavedAsianPit({ ...bundle, frozenContext: await hydrateAsianSourceEvidence(bundle.frozenContext) }) });
+    if (match[1] === 'MLB') return json({ ok: true, audit: auditSavedPitModel(bundle) });
+    let frozenContext = bundle.frozenContext;
+    try { frozenContext = await hydrateAsianSourceEvidence(frozenContext); }
+    catch { /* Missing external contents stay PENDING; the verified snapshot remains intact. */ }
+    return json({ ok: true, audit: auditSavedAsianPit({ ...bundle, frozenContext }) });
   } catch (error) {
     // Do not expose database connection details or private provider payloads.
     console.error('[PIT_MODEL_AUDIT_FAILED]', { name: error?.name, code: error?.code || null });

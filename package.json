@@ -1,6 +1,6 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.9.22",
+  "version": "11.9.23",
   "private": true,
   "type": "module",
   "engines": {
@@ -27,7 +27,7 @@
     "nba:shadow-history": "node scripts/nba-shadow-history.mjs",
     "compare:frozen": "node scripts/compare-frozen-analyses.mjs",
     "test:pit-audit": "node scripts/source-time-and-archive-test.mjs && node scripts/saved-pit-model-audit-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/pit-model-audit-route-test.mjs",
-    "test:asian-evidence": "node scripts/asian-source-evidence-test.mjs && node scripts/asian-production-features-v1-test.mjs && node scripts/asian-league-feature-gate-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/pit-model-audit-route-test.mjs"
+    "test:asian-evidence": "node scripts/asian-source-store-test.mjs && node scripts/asian-source-evidence-test.mjs && node scripts/asian-production-features-v1-test.mjs && node scripts/asian-league-feature-gate-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/pit-model-audit-route-test.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.0.2",

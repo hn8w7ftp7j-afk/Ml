@@ -14,6 +14,16 @@ assert.equal(auditAsianSourceEvidence(context).status, 'PENDING', 'missing neces
 assert.equal(JSON.stringify(context), before);
 const late = structuredClone(context); late.sourceEvidence.features[0].sourceEventIds = [second.event.id];
 assert.equal(history(late).status, 'FAILED');
+const lateMissing = structuredClone(late); lateMissing.sourceEvidence.contents = {};
+assert.equal(history(lateMissing).status, 'FAILED', 'missing content must not hide a known late bound acquisition');
+const dependent = structuredClone(context);
+dependent.sourceEvidence.features.push(
+  { featureName: 'gameIdentity', complete: true, derivationVersion: 'test', requiredFeatures: ['rules'] },
+  { featureName: 'rules', complete: true, sourceEventIds: [second.event.id] },
+);
+assert.equal(auditAsianSourceEvidence(dependent).rows.find(row => row.featureName === 'gameIdentity').status, 'FAILED', 'late transitive dependencies propagate independent of row order');
+dependent.sourceEvidence.features[2] = { featureName: 'rules', complete: true, derivationVersion: 'test', requiredFeatures: ['gameIdentity'] };
+assert.equal(auditAsianSourceEvidence(dependent).rows.find(row => row.featureName === 'gameIdentity').status, 'PENDING', 'cyclic dependencies cannot verify themselves');
 const missing = structuredClone(context); missing.sourceEvidence.contents = {};
 assert.equal(history(missing).status, 'PENDING');
 const broken = structuredClone(context); broken.sourceEvidence.contents[first.content.contentHash].data = 'broken';
