@@ -1,5 +1,6 @@
 'use client';
 import { runExplanationDisplay, externalVerificationExplanation, sourceStatusLabel, bullpenEvidenceDisplay, lineupCoverageDisplay } from '../lib/mlb-diagnostic-display-v1.js';
+import { evidenceJSON, settlementEvidence } from '../lib/analysis-evidence-export-v2.js';
 
 import { analysisDisplayGame, analysisGameIdentity, sameAnalysisGame } from '../lib/analysis-game-identity-v1.js';
 
@@ -1384,7 +1385,8 @@ function AnalysisDataAudit({ audit, persistence }) {
       {row.category === 'bullpen' && <p><b>近期用球紀錄：</b>{row.coverage?.usage ? `完整 ${row.coverage.usage.completeGames}/${row.coverage.usage.expectedGames} 場；取得 ${row.coverage.usage.fetchedGames} 場` : '未保存逐場覆蓋證據'}{row.coverage?.usage?.missingGames?.length > 0 ? `；缺項：${row.coverage.usage.missingGames.map(game => `${game.date || game.gamePk}${game.missingPlayers?.length ? `（${game.missingPlayers.map(player => player.name || player.id).join('、')}用球數）` : '（紀錄未確認）'}`).join('、')}` : ''}。缺值不代表 0 球或充分休息。</p>}
       {row.featureDefinition && <p><b>指數定義：</b>{row.featureDefinition.description}｜基準 OPS {row.featureDefinition.baselineOps ?? '未提供'}</p>}
       {row.substitutions?.length > 0 && <p><b>替代依據：</b>此項含替代或估計處理，展開明細可查原始依據。</p>}
-      <details><summary>身分、數據與來源明細</summary><pre>{JSON.stringify({ inningsEstimate: row.inningsEstimate, featureDefinition: row.featureDefinition, evidenceStatus: row.evidenceStatus, identity: row.identity, coverage: row.coverage, metrics: row.metrics, modelUsageInputs: row.modelUsageInputs, reportedBattingRates: row.reportedBattingRates, batterRateEvidence: row.batterRateEvidence, players: row.players, sources: row.sources, substitutions: row.substitutions, exclusions: row.exclusions, diagnostic: row.diagnostic, modelStatuses: row.modelStatuses, statusReason: row.statusReason, usage: row.usage }, null, 2)}</pre></details>
+      {row.roleEvidence && <p>先發專屬樣本：{row.roleEvidence.starterSampleStatus}｜局數分支：{row.roleEvidence.inningsBranch || '未保存'}｜預設局數：{row.roleEvidence.inningsFallback ?? '未使用或未保存'}</p>}
+      <details><summary>身分、數據與來源明細</summary><pre>{evidenceJSON({ roleEvidence: row.roleEvidence, modelBattingInputs: row.modelBattingInputs, inningsEstimate: row.inningsEstimate, featureDefinition: row.featureDefinition, evidenceStatus: row.evidenceStatus, identity: row.identity, coverage: row.coverage, metrics: row.metrics, modelUsageInputs: row.modelUsageInputs, reportedBattingRates: row.reportedBattingRates, batterRateEvidence: row.batterRateEvidence, players: row.players, sources: row.sources, substitutions: row.substitutions, exclusions: row.exclusions, diagnostic: row.diagnostic, modelStatuses: row.modelStatuses, statusReason: row.statusReason, usage: row.usage })}</pre></details>
     </div>)}</div>
     {audit.supportingData?.length > 0 && <details className="dataAuditRow"><summary>本季、近期與環境資料的取得及使用</summary><p>列出統計期間、實際取得欄位與模型使用。近期打擊保留小樣本收縮；整隊投球與主審身分另作查核，不能當成已啟用的得分效果。以下項目未併入上方核心人員數量。</p><pre>{JSON.stringify(audit.supportingData, null, 2)}</pre></details>}
     {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><p>此處只列模型是否使用，不代表來源完整或功能已通過歷史驗證。</p><pre>{JSON.stringify(audit.otherUsage, null, 2)}</pre></details>}
@@ -1397,7 +1399,7 @@ function BullpenEvidence({ row, league }) {
     <p>名單基準日：{evidence.rosterDates}｜個人能力統計截至：{evidence.metricDates}{evidence.metricDatesIncomplete ? '（部分日期未保存）' : ''}｜已列用量最新比賽日：{evidence.latestUsageDate}。最新紀錄日不等於完整覆蓋截止日。</p>
     <p>疲勞與可用性分開計算；可用性 1 不是官方確認，也不是 100% 出賽機率。候選名單與歷史後援出賽不等於當日角色已核驗。</p>
     {league === 'MLB' && <p>用量天數依比賽時間差換算並取整，不直接等同日曆上的昨日；請核對逐場 daysAgo 與權重。原始時間與推導紀錄未保存時，不補造。</p>}
-    <details><summary>後援能力樣本局數（十進位）</summary>{evidence.samples.map((player, index) => <p key={index}>{player.name}：{player.innings == null ? '未保存' : player.innings.toFixed(2)} 局；小樣本需搭配該版本收縮與角色證據解讀。</p>)}</details>
+    <details><summary>後援能力樣本局數（十進位）</summary><p>低於 10 局僅為顯示參考門檻，不是已驗證的可靠性界線；所有樣本仍須核對收縮與角色證據。</p>{evidence.samples.map((player, index) => <p key={index}>{player.name}：{player.innings == null ? '未保存' : player.innings.toFixed(2)} 局{player.innings != null && player.innings < 10 ? '；低於顯示參考門檻' : ''}。</p>)}</details>
   </div>;
 }
 
@@ -1462,7 +1464,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   };
   const sourceStatusText = Object.entries(analysisSourceStatusDisplay(item))
     .filter(([, value]) => value != null && String(value).trim())
-    .map(([key, value]) => sourceStatusLabel(key, value) || `${sourceStatusLabels[key] || key}：${value}`)
+    .map(([key, value]) => sourceStatusLabel(key, value, analysis.dataAudit, analysis.runExplanation) || `${sourceStatusLabels[key] || key}：${value}`)
     .join('｜');
   const provenanceText = (Array.isArray(analysis.featureProvenance) ? analysis.featureProvenance : [])
     .slice(0, 10)
@@ -1489,7 +1491,8 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
     {analysisHasCalculatedDirections(item.customData) && <AnalysisDataAudit audit={analysis.dataAudit} persistence={item.customData?.pitPersistence}/>}
     {(preservingPreviousReaderAnalysis || item.restoredFromCache === true) && <div className="sourceBanner shadowBanner"><strong>保留的分析版本</strong><span>分析時間：{localTime(analysis.analysisAsOf || analysis.createdAt)}｜資料截至：{localTime(analysis.dataAsOf)}｜盤口時間：{localTime(analysis.lineAsOf)}｜模型：{analysis.modelVersion || '未記錄'}｜Reader：{(analysis.results || []).find(row => row.readerVersion)?.readerVersion || '未記錄'}｜此處時間與版本屬於保留結果</span></div>}
     {analysis.runExplanation && <details className="details"><summary>得分計算過程與局部敏感度</summary><p>以下是既定局數、終局處理前的得分中心。敏感度不等於特徵貢獻，也不是重新估算的 EV。OPS 同時是左右拆分倍率的分母；固定拆分資料時，OPS 單項斜率可能為負。</p><pre>{JSON.stringify(runExplanationDisplay(analysis.runExplanation), null, 2)}</pre></details>}
-    {analysis.distributionQA && <details className="details"><summary>比分矩陣分期間 QA</summary><p>列出機率總和、平局與勝分差；終局矩陣檢查不等於逐路徑合法性或歷史準確度驗證。</p><pre>{JSON.stringify(analysis.distributionQA, null, 2)}</pre></details>}
+    {analysis.distributionQA && <details className="details"><summary>比分矩陣分期間 QA</summary><p>列出機率總和、平局與勝分差；終局矩陣檢查不等於逐路徑合法性或歷史準確度驗證。</p><pre>{evidenceJSON(analysis.distributionQA)}</pre></details>}
+    <details className="details"><summary>完整精度結算欄位（保存結果，未獨立重播）</summary><pre>{evidenceJSON(settlementEvidence(analysis))}</pre></details>
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT快照保存已確認（不等於資料全數驗證）' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
     {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}（卡片來源紀錄）｜分析記錄盤口時間：{localTime(analysis.lineAsOf)}；兩者各依原欄位顯示，逐方向盤口時間與版本請見完整分析匯出。</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}

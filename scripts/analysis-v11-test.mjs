@@ -65,6 +65,15 @@ assert.equal(analysis.scenarioSummary.targetPriceCalibratesDistribution, false);
 assert.equal(analysis.scenarioSummary.marketProbabilityCalibrationApplied, false);
 assert.equal(analysis.alignmentAudit.targetMarketCalibration, 'DISABLED_EXECUTION_PRICE_ONLY');
 for (const row of analysis.results) {
+  assert.equal(row.settlementEvidenceVersion, 'SETTLEMENT-EVENT-TRACE-v1');
+  assert.ok(Math.abs(row.settlementEvents.reduce((sum, event) => sum + event.modelEventProbability, 0) - 1) < 1e-9);
+  assert.ok(Math.abs(row.settlementEvents.reduce((sum, event) => sum + event.modelEventProbability * event.calculation.profit, 0) - row.modelEV) < 1e-9, 'saved event probability and actual per-leg payoff reconstruct W in profit-per-unit units');
+  assert.equal(row.robustEvidence.robustEV, row.robustEV);
+  for (const event of row.settlementEvents) {
+    assert.equal(event.scope, 'PAYOFF_EQUIVALENCE_CLASS');
+    assert.ok(event.legs.every(leg => !Object.hasOwn(leg, 'exactLine')), 'payoff classes cannot claim a representative cell is the entire exact-line event');
+    assert.ok(Math.abs(event.calculation.rebate - .015 * event.calculation.settledAmount) < 1e-12);
+  }
   assert.equal(row.marketCalibrationWeight, 0);
   assert.equal(row.marketCalibrationApplied, false);
   assert.equal(row.marketBaselineApplied, false);
