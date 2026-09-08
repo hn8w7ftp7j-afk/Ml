@@ -1363,7 +1363,7 @@ function AnalysisDataAudit({ audit, persistence }) {
     <summary>核心人員資料與模型使用｜實際 {summary.observed || 0}・替代 {summary.projected || 0}・缺失 {summary.missing || 0}・舊資料 {summary.stale || 0}</summary>
     {snapshotLink}
     <p className="muted">{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'} 各項詳細覆蓋情形如下。</p>
-    {sourceTimeAudit && <div className="dataAuditRow"><strong>資料時點核對：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[sourceTimeAudit.status] || '未核對'}</strong><p>輸入鎖定：{sourceTimeAudit.inputCutoffAt || '未保存'}。快照保存與資料時點分開核對；均不代表預測效果已驗證。</p><details><summary>逐項時間證據</summary><pre>{JSON.stringify(sourceTimeAudit.rows, null, 2)}</pre></details></div>}
+    {sourceTimeAudit && <div className="dataAuditRow"><strong>來源內容與取得時點核對：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[sourceTimeAudit.status] || '未核對'}</strong><p>輸入鎖定：{sourceTimeAudit.inputCutoffAt || '未保存'}。此項只核對綁定來源內容與取得時間，不代表資料可用或特徵映射已驗證。缺失與未接入狀態請看逐項證據；均不代表預測效果已驗證。</p><p>特徵可用性與映射：</p>{sourceTimeAudit.rows?.map(row => <p key={row.featureName}>{row.featureName}｜{({ NOT_CONNECTED: '未接入來源', MISSING: '資料缺失', PROJECTED: '含推估資料', REPORTED: '有輸入紀錄', UNKNOWN: '未記錄' })[row.availability] || '舊快照未記錄可用性'}｜{row.mapping?.status === 'MAPPED_PATHS_PRESENT' ? '來源欄位存在；推導結果尚未重播驗證' : '欄位映射證據不足'}</p>)}<details><summary>逐項時間證據</summary><pre>{JSON.stringify(sourceTimeAudit.rows, null, 2)}</pre></details></div>}
     {audit.leagueLimitations?.map(note => <p key={note}>{note}</p>)}
     <div className="dataAuditRows">{audit.rows.map(row => <div className="dataAuditRow" key={row.id || row.key}>
       <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
@@ -1437,7 +1437,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   ).ranking && !preservingPreviousReaderAnalysis && !blockedMarkets.has(row.market)).length;
   const expectedRuns = analysis.expectedRuns || null;
   const sourceStatusLabels = {
-    starters: '先發', lineups: '打線', bullpen: '純牛棚', parkFactor: '球場', weather: '天氣',
+    starterIdentity: '球員身分', starterAssignments: '當場先發指派', starters: '個人先發能力統計', lineups: '打線', bullpen: '純牛棚', parkFactor: '球場', weather: '天氣',
     catcherFraming: '捕手Framing', defenseFRV: '守備FRV', injuryRunValue: '傷停', pitchTypeMatchup: '球種對戰',
     umpire: '主審效果', umpireZone: '主審Zone', parkWindOrientation: '球場風向',
   };
@@ -1561,6 +1561,8 @@ export default function Home() {
   boardRef.current = board;
   const [readerStatus, setReaderStatus] = useState(null);
   const [readerPolling, setReaderPolling] = useState(false);
+  const [readerTrace, setReaderTrace] = useState([]);
+  function recordReaderPhase(phase, detail = '') { setReaderTrace(rows => [...rows.slice(-19), { at: new Date().toISOString(), league, date, phase, detail }]); }
   const [queuedAnalysis, setQueuedAnalysis] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ active: false, done: 0, total: 0, label: '' });
@@ -3439,13 +3441,17 @@ export default function Home() {
 
   async function pollReaderAndReprice() {
     if (operationBusyRef.current || readerPollBusyRef.current || allLeagueBusyRef.current
-      || allLeagueRunning || !boardRef.current.length) return;
+      || allLeagueRunning || !boardRef.current.length) {
+      if (boardRef.current.length) recordReaderPhase('等待其他工作完成', readerPollBusyRef.current ? '前次Reader複核仍在執行' : '分析工作占用中');
+      return;
+    }
     const targetDate = date;
     const generation = analysisGenerationRef.current;
     const stillCurrent = () => generation === analysisGenerationRef.current && currentDateRef.current === targetDate;
     readerPollBusyRef.current = true;
     markAppOperationBusy(true);
     setReaderPolling(true);
+    recordReaderPhase('讀取Reader狀態');
     let fullSlateRecoveryNeeded = false;
     try {
       const status = await requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`, {}, 20000);
@@ -3455,7 +3461,7 @@ export default function Home() {
       const statusRevision = readerHashKey(targetDate, currentStatus?.payloadHash);
       const referenceRefreshDue = league === 'MLB'
         && Date.now() - Number(lastReferenceRefreshAtRef.current || 0) >= REFERENCE_REFRESH_INTERVAL_MS;
-      if (!currentStatus?.fresh || !statusRevision) return;
+      if (!currentStatus?.fresh || !statusRevision) { recordReaderPhase('等待有效Reader資料'); return; }
       if (statusRevision === creditRevisionRef.current
         && !blockedReaderHashRecheckDue(currentStatus.payloadHash)
         && !readerBoardNeedsCoreRefresh()
@@ -3471,6 +3477,7 @@ export default function Home() {
       // A restored card is an immutable historical snapshot, not today's
       // official request identity. Provider IDs may change as links appear or
       // disappear, so every credit verification uses a freshly fetched slate.
+      recordReaderPhase('核對官方賽程');
       const games = await fetchSchedule(targetDate);
       if (!stillCurrent()) return;
       if (!games.length) {
@@ -3481,6 +3488,7 @@ export default function Home() {
         setNotice('目前已無官方賽前場次；先前分析保留查閱，停止驗證新的下注盤口。');
         return;
       }
+      recordReaderPhase('伺服器驗證盤口');
       const credit = await requestJSONWithTransientRetry('/api/credit-lines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
@@ -3685,6 +3693,7 @@ export default function Home() {
             statusLabel: '盤口快速重算中｜保留目前分數｜停止下注',
             error: '',
           }));
+          recordReaderPhase('重算已驗證盤口', String(item.game.gamePk));
           const data = await requestJSON('/api/reprice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
@@ -3819,8 +3828,9 @@ export default function Home() {
         setError(`${failed}場盤口更新暫時失敗；已保留上一版分數，下次輪詢只重試暫時失敗場次。`);
       }
     } catch (cause) {
-      if (stillCurrent()) invalidateReaderStatus(cause?.message || cause);
+      if (stillCurrent()) { recordReaderPhase('複核失敗', String(cause?.message || cause)); invalidateReaderStatus(cause?.message || cause); }
     } finally {
+      if (stillCurrent()) recordReaderPhase('本次複核結束', '是否可用仍依各場QA與盤口驗證結果');
       readerPollBusyRef.current = false;
       markAppOperationBusy(false);
       setReaderPolling(false);
@@ -4098,7 +4108,7 @@ export default function Home() {
     {tab === 'board' && <>
       <section className="heroCard">
         <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型EV（W）與穩健EV（R）。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
+        <details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details><div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
           <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每5分鐘複核｜S分數、W與R完整顯示` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>

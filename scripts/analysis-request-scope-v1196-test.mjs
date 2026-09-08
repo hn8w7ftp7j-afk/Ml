@@ -119,7 +119,7 @@ await test('a detached Reader poll releases its lock without consuming another l
   const state = { readerPolling: false, queue, launches: 0 };
   const context = vm.createContext({
     date: DATE, league: 'NPB', allLeagueRunning: false,
-    operationBusyRef: { current: false }, readerPollBusyRef: { current: false },
+    recordReaderPhase: () => {}, operationBusyRef: { current: false }, readerPollBusyRef: { current: false },
     allLeagueBusyRef: { current: false }, boardRef: { current: [card()] },
     analysisGenerationRef: { current: 1 }, currentDateRef: { current: DATE },
     currentLeagueRef: { current: 'NPB' }, queuedAnalysisRef: { current: queue },
