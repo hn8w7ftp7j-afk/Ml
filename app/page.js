@@ -1,5 +1,7 @@
 'use client';
 
+import { analysisDisplayGame, analysisGameIdentity, sameAnalysisGame } from '../lib/analysis-game-identity-v1.js';
+
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/performance-evidence-v1.js';
 import { APP_VERSION } from '../lib/app-version.js';
@@ -1382,6 +1384,8 @@ function AnalysisDataAudit({ audit, persistence }) {
 }
 
 function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
+  const displayedGame = analysisDisplayGame(item);
+  const displayedItem = { ...item, game: displayedGame };
   const gamePrestart = gameIsPrestartNow(item.game, now);
   const latestCoverage = item.latestMarketCoverage || null;
   const coverage = latestCoverage || item.marketCoverage || {};
@@ -1454,7 +1458,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   };
   return <section className="gameCard">
     <div className="gameHead">
-      <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{analysisStarterDisplay(item, 'away')} 對 {analysisStarterDisplay(item, 'home')}</p></div>
+      <div><h2>{matchup(displayedGame)}</h2><p>{localTime(displayedGame.gameDate)}｜{analysisStarterDisplay(displayedItem, 'away')} 對 {analysisStarterDisplay(displayedItem, 'home')}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
     {shadowMode && <div className="sourceBanner shadowBanner"><strong>🧪 {item.game.leagueId || item.game.league || 'MLB'} 聯合比分影子模型</strong><span>{preservingPreviousReaderAnalysis
@@ -2321,7 +2325,8 @@ export default function Home() {
   }
 
   function commitAnalysisPayload(task, baseData) {
-    const game = task?.game || baseData?.game;
+    if (task?.game?.gamePk && baseData?.game?.gamePk && !sameAnalysisGame(task.game, baseData.game)) return false;
+    const game = analysisGameIdentity(task?.game, baseData?.game);
     if (!game?.gamePk || !baseData?.analysis) return false;
     const commitBoard = updater => {
       const next = updater(boardRef.current);
@@ -2383,6 +2388,7 @@ export default function Home() {
         latestReaderSource: null,
         readerProvenance: task?.readerProvenance || previous.readerProvenance || null,
         readerPayloadHash: task?.readerPayloadHash || previous.readerPayloadHash || null,
+        pendingReaderEvidenceHash: null,
         referenceData: compactAnalysisData(baseData),
         mode: 'actual',
         status: 'done',
