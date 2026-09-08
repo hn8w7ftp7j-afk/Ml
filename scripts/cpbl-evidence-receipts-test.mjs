@@ -33,3 +33,34 @@ assert.equal(receipt.rows.find(r=>r.id==='away.starter').metrics.expectedInnings
 assert.equal(receipt.supportingData.find(r=>r.key==='away.hitting').metrics.games,19);
 assert.equal(receipt.supportingData.find(r=>r.key==='away.recentHitting').label,'客隊最近10場打擊');
 assert.equal(receipt.supportingData.find(r=>r.key==='away.pitching').metrics.gamesPitched,19);
+
+// Official page sample contract: rates are observed, AB/H are never synthesized.
+const { parseCpblBatterRates, matchCpblBatterRates, cpblRatesEligible } = await import('../lib/cpbl-batter-rates-v1.js');
+const { projectedLineup } = await import('../lib/asian-production-features-v1.js');
+const query = {queryKey:['season-pr-table',{year:2026,searchType:'batter',gameKind:'A'}],state:{status:'success',data:[{player:{acnt:'0000000935'},team:{code:'AKP011'},pa:333,ba:0.24752475247524752,obp:0.30120481927710846,slg:0.3564356435643564}]}};
+const html = `<script>self.__next_f.push(${JSON.stringify([1,'2:'+JSON.stringify({queries:[query]})+'\n'])})</script>`;
+const table = parseCpblBatterRates(html,2026);
+assert.equal(table.rows.length,1);
+assert.equal(parseCpblBatterRates(html,2025),null);
+assert.equal(parseCpblBatterRates('<script>throw new Error()</script>',2026),null);
+assert.equal(matchCpblBatterRates(table,{id:'0000000935'},'AJL011'),null);
+const rates=matchCpblBatterRates(table,{id:'0000000935'},'AKP011');
+assert.equal(rates.plateAppearances,333);
+assert.equal(rates.atBats,null);
+assert.equal(rates.hits,null);
+assert.equal(rates.usedInMean,false);
+assert.equal(cpblRatesEligible({gameDate:'2026-09-08T10:35:00Z',officialDate:'2026-09-08'},'2026-09-08T09:00:00Z'),true);
+assert.equal(cpblRatesEligible({gameDate:'2026-09-08T10:35:00Z',officialDate:'2026-09-08'},'2026-09-08T11:00:00Z'),false);
+assert.equal(cpblRatesEligible({gameDate:'2026-09-08T10:35:00Z',officialDate:'2026-09-08'},'2026-09-07T09:00:00Z'),false);
+const pageCapture=captureAsianSource({url:'https://stats.cpbl.com.tw/players/0000000935',raw:html,representation:'HTTP_RESPONSE_TEXT',fetchedAt:'2026-09-08T09:00:00Z',httpStatus:200});
+const pageBindings=cpblFeatureBindings({featureName:'away.lineup',game:{awayCode:'TSG'},parsedInput:{batterRateEvidence:{sourceEventId:pageCapture.event.id,path:table.path}},events:[pageCapture.event],contents:{[pageCapture.content.contentHash]:pageCapture.content}});
+assert.equal(inspectFeatureMapping({sourceBindings:pageBindings},()=>html).status,'MAPPED_PATHS_PRESENT');
+const lineupDetails=[{game:{gamePk:1,awayTeamId:706,gameDate:'2026-09-07'},detail:{away:{lineup:Array.from({length:9},(_,i)=>({id:String(i),name:'測試',reportedBattingRates:rates}))}}}];
+const lineup=projectedLineup(lineupDetails,706,'CPBL');
+assert.equal(lineup.offensiveIndex,1);
+assert.equal(lineup.statsCoverage,0);
+lineup.rateStatsCoverage=1;
+const rateReceipt=buildAnalysisDataAudit({leagueId:'CPBL',away:{lineup}}).rows.find(row=>row.id==='away.lineup');
+assert.equal(rateReceipt.reportedBattingRates[0].statistics.plateAppearances,333);
+assert.match(rateReceipt.featureDefinition.description,/缺少實測打數/);
+console.log('CPBL official rate evidence: year/team/ID guards, pregame exclusion, source mapping, and unchanged neutral mean PASS');
