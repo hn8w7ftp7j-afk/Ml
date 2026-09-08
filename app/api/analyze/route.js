@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { analysisGameIdentity } from '../../../lib/analysis-game-identity-v1.js';
 import { compactAnalysisContext, compactRepriceSnapshot } from '../../../lib/analysis-transport-v1.js';
 import {
   buildDistributionSnapshot,
@@ -542,7 +543,7 @@ export async function POST(request) {
     );
     const provider = getLeagueProvider(league);
     const payload = {
-      ok: true, league, game, context: compactAnalysisContext(frozenContext), analysis: finalized, repriceSnapshot,
+      ok: true, league, game: analysisGameIdentity(game, frozenContext.game), context: compactAnalysisContext(frozenContext), analysis: finalized, repriceSnapshot,
       analysisMode: provider.analysisMode, betEligible: provider.betEligible,
       openMarkets: [...new Set(activeMarkets.map(row => row.market))],
       blockedMarkets: marketCoverage.blockedMarkets,
