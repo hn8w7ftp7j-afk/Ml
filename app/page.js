@@ -1274,8 +1274,8 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, action, now, i
     && referenceEvidenceFreshNow(row, now);
   const externalBookCount = Number(row?.marketVerification?.referenceConsensusBookCount || 0);
   const externalAuditText = externalAuditFresh
-    ? `外部市場驗證：PASS｜${externalBookCount}家獨立莊家｜5分鐘內同賽事同期間同合約`
-    : `外部市場驗證：未通過｜${row?.marketVerification?.priorIneligibleReason || '目前沒有可安全配對的同合約價格'}`;
+    ? `外部價格稽核：有資料｜${externalBookCount}家獨立莊家｜5分鐘內同賽事同期間同合約`
+    : `外部價格稽核：無可用資料｜${row?.marketVerification?.priorIneligibleReason || '目前沒有可安全配對的同合約價格'}`;
   const tai888Gap = row?.tai888MarketProbabilityGap == null
     ? row?.rawMarketProbabilityGap
     : row.tai888MarketProbabilityGap;
@@ -1311,8 +1311,8 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, action, now, i
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
       <div className="scoreMeta"><strong>模型EV W {signedPct(modelEV)}｜穩健EV R {signedPct(robustEV)}</strong>{robustEV != null && robustEV <= 0 ? '｜觀察／不排名' : ''}</div>
       <div className={`qaLine ${qaLabel === 'BLOCK' ? 'pending' : ''}`}>資料／數學 QA：{qaLabel}{qaReason ? `（${qaReason}）` : ''}</div>
-      <div className={`qaLine ${externalAuditFresh ? '' : 'pending'}`}>{externalAuditText}｜只作驗證，不改W/R</div>
-      {!externalAuditFresh && <details className="details"><summary>外部驗證原因</summary><p>{externalVerificationExplanation(row?.marketVerification, externalAuditFresh)}</p></details>}
+      <div className="qaLine">{externalAuditText}｜不影響W/R、S分數與排名</div>
+      {!externalAuditFresh && <details className="details"><summary>外部稽核資料說明</summary><p>{externalVerificationExplanation(row?.marketVerification, externalAuditFresh)}</p></details>}
       <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}</div>
       {inactiveNotice && <div className="scoreMeta">實際下注紀錄狀態：{inactiveNotice}</div>}
       <div className="scoreMeta">{probabilityDetail}</div>
