@@ -41,6 +41,17 @@ assert.match(exported,/08:26:00（台灣時間）/);
 assert.ok(exported.includes(receipt.persistence.snapshotId));
 assert.equal(JSON.stringify(receipt),original);
 assert.equal(buildGameAnalysisCopy(root,receipt),exported);
+for (const leagueId of ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL']) {
+  const scoped = structuredClone(receipt);
+  scoped.game.leagueId = leagueId;
+  scoped.analysis.results = [{ market: 'FULL_SPREAD', pick: 'test', water: .95, lineAsOf: '2026-09-07T00:20:00Z', readerGameMarketHash: 'frozen-market', readerPayloadHash: 'frozen-payload' }];
+  const copy = buildGameAnalysisCopy(root, scoped);
+  assert.ok(copy.includes(`聯盟：${leagueId}`));
+  assert.match(copy, /frozen-market/);
+  assert.match(copy, /2026-09-07T00:20:00Z/);
+  assert.match(copy, /重播結論僅適用於實際查核的快照 ID/);
+  assert.match(copy, /"readerVersion": null/, 'never invent absent per-direction lineage');
+}
 assert.throws(()=>analysisCardText(null));
 console.log('PASS collapsed nested details, all eight directions, missing/zero, game isolation and original version/time receipts');
 

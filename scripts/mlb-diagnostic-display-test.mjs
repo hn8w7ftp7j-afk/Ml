@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { starterInningsDisplay, runExplanationDisplay, externalVerificationExplanation, sourceStatusLabel, bullpenEvidenceDisplay } from '../lib/mlb-diagnostic-display-v1.js';
+import { starterInningsDisplay, runExplanationDisplay, externalVerificationExplanation, sourceStatusLabel, bullpenEvidenceDisplay, lineupCoverageDisplay } from '../lib/mlb-diagnostic-display-v1.js';
 import { expectedStarterInningsV13 } from '../lib/mlb-context-v13.js';
 import { estimateRunProfileV13 } from '../lib/joint-score-v13.js';
 
@@ -34,4 +34,10 @@ assert.deepEqual(bullpenEvidenceDisplay(bullpenRow), { rosterDates: '2026-09-08'
 assert.equal(JSON.stringify(bullpenRow), before);
 assert.equal(bullpenEvidenceDisplay({ asOf: '2026-09-08' }).rosterDates, '未保存', 'must not infer roster date from aggregate asOf');
 assert.equal(bullpenEvidenceDisplay().latestUsageDate, '未保存');
+const missingRates = { coverage: { identityCount: 9, expectedCount: 9, metricCoverage: 1, modelMetricCoverage: 1 }, reportedBattingRates: Array.from({ length: 9 }, () => ({ statistics: null })) };
+const originalRates = JSON.stringify(missingRates);
+assert.match(lineupCoverageDisplay(missingRates), /系統回報模型用指標覆蓋 9\/9.*未提供逐人打擊率/);
+assert.match(lineupCoverageDisplay({ coverage: { metricCoverage: 1 } }), /模型用指標覆蓋 未提供/, 'do not substitute observed coverage for model coverage');
+assert.match(lineupCoverageDisplay({ coverage: { expectedCount: 8, modelMetricCoverage: .5 }, reportedBattingRates: [{ statistics: { average: 0 } }] }), /覆蓋 4\/8.*已列 1\/8/, 'zero rates remain present and denominator comes from evidence');
+assert.equal(JSON.stringify(missingRates), originalRates);
 console.log('MLB diagnostic display: projection semantics, immutable report, neutral calculation and external evidence checks PASS');
