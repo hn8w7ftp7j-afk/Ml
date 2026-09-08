@@ -18,6 +18,9 @@ assert.deepEqual(item, before, 'presentation cannot mutate frozen inputs, model 
 const verified = structuredClone(item);
 for (const side of ['away', 'home']) verified.customData.context[side] = { upstreamReadiness: { starterIdentity: true }, starter: { name: game[`${side}Probable`], id: side === 'away' ? '123' : '456', teamId: game[`${side}TeamId`], identityConfirmed: true, confirmed: true } };
 assert.equal(analysisSourceStatusDisplay(verified).starterIdentity, 'CONFIRMED');
+// Actual NPB IDs can start with zero (Sep 9 official schedule: 達 孝太 01205155).
+verified.customData.context.away.starter.id = '01205155';
+assert.equal(analysisSourceStatusDisplay(verified).starterIdentity, 'CONFIRMED');
 assert.equal(analysisSourceStatusDisplay({ ...verified, customData: { ...verified.customData, context: compactAnalysisContext(verified.customData.context) } }).starterIdentity, 'CONFIRMED');
 for (const mutate of [x => x.game.gamePk++, x => x.customData.context.game.gameDate = '', x => x.customData.context.home.starter.id = null, x => x.customData.context.home.starter.teamId = 999, x => x.customData.context.home.starter.identityMismatch = true, x => delete x.customData.context.home.upstreamReadiness, x => x.customData.context.leagueId = 'KBO']) {
   const bad = structuredClone(verified); bad.game = { ...bad.game }; mutate(bad); assert.notEqual(analysisSourceStatusDisplay(bad).starterIdentity, 'CONFIRMED');
