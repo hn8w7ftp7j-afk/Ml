@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import './manual-single-game-analysis-test.mjs';
 
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 

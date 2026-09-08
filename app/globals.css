@@ -41,6 +41,8 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .performanceEvidenceFilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; margin: 12px 0; }
 .performanceEvidenceFilters label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
 .performanceEvidenceFilters select { width: 100%; min-width: 0; min-height: 44px; padding: 8px; color: inherit; background: #111827; border: 1px solid #475569; border-radius: 8px; }
+.heroControls, .heroControls > label { min-width: 0; }
+.heroControls select { display: block; width: 100%; min-height: 44px; margin-top: 6px; padding: 11px 12px; background: #071522; color: #fff; border: 1px solid #355674; border-radius: 11px; }
 .performanceEvidenceGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
 .performanceEvidenceGrid article { min-width: 0; border: 1px solid #334155; padding: 12px; border-radius: 8px; }
 .performanceEvidenceGrid strong, .performanceEvidenceGrid small, .scorePerformanceBetRow small { overflow-wrap: anywhere; }

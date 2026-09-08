@@ -1495,7 +1495,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
       {(item.actualSource || item.marketCoverage || actualRows.length > 0) && <div className="actualBox">
         <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>{preservingPreviousReaderAnalysis ? 'Reader最新' : ''}已開 {openMarketCount}/4 市場{preservingPreviousReaderAnalysis ? '｜保留上一版分析' : ''}</span></div>
         {allDirectionsUnopened
-          ? <div className="readerWaitingSummary"><strong>目前尚未開盤</strong><span>四市場八方向由 Reader 持續監看；實際盤口出現後會自動分析。</span></div>
+          ? <div className="readerWaitingSummary"><strong>目前尚未開盤</strong><span>四市場八方向由 Reader 持續監看；實際盤口出現後，請手動按分析。</span></div>
           : MARKET_ORDER.map(market => {
           const rows = actualRows.filter(row => row.market === market).sort(compareDirectionsByScore);
           const calculated = rows.some(row => modelEvValue(row) != null);
@@ -1573,6 +1573,8 @@ export default function Home() {
   const [tab, setTab] = useState('board');
   const [date, setDate] = useState(taipeiDate());
   const [schedule, setSchedule] = useState([]);
+  const [gamePicker, setGamePicker] = useState({ scope: '', games: [], selected: '', loading: false });
+  const gamePickerRequestRef = useRef(0);
   const [board, setBoard] = useState([]);
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -1783,6 +1785,8 @@ export default function Home() {
   }
 
   function selectAnalysisDate(value) {
+    gamePickerRequestRef.current += 1;
+    setGamePicker({ scope: '', games: [], selected: '', loading: false });
     setLeagueBoardDate(league, value, { manual: true });
   }
 
@@ -2071,7 +2075,7 @@ export default function Home() {
     setSchedule(restoredBoard.map(item => item.game));
     setBoard(restoredBoard);
     setError('');
-    if (restoredBoard.length) setNotice(`已恢復 ${restoredBoard.length} 場上一版分析；分數保留顯示，Reader 正在背景驗證目前盤口。`);
+    if (restoredBoard.length) setNotice(`已恢復 ${restoredBoard.length} 場上一版分析；分數保留顯示，未啟動重算，請手動按分析以驗證最新盤口。`);
     readerStatusRef.current = null;
     readerStatusHighWaterRef.current = null;
     setReaderStatus(null);
@@ -2191,17 +2195,8 @@ export default function Home() {
     const timer = window.setInterval(refreshReader, READER_RECHECK_INTERVAL_MS);
     return () => { active = false; window.clearInterval(timer); };
   }, [date, board.length, league, readerEnabled, analysisEnabled, allLeagueRunning]);
-  useEffect(() => {
-    if (!readerEnabled || !analysisEnabled || !board.length || restoredBoardNeedsValidationRef.current) return undefined;
-    const pendingBatch = loadBackgroundJob(league, date, boardRef.current);
-    if (pendingBatch?.runId && pendingBatch?.batchMode === 'all-leagues') return undefined;
-    // Validate immediately after a page restore or completed analysis. Waiting
-    // for the first interval meant every mobile refresh restarted the delay and
-    // could leave otherwise-current bet buttons hidden indefinitely.
-    pollReaderAndReprice();
-    const timer = window.setInterval(() => pollReaderAndReprice(), READER_RECHECK_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [board.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning]);
+  // Reader polling above is read-only. Analysis/repricing requires an explicit
+  // analysis button; neither entry, timers nor a completed job may start it.
   useEffect(() => {
     // A previous league's poll may release the shared Reader lock after this
     // league queued a manual click. Drain from the active render so the old
@@ -2212,7 +2207,7 @@ export default function Home() {
       || queuedAnalysis.league !== league || queuedAnalysis.date !== date) return;
     queuedAnalysisRef.current = null;
     setQueuedAnalysis(null);
-    void oneClickAnalyze();
+    void oneClickAnalyze('', queuedAnalysis.gamePk);
   }, [queuedAnalysis, readerPolling, busy, allLeaguePreparing, allLeagueRunning, analysisEnabled, league, date]);
   const currentReaderHashKey = readerHashKey(date, readerStatus?.payloadHash);
   const readerExecutable = readerEnabled
@@ -2269,6 +2264,23 @@ export default function Home() {
 
   async function fetchSchedule(targetDate = date) {
     return fetchScheduleForLeague(league, targetDate, { commit: true });
+  }
+
+  async function loadGamePicker() {
+    const scope = `${league}:${date}`;
+    const request = ++gamePickerRequestRef.current;
+    setGamePicker({ scope, games: [], selected: '', loading: true });
+    setError('');
+    try {
+      const games = await fetchScheduleForLeague(league, date);
+      if (request !== gamePickerRequestRef.current || `${currentLeagueRef.current}:${currentDateRef.current}` !== scope) return;
+      setGamePicker({ scope, games, selected: '', loading: false });
+      setNotice(games.length ? '已讀取賽程，尚未執行分析。請選擇一場，或按本日全部分析。' : '這個日期目前沒有可分析的賽前賽事。');
+    } catch (cause) {
+      if (request !== gamePickerRequestRef.current || `${currentLeagueRef.current}:${currentDateRef.current}` !== scope) return;
+      setGamePicker({ scope, games: [], selected: '', loading: false });
+      setError(cause?.message || '賽程讀取失敗');
+    }
   }
 
   async function fetchReferenceLines(games, targetDate = date, targetGames = []) {
@@ -3112,13 +3124,13 @@ export default function Home() {
     }
   }
 
-  async function oneClickAnalyze(automaticKey = '') {
+  async function oneClickAnalyze(automaticKey = '', selectedGamePk = null) {
     if (allLeagueRunning) {
       setNotice('四聯盟背景分析正在進行；完成後即可重新分析目前聯盟。');
       return false;
     }
     if (readerPollBusyRef.current) {
-      const queued = { league, date };
+      const queued = { league, date, gamePk: selectedGamePk };
       queuedAnalysisRef.current = queued;
       setQueuedAnalysis(queued);
       setError('');
@@ -3145,13 +3157,15 @@ export default function Home() {
     const generation = analysisGenerationRef.current;
     const previousByPk = new Map(boardRef.current.map(item => [Number(item.game.gamePk), item]));
     setError(''); setNotice(''); setTab('board');
-    setBoard(current => current.map(item => item.actualSource?.provider === 'TAI888_READER_AUTO'
+    setBoard(current => current.map(item => (selectedGamePk == null || Number(item.game.gamePk) === Number(selectedGamePk)) && item.actualSource?.provider === 'TAI888_READER_AUTO'
       ? { ...item, readerPayloadHash: null, status: 'running', statusLabel: '後台重新驗證中｜保留目前分數｜停止下注', error: '' }
       : item));
     try {
       setProgress({ active: true, done: 0, running: 1, total: 1, label: `取得今日${activeLeague.shortLabel}賽事` });
-      const games = await fetchSchedule(targetDate);
+      const officialGames = await fetchSchedule(targetDate);
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
+      const games = selectedGamePk == null ? officialGames : officialGames.filter(game => Number(game.gamePk) === Number(selectedGamePk));
+      if (selectedGamePk != null && !games.length) throw new Error('選中的比賽已開賽、取消或不屬於目前日期；請重新讀取賽程。未啟動其他場次分析。');
       if (!games.length) {
         creditRevisionRef.current = '';
         officialPrestartCheckedAtRef.current = Date.now();
@@ -3185,6 +3199,7 @@ export default function Home() {
       });
 
       if (credit?.code === 'NO_PRESTART_GAMES') {
+        if (selectedGamePk != null) throw new Error('選中的比賽目前已無可分析的賽前盤口；未啟動其他場次分析。');
         creditRevisionRef.current = '';
         officialPrestartCheckedAtRef.current = Date.now();
         autoAnalyzeHashRef.current = requestedAutoKey || readerHashKey(targetDate, credit.payloadHash);
@@ -3198,7 +3213,7 @@ export default function Home() {
         creditRevisionRef.current = '';
         officialPrestartCheckedAtRef.current = Date.now();
         autoAnalyzeHashRef.current = requestedAutoKey || readerHashKey(targetDate, credit.payloadHash);
-        setBoard(current => current.map(markReaderBoardVerificationBlocked));
+        setBoard(current => current.map(item => selectedGamePk != null && Number(item.game.gamePk) !== Number(selectedGamePk) ? item : markReaderBoardVerificationBlocked(item)));
         setNotice(credit.message || 'Reader資料驗證未通過；已停止分析與下注。');
         setProgress({ active: false, done: 0, running: 0, total: 0, label: '' });
         return false;
@@ -3311,11 +3326,12 @@ export default function Home() {
       const byStartTime = (left, right) => Date.parse(left?.game?.gameDate || '') - Date.parse(right?.game?.gameDate || '');
       const items = [
         ...activeItems.sort(byStartTime),
-        ...retainedFinishedItems.sort(byStartTime),
+        ...(selectedGamePk != null ? [...previousByPk.values()].filter(item => Number(item.game.gamePk) !== Number(selectedGamePk)) : retainedFinishedItems).sort(byStartTime),
       ];
       setBoard(items);
 
       const tasks = items.map(item => {
+        if (!activeGamePks.has(Number(item.game.gamePk))) return null;
         const actual = readerGameByPk.get(Number(item.game.gamePk));
         return actual?.markets?.length && !item.resumedCurrentReaderGame && !item.preservedCurrentReaderGame ? {
           game: item.game,
@@ -3363,7 +3379,9 @@ export default function Home() {
         return false;
       }
 
-      const backgroundResult = await runDurableAnalysisTasks(tasks, generation, targetDate);
+      const backgroundResult = await runDurableAnalysisTasks(tasks, generation, targetDate, {
+        progressLabel: selectedGamePk != null ? '分析選定單場比賽' : '分析本日全部盤口',
+      });
       const resultRows = Array.isArray(backgroundResult?.results) ? backgroundResult.results : [];
       const outcomes = tasks.map((task, index) => Boolean(resultRows[index]?.ok));
       const blockedCount = tasks.filter((task, index) => analysisFailureState(resultRows[index]).blocked).length;
@@ -3397,11 +3415,11 @@ export default function Home() {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${tasks.length} 場驗證分析｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
       } else if (analysisSucceeded && !readerHashAcknowledged) {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜已完成 ${tasks.length} 場分析｜${coveragePendingText(coverage)}，但 Reader 在分析期間出現新盤；目前結果保留顯示。`);
-        setError('Reader 最新盤面版本尚未完成驗證；下次輪詢只更新變動場次，不會清空整批分數。');
+        setError('Reader 最新盤面版本尚未完成驗證；請手動分析需要更新的場次，原始分數會保留。');
       } else {
         setNotice(`Reader讀取 ${coverage.captured}/${coverage.total} 場｜完成 ${completedCount} 場｜資料不足 ${blockedCount} 場${failedCount ? `｜暫時失敗 ${failedCount} 場` : ''}｜${coveragePendingText(coverage)}${sourceWarnings.length ? `｜提醒：${sourceWarnings.join('；')}` : ''}`);
         if (blockedCount) {
-          setError(`${blockedCount} 場官方先發身分、左右投或獨立表現資料不足，QA 已停止評分；同一盤面每5分鐘重驗一次，也可按「同步今日 ${activeLeague.id}」立即重驗。${failedCount ? `另有 ${failedCount} 場暫時分析失敗。` : ''}`);
+          setError(`${blockedCount} 場官方先發身分、左右投或獨立表現資料不足，QA 已停止評分；請按單場或「分析本日全部 ${activeLeague.id}」手動重驗。${failedCount ? `另有 ${failedCount} 場暫時分析失敗。` : ''}`);
         } else {
           const readerHashPending = Boolean(credit?.readerFresh && creditCount > 0 && failedCreditCount > 0);
           setError(`${failedCount} 場暫時分析失敗${readerHashPending ? '，Reader 最新盤面版本尚未承認' : ''}；已保留成功場次與上一版結果。`);
@@ -3410,7 +3428,7 @@ export default function Home() {
       return allSucceeded;
     } catch (cause) {
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return false;
-      setBoard(current => current.map(item => item.customData && ['running', 'queued'].includes(item.status)
+      setBoard(current => current.map(item => (selectedGamePk == null || Number(item.game.gamePk) === Number(selectedGamePk)) && item.customData && ['running', 'queued'].includes(item.status)
         ? { ...item, status: 'failed', statusLabel: '更新失敗｜保留上一版結果' }
         : item));
       setError(`${String(cause?.message || cause)}；已保留上一版分數。`);
@@ -3840,7 +3858,7 @@ export default function Home() {
         setNotice(`Tai888盤口處理完成：${updated}場更新${removed ? '｜' + removed + '場已下架但保留舊結果' : ''}${blocked ? '｜' + blocked + '場核心資料不足' : ''}${failed ? '｜' + failed + '場暫時失敗' : ''}。`);
       }
       if (blocked) {
-        setError(`${blocked}場官方先發身分、左右投或獨立表現資料不足，QA 已停止評分；同一盤面每5分鐘重驗一次，也可按「同步今日 ${activeLeague.id}」立即重驗。${failed ? `另有 ${failed} 場盤口更新暫時失敗。` : ''}`);
+        setError(`${blocked}場官方先發身分、左右投或獨立表現資料不足，QA 已停止評分；請按單場或「分析本日全部 ${activeLeague.id}」手動重驗。${failed ? `另有 ${failed} 場盤口更新暫時失敗。` : ''}`);
       } else if (failed) {
         setError(`${failed}場盤口更新暫時失敗；已保留上一版分數，下次輪詢只重試暫時失敗場次。`);
       }
@@ -3856,7 +3874,7 @@ export default function Home() {
         && queued?.date === currentDateRef.current;
       // Queued manual work is drained by the active render's effect. A
       // detached old poll must never consume another league's queued click.
-      if (fullSlateRecoveryNeeded && !queuedForCurrentBoard && stillCurrent()) void oneClickAnalyze();
+      // Recovery is manual-only; never expand a refresh into full-slate analysis.
     }
   }
 
@@ -3994,7 +4012,7 @@ export default function Home() {
         .includes(String(cause?.code || ''));
       if (refreshReaderAfterMutation) {
         creditRevisionRef.current = '';
-        setError('Tai888盤口已更新；正在同步最新盤口，完成後請依新盤口記錄。原分析分數會保留。');
+        setError('Tai888盤口已更新；請手動分析這一場或本日全部後再記錄。原分析分數會保留。');
       } else {
         setError(cause?.message || '雲端下注紀錄更新失敗');
       }
@@ -4005,7 +4023,7 @@ export default function Home() {
       markAppOperationBusy(false);
     }
     if (reconcileAfterMutation) await probeCloudLedgerRecovery();
-    if (refreshReaderAfterMutation) await pollReaderAndReprice();
+    // A failed bet must never implicitly start analysis or repricing.
   }
 
   async function cancelBet(bet) {
@@ -4057,6 +4075,8 @@ export default function Home() {
   }
 
   function selectLeague(value) {
+    gamePickerRequestRef.current += 1;
+    setGamePicker({ scope: '', games: [], selected: '', loading: false });
     const nextLeague = normalizeLeagueId(value);
     if (nextLeague === league) return;
     const nextDate = allLeagueBoardDate(allLeagueRun, nextLeague, leagueDatesRef.current[nextLeague] || date);
@@ -4124,11 +4144,11 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>同步今日全部 {activeLeague.id} 實際盤</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型EV（W）與穩健EV（R）。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `同步今日 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a><details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 {activeLeague.id}｜單場或本日全部</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型EV（W）與穩健EV（R）。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><p className="muted">進站、重新整理及切換日期不會啟動分析；請手動選擇單場或本日全部。</p><button className="secondary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || (gamePicker.scope === `${league}:${date}` && gamePicker.loading)} onClick={loadGamePicker}>{gamePicker.scope === `${league}:${date}` && gamePicker.loading ? '讀取賽程中…' : '讀取賽程（不分析）'}</button><label>選擇單場比賽<select style={{ width: '100%', minWidth: 0, maxWidth: '100%' }} value={gamePicker.scope === `${league}:${date}` ? gamePicker.selected : ''} disabled={busy || allLeaguePreparing || allLeagueRunning || gamePicker.scope !== `${league}:${date}` || gamePicker.loading} onChange={event => setGamePicker(current => ({ ...current, selected: event.target.value }))}><option value="">請先讀取賽程並選擇一場</option>{gamePicker.scope === `${league}:${date}` && gamePicker.games.map(game => <option key={game.gamePk} value={game.gamePk}>{translateTeamText((typeof game.away === 'string' ? game.away : game.away?.name) || game.teams?.away?.team?.name || '')} @ {translateTeamText((typeof game.home === 'string' ? game.home : game.home?.name) || game.teams?.home?.team?.name || '')}｜{game.gameDate ? new Date(game.gameDate).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : ''}｜{game.gamePk}</option>)}</select></label><button className="primary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || gamePicker.scope !== `${league}:${date}` || !gamePicker.selected} onClick={() => oneClickAnalyze('', gamePicker.selected)}>只分析這一場</button><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `分析本日全部 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a><details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
-          <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜每5分鐘複核｜S分數、W與R完整顯示` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
+          <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜狀態自動更新，分析由手動啟動｜S分數、W與R完整顯示` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
         </div>
         {allLeagueRunContainsDate(allLeagueRun, date) && <div className="allLeagueState" aria-live="polite"><div><strong>四聯盟分析 {allLeagueProgress.terminal}/4</strong><span>目前聯盟：{activeLeague.id}｜盤日 {date}｜{allLeagueStatusLabel(activeLeagueBatchStatus)}；各聯盟依 Reader 盤日分開保存。</span></div><div className="allLeaguePills">{LEAGUE_IDS.map(id => {
           const state = allLeagueRun?.leagues?.[id] || {};
