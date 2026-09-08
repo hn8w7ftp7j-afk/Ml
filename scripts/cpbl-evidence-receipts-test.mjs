@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { captureAsianSource, auditAsianSourceEvidence } from '../lib/asian-source-evidence-v1.js';
+import { cpblFeatureBindings, inspectFeatureMapping } from '../lib/cpbl-feature-evidence-v1.js';
+import { bullpenSnapshot, starterSnapshot } from '../lib/asian-production-features-v1.js';
+import { buildAnalysisDataAudit } from '../lib/analysis-data-audit-v1.js';
+const raw = JSON.stringify({ Data: { Game: { Visiting: { Team: { Code:'AKP011' }, Pitchers:[{PitcherAcnt:'a'}], Hitters:[{HitterAcnt:'h'}] }, Home: {Team:{Code:'AJL011'},Pitchers:[{PitcherAcnt:'b'}]} } } });
+const capture = captureAsianSource({url:'https://stats.cpbl.com.tw/api/proxy/v1/games/test-game',raw,representation:'JSON',fetchedAt:'2026-09-08T09:00:00Z',httpStatus:200});
+const params = {game:{awayCode:'TSG',homeCode:'RKM'},events:[capture.event],contents:{[capture.event.contentHash]:capture.content}};
+const away = cpblFeatureBindings({...params,featureName:'away.bullpen'});
+const home = cpblFeatureBindings({...params,featureName:'home.bullpen'});
+assert.deepEqual(away[0].path,['Data','Game','Visiting','Pitchers']);
+assert.deepEqual(home[0].path,['Data','Game','Home','Pitchers']);
+assert.equal(inspectFeatureMapping({sourceBindings:away},()=>raw).status,'MAPPED_PATHS_PRESENT');
+assert.equal(inspectFeatureMapping({sourceBindings:[{...away[0],path:['missing']}]},()=>raw).status,'PENDING');
+assert.equal(inspectFeatureMapping({},()=>raw).status,'PENDING');
+const audit = auditAsianSourceEvidence({inputCutoffAt:'2026-09-08T09:10:00Z',game:{gameDate:'2026-09-08T10:35:00Z'},sourceEvidence:{...params,features:[{featureName:'weather',complete:true,derivationVersion:'fixture',requiredFeatures:['history'],parsedInput:{available:false,source:'UNAVAILABLE'}}]}});
+assert.equal(audit.rows.find(x=>x.featureName==='weather').availability,'NOT_CONNECTED');
+const details = [{game:{gamePk:1,gameDate:'2026-09-07T10:00:00Z',awayTeamId:706},detail:{away:{pitchers:[{officialPlayerId:'a',name:'投手甲',starter:false,inningsPitched:4,earnedRuns:2}]}}}];
+const bullpen = bullpenSnapshot(details,706,'CPBL',4.3,'2026-09-08T10:35:00Z');
+assert.equal(bullpen.players[0].name,'投手甲');
+assert.equal(bullpen.players[0].usageGames[0].inningsPitched,4);
+assert.equal(bullpen.usageCoverage.pitchCountsAvailable,false);
+assert.equal(bullpen.qualityFactorCalculation.earnedRuns,2);
+const starter=starterSnapshot({leagueId:'CPBL',game:{awayTeamId:706},side:'away',identity:{id:'a',name:'投手甲'},stats:{battersFaced:100,qualityFactor:1},referenceEra:4.3,recentStarts:[{gamePk:1,date:'2026-09-07',inningsPitched:6},{gamePk:2,date:'2026-09-01',inningsPitched:4}]});
+assert.equal(starter.expectedInnings,5);
+assert.equal(starter.expectedInningsSampleGames,2);
+assert.equal(starter.expectedInningsEvidence.games[0].gamePk,1);
+console.log('CPBL mappings: cross-team separation, missing paths, disconnected weather, relief observations and innings provenance PASS');
+
+const receipt = buildAnalysisDataAudit({leagueId:'CPBL',away:{starter,hitting:{gamesPlayed:19,startDate:'2026-07-01',endDate:'2026-09-07'},recentHitting:{gamesPlayed:10},pitching:{gamesPlayed:19}}});
+assert.equal(receipt.rows.find(r=>r.id==='away.starter').metrics.expectedInningsSource, 'OBSERVED_RECENT_STARTS_AVERAGE');
+
+assert.equal(receipt.supportingData.find(r=>r.key==='away.hitting').metrics.games,19);
+assert.equal(receipt.supportingData.find(r=>r.key==='away.recentHitting').label,'客隊最近10場打擊');
+assert.equal(receipt.supportingData.find(r=>r.key==='away.pitching').metrics.gamesPitched,19);
