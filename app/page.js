@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/performance-evidence-v1.js';
 import { APP_VERSION } from '../lib/app-version.js';
 import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
+import { analysisSourceStatusDisplay } from '../lib/npb-identity-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
 import NbaEntry from './nba/entry.js';
 import Link from 'next/link';
@@ -1433,11 +1434,11 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   ).ranking && !preservingPreviousReaderAnalysis && !blockedMarkets.has(row.market)).length;
   const expectedRuns = analysis.expectedRuns || null;
   const sourceStatusLabels = {
-    starters: '先發', lineups: '打線', bullpen: '純牛棚', parkFactor: '球場', weather: '天氣',
+    starterIdentity: '先發身分', starters: '先發', lineups: '打線', bullpen: '純牛棚', parkFactor: '球場', weather: '天氣',
     catcherFraming: '捕手Framing', defenseFRV: '守備FRV', injuryRunValue: '傷停', pitchTypeMatchup: '球種對戰',
     umpire: '主審效果', umpireZone: '主審Zone', parkWindOrientation: '球場風向',
   };
-  const sourceStatusText = Object.entries(analysis.sourceStatuses || {})
+  const sourceStatusText = Object.entries(analysisSourceStatusDisplay(item))
     .filter(([, value]) => value != null && String(value).trim())
     .map(([key, value]) => `${sourceStatusLabels[key] || key}：${value}`)
     .join('｜');
