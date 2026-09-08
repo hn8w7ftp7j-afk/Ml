@@ -29,7 +29,7 @@ assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile re
 mustMatch(/scoreBreakdown\?\.rawScore/, 'a QA-blocked formula must remain visible while ranking and betting stay blocked');
 mustMatch(/Reader複核中｜按此排隊分析/, 'manual analysis must stay actionable during an automatic Reader poll');
 mustMatch(/queuedAnalysisRef\.current = queued[\s\S]*已排隊，複核完成後會自動開始/, 'a tap during Reader polling must queue analysis and acknowledge the tap');
-mustMatch(/queuedForCurrentBoard[\s\S]*void oneClickAnalyze\(\)/, 'queued analysis must start automatically after Reader polling finishes');
+mustMatch(/void oneClickAnalyze\('', queuedAnalysis.gamePk\)/, 'only a queued manual click may start analysis, preserving its game scope');
 mustMatch(/className="heroActionStatus" role="status" aria-live="polite"/, 'mobile controls must expose adjacent live progress feedback');
 assert.doesNotMatch(page, /disabled=\{busy \|\| readerPolling \|\| allLeaguePreparing \|\| allLeagueRunning \|\| !analysisEnabled\}/, 'Reader polling must not silently disable the manual analysis button');
 assert.match(css, /\.heroActionStatus/, 'queued and running analysis status must remain visible beside the button');
@@ -86,7 +86,7 @@ mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key
 mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
 mustMatch(/const READER_RECHECK_INTERVAL_MS = 30 \* 1000/, 'Reader thirty-second recheck cadence missing');
 mustMatch(/setInterval\(refreshReader, READER_RECHECK_INTERVAL_MS\)/, 'Reader status polling interval missing');
-mustMatch(/setInterval\(\(\) => pollReaderAndReprice\(\), READER_RECHECK_INTERVAL_MS\)/, 'Reader repricing interval missing');
+assert.doesNotMatch(page, /pollReaderAndReprice\(\);/, 'entry, Reader timers and bet mutations must never invoke automatic repricing');
 mustMatch(/touchReaderHeartbeat/, 'same-content Reader heartbeat must refresh freshness without repricing');
 assert.doesNotMatch(page, /lastFullAnalysisAtRef/, 'the client must never force a destructive full-board rerun on a timer');
 
@@ -118,10 +118,10 @@ mustMatch(/const referenceByPk = new Map/, 'reference markets must be isolated b
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
 mustMatch(/verificationMarkets: task\.verificationMarkets \|\| \[\]/, 'full analyze request must send matched reference markets');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'reprice request must refresh or retain matched reference markets');
-mustMatch(/restoredBoardNeedsValidationRef\.current\) return undefined/, 'restored partial board must not race a single-board reader reprice');
+assert.doesNotMatch(page, /pollReaderAndReprice\(\);/, 'restored partial boards must not start automatic repricing');
 mustMatch(/missingReaderGameCount > 0[\s\S]*fullSlateRecoveryNeeded = true/, 'reader games missing from the rendered board must trigger full-slate recovery');
-mustMatch(/fullSlateRecoveryNeeded && !queuedForCurrentBoard && stillCurrent\(\)[\s\S]*oneClickAnalyze\(\)/, 'full-slate recovery must run after releasing the Reader lock without competing with a queued manual click');
-mustMatch(/if \(!queuedAnalysis \|\| readerPolling[\s\S]*queuedAnalysisRef\.current !== queuedAnalysis[\s\S]*queuedAnalysis\.league !== league \|\| queuedAnalysis\.date !== date[\s\S]*queuedAnalysisRef\.current = null;[\s\S]*void oneClickAnalyze\(\)/, 'a queued manual click must drain exactly once from the active league/date render after the Reader lock is released');
+assert.doesNotMatch(page, /fullSlateRecoveryNeeded && !queuedForCurrentBoard && stillCurrent\(\)[\s\S]*oneClickAnalyze\(\)/, 'Reader recovery must not implicitly expand into whole-day analysis');
+mustMatch(/if \(!queuedAnalysis \|\| readerPolling[\s\S]*queuedAnalysisRef\.current !== queuedAnalysis[\s\S]*queuedAnalysis\.league !== league \|\| queuedAnalysis\.date !== date[\s\S]*queuedAnalysisRef\.current = null;[\s\S]*void oneClickAnalyze\('', queuedAnalysis.gamePk\)/, 'a queued manual click must drain exactly once from the active league/date render after the Reader lock is released');
 assert.doesNotMatch(page, /verificationMarkets:\s*\[\]/, 'analyze/reprice must never hard-code an empty verification-market payload');
 mustMatch(/後台重新驗證中｜保留目前分數/, 'full refresh must retain completed scores on screen');
 mustMatch(/更新失敗｜保留上一版結果/, 'failed refresh must retain the previous completed result');
@@ -240,8 +240,8 @@ mustMatch(/\{actualLine && <div>/, 'actual Reader directions must retain a visib
 assert.doesNotMatch(page, /item\.readerPayloadHash === readerStatus\?\.payloadHash\s*&&\s*acknowledgedReaderKey/, 'a successfully analyzed current item must not be blocked by an unrelated full-slate acknowledgement');
 assert.doesNotMatch(page, /function capturedReaderContractReady/, 'Reader execution rules must not be duplicated inside the page');
 assert.doesNotMatch(page, /actualLineFreshNow\(/, 'the client must not re-expire a row after the current Reader hash has already proved identical content; the bet API performs the authoritative line-freshness check');
-mustMatch(/pollReaderAndReprice\(\);\s*const timer = window\.setInterval/, 'Reader validation must run immediately instead of waiting for the first interval');
-mustMatch(/\}, \[board\.length, date, busy, league, readerEnabled, analysisEnabled, allLeagueRunning\]\);/, 'Reader polling must not restart on every board item update and must stop while all-league analysis runs');
+assert.doesNotMatch(page, /pollReaderAndReprice\(\);/, 'entry, Reader timers and bet mutations must never invoke automatic repricing');
+mustMatch(/setInterval\(refreshReader, READER_RECHECK_INTERVAL_MS\)/, 'read-only Reader status polling remains available');
 mustMatch(/advanceUnchangedReaderGame\(previous, foundCredit\.markets, credit\.payloadHash, credit\.pageActivityAt, Date\.now\(\), \{[\s\S]*marketCoverage: foundCredit\.marketCoverage,[\s\S]*readerProvenance: foundCredit\.readerProvenance/, 'a mobile reload may resume only when current signed per-game markets and coverage evidence are unchanged');
 mustMatch(/const capturedHistoricalPit = !resumed[\s\S]*pitPersistence\?\.confirmed === true[\s\S]*readerProvenance\?\.provider === 'TAI888_READER_AUTO'[\s\S]*readerProvenance\.payloadHash === credit\.payloadHash/, 'a confirmed historical PIT must receive current Reader capture authority before its background refresh finishes');
 mustMatch(/bindVerifiedReaderContractsForItem\([\s\S]*analysisDirectionRows\(directionAnalysis\)/, 'historical display rows must bind through one shared exact Reader-contract helper');
@@ -250,7 +250,7 @@ mustMatch(/const previousByPk = new Map\(boardRef\.current\.map/, 'manual and au
 mustMatch(/shouldPreserveCalculatedAnalysis/, 'a partial or unopened Reader result must not downgrade completed W\/R');
 mustMatch(/const retainingPreviousRevision = preservePreviousReaderAnalysis \|\| pendingReaderAnalysis[\s\S]*customMarkets: resumed\?\.customMarkets \|\| \(capturedHistoricalPit \? foundCredit\.markets : retainingPreviousRevision \? previous\?\.customMarkets \|\| \[\]/, 'a changed Reader revision must retain prior analysis while exposing only the newly verified current contracts');
 mustMatch(/readerPayloadHash: resumed\?\.readerPayloadHash \|\| \(capturedHistoricalPit \? credit\.payloadHash : null\)/, 'a queued revision may regain execution only through a confirmed PIT plus the current signed Reader capture');
-mustMatch(/const retainedFinishedItems = \[\.\.\.previousByPk\.values\(\)\][\s\S]*analysisHasCalculatedDirections[\s\S]*readerPayloadHash: null[\s\S]*const items = \[[\s\S]*\.\.\.activeItems\.sort\(byStartTime\)[\s\S]*\.\.\.retainedFinishedItems\.sort\(byStartTime\)/, 'a full-slate refresh must retain old analysis below the current official pregame slate');
+mustMatch(/const retainedFinishedItems = \[\.\.\.previousByPk\.values\(\)\][\s\S]*analysisHasCalculatedDirections[\s\S]*readerPayloadHash: null[\s\S]*const items = \[[\s\S]*\.\.\.activeItems\.sort\(byStartTime\)[\s\S]*: retainedFinishedItems\)\.sort\(byStartTime\)/, 'a full-slate refresh must retain old analysis below the current official pregame slate');
 mustMatch(/readerResultIsStale/, 'late background results must be rejected when the live Reader hash has advanced');
 mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*taskEvidenceHash[\s\S]*currentItem\?\.pendingReaderEvidenceHash[\s\S]*readerTaskGameRevisionIsStale/, 'late results must use the single-game Reader content revision before the whole-board hash or heartbeat time');
 mustMatch(/function taskReaderStateIsStale\(task\)[\s\S]*gameRevisionStale != null[\s\S]*readerResultIsStale/, 'whole-board staleness may be used only when per-game evidence is unavailable');
@@ -282,7 +282,7 @@ assert.doesNotMatch(page, /function betRecordable|function betActionState/, 'pag
 mustMatch(/const action = evaluateBetAction\(\{[\s\S]*item,[\s\S]*row,[\s\S]*now,[\s\S]*cloudLedgerState: 'ready'/, 'recordBet must re-check the canonical action state at click time');
 mustMatch(/const liveReaderAuthority = \{[\s\S]*fresh: readerStatus\?\.fresh === true[\s\S]*expectedBoardDate: date[\s\S]*payloadHash: readerStatus\?\.payloadHash/, 'all bet buttons must use the live server Reader payload as execution authority');
 mustMatch(/readerAuthority: liveReaderAuthority/, 'recordBet and visible bet actions must reject a stale browser Reader payload');
-mustMatch(/READER_CONTRACT_MISMATCH[\s\S]*creditRevisionRef\.current = ''[\s\S]*await pollReaderAndReprice\(\)/, 'a server contract mismatch must immediately force current Reader synchronization instead of leaving a useless green button');
+assert.doesNotMatch(page, /pollReaderAndReprice\(\);/, 'entry, Reader timers and bet mutations must never invoke automatic repricing');
 const gameCardGuard = page.slice(page.indexOf('function GameCard'), page.indexOf('function LeagueSetupPanel'));
 assert.doesNotMatch(gameCardGuard, /referenceEvidenceFreshNow/, 'external-reference freshness must not hide model W/R');
 assert.match(css, /html,body\{width:100%;max-width:100%;overflow-x:hidden\}/, 'mobile document must never expand beyond the viewport');

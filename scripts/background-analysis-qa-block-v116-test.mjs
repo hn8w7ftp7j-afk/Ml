@@ -32,12 +32,12 @@ assert.match(poll, /runDurableAnalysisTasks\(rebuildTasks, generation, targetDat
 assert.doesNotMatch(poll, /const rebuilt = await analyzeBoardItem\(/, 'Reader polling must not rebuild distributions in the foreground');
 assert.match(poll, /let blocked = 0;[\s\S]*let completed = 0;[\s\S]*let updated = 0/, 'blocked and successful outcomes must be counted separately');
 assert.match(poll, /rebuiltFailed = Math\.max\(0, rebuildTasks\.length - rebuiltCompleted - rebuiltBlocked\)/, 'transient failures must remain separate from QA blocks');
-assert.match(poll, /同一盤面每5分鐘重驗一次，也可按「同步今日 \$\{activeLeague\.id\}」立即重驗/, 'UI must explain slow automatic revalidation and immediate manual retry');
+assert.match(poll, /請按單場或「分析本日全部 \$\{activeLeague\.id\}」手動重驗/, 'UI must explain explicit manual retry without promising automatic analysis');
 
 const oneClickStart = page.indexOf('async function oneClickAnalyze(');
 const oneClickEnd = page.indexOf('function blockedReaderHashRecheckDue(', oneClickStart);
 const oneClick = page.slice(oneClickStart, oneClickEnd);
-assert.match(oneClick, /runDurableAnalysisTasks\(tasks, generation, targetDate\)/, 'manual sync must always launch a durable job');
+assert.match(oneClick, /runDurableAnalysisTasks\(tasks, generation, targetDate, \{/, 'manual sync must launch a durable job with an explicit single/all progress label');
 assert.doesNotMatch(oneClick, /coreDataBlockRetryRef\.current\.get/, 'manual sync must bypass automatic same-hash backoff');
 assert.match(oneClick, /previousBlocked = analysisFailureState\(previous\?\.analysisFailure \|\| \{\}\)\.blocked;[\s\S]*hasOpenRows && !coverageRegression && previous && !previousBlocked/, 'manual sync must not resume a blocked or Reader-regressed prior result without revalidation');
 assert.match(page, /function commitAnalysisFailure\(task, value\)[\s\S]*taskReaderStateIsStale\(task\)/, 'a late failure from an old Reader hash must be ignored before it can install a QA retry');
