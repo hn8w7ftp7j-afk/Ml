@@ -10,6 +10,13 @@ const context = { leagueId: 'NPB', inputCutoffAt: cutoff, sourceEvidence: { even
 const before = JSON.stringify(context);
 const history = value => auditAsianSourceEvidence(value).rows.find(row => row.featureName === 'history');
 assert.equal(history(context).status, 'VERIFIED', 'unbound audit re-fetch is not an input');
+assert.equal(history(context).fieldTraceabilityStatus, 'PENDING', 'valid fetch time does not validate raw-field transformation');
+const extraInput = structuredClone(context);
+extraInput.sourceEvidence.features.push({ featureName: 'away.injuryAdjustment', complete: true, sourceEventIds: [second.event.id] });
+assert.equal(auditAsianSourceEvidence(extraInput).rows.find(row => row.featureName === 'away.injuryAdjustment').status, 'FAILED', 'additional bound features must not escape the fixed audit checklist');
+const futureStatistics = structuredClone(context);
+futureStatistics.sourceEvidence.events[0].dataCutoff = '2026-09-08T08:01:00Z';
+assert.equal(history(futureStatistics).status, 'FAILED');
 assert.equal(auditAsianSourceEvidence(context).status, 'PENDING', 'missing necessary fields cannot pass');
 assert.equal(JSON.stringify(context), before);
 const late = structuredClone(context); late.sourceEvidence.features[0].sourceEventIds = [second.event.id];
