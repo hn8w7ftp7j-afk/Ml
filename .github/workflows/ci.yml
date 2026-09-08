@@ -51,6 +51,7 @@ jobs:
       - run: npm run test:asian-evidence
       - run: npm run test:external-audit
       - run: npm run test:evidence-completion
+      - run: node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/pit-history-export-test.mjs
       - run: npm test
       - run: npm run build
       - run: node scripts/package-reader.mjs release

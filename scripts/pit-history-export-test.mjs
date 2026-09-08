@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { parseHistorySnapshotIds } from '../lib/pit-history-export.js';
+import { GET } from '../app/api/pit-history-export/route.js';
+import { createSessionToken } from '../lib/security.js';
+process.env.APP_PASSWORD = 'test-only';
+process.env.SESSION_SECRET = 'test-only-abcdefghijklmnopqrstuvwxyz0123456789';
+const id = `MLB:823902:FULL:${'a'.repeat(64)}`;
+assert.equal(parseHistorySnapshotIds(id)[0].gamePk,823902);
+for (const value of ['', id+','+id, `NBA:1:FULL:${'a'.repeat(64)}`, `NPB:9999999999999999:FULL:${'a'.repeat(64)}`]) assert.throws(()=>parseHistorySnapshotIds(value));
+assert.throws(()=>parseHistorySnapshotIds(Array.from({length:9},(_,i)=>`MLB:${i+1}:FULL:${'a'.repeat(64)}`).join(',')));
+assert.equal((await GET(new Request('http://localhost/api/pit-history-export?snapshotIds='+id))).status,401);
+const token=await createSessionToken();
+const response=await GET(new Request('http://localhost/api/pit-history-export?snapshotIds=bad',{headers:{cookie:`mlb_session=${token}`}}));
+assert.equal(response.status,400);
+const source=fs.readFileSync(new URL('../lib/pit-history-export.js',import.meta.url),'utf8');
+assert.ok(!/\b(?:INSERT INTO|UPDATE\s+\w+\s+SET|DELETE FROM|CREATE TABLE|ALTER TABLE)\b/.test(source));
+console.log('PASS: export authentication, batch bounds, snapshot identities and read-only SQL');
