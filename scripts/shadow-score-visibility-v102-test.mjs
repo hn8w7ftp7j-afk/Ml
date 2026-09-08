@@ -114,10 +114,10 @@ const strongestInput = secondaryIndependentMarketVerified => finalizeDeterminist
   },
   game,
 }).results[0];
-assert.equal(strongestInput(false).formulaDiagnosticScore, 8.4, '缺少兩個獨立同合約市場時，最強區間必須封頂8.4');
-assert.equal(strongestInput(false).rankingQualified, true, '外部市場未使用不得阻擋7.2～8.4分析排名');
-assert.ok(strongestInput(false).scoreBreakdown.caps.includes('TWO_INDEPENDENT_MARKETS_NOT_VERIFIED'));
-assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '外部市場驗證只控制8.5資格，不得改寫分布或W/R');
+assert.equal(strongestInput(false).formulaDiagnosticScore, strongestInput(true).formulaDiagnosticScore, '外部驗證不得封頂S分數');
+assert.equal(strongestInput(false).rankingQualified, true, '外部市場未使用不得阻擋分析排名');
+assert.ok(!strongestInput(false).scoreBreakdown.caps.includes('TWO_INDEPENDENT_MARKETS_NOT_VERIFIED'));
+assert.ok(strongestInput(true).formulaDiagnosticScore >= 8.5, '高分只依W/R公式，不受外部驗證影響');
 
 const extremeReview = finalizeDeterministicAnalysis({
   analysis: {
