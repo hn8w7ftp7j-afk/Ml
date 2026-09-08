@@ -26,6 +26,11 @@ for (const mutate of [x => x.game.gamePk++, x => x.customData.context.game.gameD
   const bad = structuredClone(verified); bad.game = { ...bad.game }; mutate(bad); assert.notEqual(analysisSourceStatusDisplay(bad).starterIdentity, 'CONFIRMED');
 }
 const oldCompact = structuredClone(compact); delete oldCompact.customData.context.game.homeTeamId;
+const conflictingReadiness = structuredClone(verified);
+conflictingReadiness.customData.context.home.upstreamReadiness.starterIdentity = false;
+conflictingReadiness.customData.context.home.starter.identityReady = true;
+assert.equal(analysisSourceStatusDisplay(conflictingReadiness).starterIdentity, 'UNVERIFIED', 'explicit upstream rejection must override a legacy starter flag');
+assert.deepEqual(analysisSourceStatusDisplay(conflictingReadiness), analysisSourceStatusDisplay({ ...conflictingReadiness, customData: { ...conflictingReadiness.customData, context: compactAnalysisContext(conflictingReadiness.customData.context) } }), 'full and compact responses must agree on conflicting readiness');
 assert.notEqual(analysisSourceStatusDisplay(oldCompact).starterIdentity, 'CONFIRMED', 'old transport lacking team evidence cannot invent confirmation');
 for (const league of ['MLB', 'KBO', 'CPBL']) {
   const other = structuredClone(item); other.game.leagueId = league;
