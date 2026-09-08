@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { uncertaintyFor } from '../lib/asian-joint-score-v1.js';
 import {
   baseballInnings,
   buildAsianProductionFeatureSnapshot,
@@ -36,6 +37,24 @@ const starterArgs = {
 const independentAbility = [0.8, 1, 1.3, 1.45].map(qualityFactor => starterSnapshot({
   ...starterArgs, stats: { battersFaced: 500, qualityFactor, woba: qualityFactor * 0.3, leagueWoba: 0.3, performanceMetric: 'WOBA_ALLOWED_RELATIVE_TO_OFFICIAL_PITCHER_SAMPLE' },
 }));
+const estimatedSample = starterSnapshot({ ...starterArgs, stats: { inningsPitched: 88.2, era: 4, whip: 1.2 } });
+assert.equal(estimatedSample.season.observedBattersFaced, null);
+assert.ok(Math.abs(estimatedSample.season.effectiveBattersFaced - 374.85) < 1e-10);
+assert.equal(estimatedSample.season.sampleSizeEvidence.status, 'ESTIMATED');
+assert.equal(estimatedSample.season.sampleSizeEvidence.formula, 'inningsPitched * 4.25');
+const reportedSample = starterSnapshot({ ...starterArgs, stats: { battersFaced: 375, era: 4, whip: 1.2 } });
+assert.equal(reportedSample.season.observedBattersFaced, 375);
+const invalidSample = starterSnapshot({ ...starterArgs, stats: { battersFaced: 374.85, era: 4, whip: 1.2 } });
+assert.equal(invalidSample.season.observedBattersFaced, null, 'fractional reported data must never be labelled observed count');
+assert.equal(invalidSample.season.sampleSizeEvidence.status, 'INVALID_REPORTED_COUNT');
+const teamWithSample = sample => ({ starter: { season: { battersFaced: sample } }, lineup: { official: true }, bullpen: { sampleInnings: 0 } });
+const sigmaBefore = uncertaintyFor(teamWithSample(374.85));
+const sigmaAfter = uncertaintyFor(teamWithSample(375));
+assert.ok(Math.abs((sigmaAfter - sigmaBefore) - (-0.15 / 12000)) < 1e-12);
+for (const sample of [0, 12, 30, 374.85, 420, 1000]) {
+  assert.ok(uncertaintyFor(teamWithSample(sample + .001)) <= uncertaintyFor(teamWithSample(sample)));
+  assert.ok(Math.abs(uncertaintyFor(teamWithSample(sample + .001)) - uncertaintyFor(teamWithSample(sample))) <= .001 / 12000 + 1e-12);
+}
 assert.equal(new Set(independentAbility.map(row => row.qualityFactor)).size, 4, '四組獨立wOBA能力不能全部被空ERA轉成同一偏強值');
 assert.ok(independentAbility.every((row, i) => i === 0 || row.qualityFactor > independentAbility[i - 1].qualityFactor));
 assert.ok(independentAbility.every(row => row.season.era === null && row.season.whip === null && row.season.inningsPitched === null));
