@@ -1372,7 +1372,7 @@ function AnalysisDataAudit({ audit, persistence }) {
       <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
       <p>{explanations[row.status]}</p>
       {row.temporalNote && <p>{row.temporalNote}</p>}
-      {row.inningsEstimate && <p><b>預估投球局數：</b>{row.inningsEstimate.value.toFixed(2)} 局（推估）｜{row.inningsEstimate.note}</p>}
+      {row.category === 'starter' && Number.isFinite(row.inningsEstimate?.value ?? row.metrics?.expectedInnings) && <p><b>預估投球局數：</b>{(row.inningsEstimate?.value ?? row.metrics.expectedInnings).toFixed(2)} 局（推估）｜{row.inningsEstimate?.note || '歷史資料取得狀態不代表未來出賽局數已確認；此舊紀錄未保存推估分支明細。'}</p>}
       <p><b>模型使用：</b>{row.usageStatus === 'UNVERIFIED' ? '尚無逐欄使用紀錄' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || '未進入計算／僅供診斷'}{row.status !== 'observed' && row.usedInMean ? '（包含既有替代值）' : ''}</p>
       <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}｜統計截至 {row.asOf || '未提供'}</p>
       {row.coverage && <p><b>覆蓋：</b>{row.category === 'lineup' ? `名單 ${row.coverage.identityCount ?? '未知'}/${row.coverage.expectedCount || 9} 人；統計 ${row.coverage.metricCoverage == null ? '未確認' : `${Math.round(row.coverage.metricCoverage * 100)}%`}` : `有效名單 ${row.coverage.rosterCount ?? '未知'} 人；名單完整性${row.coverage.rosterComplete ? '已確認' : '未確認'}`}</p>}
