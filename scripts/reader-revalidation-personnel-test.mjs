@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './npb-identity-display-test.mjs';
 import { readerAnalysisNeedsRevalidation, advanceUnchangedReaderGame, touchReaderHeartbeat } from '../lib/client-analysis-state.js';
 import { compactAnalysisContext } from '../lib/analysis-transport-v1.js';
 import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
