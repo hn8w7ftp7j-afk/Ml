@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/performance-evidence-v1.js';
 import { APP_VERSION } from '../lib/app-version.js';
+import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
 import NbaEntry from './nba/entry.js';
 import Link from 'next/link';
@@ -38,6 +39,7 @@ import {
   readerCaptureForBet,
   readerCoverageCounts,
   readerHashKey,
+  readerAnalysisNeedsRevalidation,
   readerTaskGameRevisionIsStale,
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
@@ -1452,7 +1454,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
   };
   return <section className="gameCard">
     <div className="gameHead">
-      <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{item.game.awayProbable || '先發未定'} 對 {item.game.homeProbable || '先發未定'}</p></div>
+      <div><h2>{matchup(item.game)}</h2><p>{localTime(item.game.gameDate)}｜{analysisStarterDisplay(item, 'away')} 對 {analysisStarterDisplay(item, 'home')}</p></div>
       <span className={`state ${item.status}`}>{item.statusLabel}</span>
     </div>
     {shadowMode && <div className="sourceBanner shadowBanner"><strong>🧪 {item.game.leagueId || item.game.league || 'MLB'} 聯合比分影子模型</strong><span>{preservingPreviousReaderAnalysis
@@ -3412,6 +3414,7 @@ export default function Home() {
 
   function readerBoardNeedsCoreRefresh(now = Date.now()) {
     return boardRef.current.some(item => {
+      if (gameIsPrestartNow(item?.game, now) && readerAnalysisNeedsRevalidation(item)) return true;
       if (!gameIsPrestartNow(item?.game, now)
         || !item?.readerPayloadHash
         || !item?.customData?.context
@@ -3625,7 +3628,8 @@ export default function Home() {
           rebuildTasks.push(rebuildTask);
           return;
         }
-        if (item.readerPayloadHash === credit.payloadHash && coreSnapshotReusable(item)) {
+        if (item.readerPayloadHash === credit.payloadHash && coreSnapshotReusable(item)
+          && !readerAnalysisNeedsRevalidation(item)) {
           updateBoard(item.game.gamePk, current => touchReaderHeartbeat(current, credit.payloadHash, credit.pageActivityAt));
           completed += 1;
           return;
