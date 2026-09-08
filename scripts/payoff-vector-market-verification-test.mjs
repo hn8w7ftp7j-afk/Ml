@@ -116,6 +116,7 @@ const missingBoundary = applyIndependentMarketVerification(
 )[0];
 assert.equal(missingBoundary.marketVerification.referencePriorEligible, false);
 assert.match(missingBoundary.marketVerification.priorIneligibleReason, /相鄰半分盤/);
+assert.equal(missingBoundary.marketVerification.rejectionCode, 'REQUIRED_CONTRACT_MISSING');
 
 const nonMonotonic = applyIndependentMarketVerification(
   [actual('大8平')],
@@ -128,6 +129,7 @@ const nonMonotonic = applyIndependentMarketVerification(
 )[0];
 assert.equal(nonMonotonic.marketVerification.referencePriorEligible, false);
 assert.match(nonMonotonic.marketVerification.priorIneligibleReason, /不單調/);
+assert.equal(nonMonotonic.marketVerification.rejectionCode, 'NON_MONOTONIC_PROBABILITY');
 
 const wrongPeriod = applyIndependentMarketVerification(
   [{ ...actual('大4平'), market: '上半大小' }],
@@ -137,6 +139,7 @@ const wrongPeriod = applyIndependentMarketVerification(
 )[0];
 assert.equal(wrongPeriod.marketVerification.referencePriorEligible, false);
 assert.match(wrongPeriod.marketVerification.priorIneligibleReason, /同賽事同期間|5分鐘內/);
+assert.equal(wrongPeriod.marketVerification.rejectionCode, 'NO_ELIGIBLE_PERIOD_PRICE');
 
 const spreadLattice = [
   evidence('全場讓分', '主隊讓0.5', [0.55, 0.551, 0.549]),
