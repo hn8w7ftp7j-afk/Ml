@@ -40,6 +40,16 @@ const { projectedLineup } = await import('../lib/asian-production-features-v1.js
 const query = {queryKey:['season-pr-table',{year:2026,searchType:'batter',gameKind:'A'}],state:{status:'success',data:[{player:{acnt:'0000000935'},team:{code:'AKP011'},pa:333,ba:0.24752475247524752,obp:0.30120481927710846,slg:0.3564356435643564}]}};
 const html = `<script>self.__next_f.push(${JSON.stringify([1,'2:'+JSON.stringify({queries:[query]})+'\n'])})</script>`;
 const table = parseCpblBatterRates(html,2026);
+// A UTF-8 text record can contain newlines and fake query records. The next
+// genuine JSON record begins immediately after its byte-length payload.
+const textPayload = '王柏融\n2:'+JSON.stringify({queries:[query]})+'\n';
+const textFrame = 'a:T'+Buffer.byteLength(textPayload,'utf8').toString(16)+','+textPayload;
+const framed = '\n:HL["style.css","style"]\n'+textFrame+'b:'+JSON.stringify({queries:[query]})+'\n';
+const framedHtml = `<script>self.__next_f.push(${JSON.stringify([1,framed.slice(0,23)])})</script><script>self.__next_f.push(${JSON.stringify([1,framed.slice(23)])})</script>`;
+assert.equal(parseCpblBatterRates(framedHtml,2026).rows.length,1);
+assert.deepEqual(parseCpblBatterRates(framedHtml,2026).path,['records','b','queries','0','state','data']);
+assert.equal(parseCpblBatterRates(`<script>self.__next_f.push(${JSON.stringify([1,textFrame])})</script>`,2026),null);
+assert.equal(parseCpblBatterRates(`<script>self.__next_f.push(${JSON.stringify([1,'a:Tffffff,short'])})</script>`,2026),null);
 assert.equal(table.rows.length,1);
 assert.equal(parseCpblBatterRates(html,2025),null);
 assert.equal(parseCpblBatterRates('<script>throw new Error()</script>',2026),null);
