@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import { readerAnalysisNeedsRevalidation, advanceUnchangedReaderGame, touchReaderHeartbeat } from '../lib/client-analysis-state.js';
+import { compactAnalysisContext } from '../lib/analysis-transport-v1.js';
+import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
+const now = Date.parse('2026-09-08T09:00:00Z');
+const game = { leagueId: 'CPBL', gamePk: 123, gameDate: '2026-09-08T10:35:00Z', awayTeamId: 706, homeTeamId: 703 };
+const context = { leagueId: 'CPBL', game, fetchedAt: new Date(now).toISOString(), away: { starter: { id: 'p1', teamId: 706, name: '測試投手', identitySource: 'SERVER_ATTESTED_TAI888_IDENTITY_VALIDATED_BY_CPBL_ROSTER', assignmentStatus: 'OFFICIAL_CONFIRMED' } } };
+const row = { market: '全場大小', pick: '小8平', water: 0.93, sourceType: 'ACTUAL_TW_CREDIT', provider: 'TAI888_READER_AUTO', weightedEV: 0.1, robustEV: 0.02, evCalibration: { qualified: false, actualReaderEligible: false, reasons: ['Tai888 Reader 實際盤已過期或尚未完成最新版本驗證；可追溯快照的原始模型W/R保留，但不得排名或下注'] } };
+const provenance = { readerGameMarketHash: 'same-game', payloadHash: 'same-board' };
+const item = { game, actualSource: { provider: 'TAI888_READER_AUTO' }, readerPayloadHash: 'same-board', readerProvenance: provenance, customMarkets: [row], customData: { context: compactAnalysisContext(context), analysis: { results: [row] } } };
+const before = JSON.stringify(item);
+assert.equal(readerAnalysisNeedsRevalidation(item), true);
+assert.equal(advanceUnchangedReaderGame(item, [row], 'same-board', new Date(now).toISOString(), now, { readerProvenance: provenance }), null, 'same prices must not skip server revalidation of a stale verdict');
+const heartbeat = touchReaderHeartbeat(item, 'same-board', new Date(now).toISOString());
+assert.equal(readerAnalysisNeedsRevalidation(heartbeat), true, 'heartbeat must not clear server failure');
+assert.equal(heartbeat.customData.analysis.results[0].weightedEV, row.weightedEV);
+assert.equal(JSON.stringify(item), before, 'saved input remains immutable');
+const good = structuredClone(item);
+good.customData.analysis.results[0].evCalibration = { qualified: true, actualReaderEligible: true, reasons: [] };
+assert.equal(readerAnalysisNeedsRevalidation(good), false);
+assert.ok(advanceUnchangedReaderGame(good, [row], 'same-board', new Date(now).toISOString(), now, { readerProvenance: provenance }), 'healthy unchanged result remains reusable');
+const otherFailure = structuredClone(item);
+otherFailure.customData.analysis.results[0].evCalibration.reasons = ['IDENTITY_MISMATCH'];
+assert.equal(readerAnalysisNeedsRevalidation(otherFailure), false, 'do not reinterpret an identity failure as a freshness failure');
+assert.match(analysisStarterDisplay(item, 'away'), /測試投手（Reader人選／名冊核對）/);
+assert.equal(analysisStarterDisplay(item, 'home'), '賽程未提供先發');
+const projected = structuredClone(item);
+projected.customData.context.away.starter.assignmentStatus = 'PROJECTED_ROTATION_SCENARIO';
+assert.match(analysisStarterDisplay(projected, 'away'), /輪值推估/);
+for (const mismatch of ['game', 'team', 'league']) {
+ const wrong = structuredClone(item);
+ if (mismatch === 'game') wrong.customData.context.game.gamePk = 124;
+ if (mismatch === 'team') wrong.customData.context.away.starter.teamId = 703;
+ if (mismatch === 'league') wrong.customData.context.leagueId = 'NPB';
+ assert.equal(analysisStarterDisplay(wrong, 'away'), '賽程未提供先發', mismatch + ' must not leak personnel');
+}
+console.log('Reader recovery and frozen personnel display PASS');
