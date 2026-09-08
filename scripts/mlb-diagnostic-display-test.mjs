@@ -23,6 +23,7 @@ assert.equal(display.calculation.diagnostics.awayBullpen.factor, .96);
 assert.equal(display.calculation.diagnostics.awayBullpen.season, undefined);
 assert.equal(display.calculation.diagnostics.teamPitchingReference.away.season.innings, 1288);
 assert.match(externalVerificationExplanation({ priorIneligibleReason: '缺少5分鐘內獨立國際市場同合約價格' }), /未保存/);
-assert.match(externalVerificationExplanation({ referencePriorEligible: true }, false), /時效/);
+assert.match(externalVerificationExplanation(null), /未保存/);
+assert.match(externalVerificationExplanation({ referencePriorEligible: true }, false), /有效期限/);
 assert.equal(externalVerificationExplanation({}, true), '');
 console.log('MLB diagnostic display: projection semantics, immutable report, neutral calculation and external evidence checks PASS');
