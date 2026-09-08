@@ -1349,15 +1349,17 @@ function DirectionSlotRow({ row, game }) {
 }
 
 function AnalysisDataAudit({ audit, persistence }) {
-  if (!audit?.rows?.length) return <div className="sourceBanner dataStatusBanner"><strong>資料查核明細尚未建立</strong><span>這份舊分析未保存逐欄取得與使用紀錄；重新分析後才能查核，不代表資料完整。</span></div>;
+  const snapshotLink = persistence?.snapshotId && <p>快照保存：{persistence.confirmed ? '已確認保存' : '尚未確認保存'}。<a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(persistence.snapshotId)}`} target="_blank" rel="noreferrer">查看保存快照稽核</a></p>;
+  if (!audit?.rows?.length) return <div className="sourceBanner dataStatusBanner"><strong>資料查核明細尚未建立｜時點證據不足</strong><span>這份舊分析未保存逐欄取得與使用紀錄；新分析會另存新快照，不會替舊分析補造證據。</span>{snapshotLink}</div>;
+  const sourceTimeAudit = audit.sourceTimeAudit || (['NPB', 'KBO', 'CPBL'].includes(audit.league || persistence?.snapshotId?.split(':')[0]) ? { status: 'PENDING', rows: [], inputCutoffAt: null } : null);
   const labels = { observed: '實際取得', projected: '預測替代', missing: '缺失', stale: '舊資料' };
   const explanations = { observed: '有取得紀錄，仍須核對下列來源與統計範圍。', projected: '包含預測名單或替代數據，不能視為今日完整實績。', missing: '必要的身分或統計證據不足；中性預設值不代表實際能力。', stale: '來源已標示過期，不能當作最新資料。' };
   const summary = audit.summary || {};
   return <details className="details dataAudit">
     <summary>核心人員資料與模型使用｜實際 {summary.observed || 0}・替代 {summary.projected || 0}・缺失 {summary.missing || 0}・舊資料 {summary.stale || 0}</summary>
-    {persistence?.snapshotId && <p>快照保存：{persistence.confirmed ? '已確認保存' : '尚未確認保存'}。<a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(persistence.snapshotId)}`} target="_blank" rel="noreferrer">查看保存快照稽核</a></p>}
+    {snapshotLink}
     <p className="muted">{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'} 各項詳細覆蓋情形如下。</p>
-    {audit.sourceTimeAudit && <div className="dataAuditRow"><strong>資料時點核對：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[audit.sourceTimeAudit.status] || '未核對'}</strong><p>輸入鎖定：{audit.sourceTimeAudit.inputCutoffAt || '未保存'}。快照保存與資料時點分開核對；均不代表預測效果已驗證。</p><details><summary>逐項時間證據</summary><pre>{JSON.stringify(audit.sourceTimeAudit.rows, null, 2)}</pre></details></div>}
+    {sourceTimeAudit && <div className="dataAuditRow"><strong>資料時點核對：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[sourceTimeAudit.status] || '未核對'}</strong><p>輸入鎖定：{sourceTimeAudit.inputCutoffAt || '未保存'}。快照保存與資料時點分開核對；均不代表預測效果已驗證。</p><details><summary>逐項時間證據</summary><pre>{JSON.stringify(sourceTimeAudit.rows, null, 2)}</pre></details></div>}
     {audit.leagueLimitations?.map(note => <p key={note}>{note}</p>)}
     <div className="dataAuditRows">{audit.rows.map(row => <div className="dataAuditRow" key={row.id || row.key}>
       <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
