@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { starterInningsDisplay, runExplanationDisplay, externalVerificationExplanation } from '../lib/mlb-diagnostic-display-v1.js';
+import { starterInningsDisplay, runExplanationDisplay, externalVerificationExplanation, sourceStatusLabel, bullpenEvidenceDisplay } from '../lib/mlb-diagnostic-display-v1.js';
 import { expectedStarterInningsV13 } from '../lib/mlb-context-v13.js';
 import { estimateRunProfileV13 } from '../lib/joint-score-v13.js';
 
@@ -26,4 +26,12 @@ assert.match(externalVerificationExplanation({ priorIneligibleReason: '缺少5�
 assert.match(externalVerificationExplanation(null), /未保存/);
 assert.match(externalVerificationExplanation({ referencePriorEligible: true }, false), /有效期限/);
 assert.equal(externalVerificationExplanation({}, true), '');
+assert.equal(sourceStatusLabel('starterExpectedInnings', 'CONFIRMED'), '局數歷史輸入：CONFIRMED／預估局數：PROJECTED');
+assert.equal(sourceStatusLabel('weather', 'PROJECTED'), null);
+const bullpenRow = { asOf: '2026-09-08', sources: [{ purpose: 'CURRENT_ROSTER_MEMBERSHIP', asOf: '2026-09-08' }], players: [{ name: 'Gil', metrics: { inningsPitched: 2 }, metricAsOf: '2026-09-07' }, { name: 'Warren', metrics: { inningsPitched: 3 } }], coverage: { usage: { games: [{ fetched: true, date: '2026-09-06' }, { fetched: false, date: '2026-09-07' }] } } };
+const before = JSON.stringify(bullpenRow);
+assert.deepEqual(bullpenEvidenceDisplay(bullpenRow), { rosterDates: '2026-09-08', metricDates: '2026-09-07', metricDatesIncomplete: true, latestUsageDate: '2026-09-06', samples: [{ name: 'Gil', innings: 2 }, { name: 'Warren', innings: 3 }] });
+assert.equal(JSON.stringify(bullpenRow), before);
+assert.equal(bullpenEvidenceDisplay({ asOf: '2026-09-08' }).rosterDates, '未保存', 'must not infer roster date from aggregate asOf');
+assert.equal(bullpenEvidenceDisplay().latestUsageDate, '未保存');
 console.log('MLB diagnostic display: projection semantics, immutable report, neutral calculation and external evidence checks PASS');
