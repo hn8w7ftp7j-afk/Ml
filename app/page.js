@@ -1590,6 +1590,19 @@ export default function Home() {
   allLeagueRunRef.current = allLeagueRun;
   const [allLeaguePreparing, setAllLeaguePreparing] = useState(false);
   const [backgroundJobRevision, setBackgroundJobRevision] = useState(0);
+  const requestedRecoveryScopeRef = useRef(null);
+
+  function resumeSavedAnalysis() {
+    if (operationBusyRef.current) return;
+    const saved = loadBackgroundJob(league, date, boardRef.current);
+    if (!saved?.runId) {
+      setNotice('這個日期沒有可接回的伺服器工作；請讀取賽程後手動分析。');
+      return;
+    }
+    completedRecoveryFailuresRef.current.delete(`${league}|||${date}|||${saved.runId}`);
+    requestedRecoveryScopeRef.current = `${league}:${date}`;
+    setBackgroundJobRevision(value => value + 1);
+  }
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [health, setHealth] = useState(null);
@@ -2082,11 +2095,15 @@ export default function Home() {
   }, [date, league, storageReady]);
   useEffect(() => {
     if (!storageReady) return undefined;
+    // Restoring a receipt is a network operation, not a reason to lock entry.
+    // Only the explicit recovery button may attach a previous server job.
+    if (requestedRecoveryScopeRef.current !== `${league}:${date}`) return undefined;
     const saved = loadBackgroundJob(league, date, boardRef.current);
     if (!saved?.runId) return undefined;
     if (completedRecoveryFailuresRef.current.has(`${league}|||${date}|||${saved.runId}`)) return undefined;
     const locksForeground = saved.batchMode !== 'all-leagues';
     if (locksForeground && operationBusyRef.current) return undefined;
+    requestedRecoveryScopeRef.current = null;
     if (Array.isArray(saved.preparedBoard)) {
       setSchedule(saved.preparedBoard.map(item => item?.game).filter(Boolean));
       setBoard(current => mergePreparedLeagueBoard(current, saved.preparedBoard));
@@ -2808,10 +2825,16 @@ export default function Home() {
             failure.backgroundFatal = true;
             throw failure;
           }
+          if (completedReceipt) throw new Error('伺服器尚未回覆這份已完成結果');
           setProgress(value => ({ ...value, active: true, running: 1, label: '伺服器背景分析中｜可離開App' }));
         } catch (cause) {
           if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
             return { detached: true, total: 0, completed: 0, results: [] };
+          }
+          if (completedReceipt && !cause?.backgroundFatal && ![401, 403, 404].includes(Number(cause?.status))) {
+            // A finished job cannot make progress by retrying forever. Keep its
+            // receipt intact for a later explicit retry and release the controls.
+            throw new Error(`先前結果暫時無法載入，已保留紀錄。可稍後再按「載入先前分析」，或直接手動分析。${cause?.message || ''}`);
           }
           if (cause?.backgroundFatal || [401, 403, 404].includes(Number(cause?.status))) {
             completedRecoveryFailuresRef.current.add(`${league}|||${targetDate}|||${runId}`);
@@ -4145,7 +4168,7 @@ export default function Home() {
     {tab === 'board' && <>
       <section className="heroCard">
         <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 {activeLeague.id}｜單場或本日全部</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型EV（W）與穩健EV（R）。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」會由伺服器再次核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><p className="muted">進站、重新整理及切換日期不會啟動分析；請手動選擇單場或本日全部。</p><button className="secondary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || (gamePicker.scope === `${league}:${date}` && gamePicker.loading)} onClick={loadGamePicker}>{gamePicker.scope === `${league}:${date}` && gamePicker.loading ? '讀取賽程中…' : '讀取賽程（不分析）'}</button><label>選擇單場比賽<select style={{ width: '100%', minWidth: 0, maxWidth: '100%' }} value={gamePicker.scope === `${league}:${date}` ? gamePicker.selected : ''} disabled={busy || allLeaguePreparing || allLeagueRunning || gamePicker.scope !== `${league}:${date}` || gamePicker.loading} onChange={event => setGamePicker(current => ({ ...current, selected: event.target.value }))}><option value="">請先讀取賽程並選擇一場</option>{gamePicker.scope === `${league}:${date}` && gamePicker.games.map(game => <option key={game.gamePk} value={game.gamePk}>{translateTeamText((typeof game.away === 'string' ? game.away : game.away?.name) || game.teams?.away?.team?.name || '')} @ {translateTeamText((typeof game.home === 'string' ? game.home : game.home?.name) || game.teams?.home?.team?.name || '')}｜{game.gameDate ? new Date(game.gameDate).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : ''}｜{game.gamePk}</option>)}</select></label><button className="primary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || gamePicker.scope !== `${league}:${date}` || !gamePicker.selected} onClick={() => oneClickAnalyze('', gamePicker.selected)}>只分析這一場</button><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `分析本日全部 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a><details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><p className="muted">進站、重新整理及切換日期不會啟動分析；請手動選擇單場或本日全部。</p><button className="secondary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || (gamePicker.scope === `${league}:${date}` && gamePicker.loading)} onClick={loadGamePicker}>{gamePicker.scope === `${league}:${date}` && gamePicker.loading ? '讀取賽程中…' : '讀取賽程（不分析）'}</button><label>選擇單場比賽<select style={{ width: '100%', minWidth: 0, maxWidth: '100%' }} value={gamePicker.scope === `${league}:${date}` ? gamePicker.selected : ''} disabled={busy || allLeaguePreparing || allLeagueRunning || gamePicker.scope !== `${league}:${date}` || gamePicker.loading} onChange={event => setGamePicker(current => ({ ...current, selected: event.target.value }))}><option value="">請先讀取賽程並選擇一場</option>{gamePicker.scope === `${league}:${date}` && gamePicker.games.map(game => <option key={game.gamePk} value={game.gamePk}>{translateTeamText((typeof game.away === 'string' ? game.away : game.away?.name) || game.teams?.away?.team?.name || '')} @ {translateTeamText((typeof game.home === 'string' ? game.home : game.home?.name) || game.teams?.home?.team?.name || '')}｜{game.gameDate ? new Date(game.gameDate).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : ''}｜{game.gamePk}</option>)}</select></label><button className="primary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || gamePicker.scope !== `${league}:${date}` || !gamePicker.selected} onClick={() => oneClickAnalyze('', gamePicker.selected)}>只分析這一場</button><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `分析本日全部 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<button className="secondary" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={resumeSavedAnalysis}>載入先前分析（不重算）</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a><details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
           <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}｜狀態自動更新，分析由手動啟動｜S分數、W與R完整顯示` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
