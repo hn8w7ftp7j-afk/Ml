@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { auditScoreCells, auditScenarioDistributions } from '../lib/distribution-integrity-v1.js';
+import { buildAnalysisDataAudit } from '../lib/analysis-data-audit-v1.js';
+const tie = [{ awayRuns: 2, homeRuns: 2, probability: 1 }];
+assert.equal(auditScoreCells(tie, { period: 'FIRST5', allowTie: true }).passed, true);
+assert.equal(auditScoreCells(tie, { period: 'FULL' }).passed, false);
+assert.equal(auditScoreCells([{awayRuns: 1, homeRuns: 0, probability: 1-1e-12}]).passed,true);
+assert.equal(auditScoreCells([{awayRuns: 1, homeRuns: 0, probability: -0.1}]).passed,false);
+const scoped = auditScenarioDistributions([{weight:1}], (_s, first5)=>({cells:first5?tie:[]}));
+assert.equal(scoped.periods.FIRST5.passed,true);
+assert.equal(scoped.periods.FULL.passed,false);
+const audit = buildAnalysisDataAudit({away:{lineup:{offensiveIndexBasis:'TEAM_SEASON_OPS',offensiveIndexBaselineOps:.756,metricCoverage:1}}});
+const row = audit.rows.find(r=>r.key==='away.lineup');
+assert.equal(row.featureDefinition.baselineOps,.756);
+assert.ok(!row.substitutions.some(s=>s.includes('比较基准')||s.includes('比較基準')));
+assert.equal(row.evidenceStatus.pregameAvailability,'NOT_VERIFIED_BY_THIS_RECEIPT');
+console.log('Scoped distribution and feature definition audit PASS');
