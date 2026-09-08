@@ -112,7 +112,7 @@ mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetG
 mustMatch(/requestJSON\('\/api\/reference-lines'/, 'client must request the audit-only reference-line API');
 mustMatch(/REFERENCE_REFRESH_INTERVAL_MS = 2 \* 60 \* 1000/, 'external evidence must refresh before its five-minute expiry');
 mustMatch(/referenceRefreshDue/, 'same-hash Reader polling must still refresh expiring external evidence');
-mustMatch(/只作驗證，不改W\/R/, 'the result row must visibly separate external verification from W/R');
+mustMatch(/不影響W\/R、S分數與排名/, 'the result row must visibly separate external verification from W/R');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = referenceGameMap\(references\)/, 'reference markets and signed failure receipts must be isolated by official gamePk');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
