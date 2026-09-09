@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { bindVerifiedReaderContractsForItem } from '../lib/client-analysis-state.js';
 import { BET_ACTION_STATE_VERSION, evaluateBetAction } from '../lib/bet-action-state-v118.js';
 
@@ -19,7 +20,7 @@ const baseItem = {
   customData: { pitPersistence: { confirmed: true } },
 };
 
-assert.equal(BET_ACTION_STATE_VERSION, '11.8.43');
+assert.equal(BET_ACTION_STATE_VERSION, '11.8.44');
 const [boundRow] = bindVerifiedReaderContractsForItem(baseItem, [baseRow]);
 assert.equal(boundRow.clientVerifiedReaderContract, true, 'exact current signed Reader contract must bind to an immutable legacy PIT row');
 
@@ -66,7 +67,9 @@ const advancedAuthority = { ...currentAuthority, payloadHash: 'newer-server-read
 const staleBrowserAction = evaluateBetAction({ item: baseItem, row: boundRow, now, readerAuthority: advancedAuthority });
 assert.equal(staleBrowserAction.reasonCode, 'READER_UNVERIFIED',
   'a row bound to an older browser payload must be blocked when the server Reader payload advances');
-assert.equal(staleBrowserAction.text, '盤口更新中');
+assert.equal(staleBrowserAction.text, '盤口版本待複核');
+assert.equal(staleBrowserAction.readerReasonCode, 'READER_REVISION_MISMATCH');
+assert.equal(staleBrowserAction.canRecheck, true);
 assert.equal(staleBrowserAction.disabled, true);
 assert.equal(evaluateBetAction({
   item: baseItem,
@@ -83,4 +86,42 @@ const rebet = evaluateBetAction({ item: baseItem, row: boundRow, now, cancelled:
 assert.equal(rebet.text, '重新紀錄下注');
 assert.equal(rebet.recordable, true);
 
-console.log('bet action state v11.8.43 tests passed');
+for (const [authority, code] of [
+  [{ ...currentAuthority, payloadHash: null }, 'READER_MISSING'],
+  [{ ...currentAuthority, fresh: false }, 'READER_NOT_FRESH'],
+  [{ ...currentAuthority, boardDate: '2026-09-02' }, 'READER_DATE_MISMATCH'],
+]) {
+  const action = evaluateBetAction({ item: baseItem, row: boundRow, now, readerAuthority: authority });
+  assert.equal(action.readerReasonCode, code);
+  assert.equal(action.disabled, true);
+  assert.equal(action.canRecheck, true);
+  assert.doesNotMatch(action.title, /自動開放/);
+}
+for (const [patch, code] of [
+  [{ water: null }, 'READER_WATER_UNVERIFIED'],
+  [{ waterEstimated: true }, 'READER_WATER_UNVERIFIED'],
+  [{ provider: 'OTHER' }, 'READER_SOURCE_UNVERIFIED'],
+]) {
+  const action = evaluateBetAction({ item: baseItem, row: { ...boundRow, ...patch }, now, readerAuthority: currentAuthority });
+  assert.equal(action.readerReasonCode, code);
+  assert.equal(action.recordable, false);
+}
+const running = evaluateBetAction({ item: { ...baseItem, status: 'running' }, row: boundRow, now });
+assert.equal(running.readerReasonCode, 'ANALYSIS_NOT_READY');
+assert.equal(running.canRecheck, false);
+const inactive = evaluateBetAction({ item: { ...baseItem, statusLabel: '目前已不在官方賽前清單' }, row: boundRow, now });
+assert.equal(inactive.canRecheck, false);
+assert.equal(inactive.recordable, false);
+// All three UI surfaces expose explicit user-triggered recovery, never a bet mutation.
+const page = readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
+assert.equal((page.match(/<ReaderRecovery action=/g) || []).length, 3);
+const recovery = page.slice(page.indexOf('function ReaderRecovery('), page.indexOf('function ResultRow('));
+assert.match(recovery, /onClick=\{onRecheck\}/);
+assert.match(recovery, /disabled=\{busy\}/);
+assert.match(recovery, /action.canRecheck/);
+assert.doesNotMatch(recovery, /recordBet|cancelBet|useEffect/);
+const recheck = page.slice(page.indexOf('  function recheckReaderItem('), page.indexOf('  async function oneClickAnalyze('));
+assert.match(recheck, /Number.isSafeInteger\(gamePk\)/);
+assert.match(recheck, /return oneClickAnalyze\('', gamePk\)/);
+assert.doesNotMatch(recheck, /recordBet|cancelBet/);
+console.log('bet action state v11.8.44 tests passed');
