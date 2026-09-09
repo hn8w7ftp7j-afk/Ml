@@ -1256,7 +1256,15 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated) {
   return { icon: '🟢', label: '7.2級模型方向', ranking: true, reason: `雙EV為正且達7.2${scenarioWarning}` };
 }
 
-function ResultRow({ row, game, onBet, onCancel, betState = null, action, now, inactiveNotice = '' }) {
+function ReaderRecovery({ action, onRecheck, busy = false }) {
+  if (action?.reasonCode !== 'READER_UNVERIFIED') return null;
+  return <div className="readerRecovery" style={{ maxWidth: 260, width: '100%', fontSize: 12, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
+    <p role="status">{action.title}</p>
+    {action.canRecheck && onRecheck && <button className="mini secondary" style={{ whiteSpace: 'normal', maxWidth: '100%' }} disabled={busy} onClick={onRecheck} title="手動重新驗證此場Reader盤口，必要時重算並保存新PIT；不會新增下注。">{busy ? '工作進行中' : '重新複核此場（必要時重算）'}</button>}
+  </div>;
+}
+
+function ResultRow({ row, game, onBet, onCancel, onRecheck, recoveryBusy = false, betState = null, action, now, inactiveNotice = '' }) {
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
   const modelEV = modelEvValue(row);
@@ -1321,6 +1329,7 @@ function ResultRow({ row, game, onBet, onCancel, betState = null, action, now, i
     <div className="rowActions">
       {actualLine && <div>
         <button className={`mini ${action.kind === 'cancel' ? 'cancel' : latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? onCancel(latest) : onBet(row)}>{action.text}</button>
+        <ReaderRecovery action={action} onRecheck={onRecheck} busy={recoveryBusy}/>
         {latest && <BetPriceComparison bet={latest} currentRow={row} game={game}/>} 
       </div>}
     </div>
@@ -1405,7 +1414,7 @@ function BullpenEvidence({ row, league }) {
   </div>;
 }
 
-function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
+function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
   const analysisCardRef = useRef(null);
   const displayedGame = analysisDisplayGame(item);
   const displayedItem = { ...item, game: displayedGame };
@@ -1528,7 +1537,7 @@ function GameCard({ item, onBet, onCancel, getBetState, now, betsEnabled = true,
               ? (() => {
                 const betState = betsEnabled ? getBetState(item, row) : { latest: null, cancelled: null };
                 const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled, readerAuthority });
-                return <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betState} action={action} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice}/>;
+                return <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} betState={betState} action={action} onRecheck={onRecheck ? () => onRecheck(item) : undefined} recoveryBusy={recoveryBusy} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice}/>;
               })()
               : <DirectionSlotRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game}/>)
             : <div className="marketPlaceholder">{blocked ? '資料異常｜不評分' : availableMarkets.has(market) ? '等待分析驗證' : '尚未開盤'}</div>}</div>;
@@ -1724,7 +1733,7 @@ export default function Home() {
       const stableKey = `${item.game.gamePk}|${row.slotId || `${row.market}|${row.direction || row.pick}`}`;
       return { item, row, stableKey, gamePk: item.game.gamePk, matchup: matchup(item.game), market: row.market, pick: row.pick,
         water: row.water, score, weightedEV: modelEvValue(row), robustEV: robustEvValue(row), qaPassed, qualified,
-        currentReaderPrice, inactiveNotice, rankingEligible };
+        currentReaderPrice, inactiveNotice, rankingEligible, currentAnalysisExecutable };
       });
   })
     .sort((left, right) => Number(right.score ?? -Infinity) - Number(left.score ?? -Infinity)
@@ -3159,6 +3168,15 @@ export default function Home() {
     }
   }
 
+  function recheckReaderItem(item) {
+    const gamePk = Number(item?.game?.gamePk);
+    if (!Number.isSafeInteger(gamePk) || gamePk <= 0) {
+      setError('此場缺少有效賽事識別；未啟動任何場次分析。');
+      return;
+    }
+    return oneClickAnalyze('', gamePk);
+  }
+
   async function oneClickAnalyze(automaticKey = '', selectedGamePk = null) {
     if (allLeagueRunning) {
       setNotice('四聯盟背景分析正在進行；完成後即可重新分析目前聯盟。');
@@ -4198,7 +4216,7 @@ export default function Home() {
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
       {analysisEnabled && shadowMode && <LeagueShadowPanel config={activeLeague}/>}
       {analysisEnabled && !activeBoard.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
-      {analysisEnabled && activeBoard.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={liveReaderAuthority}/>) }
+      {analysisEnabled && activeBoard.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} onRecheck={recheckReaderItem} recoveryBusy={busy || readerPolling || allLeaguePreparing || allLeagueRunning} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={liveReaderAuthority}/>) }
       {analysisEnabled && historicalIdentityBoard.length > 0 && <details className="panel historicalIdentityPanel">
         <summary>歷史識別衝突｜{historicalIdentityBoard.length} 場原始分析保留</summary>
         <p>官方最新清單使用另一個場次識別。以下原始分析僅供查閱，不列入今日盤口、影子排名或候選順序，也不能作為目前 Reader 的下注身分。原下注紀錄與 PIT 均保持原樣。</p>
@@ -4219,8 +4237,8 @@ export default function Home() {
         const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const warnings = diagnosticWarnings(entry.row);
         const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
-        const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{index + 1}</b><strong className={`rankScore ${entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div></div>;
+        const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : !entry.currentAnalysisExecutable ? '目前版本排名資格：待複核｜保留原模型分數與資格判定' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
+        return <div className={`rankRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{index + 1}</b><strong className={`rankScore ${entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div></div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
@@ -4235,8 +4253,8 @@ export default function Home() {
           const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const warnings = diagnosticWarnings(entry.row);
           const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
-          const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button></div>;
+          const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : !entry.currentAnalysisExecutable ? '目前版本排名資格：待複核｜保留原模型分數與資格判定' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
+          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型EV W {signedPct(entry.weightedEV)}｜穩健EV R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/></div></div>;
         })}
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
