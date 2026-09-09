@@ -41,3 +41,47 @@ assert.match(lineupCoverageDisplay({ coverage: { metricCoverage: 1 } }), /模型
 assert.match(lineupCoverageDisplay({ coverage: { expectedCount: 8, modelMetricCoverage: .5 }, reportedBattingRates: [{ statistics: { average: 0 } }] }), /覆蓋 4\/8.*已列 1\/8/, 'zero rates remain present and denominator comes from evidence');
 assert.equal(JSON.stringify(missingRates), originalRates);
 console.log('MLB diagnostic display: projection semantics, immutable report, neutral calculation and external evidence checks PASS');
+
+// Same saved receipt shapes can be shown for all four baseball leagues.
+const { splitEvidenceNote, bullpenUsageText, inningsEvidenceView, featureTimeText, savedLeagueLimitations } = await import('../lib/personnel-evidence-display.js');
+const { buildAnalysisDataAudit } = await import('../lib/analysis-data-audit-v1.js');
+for (const leagueId of ['MLB', 'NPB', 'KBO', 'CPBL']) {
+  const input = { leagueId, away: { starter: { expectedInnings: 7, expectedInningsSource: 'OBSERVED_RECENT_STARTS_AVERAGE', expectedInningsSampleGames: 1, expectedInningsEvidence: { method: 'MEAN_RECENT_START_INNINGS', games: [{ gamePk: 12, date: '2026-09-04', inningsPitched: 7 }] } }, vsLeft: { available: false }, vsRight: { available: false } } };
+  const frozen = JSON.stringify(input);
+  const audit = buildAnalysisDataAudit(input);
+  const split = audit.rows.find(row => row.key === 'away.splits');
+  assert.match(split.temporalNote, /未取得/);
+  assert.doesNotMatch(split.temporalNote, /本季實測/);
+  const starter = audit.rows.find(row => row.key === 'away.starter');
+  const view = inningsEvidenceView(starter);
+  assert.equal(view.sampleGames, 1);
+  assert.equal(view.method, 'MEAN_RECENT_START_INNINGS');
+  assert.equal(view.source, 'OBSERVED_RECENT_STARTS_AVERAGE');
+  assert.equal(starter.roleEvidence.inningsBranch, view.method);
+  assert.equal(view.evidence.games[0].date, '2026-09-04');
+  assert.equal(JSON.stringify(input), frozen);
+  assert.equal(savedLeagueLimitations(audit).some(note => note.includes('洋將')), leagueId === 'CPBL');
+}
+const oldSplit = { category: 'splits', status: 'missing', temporalNote: '本季實測資料' };
+assert.match(splitEvidenceNote(oldSplit), /未取得/);
+assert.equal(oldSplit.temporalNote, '本季實測資料', 'old snapshot is not rewritten');
+assert.doesNotMatch(splitEvidenceNote({ category: 'splits', status: 'projected' }), /本季實測/);
+assert.match(splitEvidenceNote({ category: 'splits', status: 'observed' }), /已取得/);
+for (const sampledGames of [5, 6]) {
+  const display = bullpenUsageText({ coverage: { usage: { sampledGames, complete: false, pitchCountsAvailable: false } } });
+  assert.match(display, new RegExp(`樣本 ${sampledGames} 場`));
+  assert.match(display, /完整性未確認.*用球數未取得/);
+  assert.doesNotMatch(display, /undefined|完整 [56]\/[56]/);
+}
+assert.match(bullpenUsageText({ coverage: { usage: { completeGames: 0, expectedGames: 3, fetchedGames: 0 } } }), /完整 0\/3 場；取得 0 場/);
+assert.doesNotMatch(bullpenUsageText({ coverage: { usage: { completeGames: NaN, fetchedGames: -1 } } }), /NaN|undefined|-1/);
+assert.match(bullpenUsageText(), /未保存/);
+const legacyInningsRow = { inningsEstimate: { value: 7, source: 'PITCHER_WOBA', calculation: null }, metrics: { expectedInningsSource: 'OBSERVED_RECENT_STARTS_AVERAGE', expectedInningsSampleGames: 1, expectedInningsEvidence: { method: 'MEAN_RECENT_START_INNINGS', games: [] } } };
+const legacyBefore = JSON.stringify(legacyInningsRow);
+assert.equal(inningsEvidenceView(legacyInningsRow).source, 'OBSERVED_RECENT_STARTS_AVERAGE');
+assert.equal(inningsEvidenceView(legacyInningsRow).method, 'MEAN_RECENT_START_INNINGS');
+assert.equal(JSON.stringify(legacyInningsRow), legacyBefore);
+assert.equal(inningsEvidenceView({}).method, null);
+assert.match(featureTimeText({ status: 'VERIFIED', verificationObject: 'CONTEXT_DEFAULT_ONLY;NO_SOURCE_QUERY_EVIDENCE', fieldTraceabilityStatus: 'PENDING' }), /預設上下文.*無此特徵來源查詢證據.*映射證據不足.*PENDING/);
+assert.deepEqual(savedLeagueLimitations({ leagueLimitations: null }), []);
+console.log('Cross-league evidence presentation and immutable legacy receipt checks PASS');
