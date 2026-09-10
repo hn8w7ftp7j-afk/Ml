@@ -1430,6 +1430,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
     || item.preservedCurrentReaderGame === true
     || item.pendingReaderAnalysis === true)
     && analysisHasCalculatedDirections(item.customData);
+  const retainedAnalysisUpdating = recoveryBusy && ['running', 'queued'].includes(item.status);
   const availableMarkets = new Set(coverage.availableMarkets || []);
   const blockedMarkets = new Set(coverage.blockedMarkets || []);
   const analysis = item.customData?.analysis || {};
@@ -1456,7 +1457,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
       : pitUnconfirmed
         ? 'PIT永久保存未確認｜保留模型分析與排名｜實際下注紀錄暫停'
       : !currentReaderPrice
-        ? '尚無已驗證的Reader盤口｜保留分析與排名｜實際下注紀錄暫停'
+        ? '尚無已驗證的Reader盤口｜保留分析數值｜排名依QA判定｜新增下注紀錄暫停'
         : '';
     // A captured signed line remains recordable until first pitch. Switching
     // Reader leagues never changes the immutable score or its stored contract.
@@ -1496,11 +1497,11 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
   return <section className="gameCard" ref={analysisCardRef}>
     <div className="gameHead">
       <div><h2>{matchup(displayedGame)}</h2><p>{localTime(displayedGame.gameDate)}｜{analysisStarterDisplay(displayedItem, 'away')} 對 {analysisStarterDisplay(displayedItem, 'home')}</p></div>
-      <span className={`state ${item.status}`}>{item.statusLabel}</span>
+      <span className={`state ${item.status}`}>{preservingPreviousReaderAnalysis && !retainedAnalysisUpdating ? '保留已完成分析｜目前Reader盤口待複核' : item.statusLabel}</span>
     </div>
     <GameAnalysisCopy key={`${displayedGame.leagueId || displayedGame.league}:${displayedGame.gamePk}:${pitPersistence?.snapshotId || analysis.inputHash || analysis.analysisAsOf || 'pending'}`} cardRef={analysisCardRef} matchup={matchup(displayedGame)} available={Object.keys(analysis).length > 0} receipt={{ game: displayedGame, analysis, persistence: pitPersistence, appVersion: APP_VERSION, retained: preservingPreviousReaderAnalysis || item.restoredFromCache === true }}/>
     {shadowMode && <div className="sourceBanner shadowBanner"><strong>🧪 {item.game.leagueId || item.game.league || 'MLB'} 聯合比分影子模型</strong><span>{preservingPreviousReaderAnalysis
-      ? `Reader最新已開 ${openMarketCount}/4 市場｜保留上一版 ${scoredDirectionCount}/${expectedDirectionCount} 個分數與排序｜新結果完成後更新`
+      ? `保留 ${scoredDirectionCount}/${expectedDirectionCount} 個分析數值｜排名依QA判定｜${retainedAnalysisUpdating ? '分析工作執行中' : '尚未核對目前Reader盤口，請手動複核此場'}`
       : `已開 ${openMarketCount}/4 市場｜應評 ${expectedDirectionCount} 方向｜已評 ${scoredDirectionCount}/${expectedDirectionCount}｜進影子排名 ${rankingDirectionCount}；依固定S分數分析與排序`}</span></div>}
     {expectedRuns && <div className="sourceBanner"><strong>上游得分中心｜市場水位回灌：停用</strong><span>全場 {runCenter(expectedRuns.full)}｜前五局 {runCenter(expectedRuns.first5)}｜這份得分分布同時結算大／小與讓／受讓</span></div>}
     {(sourceStatusText || provenanceText) && <div className="sourceBanner dataStatusBanner"><strong>上游資料狀態</strong><span>{sourceStatusText || provenanceText}</span></div>}
@@ -1528,7 +1529,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
           const blocked = blockedMarkets.has(market) || rows.some(row => directionStatus(row) === 'BLOCKED');
           const marketState = blocked ? 'BLOCKED' : calculated ? 'AVAILABLE' : 'UNOPENED';
           const marketStateLabel = blocked && latestCoverage ? '資料異常｜停止評分'
-            : preservingPreviousReaderAnalysis ? '保留上一版分析｜背景更新中｜停止下注'
+            : preservingPreviousReaderAnalysis ? (retainedAnalysisUpdating ? '保留上一版分析｜背景更新中｜停止下注' : '保留已完成分析｜等待手動複核｜停止新增下注')
               : marketState === 'AVAILABLE' ? '已完成分析'
                 : marketState === 'BLOCKED' ? '資料異常'
               : '尚未開盤';
@@ -1732,7 +1733,7 @@ export default function Home() {
         : !pitConfirmed
           ? 'PIT永久保存未確認｜保留模型分析與排名｜實際下注紀錄暫停'
         : !currentReaderPrice
-          ? '尚無已驗證的Reader盤口｜保留分析與排名｜實際下注紀錄暫停'
+          ? '尚無已驗證的Reader盤口｜保留分析數值｜排名依QA判定｜新增下注紀錄暫停'
           : '';
       const rankingEligible = currentAnalysisExecutable
         && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
@@ -3396,7 +3397,7 @@ export default function Home() {
           status: resumed || capturedHistoricalPit || preservePreviousReaderAnalysis ? 'done' : represented && hasOpenRows ? 'queued' : 'unopened',
           statusLabel: represented
             ? resumed ? 'Tai888盤口未變｜接續完成'
-              : capturedHistoricalPit ? 'Reader最新盤已驗證｜背景更新分析'
+              : capturedHistoricalPit ? '已取得目前Reader盤口｜舊分析等待複核'
               : preservePreviousReaderAnalysis ? `${waitingReason}｜保留上一版分析`
                 : hasOpenRows ? previous?.customData ? '後台更新中｜保留目前分數' : '等待分析'
                   : `${waitingReason}｜持續自動監看`
