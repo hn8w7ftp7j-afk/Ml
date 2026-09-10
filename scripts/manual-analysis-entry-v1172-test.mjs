@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import './manual-single-game-analysis-test.mjs';
 import './manual-recovery-entry-test.mjs';
+import './all-league-result-delivery-test.mjs';
 
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 
