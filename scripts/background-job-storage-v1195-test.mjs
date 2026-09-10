@@ -92,6 +92,7 @@ function submissionHarness(storage = new MemoryStorage()) {
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, id === 'MLB' ? NEXT_DATE : DATE])) },
     allLeagueBusyRef: { current: false }, readerPollBusyRef: { current: false }, operationBusyRef: { current: false },
     analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: { current: false }, manualAnalysisScopesRef: { current: new Set() },
+    submittedAllLeagueRunRef: { current: null },
     allLeagueTargetDate: async (league, date) => date,
     leagueConfig: () => ({ label: 'isolated league', capabilities: { analysis: true, reader: true } }),
     fetchScheduleForLeague: async league => Array.from({ length: COUNTS[league] }, (_, index) => game(league, index)),

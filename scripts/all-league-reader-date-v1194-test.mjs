@@ -37,6 +37,7 @@ function harness({ manual = [], latest = id => ({ fresh: true, boardDate: id ===
     readerPollBusyRef: { current: false }, allLeagueBusyRef: { current: false }, operationBusyRef: { current: false },
     analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: { current: false },
     manualAnalysisScopesRef: { current: new Set() },
+    submittedAllLeagueRunRef: { current: null },
     loadAllLeagueAnalysisRun: () => null, clearAllLeagueBackgroundJobs: () => {}, clearBackgroundJob: () => {},
     markAppOperationBusy: () => {}, setAllLeaguePreparing: () => {}, setNotice: () => {}, setError: () => {},
     publishAllLeagueRun: value => { context.allLeagueRun = value; }, setBackgroundJobRevision: () => {},
@@ -58,6 +59,7 @@ async function test(name, action) { await action(); passed += 1; console.log(`PA
 await test('hidden MLB uses its fresh next-day Reader board after a full route mount on CPBL', async () => {
   const state = harness();
   assert.equal(await state.context.oneClickAnalyzeAll(), true);
+  assert.equal(state.context.submittedAllLeagueRunRef.current, 'isolated-date-run', 'only an explicitly submitted run authorizes automatic full-result delivery');
   assert.deepEqual([...state.requested].sort(), [...LEAGUE_IDS].sort(), 'all four leagues must consult their own latest Reader status');
   assert.deepEqual(state.prepared.find(row => row.id === 'MLB'), { id: 'MLB', date: MLB_DATE });
   const mlb = state.submitted[0].batches.find(batch => batch.league === 'MLB');

@@ -186,7 +186,7 @@ await test('foreign or old-date visible cards cannot mask recovery or be persist
   storage.setItem(RUN_KEY, JSON.stringify({ runId: 'tomorrow-npb', date: '2099-01-02', state: 'completed',
     completedAt: new Date(NOW - 1000).toISOString(), leagues: { NPB: { date: '2099-01-02', total: 1, resultLoaded: true } } }));
   assert.equal(context.loadBackgroundJob('NPB', '2099-01-02', [npb]).runId, 'tomorrow-npb');
-  assert.match(page, /const restoredBoard = storageReady \? loadAnalysisBoardCache\(league, date\) : \[\];\s*boardRef\.current = restoredBoard;/,
+  assert.match(page, /const restoredBoard = storageReady \? \(allLeagueBoardsRef\.current\.get\(`\$\{league\}:\$\{date\}`\) \|\| loadAnalysisBoardCache\(league, date\)\) : \[\];\s*boardRef\.current = restoredBoard;/,
     'date hydration must update the ref before the same commit runs the reconnect effect');
 });
 
