@@ -10,7 +10,7 @@ import {
   assessEightDirectionMarketCoverage,
   attachEightDirectionContract,
 } from '../../../lib/direction-slots-v1.js';
-import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
+import { AUTHENTICATED_MARKET_INPUT_VERSION, preserveAuthenticatedMarketInputs } from '../../../lib/market-freshness-v1.js';
 import { applyIndependentMarketVerification } from '../../../lib/market-verification-v2.js';
 import { verifyReferenceReceipt } from '../../../lib/market-integrity-v1.js';
 import { replayEnvironmentEvidence } from '../../../lib/replay-environment-evidence.js';
@@ -113,7 +113,7 @@ function sanitizeMarkets(rows, maximum = 16) {
 async function prepareMarkets(league, game, rows, maximum) {
   const attested = await attestIncomingMarketRows(league, game, sanitizeMarkets(rows, maximum));
   const now = Date.now();
-  return attested.map(row => applyMarketFreshness(row, now));
+  return preserveAuthenticatedMarketInputs(attested, now);
 }
 
 function deriveReaderProvenanceFromSignedRows(suppliedMarkets) {
@@ -271,13 +271,13 @@ export async function POST(request) {
     if (!resolvedDistribution.matches) {
       return NextResponse.json({ ok: false, error: '凍結比分分布識別不一致，已停止快速重算' }, { status: 409 });
     }
-    const suppliedMarkets = await prepareMarkets(league, game, body.markets, MAX_SUPPLIED_MARKET_ROWS);
+    const { markets: suppliedMarkets, authenticatedMarkets: authenticatedSuppliedMarkets } = await prepareMarkets(league, game, body.markets, MAX_SUPPLIED_MARKET_ROWS);
     const readerProvenance = await verifiedReaderProvenance(league, game, body.readerProvenance, suppliedMarkets);
-    const verificationMarkets = await prepareMarkets(league, game, body.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS);
+    const { markets: verificationMarkets } = await prepareMarkets(league, game, body.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS);
     const acquisition = await verifyReferenceReceipt(body.referenceEvidence, league, game);
     const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets).map(row => ({ ...row,
       marketVerification: { ...row.marketVerification, acquisition } }));
-    const previousMarkets = await prepareMarkets(league, game, body.previousMarkets, MAX_PREVIOUS_MARKET_ROWS);
+    const { markets: previousMarkets } = await prepareMarkets(league, game, body.previousMarkets, MAX_PREVIOUS_MARKET_ROWS);
     const marketCoverage = assessEightDirectionMarketCoverage(markets, game);
     const activeMarkets = marketCoverage.validRows;
 
@@ -302,6 +302,7 @@ export async function POST(request) {
       settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
       repriceVersion: REPRICE_VERSION,
       pitPayloadEncodingVersion: ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION,
+      marketEvidenceVersion: AUTHENTICATED_MARKET_INPUT_VERSION,
     };
     const fingerprints = buildSnapshotFingerprints({
       league,
@@ -392,6 +393,7 @@ export async function POST(request) {
       repriceSnapshot,
       versions,
       markets,
+      authenticatedSuppliedMarkets,
       previousMarkets,
       readerSnapshot: readerProvenance,
     }, { requiredWhenConfigured: true });

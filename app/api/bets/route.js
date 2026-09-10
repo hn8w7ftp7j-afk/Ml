@@ -3,7 +3,9 @@ import {
   cancelOpenCloudBet,
   cloudBetStats,
   listCloudBets,
+  listCloudBetsByIds,
   mergeCloudBets,
+  recoverPersistedCloudBet,
   settleOpenCloudBets,
   upsertCloudBet,
 } from '../../../lib/cloud-bet-store.js';
@@ -20,6 +22,13 @@ const response = (bets, extra = {}) => NextResponse.json({
   calibration: buildCalibrationStatusFromBetsV109(bets),
   ...extra,
 }, { headers: { 'Cache-Control': 'no-store' } });
+
+const mutationResponse = mutation => response(mutation.bets, {
+  created: mutation.created === true,
+  idempotent: mutation.idempotent === true,
+  betId: mutation.betId || null,
+  persistence: mutation.persistence,
+});
 
 // The browser may identify the exact Reader/PIT contract and choose a stake.
 // All durable ledger fields are rebuilt after server verification.
@@ -59,7 +68,22 @@ function databaseFailureResponse(error, operation) {
 
 export async function GET(request) {
   const auth = await requireApiAuth(request); if (auth) return auth;
-  try { return response(await listCloudBets()); }
+  try {
+    const confirmBetId = new URL(request.url).searchParams.get('confirmBetId');
+    if (confirmBetId != null && (!confirmBetId.trim() || confirmBetId.length > 120)) {
+      return NextResponse.json({ ok: false, code: 'BET_ID_INVALID', error: '下注紀錄識別格式不正確' }, {
+        status: 400, headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    let bets = await listCloudBets();
+    if (confirmBetId != null) {
+      // Independent client readback must also find old retry/cancellation IDs
+      // beyond the bounded ledger page, and must use their latest DB state.
+      const confirmed = await listCloudBetsByIds([confirmBetId]);
+      bets = [...confirmed, ...bets.filter(bet => bet.id !== confirmBetId)];
+    }
+    return response(bets);
+  }
   catch (error) { return databaseFailureResponse(error, 'BET_LEDGER_READ_FAILED'); }
 }
 
@@ -73,24 +97,31 @@ export async function POST(request) {
     if (body.action === 'merge') return response(await mergeCloudBets(body.bets));
     if (body.action === 'upsert') {
       const candidate = betUpsertCandidate(body.bet);
+      // Only return an existing trusted record for an exact repeated intent.
+      // This never creates a bet or relaxes the evidence gate below.
+      const recovered = await recoverPersistedCloudBet(candidate);
+      if (recovered) return mutationResponse(recovered);
       const verification = await verifyCloudBetEvidenceV110(candidate);
       if (verification.pitVerified !== true) {
         console.warn('[BET_LEDGER_REJECTED]', {
           code: 'PIT_EVIDENCE_REQUIRED',
+          reasonCode: verification.pitErrorCode || null,
           status: 409,
+          league: String(candidate.league || '').slice(0, 8),
+          date: String(candidate.date || '').slice(0, 10),
+          gamePk: Number(candidate.gamePk) || null,
+          pitSnapshotId: String(candidate.pitSnapshotId || '').slice(0, 500),
           message: String(verification.pitError || 'PIT_UNVERIFIED').slice(0, 300),
         });
         return NextResponse.json({
           ok: false,
           code: 'PIT_EVIDENCE_REQUIRED',
+          reasonCode: verification.pitErrorCode || null,
           error: `目前下注找不到同場最新不可變PIT證據：${verification.pitError || 'PIT_UNVERIFIED'}`,
         }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
       }
       const mutation = await upsertCloudBet(candidate, { verification });
-      return response(mutation.bets, {
-        created: mutation.created === true,
-        betId: mutation.betId || null,
-      });
+      return mutationResponse(mutation);
     }
     if (body.action === 'cancel') return response(await cancelOpenCloudBet(body.id));
     if (body.action === 'settleOpen') {

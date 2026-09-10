@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.32', 'Reader recovery release retains one shared release version');
+assert.equal(APP_VERSION, '11.9.33', 'Reader recovery release retains one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -151,7 +151,7 @@ assert.match(readerIngestRoute, /trackOpenBetClosingSnapshots\(normalized\)/, 'c
 mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
 mustMatch(/此方向已經記錄；盤口或水位變動也不再新增/, 'single-position bet suppression text missing');
 assert.doesNotMatch(page, /加注目前盤/, 'same direction must never expose a reprice add-on action');
-mustMatch(/記錄實際下注/, 'actual-bet action missing');
+mustMatch(/紀錄實際下注/, 'actual-bet action missing');
 mustMatch(/每筆實際下注金額/, 'stake preset must be labelled as an actual-ledger amount rather than a model Unit');
 assert.doesNotMatch(page, />1 Unit 金額</, 'formal Unit is disabled and must not appear as an active setting');
 assert.match(page, /unit: null/, 'actual ledger writes must not claim a model Unit');

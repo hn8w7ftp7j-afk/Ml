@@ -34,9 +34,10 @@ async function trackOpenBetClosingSnapshots(snapshot) {
   }
 }
 
-function temporalError(message) {
+function temporalError(message, code) {
   const error = new Error(message);
   error.status = 409;
+  error.code = code;
   return error;
 }
 
@@ -47,13 +48,13 @@ function assertMonotonic(previous, envelope, boardChanged) {
   const observed = Date.parse(envelope.observedAt);
   const activity = Date.parse(envelope.pageActivityAt);
   if (Number.isFinite(previousObserved) && observed <= previousObserved) {
-    throw temporalError('Reader observedAt 未向前推進，已拒絕重播快照');
+    throw temporalError('Reader observedAt 未向前推進，已拒絕重播快照', 'READER_OBSERVED_AT_NOT_ADVANCING');
   }
   if (Number.isFinite(previousActivity) && activity < previousActivity) {
-    throw temporalError('Reader pageActivityAt 時間倒退，已拒絕舊盤覆蓋');
+    throw temporalError('Reader pageActivityAt 時間倒退，已拒絕舊盤覆蓋', 'READER_ACTIVITY_TIME_REGRESSION');
   }
   if (boardChanged && Number.isFinite(previousActivity) && activity <= previousActivity) {
-    throw temporalError('Reader 盤口內容變更但頁面活動時間未推進，已拒絕重播');
+    throw temporalError('Reader 盤口內容變更但頁面活動時間未推進，已拒絕重播', 'READER_CHANGED_BOARD_WITHOUT_ACTIVITY');
   }
 }
 
@@ -100,6 +101,7 @@ export async function POST(request) {
     }
     const config = leagueConfig(league);
     if (!config.capabilities.reader) {
+      console.warn('[READER_INGEST_REJECTED]', { code: 'LEAGUE_NOT_READY', status: 409, league });
       return NextResponse.json({
         ok: false,
         code: 'LEAGUE_NOT_READY',
@@ -124,7 +126,8 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: `無法取得完整 ${config.shortLabel} 官方賽程，Reader 本次未寫入` }, { status: 502, headers });
     }
     if (!schedule.length) {
-      return NextResponse.json({ ok: false, error: `${config.shortLabel} 官方台北盤日已無未開賽場次，Reader 本次未寫入` }, { status: 409, headers });
+      console.warn('[READER_INGEST_REJECTED]', { code: 'READER_NO_PRESTART_GAMES', status: 409, league, boardDate });
+      return NextResponse.json({ ok: false, code: 'READER_NO_PRESTART_GAMES', error: `${config.shortLabel} 官方台北盤日已無未開賽場次，Reader 本次未寫入` }, { status: 409, headers });
     }
 
     const unchangedBoard = previous?.rawBoardHash === envelope.rawBoardHash;
@@ -213,7 +216,9 @@ export async function POST(request) {
       freshness: status,
     }, { headers });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: String(error?.message || error) }, {
+    const code = String(error?.code || 'READER_INGEST_REJECTED').slice(0, 100);
+    console.warn('[READER_INGEST_REJECTED]', { code, status: Number(error?.status) || 500, message: String(error?.message || error).slice(0, 300) });
+    return NextResponse.json({ ok: false, code, error: String(error?.message || error) }, {
       status: Number(error?.status) || 500,
       headers,
     });
