@@ -24,6 +24,13 @@ import {
   betPriceMatches,
 } from '../lib/bet-ledger.js';
 import { compareBetPrice } from '../lib/bet-price-comparison.js';
+import {
+  cloudBetMutationOutcomeUncertain,
+  confirmCloudBetMutation,
+  findConfirmedRecordedBet,
+  requireCancelledBet,
+  requireCloudLedgerResponse,
+} from '../lib/cloud-ledger-receipt.js';
 import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
 import { summarizeOriginalBetPrices } from '../lib/bet-price-summary.js';
 import { BET_PERIODS, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
@@ -1659,6 +1666,7 @@ export default function Home() {
   const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
   const betMutationBusyRef = useRef(false);
+  const cloudLedgerGenerationRef = useRef(0);
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
   const completedRecoveryFailuresRef = useRef(new Set());
@@ -1879,21 +1887,26 @@ export default function Home() {
 
   async function probeCloudLedgerRecovery() {
     if (cloudSyncBusyRef.current || betMutationBusyRef.current || document.visibilityState !== 'visible') return;
+    const generation = ++cloudLedgerGenerationRef.current;
     cloudSyncBusyRef.current = true;
     setCloudLedgerBusy(true);
     try {
       const data = await requestJSON('/api/bets', {}, 30000);
-      if (!Array.isArray(data.bets)) throw new Error('雲端下注紀錄回傳格式錯誤');
+      requireCloudLedgerResponse(data);
+      if (generation !== cloudLedgerGenerationRef.current || betMutationBusyRef.current) return;
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
       cloudSyncRetryAtRef.current = 0;
       setCloudLedgerStatus({ state: 'ready', code: '', message: '', retryAt: 0 });
+      return data;
     } catch (cause) {
-      reportCloudLedgerFailure(cause);
+      if (generation === cloudLedgerGenerationRef.current) reportCloudLedgerFailure(cause);
     } finally {
-      cloudSyncBusyRef.current = false;
-      setCloudLedgerBusy(false);
+      if (generation === cloudLedgerGenerationRef.current) {
+        cloudSyncBusyRef.current = false;
+        setCloudLedgerBusy(false);
+      }
     }
   }
 
@@ -1907,6 +1920,7 @@ export default function Home() {
       retryAt: cloudSyncRetryAtRef.current,
     })) return;
     if (cloudSyncBusyRef.current || betMutationBusyRef.current) return;
+    const generation = ++cloudLedgerGenerationRef.current;
     cloudSyncBusyRef.current = true;
     setCloudLedgerBusy(true);
     try {
@@ -1918,7 +1932,8 @@ export default function Home() {
           ? { action: 'settleOpen', league: targetLeague, limit: 500 }
           : { action: 'merge', bets: migrateLegacyLocalBets(betsRef.current) }),
       }, 120000);
-      if (Array.isArray(data.bets)) {
+      requireCloudLedgerResponse(data);
+      if (generation === cloudLedgerGenerationRef.current && !betMutationBusyRef.current) {
         if (!migrationComplete) markCloudBetMigrationComplete();
         betsRef.current = data.bets;
         setBets(data.bets);
@@ -1927,15 +1942,19 @@ export default function Home() {
         setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
       }
     } catch (cause) {
-      reportCloudLedgerFailure(cause);
+      if (generation === cloudLedgerGenerationRef.current) reportCloudLedgerFailure(cause);
       // A temporary result-provider failure must not erase or rewrite the ledger.
     } finally {
-      cloudSyncBusyRef.current = false;
-      setCloudLedgerBusy(false);
+      if (generation === cloudLedgerGenerationRef.current) {
+        cloudSyncBusyRef.current = false;
+        setCloudLedgerBusy(false);
+      }
     }
   }
 
   useEffect(() => {
+    let disposed = false;
+    const generation = ++cloudLedgerGenerationRef.current;
     const initial = loadCompactStore();
     const migratedBets = migrateLegacyLocalBets(initial.bets);
     // Same-site sport routes can return to a particular baseball league.
@@ -1951,20 +1970,23 @@ export default function Home() {
     requestJSON('/api/bets', migrationComplete ? {} : {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: migratedBets }),
     }, 30000).then(data => {
-      if (!Array.isArray(data.bets)) return;
+      requireCloudLedgerResponse(data);
+      if (disposed || generation !== cloudLedgerGenerationRef.current || betMutationBusyRef.current) return;
       if (!migrationComplete) markCloudBetMigrationComplete();
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
-    }).then(() => {
       cloudSyncRetryAtRef.current = 0;
       setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
     }).catch(cause => {
-      reportCloudLedgerFailure(cause);
+      if (!disposed && generation === cloudLedgerGenerationRef.current) reportCloudLedgerFailure(cause);
     }).finally(() => {
-      cloudSyncBusyRef.current = false;
-      setCloudLedgerBusy(false);
+      if (!disposed && generation === cloudLedgerGenerationRef.current) {
+        cloudSyncBusyRef.current = false;
+        setCloudLedgerBusy(false);
+      }
     });
+    return () => { disposed = true; };
   }, []);
   useEffect(() => {
     betsRef.current = bets;
@@ -4100,22 +4122,27 @@ export default function Home() {
     };
     let reconcileAfterMutation = false;
     let refreshReaderAfterMutation = false;
+    let uncertainOutcome = false;
     betMutationBusyRef.current = true;
     setCloudLedgerBusy(true);
     markAppOperationBusy(true);
+    cloudLedgerGenerationRef.current += 1;
+    setError('');
+    setNotice('正在寫入並回讀永久帳本；確認完成前不會顯示已記錄。');
     try {
-      const data = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', bet }) }, 30000);
-      if (!Array.isArray(data.bets) || data.created !== true || !data.betId) {
-        throw new Error('永久帳本未確認新增這筆下注');
-      }
+      const postData = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', bet }) }, 30000);
+      const receipt = await confirmCloudBetMutation(postData, bet,
+        () => requestJSON(`/api/bets?confirmBetId=${encodeURIComponent(postData.betId)}`, {}, 30000));
+      const data = receipt.data;
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
       cloudSyncRetryAtRef.current = 0;
       setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
       setError('');
-      setNotice(`已雲端記錄實際下注：${translateTeamText(row.pick)}｜${Number(row.water).toFixed(3)}｜${Number(settings.unitValue).toLocaleString()}元`);
+      setNotice(`${receipt.idempotent ? '已讀回原有紀錄，未重複新增' : '已寫入並回讀永久帳本'}：${translateTeamText(receipt.bet.pick)}｜${Number(receipt.bet.water).toFixed(3)}｜${Number(receipt.bet.stake).toLocaleString()}元`);
     } catch (cause) {
+      setNotice('');
       if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
         reportCloudLedgerFailure(cause);
       }
@@ -4127,13 +4154,28 @@ export default function Home() {
       } else {
         setError(cause?.message || '雲端下注紀錄更新失敗');
       }
-      reconcileAfterMutation = [409].includes(Number(cause?.status)) || /逾時/.test(String(cause?.message || ''));
+      uncertainOutcome = cloudBetMutationOutcomeUncertain(cause);
+      reconcileAfterMutation = Number(cause?.status) === 409 || uncertainOutcome;
+      if (uncertainOutcome) setError(`${cause?.message || '帳本回覆中斷'}。寫入結果尚未確認，正在回讀帳本；請勿重複新增。`);
     } finally {
       betMutationBusyRef.current = false;
       setCloudLedgerBusy(false);
       markAppOperationBusy(false);
     }
-    if (reconcileAfterMutation) await probeCloudLedgerRecovery();
+    if (reconcileAfterMutation) {
+      const recovered = await probeCloudLedgerRecovery();
+      if (uncertainOutcome && recovered) {
+        const persisted = findConfirmedRecordedBet(recovered, bet);
+        if (persisted) {
+          setError('');
+          setNotice(`已從永久帳本確認紀錄存在：${translateTeamText(persisted.pick)}｜${Number(persisted.water).toFixed(3)}｜${Number(persisted.stake).toLocaleString()}元；未重複新增。`);
+        } else {
+          setError('本次寫入尚未確認：帳本未讀回相同盤口與金額的紀錄。可重試；伺服器會防止重複新增。');
+        }
+      } else if (uncertainOutcome) {
+        setError('本次寫入結果尚未確認，帳本暫時無法回讀。請稍後重新確認；目前不會顯示成功。');
+      }
+    }
     // A failed bet must never implicitly start analysis or repricing.
   }
 
@@ -4155,16 +4197,22 @@ export default function Home() {
       return;
     }
     let reconcileAfterMutation = false;
+    let uncertainOutcome = false;
     betMutationBusyRef.current = true;
     setCloudLedgerBusy(true);
     markAppOperationBusy(true);
+    cloudLedgerGenerationRef.current += 1;
+    setError('');
+    setNotice('正在取消並回讀永久帳本；確認完成前保留原紀錄狀態。');
     try {
-      const data = await requestJSON('/api/bets', {
+      const postData = await requestJSON('/api/bets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'cancel', id: bet.id }),
       }, 30000);
-      if (!Array.isArray(data.bets)) throw new Error('雲端下注紀錄回傳格式錯誤');
+      requireCloudLedgerResponse(postData);
+      const data = await requestJSON(`/api/bets?confirmBetId=${encodeURIComponent(bet.id)}`, {}, 30000);
+      requireCancelledBet(data, bet.id);
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
@@ -4172,17 +4220,27 @@ export default function Home() {
       setError('');
       setNotice(`已取消下注：${translateTeamText(bet.pick)}；原始下注證據仍保留。`);
     } catch (cause) {
+      setNotice('');
       if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
         reportCloudLedgerFailure(cause);
       }
       setError(cause?.message || '取消下注失敗');
-      reconcileAfterMutation = [409].includes(Number(cause?.status)) || /逾時/.test(String(cause?.message || ''));
+      uncertainOutcome = cloudBetMutationOutcomeUncertain(cause);
+      reconcileAfterMutation = Number(cause?.status) === 409 || uncertainOutcome;
     } finally {
       betMutationBusyRef.current = false;
       setCloudLedgerBusy(false);
       markAppOperationBusy(false);
     }
-    if (reconcileAfterMutation) await probeCloudLedgerRecovery();
+    if (reconcileAfterMutation) {
+      const recovered = await probeCloudLedgerRecovery();
+      if (recovered?.bets?.some(row => row.id === bet.id && row.status === 'CANCELLED')) {
+        setError('');
+        setNotice(`已從永久帳本確認取消：${translateTeamText(bet.pick)}；原始下注證據仍保留。`);
+      } else if (uncertainOutcome) {
+        setError('本次取消尚未確認；請重新確認帳本後重試，目前不會顯示取消成功。');
+      }
+    }
   }
 
   function selectLeague(value) {
@@ -4249,8 +4307,9 @@ export default function Home() {
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
     </nav>
 
-    {error && <div className="errorBox global"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
-    {notice && <div className="noticeBox">{notice}</div>}
+    {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
+    {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
+    {cloudLedgerStatus.state === 'unavailable' && <div className="noticeBox" role="status"><span>帳本尚未同步完成：{cloudLedgerStatus.message} </span><button type="button" className="mini" disabled={cloudLedgerBusy} onClick={() => probeCloudLedgerRecovery()}>{cloudLedgerBusy ? '正在回讀帳本…' : '重新讀取帳本'}</button></div>}
     <LoadingLine progress={progress}/>
 
     {tab === 'board' && <>

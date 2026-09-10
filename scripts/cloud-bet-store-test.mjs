@@ -284,7 +284,7 @@ assert.match(page, /async function cancelBet\([\s\S]*betMutationBusyRef\.current
 assert.match(page, /async function probeCloudLedgerRecovery\(\)[\s\S]{0,180}cloudSyncBusyRef\.current \|\| betMutationBusyRef\.current/, '帳本恢復讀取不得與下注狀態寫入並行');
 assert.match(page, /async function refreshSettlements[\s\S]*if \(cloudSyncBusyRef\.current \|\| betMutationBusyRef\.current\) return;/, '賽果刷新不得與下注狀態寫入並行');
 assert.match(page, /const cloudLedgerActionState = cloudLedgerBusy \? 'loading' : cloudLedgerStatus\.state[\s\S]*cloudLedgerState=\{cloudLedgerActionState\}/, '任何帳本操作進行中都必須禁用盤口下注按鈕');
-assert.match(page, /reconcileAfterMutation[\s\S]*finally \{[\s\S]*betMutationBusyRef\.current = false;[\s\S]*if \(reconcileAfterMutation\) await probeCloudLedgerRecovery\(\);/, '不確定寫入的帳本復核必須在釋放mutation互斥後執行');
+assert.match(page, /reconcileAfterMutation[\s\S]*finally \{[\s\S]*betMutationBusyRef\.current = false;[\s\S]*if \(reconcileAfterMutation\) \{\s*const recovered = await probeCloudLedgerRecovery\(\);/, '不確定寫入的帳本復核必須在釋放mutation互斥後執行');
 const initialMergeStart = page.indexOf("body: JSON.stringify({ action: 'merge', bets: migratedBets })");
 const initialMergeEnd = page.indexOf('}, []);', initialMergeStart);
 assert.ok(initialMergeStart >= 0 && initialMergeEnd > initialMergeStart, 'initial cloud merge flow missing');

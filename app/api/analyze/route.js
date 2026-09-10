@@ -23,7 +23,7 @@ import {
   assessEightDirectionMarketCoverage,
   attachEightDirectionContract,
 } from '../../../lib/direction-slots-v1.js';
-import { applyMarketFreshness } from '../../../lib/market-freshness-v1.js';
+import { AUTHENTICATED_MARKET_INPUT_VERSION, preserveAuthenticatedMarketInputs } from '../../../lib/market-freshness-v1.js';
 import {
   ANALYSIS_IDEMPOTENCY_CACHE_TTL_MS,
   ANALYSIS_RESPONSE_CACHE_TTL_MS,
@@ -167,7 +167,7 @@ function sanitizeMarketRows(rows, maximum = 16) {
 async function prepareMarketRows(league, game, rows, maximum) {
   const attested = await attestIncomingMarketRows(league, game, sanitizeMarketRows(rows, maximum));
   const now = Date.now();
-  return attested.map(row => applyMarketFreshness(row, now));
+  return preserveAuthenticatedMarketInputs(attested, now);
 }
 
 function deriveReaderProvenanceFromSignedRows(suppliedMarkets) {
@@ -330,13 +330,13 @@ export async function POST(request) {
     const { game } = await resolveLeagueGame(league, requestedGame);
     assertLeagueGamePrestart(league, game);
 
-    const suppliedMarkets = await prepareMarketRows(league, game, body.markets, MAX_SUPPLIED_MARKET_ROWS);
+    const { markets: suppliedMarkets, authenticatedMarkets: authenticatedSuppliedMarkets } = await prepareMarketRows(league, game, body.markets, MAX_SUPPLIED_MARKET_ROWS);
     const readerProvenance = await verifiedReaderProvenance(league, game, body.readerProvenance, suppliedMarkets);
-    const verificationMarkets = await prepareMarketRows(league, game, body.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS);
+    const { markets: verificationMarkets } = await prepareMarketRows(league, game, body.verificationMarkets, MAX_VERIFICATION_MARKET_ROWS);
     const acquisition = await verifyReferenceReceipt(body.referenceEvidence, league, game);
     const markets = applyIndependentMarketVerification(suppliedMarkets, verificationMarkets).map(row => ({ ...row,
       marketVerification: { ...row.marketVerification, acquisition } }));
-    const previousMarkets = await prepareMarketRows(league, game, body.previousMarkets, MAX_PREVIOUS_MARKET_ROWS);
+    const { markets: previousMarkets } = await prepareMarketRows(league, game, body.previousMarkets, MAX_PREVIOUS_MARKET_ROWS);
     const marketCoverage = assessEightDirectionMarketCoverage(markets, game);
     const activeMarkets = marketCoverage.validRows;
 
@@ -392,6 +392,7 @@ export async function POST(request) {
       dataVersion: DATA_VERSION,
       scoreFormulaVersion: SCORE_FORMULA_VERSION, settlementRuleVersion: SETTLEMENT_RULE_VERSION, uncertaintySetVersion: UNCERTAINTY_SET_VERSION,
       pitPayloadEncodingVersion: ANALYSIS_PIT_PAYLOAD_ENCODING_VERSION,
+      marketEvidenceVersion: AUTHENTICATED_MARKET_INPUT_VERSION,
     };
 
     const coreOnly = buildSnapshotFingerprints({ league, context, markets: [], versions });
@@ -458,6 +459,7 @@ export async function POST(request) {
           repriceSnapshot: safePayload.repriceSnapshot,
           versions,
           markets,
+          authenticatedSuppliedMarkets,
           previousMarkets,
           readerSnapshot: readerProvenance,
         }, { requiredWhenConfigured: true });
@@ -565,6 +567,7 @@ export async function POST(request) {
       repriceSnapshot,
       versions,
       markets,
+      authenticatedSuppliedMarkets,
       previousMarkets,
       readerSnapshot: readerProvenance,
     }, { requiredWhenConfigured: true });
