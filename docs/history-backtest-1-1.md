@@ -35,7 +35,14 @@ embedded frozen-input hash before displaying data. These checks establish artifa
 integrity; they do not independently authenticate historical publication times.
 Provenance projections explicitly distinguish archived receipts, retrieval time,
 publication evidence and missing fields. Full underlying receipt collections remain
-in the separately preserved research archive.
+in the original frozen inputs. Availability update (2026-09-12): workspace cleanup
+removed the not-yet-persisted full v1.1 research projection and its scripts.
+The 539 public diagnostic rows and 4,539 representative source records were
+recovered unchanged from GitHub blobs. The 33,504-record full collection is not
+currently restored: attempts to materialize the original Library input archives
+returned HTTP 502. Embedded full-artifact paths/hashes are historical references,
+not a claim that the exact full archive is currently downloadable. Any rebuilt
+research bundle must disclose this scope and must not invent omitted receipts.
 
 The original mathematical core is pinned to
 `4f04ecf22bc0682c9e7e70116dd991c873d0186d`. Display/data provenance changes do not

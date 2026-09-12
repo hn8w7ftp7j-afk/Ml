@@ -75,6 +75,7 @@ export default function OverDiagnostics() {
   return <main className="od-shell">
     <header className="od-header"><div><Link href="/" prefetch={false}>← 返回分析網站</Link><p className="od-eyebrow">MLB · HISTORICAL DIAGNOSTICS · 1.1</p><h1>大分偏差診斷</h1><p>追查得分預測與選盤各階段的落差。本頁呈現凍結資料的歷史模擬。</p></div><span className="od-badge">測試版 · 唯讀診斷</span></header>
     <div className="od-notice">這次調整診斷與呈現方式，沒有變更得分模型、S／W／R 公式或選盤門檻。歷史重播的結果不代表新模型已驗證或未來獲利。</div>
+    <div className="od-notice">來源保存狀態（2026-09-12）：539 場診斷與 4,539 筆代表來源紀錄已保存。本次環境清理後，33,504 筆完整來源集合尚未恢復；明細中的完整檔名與雜湊是先前紀錄，不代表該完整檔目前可下載。以下 JSON.gz 是代表紀錄版本，並非完整來源集合。</div>
     <div className="od-actions"><button disabled={busy} onClick={() => load(AbortSignal.timeout(30000))}>{busy ? '讀取中…' : '重新載入資料'}</button>{data && <a className="od-download" href="/api/diagnostics/over?download=1" download="MLB-over-diagnostic-data.json.gz">下載診斷資料 JSON.gz</a>}</div>
     {error && <p className="od-error" role="alert">{error}</p>}
     {busy && !data && <p role="status">正在讀取已保存的診斷結果…</p>}
