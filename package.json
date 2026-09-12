@@ -40,7 +40,7 @@
     "react": "19.1.7",
     "react-dom": "19.1.7",
     "sharp": "0.35.4",
-    "workflow": "^4.8.5"
+    "workflow": "^4.8.6"
   },
   "overrides": {
     "nanoid": "6.0.1",
