@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { marketResearchPolicy, isResearchOnlyMarket } from '../lib/market-research-policy.js';
+import { marketResearchPolicy, marketResearchRestriction, isResearchOnlyMarket } from '../lib/market-research-policy.js';
 import { BET_ORDER_MIN_SCORE, buildBetOrderEntries } from '../lib/bet-order.js';
 import { bindVerifiedReaderContractsForItem } from '../lib/client-analysis-state.js';
 import { evaluateBetAction } from '../lib/bet-action-state-v118.js';
@@ -13,13 +13,14 @@ const row = Object.freeze({
 });
 const policy = marketResearchPolicy(row, game);
 assert.ok(Object.isFrozen(policy));
-assert.equal(policy.id, 'MLB_FULL_TOTAL_OVER_RESEARCH_ONLY');
-assert.equal(policy.candidateEligible, false);
+assert.equal(policy.id, 'MLB_FULL_TOTAL_OVER_OBSERVATION');
+assert.equal(policy.candidateEligible, true);
+assert.equal(marketResearchRestriction(row, game), null, 'observation must not suspend an otherwise eligible market');
 assert.equal(policy.preserveAnalysis, true);
 assert.equal(policy.preserveLedger, true);
 assert.equal(policy.market, '全場大小');
 assert.equal(policy.direction, 'over');
-assert.throws(() => { policy.candidateEligible = true; }, TypeError);
+assert.throws(() => { policy.candidateEligible = false; }, TypeError);
 
 const positiveCases = [
   [{ market: '全場大小', pick: '大8平' }, game],
@@ -40,7 +41,7 @@ const positiveCases = [
 for (const [value, context] of positiveCases) {
   const before = structuredClone(value);
   assert.equal(marketResearchPolicy(value, context), policy, JSON.stringify(value));
-  assert.equal(isResearchOnlyMarket(value, context), true);
+  assert.equal(isResearchOnlyMarket(value, context), false);
   assert.deepEqual(value, before, 'policy may not mutate input snapshots');
 }
 
@@ -98,11 +99,11 @@ const entries = [
 const original = structuredClone(entries);
 const ordered = buildBetOrderEntries(entries);
 assert.equal(BET_ORDER_MIN_SCORE, 7.0, 'do not redefine the existing 7.0 display threshold');
-assert.deepEqual(new Set(ordered.map(entry => entry.id)), new Set(['under', 'first5', 'npb', 'qa-preserved']));
-assert.deepEqual(ordered.map(entry => entry.betOrderIndex), [1, 2, 3, 4]);
+assert.deepEqual(new Set(ordered.map(entry => entry.id)), new Set(['research', 'legacy-research', 'under', 'first5', 'npb', 'qa-preserved']));
+assert.deepEqual(ordered.map(entry => entry.betOrderIndex), [1, 2, 3, 4, 5, 6]);
 assert.equal(ordered.find(entry => entry.id === 'qa-preserved').qaPassed, false);
 assert.deepEqual(entries, original, 'candidate omission must not modify raw scores or rankingQualified');
-assert.deepEqual(buildBetOrderEntries(entries, { minimumScore: 8 }).map(entry => entry.id), ['npb']);
+assert.deepEqual(buildBetOrderEntries(entries, { minimumScore: 8 }).map(entry => entry.id).sort(), ['legacy-research', 'npb', 'research']);
 assert.deepEqual(buildBetOrderEntries(null), []);
 
 // The policy cannot prevent honest recording, cancellation or re-recording of
@@ -120,7 +121,7 @@ const item = {
 };
 const [boundRow] = bindVerifiedReaderContractsForItem(item, [actualRow]);
 const context = { item, row: boundRow, now: Date.parse('2099-09-12T00:00:00.000Z'), betsEnabled: true, cloudLedgerState: 'ready' };
-assert.equal(isResearchOnlyMarket(boundRow, game), true);
+assert.equal(isResearchOnlyMarket(boundRow, game), false);
 assert.equal(evaluateBetAction(context).recordable, true);
 assert.equal(evaluateBetAction({ ...context, latest: { status: 'OPEN' } }).kind, 'cancel');
 assert.equal(evaluateBetAction({ ...context, latest: { status: 'OPEN' } }).disabled, false);
@@ -128,4 +129,4 @@ assert.equal(evaluateBetAction({ ...context, cancelled: { status: 'CANCELLED' } 
 assert.equal(evaluateBetAction({ ...context, latest: { status: 'WON' } }).text, '已下注 ✓');
 assert.doesNotMatch(readFileSync(new URL('../lib/bet-action-state-v118.js', import.meta.url), 'utf8'), /market-research-policy/);
 
-console.log(`Market research policy PASS: ${positiveCases.length} exact matches, ${negativeCases.length} isolation/conflict cases, immutable candidate filtering, unchanged recording/cancel/rebet`);
+console.log(`Market research policy PASS: ${positiveCases.length} exact matches, ${negativeCases.length} isolation/conflict cases, observation without candidate exclusion, unchanged recording/cancel/rebet`);

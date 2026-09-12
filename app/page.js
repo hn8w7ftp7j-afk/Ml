@@ -33,7 +33,7 @@ import {
 } from '../lib/cloud-ledger-receipt.js';
 import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
 import { summarizeOriginalBetPrices } from '../lib/bet-price-summary.js';
-import { BET_PERIODS, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
+import { BET_PERIODS, FIRST5_TOTAL_STAT_FILTERS, matchesBetStatMarket, betStatMarketLabel, first5TotalStatDirection, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
 import {
   SCORE_BUCKETS,
   SCORE_PERFORMANCE_MARKETS,
@@ -63,7 +63,7 @@ import {
 } from '../lib/client-analysis-state.js';
 import { assessCoreSnapshotFreshnessV109 } from '../lib/analysis-refresh-policy-v109.js';
 import { BET_ORDER_MIN_SCORE, buildBetOrderEntries, groupBetOrderEntries } from '../lib/bet-order.js';
-import { marketResearchPolicy, isResearchOnlyMarket } from '../lib/market-research-policy.js';
+import { marketResearchRestriction, isResearchOnlyMarket } from '../lib/market-research-policy.js';
 import {
   analysisBoardCacheKey,
   createAnalysisBoardCacheEntry,
@@ -1015,9 +1015,8 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
   const leagueBets = useMemo(() => selectedLeague === 'ALL'
     ? periodBets
     : periodBets.filter(bet => normalizeLeagueId(bet?.league) === selectedLeague), [periodBets, selectedLeague]);
-  const filteredBets = useMemo(() => selectedMarket === 'ALL'
-    ? leagueBets
-    : leagueBets.filter(bet => bet?.market === selectedMarket), [leagueBets, selectedMarket]);
+  const filteredBets = useMemo(() => leagueBets.filter(bet => matchesBetStatMarket(bet, selectedMarket)), [leagueBets, selectedMarket]);
+  const unclassifiedFirst5 = leagueBets.filter(bet => bet?.market === '上半大小' && first5TotalStatDirection(bet) == null).length;
   const summary = useMemo(() => summarizeBetLedger(filteredBets).overall, [filteredBets]);
   const originalPriceSummary = useMemo(
     () => summarizeOriginalBetPrices(filteredBets, priceFeed),
@@ -1030,7 +1029,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
   const priceRequestKey = priceBetIds.join('|');
   const periodLabel = BET_PERIODS.find(item => item.id === period)?.label || '全部';
   const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : leagueConfig(selectedLeague).label;
-  const marketLabel = selectedMarket === 'ALL' ? '全部市場' : selectedMarket;
+  const marketLabel = betStatMarketLabel(selectedMarket);
   const chooseLeague = value => {
     setSelectedLeague(value);
     setSelectedMarket('ALL');
@@ -1105,6 +1104,16 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
         return <BreakdownButton key={market} label={market} active={selectedMarket === market} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === market ? 'ALL' : market)}/>;
       })}
     </div>
+
+    <div className="ledgerSectionHead"><h3>上半場大小分｜獨立統計</h3></div>
+    <p className="muted">上方「上半大小」合計保留；下方分開顯示大分、小分，沿用相同日期、聯盟及結算規則，不重複計入總計。</p>
+    <div className="breakdownGrid marketBreakdown" aria-label="上半場大分小分獨立統計">
+      {FIRST5_TOTAL_STAT_FILTERS.map(({ id, label }) => {
+        const rows = leagueBets.filter(bet => matchesBetStatMarket(bet, id));
+        return <BreakdownButton key={id} label={label} active={selectedMarket === id} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === id ? 'ALL' : id)}/>;
+      })}
+    </div>
+    {unclassifiedFirst5 > 0 && <p className="muted">{unclassifiedFirst5} 筆上半大小紀錄的方向缺失或衝突：保留在合計與原明細，不擅自歸入大分或小分。</p>}
 
     <div className="ledgerSectionHead"><h3>3. 下注明細</h3><span>{filteredBets.length} 注｜不可變帳本</span></div>
     {filteredBets.length ? filteredBets.map(bet => <div className="betRow" key={bet.id}>
@@ -1248,7 +1257,7 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
 }
 
 function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated, game) {
-  const researchPolicy = marketResearchPolicy(row, game);
+  const researchPolicy = marketResearchRestriction(row, game);
   if (researchPolicy) return { icon: '🧪', label: researchPolicy.label, ranking: false, reason: researchPolicy.reason };
   const weightedEV = modelEvValue(row);
   const robustEV = robustEvValue(row);
@@ -1287,7 +1296,7 @@ function researchLedgerActionText(action, policy) {
 }
 
 function ResultRow({ row, game, limitations = [], onBet, onCancel, onRecheck, recoveryBusy = false, betState = null, action, now, inactiveNotice = '' }) {
-  const researchPolicy = marketResearchPolicy(row, game);
+  const researchPolicy = marketResearchRestriction(row, game);
   const actualLine = row.sourceType === 'ACTUAL_TW_CREDIT' && hasActualWater(row.water);
   const breakEven = actualLine ? breakEvenProbability(row.water, 0.015) : null;
   const modelEV = modelEvValue(row);
@@ -1343,7 +1352,7 @@ function ResultRow({ row, game, limitations = [], onBet, onCancel, onRecheck, re
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
       <div className="scoreMeta"><strong>模型估計EV W {signedPct(modelEV)}｜保守估計 R {signedPct(robustEV)}</strong>{robustEV != null && robustEV <= 0 ? '｜觀察／不排名' : ''}</div>
       <div className={`qaLine ${qaLabel === 'BLOCK' ? 'pending' : ''}`}>資料／數學 QA：{qaLabel}{qaReason ? `（${qaReason}）` : ''}</div>
-      <div className="qaLine">{externalAuditText}｜不改W/R與S；研究隔離另行適用</div>
+      <div className="qaLine">{externalAuditText}｜不影響W/R、S分數與排名</div>
       {!externalAuditFresh && <details className="details"><summary>外部稽核資料說明</summary><p>{externalVerificationExplanation(row?.marketVerification, externalAuditFresh)}</p></details>}
       <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}</div>
       {inactiveNotice && <div className="scoreMeta">實際下注紀錄狀態：{inactiveNotice}</div>}
@@ -1362,7 +1371,7 @@ function ResultRow({ row, game, limitations = [], onBet, onCancel, onRecheck, re
 }
 
 function DirectionSlotRow({ row, game }) {
-  const researchPolicy = marketResearchPolicy(row, game);
+  const researchPolicy = marketResearchRestriction(row, game);
   const status = directionStatus(row);
   const blocked = status === 'BLOCKED';
   const statusLabel = status === 'UNOPENED' ? '尚未開盤'
@@ -1762,7 +1771,7 @@ export default function Home() {
         : !currentReaderPrice
           ? '尚無已驗證的Reader盤口｜保留分析數值｜排名依QA判定｜新增下注紀錄暫停'
           : '';
-      const researchPolicy = marketResearchPolicy(row, item.game);
+      const researchPolicy = marketResearchRestriction(row, item.game);
       const rankingEligible = !researchPolicy && currentAnalysisExecutable
         && qualified && qaPassed && row.scoreStatus === 'SHADOW_DIAGNOSTIC_UNCALIBRATED'
         && row.rankingQualified === true;
@@ -4328,7 +4337,7 @@ export default function Home() {
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
     </nav>
 
-    {activeLeague.id === 'MLB' && <section className="sourceBanner researchNotice" aria-label="MLB 全場大分研究隔離"><strong>MLB 全場大分｜暫停使用／僅供研究</strong><span>繼續分析、保存及追蹤賽果，但不列入候選順序或排名資格；已自行下注仍可如實記帳，既有紀錄、取消與結算不受影響。此限制不套用上半場、小分或其他聯盟，也不代表其他市場已驗證可靠。<Link prefetch={false} href="/diagnostics/over">查看研究回測與樣本限制</Link></span></section>}
+    {activeLeague.id === 'MLB' && <section className="sourceBanner researchNotice" aria-label="MLB 全場大分持續觀察"><strong>MLB 全場大分｜正常保留・持續觀察</strong><span>全場大分正常保留於分析、全部方向與候選順序，仍依原有分數門檻與 QA 判定；繼續追蹤歷史模擬及後續結果，不代表已驗證為正 EV。原模型、記帳、取消與結算不變。<Link prefetch={false} href="/diagnostics/over">查看研究回測與樣本限制</Link></span></section>}
 
     {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
@@ -4337,7 +4346,7 @@ export default function Home() {
 
     {tab === 'board' && <>
       <section className="heroCard">
-        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 {activeLeague.id}｜單場或本日全部</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型估計EV（W）與保守估計（R），不是實際收益率。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK，研究市場隔離另行適用。按下「紀錄實際下注」只記錄已自行下注的事實，不會替你下注；伺服器仍會核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
+        <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 {activeLeague.id}｜單場或本日全部</h2><p>只使用Reader同步的實際信用盤。比分分布與逐腿結算完整時，先顯示固定S分數，再列模型估計EV（W）與保守估計（R），不是實際收益率。市場差距與極高EV只作WARNING；資料、合約、分布、鏡像或結算等實質錯誤才會BLOCK。按下「紀錄實際下注」只記錄已自行下注的事實，不會替你下注；伺服器仍會核對Reader與PIT證據，再永久保存當下盤口、水位與金額。</p></div>
         <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><p className="muted">進站、重新整理及切換日期不會啟動分析；請手動選擇單場或本日全部。</p><button className="secondary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || (gamePicker.scope === `${league}:${date}` && gamePicker.loading)} onClick={loadGamePicker}>{gamePicker.scope === `${league}:${date}` && gamePicker.loading ? '讀取賽程中…' : '讀取賽程（不分析）'}</button><label>選擇單場比賽<select style={{ width: '100%', minWidth: 0, maxWidth: '100%' }} value={gamePicker.scope === `${league}:${date}` ? gamePicker.selected : ''} disabled={busy || allLeaguePreparing || allLeagueRunning || gamePicker.scope !== `${league}:${date}` || gamePicker.loading} onChange={event => setGamePicker(current => ({ ...current, selected: event.target.value }))}><option value="">請先讀取賽程並選擇一場</option>{gamePicker.scope === `${league}:${date}` && gamePicker.games.map(game => <option key={game.gamePk} value={game.gamePk}>{translateTeamText((typeof game.away === 'string' ? game.away : game.away?.name) || game.teams?.away?.team?.name || '')} @ {translateTeamText((typeof game.home === 'string' ? game.home : game.home?.name) || game.teams?.home?.team?.name || '')}｜{game.gameDate ? new Date(game.gameDate).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : ''}｜{game.gamePk}</option>)}</select></label><button className="primary" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || gamePicker.scope !== `${league}:${date}` || !gamePicker.selected} onClick={() => oneClickAnalyze('', gamePicker.selected)}>只分析這一場</button><button className="primary giant" disabled={busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => oneClickAnalyze()}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `分析本日全部 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={() => oneClickAnalyzeAll()}>{allLeaguePreparing ? `預查四聯盟中 ${allLeaguePrechecked}/4` : allLeagueRunning ? '四聯盟伺服器背景處理中…' : allLeagueProgress.terminal === 4 ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/4`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<button className="secondary" disabled={busy || allLeaguePreparing || allLeagueRunning} onClick={resumeSavedAnalysis}>載入先前分析（不重算）</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載目前穩定版 Reader v2.1.19</a><details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? 'Tai888 Reader自動同步正常｜目前畫面已驗證' : readerStatus?.fresh ? 'Tai888 Reader新盤已同步｜等待分析驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
@@ -4364,7 +4373,7 @@ export default function Home() {
     </>}
 
     {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
-      <div className="emptySmall">此處顯示這一版Reader快照中已開盤且成功完成分析的全部方向，先依固定S分數由高到低排列，同分再依W、R排序；負EV、R≤0、QA BLOCK與低分方向都不刪除。研究方向保留數值但標示「僅供研究」，不具排名資格、不列候選；此處排列不代表推薦。市場差距與極高EV只顯示WARNING，不改原始分數。尚未開盤或市場資料錯誤的固定槽位保留在各場今日盤口，不能與其他時點、其他盤口快照混合比較。</div>
+      <div className="emptySmall">此處顯示這一版Reader快照中已開盤且成功完成分析的全部方向，先依固定S分數由高到低排列，同分再依W、R排序；負EV、R≤0、QA BLOCK與低分方向都不刪除。全場大分正常保留，排名資格仍依原有規則判定；此處排列不代表推薦或已驗證獲利。市場差距與極高EV只顯示WARNING，不改原始分數。尚未開盤或市場資料錯誤的固定槽位保留在各場今日盤口，不能與其他時點、其他盤口快照混合比較。</div>
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
@@ -4384,7 +4393,7 @@ export default function Home() {
     </section>}
 
     {tab === 'betOrder' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button onClick={() => setTab('ranking')}>全部方向</button><button className="active" onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>影子候選順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
-      <div className="emptySmall">先按比賽開始時間由早到晚，再於同場依序排列全場讓分、全場大小、上半讓分、上半大小；同一市場有多個7.0分以上方向時，分數較高者排前。MLB 全場大分已移出本區，請到全部方向查看研究數值；即使先前已下注也不恢復候選資格，帳本照常保留。其他已下注項目保留標記，時間未定賽事排在最後。</div>
+      <div className="emptySmall">先按比賽開始時間由早到晚，再於同場依序排列全場讓分、全場大小、上半讓分、上半大小；同一市場有多個7.0分以上方向時，分數較高者排前。MLB 全場大分正常保留，與其他方向依原有規則顯示，持續觀察不代表已驗證獲利。已下注項目保留標記，時間未定賽事排在最後。</div>
       {shadowBetOrderGames.length ? shadowBetOrderGames.map((group, gameIndex) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
@@ -4397,7 +4406,7 @@ export default function Home() {
           const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : !entry.currentAnalysisExecutable ? '目前版本排名資格：待複核｜保留原模型分數與資格判定' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
           return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型估計EV W {signedPct(entry.weightedEV)}｜保守估計 R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/></div></div>;
         })}
-      </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 且未被研究隔離的Reader實際盤方向。</div>}
+      </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
 
     {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
@@ -4406,7 +4415,7 @@ export default function Home() {
 
     {tab === 'performanceStats' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
 
-    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>每場正反方向、讓分大小、全場與上半場共用一份PIT凍結聯合比分分布；Tai888只提供待評估的成交盤口與水位，不改寫模型概率。前台固定以S分數為主，W與R是模型估計，不是實際收益率；Tai888差距、外部市場方向與極高EV只作WARNING，不改原始S。研究市場不列候選或排名資格，與實質QA BLOCK分開判定；資料、合約、比分分布、正反鏡像與逐腿結算等實質QA錯誤仍會BLOCK。此金額只供實際下注帳本紀錄；帳本仍依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
+    {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>每場正反方向、讓分大小、全場與上半場共用一份PIT凍結聯合比分分布；Tai888只提供待評估的成交盤口與水位，不改寫模型概率。前台固定以S分數為主，W與R是模型估計，不是實際收益率；Tai888差距、外部市場方向與極高EV只作WARNING，不改原始S。全場大分正常保留於分析與候選順序，仍依原有門檻與 QA 判定；資料、合約、比分分布、正反鏡像與逐腿結算等實質QA錯誤仍會BLOCK。此金額只供實際下注帳本紀錄；帳本仍依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
   </main>;
 }

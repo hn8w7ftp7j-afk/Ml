@@ -6,7 +6,21 @@ over market, 539 valid over contracts, and 4 preserved source blocks. Historical
 simulation is separate from the actual bet ledger. No model, market, rebate,
 historical selection, settlement or source eligibility rule is changed.
 
-## Production integration — UI 11.9.34
+## Current policy — UI 11.9.35
+
+The user reversed the temporary exclusion: MLB full-game overs remain normally
+visible and participate in the original candidate order and QA/ranking rules.
+Observation metadata is not a restriction and is not evidence of positive EV.
+The frozen research tables, model estimates and negative historical ROI remain
+unchanged. No model, ledger, authentication or settlement formula is changed.
+
+The actual-bet statistics panel also retains the original first-five total
+aggregate and adds independent first-five OVER and UNDER views. These filters use
+the recorded contract direction, inherit date/league filters, and reuse existing
+settlement accounting. Unknown/conflicting directions remain in the aggregate
+without guessed assignment. Subviews never get added again into the grand total.
+
+## Previous integration — UI 11.9.34 (exclusion superseded above)
 
 The approved integration labels **MLB full-game total-over only** as research-only
 and removes it from the actionable candidate order. Raw scores, W/R, QA results,

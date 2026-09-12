@@ -46,7 +46,7 @@ researchReceipt.analysis.results = [{ market: '全場大小', direction: 'over',
 const researchBefore = JSON.stringify(researchReceipt);
 const researchCopy = buildGameAnalysisCopy(root, researchReceipt);
 assert.match(researchCopy, /currentUsagePolicy/);
-assert.match(researchCopy, /"candidateEligible": false/);
+assert.match(researchCopy, /"candidateEligible": true/);
 assert.match(researchCopy, /歷史模擬 ROI 與實際帳本 ROI 分開統計/);
 assert.equal(JSON.stringify(researchReceipt), researchBefore, 'copy policy never mutates archived model fields');
 researchReceipt.game.leagueId = 'NPB';
