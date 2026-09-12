@@ -4296,6 +4296,7 @@ export default function Home() {
       <NbaEntry/>
       <Link prefetch={false} className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球資料與研究</small></Link>
       <Link prefetch={false} className="sportModuleLink" href="/external-audit"><b>外部來源</b><small>獨立稽核，不改評分</small></Link>
+      <Link prefetch={false} className="sportModuleLink" href="/diagnostics/over"><b>歷史診斷</b><small>大分偏差與選盤漏斗</small></Link>
     </nav>
 
     <nav className="mainTabs">

@@ -31,6 +31,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   outputFileTracingIncludes: {
+    '/api/diagnostics/over': ['./data/diagnostics/*'],
     '/api/analyze': ['./.generated/replay-artifact.json'],
     '/api/reprice': ['./.generated/replay-artifact.json'],
     '/api/analysis-jobs': ['./.generated/replay-artifact.json'],
