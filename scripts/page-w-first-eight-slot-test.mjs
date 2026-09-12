@@ -26,7 +26,7 @@ const resultStart = page.indexOf('function ResultRow(');
 const resultEnd = page.indexOf('function DirectionSlotRow(', resultStart);
 assert.ok(resultStart >= 0 && resultEnd > resultStart, 'result-row component missing');
 const resultRow = page.slice(resultStart, resultEnd);
-const orderedLabels = ['S 分數', '模型EV W', '穩健EV R', '資料／數學 QA：', '排名資格：'];
+const orderedLabels = ['S 分數', '模型估計EV W', '保守估計 R', '資料／數學 QA：', '排名資格：'];
 let previous = -1;
 for (const label of orderedLabels) {
   const position = resultRow.indexOf(label, previous + 1);
@@ -34,6 +34,10 @@ for (const label of orderedLabels) {
   previous = position;
 }
 assert.doesNotMatch(resultRow, /不顯示W\/R|不顯示為EV|只留後台/, 'no qualification branch may hide a calculated W/R value');
+assert.match(resultRow, /marketResearchPolicy\(row, game\)/, 'research policy must use exact row and game identity');
+assert.match(resultRow, /<ResearchMarketBadge policy=\{researchPolicy\}/, 'research rows must show an unmistakable research-only badge');
+assert.match(resultRow, /const scoreClass = researchPolicy \? 'researchOnlyScore'/, 'research rows must not retain candidate or strongest styling');
+assert.match(resultRow, /action\.kind === 'cancel' \? onCancel\(latest\) : onBet\(row\)/, 'research labeling must retain the original ledger and cancel flow');
 
 const rankingStart = page.indexOf("const shadowRanking = useMemo");
 const rankingEnd = page.indexOf('const shadowBetOrder = useMemo', rankingStart);
@@ -42,5 +46,8 @@ const ranking = page.slice(rankingStart, rankingEnd);
 assert.match(ranking, /modelEvValue\(row\) != null/, 'all-direction list must retain every finite W, including negative values');
 assert.match(ranking, /Number\(right\.score \?\? -Infinity\) - Number\(left\.score \?\? -Infinity\)[\s\S]*Number\(right\.weightedEV \?\? -Infinity\)/, 'all-direction list must sort by S, then W');
 assert.doesNotMatch(ranking, /\.filter\([^)]*(rankingQualified|formulaDiagnosticScore|robustEV)/, 'score, R and rank gates must not filter the all-direction W list');
+assert.match(ranking, /const rankingEligible = !researchPolicy && currentAnalysisExecutable/, 'research rows must never advertise current ranking eligibility');
+assert.match(page, /activeLeague\.id === 'MLB'[\s\S]*MLB 全場大分｜暫停使用／僅供研究/, 'homepage research notice must be scoped to MLB');
+assert.match(page, /研究回測[\s\S]*歷史模擬｜非實際帳本/, 'research history must be distinguished from actual ledger');
 
 console.log('page S-first eight-slot presentation test passed');

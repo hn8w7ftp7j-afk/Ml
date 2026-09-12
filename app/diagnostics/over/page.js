@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { csvText, diagnosticView, field, numberText, percentText, sourceStateText, valueText } from '../../../lib/over-diagnostic-view.js';
+import { csvText, diagnosticView, field, numberText, percentText, signedPercentText, sourceStateText, valueText } from '../../../lib/over-diagnostic-view.js';
 import './over.css';
 
 const tabs = [['funnel', '選盤漏斗'], ['chain', '得分計算鏈'], ['pitching', '先發與牛棚'], ['coverage', '條件與來源']];
@@ -45,9 +45,31 @@ function DataTable({ rows = [], columns = [], label, details = false, paged = tr
 }
 const identity = [{ key: 'gameId', label: '賽事 ID' }, { key: 'gameDate', label: '比賽日期' }, { key: 'matchup', label: '客隊 @ 主隊' }, { key: 'selected', label: '模擬選中' }];
 const gameColumns = [...identity, { key: 'batch', label: '來源批次' }, { key: 'line', label: '門檻摘要', type: 'number' }, { key: 'delta', label: '預測−門檻', type: 'number' }, { key: 'bias', label: '得分偏差', type: 'number' }, { key: 'W', label: '估計 W', type: 'percent' }, { key: 'R', label: '保守 R', type: 'percent' }, { key: 'S', label: '評分 S', type: 'number' }];
-function SummaryCards({ inventory, selected }) {
+const countText = value => Number.isInteger(value) && value >= 0 ? String(value) : '未提供';
+function FrozenSummary({ summary }) {
+  if (!summary?.available) return <p className="od-notice">未提供最終模擬選中階段，無法顯示該組的 EV 與歷史收益摘要；不以其他階段代替。</p>;
+  return <section className="od-frozen-summary" aria-labelledby="od-frozen-title">
+    <div className="od-summary-heading"><div><p className="od-eyebrow">凍結歷史樣本 · 最終模擬選中</p><h2 id="od-frozen-title">MLB 全場大分：{countText(summary.selectedN)} 場</h2></div><span className="od-summary-state">僅供研究</span></div>
+    <p className="od-summary-intro">先看清楚：模型估計的優勢，與這批歷史比賽實際模擬出的收益，是兩件事。</p>
+    <div className="od-ev-cards">
+      <div className="od-ev-card"><span>模型估計 EV（平均 W）</span><strong>{signedPercentText(summary.modelW)}</strong><small>原模型對這批選中合約的平均估計</small></div>
+      <div className="od-ev-card"><span>保守估計 EV（平均 R）</span><strong>{signedPercentText(summary.modelR)}</strong><small>原模型的保守情境估計，非保證收益</small></div>
+      <div className="od-ev-card od-ev-realized"><span>歷史模擬 ROI（含退水）</span><strong>{signedPercentText(summary.roi)}</strong><small>已結算模擬淨收益 ÷ 對應投入單位</small></div>
+    </div>
+    <dl className="od-outcomes">
+      <div><dt>模擬勝／敗／走（退水前）</dt><dd>{countText(summary.wins)}／{countText(summary.losses)}／{countText(summary.pushes)}</dd></div>
+      <div><dt>模擬淨收益（含退水）</dt><dd>{numberText(summary.netUnits, 2)} 注</dd></div>
+      <div><dt>模擬投入</dt><dd>{numberText(summary.stakeUnits, 0)} 注</dd></div>
+      <div><dt>勝率（排除走水）</dt><dd>{percentText(summary.winRateExcludingPush)}<small>分母：{countText(summary.winLossN)} 場勝敗</small></dd></div>
+    </dl>
+    <p className="od-summary-denominator">可結算 {countText(summary.settlementN)} 場；缺賽果 {countText(summary.missingOutcomeN)} 場。每場合約原定投入 1 注，走水保留在投入分母；缺失不當作 0 收益。</p>
+    <p className="od-summary-caution">這是整批歷史樣本摘要，不是目前單場 EV，也不是你的實際下注帳本。歷史 ROI 不等於已知的未來真實 EV；這批資料已用於研究，不是新模型的獨立驗證。</p>
+    <div className="od-summary-provenance"><p><span>全部有效大分日期</span> {valueText(summary.fromDate)} ～ {valueText(summary.toDate)}（{countText(summary.dateCount)} 個有資料日期；非每日完整收錄）。其中選中組涵蓋 {countText(summary.selectedDateCount)} 個日期。</p><p><span>歷史模型版本</span> {valueText(summary.modelVersion)}</p><p><span>診斷版本／產生時間</span> {valueText(summary.diagnosticVersion)} · {valueText(summary.createdAt)}</p></div>
+  </section>;
+}
+function SummaryCards({ inventory, summary }) {
   return <div className="od-cards">{[
-    ['歷史清冊', inventory.totalGames, '場賽事'], ['有效全場大分', inventory.validOverMarkets, '個市場'], ['模擬選中', selected?.n ?? selected?.N, '注'], ['選中組偏差', selected?.bias ?? selected?.meanBias, '分 · 預測減實際'],
+    ['歷史清冊', inventory.totalGames, '場賽事'], ['有效全場大分', inventory.validOverMarkets, '個市場'], ['模擬選中', summary.selectedN, '個合約 · 原歷史篩選'], ['選中組偏差', summary.bias, '分 · 預測減實際'],
   ].map(([label, value, unit]) => <div className="od-card" key={label}><span>{label}</span><strong>{typeof value === 'number' ? (label === '選中組偏差' ? `${value > 0 ? '+' : ''}${value.toFixed(3)}` : value) : '未提供'}</strong><small>{unit}</small></div>)}</div>;
 }
 export default function OverDiagnostics() {
@@ -71,21 +93,22 @@ export default function OverDiagnostics() {
   const ids = useMemo(() => new Set(selectedGames.map(row => String(row.gameId))), [selectedGames]);
   const chainRows = useMemo(() => (data?.calculationChain || []).filter(row => ids.has(String(row.gameId))), [data, ids]);
   const pitchingRows = useMemo(() => (data?.pitchingAllocation || []).filter(row => ids.has(String(row.gameId))), [data, ids]);
-  const manifest = data?.manifest || {}, stages = data?.funnel?.stages || [], selectedStage = stages.at(-1);
+  const manifest = data?.manifest || {}, stages = data?.funnel?.stages || [];
   return <main className="od-shell">
-    <header className="od-header"><div><Link href="/" prefetch={false}>← 返回分析網站</Link><p className="od-eyebrow">MLB · HISTORICAL DIAGNOSTICS · 1.1</p><h1>大分偏差診斷</h1><p>追查得分預測與選盤各階段的落差。本頁呈現凍結資料的歷史模擬。</p></div><span className="od-badge">測試版 · 唯讀診斷</span></header>
-    <div className="od-notice">這次調整診斷與呈現方式，沒有變更得分模型、S／W／R 公式或選盤門檻。歷史重播的結果不代表新模型已驗證或未來獲利。</div>
-    <div className="od-notice">來源保存狀態（2026-09-12）：539 場診斷與 4,539 筆代表來源紀錄已保存。本次環境清理後，33,504 筆完整來源集合尚未恢復；明細中的完整檔名與雜湊是先前紀錄，不代表該完整檔目前可下載。以下 JSON.gz 是代表紀錄版本，並非完整來源集合。</div>
+    <header className="od-header"><div><Link href="/" prefetch={false}>← 返回分析網站</Link><p className="od-eyebrow">MLB · HISTORICAL DIAGNOSTICS · 1.1</p><h1>研究回測｜全場大分</h1><p>追查得分預測與選盤各階段的落差。本頁呈現凍結資料的歷史模擬。</p></div><span className="od-badge">研究回測 · 唯讀</span></header>
+    {data && <FrozenSummary summary={data.frozenSummary}/>}
+    <div className="od-notice">此頁保留原版的歷史模擬選中結果，與目前網站的研究觀察狀態分開；不因停用市場而改寫歷史選中數。得分模型與 S／W／R 公式未改，歷史重播不代表新模型已驗證或未來獲利。</div>
+    <div className="od-notice">來源保存狀態（2026-09-12）：539 場診斷與 4,539 筆代表來源紀錄已保存。本次環境清理後，33,504 筆完整來源集合尚未恢復；明細中的完整檔名與雜湊是先前紀錄，不代表該完整檔目前可下載。以下 JSON.gz 是代表紀錄版本，並非完整來源集合，不能視為全部來源已完整驗證。</div>
     <div className="od-actions"><button disabled={busy} onClick={() => load(AbortSignal.timeout(30000))}>{busy ? '讀取中…' : '重新載入資料'}</button>{data && <a className="od-download" href="/api/diagnostics/over?download=1" download="MLB-over-diagnostic-data.json.gz">下載診斷資料 JSON.gz</a>}</div>
     {error && <p className="od-error" role="alert">{error}</p>}
     {busy && !data && <p role="status">正在讀取已保存的診斷結果…</p>}
     {data && <>
-      <SummaryCards inventory={data.inventory || {}} selected={selectedStage}/>
+      <SummaryCards inventory={data.inventory || {}} summary={data.frozenSummary}/>
       <details className="od-manifest"><summary>資料範圍、模型版本與限制</summary><dl>{Object.entries(manifest).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{valueText(value)}</dd></div>)}</dl><ul>{(data.limitations || []).map((note, index) => <li key={index}>{typeof note === 'string' ? note : JSON.stringify(note)}</li>)}</ul><p>空值顯示「未提供」。來源確認與賽前可得性分開記錄；環境係數等於 1，不直接代表缺失。</p></details>
       <nav className="od-tabs" aria-label="四張排查表">{tabs.map(([key, label]) => <button key={key} aria-pressed={tab === key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>)}</nav>
       {tab !== 'funnel' && <div className="od-filters"><label>賽事搜尋<input placeholder="Game ID、隊伍或日期" value={query} onChange={event => setQuery(event.target.value)}/></label><label>模擬選中<select value={selection} onChange={event => setSelection(event.target.value)}><option value="all">全部可計算大分</option><option value="selected">模擬選中</option><option value="unselected">未選中</option></select></label><label>來源批次<select value={batch} onChange={event => setBatch(event.target.value)}><option value="all">全部批次</option>{[...new Set(games.map(row => row.batch).filter(Boolean))].map(value => <option key={value}>{value}</option>)}</select></label><span>符合篩選：{selectedGames.length} 場</span></div>}
       {tab === 'funnel' && <section><h2>偏差在哪個階段增加？</h2><p>Bias 是比賽總得分的預測減實際，單位為「分」。各階段收益是假設該階全部合約各投入 1 單位的歷史模擬，包含既定退水，並非實際下注帳本。</p><DataTable label="逐階選盤漏斗" paged={false} rows={stages} columns={[
-        { key: 'label', label: '篩選階段' }, { key: 'n', label: '可計算數' }, { key: 'evaluatedN', label: '有賽果數' }, { key: 'missingOutcomeN', label: '缺賽果數' }, { key: 'bias', label: '平均 Bias', type: 'number' }, { key: 'ci.bias', label: 'Bias 95% 區間', render: row => `${numberText(row.ci?.bias?.low)} ～ ${numberText(row.ci?.bias?.high)}` }, { key: 'mae', label: 'MAE', type: 'number' }, { key: 'rmse', label: 'RMSE', type: 'number' }, { key: 'meanMu', label: '平均預測總分', type: 'number' }, { key: 'meanActual', label: '平均實際總分', type: 'number' }, { key: 'netUnits', label: '模擬淨收益 u', type: 'number' }, { key: 'meanW', label: '平均估計 W', type: 'percent' }, { key: 'meanR', label: '平均保守 R', type: 'percent' }, { key: 'meanScore', label: '平均評分 S', type: 'number' }, { key: 'winRateExcludingPush', label: '勝率（排除走水）', type: 'percent' }, { key: 'meanNetProfit', label: '平均實際淨收益', type: 'percent' },
+        { key: 'label', label: '篩選階段' }, { key: 'n', label: '可計算數' }, { key: 'evaluatedN', label: '有賽果數' }, { key: 'missingOutcomeN', label: '缺賽果數' }, { key: 'bias', label: '平均 Bias', type: 'number' }, { key: 'ci.bias', label: 'Bias 95% 區間', render: row => `${numberText(row.ci?.bias?.low)} ～ ${numberText(row.ci?.bias?.high)}` }, { key: 'mae', label: 'MAE', type: 'number' }, { key: 'rmse', label: 'RMSE', type: 'number' }, { key: 'meanMu', label: '平均預測總分', type: 'number' }, { key: 'meanActual', label: '平均實際總分', type: 'number' }, { key: 'netUnits', label: '模擬淨收益 u', type: 'number' }, { key: 'meanW', label: '模型估計 EV（平均 W）', type: 'percent' }, { key: 'meanR', label: '保守估計 EV（平均 R）', type: 'percent' }, { key: 'meanScore', label: '平均評分 S', type: 'number' }, { key: 'winRateExcludingPush', label: '勝率（排除走水）', type: 'percent' }, { key: 'meanNetProfit', label: '歷史模擬 ROI（含退水）', type: 'percent' },
       ]}/><h2>相鄰階段的偏差差值</h2><p>兩階段使用同次日期群集重抽樣。正差值表示留下樣本的帶正負號偏差較高；不單憑此表判定篩選規則造成錯誤。</p><DataTable label="同抽樣偏差差值" paged={false} rows={data.funnel.transitions || []} columns={[
         { key: 'label', label: '相鄰階段' }, { key: 'deltaBias', label: 'Bias 差值', type: 'number' }, { key: 'ciLow', label: '95% 區間下界', type: 'number' }, { key: 'ciHigh', label: '95% 區間上界', type: 'number' }, { key: 'validDraws', label: '有效抽樣次數' }, { key: 'interpretation', label: '探索性解讀' },
       ]}/><details className="od-manifest"><summary>抽樣方法與原始清冊狀態</summary><p>{data.funnel.bootstrap?.draws ?? '未提供'} 次日期群集抽樣，{data.funnel.bootstrap?.nDateClusters ?? '未提供'} 個日期群，種子 {data.funnel.bootstrap?.seed ?? '未提供'}。各階段共用抽樣，區間未作多重比較校正；空樣本留空並計數。</p><p>全部 {data.inventory?.totalGames ?? '未提供'} 場，可計算 {data.inventory?.computableGames ?? '未提供'} 場。詳細狀態清册保留於完整 JSON。</p><pre>{JSON.stringify(data.inventory?.statusCounts || {}, null, 2)}</pre></details></section>}

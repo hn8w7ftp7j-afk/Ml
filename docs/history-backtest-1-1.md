@@ -1,10 +1,31 @@
 # Historical backtest 1.1 — frozen over diagnostics
 
-This preview adds `/diagnostics/over` to the existing application. It uses the
+This integration adds `/diagnostics/over` to the existing application. It uses the
 frozen 659-game research inventory: 655 computable games, 116 without a full-game
 over market, 539 valid over contracts, and 4 preserved source blocks. Historical
 simulation is separate from the actual bet ledger. No model, market, rebate,
-selection, settlement or source eligibility rule is changed.
+historical selection, settlement or source eligibility rule is changed.
+
+## Production integration — UI 11.9.34
+
+The approved integration labels **MLB full-game total-over only** as research-only
+and removes it from the actionable candidate order. Raw scores, W/R, QA results,
+signed snapshots and the original model v11.0.3 remain unchanged. The policy lives
+in a separate display/candidate helper and is not written into historical analyses.
+Full-game unders, first-five markets and other leagues retain their existing rules;
+this does not imply they have demonstrated positive returns.
+
+Actual bets can still be honestly recorded, cancelled, re-recorded and settled
+under the original ledger checks. Research-only is not a ledger deletion or a block
+on recording an external bet. Copy exports distinguish the current display policy
+from the archived analysis.
+
+The home page links to **研究回測**. Its first screen separately reports the frozen
+selected cohort's mean model W (+14.71%), conservative model R (+8.85%) and historical
+simulated ROI (−14.42%; −30.27475 units on 210 one-unit entries; 89 wins, 120 losses,
+1 push). The sample is repeatedly studied, not a new out-of-sample test, and these
+values are neither current opportunities nor actual ledger ROI. All-sample and
+selected-sample date counts are separately labelled (50 and 49 dates).
 
 ## Four tables
 
@@ -52,8 +73,12 @@ reported intervals and conditional contrasts are exploratory, not fresh OOS resu
 ## Validation
 
 Run `npm run test:over-diagnostics`, the existing `npm test`, additional PIT/Asian/
-external/evidence export gates, and `npm run build`. Then verify the deployed
-preview API and UI, including all four tabs, search/selection/batch filters, paging,
+external/evidence export gates, `npm run build` and `npm run test:over-http`.
+The HTTP smoke test starts the built app with random ephemeral local credentials;
+it verifies normal authentication, protected routes, summaries, detail and exact
+gzip download without production credentials, database writes or browser claims.
+Separately verify the deployed API and UI, including all four tabs, search/selection/batch filters, paging,
 expanded details, downloads, reload recovery, authentication and mobile layout.
-Build success alone is not end-to-end acceptance. Do not promote this research
-preview as a verified profitable model.
+Build and local HTTP success alone are not authenticated production-browser or
+mobile visual acceptance. Report any remaining acceptance gaps explicitly.
+Do not promote this research integration as a verified profitable model.

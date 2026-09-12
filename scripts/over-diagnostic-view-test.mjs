@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { csvText, diagnosticView, numberText } from '../lib/over-diagnostic-view.js';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { csvText, diagnosticView, frozenCohortSummary, numberText, signedPercentText } from '../lib/over-diagnostic-view.js';
 
 const source = { games: [{ gameId: 17, gameDate: '2026-07-11', away: 'A', home: 'B', cohort: 'original', selected: false, baselineRuns: 4.5, baselineDataVersion: 'league-hash-abc', W: 0.1, R: -0.02, score: 6.7, net: 0,
   offense: { away: { finalFactor: 0.9 }, home: { finalFactor: 1.1 } },
@@ -26,4 +28,61 @@ assert(csv.includes("'=HYPERLINK"), 'untrusted strings cannot become spreadsheet
 assert(csv.includes('"-0.985"'), 'numeric losses must remain numeric');
 assert(csv.includes('""'), 'missing values are exported empty');
 assert(csv.includes('大9+22.5'));
-console.log('Diagnostic view PASS: opposing-team identity, immutable inputs, null/zero, missing-outcome denominator and safe CSV.');
+assert.equal(view.frozenSummary.available, false, 'an intermediate stage cannot impersonate final selection');
+assert.equal(view.frozenSummary.roi, null);
+assert.equal(frozenCohortSummary().selectedN, null);
+assert.equal(signedPercentText(0.1471), '+14.71%');
+assert.equal(signedPercentText(-0.1442), '-14.42%');
+assert.equal(signedPercentText(0), '0.00%');
+assert.equal(signedPercentText(null), '未提供');
+
+const finalStage = { label: 'SIMULATED_SELECTED', n: 5, nDates: 2, nEvaluated: 4, nSettlementEvaluated: 3, nMissingOutcome: 1, meanW: 0.2, meanR: 0.1, netUnits: -0.6, stakeUnits: 6, winsBeforeRebate: 1, lossesBeforeRebate: 1, pushesBeforeRebate: 1 };
+const cohortSource = { manifest: { modelVersion: 'FROZEN-v1', diagnosticVersion: 'DIAGNOSTIC-v1', createdAt: '2026-09-12T00:00:00Z' }, games: [{ gameDate: '2026-08-02' }, { gameDate: '2026-07-01' }, { gameDate: '2026-08-02' }, { gameDate: null }], funnel: { stages: [finalStage, { label: 'NOT_FINAL', n: 800, meanW: 1 }] } };
+const cohortFrozen = JSON.stringify(cohortSource), cohort = frozenCohortSummary(cohortSource);
+assert.equal(JSON.stringify(cohortSource), cohortFrozen, 'summary extraction cannot mutate archived rows');
+assert.equal(cohort.selectedN, 5, 'select the named final stage, even when not last');
+assert.equal(cohort.modelW, 0.2);
+assert.equal(cohort.modelR, 0.1);
+assert.equal(cohort.roi, -0.6 / 6, 'ROI denominator is recorded settled stake, not computable or scored count');
+assert.equal(cohort.settlementN, 3);
+assert.equal(cohort.missingOutcomeN, 1);
+assert.equal(cohort.winRateExcludingPush, 1 / 2, 'push excluded from win-rate denominator, not from ROI stake');
+assert.equal(cohort.winLossN, 2);
+assert.equal(cohort.selectedDateCount, 2);
+assert.equal(cohort.fromDate, '2026-07-01');
+assert.equal(cohort.toDate, '2026-08-02');
+assert.equal(cohort.dateCount, 2);
+assert.equal(cohort.modelVersion, 'FROZEN-v1');
+const summaryWith = changes => frozenCohortSummary({ funnel: { stages: [{ ...finalStage, ...changes }] } });
+assert.equal(summaryWith({ stakeUnits: 0 }).roi, null, 'never divide by zero stake');
+assert.equal(summaryWith({ netUnits: null }).roi, null, 'unknown settlement is not zero return');
+assert.equal(summaryWith({ nSettlementEvaluated: 0 }).roi, null, 'no settlement cannot produce realized ROI');
+assert.equal(summaryWith({ nSettlementEvaluated: null }).roi, null, 'do not borrow outcome count for settlement availability');
+assert.equal(summaryWith({ meanW: '0.2', meanR: NaN }).modelW, null, 'invalid numeric values are not silently coerced');
+assert.equal(summaryWith({ meanW: '0.2', meanR: NaN }).modelR, null);
+assert.equal(summaryWith({ n: 0, meanW: 0.2 }).modelW, null, 'empty sample has no average model EV');
+const allPush = summaryWith({ netUnits: 0, winsBeforeRebate: 0, lossesBeforeRebate: 0, pushesBeforeRebate: 3 });
+assert.equal(allPush.roi, 0, 'real zero is retained');
+assert.equal(allPush.wins, 0);
+assert.equal(allPush.winRateExcludingPush, null, 'all-push sample has no decisive-game win rate');
+assert.equal(summaryWith({ lossesBeforeRebate: null }).winRateExcludingPush, null, 'missing loss count is not zero');
+
+const archived = JSON.parse(gunzipSync(readFileSync(new URL('../data/diagnostics/over-diagnostic-v1.json.gz', import.meta.url))));
+const actual = frozenCohortSummary(archived), selected = archived.funnel.stages.find(stage => stage.label === 'SIMULATED_SELECTED');
+assert.equal(actual.selectedN, 210);
+assert.deepEqual([actual.wins, actual.losses, actual.pushes], [89, 120, 1]);
+assert.equal(actual.modelW, selected.meanW);
+assert.equal(actual.modelR, selected.meanR);
+assert.equal(actual.netUnits, selected.netUnits);
+assert(Math.abs(actual.roi - selected.roi) < 1e-12);
+assert.equal(signedPercentText(actual.modelW), '+14.71%');
+assert.equal(signedPercentText(actual.modelR), '+8.85%');
+assert.equal(signedPercentText(actual.roi), '-14.42%');
+assert.equal(numberText(actual.netUnits, 2), '-30.27');
+assert.equal(actual.winLossN, 209);
+assert.equal(actual.dateCount, 50, 'all valid-over dates must not be labelled selected dates');
+assert.equal(actual.selectedDateCount, 49);
+assert.equal(actual.fromDate, '2026-07-11');
+assert.equal(actual.toDate, '2026-09-09');
+assert.equal(actual.modelVersion, archived.manifest.modelVersion);
+console.log('Diagnostic view PASS: frozen cohort EV/ROI/denominators and dates, opposing-team identity, immutable inputs, null/zero and safe CSV.');

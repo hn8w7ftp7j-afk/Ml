@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.33', 'Reader recovery release retains one shared release version');
+assert.equal(APP_VERSION, '11.9.34', 'Research integration release retains one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -112,7 +112,7 @@ mustMatch(/async function fetchReferenceLines\(games, targetDate = date, targetG
 mustMatch(/requestJSON\('\/api\/reference-lines'/, 'client must request the audit-only reference-line API');
 mustMatch(/REFERENCE_REFRESH_INTERVAL_MS = 2 \* 60 \* 1000/, 'external evidence must refresh before its five-minute expiry');
 mustMatch(/referenceRefreshDue/, 'same-hash Reader polling must still refresh expiring external evidence');
-mustMatch(/不影響W\/R、S分數與排名/, 'the result row must visibly separate external verification from W/R');
+mustMatch(/不改W\/R與S；研究隔離另行適用/, 'the result row must separate external verification from unchanged W/R/S and the independent research policy');
 mustMatch(/body: JSON\.stringify\(\{ league, date: targetDate, schedule: games \}\)/, 'reference request must bind league, date and official schedule');
 mustMatch(/const referenceByPk = referenceGameMap\(references\)/, 'reference markets and signed failure receipts must be isolated by official gamePk');
 mustMatch(/verificationMarkets: referenceByPk\.get\(Number\(item\.game\.gamePk\)\)\?\.markets \|\| item\.verificationMarkets \|\| \[\]/, 'per-game analysis task must retain its signed reference markets');
@@ -176,7 +176,15 @@ const rankingUi = page.slice(rankingStart, rankingEnd);
 assert.match(rankingUi, /getBetState\(entry\.item,\s*entry\.row\)/, 'ranking action must read the same cloud/local bet state as the board');
 assert.match(rankingUi, /evaluateBetAction\(\{ item: entry\.item, row: entry\.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState/, 'ranking action must use the canonical durable action evaluator');
 assert.match(rankingUi, /recordBet\(entry\.item,\s*entry\.row\)/, 'ranking button must call the canonical cloud recordBet flow');
-assert.match(rankingUi, /\{action\.text\}/, 'ranking row must visibly expose its placed, recordable, or blocked action state');
+assert.match(rankingUi, /\{researchLedgerActionText\(action, entry\.researchPolicy\)\}/, 'ranking row must expose the original action state with a research-only recording label');
+const actionLabelSource = page.match(/function researchLedgerActionText\(action, policy\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(actionLabelSource, 'research ledger display helper is missing');
+const actionLabel = Function(`return (${actionLabelSource})`)();
+assert.equal(actionLabel({ kind: 'cancel', text: '取消下注', recordable: false, disabled: false }, {}), '取消下注', 'research policy must retain cancel wording');
+assert.equal(actionLabel({ kind: 'none', text: '已下注 ✓', recordable: false, disabled: true }, {}), '已下注 ✓', 'research policy must retain recorded state');
+assert.equal(actionLabel({ kind: 'none', text: 'PIT未保存', recordable: false, disabled: true }, {}), 'PIT未保存', 'research policy must retain exact blocked reason');
+assert.equal(actionLabel({ kind: 'record', text: '紀錄實際下注', recordable: true, disabled: false }, null), '紀錄實際下注', 'other markets must retain the original action label');
+assert.equal(actionLabel({ kind: 'record', text: '紀錄實際下注', recordable: true, disabled: false }, {}), '已自行下注？記帳', 'research recording must explicitly describe factual bookkeeping');
 assert.match(betActionPolicy, /text: '已下注 ✓'/, 'placed action label missing');
 assert.match(betActionPolicy, /text: cancelled \? '重新紀錄下注' : '紀錄實際下注'/, 'recordable and rebet action labels missing');
 assert.match(rankingUi, /evaluateBetAction/, 'ranking rows must render the canonical enabled or disabled action state');
@@ -319,8 +327,8 @@ mustMatch(/狀態模型等效條件勝率 \${pct\(row\.modelProbability\)}（排
 assert.doesNotMatch(page, /provisionalBaseline|連續合理性校準/, 'UI must not describe removed Tai888 probability feedback as active');
 mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
 mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
-mustMatch(/模型EV（W）/, 'raw distribution EV must use the fixed public W label');
-mustMatch(/穩健EV R \{signedPct\(robustEV\)\}/, 'robust EV must be secondary to S and use the fixed public R label');
+mustMatch(/模型估計EV（W）/, 'raw distribution EV must explicitly be a model estimate');
+mustMatch(/保守估計 R \{signedPct\(robustEV\)\}/, 'robust EV must be secondary to S and explicitly be a conservative estimate');
 mustMatch(/function modelEvValue\(row\)[\s\S]*row\?\.rawWeightedEV/, 'W display must fall back to the raw distribution EV when qualification fields are null');
 mustMatch(/function robustEvValue\(row\)[\s\S]*row\?\.rawRobustEV/, 'R display must fall back to the raw robust EV when qualification fields are null');
 mustMatch(/W\/R差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
