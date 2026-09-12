@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { BET_PERIODS, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
+import { BET_PERIODS, FIRST5_TOTAL_STAT_FILTERS, first5TotalStatDirection, matchesBetStatMarket, betStatMarketLabel, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
 
 const settled = (id, league, market, outcome, netProfit, values = {}) => ({
   id,
@@ -31,6 +31,33 @@ const ledger = [
 ];
 
 const stats = summarizeBetLedger(ledger);
+const splitRows = [
+  { ...settled('over', 'MLB', '上半大小', 'WIN', 9650), pick: '大4平' },
+  { ...settled('under', 'MLB', '上半大小', 'LOSS', -9850), pick: '小4+50' },
+  { ...settled('push', 'MLB', '上半大小', 'PUSH', 0), pick: '大4平' },
+  { ...settled('cancel', 'MLB', '上半大小', 'WIN', 9999), pick: '小4平', status: 'CANCELLED' },
+  { ...settled('open', 'MLB', '上半大小', 'WIN', 9999), pick: '大4平', status: 'OPEN' },
+  { ...settled('unknown', 'MLB', '上半大小', 'WIN', 100), pick: '未提供' },
+  { ...settled('otherleague', 'NPB', '上半大小', 'WIN', 9000), pick: 'over 4.5' },
+  { ...settled('full', 'MLB', '全場大小', 'WIN', 10000), pick: '大8平' },
+];
+const frozenSplit = structuredClone(splitRows);
+const scope = splitRows.filter(bet => bet.league === 'MLB');
+const over = summarizeBetLedger(scope.filter(bet => matchesBetStatMarket(bet, 'FIRST5_TOTAL_OVER'))).overall;
+const under = summarizeBetLedger(scope.filter(bet => matchesBetStatMarket(bet, 'FIRST5_TOTAL_UNDER'))).overall;
+const combined = summarizeBetLedger(scope.filter(bet => matchesBetStatMarket(bet, '上半大小'))).overall;
+assert.deepEqual([over.bets, over.settled, over.wins, over.pushes, over.open, over.netPnl, over.roi], [3, 2, 1, 1, 1, 9650, .4825]);
+assert.deepEqual([under.bets, under.settled, under.losses, under.cancelled, under.netPnl, under.roi], [1, 1, 1, 1, -9850, -.985]);
+assert.equal(combined.netPnl, over.netPnl + under.netPnl + 100, 'unknown direction remains only in aggregate');
+assert.equal(scope.filter(bet => matchesBetStatMarket(bet, 'ALL')).length, scope.length, 'split views never duplicate tickets');
+assert.equal(FIRST5_TOTAL_STAT_FILTERS.length, 2);
+assert.equal(betStatMarketLabel('FIRST5_TOTAL_OVER'), '上半場大分');
+assert.equal(betStatMarketLabel('FIRST5_TOTAL_UNDER'), '上半場小分');
+for (const bet of [{market:'上半大小',pick:'大都會讓1平'}, {market:'上半大小',pick:'大4平',direction:'UNDER'}, {market:'全場大小',pick:'大4平'}, {market:'上半大小',pick:'大4平',slotId:'FULL_TOTAL_OVER'}, {}]) assert.equal(first5TotalStatDirection(bet), null);
+assert.equal(first5TotalStatDirection({market:'上半大小',pick:'小4平'}), 'UNDER');
+assert.equal(first5TotalStatDirection({market:'上半大小',pick:'over 4.5'}), 'OVER');
+assert.deepEqual(splitRows, frozenSplit, 'statistics never mutate original ledger');
+assert.equal(summarizeBetLedger([]).overall.roi, null);
 assert.equal(stats.overall.bets, 6);
 assert.equal(stats.overall.settled, 4);
 assert.equal(stats.overall.open, 1);
