@@ -41,6 +41,16 @@ assert.match(exported,/08:26:00（台灣時間）/);
 assert.ok(exported.includes(receipt.persistence.snapshotId));
 assert.equal(JSON.stringify(receipt),original);
 assert.equal(buildGameAnalysisCopy(root,receipt),exported);
+const researchReceipt = structuredClone(receipt);
+researchReceipt.analysis.results = [{ market: '全場大小', direction: 'over', pick: '大8.5', water: .94, weightedEV: .2, robustEV: .1, score: 8.9 }];
+const researchBefore = JSON.stringify(researchReceipt);
+const researchCopy = buildGameAnalysisCopy(root, researchReceipt);
+assert.match(researchCopy, /currentUsagePolicy/);
+assert.match(researchCopy, /"candidateEligible": false/);
+assert.match(researchCopy, /歷史模擬 ROI 與實際帳本 ROI 分開統計/);
+assert.equal(JSON.stringify(researchReceipt), researchBefore, 'copy policy never mutates archived model fields');
+researchReceipt.game.leagueId = 'NPB';
+assert.match(buildGameAnalysisCopy(root, researchReceipt), /"currentUsagePolicy": null/, 'MLB-only policy must not leak to NPB');
 for (const leagueId of ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL']) {
   const scoped = structuredClone(receipt);
   scoped.game.leagueId = leagueId;

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "MLB-OVER-DIAGNOSTIC-ASSET-v1",
+  "file": "over-diagnostic-v1.json.gz",
+  "dataSchemaVersion": "MLB-OVER-DIAGNOSTIC-TABLES-v1",
+  "sha256": "ae177617461640f2509e2a0d7552301c9035b8d6a7b13473b0c6dbe310b6b405",
+  "gzipSha256": "a3879a5895765aa81dd3731defb9aa7e3d3272f607fd01f1ab160d177ad68d66",
+  "inputHash": "d8ac6cb570d0347e32f0c203d4b1651997d3bb72ee3e5bc23eb3c2c3f7f092a7",
+  "jsonBytes": 23293548,
+  "gzipBytes": 2644521,
+  "gameCount": 539,
+  "inventoryCount": 659,
+  "createdAt": "2026-09-12T00:13:46.607Z",
+  "mode": "READ_ONLY_FROZEN_DIAGNOSTIC",
+  "diagnosticVersion": "MLB-OVER-FOUR-TABLES-20260912-v1.1",
+  "receiptScope": "COMPACT_RECEIPT_PROJECTION_FULL_COLLECTION_IN_RESEARCH_ARCHIVE"
+}
