@@ -33,7 +33,7 @@ import {
 } from '../lib/cloud-ledger-receipt.js';
 import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
 import { summarizeOriginalBetPrices } from '../lib/bet-price-summary.js';
-import { BET_PERIODS, FIRST5_TOTAL_STAT_FILTERS, matchesBetStatMarket, betStatMarketLabel, first5TotalStatDirection, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
+import { BET_PERIODS, FULL_TOTAL_STAT_FILTERS, fullTotalStatDirection, FIRST5_TOTAL_STAT_FILTERS, matchesBetStatMarket, betStatMarketLabel, first5TotalStatDirection, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
 import {
   SCORE_BUCKETS,
   SCORE_PERFORMANCE_MARKETS,
@@ -1017,6 +1017,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
     : periodBets.filter(bet => normalizeLeagueId(bet?.league) === selectedLeague), [periodBets, selectedLeague]);
   const filteredBets = useMemo(() => leagueBets.filter(bet => matchesBetStatMarket(bet, selectedMarket)), [leagueBets, selectedMarket]);
   const unclassifiedFirst5 = leagueBets.filter(bet => bet?.market === '上半大小' && first5TotalStatDirection(bet) == null).length;
+  const unclassifiedFull = leagueBets.filter(bet => bet?.market === '全場大小' && fullTotalStatDirection(bet) == null).length;
   const summary = useMemo(() => summarizeBetLedger(filteredBets).overall, [filteredBets]);
   const originalPriceSummary = useMemo(
     () => summarizeOriginalBetPrices(filteredBets, priceFeed),
@@ -1104,6 +1105,16 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
         return <BreakdownButton key={market} label={market} active={selectedMarket === market} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === market ? 'ALL' : market)}/>;
       })}
     </div>
+
+    <div className="ledgerSectionHead"><h3>全場大小分｜獨立統計</h3></div>
+    <p className="muted">上方「全場大小」合計保留；下方分開顯示大分、小分，沿用相同日期、聯盟及結算規則，不重複計入總計。</p>
+    <div className="breakdownGrid marketBreakdown" aria-label="全場大分小分獨立統計">
+      {FULL_TOTAL_STAT_FILTERS.map(({ id, label }) => {
+        const rows = leagueBets.filter(bet => matchesBetStatMarket(bet, id));
+        return <BreakdownButton key={id} label={label} active={selectedMarket === id} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === id ? 'ALL' : id)}/>;
+      })}
+    </div>
+    {unclassifiedFull > 0 && <p className="muted">{unclassifiedFull} 筆全場大小紀錄的方向缺失或衝突：保留在合計與原明細，不擅自歸入大分或小分。</p>}
 
     <div className="ledgerSectionHead"><h3>上半場大小分｜獨立統計</h3></div>
     <p className="muted">上方「上半大小」合計保留；下方分開顯示大分、小分，沿用相同日期、聯盟及結算規則，不重複計入總計。</p>
