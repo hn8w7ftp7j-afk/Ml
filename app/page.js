@@ -3083,11 +3083,14 @@ export default function Home() {
     }
     const { games, credit, emptyReason } = await prepareLeagueReaderPreflight({
       loadSchedule: () => fetchScheduleForLeague(targetLeague, targetDate),
-      loadCredit: schedule => requestJSONWithTransientRetry('/api/credit-lines', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
-        body: JSON.stringify({ league: targetLeague, date: targetDate, schedule }),
-      }, 60000),
+      loadCredit: schedule => {
+        const creditRequestId = uid();
+        return requestJSONWithTransientRetry('/api/credit-lines', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': creditRequestId },
+          body: JSON.stringify({ league: targetLeague, date: targetDate, schedule }),
+        }, 60000);
+      },
       onWaiting,
     });
     if (emptyReason === 'no_games') {
