@@ -69,7 +69,7 @@ assert.match(route, /new Set\(leagues\)\.size === leagues\.length/, 'batch leagu
 assert.match(route, /requestedLeague[\s\S]*result\?\.batches[\s\S]*find\(value => value\?\.league === requestedLeague\)/, 'one league tab must retrieve only its own batch result');
 assert.match(route, /summaryOnly[\s\S]*result\.batches\.map[\s\S]*results: \(batch\.results \|\| \[\]\)\.map/, 'global progress polling must omit large per-game analysis payloads');
 assert.match(page, /一鍵分析全部聯盟/, 'the UI needs one all-league action');
-assert.match(page, /for \(const id of LEAGUE_IDS\)[\s\S]*allLeagueTargetDate\(id,[\s\S]*prepareAllLeagueBatch\(id, batchDate\)/, 'every league must resolve and precheck its own Reader board date');
+assert.match(page, /for \(const id of LEAGUE_IDS\)[\s\S]*allLeagueTargetDate\(id,[\s\S]*prepareAllLeagueBatch\(id, batchDate,/, 'every league must resolve and precheck its own Reader board date');
 assert.match(page, /mode: 'all-leagues'[\s\S]*batches: batches\.map/, 'the client must submit one isolated batch per prepared league');
 assert.match(page, /const BACKGROUND_JOB_START_TIMEOUT_MS = 75_000/, 'workflow submission timeout must exceed the 60 second server route ceiling');
 assert.match(page, /startBackgroundAnalysisJob\([\s\S]*requestJSONWithTransientRetry\('\/api\/analysis-jobs',[\s\S]*BACKGROUND_JOB_START_TIMEOUT_MS/, 'all-league submission must retry safely without aborting before the server route ceiling');

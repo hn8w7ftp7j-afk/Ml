@@ -105,6 +105,7 @@ import {
   updateAllLeagueAnalysisLeague,
 } from '../lib/all-league-analysis-v117.js';
 import { capturedReaderContractReady, evaluateBetAction } from '../lib/bet-action-state-v118.js';
+import { prepareLeagueReaderPreflight } from '../lib/all-league-reader-preflight.js';
 
 const VERSION = APP_VERSION;
 const READER_DOWNLOAD_PATH = '/downloads/Tai888-Reader-v2.1.19-VERIFIED-RESCAN.zip';
@@ -3075,26 +3076,22 @@ export default function Home() {
     }
   }
 
-  async function prepareAllLeagueBatch(targetLeague, targetDate) {
+  async function prepareAllLeagueBatch(targetLeague, targetDate, onWaiting) {
     const config = leagueConfig(targetLeague);
     if (config.capabilities.analysis !== true || config.capabilities.reader !== true) {
       throw new Error(`${config.label}尚未啟用分析`);
     }
-    const games = await fetchScheduleForLeague(targetLeague, targetDate);
-    if (!games.length) {
+    const { games, credit, emptyReason } = await prepareLeagueReaderPreflight({
+      loadSchedule: () => fetchScheduleForLeague(targetLeague, targetDate),
+      loadCredit: schedule => requestJSONWithTransientRetry('/api/credit-lines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ league: targetLeague, date: targetDate, schedule }),
+      }, 60000),
+      onWaiting,
+    });
+    if (emptyReason === 'no_games') {
       return { league: targetLeague, date: targetDate, tasks: [], preparedBoard: [], emptyReason: 'no_games' };
-    }
-    const creditRequestId = uid();
-    const credit = await requestJSONWithTransientRetry('/api/credit-lines', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': creditRequestId },
-      body: JSON.stringify({ league: targetLeague, date: targetDate, schedule: games }),
-    }, 60000);
-    if (credit?.code === 'NO_PRESTART_GAMES') {
-      return { league: targetLeague, date: targetDate, tasks: [], preparedBoard: [], emptyReason: 'no_games' };
-    }
-    if (credit?.blocked === true) {
-      throw new Error(credit.message || `${config.label} Reader資料驗證未通過`);
     }
     const readerReady = credit?.provider === 'TAI888_READER_AUTO'
       && credit?.readerFresh === true
@@ -3192,7 +3189,13 @@ export default function Home() {
         leagueDatesRef.current[id] = batchDate;
         manualAnalysisScopesRef.current.add(`${id}:${batchDate}`);
         try {
-          const batch = await prepareAllLeagueBatch(id, batchDate);
+          const batch = await prepareAllLeagueBatch(id, batchDate, waiting => {
+            run = updateAllLeagueAnalysisLeague(run, id, {
+              status: 'preparing', boardDate: batchDate,
+              message: `等待Reader同步，第${waiting.attempt}次重查（${waiting.delayMs / 1000}秒後）：${waiting.message}`,
+            });
+            publishAllLeagueRun(run);
+          });
           run = updateAllLeagueAnalysisLeague(run, id, {
             status: batch.emptyReason || 'queued',
             boardDate: batchDate,
@@ -3210,7 +3213,9 @@ export default function Home() {
           run = updateAllLeagueAnalysisLeague(run, id, {
             status: 'failed',
             boardDate: batchDate,
-            message: String(cause?.message || cause),
+            code: cause?.code || '',
+            stage: cause?.stage || 'preflight',
+            message: `${cause?.code ? `[${cause.code}] ` : ''}${String(cause?.message || cause)}`,
           });
           publishAllLeagueRun(run);
           return { id, batchDate, cause };
@@ -3223,6 +3228,12 @@ export default function Home() {
         run = { ...run, state: 'completed', completedAt: new Date().toISOString() };
         publishAllLeagueRun(run);
         setError('四個聯盟的賽程或Reader預查都失敗；可切到個別聯盟重新執行。');
+        return false;
+      }
+      if (!batches.some(batch => batch.tasks.length)) {
+        run = { ...run, state: 'completed', completedAt: new Date().toISOString() };
+        publishAllLeagueRun(run);
+        setNotice('四聯盟預查已結束，目前沒有可送出的分析場次；各聯盟原因見下方。');
         return false;
       }
       const job = await startBackgroundAnalysisJob({
@@ -4365,7 +4376,7 @@ export default function Home() {
         </div>
         {allLeagueRunContainsDate(allLeagueRun, date) && <div className="allLeagueState" aria-live="polite"><div><strong>四聯盟分析 {allLeagueProgress.terminal}/4</strong><span>目前聯盟：{activeLeague.id}｜盤日 {date}｜{allLeagueStatusLabel(activeLeagueBatchStatus)}；各聯盟依 Reader 盤日分開保存。</span></div><div className="allLeaguePills">{LEAGUE_IDS.map(id => {
           const state = allLeagueRun?.leagues?.[id] || {};
-          return <span className={`batch-${state.status || 'idle'}`} title={state.message || ''} key={id}>{id} {state.boardDate || '—'}｜{allLeagueStatusLabel(state.status)}</span>;
+          return <span className={`batch-${state.status || 'idle'}`} title={state.message || ''} key={id}>{id} {state.boardDate || '—'}｜{allLeagueStatusLabel(state.status)}{state.status === 'preparing' && state.message?.startsWith('等待Reader') && <small>{state.message}</small>}</span>;
         })}</div>{LEAGUE_IDS.some(id => allLeagueRun?.leagues?.[id]?.status === 'failed') && <div className="allLeagueErrors">{LEAGUE_IDS.filter(id => allLeagueRun?.leagues?.[id]?.status === 'failed').map(id => <small key={id}>{id} {allLeagueRun.leagues[id].boardDate || '—'}：{allLeagueRun.leagues[id].message || '分析失敗'}</small>)}</div>}</div>}
       </section>
       {allLeagueRunContainsDate(allLeagueRun, date) && LEAGUE_IDS.filter(id => allLeagueRun?.leagues?.[id]?.status === 'result_pending').map(id => <div className="noticeBox" role="status" key={`pending-${id}`}>{id}：{allLeagueRun.leagues[id].message || '結果待載入，請切至此聯盟按「載入先前分析（不重算）」。'}</div>)}
