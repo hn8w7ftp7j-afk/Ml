@@ -125,4 +125,22 @@ await test('one unavailable league date lookup does not change or prevent the ot
   assert.deepEqual([...state.submitted[0].batches.filter(batch => batch.league !== 'MLB').map(batch => batch.tasks.length)], [4, 5, 3]);
 });
 
+await test('empty and failed preflights never create an empty workflow or overwrite failure evidence', async () => {
+  const state = harness();
+  state.context.prepareAllLeagueBatch = async (league, date) => {
+    if (league !== 'MLB') throw Object.assign(new Error('Reader尚未同步'), { code: 'READER_NOT_SYNCED', stage: 'reader_preflight' });
+    return { league, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' };
+  };
+  assert.equal(await state.context.oneClickAnalyzeAll(), false);
+  assert.equal(state.submitted.length, 0);
+  assert.equal(state.context.allLeagueRun.state, 'completed');
+  assert.equal(state.context.allLeagueRun.leagues.MLB.status, 'no_games');
+  for (const id of ['NPB', 'KBO', 'CPBL']) {
+    assert.equal(state.context.allLeagueRun.leagues[id].status, 'failed');
+    assert.equal(state.context.allLeagueRun.leagues[id].code, 'READER_NOT_SYNCED');
+    assert.equal(state.context.allLeagueRun.leagues[id].stage, 'reader_preflight');
+  }
+  assert.equal(state.context.allLeagueBusyRef.current, false);
+});
+
 console.log(`All-league Reader dates: ${passed} groups passed; actual page functions, isolated sources and workflow submission.`);

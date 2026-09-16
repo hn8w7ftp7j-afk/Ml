@@ -316,11 +316,21 @@ export async function POST(request) {
       }
     }
 
+    const blockedCode = !readerState.available ? 'READER_NOT_SYNCED'
+      : !readerState.fresh ? 'READER_STALE'
+        : !completeReaderSlate ? 'READER_SLATE_MISMATCH' : 'READER_MARKET_COVERAGE_MISMATCH';
+    console.warn('[READER_PREFLIGHT_BLOCK]', {
+      league, date, code: blockedCode, readerState: readerState.state,
+      ageSeconds: readerState.ageSeconds, boardDate: readerSnapshot?.boardDate || null,
+      scheduleGameCount: currentSchedule.length,
+      readerScheduleGameCount: readerSnapshot?.scheduleGameCount || 0,
+    });
     return NextResponse.json({
       ok: true,
       league,
       configured: Boolean(process.env.READER_PAIR_SECRET),
       blocked: true,
+      code: blockedCode,
       readerFresh: readerState.fresh,
       version: TAI888_READER_PARSER_VERSION,
       readerVersion: readerSnapshot?.readerVersion || null,

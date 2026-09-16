@@ -7,6 +7,7 @@ import * as receipts from '../lib/analysis-completed-receipt-v1.js';
 import { analysisHasCalculatedDirections } from '../lib/analysis-display-state-v116.js';
 import { allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
 import { LEAGUE_IDS, normalizeLeagueId } from '../lib/leagues.js';
+import { prepareLeagueReaderPreflight } from '../lib/all-league-reader-preflight.js';
 
 // Execute the real page's preparation, submission, storage and reconnect code.
 // These are explicit provider-shaped stress fixtures, never live odds/results.
@@ -70,7 +71,7 @@ const verificationMarkets = Array.from({ length: 120 }, (_, index) => ({
 
 function sandbox(storage = new MemoryStorage()) {
   const context = vm.createContext({ ...cache, ...receipts, analysisHasCalculatedDirections, referenceGameMap,
-    allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, LEAGUE_IDS, normalizeLeagueId,
+    allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, LEAGUE_IDS, normalizeLeagueId, prepareLeagueReaderPreflight,
     Date, Map, Set, Number, String, Array, JSON, encodeURIComponent,
     backgroundJobsInMemory: new Map(), supersededBackgroundRuns: new Set(), window: { localStorage: storage },
     safeParse: value => { try { return JSON.parse(value); } catch { return null; } },
