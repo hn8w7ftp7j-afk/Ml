@@ -34,6 +34,25 @@ jobs:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           cat database/tests/settlement-review-fixture.sql database/0010_analysis_direction_review_recovery.sql database/tests/settlement-review-assertions.sql | docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify concurrent history schema initialization
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$POSTGRES_CONTAINER" createdb -U postgres schema_concurrency_test
+          docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d schema_concurrency_test -v ON_ERROR_STOP=1 < database/0005_analysis_pit_snapshots.sql
+          node scripts/direction-schema-concurrency-test.mjs --sql > /tmp/direction-schema.sql
+          pids=()
+          for worker in $(seq 1 8); do
+            docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d schema_concurrency_test -v ON_ERROR_STOP=1 < /tmp/direction-schema.sql > "/tmp/schema-worker-$worker.log" 2>&1 &
+            pids+=("$!")
+          done
+          result=0
+          for pid in "${pids[@]}"; do wait "$pid" || result=1; done
+          cat /tmp/schema-worker-*.log
+          exit "$result"
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 25
