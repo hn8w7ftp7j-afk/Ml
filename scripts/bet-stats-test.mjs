@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { RUNLINE_STAT_GROUPS, runlineStatRole } from '../lib/bet-stats.js';
 import { BET_PERIODS, FULL_TOTAL_STAT_FILTERS, fullTotalStatDirection, FIRST5_TOTAL_STAT_FILTERS, first5TotalStatDirection, matchesBetStatMarket, betStatMarketLabel, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
 
 const settled = (id, league, market, outcome, netProfit, values = {}) => ({
@@ -31,6 +32,54 @@ const ledger = [
 ];
 
 const stats = summarizeBetLedger(ledger);
+// Runline roles derive from the recorded contract, never HOME/AWAY or tail sign.
+for (const group of RUNLINE_STAT_GROUPS) {
+  const market = group.market;
+  for (const [pick, expected] of [
+    ['道奇讓1+50', 'GIVING'], ['道奇讓1-50', 'GIVING'],
+    ['巨人受讓1+50', 'RECEIVING'], ['巨人受讓1-50', 'RECEIVING'],
+    ['道奇讓0平', 'PICKEM'], ['巨人受讓0平', 'PICKEM'],
+    ['道奇讓0+50', 'PICKEM'], ['巨人受讓0-50', 'PICKEM'],
+    ['道奇讓0/0.5', 'GIVING'], ['巨人受讓0/0.5', 'RECEIVING'],
+    ['大8平', null], ['未提供', null], ['', null],
+  ]) {
+    assert.equal(runlineStatRole({ market, pick }), expected, `${market} ${pick}`);
+    assert.equal(group.filters.filter(filter => matchesBetStatMarket({ market, pick }, filter.id)).length, expected ? 1 : 0);
+  }
+  const prefix = market === '全場讓分' ? 'FULL' : 'FIRST5';
+  for (const direction of ['HOME', 'AWAY']) {
+    assert.equal(runlineStatRole({ market, pick: '巨人受讓1平', direction, slotId: `${prefix}_RUNLINE_${direction}` }), 'RECEIVING');
+    assert.equal(runlineStatRole({ market, pick: '道奇讓1平', direction, slotId: `${prefix}_RUNLINE_${direction}` }), 'GIVING');
+  }
+  assert.equal(runlineStatRole({ market, pick: '道奇讓1平', slotId: `${prefix}_TOTAL_OVER` }), null);
+  assert.equal(runlineStatRole({ market, pick: '道奇讓1平', slotId: `${prefix === 'FULL' ? 'FIRST5' : 'FULL'}_RUNLINE_HOME` }), null);
+  const rows = [
+    { ...settled('give', 'MLB', market, 'WIN', 9650), pick: '道奇讓1平', placedAt: '2026-09-18T03:00:00Z' },
+    { ...settled('receive', 'MLB', market, 'HALF_LOSS', -4925), pick: '巨人受讓1平', placedAt: '2026-09-18T03:00:00Z' },
+    { ...settled('zero', 'MLB', market, 'PUSH', 0), pick: '道奇讓0+50', placedAt: '2026-09-18T03:00:00Z' },
+    { ...settled('cancel', 'MLB', market, 'WIN', 9999), pick: '道奇讓1平', status: 'CANCELLED', placedAt: '2026-09-18T03:00:00Z' },
+    { ...settled('open', 'MLB', market, 'WIN', 9999), pick: '巨人受讓1平', status: 'OPEN', placedAt: '2026-09-18T03:00:00Z' },
+    { ...settled('excluded', 'MLB', market, 'WIN', 9999), pick: '道奇讓1平', performanceEligibility: 'EXCLUDED_UNVERIFIABLE_LEGACY', placedAt: '2026-09-18T03:00:00Z' },
+    { ...settled('foreign', 'NPB', market, 'WIN', 9999), pick: '道奇讓1平', placedAt: '2026-09-18T03:00:00Z' },
+    { ...settled('old', 'MLB', market, 'WIN', 9999), pick: '道奇讓1平', placedAt: '2026-09-17T03:00:00Z' },
+  ];
+  const before = structuredClone(rows);
+  const scoped = filterBetLedgerByPeriod(rows, 'TODAY', '2026-09-18T04:00:00Z').filter(bet => bet.league === 'MLB');
+  const parts = group.filters.map(filter => {
+    assert.equal(betStatMarketLabel(filter.id), filter.label);
+    assert.equal(matchesBetStatMarket({ market: '全場大小', pick: '道奇讓1平' }, filter.id), false);
+    return summarizeBetLedger(scoped.filter(bet => matchesBetStatMarket(bet, filter.id))).overall;
+  });
+  const all = summarizeBetLedger(scoped).overall;
+  for (const key of ['bets', 'settled', 'open', 'cancelled', 'quarantined', 'netPnl', 'totalStake', 'effectiveWinStake', 'effectiveLossStake']) {
+    assert.equal(parts.reduce((sum, part) => sum + part[key], 0), all[key], `No duplicate ${market} ${key}`);
+  }
+  assert.deepEqual(parts.map(part => part.netPnl), [9650, -4925, 0]);
+  assert.deepEqual(parts.map(part => part.winRate), [1, 0, null]);
+  assert.deepEqual(rows, before, 'display filters cannot mutate ledger records');
+}
+assert.equal(runlineStatRole({ market: '全場大小', pick: '道奇讓1平' }), null);
+assert.equal(runlineStatRole({ market: '上半大小', pick: '道奇讓1平' }), null);
 const splitRows = [
   { ...settled('over', 'MLB', '上半大小', 'WIN', 9650), pick: '大4平' },
   { ...settled('under', 'MLB', '上半大小', 'LOSS', -9850), pick: '小4+50' },
