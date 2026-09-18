@@ -34,6 +34,7 @@ import {
 import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
 import { summarizeOriginalBetPrices } from '../lib/bet-price-summary.js';
 import { BET_PERIODS, FULL_TOTAL_STAT_FILTERS, fullTotalStatDirection, FIRST5_TOTAL_STAT_FILTERS, matchesBetStatMarket, betStatMarketLabel, first5TotalStatDirection, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
+import { RUNLINE_STAT_GROUPS, runlineStatRole } from '../lib/bet-stats.js';
 import {
   SCORE_BUCKETS,
   SCORE_PERFORMANCE_MARKETS,
@@ -1106,6 +1107,21 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
         return <BreakdownButton key={market} label={market} active={selectedMarket === market} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === market ? 'ALL' : market)}/>;
       })}
     </div>
+
+    {RUNLINE_STAT_GROUPS.map(group => {
+      const unclassified = leagueBets.filter(bet => bet?.market === group.market && runlineStatRole(bet) == null).length;
+      return <div key={group.market}>
+        <div className="ledgerSectionHead"><h3>{group.label}讓分／受讓｜獨立統計</h3></div>
+        <p className="muted">依下注當時盤口分開顯示讓分隊、受讓隊；0 分盤（含尾數）另列平手盤，不以主客隊判定。沿用相同日期、聯盟及結算規則，保留上方合計，不重複計入總計。</p>
+        <div className="breakdownGrid marketBreakdown" aria-label={`${group.label}讓分受讓平手盤獨立統計`}>
+          {group.filters.map(({ id, label }) => {
+            const rows = leagueBets.filter(bet => matchesBetStatMarket(bet, id));
+            return <BreakdownButton key={id} label={label} active={selectedMarket === id} summary={summarizeBetLedger(rows).overall} onClick={() => setSelectedMarket(selectedMarket === id ? 'ALL' : id)}/>;
+          })}
+        </div>
+        {unclassified > 0 && <p className="muted">{unclassified} 筆{group.market}紀錄的盤口缺失或類型衝突：保留在合計與原明細，不擅自歸類。</p>}
+      </div>;
+    })}
 
     <div className="ledgerSectionHead"><h3>全場大小分｜獨立統計</h3></div>
     <p className="muted">上方「全場大小」合計保留；下方分開顯示大分、小分，沿用相同日期、聯盟及結算規則，不重複計入總計。</p>
