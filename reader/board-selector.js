@@ -225,6 +225,22 @@ function framePriority(left, right) {
   return Number(left.candidate?.frameId || 0) - Number(right.candidate?.frameId || 0);
 }
 
+// Compare shared contracts even when one frame contains fewer games/markets.
+// Capture completion time is not evidence that its prices are newer.
+function sharedContractsDisagree(left, right) {
+  const canonicalGames = row => JSON.parse(row.payloadFingerprint).games;
+  const identity = game => [game.boardDate, game.boardTime, game.awayCode, game.homeCode].join('|');
+  const rightGames = new Map(canonicalGames(right).map(game => [identity(game), game]));
+  return canonicalGames(left).some(game => {
+    const other = rightGames.get(identity(game));
+    if (!other) return false;
+    if (game.marketStatus !== other.marketStatus) return true;
+    return ['fullRunline', 'fullTotal', 'first5Runline', 'first5Total'].some(key =>
+      game[key] != null && other[key] != null
+      && JSON.stringify(game[key]) !== JSON.stringify(other[key]));
+  });
+}
+
 /**
  * Pick one board from one frame in one authoritative tab.  The function never
  * combines tables or games across frames.  If two complete frames in that tab
@@ -252,6 +268,18 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     const bestCoverage = Math.max(0, ...validTabFrames.map(row => row.detectedGameCount || 0));
     const complete = validTabFrames.filter(row => row.detectedGameCount === bestCoverage);
     if (!complete.length) continue;
+    const completeDisagree = new Set(complete.map(row => row.payloadFingerprint)).size > 1;
+    const overlapDisagrees = validTabFrames.some((left, index) =>
+      validTabFrames.slice(index + 1).some(right => sharedContractsDisagree(left, right)));
+    if (completeDisagree || overlapDisagrees) {
+      return {
+        ok: false,
+        error: 'conflicting-duplicate-frames',
+        authorityTabId: tab.tabId,
+        conflictingFrameIds: validTabFrames.map(row => row.candidate.frameId),
+        assessed,
+      };
+    }
     usableTabs.push({
       tab,
       selected: [...complete].sort(framePriority)[0],
