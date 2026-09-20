@@ -1,4 +1,5 @@
 'use client';
+import { readerWaitingDisplay } from '../lib/reader-waiting-display.js';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
 import { splitEvidenceNote, bullpenUsageText, inningsEvidenceView, featureTimeText, savedLeagueLimitations } from '../lib/personnel-evidence-display.js';
 import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
@@ -1485,8 +1486,10 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
   const displayedGame = analysisDisplayGame(item);
   const displayedItem = { ...item, game: displayedGame };
   const gamePrestart = gameIsPrestartNow(item.game, now);
+  const liveWaiting = readerWaitingDisplay(item, readerAuthority, now);
+  const waitingLabel = liveWaiting?.message || item.statusLabel;
   const latestCoverage = item.latestMarketCoverage || null;
-  const coverage = latestCoverage || item.marketCoverage || {};
+  const coverage = liveWaiting?.coverage || latestCoverage || item.marketCoverage || {};
   const preservingPreviousReaderAnalysis = (Boolean(latestCoverage)
     || item.preservedCurrentReaderGame === true
     || item.pendingReaderAnalysis === true)
@@ -1559,8 +1562,9 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
   return <section className="gameCard" ref={analysisCardRef}>
     <div className="gameHead">
       <div><h2>{matchup(displayedGame)}</h2><p>{localTime(displayedGame.gameDate)}｜{analysisStarterDisplay(displayedItem, 'away')} 對 {analysisStarterDisplay(displayedItem, 'home')}</p></div>
-      <span className={`state ${item.status}`}>{preservingPreviousReaderAnalysis && !retainedAnalysisUpdating ? '保留已完成分析｜目前Reader盤口待複核' : item.statusLabel}</span>
+      <span className={`state ${item.status}`}>{preservingPreviousReaderAnalysis && !retainedAnalysisUpdating ? '保留已完成分析｜目前Reader盤口待複核' : waitingLabel}</span>
     </div>
+    {liveWaiting?.open && <button type="button" disabled={recoveryBusy} onClick={() => onRecheck?.(item)}>分析此場</button>}
     {actualRows.some(row => isResearchOnlyMarket(row, item.game)) && <div className="sourceBanner researchNotice"><strong>MLB 全場大分：僅供研究</strong><span>原始分析照常保留，已退出候選順序與排名資格；已自行下注的紀錄、取消及結算仍照常處理。上半場大分、小分及其他聯盟不套用此限制。</span></div>}
     <GameAnalysisCopy key={`${displayedGame.leagueId || displayedGame.league}:${displayedGame.gamePk}:${pitPersistence?.snapshotId || analysis.inputHash || analysis.analysisAsOf || 'pending'}`} cardRef={analysisCardRef} matchup={matchup(displayedGame)} available={Object.keys(analysis).length > 0} receipt={{ game: displayedGame, analysis, persistence: pitPersistence, appVersion: APP_VERSION, retained: preservingPreviousReaderAnalysis || item.restoredFromCache === true }}/>
     {shadowMode && <div className="sourceBanner shadowBanner"><strong>🧪 {item.game.leagueId || item.game.league || 'MLB'} 聯合比分影子模型</strong><span>{preservingPreviousReaderAnalysis
@@ -1578,13 +1582,15 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
       {pitPersistence?.confirmed && analysis.replayEnvironment?.sourceArtifact && <p><a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(pitPersistence.snapshotId)}&artifact=source`} target="_blank" rel="noreferrer">讀取此快照保存的重播來源封存</a></p>}
     </details>
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT快照保存已確認（不等於資料全數驗證）' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
-    {item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}（卡片來源紀錄）｜分析記錄盤口時間：{localTime(analysis.lineAsOf)}；兩者各依原欄位顯示，逐方向盤口時間與版本請見完整分析匯出。</span></div>}
+    {liveWaiting ? <div className="sourceBanner actualSource"><strong>{liveWaiting.label}</strong><span>最新Reader盤口時間：{localTime(liveWaiting.observedAt)}｜盤口狀態不代表分析已完成。</span></div> : item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}（卡片來源紀錄）｜分析記錄盤口時間：{localTime(analysis.lineAsOf)}；兩者各依原欄位顯示，逐方向盤口時間與版本請見完整分析匯出。</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
-    {!item.referenceData && !item.error && <div className="emptyGame">{item.statusLabel}</div>}
+    {!item.referenceData && !item.error && <div className="emptyGame">{waitingLabel}</div>}
     {item.referenceData && <>
       {(item.actualSource || item.marketCoverage || actualRows.length > 0) && <div className="actualBox">
         <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>{preservingPreviousReaderAnalysis ? 'Reader最新' : ''}已開 {openMarketCount}/4 市場{preservingPreviousReaderAnalysis ? '｜保留上一版分析' : ''}</span></div>
-        {allDirectionsUnopened
+        {liveWaiting?.open
+          ? <div className="readerWaitingSummary"><strong>{liveWaiting.message}</strong><span>盤口已收到；尚未計算的方向不會冒充分析結果。</span></div>
+          : allDirectionsUnopened
           ? <div className="readerWaitingSummary"><strong>目前尚未開盤</strong><span>四市場八方向由 Reader 持續監看；實際盤口出現後，請手動按分析。</span></div>
           : MARKET_ORDER.map(market => {
           const rows = actualRows.filter(row => row.market === market).sort(compareDirectionsByScore);
@@ -1748,6 +1754,10 @@ export default function Home() {
   const readerCoverage = readerCoverageCounts(readerStatus);
   const readerPendingText = coveragePendingText(readerCoverage);
   const liveReaderAuthority = {
+    league,
+    gameAvailability: readerStatus?.gameAvailability || [],
+    observedAt: readerStatus?.observedAt || null,
+    pageActivityAt: readerStatus?.pageActivityAt || null,
     fresh: readerStatus?.fresh === true,
     boardDate: readerStatus?.boardDate || null,
     expectedBoardDate: date,
