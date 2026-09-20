@@ -283,7 +283,9 @@ assert.match(page, /async function recordBet\([\s\S]*betMutationBusyRef\.current
 assert.match(page, /async function cancelBet\([\s\S]*betMutationBusyRef\.current = true;[\s\S]{0,120}markAppOperationBusy\(true\);[\s\S]*finally \{\s*betMutationBusyRef\.current = false;[\s\S]{0,120}markAppOperationBusy\(false\);/, '取消寫入期間必須阻止PWA更新重載');
 assert.match(page, /async function probeCloudLedgerRecovery\(\)[\s\S]{0,180}cloudSyncBusyRef\.current \|\| betMutationBusyRef\.current/, '帳本恢復讀取不得與下注狀態寫入並行');
 assert.match(page, /async function refreshSettlements[\s\S]*if \(cloudSyncBusyRef\.current \|\| betMutationBusyRef\.current\) return;/, '賽果刷新不得與下注狀態寫入並行');
-assert.match(page, /const cloudLedgerActionState = cloudLedgerBusy \? 'loading' : cloudLedgerStatus\.state[\s\S]*cloudLedgerState=\{cloudLedgerActionState\}/, '任何帳本操作進行中都必須禁用盤口下注按鈕');
+assert.match(page, /const cloudLedgerActionState = cloudLedgerBusy && !betQueueActive \? 'loading' : cloudLedgerStatus\.state[\s\S]*cloudLedgerState=\{cloudLedgerActionState\}/, '非隊列帳本操作仍鎖定；隊列允許其他方向繼續加入');
+assert.match(page, /async function cancelBet\(bet\) \{\s*if \(betQueueRef\.current\.running\)/, '隊列處理中不得同時取消');
+assert.match(page, /if \(!betQueueActive\) return;\s*markAppOperationBusy\(true\)/, '整個隊列包含復核階段都必須阻止PWA自動重載');
 assert.match(page, /reconcileAfterMutation[\s\S]*finally \{[\s\S]*betMutationBusyRef\.current = false;[\s\S]*if \(reconcileAfterMutation\) \{\s*const recovered = await probeCloudLedgerRecovery\(\);/, '不確定寫入的帳本復核必須在釋放mutation互斥後執行');
 const initialMergeStart = page.indexOf("body: JSON.stringify({ action: 'merge', bets: migratedBets })");
 const initialMergeEnd = page.indexOf('}, []);', initialMergeStart);

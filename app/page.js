@@ -1736,9 +1736,13 @@ export default function Home() {
   const betQueueActive = betQueueEntries.some(entry => ['queued', 'saving'].includes(entry.status));
   useEffect(() => {
     if (!betQueueActive) return;
+    markAppOperationBusy(true);
     const warn = event => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      markAppOperationBusy(false);
+    };
   }, [betQueueActive]);
   useEffect(() => {
     for (const entry of betQueueEntries) {
