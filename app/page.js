@@ -1731,6 +1731,7 @@ export default function Home() {
   const betMutationBusyRef = useRef(false);
   const [betQueueEntries, setBetQueueEntries] = useState([]);
   const betQueueRef = useRef(null);
+  const betQueueCapturesRef = useRef(new Map());
   if (!betQueueRef.current) betQueueRef.current = createBetRecordQueue(setBetQueueEntries);
   const betQueueActive = betQueueEntries.some(entry => ['queued', 'saving'].includes(entry.status));
   useEffect(() => {
@@ -1739,6 +1740,14 @@ export default function Home() {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [betQueueActive]);
+  useEffect(() => {
+    for (const entry of betQueueEntries) {
+      const captured = betQueueCapturesRef.current.get(entry.key);
+      if (entry.status === 'uncertain' && captured && findConfirmedRecordedBet({ ok: true, bets }, captured)) {
+        betQueueRef.current.confirm(entry.key);
+      }
+    }
+  }, [bets, betQueueEntries]);
   const cloudLedgerGenerationRef = useRef(0);
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
@@ -4216,6 +4225,8 @@ export default function Home() {
     const capturedBet = JSON.parse(JSON.stringify(bet));
     if (!betQueueRef.current.enqueue(positionIdentity, `${bet.matchup}｜${translateTeamText(bet.pick)}`, () => persistQueuedBet(capturedBet))) {
       setNotice('此方向已在記錄隊列中；不會重複新增。');
+    } else {
+      betQueueCapturesRef.current.set(positionIdentity, capturedBet);
     }
   }
 
@@ -4274,7 +4285,7 @@ export default function Home() {
           setError('');
           setNotice(`已從永久帳本確認紀錄存在：${translateTeamText(persisted.pick)}｜${Number(persisted.water).toFixed(3)}｜${Number(persisted.stake).toLocaleString()}元；未重複新增。`);
         } else {
-          setError('本次寫入尚未確認：帳本未讀回相同盤口與金額的紀錄。可重試；伺服器會防止重複新增。');
+          setError('本次寫入尚未確認：帳本未讀回相同盤口與金額的紀錄。請先回讀帳本，勿重複新增。');
         }
       } else if (uncertainOutcome) {
         setError('本次寫入結果尚未確認，帳本暫時無法回讀。請稍後重新確認；目前不會顯示成功。');
@@ -4420,6 +4431,7 @@ export default function Home() {
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
     {betQueueEntries.length > 0 && <section className="panel" aria-label="下注紀錄隊列"><strong>紀錄隊列｜依點選順序處理</strong><p>只記錄已自行下注的事實，不會替你下注。處理中可繼續點選其他方向；請保持本頁開啟，重新整理不會保留尚未完成的隊列。</p><ul aria-live="polite">{betQueueEntries.map(entry => <li key={entry.key}>{entry.label}：{({ queued: '排隊中', saving: '儲存確認中', confirmed: '已記錄 ✓', failed: '記錄失敗', uncertain: '結果待確認，請先回讀帳本，勿重複新增' })[entry.status]}{entry.message ? `｜${entry.message}` : ''}</li>)}</ul></section>}
     {cloudLedgerStatus.state === 'unavailable' && <div className="noticeBox" role="status"><span>帳本尚未同步完成：{cloudLedgerStatus.message} </span><button type="button" className="mini" disabled={cloudLedgerBusy} onClick={() => probeCloudLedgerRecovery()}>{cloudLedgerBusy ? '正在回讀帳本…' : '重新讀取帳本'}</button></div>}
+    {betQueueEntries.some(entry => entry.status === 'uncertain') && <button type="button" className="secondary" disabled={cloudLedgerBusy || betQueueActive} onClick={() => probeCloudLedgerRecovery()}>回讀帳本確認待確認紀錄（不重新送出）</button>}
     <LoadingLine progress={progress}/>
 
     {tab === 'board' && <>

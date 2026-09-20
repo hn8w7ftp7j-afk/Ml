@@ -58,6 +58,7 @@ function harness(requestJSON, recovery = async () => undefined) {
     cloudLedgerStatus: { state: 'ready' }, cloudSyncBusyRef: { current: false },
     cloudLedgerBusy: false, betMutationBusyRef: { current: false },
     betQueueRef: { current: createBetRecordQueue(entries => { state.queue = entries; }) },
+    betQueueCapturesRef: { current: new Map() },
     evaluateBetAction: () => ({ recordable: true }), liveReaderAuthority: {},
     betIdentity, betPositionIdentity, date: candidate.date, league: candidate.league,
     readerCaptureForBet: () => ({ payloadHash: 'a'.repeat(64), rawBoardHash: 'b'.repeat(64), revision: `${candidate.date}:${'a'.repeat(64)}` }),
@@ -153,7 +154,7 @@ assert.match(disconnected.state.notice, /確認紀錄存在/);
 assert.equal(disconnected.state.error, '');
 const unresolved = harness(async () => { throw new TypeError('Failed to fetch'); }, async () => ({ ok: true, bets: [] }));
 await unresolved.run();
-assert.match(unresolved.state.error, /可重試/);
+assert.match(unresolved.state.error, /請先回讀帳本/);
 assert.equal(unresolved.state.notice, '');
 const mismatch = harness(async (_url, options) => options?.method === 'POST' ? created : { ok: true, bets: [] });
 await mismatch.run();

@@ -35,6 +35,8 @@ while (queue.running) await tick();
 assert.equal(latest.find(entry => entry.key === 'd').status, 'uncertain');
 assert.equal(queue.enqueue('d', 'D retry', () => assert.fail('blind retry')), false);
 assert.equal(latest.find(entry => entry.key === 'e').status, 'confirmed');
+queue.confirm('d');
+assert.equal(latest.find(entry => entry.key === 'd').status, 'confirmed');
 for (const status of ['queued', 'saving', 'uncertain']) {
   const action = evaluateBetAction({ queued: { status } });
   assert.equal(action.disabled, true);
