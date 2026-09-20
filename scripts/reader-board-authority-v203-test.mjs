@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 import {
   MAX_TAI888_TABS,
@@ -57,6 +58,44 @@ function candidate({ tabId, active, overWater = 0.94, complete = true, lastAcces
 }
 
 const activeComplete = candidate({ tabId: 1, active: true, lastAccessed: 200 });
+// Regression: a later iframe response must never replace visible 2+90 with 2+10.
+const visibleKbo = structuredClone(activeComplete);
+visibleKbo.parsed.league = 'KBO';
+visibleKbo.parsed.games[0].awayCode = 'DOO';
+visibleKbo.parsed.games[0].homeCode = 'KT';
+visibleKbo.parsed.games[0].fullRunline.line = '2+90';
+visibleKbo.capture.pageUrl = 'https://tai888.in/newapp/#/KB';
+const embeddedKbo = structuredClone(visibleKbo);
+embeddedKbo.frameId = 2;
+embeddedKbo.capture.observedAt = new Date(NOW + 100).toISOString();
+embeddedKbo.parsed.games[0].fullRunline.line = '2+10';
+for (const frames of [[visibleKbo, embeddedKbo], [embeddedKbo, visibleKbo]]) {
+  const result = selectAuthoritativeBoard(frames, { now: NOW + 1000, league: 'KBO' });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'conflicting-duplicate-frames');
+  assert.equal(result.selected, undefined);
+  assert.deepEqual(new Set(result.conflictingFrameIds), new Set([0, 2]));
+}
+const identicalKbo = structuredClone(embeddedKbo);
+identicalKbo.parsed.games[0].fullRunline.line = '2+90';
+assert.equal(selectAuthoritativeBoard([visibleKbo, identicalKbo], { now: NOW }).ok, true);
+identicalKbo.parsed.games[0].fullRunline.homeWater = 0.91;
+assert.equal(selectAuthoritativeBoard([visibleKbo, identicalKbo], { now: NOW }).ok, false);
+const broaderKbo = structuredClone(visibleKbo);
+const secondGame = structuredClone(broaderKbo.parsed.games[0]);
+secondGame.boardTime = '18:00';
+broaderKbo.parsed.games.push(secondGame);
+broaderKbo.capture.diagnostics.expectedGameCount = 2;
+broaderKbo.capture.diagnostics.gameCount = 2;
+assert.equal(selectAuthoritativeBoard([broaderKbo, embeddedKbo], { now: NOW }).ok, false,
+  'a conflicting frame cannot be hidden by lower coverage');
+const subsetKbo = structuredClone(visibleKbo);
+subsetKbo.frameId = 3;
+assert.equal(selectAuthoritativeBoard([broaderKbo, subsetKbo], { now: NOW }).ok, true,
+  'matching subsets remain usable');
+const npbFrame = structuredClone(embeddedKbo);
+npbFrame.parsed.league = 'NPB';
+assert.equal(selectAuthoritativeBoard([visibleKbo, npbFrame], { now: NOW, league: 'KBO' }).ok, true);
 const hiddenSameBoard = candidate({ tabId: 2, active: false, lastAccessed: 300 });
 const hiddenPreferred = selectAuthoritativeBoard(
   [activeComplete, hiddenSameBoard],
@@ -116,5 +155,29 @@ assert.doesNotMatch(backgroundSource, /!withinTai888TabScanLimit\(tabs\.length\)
 assert.match(backgroundSource, /for \(const tab of tabs\)/);
 assert.doesNotMatch(backgroundSource, /tabs\.slice\(0,\s*4\)/);
 assert.match(backgroundSource, /if \(!selection\.ok\)/);
+
+// Run the real sync failure path: conflict replaces old green status and never
+// reaches ingest, even if a previous payload was successfully uploaded.
+const stored = { readerToken: 'fixture', readerStatuses: { KBO: { ok: true, state: 'synced' } } };
+const event = { addListener() {} };
+let requests = 0;
+const context = vm.createContext({
+  URL, console, setTimeout, clearTimeout,
+  selectAuthoritativeBoard: (rows, options) => selectAuthoritativeBoard(rows, { ...options, now: NOW }),
+  fixtureCandidates: [visibleKbo, embeddedKbo],
+  fetch: async () => { requests++; throw new Error('conflicting capture must not upload'); },
+  chrome: {
+    runtime: { onInstalled: event, onStartup: event, onMessage: event },
+    alarms: { onAlarm: event },
+    tabs: { onUpdated: event, query: async () => [{ id: 1 }] },
+    storage: { local: { get: async () => stored, set: async value => Object.assign(stored, value) } },
+  },
+});
+vm.runInContext(backgroundSource.replace(/^import .*;\n/gm, ''), context);
+vm.runInContext('collectCandidates = async () => ({ candidates: fixtureCandidates, silentTabIds: [] })', context);
+await vm.runInContext("performSync('manual', null)", context);
+assert.equal(requests, 0);
+assert.equal(stored.readerStatuses.KBO.ok, false);
+assert.match(stored.readerStatuses.KBO.message, /同一分頁內盤口不一致/);
 
 console.log('Reader board authority: duplicate tabs and host/iframe boards deduplicated PASS');

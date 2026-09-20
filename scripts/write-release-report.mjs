@@ -7,7 +7,7 @@ import path from 'node:path';
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const RELEASE = path.join(ROOT, 'release');
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
-const ARCHIVE_NAME = `Tai888-Reader-v${manifest.version}-VERIFIED-RESCAN.zip`;
+const ARCHIVE_NAME = `Tai888-Reader-v${manifest.version}-FRAME-CONFLICT-GUARD.zip`;
 const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
 const REPORT_NAME = `Tai888-Reader-v${manifest.version}-VERIFICATION.md`;
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
