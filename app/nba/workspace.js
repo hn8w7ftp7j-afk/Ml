@@ -11,6 +11,7 @@ import OnOffPanel from './on-off-panel.js';
 import OfficialPanel from './official-panel.js';
 import PregamePanel from './pregame-panel.js';
 import VerifiedResearchPanel from './verified-research-panel.js';
+import CorpusPanel from './corpus-panel.js';
 
 const VIEWS = [['schedule', '賽程與賽果'], ['teams', '球隊與球員'], ['injuries', '傷病狀態'], ['history', '歷史研究'], ['sources', '資料與 QA']];
 const typeLabel = value => ({ regular: '例行賽', preseason: '季前賽', postseason: '季後賽', unknown: '類型待確認' }[value] || value || '—');
@@ -201,6 +202,7 @@ export default function NbaWorkspace({ onClose }) {
       {view === 'player' && <><button type="button" onClick={() => setView('teams')}>← 返回球隊</button><label>球季<select value={season} onChange={event => setSeason(event.target.value)}>{years.map(year => <option key={year} value={year}>{year - 1}–{String(year).slice(-2)}</option>)}</select></label><label>賽事類型<select value={seasonType} onChange={event => setSeasonType(event.target.value)}><option value="regular">例行賽</option><option value="preseason">季前賽（獨立）</option><option value="postseason">季後賽（獨立）</option></select></label></>}
       {view !== 'sources' && <button type="button" className={styles.refresh} disabled={loading || !ready} onClick={() => load(key, true)}>{loading ? '讀取中…' : '重新讀取'}</button>}
     </div>
+    {view === 'history' && <CorpusPanel/>}
     {loading && <p className={styles.loading} role="status">正在讀取 NBA 資料…可切換頁籤，已取得的內容會保留。</p>}
     {screen.key === key && screen.error && <div className={styles.error} role="alert">{screen.error}{screen.error.includes('登入') && <a href="/login?next=/nba">重新登入</a>}</div>}
     <SourceStatus result={result} retained={view !== 'sources' && screen.retained}/>

@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';
+import {validateNbaCorpus} from '../lib/nba/corpus-store.js';
+const args=Object.fromEntries(process.argv.slice(2).map(a=>a.replace(/^--/,'').split('=')));
+if(!args.input||!args.output)throw Error('Required: --input=/private/result.json --output=/private/import.json');
+const report=JSON.parse(await fs.readFile(args.input,'utf8'));
+const {reports,...payload}=report;
+payload.league='NBA';payload.modelInputEnabled=false;
+payload.entries=report.entries.map(({snapshots,...e})=>({...e,snapshotCount:snapshots.length,sourceRows:snapshots.map(s=>s.id),marketQuotes:snapshots.map(s=>({sourceRow:s.id,period:s.period,time:s.time,favorite:s.favorite,spread:s.spread,homeOdds:s.homeOdds,awayOdds:s.awayOdds,total:s.total,overOdds:s.overOdds,underOdds:s.underOdds}))}));
+validateNbaCorpus(payload);
+const serialized=JSON.stringify(payload);if(Buffer.byteLength(serialized)>3500000)throw Error('Import payload exceeds API limit; do not silently truncate');
+await fs.writeFile(args.output,serialized,{flag:'wx'});
+console.log(JSON.stringify({output:args.output,bytes:Buffer.byteLength(serialized),summary:payload.summary}));

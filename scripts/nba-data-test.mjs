@@ -67,6 +67,16 @@ await test('an empty valid schedule is empty with predictable arrays, not an ups
   assert.equal(result.status, 'empty');
   for (const key of ['games', 'teams', 'players', 'injuries', 'statistics', 'lineups']) assert.ok(Array.isArray(result.data[key]));
 });
+await test('historical date-range 400 falls back to two source-traced UTC days', async () => {
+  const calls=[];
+  const fetchImpl=async url=>{calls.push(url);if(url.includes('20260412-'))return new Response('',{status:400});return jsonResponse(scoreboard([event()]));};
+  const r=await loadNbaData({view:'schedule',date:'2026-04-13'},{fetchImpl,now});
+  assert.equal(r.status,'ready');assert.equal(r.data.games.length,1);assert.equal(calls.length,3);
+  assert.ok(calls.some(u=>u.includes('dates=20260412&')));assert.ok(calls.some(u=>u.includes('dates=20260413&')));
+  assert.equal(r.sources.filter(s=>s.hash).length,2);
+  const bad=await loadNbaData({view:'schedule',date:'2026-04-13'},{now,fetchImpl:async url=>url.includes('20260412-')?new Response('',{status:400}):jsonResponse({leagues:[{...league,abbreviation:'MLB'}],events:[]})});
+  assert.equal(bad.qa.status,'BLOCK');assert.equal(bad.data.games.length,0);
+});
 await test('impossible calendar dates fail before any request', async () => {
   let calls = 0;
   const result = await loadNbaData({ date: '2026-02-30' }, { fetchImpl: async () => { calls += 1; }, now });
@@ -104,6 +114,17 @@ await test('game summary preserves postgame starters and excludes latest injurie
 await test('wrong game returned by summary blocks, regardless of HTTP 200', async () => {
   const result = await loadNbaData({ view: 'game', id: '900002' }, { fetchImpl: fetchValue({ header: { ...event(), league } }), now });
   assert.equal(result.qa.status, 'BLOCK'); assert.equal(result.data.game, null);
+});
+await test('team-only historical evidence never relaxes player or score identity gates', async () => {
+  const stats=made=>Object.entries({'fieldGoalsMade-fieldGoalsAttempted':`${made}-85`,'threePointFieldGoalsMade-threePointFieldGoalsAttempted':'10-30','freeThrowsMade-freeThrowsAttempted':'14-20',offensiveRebounds:10,defensiveRebounds:30,totalRebounds:40,turnovers:12,teamTurnovers:1,totalTurnovers:13}).map(([name,value])=>({name,displayValue:String(value)}));
+  const raw={header:{...event(),league},boxscore:{teams:[{team:team('5'),statistics:stats(40)},{team:team('18'),statistics:stats(38)}],players:[{team:team('5'),statistics:[{keys:[],athletes:[{athlete:{displayName:'Unknown synthetic player'},stats:[],didNotPlay:true}]}]}]}};
+  const full=await loadNbaData({view:'game',id:'900001'},{now,fetchImpl:fetchValue(raw)});
+  assert.equal(full.qa.status,'BLOCK');assert.ok(full.qa.issues.some(i=>i.code==='PLAYER_IDENTITY_MISMATCH'));
+  const teamOnly=await loadNbaData({view:'historical-team-box',id:'900001'},{now,fetchImpl:fetchValue(raw)});
+  assert.equal(teamOnly.status,'ready');assert.equal(teamOnly.data.players.length,0);assert.equal(teamOnly.data.availability.players,'not_validated_or_used');
+  for(const mutate of [r=>{r.header.id='900002';},r=>{r.boxscore.teams[1].team=team('5');},r=>{r.boxscore.teams[0].statistics[0].displayValue='90-85';},r=>{r.header.competitions[0].status.type={state:'pre',completed:false};}]){
+    const bad=structuredClone(raw);mutate(bad);const r=await loadNbaData({view:'historical-team-box',id:'900001'},{now,fetchImpl:fetchValue(bad)});assert.equal(r.qa.status,'BLOCK');assert.equal(r.data.game,null);
+  }
 });
 await test('optional On/Off event conflict is quarantined without erasing independently verified scores', async () => {
   const raw = { header: { ...event(), league }, plays: [{ id: '7777', sequenceNumber: '1' }], boxscore: { players: ['5', '18'].map((id, side) => ({ team: team(id), statistics: [{ keys: ['minutes', 'points'], athletes: Array.from({ length: 5 }, (_, i) => {
