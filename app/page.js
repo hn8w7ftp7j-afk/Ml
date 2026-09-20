@@ -107,6 +107,7 @@ import {
   updateAllLeagueAnalysisLeague,
 } from '../lib/all-league-analysis-v117.js';
 import { capturedReaderContractReady, evaluateBetAction } from '../lib/bet-action-state-v118.js';
+import { createBetRecordQueue } from '../lib/bet-record-queue.js';
 import { prepareLeagueReaderPreflight } from '../lib/all-league-reader-preflight.js';
 
 const VERSION = APP_VERSION;
@@ -1611,7 +1612,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
             : rows.length ? rows.map((row, index) => directionStatus(row) === 'CALCULATED' || modelEvValue(row) != null
               ? (() => {
                 const betState = betsEnabled ? getBetState(item, row) : { latest: null, cancelled: null };
-                const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled, readerAuthority });
+                const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled, readerAuthority, queued: betState?.queued });
                 return <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} limitations={savedLeagueLimitations(analysis.dataAudit)} betState={betState} action={action} onRecheck={onRecheck ? () => onRecheck(item) : undefined} recoveryBusy={recoveryBusy} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice}/>;
               })()
               : <DirectionSlotRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game}/>)
@@ -1728,6 +1729,29 @@ export default function Home() {
   const betsRef = useRef([]);
   const cloudSyncBusyRef = useRef(false);
   const betMutationBusyRef = useRef(false);
+  const [betQueueEntries, setBetQueueEntries] = useState([]);
+  const betQueueRef = useRef(null);
+  const betQueueCapturesRef = useRef(new Map());
+  if (!betQueueRef.current) betQueueRef.current = createBetRecordQueue(setBetQueueEntries);
+  const betQueueActive = betQueueEntries.some(entry => ['queued', 'saving'].includes(entry.status));
+  useEffect(() => {
+    if (!betQueueActive) return;
+    markAppOperationBusy(true);
+    const warn = event => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      markAppOperationBusy(false);
+    };
+  }, [betQueueActive]);
+  useEffect(() => {
+    for (const entry of betQueueEntries) {
+      const captured = betQueueCapturesRef.current.get(entry.key);
+      if (entry.status === 'uncertain' && captured && findConfirmedRecordedBet({ ok: true, bets }, captured)) {
+        betQueueRef.current.confirm(entry.key);
+      }
+    }
+  }, [bets, betQueueEntries]);
   const cloudLedgerGenerationRef = useRef(0);
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
@@ -1747,7 +1771,7 @@ export default function Home() {
     String(allLeagueRun?.leagues?.[id]?.status || 'idle'),
   )).length;
   const allLeagueRunning = ['preparing', 'running'].includes(String(allLeagueRun?.state || ''));
-  const cloudLedgerActionState = cloudLedgerBusy ? 'loading' : cloudLedgerStatus.state;
+  const cloudLedgerActionState = cloudLedgerBusy && !betQueueActive ? 'loading' : cloudLedgerStatus.state;
   const activeLeagueBatchStatus = allLeagueBoardDate(allLeagueRun, league) === date
     ? allLeagueRun?.leagues?.[league]?.status || 'idle'
     : 'idle';
@@ -2390,6 +2414,7 @@ export default function Home() {
     const activeRecords = records.filter(bet => bet.status !== 'CANCELLED');
     return {
       records,
+      queued: betQueueEntries.find(entry => entry.key === betPositionIdentity(date, item.game.gamePk, row, league)),
       latest: activeRecords[0] || null,
       exact: activeRecords.find(bet => betPriceMatches(bet, date, item.game.gamePk, row, league)) || null,
       cancelled: records.find(bet => bet.status === 'CANCELLED') || null,
@@ -4112,11 +4137,11 @@ export default function Home() {
         : '永久雲端帳本目前無法寫入；系統不會把未保存的下注顯示成成功');
       return;
     }
-    if (cloudSyncBusyRef.current || cloudLedgerBusy) {
+    if ((cloudSyncBusyRef.current || cloudLedgerBusy) && !betQueueRef.current.running) {
       setNotice('永久雲端帳本正在同步；完成後才能記錄下注。');
       return;
     }
-    if (betMutationBusyRef.current) {
+    if (betMutationBusyRef.current && !betQueueRef.current.running) {
       setNotice('上一筆帳本操作仍在確認中，請稍候。');
       return;
     }
@@ -4200,9 +4225,20 @@ export default function Home() {
       placedAt: new Date().toISOString(),
       status: 'OPEN',
     };
+    // Capture at click time, before the user switches league/date/amount.
+    const capturedBet = JSON.parse(JSON.stringify(bet));
+    if (!betQueueRef.current.enqueue(positionIdentity, `${bet.matchup}｜${translateTeamText(bet.pick)}`, () => persistQueuedBet(capturedBet))) {
+      setNotice('此方向已在記錄隊列中；不會重複新增。');
+    } else {
+      betQueueCapturesRef.current.set(positionIdentity, capturedBet);
+    }
+  }
+
+  async function persistQueuedBet(bet) {
     let reconcileAfterMutation = false;
     let refreshReaderAfterMutation = false;
     let uncertainOutcome = false;
+    let outcome = { status: 'confirmed', message: '已寫入並回讀永久帳本' };
     betMutationBusyRef.current = true;
     setCloudLedgerBusy(true);
     markAppOperationBusy(true);
@@ -4222,6 +4258,7 @@ export default function Home() {
       setError('');
       setNotice(`${receipt.idempotent ? '已讀回原有紀錄，未重複新增' : '已寫入並回讀永久帳本'}：${translateTeamText(receipt.bet.pick)}｜${Number(receipt.bet.water).toFixed(3)}｜${Number(receipt.bet.stake).toLocaleString()}元`);
     } catch (cause) {
+      outcome = { status: 'failed', message: cause?.message || '雲端下注紀錄更新失敗' };
       setNotice('');
       if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
         reportCloudLedgerFailure(cause);
@@ -4235,6 +4272,7 @@ export default function Home() {
         setError(cause?.message || '雲端下注紀錄更新失敗');
       }
       uncertainOutcome = cloudBetMutationOutcomeUncertain(cause);
+      if (uncertainOutcome) outcome.status = 'uncertain';
       reconcileAfterMutation = Number(cause?.status) === 409 || uncertainOutcome;
       if (uncertainOutcome) setError(`${cause?.message || '帳本回覆中斷'}。寫入結果尚未確認，正在回讀帳本；請勿重複新增。`);
     } finally {
@@ -4247,19 +4285,22 @@ export default function Home() {
       if (uncertainOutcome && recovered) {
         const persisted = findConfirmedRecordedBet(recovered, bet);
         if (persisted) {
+          outcome = { status: 'confirmed', message: '已從永久帳本確認紀錄存在' };
           setError('');
           setNotice(`已從永久帳本確認紀錄存在：${translateTeamText(persisted.pick)}｜${Number(persisted.water).toFixed(3)}｜${Number(persisted.stake).toLocaleString()}元；未重複新增。`);
         } else {
-          setError('本次寫入尚未確認：帳本未讀回相同盤口與金額的紀錄。可重試；伺服器會防止重複新增。');
+          setError('本次寫入尚未確認：帳本未讀回相同盤口與金額的紀錄。請先回讀帳本，勿重複新增。');
         }
       } else if (uncertainOutcome) {
         setError('本次寫入結果尚未確認，帳本暫時無法回讀。請稍後重新確認；目前不會顯示成功。');
       }
     }
     // A failed bet must never implicitly start analysis or repricing.
+    return outcome;
   }
 
   async function cancelBet(bet) {
+    if (betQueueRef.current.running) { setNotice('記錄隊列處理中，完成後才能取消紀錄。'); return; }
     if (!bet?.id || bet.status !== 'OPEN') return;
     if (!window.confirm(`確定取消這筆下注？\n${translateTeamText(bet.pick)}｜${waterText(bet.water)}`)) return;
     if (cloudLedgerStatus.state !== 'ready') {
@@ -4392,7 +4433,9 @@ export default function Home() {
 
     {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
+    {betQueueEntries.length > 0 && <section className="panel" aria-label="下注紀錄隊列"><strong>紀錄隊列｜依點選順序處理</strong><p>只記錄已自行下注的事實，不會替你下注。處理中可繼續點選其他方向；請保持本頁開啟，重新整理不會保留尚未完成的隊列。</p><ul aria-live="polite">{betQueueEntries.map(entry => <li key={entry.key}>{entry.label}：{({ queued: '排隊中', saving: '儲存確認中', confirmed: '已記錄 ✓', failed: '記錄失敗', uncertain: '結果待確認，請先回讀帳本，勿重複新增' })[entry.status]}{entry.message ? `｜${entry.message}` : ''}</li>)}</ul></section>}
     {cloudLedgerStatus.state === 'unavailable' && <div className="noticeBox" role="status"><span>帳本尚未同步完成：{cloudLedgerStatus.message} </span><button type="button" className="mini" disabled={cloudLedgerBusy} onClick={() => probeCloudLedgerRecovery()}>{cloudLedgerBusy ? '正在回讀帳本…' : '重新讀取帳本'}</button></div>}
+    {betQueueEntries.some(entry => entry.status === 'uncertain') && <button type="button" className="secondary" disabled={cloudLedgerBusy || betQueueActive} onClick={() => probeCloudLedgerRecovery()}>回讀帳本確認待確認紀錄（不重新送出）</button>}
     <LoadingLine progress={progress}/>
 
     {tab === 'board' && <>
@@ -4428,7 +4471,7 @@ export default function Home() {
       <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-        const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority });
+        const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority, queued: betState.queued });
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const warnings = diagnosticWarnings(entry.row);
@@ -4449,7 +4492,7 @@ export default function Home() {
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
           const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
-          const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority });
+          const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority, queued: betState.queued });
           const scoreText = entry.score.toFixed(1);
           const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const warnings = diagnosticWarnings(entry.row);
