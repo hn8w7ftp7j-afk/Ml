@@ -268,7 +268,10 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     const bestCoverage = Math.max(0, ...validTabFrames.map(row => row.detectedGameCount || 0));
     const complete = validTabFrames.filter(row => row.detectedGameCount === bestCoverage);
     if (!complete.length) continue;
-    const completeDisagree = new Set(complete.map(row => row.payloadFingerprint)).size > 1;
+    const fullBoards = complete.filter(row => row.detectedGameCount === row.expectedGameCount
+      && row.candidate.parsed.games.every(game => game.marketStatus === 'locked'
+        || validateStandardReaderGame(game).ok));
+    const completeDisagree = new Set(fullBoards.map(row => row.payloadFingerprint)).size > 1;
     const overlapDisagrees = validTabFrames.some((left, index) =>
       validTabFrames.slice(index + 1).some(right => sharedContractsDisagree(left, right)));
     if (completeDisagree || overlapDisagrees) {

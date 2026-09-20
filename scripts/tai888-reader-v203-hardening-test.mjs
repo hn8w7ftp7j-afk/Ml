@@ -331,9 +331,9 @@ assert.equal(assessBoardCandidate(invalidWater, now).ok, false, 'all eight direc
 const conflictingFrame = candidate({ frameId: 10 });
 conflictingFrame.parsed.games[0].fullTotal.overWater = 0.95;
 const conflict = selectAuthoritativeBoard([completeFrame, conflictingFrame], { now });
-assert.equal(conflict.ok, true, 'duplicate host/iframe observations must resolve to one authoritative frame');
-assert.equal(conflict.selected.candidate.frameId, 9);
-assert.equal(conflict.ignoredDuplicateFrameCount, 1);
+assert.equal(conflict.ok, false, 'different host/iframe prices must stop synchronization');
+assert.equal(conflict.error, 'conflicting-duplicate-frames');
+assert.equal(conflict.selected, undefined);
 
 assert.equal(shouldSkipSuccessfulPayload({
   reason: 'alarm', payloadHash: 'new', lastSuccessfulPayloadHash: 'old', lastSuccessfulSyncAt: now, now,
