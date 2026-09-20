@@ -47,6 +47,8 @@ assert.equal(cloudBetMutationOutcomeUncertain(new TypeError('Failed to fetch')),
 // state before GET, loss of the mutation lock, and failure recovery regressions.
 const page = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 const recordSource = page.slice(page.indexOf('  async function recordBet('), page.indexOf('  async function cancelBet('));
+const { createBetRecordQueue } = await import('../lib/bet-record-queue.js');
+await import('./bet-record-queue-test.mjs');
 function harness(requestJSON, recovery = async () => undefined) {
   const state = { bets: [], notice: '', error: '', busy: false };
   const env = {
@@ -55,6 +57,7 @@ function harness(requestJSON, recovery = async () => undefined) {
     getBetState: () => ({ latest: null, cancelled: null }),
     cloudLedgerStatus: { state: 'ready' }, cloudSyncBusyRef: { current: false },
     cloudLedgerBusy: false, betMutationBusyRef: { current: false },
+    betQueueRef: { current: createBetRecordQueue(entries => { state.queue = entries; }) },
     evaluateBetAction: () => ({ recordable: true }), liveReaderAuthority: {},
     betIdentity, betPositionIdentity, date: candidate.date, league: candidate.league,
     readerCaptureForBet: () => ({ payloadHash: 'a'.repeat(64), rawBoardHash: 'b'.repeat(64), revision: `${candidate.date}:${'a'.repeat(64)}` }),
@@ -72,8 +75,12 @@ function harness(requestJSON, recovery = async () => undefined) {
     requestJSON, confirmCloudBetMutation, findConfirmedRecordedBet,
     cloudBetMutationOutcomeUncertain, probeCloudLedgerRecovery: recovery,
   };
-  const handler = new Function(...Object.keys(env), `return (${recordSource});`)(...Object.values(env));
-  return { state, env, run: () => handler({ game: { gamePk: candidate.gamePk, away: 'Away', home: 'Home', gameDate: '2027-09-10T18:00:00Z' } }, candidate) };
+  const handler = new Function(...Object.keys(env), `${recordSource}; return recordBet;`)(...Object.values(env));
+  const tap = (row = candidate) => handler({ game: { gamePk: row.gamePk, away: 'Away', home: 'Home', gameDate: '2027-09-10T18:00:00Z' } }, row);
+  return { state, env, tap, run: async () => {
+    await tap();
+    while (env.betQueueRef.current.running) await new Promise(resolve => setImmediate(resolve));
+  } };
 }
 
 let releaseGet;
@@ -89,7 +96,7 @@ assert.deepEqual(requests, ['POST', 'GET']);
 assert.deepEqual(success.state.bets, [], 'POST alone must not publish a recorded state');
 assert.equal(success.state.busy, true);
 assert.equal(success.env.betMutationBusyRef.current, true, 'GET readback stays inside the mutation lock');
-await success.run();
+await success.tap();
 assert.deepEqual(requests, ['POST', 'GET'], 'a second tap cannot submit while readback is pending');
 releaseGet(ledger);
 await pending;
@@ -97,6 +104,39 @@ assert.equal(success.state.bets[0].id, stored.id);
 assert.equal(success.state.busy, false);
 assert.equal(success.env.betMutationBusyRef.current, false);
 assert.match(success.state.notice, /已寫入並回讀/);
+
+// Run three actual page captures while the first independent GET is held.
+let releaseBurst;
+const burstGate = new Promise(resolve => { releaseBurst = resolve; });
+const submitted = [];
+let burstStored;
+const burst = harness(async (_url, options) => {
+  if (options?.method === 'POST') {
+    const bet = JSON.parse(options.body).bet;
+    submitted.push(bet);
+    if (bet.gamePk === 900002) throw Object.assign(new Error('Rejected second'), { status: 400 });
+    burstStored = { ...stored, ...bet };
+    return { ok: true, created: true, betId: bet.id, bets: [burstStored] };
+  }
+  if (submitted.length === 1) await burstGate;
+  return { ok: true, bets: [burstStored] };
+});
+await burst.tap();
+const secondRow = { ...candidate, gamePk: 900002 };
+const thirdRow = { ...candidate, gamePk: 900003 };
+await burst.tap(secondRow);
+await burst.tap(thirdRow);
+await burst.tap(thirdRow);
+thirdRow.water = 0.01;
+burst.env.settings.unitValue = 999;
+assert.equal(submitted.length, 1);
+assert.deepEqual(burst.state.queue.map(entry => entry.status), ['saving', 'queued', 'queued']);
+releaseBurst();
+while (burst.env.betQueueRef.current.running) await new Promise(resolve => setImmediate(resolve));
+assert.deepEqual(submitted.map(bet => bet.gamePk), [900001, 900002, 900003]);
+assert.equal(submitted[2].water, candidate.water, 'queued prices are captured at click');
+assert.equal(submitted[2].stake, candidate.stake, 'queued amounts survive settings changes');
+assert.deepEqual(burst.state.queue.map(entry => entry.status), ['confirmed', 'failed', 'confirmed']);
 
 let reconciles = 0;
 const rejected = harness(async () => { throw Object.assign(new Error('PIT成交盤缺少有效伺服器簽章'), { status: 409, code: 'PIT_EVIDENCE_REQUIRED' }); }, async () => { reconciles += 1; return { ok: true, bets: [] }; });
