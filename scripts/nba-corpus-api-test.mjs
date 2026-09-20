@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {GET,POST} from '../app/api/nba/corpus/route.js';
+import {createSessionToken} from '../lib/security.js';
+process.env.APP_PASSWORD='synthetic-corpus-test';process.env.SESSION_SECRET='synthetic-corpus-only-secret';
+const cookie=`mlb_session=${await createSessionToken()}`;
+const req=(query='',auth=true,method='GET',origin='http://localhost',body)=>new Request(`http://localhost/api/nba/corpus${query}`,{method,headers:{...(auth?{cookie}:{}),origin,'Content-Type':'application/json'},...(body===undefined?{}:{body})});
+assert.equal((await GET(req('',false))).status,401);assert.equal((await POST(req('',false,'POST'))).status,401);
+assert.equal((await POST(req('',true,'POST','https://other.example','{}'))).status,403);
+for(const query of ['?page=-1','?page=NaN','?status=MLB'])assert.equal((await GET(req(query))).status,400);
+assert.equal((await POST(req('',true,'POST','http://localhost','bad-json'))).status,400);
+assert.equal((await POST(req('',true,'POST','http://localhost','{"league":"MLB"}'))).status,422);
+console.log('NBA corpus API auth, CSRF, malformed inputs and foreign-league rejection PASS; no live DB writes.');

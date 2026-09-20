@@ -19,6 +19,18 @@ function game(i, year = 2026, type = 'regular') {
 }
 const options = { teamId: 'nba:espn:team:5', seasonType: 'regular' };
 const games = Array.from({ length: 65 }, (_, i) => game(i));
+await test('historical diagnostics preserve the model and paired error metrics', () => {
+  const original = analyzeNbaShadow(games, options);
+  const detailed = analyzeNbaShadow(games, { ...options, includeHistoricalDiagnostics: true });
+  assert.deepEqual(detailed.validation, original.validation);
+  assert.deepEqual(detailed.folds.map(({historicalDiagnostics, ...fold}) => fold), original.folds);
+  const errors = detailed.folds.flatMap(f => { const d=f.historicalDiagnostics; return [d.predictedOwn-d.actualOwn,d.predictedOpponent-d.actualOpponent]; });
+  assert.equal(errors.length, detailed.validation.samples);
+  assert.ok(Math.abs(errors.reduce((s,x)=>s+Math.abs(x),0)/errors.length-detailed.validation.mae)<1e-12);
+  const changed=structuredClone(games); changed.at(-1).home=team('5',200); changed.at(-1).away=team('18',203);
+  const rerun=analyzeNbaShadow(changed,{...options,includeHistoricalDiagnostics:true});
+  assert.deepEqual(rerun.folds.slice(0,-1),detailed.folds.slice(0,-1));
+});
 await test('possessions use team total turnovers and one shared denominator', () => {
   const g = game(0); const box = deriveNbaBoxscore(g);
   const expected = ((80 + 0.44 * 24 - 10 + 13) + (83 + 0.44 * 24 - 10 + 13)) / 2;

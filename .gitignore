@@ -7,6 +7,7 @@ node_modules
 /release/
 /release-obsolete/
 /.swc
+/research/nba-history/
 # Original NHL acquisition checkpoints remain local; verified lossless archives
 # are committed. Do not remove archives or treat missing live data as acquired.
 /scripts/fixtures/nhl/xg-research/pbp-*.json
