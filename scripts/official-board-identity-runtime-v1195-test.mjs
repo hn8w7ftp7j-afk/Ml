@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
 import { register } from 'node:module';
-import { parseKboOfficialSchedulePayload } from '../lib/asian-baseball.js';
+import { parseKboOfficialSchedulePayload, reconcileKboDailyIdentity } from '../lib/asian-baseball.js';
 import { LEAGUE_IDS, leagueConfig } from '../lib/leagues.js';
 import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
 import { gameIsPrestartNow, touchReaderHeartbeat } from '../lib/client-analysis-state.js';
@@ -30,10 +30,14 @@ function providerRow(away, home, { finished = false, link = '' } = {}) {
 }
 const providerPayload = { rows: [providerRow('NC', '키움', { finished: true }), providerRow('LG', '두산'),
   providerRow('KIA', '삼성'), providerRow('KT', 'SSG'), providerRow('롯데', '한화')] };
-const officialGames = parseKboOfficialSchedulePayload(providerPayload, DATE);
-const [oldGame] = parseKboOfficialSchedulePayload({ rows: [providerRow('NC', '키움', {
-  link: "<a href='/Schedule/GameCenter/Main.aspx?gameId=20990818NCWO0&section=PREVIEW'>preview</a>",
-})] }, DATE);
+const dailyPayload = { game: [['NC', 'WO'], ['LG', 'OB'], ['HT', 'SS'], ['KT', 'SK'], ['LT', 'HH']].map(([away, home]) => ({
+  LE_ID: 1, SEASON_ID: 2099, G_DT: '20990818', G_ID: `20990818${away}${home}0`,
+  HEADER_NO: 0, AWAY_ID: away, HOME_ID: home, G_TM: '14:00',
+})) };
+// Legacy layout-derived cards remain immutable and quarantined; the schedule
+// now recovers the independently verified official IDs even without links.
+const officialGames = reconcileKboDailyIdentity(parseKboOfficialSchedulePayload(providerPayload, DATE), dailyPayload, DATE);
+const [oldGame] = parseKboOfficialSchedulePayload({ rows: [providerRow('NC', '키움')] }, DATE);
 assert.equal(officialGames.length, 5);
 const currentGame = officialGames.find(game => game.awayTeamId === oldGame.awayTeamId && game.homeTeamId === oldGame.homeTeamId);
 assert.ok(currentGame);
@@ -97,7 +101,7 @@ const originalFetch = globalThis.fetch;
 let scheduleBody;
 try {
   await test('schedule API keeps four executable games but exposes identity-only evidence for all five official games', async () => {
-    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => providerPayload });
+    globalThis.fetch = async url => ({ ok: true, status: 200, json: async () => String(url).includes('GetKboGameList') ? dailyPayload : providerPayload });
     const response = await getSchedule(new Request(`https://app.test/api/schedule?league=KBO&date=${DATE}`, { headers: authHeaders }));
     assert.equal(response.status, 200);
     scheduleBody = await response.json();
