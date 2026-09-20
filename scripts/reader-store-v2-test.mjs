@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './reader-waiting-display-test.mjs';
 const {
   storeReaderSnapshot,
   loadReaderSnapshot,
