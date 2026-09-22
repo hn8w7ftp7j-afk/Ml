@@ -43,4 +43,8 @@ for (const status of ['queued', 'saving', 'uncertain']) {
   assert.equal(action.recordable, false);
   assert.doesNotMatch(action.text, /已下注|已記錄/);
 }
+queue.enqueue('recheck', 'Recheck', async () => ({ status: 'failed', requiresRecheck: true, rejectedPitSnapshotId: 'pit-1', message: '盤口版本不符' }));
+while (queue.running) await tick();
+assert.equal(latest.find(entry => entry.key === 'recheck').requiresRecheck, true);
+assert.equal(latest.find(entry => entry.key === 'recheck').rejectedPitSnapshotId, 'pit-1');
 console.log('bet record queue: FIFO, independent failure, duplicates and uncertain outcomes PASS');

@@ -22,6 +22,19 @@ const baseItem = {
 
 assert.equal(BET_ACTION_STATE_VERSION, '11.8.44');
 const [boundRow] = bindVerifiedReaderContractsForItem(baseItem, [baseRow]);
+const rejected = { status: 'failed', requiresRecheck: true, rejectedPitSnapshotId: 'old-pit', message: 'PIT成交盤與目前Reader不是同一場盤口內容版本' };
+const rejectedItem = { ...baseItem, customData: { ...baseItem.customData, analysis: { pitSnapshotId: 'old-pit' } } };
+const blockedRetry = evaluateBetAction({ item: rejectedItem, row: boundRow, now, queued: rejected });
+assert.equal(blockedRetry.reasonCode, 'RECORD_RECHECK_REQUIRED');
+assert.equal(blockedRetry.recordable, false);
+assert.equal(blockedRetry.canRecheck, true);
+assert.match(blockedRetry.title, /尚未入單/);
+assert.equal(evaluateBetAction({ item: { ...rejectedItem, customData: { ...rejectedItem.customData, analysis: { pitSnapshotId: 'new-pit' } } }, row: boundRow, now, queued: rejected }).recordable, true);
+assert.equal(evaluateBetAction({ item: rejectedItem, row: boundRow, now, queued: rejected, latest: { status: 'OPEN' } }).kind, 'cancel');
+assert.equal(evaluateBetAction({ item: rejectedItem, row: boundRow, now, queued: { status: 'uncertain' } }).recordable, false);
+const failedAction = evaluateBetAction({ item: baseItem, row: boundRow, now, queued: { status: 'failed', message: '明確拒絕' } });
+assert.equal(failedAction.text, '記錄失敗｜重試');
+assert.equal(failedAction.failureMessage, '明確拒絕');
 assert.equal(boundRow.clientVerifiedReaderContract, true, 'exact current signed Reader contract must bind to an immutable legacy PIT row');
 
 const advancedBoardItem = {
