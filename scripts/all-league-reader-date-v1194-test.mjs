@@ -25,6 +25,7 @@ function harness({ manual = [], latest = id => ({ fresh: true, boardDate: id ===
   const submitted = [];
   const context = vm.createContext({
     Date, Number, String, encodeURIComponent, LEAGUE_IDS, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
+    independentRunsRef: { current: new Map() },
     manualDateSelectionRef: { current: new Set(manual) },
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, TODAY])) },
     requestJSONWithTransientRetry: async url => {
@@ -144,3 +145,10 @@ await test('empty and failed preflights never create an empty workflow or overwr
 });
 
 console.log(`All-league Reader dates: ${passed} groups passed; actual page functions, isolated sources and workflow submission.`);
+
+await test('four-league submission cannot overwrite a still-preparing independent run', async () => {
+  const state = harness();
+  state.context.independentRunsRef.current.set('NPB:2026-09-06', { status: 'preparing' });
+  assert.equal(await state.context.oneClickAnalyzeAll(), false);
+  assert.equal(state.submitted.length, 0);
+});

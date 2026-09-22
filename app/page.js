@@ -1690,6 +1690,8 @@ export default function Home() {
   const [allLeaguePreparing, setAllLeaguePreparing] = useState(false);
   const [backgroundJobRevision, setBackgroundJobRevision] = useState(0);
   const requestedRecoveryScopeRef = useRef(null);
+  const independentRunsRef = useRef(new Map());
+  const [independentRunRevision, setIndependentRunRevision] = useState(0);
   const submittedAllLeagueRunRef = useRef(null);
   const allLeagueBoardsRef = useRef(new Map());
 
@@ -2316,7 +2318,14 @@ export default function Home() {
   useEffect(() => {
     if (!storageReady) return undefined;
     // Restoring a receipt is a network operation, not a reason to lock entry.
-    // Only the explicit recovery button may attach a previous server job.
+    // Only explicit recovery or a run started in this session may attach.
+    const sessionRun = independentRunsRef.current.get(`${league}:${date}`);
+    if (sessionRun?.status === 'preparing') {
+      operationBusyRef.current = true;
+      setBusy(true);
+      setProgress({ active: true, done: 0, running: 1, total: 1, label: sessionRun.message });
+      return undefined;
+    }
     if (requestedRecoveryScopeRef.current !== `${league}:${date}`) return undefined;
     const saved = loadBackgroundJob(league, date, boardRef.current);
     if (!saved?.runId) return undefined;
@@ -2343,6 +2352,11 @@ export default function Home() {
     pollBackgroundJob(saved.runId, generation, date, saved.gamePks, { completedReceipt: saved.completedReceipt === true ? saved : null, displayOnly: saved.batchMode === 'all-leagues' }).then(result => {
       if (generation !== analysisGenerationRef.current || currentDateRef.current !== date) return;
       const resultActuallyLoaded = result?.detached !== true && result?.discarded !== true;
+      if (sessionRun?.runId === saved.runId && result?.detached !== true) {
+        sessionRun.status = 'completed';
+        sessionRun.message = result?.discarded ? '完成｜待重新核對盤口' : '分析完成';
+        setIndependentRunRevision(value => value + 1);
+      }
       if (saved.batchMode === 'all-leagues' && resultActuallyLoaded && result?.recoveryPersisted === true) {
         const completedRun = loadAllLeagueAnalysisRun(date);
         if (completedRun?.runId === saved.runId) {
@@ -2363,7 +2377,13 @@ export default function Home() {
       }
       setNotice(`伺服器背景分析已載入：完成 ${completed} 場${blocked ? `｜資料不足 ${blocked} 場` : ''}${failed ? `｜暫時失敗 ${failed} 場` : ''}。`);
     }).catch(cause => {
-      if (generation === analysisGenerationRef.current && currentDateRef.current === date) setError(String(cause?.message || cause));
+      if (generation === analysisGenerationRef.current && currentDateRef.current === date) {
+        if (sessionRun?.runId === saved.runId) {
+          sessionRun.status = 'failed'; sessionRun.message = String(cause?.message || cause);
+          setIndependentRunRevision(value => value + 1);
+        }
+        setError(String(cause?.message || cause));
+      }
     }).finally(() => {
       if (locksForeground && generation === analysisGenerationRef.current && currentDateRef.current === date) {
         releaseOperation();
@@ -3176,13 +3196,19 @@ export default function Home() {
     }
   }
 
-  async function prepareAllLeagueBatch(targetLeague, targetDate, onWaiting) {
+  async function prepareAllLeagueBatch(targetLeague, targetDate, onWaiting, selectedGamePk = null) {
     const config = leagueConfig(targetLeague);
     if (config.capabilities.analysis !== true || config.capabilities.reader !== true) {
       throw new Error(`${config.label}尚未啟用分析`);
     }
     const { games, credit, emptyReason } = await prepareLeagueReaderPreflight({
-      loadSchedule: () => fetchScheduleForLeague(targetLeague, targetDate),
+      loadSchedule: async () => {
+        const official = await fetchScheduleForLeague(targetLeague, targetDate);
+        if (selectedGamePk == null) return official;
+        const selected = official.filter(game => Number(game.gamePk) === Number(selectedGamePk));
+        if (!selected.length) throw new Error('選中的比賽已開賽、取消或不屬於目前日期；未啟動其他場次分析。');
+        return selected;
+      },
       loadCredit: schedule => {
         const creditRequestId = uid();
         return requestJSONWithTransientRetry('/api/credit-lines', {
@@ -3260,7 +3286,8 @@ export default function Home() {
       setNotice('Reader 正在自動複核最新盤口；複核完成後請再按一次「一鍵分析全部聯盟」。');
       return false;
     }
-    if (allLeagueBusyRef.current || operationBusyRef.current || allLeagueRunning) {
+    if ([...independentRunsRef.current.values()].some(run => ['preparing', 'running'].includes(run.status))
+      || allLeagueBusyRef.current || operationBusyRef.current || allLeagueRunning) {
       setNotice('目前已有分析工作進行中；完成後即可重新分析全部聯盟。');
       return false;
     }
@@ -3406,7 +3433,91 @@ export default function Home() {
     return oneClickAnalyze('', gamePk);
   }
 
+  // Preparation belongs to a league/date, never to the currently visible tab.
+  async function startIndependentAnalysis(selectedGamePk = null) {
+    const targetLeague = league;
+    const targetDate = date;
+    const scope = `${targetLeague}:${targetDate}`;
+    const existing = independentRunsRef.current.get(scope);
+    if (existing && ['preparing', 'running'].includes(existing.status)) {
+      if (existing.status === 'running') {
+        requestedRecoveryScopeRef.current = scope;
+        setBackgroundJobRevision(value => value + 1);
+      }
+      return false;
+    }
+    if (!analysisEnabled || allLeagueBusyRef.current || allLeagueRunning) return false;
+    const run = { status: 'preparing', message: '準備資料中', startedAt: new Date().toISOString() };
+    independentRunsRef.current.set(scope, run);
+    const visible = () => currentLeagueRef.current === targetLeague && currentDateRef.current === targetDate;
+    const publish = () => setIndependentRunRevision(value => value + 1);
+    // Invalidate old screen work, but not another league's independent preparation.
+    analysisGenerationRef.current += 1;
+    manualAnalysisScopesRef.current.add(scope);
+    restoredBoardNeedsValidationRef.current = false;
+    operationBusyRef.current = true;
+    markAppOperationBusy(true);
+    setBusy(true);
+    setError('');
+    setProgress({ active: true, done: 0, running: 1, total: 1, label: '準備資料中｜可切換聯盟' });
+    publish();
+    try {
+      const batch = await prepareAllLeagueBatch(targetLeague, targetDate, waiting => {
+        run.message = waiting.message || '等待Reader盤口';
+        publish();
+      }, selectedGamePk);
+      const previous = allLeagueBoardsRef.current.get(scope) || loadAnalysisBoardCache(targetLeague, targetDate);
+      batch.preparedBoard = batch.preparedBoard.map(item => ({ ...item,
+        statusLabel: item.statusLabel.replaceAll('四聯盟', '伺服器'),
+      }));
+      const selectedPks = new Set(batch.tasks.map(task => Number(task.game.gamePk)));
+      const prepared = mergePreparedLeagueBoard(previous, batch.preparedBoard).map(item => selectedPks.has(Number(item.game.gamePk))
+        ? { ...item, readerPayloadHash: null, pendingReaderAnalysis: true, status: 'queued', statusLabel: '等待伺服器背景分析｜保留目前分數' }
+        : item);
+      allLeagueBoardsRef.current.set(scope, prepared);
+      if (visible()) {
+        boardRef.current = prepared;
+        setBoard(prepared);
+        setSchedule(prepared.map(item => item.game));
+      }
+      if (!batch.tasks.length) {
+        run.status = 'completed';
+        run.message = batch.emptyReason === 'no_games' ? '目前沒有可分析的賽前場次' : '目前沒有可分析的已開盤場次';
+        if (visible()) setNotice(run.message);
+        return true;
+      }
+      const job = await startBackgroundAnalysisJob({
+        league: targetLeague, date: targetDate,
+        tasks: batch.tasks.map(task => ({ ...task, requestId: uid() })),
+      });
+      run.runId = job.runId;
+      run.status = 'running';
+      run.message = '分析中';
+      saveBackgroundJob({ runId: job.runId, league: targetLeague, date: targetDate,
+        total: batch.tasks.length, gamePks: batch.tasks.map(task => Number(task.game.gamePk)),
+        preparedBoard: prepared, startedAt: run.startedAt });
+      if (visible()) {
+        requestedRecoveryScopeRef.current = scope;
+        setNotice(`${targetLeague} 已送出背景分析；可繼續切換其他聯盟分析。`);
+        setBackgroundJobRevision(value => value + 1);
+      }
+      return true;
+    } catch (cause) {
+      run.status = 'failed';
+      run.message = String(cause?.message || cause);
+      if (visible()) setError(run.message);
+      return false;
+    } finally {
+      if (visible()) {
+        releaseOperation();
+        setProgress(value => ({ ...value, active: false }));
+      }
+      publish();
+    }
+  }
+
   async function oneClickAnalyze(automaticKey = '', selectedGamePk = null) {
+    if (!automaticKey) return startIndependentAnalysis(selectedGamePk);
     if (allLeagueRunning) {
       setNotice('四聯盟背景分析正在進行；完成後即可重新分析目前聯盟。');
       return false;
@@ -4434,6 +4545,8 @@ export default function Home() {
     }
     queuedAnalysisRef.current = null;
     setQueuedAnalysis(null);
+    const returningRun = independentRunsRef.current.get(`${nextLeague}:${nextDate}`);
+    if (returningRun?.status === 'running') requestedRecoveryScopeRef.current = `${nextLeague}:${nextDate}`;
     currentLeagueRef.current = nextLeague;
     currentDateRef.current = nextDate;
     leagueDatesRef.current[nextLeague] = nextDate;
@@ -4462,11 +4575,12 @@ export default function Home() {
     <nav className="leagueTabs" aria-label="聯盟切換">
       {LEAGUE_IDS.map(id => {
         const config = leagueConfig(id);
+        const independentStatus = independentRunsRef.current.get(`${id}:${leagueDatesRef.current[id] || date}`);
         const batchStatus = allLeagueBoardDate(allLeagueRun, id) === (leagueDatesRef.current[id] || date)
           ? allLeagueRun?.leagues?.[id]?.status || 'idle'
           : 'idle';
         return <button key={id} className={league === id ? 'active' : ''} onClick={() => selectLeague(id)} aria-pressed={league === id}>
-          <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small>
+          <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{independentStatus ? `｜${({ preparing: '準備中', running: '分析中', completed: '已完成', failed: '失敗，可重試' })[independentStatus.status]}` : ''}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small>
         </button>;
       })}
       <NbaEntry/>

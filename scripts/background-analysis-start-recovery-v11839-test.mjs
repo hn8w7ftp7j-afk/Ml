@@ -17,7 +17,7 @@ assert.match(route, /completeAnalysisJobRequest\(requestKey, run\.runId\)/, 'the
 assert.match(route, /searchParams\.get\('requestId'\)[\s\S]*getAnalysisJobRequest\(requestKey\)/, 'the client must be able to reconnect while the first request is still starting');
 assert.match(page, /startBackgroundAnalysisJob\([\s\S]*requestJSONWithTransientRetry\('\/api\/analysis-jobs',[\s\S]*Idempotency-Key': requestId/, 'Safari transport retries must reuse one idempotency key');
 assert.match(page, /requestId=\$\{encodeURIComponent\(job\.requestId\)\}/, 'a starting response must poll the durable request mapping');
-assert.equal((page.match(/startBackgroundAnalysisJob\(\{/g) || []).length, 2, 'single-league and four-league starts must use recovery');
+assert.equal((page.match(/startBackgroundAnalysisJob\(\{/g) || []).length, 3, 'single-league, independent-league and four-league starts must use recovery');
 assert.match(page, /function isInterruptedPreSubmitRun\(run\)[\s\S]*!run \|\| run\.runId[\s\S]*送出伺服器背景工作前中斷/, 'legacy pre-submit failures must be recognized without touching a real durable run');
 assert.match(page, /isInterruptedPreSubmitRun\(saved\)[\s\S]*clearAllLeagueAnalysisRun\(saved\)[\s\S]*setAllLeagueRun\(null\)[\s\S]*setProgress\(\{ active: false/, 'a stale local-only batch must be removed and all controls unlocked on reload');
 assert.doesNotMatch(page, /message: '上次在送出伺服器背景工作前中斷，請重新執行'/, 'a local pre-submit interruption must not be presented as three league failures');

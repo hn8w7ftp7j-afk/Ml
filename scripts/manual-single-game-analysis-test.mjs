@@ -41,7 +41,7 @@ async function exercise(selected, options = {}) {
     runDurableAnalysisTasks: async tasks => { batches.push(tasks); throw new Error('TEST_STOP_AFTER_SUBMISSION'); },
   };
   vm.createContext(context);
-  await vm.runInContext(`(${source.trim()})`, context)('', selected);
+  await vm.runInContext(`(${source.trim()})`, context)('reader-revalidation', selected);
   return { games, original, board, requests, batches, errors, context };
 }
 const single = await exercise('22');

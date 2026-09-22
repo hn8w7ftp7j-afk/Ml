@@ -91,6 +91,7 @@ function submissionHarness(storage = new MemoryStorage()) {
   Object.assign(context, {
     league: 'CPBL', date: DATE, allLeagueRun: null, allLeagueRunning: false,
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, id === 'MLB' ? NEXT_DATE : DATE])) },
+    independentRunsRef: { current: new Map() },
     allLeagueBusyRef: { current: false }, readerPollBusyRef: { current: false }, operationBusyRef: { current: false },
     analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: { current: false }, manualAnalysisScopesRef: { current: new Set() },
     submittedAllLeagueRunRef: { current: null },
