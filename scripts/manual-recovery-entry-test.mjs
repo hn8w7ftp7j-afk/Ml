@@ -11,6 +11,7 @@ const saved = { runId: 'previous-completed', completedReceipt: true, total: 3, g
 let effect, polls = 0, locks = 0, releases = 0;
 const context = {
   storageReady: true, league: 'MLB', date: '2026-09-08', busy: false, backgroundJobRevision: 0,
+  independentRunsRef: { current: new Map() }, setIndependentRunRevision: () => {},
   requestedRecoveryScopeRef: { current: null }, boardRef: { current: [] },
   completedRecoveryFailuresRef: { current: new Set() }, operationBusyRef: { current: false },
   analysisGenerationRef: { current: 1 }, currentDateRef: { current: '2026-09-08' },

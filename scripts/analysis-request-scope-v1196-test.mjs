@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+// Legacy Reader revalidation must still detach; manual concurrent runs are tested in parallel-league-analysis-test.mjs.
 // Run the actual page function with deferred, isolated transport responses.
 // These scenarios stop at schedule/Reader loading; no analysis or wager API,
 // browser account, persistent storage, or Production endpoint is contacted.
@@ -66,7 +67,7 @@ for (const stage of ['schedule', 'credit']) {
   for (const scope of ['generation', 'date']) {
     await test(`late ${stage} failure after ${scope} change cannot overwrite or unlock the active board`, async () => {
       const h = harness(stage);
-      const pending = h.context.oneClickAnalyze();
+      const pending = h.context.oneClickAnalyze('reader-revalidation');
       await new Promise(setImmediate);
       assert.equal(stage === 'credit' ? h.state.creditRequests : h.state.scheduleRequests, 1);
       const activeState = switchBoard(h, scope);
@@ -79,7 +80,7 @@ for (const stage of ['schedule', 'credit']) {
 
 await test('a successful old schedule response detaches before sending a Reader request', async () => {
   const h = harness();
-  const pending = h.context.oneClickAnalyze();
+  const pending = h.context.oneClickAnalyze('reader-revalidation');
   const activeState = switchBoard(h, 'generation');
   h.gate.resolve([game]);
   assert.equal(await pending, false);
@@ -89,7 +90,7 @@ await test('a successful old schedule response detaches before sending a Reader 
 
 await test('a current request failure remains visible and releases controls for retry', async () => {
   const h = harness();
-  const pending = h.context.oneClickAnalyze();
+  const pending = h.context.oneClickAnalyze('reader-revalidation');
   h.gate.reject(new Error('current schedule temporarily unavailable'));
   assert.equal(await pending, false);
   assert.match(h.state.error, /current schedule temporarily unavailable/);
@@ -102,8 +103,8 @@ await test('a current request failure remains visible and releases controls for 
 
 await test('two fast analyze clicks create one request while the first request owns the operation', async () => {
   const h = harness();
-  const first = h.context.oneClickAnalyze();
-  assert.equal(await h.context.oneClickAnalyze(), false);
+  const first = h.context.oneClickAnalyze('reader-revalidation');
+  assert.equal(await h.context.oneClickAnalyze('reader-revalidation'), false);
   assert.equal(h.state.scheduleRequests, 1);
   h.gate.reject(new Error('isolated expected failure'));
   await first;
