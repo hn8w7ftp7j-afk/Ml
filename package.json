@@ -1,12 +1,13 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.9.37",
+  "version": "11.9.38",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
+    "test:push": "node scripts/analysis-push-test.mjs",
     "pretest": "node scripts/kbo-stable-identity-test.mjs && node scripts/direction-schema-concurrency-test.mjs && node scripts/all-league-reader-preflight-test.mjs && node scripts/authenticated-market-pit-test.mjs && node scripts/bet-persistence-receipt-test.mjs && node scripts/cloud-ledger-receipt-test.mjs && node scripts/game-analysis-copy-test.mjs && node scripts/mlb-diagnostic-display-test.mjs && node scripts/cpbl-evidence-receipts-test.mjs && node scripts/analysis-game-identity-test.mjs && node scripts/reader-revalidation-personnel-test.mjs && node scripts/analysis-snapshot-diagnostics-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/analysis-snapshot-diagnostics-route-test.mjs && node scripts/bullpen-evidence-v11917-test.mjs && node scripts/performance-evidence-v11917-test.mjs && node scripts/mlb-coverage-completion-v11916-test.mjs && node scripts/analysis-data-audit-v1-test.mjs && node scripts/analysis-request-scope-v1196-test.mjs && node scripts/mlb-data-integrity-v118-test.mjs && node scripts/model-input-usage-integrity-v119-test.mjs && node scripts/reprice-snapshot-compatibility-v118-test.mjs && node scripts/npb-result-integrity-test.mjs && node scripts/bet-settlement-budget-test.mjs && node scripts/official-result-recovery-test.mjs && node scripts/payoff-vector-market-verification-test.mjs && node scripts/eight-direction-contract-v111-test.mjs && node scripts/bet-settlement-integrity-test.mjs && node scripts/pit-oos-calibration-test.mjs && node scripts/pit-continuous-calibration-v109-test.mjs && node scripts/calibration-ledger-v109-test.mjs && node scripts/mlb-production-pit-replay-v109-test.mjs && node scripts/analysis-pit-snapshot-store-v1-test.mjs && node scripts/analysis-direction-history-v1-test.mjs && node scripts/analysis-direction-settlement-api-v1-test.mjs && node scripts/analysis-refresh-policy-v109-test.mjs && node scripts/analysis-response-cache-policy-v110-test.mjs && node scripts/mlb-advanced-promotion-gate-v109-test.mjs && node scripts/mlb-advanced-oos-validation-v2-test.mjs && node scripts/mlb-advanced-features-v2-test.mjs && node scripts/mlb-advanced-runtime-policy-v110-test.mjs && node scripts/mlb-starter-split-opener-v110-test.mjs && node scripts/mlb-historical-weather-v2-test.mjs && node scripts/mlb-savant-advanced-v2-test.mjs && node scripts/mlb-injury-run-value-v2-test.mjs && node scripts/mlb-catcher-umpire-wind-v2-test.mjs && node scripts/mlb-advanced-snapshot-store-v2-test.mjs && node scripts/mlb-advanced-snapshot-cron-v2-test.mjs && node scripts/mlb-historical-pit-download-v2-test.mjs && node scripts/game-distribution-cache-v1-test.mjs && node scripts/asian-league-release-readiness-test.mjs && node scripts/asian-production-features-v1-test.mjs && node scripts/high-ev-warning-ranking-v112-test.mjs && node scripts/page-w-first-eight-slot-test.mjs && node scripts/database-quota-resilience-test.mjs && node scripts/pwa-install-test.mjs && node scripts/background-analysis-workflow-v115-test.mjs && node scripts/background-analysis-qa-block-v116-test.mjs && node scripts/analysis-display-state-v116-test.mjs && node scripts/reader-current-prestart-v116-test.mjs && node scripts/all-league-analysis-v117-test.mjs && node scripts/integrated-stability-v1182-test.mjs && node scripts/manual-analysis-entry-v1172-test.mjs && node scripts/completed-background-job-unlock-v1173-test.mjs && node scripts/rebet-after-cancel-v1172-test.mjs && node scripts/score-performance-v118-test.mjs",
     "test:reader-v211": "node scripts/reader-v218-league-partial-safe-test.mjs",
     "dev": "next dev",
@@ -42,6 +43,7 @@
     "react": "19.1.7",
     "react-dom": "19.1.7",
     "sharp": "0.35.4",
+    "web-push": "3.6.7",
     "workflow": "^4.8.5"
   },
   "overrides": {

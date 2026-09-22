@@ -1,4 +1,5 @@
-import { FatalError, RetryableError } from 'workflow';
+import { FatalError, RetryableError, getWorkflowMetadata } from 'workflow';
+import { completionMessage, sendPush } from '../lib/analysis-push.js';
 import { POST as analyzeRequest } from '../app/api/analyze/route.js';
 import { createBackgroundAnalysisAuthorization } from '../lib/security.js';
 
@@ -41,6 +42,12 @@ async function analyzeGameStep(task) {
 
 analyzeGameStep.maxRetries = 2;
 
+async function notifyCompletionStep(device, runId, result, preflightFailures) {
+  'use step';
+  return sendPush(device, completionMessage(runId, result, preflightFailures), `${device}:${runId}`);
+}
+notifyCompletionStep.maxRetries = 2;
+
 export async function analyzeBoardWorkflow(input) {
   'use workflow';
 
@@ -68,7 +75,7 @@ export async function analyzeBoardWorkflow(input) {
         });
     }
   }
-  return {
+  const output = {
     ok: results.every(result => result.ok),
     league: input.league,
     date: input.date,
@@ -76,6 +83,11 @@ export async function analyzeBoardWorkflow(input) {
     completed: results.filter(result => result.ok).length,
     results,
   };
+  if (input.pushDevice) {
+    try { output.notification = await notifyCompletionStep(input.pushDevice, getWorkflowMetadata().workflowRunId, output, 0); }
+    catch { output.notification = { status: 'failed' }; }
+  }
+  return output;
 }
 
 export async function analyzeAllLeaguesWorkflow(input) {
@@ -122,12 +134,18 @@ export async function analyzeAllLeaguesWorkflow(input) {
       results,
     });
   }
-  return {
+  const output = {
     ok: batches.every(batch => batch.ok),
     mode: 'all-leagues',
     date: input.date,
     total: batches.reduce((sum, batch) => sum + batch.total, 0),
     completed: batches.reduce((sum, batch) => sum + batch.completed, 0),
+    preflightFailures: input.preflightFailures || 0,
     batches,
   };
+  if (input.pushDevice) {
+    try { output.notification = await notifyCompletionStep(input.pushDevice, getWorkflowMetadata().workflowRunId, output, input.preflightFailures || 0); }
+    catch { output.notification = { status: 'failed' }; }
+  }
+  return output;
 }

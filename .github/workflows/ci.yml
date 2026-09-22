@@ -65,6 +65,7 @@ jobs:
       - run: npm install --global npm@11
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
+      - run: npm run test:push
       - run: node scripts/score-model-integrity-v102-test.mjs
       - run: npm run test:pit-audit
       - run: npm run test:asian-evidence
