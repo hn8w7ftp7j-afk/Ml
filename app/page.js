@@ -3438,7 +3438,8 @@ export default function Home() {
     const targetDate = date;
     const generation = analysisGenerationRef.current;
     const previousByPk = new Map(boardRef.current.map(item => [Number(item.game.gamePk), item]));
-    setError(''); setNotice(''); setTab('board');
+    // Rechecks also start from ranking views; keep the mounted view and its scroll anchor.
+    setError(''); setNotice('');
     setBoard(current => current.map(item => (selectedGamePk == null || Number(item.game.gamePk) === Number(selectedGamePk)) && item.actualSource?.provider === 'TAI888_READER_AUTO'
       ? { ...item, readerPayloadHash: null, status: 'running', statusLabel: '後台重新驗證中｜保留目前分數｜停止下注', error: '' }
       : item));
