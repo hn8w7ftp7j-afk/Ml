@@ -1309,9 +1309,9 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated, game) {
 }
 
 function ReaderRecovery({ action, onRecheck, busy = false }) {
-  if (action?.reasonCode !== 'READER_UNVERIFIED') return null;
+  if (!['READER_UNVERIFIED', 'RECORD_RECHECK_REQUIRED', 'RECORD_QUEUE'].includes(action?.reasonCode) && !action?.failureMessage) return null;
   return <div className="readerRecovery" style={{ maxWidth: 260, width: '100%', fontSize: 12, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
-    <p role="status">{action.title}</p>
+    <p role="status">{action.failureMessage || action.title}</p>
     {action.canRecheck && onRecheck && <button className="mini secondary" style={{ whiteSpace: 'normal', maxWidth: '100%' }} disabled={busy} onClick={onRecheck} title="手動重新驗證此場Reader盤口，必要時重算並保存新PIT；不會新增下注。">{busy ? '工作進行中' : '重新複核此場（必要時重算）'}</button>}
   </div>;
 }
@@ -4203,6 +4203,7 @@ export default function Home() {
       cloudLedgerState: 'ready',
       latest: state.latest,
       cancelled: state.cancelled,
+      queued: state.queued,
       readerAuthority: liveReaderAuthority,
     });
     if (!action.recordable) {
@@ -4309,6 +4310,8 @@ export default function Home() {
       setNotice(`${receipt.idempotent ? '已讀回原有紀錄，未重複新增' : '已寫入並回讀永久帳本'}：${translateTeamText(receipt.bet.pick)}｜${Number(receipt.bet.water).toFixed(3)}｜${Number(receipt.bet.stake).toLocaleString()}元`);
     } catch (cause) {
       outcome = { status: 'failed', message: cause?.message || '雲端下注紀錄更新失敗' };
+      outcome.requiresRecheck = ['READER_CONTRACT_MISMATCH', 'READER_HASH_MISMATCH', 'READER_GAME_MISSING', 'READER_RAW_HASH_MISMATCH', 'PIT_EVIDENCE_REQUIRED'].includes(String(cause?.code || ''));
+      outcome.rejectedPitSnapshotId = bet.pitSnapshotId;
       setNotice('');
       if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
         reportCloudLedgerFailure(cause);
