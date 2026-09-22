@@ -1,4 +1,5 @@
 'use client';
+import AnalysisNotificationControl from './analysis-notification-control.js';
 import { readerWaitingDisplay } from '../lib/reader-waiting-display.js';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
 import { splitEvidenceNote, bullpenUsageText, inningsEvidenceView, featureTimeText, savedLeagueLimitations } from '../lib/personnel-evidence-display.js';
@@ -1668,6 +1669,7 @@ export default function Home() {
   const [cloudLedgerStatus, setCloudLedgerStatus] = useState({ state: 'loading', code: '', message: '' });
   const [cloudLedgerBusy, setCloudLedgerBusy] = useState(true);
   const [tab, setTab] = useState('board');
+  const [notificationResultNotice, setNotificationResultNotice] = useState('');
   const [date, setDate] = useState(taipeiDate());
   const [schedule, setSchedule] = useState([]);
   const [gamePicker, setGamePicker] = useState({ scope: '', games: [], selected: '', loading: false });
@@ -2083,6 +2085,53 @@ export default function Home() {
     betsRef.current = bets;
     if (storageReady) saveCompactStore({ settings, bets, activeLeague: league });
   }, [settings, bets, league, storageReady]);
+  useEffect(() => {
+    if (!storageReady) return undefined;
+    const runId = new URLSearchParams(window.location.search).get('analysisRun');
+    if (!runId || !/^[a-zA-Z0-9_:-]{8,300}$/.test(runId)) return undefined;
+    let active = true;
+    let timer;
+    const deadline = Date.now() + 120000;
+    async function loadNotificationResult() {
+      try {
+        const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}`, {}, 30000);
+        if (!active) return;
+        if (state.status !== 'completed') {
+          if (['failed', 'cancelled'].includes(state.status) || Date.now() > deadline) throw new Error('工作尚未完成或已中止，請回到分析頁確認。');
+          setNotificationResultNotice('正在取得該次分析結果…');
+          timer = window.setTimeout(loadNotificationResult, 2000);
+          return;
+        }
+        const batches = state.result?.batches || [state.result];
+        let first = null;
+        for (const batch of batches) {
+          if (!LEAGUE_IDS.includes(batch?.league) || !/^\d{4}-\d{2}-\d{2}$/.test(batch?.date)) throw new Error('通知結果聯盟或日期無效');
+          const next = materializeAllLeagueResult(batch, [], compactAnalysisData);
+          if (next.some(item => !analysisItemMatchesScope(item, { league: batch.league, date: batch.date }))) throw new Error('通知結果賽事身分不符');
+          saveAnalysisBoardCache(batch.league, batch.date, next);
+          allLeagueBoardsRef.current.set(`${batch.league}:${batch.date}`, next);
+          leagueDatesRef.current[batch.league] = batch.date;
+          manualDateSelectionRef.current.add(batch.league);
+          if (!first && next.length) first = { ...batch, board: next };
+        }
+        if (first) {
+          currentLeagueRef.current = first.league;
+          currentDateRef.current = first.date;
+          setLeague(first.league);
+          setDate(first.date);
+          boardRef.current = first.board;
+          setBoard(first.board);
+          setSchedule(first.board.map(item => item.game));
+          setTab('board');
+        }
+        setNotificationResultNotice(`已載入通知對應的原始分析，未重新計算：${batches.map(b => `${b.league} ${b.date} 完成 ${b.completed}/${b.total} 場`).join('｜')}。可切換聯盟查看；盤口仍需重新核對。`);
+      } catch (error) {
+        if (active) setNotificationResultNotice(`通知結果載入失敗：${error.message}。請重新整理重試，不會啟動重算。`);
+      }
+    }
+    loadNotificationResult();
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [storageReady]);
   useEffect(() => {
     if (!storageReady) return;
     const saved = loadAllLeagueAnalysisRun(date);
@@ -4403,6 +4452,8 @@ export default function Home() {
       <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1><p>每場使用一份聯盟專屬的凍結聯合比分分布，依Tai888實際盤口逐腿結算八個方向；前台以固定S分數為主，模型估計EV（W）與保守估計（R）作次要診斷。兩者都不是歷史收益率或已證實的獲利。Tai888與外部市場都不回灌模型概率。</p></div>
       <div className="headerBadges"><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span><button type="button" className="appRefreshButton" title="重新整理並取得最新版" onClick={() => window.location.reload()}>↻ 更新</button><span className="version">v{VERSION}</span></div>
     </header>
+    <AnalysisNotificationControl/>
+    {notificationResultNotice && <p role="status">{notificationResultNotice}</p>}
 
     <nav className="leagueTabs" aria-label="聯盟切換">
       {LEAGUE_IDS.map(id => {

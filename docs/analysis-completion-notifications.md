@@ -1,0 +1,11 @@
+# Analysis completion notifications
+
+Opt-in, per-device Web Push for durable baseball analysis jobs. Enable from the analysis page, then send a test notification. On iOS, install to the Home Screen and open the installed app before granting notification permission.
+
+Wait for the UI to confirm that server background analysis has started before leaving. Schedule/Reader preflight still runs in the page; closing during preflight is not a submitted background job. No notification is promised for an interrupted preflight, a cancelled workflow, or a platform-level failure that prevents workflow completion. The completion step reports partial game failures and leagues missing from the all-league preflight. Delivery is best effort (network, OS settings and push provider affect receipt), not exactly once.
+
+Subscriptions are bound to a random HttpOnly/Secure/SameSite device cookie, not broadcast to every device. Endpoints and keys are encrypted at rest with a purpose-separated key derived from SESSION_SECRET. VAPID keys are generated once server-side and stored encrypted in the existing durable database; no private key is returned to clients or committed to source control. Rotating SESSION_SECRET requires resetting this feature's keys/subscriptions and subscribing again. API operations retain login, same-origin and rate-limit protection. Push destinations use a strict HTTPS provider allowlist. 404/410 subscriptions are removed.
+
+The final durable workflow step sends a minimal title/counts notification. Push errors do not discard analysis; `result.notification.status` records the outcome. Retries are deduplicated by device/run and notification tag (duplicates are still possible after crashes). Clicking opens a same-origin result link; authentication still applies. The original run is read, validated and rendered through the existing immutable-result adapter, without recalculation or fresh market authorization.
+
+Verification: `node scripts/analysis-push-test.mjs`, existing workflow/PWA tests, full regression and production build. A real user's iPhone permission, receipt with the app closed and notification-tap return must be tested on that phone; server acceptance is not evidence of device display.

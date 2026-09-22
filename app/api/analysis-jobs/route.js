@@ -11,6 +11,8 @@ import {
   validateSameOrigin,
 } from '../../../lib/security.js';
 import { isLeagueId } from '../../../lib/leagues.js';
+import { readCookie } from '../../../lib/security.js';
+import { deviceHash, PUSH_COOKIE } from '../../../lib/analysis-push.js';
 import {
   claimAnalysisJobRequest,
   completeAnalysisJobRequest,
@@ -103,7 +105,8 @@ export async function POST(request) {
       if (!valid) {
         return NextResponse.json({ ok: false, code: 'INVALID_ALL_LEAGUE_BACKGROUND_JOB', error: '四聯盟背景分析工作內容無效' }, { status: 400 });
       }
-      const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches }]);
+      const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
+      const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches, pushDevice, preflightFailures: 4 - normalizedBatches.length }]);
       if (requestClaim?.claimed) {
         try { await completeAnalysisJobRequest(requestKey, run.runId); }
         catch {}
@@ -123,7 +126,8 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, code: 'INVALID_BACKGROUND_JOB', error: '背景分析工作內容無效' }, { status: 400 });
     }
     const normalizedTasks = normalizeTasks(tasks, league);
-    const run = await start(analyzeBoardWorkflow, [{ league, date, tasks: normalizedTasks }]);
+    const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
+    const run = await start(analyzeBoardWorkflow, [{ league, date, tasks: normalizedTasks, pushDevice }]);
     if (requestClaim?.claimed) {
       try { await completeAnalysisJobRequest(requestKey, run.runId); }
       catch {}
