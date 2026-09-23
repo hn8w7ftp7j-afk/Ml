@@ -72,6 +72,17 @@ for (const leagueId of ['MLB', 'KBO', 'CPBL', 'NPB']) {
   assert.equal(analysisStarterDisplay(item, 'away'), 'Schedule Pitcher（賽程人選／未核對）');
   assert.deepEqual(item.customData.analysis.results, before.customData.analysis.results, 'display never alters scores');
 }
+const readerGame = { gamePk: '456', leagueId: 'CPBL', awayTeamId: 9 };
+const readerItem = { game: readerGame, customData: { context: { game: { ...readerGame }, leagueId: 'CPBL', away: { starter: { id: '12', name: '測試投手', teamId: 9, assignmentStatus: 'OFFICIAL_CONFIRMED' } } } } };
+for (const source of ['SERVER_ATTESTED_TAI888_IDENTITY_VALIDATED_BY_CPBL_ROSTER', 'TAI888_ROSTER_VALIDATED_REPORTED_STARTER']) {
+  readerItem.customData.context.away.starter.identitySource = source;
+  assert.equal(analysisStarterDisplay(readerItem, 'away'), '測試投手（Reader人選／名冊核對）', 'roster identity evidence remains visible without claiming official game assignment');
+  assert.doesNotMatch(analysisStarterDisplay(readerItem, 'away'), /官方/);
+}
+readerItem.customData.context.away.starter.identitySource = 'TAI888_REPORTED_STARTER';
+assert.equal(analysisStarterDisplay(readerItem, 'away'), '測試投手（Reader人選／未核對）');
+for (const leagueId of ['MLB', 'KBO', 'CPBL']) assert.equal(analysisStarterDisplay({ game: { leagueId } }, 'away'), '賽程未提供先發');
+
 const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/personnel-receipt-audit.json', import.meta.url), 'utf8'));
 const fixtureBefore = structuredClone(fixture);
 for (const item of fixture.cases) {
