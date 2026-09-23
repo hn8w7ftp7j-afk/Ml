@@ -2,12 +2,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { parsePersonnelAuditQuery, projectPersonnelContext, exportPersonnelAuditRow, buildPersonnelAuditPage } from '../lib/personnel-audit-export.js';
+import { parsePersonnelAuditQuery, projectPersonnelContext, exportPersonnelAuditRow, buildPersonnelAuditPage, decodePersonnelAuditPayload } from '../lib/personnel-audit-export.js';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const until = '2026-09-23T12:00:00.000Z';
 const query = parsePersonnelAuditQuery(new URLSearchParams({ until }), Date.parse(until));
 assert.equal(query.limit, 100);
+assert.equal(query.payloadVersion, null);
+assert.equal(parsePersonnelAuditQuery(new URLSearchParams({ until, payloadVersion: 'v1.1.0' }), Date.parse(until)).payloadVersion, 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0');
+for (const payloadVersion of ['', 'v1.3.0', "v1.1.0' OR true", 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0']) {
+  assert.throws(() => parsePersonnelAuditQuery(new URLSearchParams({ until, payloadVersion }), Date.parse(until)));
+}
+assert.throws(() => parsePersonnelAuditQuery(new URLSearchParams(`until=${until}&payloadVersion=v1.1.0&payloadVersion=v1.0.0`), Date.parse(until)));
 for (const values of [{}, { until: '2026-02-30T12:00:00.000Z' }, { until, limit: '101' }, { until, limit: '01' }, { until, after: 'bad' }, { until, leak: 'true' }]) {
   assert.throws(() => parsePersonnelAuditQuery(new URLSearchParams(values), Date.parse(until)));
 }
@@ -28,6 +34,32 @@ const decode = value => {
   assert.equal(raw.length, value.rawBytes); assert.equal(digest(raw), value.payloadHash);
   return JSON.parse(raw.toString());
 };
+// Reproduce the historical v1.1 exactJsonBase64Envelope contract. JSONB can
+// reorder envelope keys but cannot alter these embedded original UTF-8 bytes.
+const legacyEnvelope = raw => ({ version: 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0', encoding: 'JSON_BASE64',
+  rawBytes: raw.length, compressedBytes: null, base64Bytes: raw.toString('base64').length,
+  payloadHash: digest(raw), data: raw.toString('base64') });
+const legacyRaw = Buffer.from('{"z":"投手😀","a":{"b":2,"a":1}}');
+const legacyPayload = legacyEnvelope(legacyRaw);
+let legacyFallbackCalls = 0;
+const noFallback = () => { legacyFallbackCalls += 1; throw new Error('must not bypass the audit decoder'); };
+assert.deepEqual(decodePersonnelAuditPayload(JSON.parse(JSON.stringify(legacyPayload)), noFallback), JSON.parse(legacyRaw));
+for (const mutation of [
+  { rawBytes: legacyRaw.length + 1 }, { rawBytes: '35' }, { rawBytes: 16_000_001 },
+  { base64Bytes: legacyPayload.base64Bytes + 4 }, { base64Bytes: -1 },
+  { data: legacyPayload.data + '\n', base64Bytes: legacyPayload.base64Bytes + 1 },
+  { data: legacyPayload.data.slice(0, -1) }, { data: legacyPayload.data.replace(/.$/, '-') },
+  { data: 'A'.repeat(4_000_004), base64Bytes: 4_000_004 },
+  { payloadHash: '0'.repeat(64) }, { payloadHash: null }, { encoding: 'JSON', value: {} },
+  { encoding: 'GZIP_BASE64' }, { encoding: 'OMITTED_HASH_ONLY' },
+]) assert.throws(() => decodePersonnelAuditPayload({ ...legacyPayload, ...mutation }, noFallback));
+assert.throws(() => decodePersonnelAuditPayload(legacyEnvelope(Buffer.from([0x22, 0xff, 0x22])), noFallback), /UTF-8/);
+assert.throws(() => decodePersonnelAuditPayload(legacyEnvelope(Buffer.from('{malformed')), noFallback), SyntaxError);
+assert.equal(legacyFallbackCalls, 0);
+const untouched = { version: 'BASEBALL-PIT-JSON-PAYLOAD-v1.0.0', encoding: 'JSON', value: {} };
+assert.throws(() => decodePersonnelAuditPayload(untouched, value => { assert.equal(value, untouched); throw new Error('PIT快照內容雜湊或大小不一致'); }), /雜湊/);
+assert.throws(() => decodePersonnelAuditPayload({ ...legacyPayload, version: 'BASEBALL-PIT-JSON-PAYLOAD-v9.0.0' }, noFallback));
+assert.equal(legacyFallbackCalls, 1);
 const id = number => `KBO:${number}:FULL:${'a'.repeat(64)}`;
 function row(number = 1) {
   const game = { leagueId: 'KBO', gamePk: number, awayTeamId: 1, homeTeamId: 2, gameNumber: 1, gameDate: '2026-09-22T10:00:00.000Z' };
@@ -41,6 +73,15 @@ function row(number = 1) {
     market_analysis_payload: envelope({ leagueId: 'KBO', dataAudit: { rows: [{ id: 'away.starter', usedInMean: true }] }, results: [{ recommendation: 'excluded' }] }) };
 }
 const original = row(), one = exportPersonnelAuditRow(original, decode);
+const recovered = row();
+recovered.frozen_context_payload = legacyEnvelope(Buffer.from(JSON.stringify(decode(recovered.frozen_context_payload))));
+recovered.market_analysis_payload = legacyEnvelope(Buffer.from(JSON.stringify(decode(recovered.market_analysis_payload))));
+const recoveredExport = exportPersonnelAuditRow(recovered, noFallback);
+assert.equal(recoveredExport.ok, true);
+assert.equal(recoveredExport.contextEnvelopeIntegrity, 'VERIFIED_BY_AUDIT_LEGACY_DECODER');
+assert.equal(recoveredExport.analysisEvidenceIntegrity, 'VERIFIED_BY_AUDIT_LEGACY_DECODER');
+assert.deepEqual(recoveredExport.frozenContext, one.frozenContext);
+assert.equal(recoveredExport.fullSnapshotIntegrity, 'NOT_RECHECKED');
 assert.equal(one.ok, true); assert.equal(one.contextIdentity.status, 'MATCH');
 assert.equal(one.contextEnvelopeIntegrity, 'VERIFIED_BY_EXISTING_DECODER'); assert.equal(one.fullSnapshotIntegrity, 'NOT_RECHECKED');
 assert.deepEqual(one.frozenContext.away.bullpen.players[0].usageGames, [{ pitches: 12 }]);
@@ -71,6 +112,10 @@ const sensitiveError = exportPersonnelAuditRow(row(), () => { throw new Error('s
 assert.equal(sensitiveError.diagnostic.reason, 'UNCLASSIFIED_READ_OR_DECODE_FAILURE');
 assert.ok(!JSON.stringify(sensitiveError).includes('secret-source-response-do-not-leak'));
 assert.ok(!JSON.stringify(sensitiveError).includes(original.frozen_context_payload.data));
+const inlineMissing = row(); inlineMissing.frozen_context_payload = { version: 'BASEBALL-PIT-JSON-PAYLOAD-v1.0.0', encoding: 'JSON', rawBytes: 10 };
+const missingDiagnostic = exportPersonnelAuditRow(inlineMissing, () => { throw new Error('PIT快照內嵌內容無法序列化'); }).diagnostic;
+assert.equal(missingDiagnostic.reason, 'INLINE_JSON_VALUE_UNAVAILABLE');
+assert.equal(missingDiagnostic.hasInlineValue, false); assert.equal(missingDiagnostic.inlineValueType, 'MISSING');
 const wrongId = row(); wrongId.external_game_id = '2';
 assert.equal(exportPersonnelAuditRow(wrongId, decode).code, 'ROW_IDENTITY_MISMATCH');
 const marketCorrupt = row(); marketCorrupt.market_analysis_payload.payloadHash = '0'.repeat(64);
@@ -107,8 +152,12 @@ assert.deepEqual(await route({ status: 401 })(request), { status: 401 }); assert
 assert.deepEqual(await route(null, false)(request), { status: 429 }); assert.equal(dbCalls, 0);
 assert.equal((await route()({ url: 'https://example.test/?limit=0' })).options.status, 400); assert.equal(dbCalls, 0);
 const response = await route()(request); assert.equal(dbCalls, 1); assert.equal(response.options.headers['Cache-Control'], 'private, no-store');
-assert.deepEqual(captured.values, [until, '', 11]); assert.match(captured.parts.join('?'), /analysis_type = 'FULL'/);
+assert.deepEqual(captured.values, [until, '', null, null, 11]); assert.match(captured.parts.join('?'), /analysis_type = 'FULL'/);
 assert.equal(unpack(response.body).results[0].snapshotId, id(1));
+const versionResponse = await route()({ url: `${request.url}&payloadVersion=v1.1.0` });
+assert.deepEqual(captured.values, [until, '', 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0', 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0', 11]);
+assert.match(captured.parts.join('?'), /frozen_context_payload->>'version' = \?/);
+assert.equal(unpack(versionResponse.body).payloadVersion, 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0');
 
 if (process.argv[2]) {
   const actual = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).results[0];
