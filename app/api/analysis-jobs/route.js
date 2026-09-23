@@ -207,7 +207,7 @@ export async function GET(request) {
     }
     let progress = null;
     if (requestedLeague && !summaryOnly && !['failed', 'cancelled'].includes(status)) {
-      try { progress = await getAnalysisJobProgress(runId, requestedLeague); } catch {}
+      try { progress = await getAnalysisJobProgress(runId, requestedLeague, searchParams.get('afterRevision')); } catch {}
     }
     return NextResponse.json({ ok: true, runId, status, progress });
   } catch (error) {
