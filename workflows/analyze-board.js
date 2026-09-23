@@ -1,3 +1,5 @@
+import { saveAnalysisJobProgress } from '../lib/analysis-job-progress-store.js';
+import { createAnalysisJobProgress } from '../lib/analysis-job-progress.js';
 import { FatalError, RetryableError, getWorkflowMetadata } from 'workflow';
 import { completionMessage, saveNotificationResult, sendPush } from '../lib/analysis-push.js';
 import { POST as analyzeRequest } from '../app/api/analyze/route.js';
@@ -49,6 +51,16 @@ async function notifyCompletionStep(device, runId, result, preflightFailures) {
 }
 notifyCompletionStep.maxRetries = 2;
 
+async function publishProgressStep(runId, batch, results, runningGamePks) {
+  'use step';
+  try {
+    return await saveAnalysisJobProgress(runId, createAnalysisJobProgress(batch, results, runningGamePks));
+  } catch {
+    // Progress is optional telemetry; the authoritative workflow result survives.
+    return false;
+  }
+}
+
 export async function analyzeBoardWorkflow(input) {
   'use workflow';
 
@@ -59,6 +71,7 @@ export async function analyzeBoardWorkflow(input) {
   const concurrency = input.league === 'MLB' ? 2 : 1;
   for (let offset = 0; offset < input.tasks.length; offset += concurrency) {
     const batch = input.tasks.slice(offset, offset + concurrency);
+    await publishProgressStep(getWorkflowMetadata().workflowRunId, input, results, batch.map(task => Number(task.game.gamePk)));
     const settled = await Promise.allSettled(batch.map(task => analyzeGameStep(task)));
     for (let index = 0; index < settled.length; index += 1) {
       const result = settled[index];
@@ -75,6 +88,7 @@ export async function analyzeBoardWorkflow(input) {
           task: resultTask(batch[index]),
         });
     }
+    await publishProgressStep(getWorkflowMetadata().workflowRunId, input, results, []);
   }
   const output = {
     ok: results.every(result => result.ok),
@@ -108,6 +122,7 @@ export async function analyzeAllLeaguesWorkflow(input) {
     // receiving its own independent analysis result.
     for (let offset = 0; offset < tasks.length; offset += concurrency) {
       const group = tasks.slice(offset, offset + concurrency);
+      await publishProgressStep(getWorkflowMetadata().workflowRunId, batch, results, group.map(task => Number(task.game.gamePk)));
       const settled = await Promise.allSettled(group.map(task => analyzeGameStep(task)));
       for (let index = 0; index < settled.length; index += 1) {
         const result = settled[index];
@@ -124,6 +139,7 @@ export async function analyzeAllLeaguesWorkflow(input) {
             task: resultTask(group[index]),
           });
       }
+      await publishProgressStep(getWorkflowMetadata().workflowRunId, batch, results, []);
     }
     batches.push({
       ok: results.every(result => result.ok),
@@ -150,3 +166,4 @@ export async function analyzeAllLeaguesWorkflow(input) {
   }
   return output;
 }
+

@@ -1,4 +1,5 @@
 'use client';
+import { applyAnalysisJobProgress } from '../lib/analysis-job-progress.js';
 import AnalysisNotificationControl from './analysis-notification-control.js';
 import { readerWaitingDisplay } from '../lib/reader-waiting-display.js';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
@@ -2855,6 +2856,7 @@ export default function Home() {
     if (currentPoll) return currentPoll;
     const poll = (async () => {
       let readerWaitDelayMs = 2500;
+      let lastProgressRevision = -1;
       while (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
         try {
           const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&league=${encodeURIComponent(league)}&t=${Date.now()}`, {}, 30000);
@@ -3133,7 +3135,19 @@ export default function Home() {
             throw failure;
           }
           if (completedReceipt) throw new Error('伺服器尚未回覆這份已完成結果');
-          setProgress(value => ({ ...value, active: true, running: 1, label: '伺服器背景分析中｜可離開App' }));
+          if (state.progress && state.progress.revision > lastProgressRevision) {
+            const partial = applyAnalysisJobProgress(state.progress, boardRef.current,
+              { league, date: targetDate, gamePks }, compactAnalysisData);
+            if (partial.board.some(item => !analysisItemMatchesScope(item, { league, date: targetDate }))) throw new Error('進度賽事識別不符');
+            boardRef.current = partial.board;
+            setBoard(partial.board);
+            allLeagueBoardsRef.current.set(`${league}:${targetDate}`, partial.board);
+            setProgress({ active: true, done: partial.settled, running: partial.running, total: partial.total,
+              label: `分析進度：成功 ${partial.completed} 場${partial.failed ? `｜失敗或資料不足 ${partial.failed} 場` : ''}｜處理中 ${partial.running} 場｜排隊 ${partial.queued} 場` });
+            lastProgressRevision = state.progress.revision;
+          } else if (lastProgressRevision < 0) {
+            setProgress(value => ({ ...value, active: true, running: 0, label: '伺服器背景分析中｜等待逐場進度' }));
+          }
         } catch (cause) {
           if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
             return { detached: true, total: 0, completed: 0, results: [] };
@@ -4734,3 +4748,4 @@ export default function Home() {
 
   </main>;
 }
+
