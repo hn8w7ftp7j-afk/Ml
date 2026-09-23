@@ -1,5 +1,5 @@
 import { FatalError, RetryableError, getWorkflowMetadata } from 'workflow';
-import { completionMessage, sendPush } from '../lib/analysis-push.js';
+import { completionMessage, saveNotificationResult, sendPush } from '../lib/analysis-push.js';
 import { POST as analyzeRequest } from '../app/api/analyze/route.js';
 import { createBackgroundAnalysisAuthorization } from '../lib/security.js';
 
@@ -44,6 +44,7 @@ analyzeGameStep.maxRetries = 2;
 
 async function notifyCompletionStep(device, runId, result, preflightFailures) {
   'use step';
+  await saveNotificationResult(runId, result);
   return sendPush(device, completionMessage(runId, result, preflightFailures), `${device}:${runId}`);
 }
 notifyCompletionStep.maxRetries = 2;

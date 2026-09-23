@@ -12,7 +12,7 @@ import {
 } from '../../../lib/security.js';
 import { isLeagueId } from '../../../lib/leagues.js';
 import { readCookie } from '../../../lib/security.js';
-import { deviceHash, PUSH_COOKIE } from '../../../lib/analysis-push.js';
+import { deviceHash, getNotificationResult, PUSH_COOKIE } from '../../../lib/analysis-push.js';
 import {
   claimAnalysisJobRequest,
   completeAnalysisJobRequest,
@@ -164,9 +164,11 @@ export async function GET(request) {
     if (!RUN_ID.test(runId)) return NextResponse.json({ ok: false, error: '缺少有效背景工作編號' }, { status: 400 });
     const run = getRun(runId);
     if (!(await run.exists)) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_NOT_FOUND', error: '找不到背景分析工作' }, { status: 404 });
-    const status = await run.status;
+    const workflowStatus = await run.status;
+    const publishedResult = workflowStatus === 'completed' ? null : await getNotificationResult(runId);
+    const status = publishedResult ? 'completed' : workflowStatus;
     if (status === 'completed') {
-      const result = await run.returnValue;
+      const result = publishedResult || await run.returnValue;
       if (requestedLeague && Array.isArray(result?.batches)) {
         const batch = result.batches.find(value => value?.league === requestedLeague);
         if (!batch) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_LEAGUE_NOT_FOUND', error: '背景工作沒有這個聯盟' }, { status: 404 });

@@ -2120,18 +2120,56 @@ export default function Home() {
           return;
         }
         const batches = state.result?.batches || [state.result];
-        let first = null;
-        for (const batch of batches) {
+        // Validate the entire response before changing any board or run state.
+        const restored = batches.map(batch => {
           if (!LEAGUE_IDS.includes(batch?.league) || !/^\d{4}-\d{2}-\d{2}$/.test(batch?.date)) throw new Error('通知結果聯盟或日期無效');
           const next = materializeAllLeagueResult(batch, [], compactAnalysisData);
           if (next.some(item => !analysisItemMatchesScope(item, { league: batch.league, date: batch.date }))) throw new Error('通知結果賽事身分不符');
+          return { batch, next };
+        });
+        let first = null;
+        let skipped = false;
+        const visibleJobBeforeRestore = loadBackgroundJob(currentLeagueRef.current, currentDateRef.current, boardRef.current);
+        const ownsVisibleOperation = visibleJobBeforeRestore?.runId === runId
+          || independentRunsRef.current.get(`${currentLeagueRef.current}:${currentDateRef.current}`)?.runId === runId;
+        let completedRun = allLeagueRunRef.current?.runId === runId
+          ? { ...allLeagueRunRef.current, state: 'completed', completedAt: new Date().toISOString() } : null;
+        for (const { batch, next } of restored) {
+          const scope = `${batch.league}:${batch.date}`;
+          const session = independentRunsRef.current.get(scope);
+          const pending = loadBackgroundJob(batch.league, batch.date, next);
+          // An older notification must never replace a newer job's cards/lock.
+          if ((session && ['preparing', 'running'].includes(session.status) && session.runId !== runId)
+            || (pending?.runId && pending.runId !== runId && pending.completedReceipt !== true)) {
+            skipped = true;
+            continue;
+          }
+          const receipt = saveCompletedAnalysisReceipt({ runId, league: batch.league, date: batch.date }, batch);
           saveAnalysisBoardCache(batch.league, batch.date, next);
-          allLeagueBoardsRef.current.set(`${batch.league}:${batch.date}`, next);
+          allLeagueBoardsRef.current.set(scope, next);
+          if (!receipt.completed || receipt.stored) clearBackgroundJob(batch.league, batch.date, runId);
+          if (session?.runId === runId) {
+            session.status = 'completed';
+            session.message = batch.ok ? '分析完成' : '分析結束｜部分項目未完成';
+          }
+          if (requestedRecoveryScopeRef.current === scope) requestedRecoveryScopeRef.current = null;
+          if (completedRun) completedRun = updateAllLeagueAnalysisLeague(completedRun, batch.league, {
+            ...summarizeAllLeagueBatchResult(batch), resultLoaded: true, message: '',
+          });
           leagueDatesRef.current[batch.league] = batch.date;
           manualDateSelectionRef.current.add(batch.league);
-          if (!first && next.length) first = { ...batch, board: next };
+          if (!first) first = { ...batch, board: next };
         }
-        if (first) {
+        if (completedRun) publishAllLeagueRun(completedRun);
+        setIndependentRunRevision(value => value + 1);
+        const unrelatedOperation = operationBusyRef.current && !ownsVisibleOperation;
+        const unrelatedAllLeague = allLeagueRunRef.current?.runId !== runId
+          && ['preparing', 'running'].includes(allLeagueRunRef.current?.state);
+        if (first && !unrelatedOperation && !unrelatedAllLeague && !allLeagueBusyRef.current) {
+          // Invalidate an in-flight old poll before installing the terminal board.
+          analysisGenerationRef.current += 1;
+          releaseOperation();
+          setProgress({ active: false, done: first.completed, running: 0, total: first.total, label: '分析已完成' });
           currentLeagueRef.current = first.league;
           currentDateRef.current = first.date;
           setLeague(first.league);
@@ -2141,7 +2179,7 @@ export default function Home() {
           setSchedule(first.board.map(item => item.game));
           setTab('board');
         }
-        setNotificationResultNotice(`已載入通知對應的原始分析，未重新計算：${batches.map(b => `${b.league} ${b.date} 完成 ${b.completed}/${b.total} 場`).join('｜')}。可切換聯盟查看；盤口仍需重新核對。`);
+        setNotificationResultNotice(`${skipped ? '部分聯盟有較新的分析工作，保留該工作；' : ''}已取得通知對應的原始分析，未重新計算：${batches.map(b => `${b.league} ${b.date} 完成 ${b.completed}/${b.total} 場`).join('｜')}。可切換聯盟查看；盤口仍需重新核對。`);
       } catch (error) {
         if (active) setNotificationResultNotice(`通知結果載入失敗：${error.message}。請重新整理重試，不會啟動重算。`);
       }
