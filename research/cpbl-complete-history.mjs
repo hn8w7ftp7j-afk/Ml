@@ -3,11 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
+import { assertSourceBlob } from './cpbl-source-pin.mjs';
 import { fileURLToPath } from 'node:url';
 import { parseCpblGameDetailPayload, projectCpblRotationStarter as baseline } from '../lib/asian-production-features-v1.js';
 import { projectCpblRotationStarter as candidate } from './cpbl-empirical-cadence.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+assertSourceBlob(fs.readFileSync(path.join(here, '../lib/asian-production-features-v1.js')),
+  '31963075d783ee1e21363db22b6c1ecf4163c6ac', 'v11.9.43');
+assert.ok(process.argv[3], 'Prior audit inventory is required to label newly acquired games correctly');
 const data = path.resolve(process.argv[2]);
 const priorData = process.argv[3] ? path.resolve(process.argv[3]) : null;
 const sha = x => crypto.createHash('sha256').update(x).digest('hex');

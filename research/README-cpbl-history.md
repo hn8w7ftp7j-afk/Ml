@@ -13,7 +13,7 @@ node research/cpbl-complete-history.mjs /absolute/path/to/data /absolute/path/to
 python research/cpbl-verify-evaluation.py /absolute/path/to/data
 ```
 
-The optional prior-audit directory contains `inventory-game-map.json`; without it, the new-versus-known grouping is unavailable and should not be interpreted as a new sample. To acquire missing game details using already downloaded schedules:
+The required prior-audit directory contains `inventory-game-map.json`. Missing inventory now stops evaluation rather than silently labeling every game newly acquired. The v11.9.43 source is also pinned by its Git blob hash; rebasing onto a newer application must not silently change this historical baseline. To acquire missing game details using already downloaded schedules:
 
 ```sh
 python research/cpbl-acquire-history.py /absolute/path/to/data /absolute/path/to/prior-audit
@@ -51,3 +51,18 @@ The 2026 monthly schedules resolve to 360 unique game IDs. Of these, 330 finishe
 Among the 560 team-sides outside the prior audit, production scored 48/560 (8.6%) and the candidate 216/560 (38.6%). All six teams improved in this retrospective comparison. On the 625 sides covered by both primary methods, production scored 58 and the candidate 266; 22 were correct only for production and 230 only for the candidate.
 
 Decision: retain production behavior and keep this candidate in research. The source lacks independent 2025 coverage and archived acquisition/completion timing, and production runtime cost plus current roster eligibility have not been validated. The improvement is evidence for further prospective validation, not a calibrated confidence claim or an already deployed improvement.
+
+## v11.9.44 follow-up
+
+The application subsequently changed at commit `8cff679ec5943efcd9a191eb1c65c7a2bef9476e`. Its completed-game selection and rotation function are separately replayed by `cpbl-v11944-replay.mjs`. Supply the exact `lib/asian-production-features-v1.js` from that commit (Git blob `54d4b7d83492cddd6298f0c40ce6c3ef817974a7`):
+
+```sh
+node research/cpbl-source-pin-test.mjs
+node research/cpbl-v11944-replay.mjs /path/to/data /path/to/v11944-source.js research/cpbl-empirical-cadence.mjs /path/to/results.json
+```
+
+This dependency-free runner extracts unchanged named pure functions from the pinned production source. It is not a mock of the network pipeline. Every target uses prior completed games only; hypothetical unique `gamePk` values preserve the production selector's deduplication behavior. Archived raw hashes and candidate predictions are checked against the previous run. It does **not** replay the reserved-game path: all historical source receipts were collected after the target games, so claiming pre-target eligibility would violate the new production evidence gate.
+
+On this restricted replay, v11.9.44 still scores 59/660 top-one predictions and covers 639/660. Candidate recall rises from 412 to 416. No top-one identity changes in this corpus. Potential completed-detail reads increase from 3,526 to 3,763 (+6.7%), with at most 16 per target and increases on 123/330 games. These counts do not measure real latency, concurrent requests or cache hits. The frozen candidate reproduces 266/660 exactly.
+
+No pre-target receipt exists for a complete selected history in this archive. Prospective validation has not started automatically. Capture both formulas against the same pregame inputs, preserve source timestamps and hashes, and later compare actual first-pitch identities; do not modify old forecasts after learning outcomes. Real network/cache latency and reserved-game behavior remain separate validation tasks. No application code or production behavior changes in this research PR.
