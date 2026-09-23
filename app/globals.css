@@ -69,3 +69,24 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .score.researchOnlyScore,.rankRow>strong.rankScore.researchOnlyScore{color:#b7c1cb}
 .researchOnlyRow .mini.researchLedger{border-color:#657282;background:#202b36;color:#dde5ed;white-space:normal}
 .rankRow.researchOnlyRow>b{font-size:11px;color:#d5c7a8}
+
+
+/* 2026-09-23 mobile typography/layout cleanup */
+.appHeader h1,.heroCopy h2,.setupHead h2,.panelHead h2,.gameHead h2{overflow-wrap:normal;word-break:keep-all;text-wrap:balance}
+.appHeader>div:first-child,.heroCopy,.setupHead>div,.panelHead>div{min-width:0}
+@media(max-width:720px){
+  .appHeader{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+  .appHeader h1{font-size:clamp(28px,8vw,38px);line-height:1.12;letter-spacing:-.02em}
+  .headerBadges{justify-content:flex-start;align-items:center;gap:8px}
+  .heroCard{padding:18px 16px}
+  .heroCopy h2{font-size:clamp(24px,7vw,32px);line-height:1.18;letter-spacing:-.015em}
+  .setupHead{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+  .setupHead .state{justify-self:start}
+  .setupHead h2,.panelHead h2{line-height:1.22}
+  .panelHead{align-items:flex-start;gap:10px}
+  .sourceBanner{gap:5px}
+  .sourceBanner strong,.sourceBanner span{word-break:normal;overflow-wrap:break-word}
+  .gameHead h2{font-size:clamp(20px,6vw,27px);line-height:1.22}
+  .heroControls label{line-height:1.45}
+  button,select,input{font-size:16px}
+}
