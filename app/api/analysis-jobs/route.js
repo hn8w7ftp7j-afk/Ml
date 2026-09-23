@@ -1,3 +1,4 @@
+import { getAnalysisJobProgress } from '../../../lib/analysis-job-progress-store.js';
 import { NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 import { analyzeAllLeaguesWorkflow, analyzeBoardWorkflow } from '../../../workflows/analyze-board.js';
@@ -202,7 +203,11 @@ export async function GET(request) {
       }
       return NextResponse.json({ ok: true, runId, status, result });
     }
-    return NextResponse.json({ ok: true, runId, status });
+    let progress = null;
+    if (requestedLeague && !summaryOnly && !['failed', 'cancelled'].includes(status)) {
+      try { progress = await getAnalysisJobProgress(runId, requestedLeague); } catch {}
+    }
+    return NextResponse.json({ ok: true, runId, status, progress });
   } catch (error) {
     return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_STATUS_FAILED', error: String(error?.message || error) }, { status: 500 });
   }
