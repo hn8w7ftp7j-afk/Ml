@@ -1,0 +1,1347 @@
+{
+  "case": "MLB822680",
+  "snapshotId": "MLB:822680:FULL:cc9ace502e80cf85726ff36c7c698afa4de97ff834624cfedc60d16adef20fbb",
+  "analysisAsOf": "2026-09-16T16:40:15.875Z",
+  "targetGameStart": "2026-09-16T22:45:00.000Z",
+  "teamId": 143,
+  "teamOps": 0.711,
+  "scope": "Offline regression using the five locally archived prior-game feeds cited by the frozen analysis; not an exact six-feed point-in-time replay. No target-game actual lineup is included.",
+  "missingHistoryGamePks": [
+    824869
+  ],
+  "historyFeeds": [
+    {
+      "gamePk": 822683,
+      "officialDate": "2026-09-15",
+      "sourceReceiptAtAnalysis": {
+        "source": "MLB_GAME_LIVE_FEED",
+        "sourceRecord": "https://statsapi.mlb.com/api/v1.1/game/822683/feed/live",
+        "fetchedAt": "2026-09-16T16:40:02.954Z",
+        "rawPayloadHash": "820c0b71be01f626583d4561f5e2c31c3e01cac67353f6190e47139079375287",
+        "fetchStatus": "FETCHED",
+        "error": null,
+        "purpose": "PROJECTED_LINEUP_IDENTITY_AND_AVAILABLE_BATTING",
+        "sourceGameId": 822683,
+        "sourceGameDate": "2026-09-15",
+        "temporalContract": "LIVE_FEED_AS_FETCHED_NOT_HISTORICAL_ARCHIVE"
+      },
+      "players": [
+        {
+          "person": {
+            "id": 650559,
+            "fullName": "Bryan De La Cruz"
+          },
+          "battingOrder": "600",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 74,
+              "ops": ".790",
+              "obp": ".351",
+              "slg": ".439"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 547180,
+            "fullName": "Bryce Harper"
+          },
+          "battingOrder": "300",
+          "position": {
+            "abbreviation": "RF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 643,
+              "ops": ".881",
+              "obp": ".384",
+              "slg": ".497"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 592663,
+            "fullName": "J.T. Realmuto"
+          },
+          "battingOrder": "800",
+          "position": {
+            "abbreviation": "C"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 429,
+              "ops": ".648",
+              "obp": ".294",
+              "slg": ".354"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 664761,
+            "fullName": "Alec Bohm"
+          },
+          "battingOrder": "500",
+          "position": {
+            "abbreviation": "1B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 583,
+              "ops": ".700",
+              "obp": ".310",
+              "slg": ".390"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 681082,
+            "fullName": "Bryson Stott"
+          },
+          "battingOrder": "700",
+          "position": {
+            "abbreviation": "3B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 562,
+              "ops": ".713",
+              "obp": ".324",
+              "slg": ".389"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656941,
+            "fullName": "Kyle Schwarber"
+          },
+          "battingOrder": "100",
+          "position": {
+            "abbreviation": "DH"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 650,
+              "ops": ".875",
+              "obp": ".353",
+              "slg": ".522"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650333,
+            "fullName": "Luis Arraez"
+          },
+          "battingOrder": "400",
+          "position": {
+            "abbreviation": "2B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 621,
+              "ops": ".776",
+              "obp": ".348",
+              "slg": ".428"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 607208,
+            "fullName": "Trea Turner"
+          },
+          "battingOrder": "200",
+          "position": {
+            "abbreviation": "SS"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 649,
+              "ops": ".677",
+              "obp": ".293",
+              "slg": ".384"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656537,
+            "fullName": "Derek Hill"
+          },
+          "battingOrder": "900",
+          "position": {
+            "abbreviation": "CF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 209,
+              "ops": ".734",
+              "obp": ".296",
+              "slg": ".438"
+            }
+          }
+        }
+      ],
+      "historyIndex": 0,
+      "archiveReceipt": {
+        "url": "https://statsapi.mlb.com/api/v1.1/game/822683/feed/live",
+        "fetchedAt": "2026-09-23T03:26:47.044059+00:00",
+        "httpStatus": 200,
+        "rawSha256": "9c579fc93c9cbe04065278f6381ddc4aeab6179a9e1d82ced18f2e0e886e9441"
+      }
+    },
+    {
+      "gamePk": 824870,
+      "officialDate": "2026-09-12",
+      "sourceReceiptAtAnalysis": {
+        "source": "MLB_GAME_LIVE_FEED",
+        "sourceRecord": "https://statsapi.mlb.com/api/v1.1/game/824870/feed/live",
+        "fetchedAt": "2026-09-16T16:40:02.964Z",
+        "rawPayloadHash": "6437c0629dde9a5824bd91464b8fd6808d7816efcc2ceee6d8e0fd7c0364b548",
+        "fetchStatus": "FETCHED",
+        "error": null,
+        "purpose": "PROJECTED_LINEUP_IDENTITY_AND_AVAILABLE_BATTING",
+        "sourceGameId": 824870,
+        "sourceGameDate": "2026-09-12",
+        "temporalContract": "LIVE_FEED_AS_FETCHED_NOT_HISTORICAL_ARCHIVE"
+      },
+      "players": [
+        {
+          "person": {
+            "id": 669016,
+            "fullName": "Brandon Marsh"
+          },
+          "battingOrder": "700",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 534,
+              "ops": ".724",
+              "obp": ".310",
+              "slg": ".414"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 702222,
+            "fullName": "Justin Crawford"
+          },
+          "battingOrder": "900",
+          "position": {
+            "abbreviation": "CF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 428,
+              "ops": ".667",
+              "obp": ".312",
+              "slg": ".355"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650559,
+            "fullName": "Bryan De La Cruz"
+          },
+          "battingOrder": "201",
+          "position": {
+            "abbreviation": "RF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 67,
+              "ops": ".848",
+              "obp": ".373",
+              "slg": ".475"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 547180,
+            "fullName": "Bryce Harper"
+          },
+          "battingOrder": "300",
+          "position": {
+            "abbreviation": "RF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 634,
+              "ops": ".884",
+              "obp": ".386",
+              "slg": ".498"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 592663,
+            "fullName": "J.T. Realmuto"
+          },
+          "battingOrder": "800",
+          "position": {
+            "abbreviation": "C"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 420,
+              "ops": ".637",
+              "obp": ".293",
+              "slg": ".344"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 624641,
+            "fullName": "Edmundo Sosa"
+          },
+          "battingOrder": "801",
+          "position": {
+            "abbreviation": "SS"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 237,
+              "ops": ".672",
+              "obp": ".278",
+              "slg": ".394"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 664761,
+            "fullName": "Alec Bohm"
+          },
+          "battingOrder": "500",
+          "position": {
+            "abbreviation": "1B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 574,
+              "ops": ".696",
+              "obp": ".308",
+              "slg": ".388"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 681082,
+            "fullName": "Bryson Stott"
+          },
+          "battingOrder": "600",
+          "position": {
+            "abbreviation": "3B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 553,
+              "ops": ".712",
+              "obp": ".324",
+              "slg": ".388"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656941,
+            "fullName": "Kyle Schwarber"
+          },
+          "battingOrder": "100",
+          "position": {
+            "abbreviation": "DH"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 641,
+              "ops": ".868",
+              "obp": ".350",
+              "slg": ".518"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 665561,
+            "fullName": "Rafael Marchán"
+          },
+          "battingOrder": "301",
+          "position": {
+            "abbreviation": "C"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 95,
+              "ops": ".302",
+              "obp": ".137",
+              "slg": ".165"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650333,
+            "fullName": "Luis Arraez"
+          },
+          "battingOrder": "400",
+          "position": {
+            "abbreviation": "2B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 612,
+              "ops": ".775",
+              "obp": ".348",
+              "slg": ".427"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 607208,
+            "fullName": "Trea Turner"
+          },
+          "battingOrder": "200",
+          "position": {
+            "abbreviation": "SS"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 640,
+              "ops": ".675",
+              "obp": ".291",
+              "slg": ".384"
+            }
+          }
+        }
+      ],
+      "historyIndex": 2,
+      "archiveReceipt": {
+        "url": "https://statsapi.mlb.com/api/v1.1/game/824870/feed/live",
+        "fetchedAt": "2026-09-23T03:42:55.785460+00:00",
+        "httpStatus": 200,
+        "rawSha256": "dcf92f9a5340318327c307e151e0c618740c7f428de11b7bc1dcd3acdb81ce66"
+      }
+    },
+    {
+      "gamePk": 824873,
+      "officialDate": "2026-09-11",
+      "sourceReceiptAtAnalysis": {
+        "source": "MLB_GAME_LIVE_FEED",
+        "sourceRecord": "https://statsapi.mlb.com/api/v1.1/game/824873/feed/live",
+        "fetchedAt": "2026-09-16T16:40:03.028Z",
+        "rawPayloadHash": "ee5e7ecd37bedfa22a11e73ba59f2d1066080e8a06a9e9e740cdf16f6c6a9b1f",
+        "fetchStatus": "FETCHED",
+        "error": null,
+        "purpose": "PROJECTED_LINEUP_IDENTITY_AND_AVAILABLE_BATTING",
+        "sourceGameId": 824873,
+        "sourceGameDate": "2026-09-11",
+        "temporalContract": "LIVE_FEED_AS_FETCHED_NOT_HISTORICAL_ARCHIVE"
+      },
+      "players": [
+        {
+          "person": {
+            "id": 669016,
+            "fullName": "Brandon Marsh"
+          },
+          "battingOrder": "901",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 531,
+              "ops": ".728",
+              "obp": ".311",
+              "slg": ".417"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 702222,
+            "fullName": "Justin Crawford"
+          },
+          "battingOrder": "701",
+          "position": {
+            "abbreviation": "CF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 425,
+              "ops": ".659",
+              "obp": ".312",
+              "slg": ".347"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650559,
+            "fullName": "Bryan De La Cruz"
+          },
+          "battingOrder": "700",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 66,
+              "ops": ".862",
+              "obp": ".379",
+              "slg": ".483"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 547180,
+            "fullName": "Bryce Harper"
+          },
+          "battingOrder": "300",
+          "position": {
+            "abbreviation": "RF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 631,
+              "ops": ".880",
+              "obp": ".387",
+              "slg": ".493"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 592663,
+            "fullName": "J.T. Realmuto"
+          },
+          "battingOrder": "800",
+          "position": {
+            "abbreviation": "C"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 418,
+              "ops": ".630",
+              "obp": ".289",
+              "slg": ".341"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 624641,
+            "fullName": "Edmundo Sosa"
+          },
+          "battingOrder": "600",
+          "position": {
+            "abbreviation": "3B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 236,
+              "ops": ".675",
+              "obp": ".279",
+              "slg": ".396"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 664761,
+            "fullName": "Alec Bohm"
+          },
+          "battingOrder": "500",
+          "position": {
+            "abbreviation": "1B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 570,
+              "ops": ".695",
+              "obp": ".307",
+              "slg": ".388"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 681082,
+            "fullName": "Bryson Stott"
+          },
+          "battingOrder": "601",
+          "position": {
+            "abbreviation": "3B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 550,
+              "ops": ".715",
+              "obp": ".325",
+              "slg": ".390"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656941,
+            "fullName": "Kyle Schwarber"
+          },
+          "battingOrder": "100",
+          "position": {
+            "abbreviation": "DH"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 637,
+              "ops": ".874",
+              "obp": ".352",
+              "slg": ".522"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 596117,
+            "fullName": "Garrett Stubbs"
+          },
+          "battingOrder": "101",
+          "position": {
+            "abbreviation": "DH"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 59,
+              "ops": ".387",
+              "obp": ".220",
+              "slg": ".167"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650333,
+            "fullName": "Luis Arraez"
+          },
+          "battingOrder": "400",
+          "position": {
+            "abbreviation": "2B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 608,
+              "ops": ".780",
+              "obp": ".350",
+              "slg": ".430"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 607208,
+            "fullName": "Trea Turner"
+          },
+          "battingOrder": "200",
+          "position": {
+            "abbreviation": "SS"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 637,
+              "ops": ".675",
+              "obp": ".290",
+              "slg": ".385"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656537,
+            "fullName": "Derek Hill"
+          },
+          "battingOrder": "900",
+          "position": {
+            "abbreviation": "CF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 206,
+              "ops": ".744",
+              "obp": ".300",
+              "slg": ".444"
+            }
+          }
+        }
+      ],
+      "historyIndex": 3,
+      "archiveReceipt": {
+        "url": "https://statsapi.mlb.com/api/v1.1/game/824873/feed/live",
+        "fetchedAt": "2026-09-23T03:43:07.416370+00:00",
+        "httpStatus": 200,
+        "rawSha256": "0ba340578298849d272a8c2ea0de331e3f1cf221e64c469b79ebe6a39d951616"
+      }
+    },
+    {
+      "gamePk": 823413,
+      "officialDate": "2026-09-10",
+      "sourceReceiptAtAnalysis": {
+        "source": "MLB_GAME_LIVE_FEED",
+        "sourceRecord": "https://statsapi.mlb.com/api/v1.1/game/823413/feed/live",
+        "fetchedAt": "2026-09-16T16:40:03.008Z",
+        "rawPayloadHash": "70f6555d107b66e4e52a9444e3417695cd63a4f877b3cc88a2ca772ded638c8a",
+        "fetchStatus": "FETCHED",
+        "error": null,
+        "purpose": "PROJECTED_LINEUP_IDENTITY_AND_AVAILABLE_BATTING",
+        "sourceGameId": 823413,
+        "sourceGameDate": "2026-09-10",
+        "temporalContract": "LIVE_FEED_AS_FETCHED_NOT_HISTORICAL_ARCHIVE"
+      },
+      "players": [
+        {
+          "person": {
+            "id": 669016,
+            "fullName": "Brandon Marsh"
+          },
+          "battingOrder": "700",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 530,
+              "ops": ".730",
+              "obp": ".312",
+              "slg": ".418"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 702222,
+            "fullName": "Justin Crawford"
+          },
+          "battingOrder": "800",
+          "position": {
+            "abbreviation": "CF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 423,
+              "ops": ".657",
+              "obp": ".311",
+              "slg": ".346"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 547180,
+            "fullName": "Bryce Harper"
+          },
+          "battingOrder": "300",
+          "position": {
+            "abbreviation": "RF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 626,
+              "ops": ".879",
+              "obp": ".387",
+              "slg": ".492"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 624641,
+            "fullName": "Edmundo Sosa"
+          },
+          "battingOrder": "901",
+          "position": {
+            "abbreviation": "PH"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 233,
+              "ops": ".675",
+              "obp": ".278",
+              "slg": ".397"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 664761,
+            "fullName": "Alec Bohm"
+          },
+          "battingOrder": "500",
+          "position": {
+            "abbreviation": "1B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 565,
+              "ops": ".699",
+              "obp": ".308",
+              "slg": ".391"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 681082,
+            "fullName": "Bryson Stott"
+          },
+          "battingOrder": "600",
+          "position": {
+            "abbreviation": "3B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 548,
+              "ops": ".716",
+              "obp": ".325",
+              "slg": ".391"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656941,
+            "fullName": "Kyle Schwarber"
+          },
+          "battingOrder": "100",
+          "position": {
+            "abbreviation": "DH"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 632,
+              "ops": ".882",
+              "obp": ".355",
+              "slg": ".527"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 665561,
+            "fullName": "Rafael Marchán"
+          },
+          "battingOrder": "900",
+          "position": {
+            "abbreviation": "C"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 94,
+              "ops": ".305",
+              "obp": ".138",
+              "slg": ".167"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650333,
+            "fullName": "Luis Arraez"
+          },
+          "battingOrder": "400",
+          "position": {
+            "abbreviation": "2B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 603,
+              "ops": ".780",
+              "obp": ".350",
+              "slg": ".430"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 607208,
+            "fullName": "Trea Turner"
+          },
+          "battingOrder": "200",
+          "position": {
+            "abbreviation": "SS"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 632,
+              "ops": ".681",
+              "obp": ".293",
+              "slg": ".388"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656537,
+            "fullName": "Derek Hill"
+          },
+          "battingOrder": "701",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 203,
+              "ops": ".734",
+              "obp": ".295",
+              "slg": ".439"
+            }
+          }
+        }
+      ],
+      "historyIndex": 4,
+      "archiveReceipt": {
+        "url": "https://statsapi.mlb.com/api/v1.1/game/823413/feed/live",
+        "fetchedAt": "2026-09-23T03:31:59.565179+00:00",
+        "httpStatus": 200,
+        "rawSha256": "f52761cbc97e00a0f9400085567b1a35f6ab3dd7f57e3c90425eb8d7546f7845"
+      }
+    },
+    {
+      "gamePk": 823416,
+      "officialDate": "2026-09-09",
+      "sourceReceiptAtAnalysis": {
+        "source": "MLB_GAME_LIVE_FEED",
+        "sourceRecord": "https://statsapi.mlb.com/api/v1.1/game/823416/feed/live",
+        "fetchedAt": "2026-09-16T16:40:03.018Z",
+        "rawPayloadHash": "b9397cbcc98af49b314fed0a2478b1355a15938081535dca2b7bcba3528e79dc",
+        "fetchStatus": "FETCHED",
+        "error": null,
+        "purpose": "PROJECTED_LINEUP_IDENTITY_AND_AVAILABLE_BATTING",
+        "sourceGameId": 823416,
+        "sourceGameDate": "2026-09-09",
+        "temporalContract": "LIVE_FEED_AS_FETCHED_NOT_HISTORICAL_ARCHIVE"
+      },
+      "players": [
+        {
+          "person": {
+            "id": 669016,
+            "fullName": "Brandon Marsh"
+          },
+          "battingOrder": "600",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 527,
+              "ops": ".734",
+              "obp": ".314",
+              "slg": ".420"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 702222,
+            "fullName": "Justin Crawford"
+          },
+          "battingOrder": "700",
+          "position": {
+            "abbreviation": "CF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 420,
+              "ops": ".657",
+              "obp": ".311",
+              "slg": ".346"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650559,
+            "fullName": "Bryan De La Cruz"
+          },
+          "battingOrder": "900",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 63,
+              "ops": ".881",
+              "obp": ".381",
+              "slg": ".500"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 547180,
+            "fullName": "Bryce Harper"
+          },
+          "battingOrder": "300",
+          "position": {
+            "abbreviation": "DH"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 623,
+              "ops": ".883",
+              "obp": ".388",
+              "slg": ".495"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 592663,
+            "fullName": "J.T. Realmuto"
+          },
+          "battingOrder": "800",
+          "position": {
+            "abbreviation": "C"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 414,
+              "ops": ".633",
+              "obp": ".290",
+              "slg": ".343"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 624641,
+            "fullName": "Edmundo Sosa"
+          },
+          "battingOrder": "601",
+          "position": {
+            "abbreviation": "LF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 232,
+              "ops": ".678",
+              "obp": ".279",
+              "slg": ".399"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 664761,
+            "fullName": "Alec Bohm"
+          },
+          "battingOrder": "101",
+          "position": {
+            "abbreviation": "1B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 562,
+              "ops": ".697",
+              "obp": ".308",
+              "slg": ".389"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 681082,
+            "fullName": "Bryson Stott"
+          },
+          "battingOrder": "500",
+          "position": {
+            "abbreviation": "3B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 545,
+              "ops": ".720",
+              "obp": ".327",
+              "slg": ".393"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656941,
+            "fullName": "Kyle Schwarber"
+          },
+          "battingOrder": "100",
+          "position": {
+            "abbreviation": "1B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 628,
+              "ops": ".886",
+              "obp": ".356",
+              "slg": ".530"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 650333,
+            "fullName": "Luis Arraez"
+          },
+          "battingOrder": "400",
+          "position": {
+            "abbreviation": "2B"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 600,
+              "ops": ".781",
+              "obp": ".350",
+              "slg": ".431"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 607208,
+            "fullName": "Trea Turner"
+          },
+          "battingOrder": "200",
+          "position": {
+            "abbreviation": "SS"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 628,
+              "ops": ".686",
+              "obp": ".295",
+              "slg": ".391"
+            }
+          }
+        },
+        {
+          "person": {
+            "id": 656537,
+            "fullName": "Derek Hill"
+          },
+          "battingOrder": "602",
+          "position": {
+            "abbreviation": "RF"
+          },
+          "seasonStats": {
+            "batting": {
+              "plateAppearances": 203,
+              "ops": ".734",
+              "obp": ".295",
+              "slg": ".439"
+            }
+          }
+        }
+      ],
+      "historyIndex": 5,
+      "archiveReceipt": {
+        "url": "https://statsapi.mlb.com/api/v1.1/game/823416/feed/live",
+        "fetchedAt": "2026-09-23T03:32:00.150132+00:00",
+        "httpStatus": 200,
+        "rawSha256": "e27cfb3fa547840f958a6ac99cec6da4eed6024528ba832e71722d6d3efd8748"
+      }
+    }
+  ],
+  "frozenProjectedLineup": {
+    "available": true,
+    "identityAvailable": true,
+    "official": false,
+    "projected": true,
+    "identityStatus": "PROJECTED",
+    "metricsStatus": "CONFIRMED",
+    "metricCount": 9,
+    "metricCoverage": 1,
+    "modelMetricCoverage": 1,
+    "metricComplete": true,
+    "teamBaselineAvailable": true,
+    "offensiveIndexBasis": "TEAM_SEASON_OPS",
+    "offensiveIndexBaselineOps": 0.711,
+    "missingMetricPlayerIds": [],
+    "status": "PROJECTED",
+    "source": "MLB_RECENT_SIX_GAME_FEEDS_WEIGHTED_PROJECTION",
+    "sampleGames": 6,
+    "players": [
+      {
+        "id": 656941,
+        "name": "Kyle Schwarber",
+        "position": "DH",
+        "battingOrder": 100,
+        "plateAppearances": 650,
+        "ops": 0.875,
+        "obp": 0.353,
+        "slg": 0.522,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 607208,
+        "name": "Trea Turner",
+        "position": "SS",
+        "battingOrder": 200,
+        "plateAppearances": 649,
+        "ops": 0.677,
+        "obp": 0.293,
+        "slg": 0.384,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 547180,
+        "name": "Bryce Harper",
+        "position": "RF",
+        "battingOrder": 300,
+        "plateAppearances": 643,
+        "ops": 0.881,
+        "obp": 0.384,
+        "slg": 0.497,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 650333,
+        "name": "Luis Arraez",
+        "position": "2B",
+        "battingOrder": 400,
+        "plateAppearances": 621,
+        "ops": 0.776,
+        "obp": 0.348,
+        "slg": 0.428,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 664761,
+        "name": "Alec Bohm",
+        "position": "1B",
+        "battingOrder": 500,
+        "plateAppearances": 583,
+        "ops": 0.7,
+        "obp": 0.31,
+        "slg": 0.39,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 681082,
+        "name": "Bryson Stott",
+        "position": "3B",
+        "battingOrder": 600,
+        "plateAppearances": 562,
+        "ops": 0.713,
+        "obp": 0.324,
+        "slg": 0.389,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 650559,
+        "name": "Bryan De La Cruz",
+        "position": "LF",
+        "battingOrder": 600,
+        "plateAppearances": 74,
+        "ops": 0.79,
+        "obp": 0.351,
+        "slg": 0.439,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 0.4111111111111111,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 656537,
+        "name": "Derek Hill",
+        "position": "CF",
+        "battingOrder": 700,
+        "plateAppearances": 209,
+        "ops": 0.734,
+        "obp": 0.296,
+        "slg": 0.438,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      },
+      {
+        "id": 592663,
+        "name": "J.T. Realmuto",
+        "position": "C",
+        "battingOrder": 800,
+        "plateAppearances": 429,
+        "ops": 0.648,
+        "obp": 0.294,
+        "slg": 0.354,
+        "metricAvailable": true,
+        "metricSource": "MLB_FEED_SEASON_BATTING",
+        "metricProvenance": null,
+        "reliability": 1,
+        "modelMetricUsed": true
+      }
+    ],
+    "catcher": "J.T. Realmuto",
+    "offensiveIndex": 1.056358768812012,
+    "missingCoreCount": 0
+  },
+  "frozenMissingOpponentLineup": {
+    "available": false,
+    "identityAvailable": false,
+    "official": false,
+    "projected": true,
+    "identityStatus": "MISSING",
+    "metricsStatus": "MISSING",
+    "metricCount": 0,
+    "metricCoverage": 0,
+    "modelMetricCoverage": 0,
+    "metricComplete": false,
+    "teamBaselineAvailable": true,
+    "offensiveIndexBasis": "TEAM_SEASON_OPS",
+    "offensiveIndexBaselineOps": 0.751,
+    "missingMetricPlayerIds": [],
+    "status": "MISSING",
+    "source": "MLB_RECENT_SIX_GAME_FEEDS_WEIGHTED_PROJECTION",
+    "sampleGames": 0,
+    "players": [],
+    "catcher": "",
+    "offensiveIndex": 1,
+    "missingCoreCount": 9
+  }
+}

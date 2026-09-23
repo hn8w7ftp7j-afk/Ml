@@ -3,7 +3,7 @@ import { applyAnalysisJobProgress } from '../lib/analysis-job-progress.js';
 import AnalysisNotificationControl from './analysis-notification-control.js';
 import { readerWaitingDisplay } from '../lib/reader-waiting-display.js';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
-import { splitEvidenceNote, bullpenUsageText, inningsEvidenceView, featureTimeText, savedLeagueLimitations } from '../lib/personnel-evidence-display.js';
+import { splitEvidenceNote, bullpenUsageText, inningsEvidenceView, featureTimeText, savedLeagueLimitations, assignmentEvidenceView, measurementEvidenceView, personnelAssignmentSummary, personnelNames, lineupOrderText, bullpenRosterView, sourceLineageView, umpireEvidenceView } from '../lib/personnel-evidence-display.js';
 import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
 import { runExplanationDisplay, externalVerificationExplanation, sourceStatusLabel, bullpenEvidenceDisplay, lineupCoverageDisplay } from '../lib/mlb-diagnostic-display-v1.js';
 import { evidenceJSON, settlementEvidence, replayEvidenceView } from '../lib/analysis-evidence-export-v2.js';
@@ -1437,50 +1437,72 @@ function DirectionSlotRow({ row, game }) {
 }
 
 function AnalysisDataAudit({ audit, persistence }) {
-  const snapshotLink = persistence?.snapshotId && <p>快照保存：{persistence.confirmed ? '已確認保存' : '尚未確認保存'}。<a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(persistence.snapshotId)}`} target="_blank" rel="noreferrer">查看保存快照稽核</a></p>;
-  if (!audit?.rows?.length) return <div className="sourceBanner dataStatusBanner"><strong>資料查核明細尚未建立｜時點證據不足</strong><span>這份舊分析未保存逐欄取得與使用紀錄；新分析會另存新快照，不會替舊分析補造證據。</span>{snapshotLink}</div>;
+  const snapshotLink = persistence?.snapshotId && <p>快照：{persistence.confirmed ? '已保存' : '保存待確認'}｜<a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(persistence.snapshotId)}`} target="_blank" rel="noreferrer">查看查核</a></p>;
+  if (!audit?.rows?.length) return <details className="details dataAudit"><summary>人員與資料｜未保存查核明細</summary><p>這份分析未保存逐項取得與使用紀錄。</p>{snapshotLink}</details>;
   const sourceTimeAudit = audit.sourceTimeAudit || (['NPB', 'KBO', 'CPBL'].includes(audit.league || persistence?.snapshotId?.split(':')[0]) ? { status: 'PENDING', rows: [], inputCutoffAt: null } : null);
-  const labels = { observed: '實際取得', projected: '預測替代', missing: '缺失', stale: '舊資料' };
-  const explanations = { observed: '有取得紀錄，仍須核對下列來源與統計範圍。', projected: '包含預測名單或替代數據，不能視為今日完整實績。', missing: '必要的身分或統計證據不足；中性預設值不代表實際能力。', stale: '來源已標示過期，不能當作最新資料。' };
-  const summary = audit.summary || {};
+  const umpire = umpireEvidenceView(audit);
+  const supportingData = audit.supportingData?.filter(row => row.key !== 'umpire') || [];
   return <details className="details dataAudit">
-    <summary>核心人員資料與模型使用｜實際 {summary.observed || 0}・替代 {summary.projected || 0}・缺失 {summary.missing || 0}・舊資料 {summary.stale || 0}</summary>
-    {snapshotLink}
-    <p className="muted">保存確認、快照完整性、比分分布與 W/R 重播、原始來源核驗、歷史預測成效是不同查核。此頁不因保存成功而宣告其他項目通過；各項結果請見快照稽核。高 EV 與重播一致均不代表勝率已驗證可靠。</p>
-    <p className="muted">{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'} 各項詳細覆蓋情形如下。</p>
-    {sourceTimeAudit && <div className="dataAuditRow"><strong>來源內容與取得時點核對：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[sourceTimeAudit.status] || '未核對'}</strong><p>輸入鎖定：{sourceTimeAudit.inputCutoffAt || '未保存'}。此項只核對綁定來源內容與取得時間，不代表資料可用或特徵映射已驗證。缺失與未接入狀態請看逐項證據；均不代表預測效果已驗證。</p><p>特徵可用性與映射：</p>{sourceTimeAudit.rows?.map(row => <p key={row.featureName}>{row.featureName}｜{({ NOT_CONNECTED: '未接入來源', MISSING: '資料缺失', PROJECTED: '含推估資料', REPORTED: '有輸入紀錄', UNKNOWN: '未記錄' })[row.availability] || '舊快照未記錄可用性'}｜{featureTimeText(row)}</p>)}<details><summary>逐項時間證據</summary><pre>{JSON.stringify(sourceTimeAudit.rows, null, 2)}</pre></details></div>}
-    {audit.leagueLimitations?.map(note => <p key={note}>{note}</p>)}
-    <div className="dataAuditRows">{audit.rows.map(row => <div className="dataAuditRow" key={row.id || row.key}>
-      <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${row.status}`}>{labels[row.status] || '未確認'}</span></div>
-      <p>{explanations[row.status]}</p>
-      {splitEvidenceNote(row) && <p>{splitEvidenceNote(row)}</p>}
-      {row.category === 'starter' && <p><b>當場先發指派：</b>{row.identity?.assignmentStatus || '未記錄'}。球員身分與個人成績取得不代表當天先發已確認。</p>}
-      {row.category === 'starter' && Number.isFinite(row.inningsEstimate?.value ?? row.metrics?.expectedInnings) && <p><b>預估投球局數：</b>{(row.inningsEstimate?.value ?? row.metrics.expectedInnings).toFixed(2)} 局（推估）｜{inningsEvidenceView(row).historyStatus}｜方法：{inningsEvidenceView(row).method || '未保存'}｜局數樣本：{inningsEvidenceView(row).sampleGames ?? '未保存'} 場｜來源：{inningsEvidenceView(row).source || '未保存'}。{inningsEvidenceView(row).note}</p>}
-      <p><b>模型使用：</b>{row.usageStatus === 'UNVERIFIED' ? '尚無逐欄使用紀錄' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || '未進入計算／僅供診斷'}{row.status !== 'observed' && row.usedInMean ? '（包含既有替代值）' : ''}</p>
-      <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未提供'}{row.category !== 'bullpen' && `｜統計截至 ${row.asOf || '未提供'}`}</p>
-      {row.category === 'bullpen' && <BullpenEvidence row={row} league={audit.league}/>}
-      {row.coverage && <p><b>覆蓋：</b>{row.category === 'lineup' ? lineupCoverageDisplay(row) : `有效名單 ${row.coverage.rosterCount ?? '未知'} 人；名單完整性${row.coverage.rosterComplete ? '已確認' : '未確認'}`}</p>}
-      {row.category === 'lineup' && <p><b>打線指數：</b>{row.metrics?.offensiveIndex ?? '未保存'}｜得分中心使用：{row.usedInMean === true ? '有（請核對替代值及逐欄聲明）' : row.usedInMean === false ? '未使用' : '未記錄'}。數值為 1 不單獨證明實測能力中性；推估及診斷用途請見下列定義。</p>}
-      {row.category === 'lineup' && row.coverage?.rateStatsCoverage > 0 && <p><b>官方個人比率：</b>{Math.round(row.coverage.rateStatsCoverage * 9)}/9 人取得打擊率及打席；不等於模型所需打數與安打數完整，僅供診斷。</p>}
-      {row.category === 'bullpen' && <p><b>能力統計：</b>{row.coverage?.qualityCount ?? '未確認'}/{row.coverage?.rosterCount ?? '未知'} 人必要欄位完整{row.players?.some(player => !player.qualityComplete) ? `；缺項球員：${row.players.filter(player => !player.qualityComplete).map(player => player.name || player.id).join('、')}` : ''}。欄位覆蓋不代表樣本充足或能力估計已驗證。可出賽程度仍是依近期用量估計。</p>}
-      {row.category === 'bullpen' && <p><b>近期後援用量與覆蓋：</b>{bullpenUsageText(row)}{row.coverage?.usage?.missingGames?.length > 0 ? `；缺項：${row.coverage.usage.missingGames.map(game => `${game.date || game.gamePk}${game.missingPlayers?.length ? `（${game.missingPlayers.map(player => player.name || player.id).join('、')}用球數）` : '（紀錄未確認）'}`).join('、')}` : ''}。缺值不代表 0 球或充分休息。</p>}
-      {row.featureDefinition && <p><b>指數定義：</b>{row.featureDefinition.description}｜基準 OPS {row.featureDefinition.baselineOps ?? '未提供'}</p>}
-      {row.substitutions?.length > 0 && <p><b>替代依據：</b>此項含替代或估計處理，展開明細可查原始依據。</p>}
-      {row.roleEvidence && <p>先發專屬樣本：{row.roleEvidence.starterSampleStatus}｜局數分支：{row.roleEvidence.inningsBranch || inningsEvidenceView(row).method || '未保存'}｜預設局數：{row.roleEvidence.inningsFallback ?? '未使用或未保存'}</p>}
-      <details><summary>身分、數據與來源明細</summary><pre>{evidenceJSON({ displayInningsEvidence: row.category === 'starter' ? inningsEvidenceView(row) : undefined, roleEvidence: row.roleEvidence, modelBattingInputs: row.modelBattingInputs, inningsEstimate: row.inningsEstimate, featureDefinition: row.featureDefinition, evidenceStatus: row.evidenceStatus, identity: row.identity, coverage: row.coverage, metrics: row.metrics, modelUsageInputs: row.modelUsageInputs, reportedBattingRates: row.reportedBattingRates, batterRateEvidence: row.batterRateEvidence, players: row.players, sources: row.sources, substitutions: row.substitutions, exclusions: row.exclusions, diagnostic: row.diagnostic, modelStatuses: row.modelStatuses, statusReason: row.statusReason, usage: row.usage })}</pre></details>
-    </div>)}</div>
-    {audit.supportingData?.length > 0 && <details className="dataAuditRow"><summary>本季、近期與環境資料的取得及使用</summary><p>列出統計期間、實際取得欄位與模型使用。近期打擊保留小樣本收縮；整隊投球與主審身分另作查核，不能當成已啟用的得分效果。以下項目未併入上方核心人員數量。</p><pre>{JSON.stringify(audit.supportingData, null, 2)}</pre></details>}
-    {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><p>此處只列模型是否使用，不代表來源完整或功能已通過歷史驗證。</p><pre>{JSON.stringify(audit.otherUsage, null, 2)}</pre></details>}
+    <summary>先發與打線｜{personnelAssignmentSummary(audit)}</summary>
+    <p className="muted">以這次分析保存內容為準；當場人選與能力數據分開顯示。</p>
+    <div className="dataAuditRows">{audit.rows.map(row => {
+      const assignment = assignmentEvidenceView(row);
+      const measurement = measurementEvidenceView(row);
+      const isAssignment = ['starter', 'lineup'].includes(row.category);
+      const badge = isAssignment ? assignment : { ...measurement, tone: measurement.status };
+      const names = personnelNames(row);
+      const innings = row.category === 'starter' ? inningsEvidenceView(row) : null;
+      const usage = row.usageStatus === 'UNVERIFIED' ? '未保存逐欄聲明' : [row.usedInMean && '得分中心', row.usedInUncertainty && '不確定性'].filter(Boolean).join('、') || (row.usedInMean === false && row.usedInUncertainty === false ? '未使用／僅供診斷' : '未記錄');
+      return <div className="dataAuditRow" key={row.id || row.key}>
+        <div className="dataAuditHeading"><strong>{row.label}</strong><span className={`dataAuditStatus ${badge.tone}`}>{badge.label}</span></div>
+        {isAssignment && <p><b>{row.category === 'starter' ? '當場先發' : '當場打線'}：</b>{assignment.label}｜<b>能力數據：</b>{measurement.label}</p>}
+        {row.category === 'starter' && <p><b>保存人選：</b>{names.join('、') || '未保存'}{Number.isFinite(innings.value) ? `｜預估 ${innings.value.toFixed(2)} 局` : ''}</p>}
+        {row.category === 'lineup' && <p>保存名單 {row.coverage?.identityCount ?? names.length}/{row.coverage?.expectedCount ?? '未保存'} 人</p>}
+        {row.category === 'lineup' && <details><summary>查看打線與棒次（{names.length} 人）</summary>{row.modelBattingInputs?.length ? row.modelBattingInputs.map((player, index) => <p key={`${player.id || player.name}-${index}`}>{lineupOrderText(player, audit.league)}｜{player.name || player.id || '姓名未保存'}</p>) : <p>{names.join('、') || '未保存逐人打線'}</p>}</details>}
+        {row.category === 'bullpen' && <BullpenEvidence row={row} league={audit.league}/>}
+        <p><b>模型使用紀錄：</b>{usage}</p>
+        <details><summary>數據、來源與使用明細</summary>
+          <p><b>來源：</b>{row.source || '未提供'}｜取得 {row.observedAt ? localTime(row.observedAt) : '時間未保存'}｜統計截至 {row.asOf || '未保存'}</p>
+          <p>{sourceLineageView(row)}；限保存的解析欄位，原始來源與賽前可得性另行核對。</p>
+          {splitEvidenceNote(row) && <p>{splitEvidenceNote(row)}</p>}
+          {innings && <p>{innings.historyStatus}｜方法：{innings.method || '未保存'}｜局數樣本：{innings.sampleGames ?? '未保存'} 場。{innings.note}</p>}
+          {row.category === 'lineup' && <p>{lineupCoverageDisplay(row)} 打線指數：{row.metrics?.offensiveIndex ?? '未保存'}。數值為 1 不單獨證明實測能力中性。</p>}
+          {row.category === 'bullpen' && <p>近期後援用量與覆蓋：{bullpenUsageText(row)}。缺值不代表 0 球或充分休息。</p>}
+          <pre>{evidenceJSON({ ...row, displayInningsEvidence: innings || undefined })}</pre>
+        </details>
+      </div>;
+    })}</div>
+    <div className="dataAuditRow">
+      <div className="dataAuditHeading"><strong>主審</strong><span className={`dataAuditStatus ${umpire.tone}`}>{umpire.label}</span></div>
+      <p>{umpire.name || '姓名未保存'}｜{umpire.effect}</p>
+      {umpire.row && <details><summary>主審來源與使用明細</summary><pre>{evidenceJSON(umpire.row)}</pre></details>}
+    </div>
+    {supportingData.length > 0 && <details className="dataAuditRow"><summary>本季、近期與環境資料</summary><pre>{evidenceJSON(supportingData)}</pre></details>}
+    {audit.otherUsage?.length > 0 && <details className="dataAuditRow"><summary>球場、天氣與進階欄位使用明細</summary><pre>{evidenceJSON(audit.otherUsage)}</pre></details>}
+    <details className="dataAuditRow"><summary>保存與時點查核</summary>
+      {snapshotLink}
+      <p>{audit.temporal?.limitation || '這是本次取得紀錄，不等於已驗證的歷史賽前快照。'}</p>
+      <p>保存、來源核驗、模型重播與預測成效分別查核；保存使用聲明不代表已重跑模型。</p>
+      {sourceTimeAudit && <><p>來源內容與取得時點：{({ VERIFIED: '通過', PENDING: '證據不足', FAILED: '核對失敗' })[sourceTimeAudit.status] || '未核對'}｜輸入鎖定：{sourceTimeAudit.inputCutoffAt || '未保存'}</p>{sourceTimeAudit.rows?.map(row => <p key={row.featureName}>{row.featureName}｜{({ NOT_CONNECTED: '未接入來源', MISSING: '資料缺失', PROJECTED: '含推估資料', REPORTED: '有輸入紀錄', UNKNOWN: '未記錄' })[row.availability] || '舊快照未記錄可用性'}｜{featureTimeText(row)}</p>)}<pre>{evidenceJSON(sourceTimeAudit.rows)}</pre></>}
+      {audit.leagueLimitations?.map(note => <p key={note}>{note}</p>)}
+    </details>
   </details>;
 }
 
 function BullpenEvidence({ row, league }) {
   const evidence = bullpenEvidenceDisplay(row);
+  const roster = bullpenRosterView(row);
   return <div>
-    <p>名單基準日：{evidence.rosterDates}｜個人能力統計截至：{evidence.metricDates}{evidence.metricDatesIncomplete ? '（部分日期未保存）' : ''}｜已列用量最新比賽日：{evidence.latestUsageDate}。最新紀錄日不等於完整覆蓋截止日。</p>
-    <p>疲勞與可用性分開計算；可用性 1 不是官方確認，也不是 100% 出賽機率。候選名單與歷史後援出賽不等於當日角色已核驗。</p>
-    {league === 'MLB' && <p>用量天數依比賽時間差換算並取整，不直接等同日曆上的昨日；請核對逐場 daysAgo 與權重。原始時間與推導紀錄未保存時，不補造。</p>}
-    <details><summary>後援能力樣本局數（十進位）</summary><p>低於 10 局僅為顯示參考門檻，不是已驗證的可靠性界線；所有樣本仍須核對收縮與角色證據。</p>{evidence.samples.map((player, index) => <p key={index}>{player.name}：{player.innings == null ? '未保存' : player.innings.toFixed(2)} 局{player.innings != null && player.innings < 10 ? '；低於顯示參考門檻' : ''}。</p>)}</details>
+    <p>{roster.candidateLabel}｜{roster.historyLabel}</p>
+    <details><summary>投手名單與歷史登板</summary>
+      <p><b>保存投手名單：</b>{roster.candidates.join('、') || '未保存逐人名單'}｜{roster.completeness}</p>
+      <p><b>歷史登板：</b>{roster.historical.join('、') || '未保存逐人歷史登板'}</p>
+      <p>{roster.note}</p>
+      <p>名單基準日：{evidence.rosterDates}｜能力統計截至：{evidence.metricDates}{evidence.metricDatesIncomplete ? '（部分未保存）' : ''}｜最近登板日：{evidence.latestUsageDate}</p>
+      <p>可出賽程度依近期用量估計；可用性 1 不是官方確認，也不是 100% 出賽機率。</p>
+      {league === 'MLB' && <p>用量天數依比賽時間差換算，逐場 daysAgo 與權重請見來源明細。</p>}
+      {evidence.samples.length > 0 && <details><summary>後援能力樣本局數（十進位）</summary>{evidence.samples.map((player, index) => <p key={index}>{player.name}：{player.innings == null ? '未保存' : player.innings.toFixed(2)} 局</p>)}</details>}
+    </details>
   </div>;
 }
 

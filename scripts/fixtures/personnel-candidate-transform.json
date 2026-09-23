@@ -1,0 +1,495 @@
+{
+  "description": "Derived regression from asian-personnel-handoff-test: two real individual CPBL ability rows placed into a synthetic same-team history and synthetic game. This is not a recorded production game or proof the pitchers shared a team.",
+  "context": {
+    "leagueId": "CPBL",
+    "game": {
+      "league": "CPBL",
+      "leagueId": "CPBL",
+      "gamePk": 999701,
+      "providerGameId": "2099-A-999",
+      "gameDate": "2099-09-08T10:00:00Z",
+      "officialDate": "2099-09-08",
+      "taipeiDate": "2099-09-08",
+      "awayCode": "CTB",
+      "homeCode": "UNI",
+      "awayTeamId": 701,
+      "homeTeamId": 702,
+      "statusCode": "S",
+      "gameNumber": 1,
+      "scheduledInnings": 9,
+      "awayProbableId": "0000002679",
+      "awayProbable": "江承諺",
+      "probableSource": "CPBL_OFFICIAL_ROTATION_PROJECTED_STARTER",
+      "analysisMode": "EXPERIMENTAL_SHADOW",
+      "betEligible": false
+    },
+    "modelConfig": {
+      "neutralStarterInnings": 4.8
+    },
+    "away": {
+      "starter": {
+        "available": true,
+        "confirmed": false,
+        "identityConfirmed": false,
+        "playerIdentityVerified": true,
+        "projected": true,
+        "assignmentStatus": "PROJECTED_ROTATION_SCENARIO",
+        "performanceAvailable": false,
+        "performanceStatus": "OBSERVED_INDIVIDUAL_PROJECTED_ASSIGNMENT",
+        "performanceScope": "INDIVIDUAL_STARTER",
+        "id": "0000002679",
+        "name": "江承諺",
+        "handedness": null,
+        "throws": null,
+        "throwsStatus": "CONFIRMED",
+        "expectedInnings": 5.327392982932239,
+        "inningsPitched": null,
+        "gamesStarted": null,
+        "era": 4,
+        "fip": null,
+        "whip": 1.2,
+        "season": {
+          "inningsPitched": 24,
+          "gamesStarted": null,
+          "appearances": null,
+          "era": 4,
+          "whip": 1.2,
+          "battersFaced": 100,
+          "war": null,
+          "qualityFactor": 0.9949419514231295,
+          "observedBattersFaced": 100,
+          "effectiveBattersFaced": 100,
+          "battersFacedSourceEvidence": null,
+          "battersFacedAcquisitionStatus": null,
+          "inningsPitchedSourceEvidence": null,
+          "appearancesSourceEvidence": null,
+          "gamesStartedSourceEvidence": null,
+          "gamesStartedAcquisitionStatus": null,
+          "sampleSizeEvidence": {
+            "version": "ASIAN-STARTER-SAMPLE-DEFINITION-v1",
+            "status": "REPORTED_INTEGER",
+            "rawReportedBattersFaced": 100,
+            "formula": "reported battersFaced",
+            "inningsPitched": 24,
+            "coefficient": null,
+            "legacyBattersFacedIsEffectiveSample": true,
+            "consumers": [
+              "qualityFactor.sampleReliability",
+              "starterReadiness",
+              "jointScore.uncertaintyFor"
+            ],
+            "externallyValidated": false
+          },
+          "inningsPitchedEstimated": false,
+          "inningsPitchedMethod": "OFFICIAL_OBSERVED_INNINGS",
+          "estimatedInningsPitched": null,
+          "battersFacedEstimated": false,
+          "woba": null,
+          "leagueWoba": null,
+          "available": true,
+          "metricScope": "INDIVIDUAL_STARTER"
+        },
+        "recent": {
+          "inningsPitched": 6,
+          "gamesStarted": 1,
+          "available": true,
+          "metricScope": "INDIVIDUAL_STARTER"
+        },
+        "pitchQuality": {
+          "available": false,
+          "runFactor": 1
+        },
+        "projectedFromTeamPitching": false,
+        "projectionMode": "OFFICIAL_PRIOR_START_ROTATION_MIXTURE",
+        "source": "CPBL_OFFICIAL_ROTATION_PROJECTED_STARTER",
+        "officialPlayerId": "0000002679",
+        "teamId": 701,
+        "projectionBased": true,
+        "identitySource": "CPBL_OFFICIAL_ROTATION_PROJECTED_STARTER",
+        "sourceEvidence": null,
+        "independentOfTeamResults": true,
+        "performanceSource": "CPBL_OFFICIAL_INDIVIDUAL_STARTER",
+        "performanceMetric": "ERA_AND_WHIP",
+        "performanceObservedAt": null,
+        "qualityFactorInputs": {
+          "era": 4,
+          "whip": 1.2,
+          "observedQualityFactor": null,
+          "sampleReliability": 0.35714285714285715,
+          "woba": null,
+          "leagueWoba": null
+        },
+        "dataCoverage": {
+          "era": true,
+          "whip": true,
+          "independentQualityMetric": false
+        },
+        "officialThrows": null,
+        "qualityFactor": 0.9554615159286771,
+        "expectedInningsSource": "OBSERVED_RECENT_STARTS_AVERAGE",
+        "expectedInningsEvidence": {
+          "method": "MEAN_RECENT_START_INNINGS",
+          "limits": [
+            2.5,
+            7.2
+          ],
+          "games": [
+            {
+              "gamePk": null,
+              "date": null,
+              "inningsPitched": 6
+            }
+          ],
+          "unboundedValue": 6
+        },
+        "expectedInningsSampleGames": 1,
+        "qualityMetricScope": "INDIVIDUAL_STARTER_RUN_PREVENTION",
+        "referenceEra": 4,
+        "projectionMethod": "OFFICIAL_RECENT_STARTS_REST_DAY_ROTATION",
+        "projectionConfidence": 0.6726070170677604,
+        "projectionConfidenceKind": "HEURISTIC_CANDIDATE_WEIGHT",
+        "confidenceCalibrated": false,
+        "probabilityScope": "CONDITIONAL_ON_OBSERVED_CANDIDATE_SET",
+        "candidateSetComplete": false,
+        "rotationCandidates": [
+          {
+            "id": "0000002679",
+            "name": "江承諺",
+            "lastStart": "2026-09-03T10:00:00Z",
+            "restDays": 5,
+            "weight": 0.6726070170677604,
+            "officialPlayerId": "0000002679",
+            "teamId": 701,
+            "probability": 0.6726070170677604,
+            "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+            "confidenceCalibrated": false,
+            "priorStarts": 1,
+            "inningsPitched": 5,
+            "battersFaced": 21,
+            "era": 1.8,
+            "whip": 1.4,
+            "expectedInnings": 5,
+            "performanceAvailable": true,
+            "evidenceGamePks": [
+              100
+            ]
+          },
+          {
+            "id": "0000007074",
+            "name": "曾家輝",
+            "lastStart": "2026-09-02T10:00:00Z",
+            "restDays": 6,
+            "weight": 0.32739298293223956,
+            "officialPlayerId": "0000007074",
+            "teamId": 701,
+            "probability": 0.32739298293223956,
+            "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+            "confidenceCalibrated": false,
+            "priorStarts": 1,
+            "inningsPitched": 6,
+            "battersFaced": 26,
+            "era": 0,
+            "whip": 1.1666666666666667,
+            "expectedInnings": 6,
+            "performanceAvailable": true,
+            "evidenceGamePks": [
+              101
+            ]
+          }
+        ],
+        "candidates": [
+          {
+            "id": "0000002679",
+            "name": "江承諺",
+            "lastStart": "2026-09-03T10:00:00Z",
+            "restDays": 5,
+            "weight": 0.6726070170677604,
+            "officialPlayerId": "0000002679",
+            "teamId": 701,
+            "probability": 0.6726070170677604,
+            "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+            "confidenceCalibrated": false,
+            "priorStarts": 1,
+            "inningsPitched": 5,
+            "battersFaced": 21,
+            "era": 1.8,
+            "whip": 1.4,
+            "expectedInnings": 5,
+            "performanceAvailable": true,
+            "evidenceGamePks": [
+              100
+            ],
+            "qualityFactor": 0.9578363965785066,
+            "qualityFactorMethod": "EXISTING_ERA_SAMPLE_SHRINK"
+          },
+          {
+            "id": "0000007074",
+            "name": "曾家輝",
+            "lastStart": "2026-09-02T10:00:00Z",
+            "restDays": 6,
+            "weight": 0.32739298293223956,
+            "officialPlayerId": "0000007074",
+            "teamId": 701,
+            "probability": 0.32739298293223956,
+            "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+            "confidenceCalibrated": false,
+            "priorStarts": 1,
+            "inningsPitched": 6,
+            "battersFaced": 26,
+            "era": 0,
+            "whip": 1.1666666666666667,
+            "expectedInnings": 6,
+            "performanceAvailable": true,
+            "evidenceGamePks": [
+              101
+            ],
+            "qualityFactor": 0.950582482250352,
+            "qualityFactorMethod": "EXISTING_ERA_SAMPLE_SHRINK"
+          }
+        ],
+        "identityMismatch": false,
+        "handednessConflict": false,
+        "handednessResolution": null,
+        "status": "PROJECTED",
+        "candidateMixtureReady": true,
+        "candidateAbilityStatus": "ALL_CANDIDATE_ABILITIES_AVAILABLE",
+        "candidateNormalization": {
+          "version": "ASIAN-EXISTING-CANDIDATE-NORMALIZATION-v1",
+          "method": "EXISTING_ERA_SAMPLE_SHRINK_AND_CONDITIONAL_WEIGHTED_MEAN",
+          "applied": true,
+          "sourcePrimary": {
+            "qualityFactor": 0.9949419514231295,
+            "expectedInnings": 6
+          },
+          "weightedCandidateValues": {
+            "qualityFactor": 0.9554615159286771,
+            "expectedInnings": 5.327392982932239
+          },
+          "output": {
+            "qualityFactor": 0.9554615159286771,
+            "expectedInnings": 5.327392982932239
+          },
+          "bounds": {
+            "qualityFactor": [
+              0.82,
+              1.22
+            ],
+            "expectedInnings": [
+              2.5,
+              7.2
+            ]
+          },
+          "candidateProbabilitiesReestimated": false,
+          "missingAbilitiesReplaced": false
+        },
+        "uncertaintyExpanded": false,
+        "uncertaintyMethod": "CANDIDATE_DISTRIBUTION_MIXTURE_PENDING_VALIDATION"
+      }
+    },
+    "sourceEvidence": {
+      "features": [
+        {
+          "featureName": "away.starter",
+          "parsedInput": {
+            "id": "0000002679",
+            "officialPlayerId": "0000002679",
+            "teamId": 701,
+            "name": "江承諺",
+            "identityConfirmed": false,
+            "confirmed": false,
+            "playerIdentityVerified": true,
+            "projected": true,
+            "projectionBased": true,
+            "identitySource": "CPBL_OFFICIAL_ROTATION_PROJECTED_STARTER",
+            "sourceEvidence": null,
+            "performanceAvailable": true,
+            "performanceScope": "INDIVIDUAL_STARTER",
+            "independentOfTeamResults": true,
+            "projectedFromTeamPitching": false,
+            "performanceSource": "CPBL_OFFICIAL_INDIVIDUAL_STARTER",
+            "performanceMetric": "ERA_AND_WHIP",
+            "performanceObservedAt": null,
+            "qualityFactorInputs": {
+              "era": 4,
+              "whip": 1.2,
+              "observedQualityFactor": null,
+              "sampleReliability": 0.35714285714285715,
+              "woba": null,
+              "leagueWoba": null
+            },
+            "dataCoverage": {
+              "era": true,
+              "whip": true,
+              "independentQualityMetric": false
+            },
+            "throws": null,
+            "officialThrows": null,
+            "expectedInnings": 6,
+            "qualityFactor": 0.9949419514231295,
+            "expectedInningsSource": "OBSERVED_RECENT_STARTS_AVERAGE",
+            "expectedInningsEvidence": {
+              "method": "MEAN_RECENT_START_INNINGS",
+              "limits": [
+                2.5,
+                7.2
+              ],
+              "games": [
+                {
+                  "gamePk": null,
+                  "date": null,
+                  "inningsPitched": 6
+                }
+              ],
+              "unboundedValue": 6
+            },
+            "expectedInningsSampleGames": 1,
+            "qualityMetricScope": "INDIVIDUAL_STARTER_RUN_PREVENTION",
+            "referenceEra": 4,
+            "season": {
+              "inningsPitched": 24,
+              "gamesStarted": null,
+              "appearances": null,
+              "era": 4,
+              "whip": 1.2,
+              "battersFaced": 100,
+              "war": null,
+              "qualityFactor": 0.9949419514231295,
+              "observedBattersFaced": 100,
+              "effectiveBattersFaced": 100,
+              "battersFacedSourceEvidence": null,
+              "battersFacedAcquisitionStatus": null,
+              "inningsPitchedSourceEvidence": null,
+              "appearancesSourceEvidence": null,
+              "gamesStartedSourceEvidence": null,
+              "gamesStartedAcquisitionStatus": null,
+              "sampleSizeEvidence": {
+                "version": "ASIAN-STARTER-SAMPLE-DEFINITION-v1",
+                "status": "REPORTED_INTEGER",
+                "rawReportedBattersFaced": 100,
+                "formula": "reported battersFaced",
+                "inningsPitched": 24,
+                "coefficient": null,
+                "legacyBattersFacedIsEffectiveSample": true,
+                "consumers": [
+                  "qualityFactor.sampleReliability",
+                  "starterReadiness",
+                  "jointScore.uncertaintyFor"
+                ],
+                "externallyValidated": false
+              },
+              "inningsPitchedEstimated": false,
+              "inningsPitchedMethod": "OFFICIAL_OBSERVED_INNINGS",
+              "estimatedInningsPitched": null,
+              "battersFacedEstimated": false,
+              "woba": null,
+              "leagueWoba": null
+            },
+            "recent": {
+              "inningsPitched": 6,
+              "gamesStarted": 1
+            },
+            "assignmentStatus": "PROJECTED_ROTATION_SCENARIO",
+            "projectionMethod": "OFFICIAL_RECENT_STARTS_REST_DAY_ROTATION",
+            "projectionConfidence": 0.6726070170677604,
+            "projectionConfidenceKind": "HEURISTIC_CANDIDATE_WEIGHT",
+            "confidenceCalibrated": false,
+            "probabilityScope": "CONDITIONAL_ON_OBSERVED_CANDIDATE_SET",
+            "candidateSetComplete": false,
+            "rotationCandidates": [
+              {
+                "id": "0000002679",
+                "name": "江承諺",
+                "lastStart": "2026-09-03T10:00:00Z",
+                "restDays": 5,
+                "weight": 0.6726070170677604,
+                "officialPlayerId": "0000002679",
+                "teamId": 701,
+                "probability": 0.6726070170677604,
+                "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+                "confidenceCalibrated": false,
+                "priorStarts": 1,
+                "inningsPitched": 5,
+                "battersFaced": 21,
+                "era": 1.8,
+                "whip": 1.4,
+                "expectedInnings": 5,
+                "performanceAvailable": true,
+                "evidenceGamePks": [
+                  100
+                ]
+              },
+              {
+                "id": "0000007074",
+                "name": "曾家輝",
+                "lastStart": "2026-09-02T10:00:00Z",
+                "restDays": 6,
+                "weight": 0.32739298293223956,
+                "officialPlayerId": "0000007074",
+                "teamId": 701,
+                "probability": 0.32739298293223956,
+                "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+                "confidenceCalibrated": false,
+                "priorStarts": 1,
+                "inningsPitched": 6,
+                "battersFaced": 26,
+                "era": 0,
+                "whip": 1.1666666666666667,
+                "expectedInnings": 6,
+                "performanceAvailable": true,
+                "evidenceGamePks": [
+                  101
+                ]
+              }
+            ],
+            "candidates": [
+              {
+                "id": "0000002679",
+                "name": "江承諺",
+                "lastStart": "2026-09-03T10:00:00Z",
+                "restDays": 5,
+                "weight": 0.6726070170677604,
+                "officialPlayerId": "0000002679",
+                "teamId": 701,
+                "probability": 0.6726070170677604,
+                "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+                "confidenceCalibrated": false,
+                "priorStarts": 1,
+                "inningsPitched": 5,
+                "battersFaced": 21,
+                "era": 1.8,
+                "whip": 1.4,
+                "expectedInnings": 5,
+                "performanceAvailable": true,
+                "evidenceGamePks": [
+                  100
+                ]
+              },
+              {
+                "id": "0000007074",
+                "name": "曾家輝",
+                "lastStart": "2026-09-02T10:00:00Z",
+                "restDays": 6,
+                "weight": 0.32739298293223956,
+                "officialPlayerId": "0000007074",
+                "teamId": 701,
+                "probability": 0.32739298293223956,
+                "probabilityKind": "HEURISTIC_CANDIDATE_WEIGHT",
+                "confidenceCalibrated": false,
+                "priorStarts": 1,
+                "inningsPitched": 6,
+                "battersFaced": 26,
+                "era": 0,
+                "whip": 1.1666666666666667,
+                "expectedInnings": 6,
+                "performanceAvailable": true,
+                "evidenceGamePks": [
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

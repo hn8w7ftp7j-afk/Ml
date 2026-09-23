@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.42', 'Personnel source integrity release retains one shared release version');
+assert.equal(APP_VERSION, '11.9.43', 'Personnel evidence release retains one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -348,3 +348,4 @@ mustMatch(/running: 1, total: 1/, 'single-request phases must report one active 
 mustMatch(/restoredBoardNeedsValidationRef\.current = restoredBoard\.length > 0[\s\S]*manualAnalysisScopesRef\.current\.has/, 'restored scores must wait for a manual analysis action before Reader repricing starts');
 
 console.log('Page Reader automation, four-league navigation, storage continuity, board authority and all-score presentation PASS');
+

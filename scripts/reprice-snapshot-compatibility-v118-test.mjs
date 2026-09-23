@@ -62,7 +62,7 @@ try {
   }
   const signed = await signRepriceSnapshot('MLB', game, base);
   const oldPersonnel = await signRepriceSnapshot('MLB', game, {
-    ...base, versions: { ...expected, dataVersion: 'BASEBALL-POINT-IN-TIME-DATA-SNAPSHOT-2026-09-v11.0.4' },
+    ...base, versions: { ...expected, dataVersion: 'BASEBALL-POINT-IN-TIME-DATA-SNAPSHOT-2026-09-v11.0.5' },
   });
   const originalPersonnelSnapshot = JSON.stringify(oldPersonnel);
   const oldPersonnelResponse = await post(oldPersonnel);
@@ -92,3 +92,4 @@ try {
     else process.env[key] = value;
   }
 }
+
