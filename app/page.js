@@ -1,4 +1,5 @@
 'use client';
+import { createJobStatusReader } from '../lib/job-status-reader.js';
 import { applyAnalysisJobProgress } from '../lib/analysis-job-progress.js';
 import AnalysisNotificationControl from './analysis-notification-control.js';
 import { readerWaitingDisplay } from '../lib/reader-waiting-display.js';
@@ -702,6 +703,16 @@ function markCloudBetMigrationComplete() {
 }
 
 async function requestJSON(url, options = {}, timeoutMs = 180000, { allowApplicationFailure = false } = {}) {
+  if (typeof url === 'string' && url.startsWith('/api/analysis-jobs?')
+    && Object.keys(options).length === 0 && !allowApplicationFailure) {
+    return readJobStatus(url, timeoutMs);
+  }
+  return requestJSONDirect(url, options, timeoutMs, { allowApplicationFailure });
+}
+
+const readJobStatus = createJobStatusReader((url, timeoutMs) => requestJSONDirect(url, {}, timeoutMs));
+
+async function requestJSONDirect(url, options = {}, timeoutMs = 180000, { allowApplicationFailure = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -2881,7 +2892,7 @@ export default function Home() {
       let lastProgressRevision = -1;
       while (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
         try {
-          const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&league=${encodeURIComponent(league)}&t=${Date.now()}`, {}, 30000);
+          const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&league=${encodeURIComponent(league)}&afterRevision=${lastProgressRevision}&t=${Date.now()}`, {}, 30000);
           if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
             return { detached: true, total: 0, completed: 0, results: [] };
           }
