@@ -60,6 +60,30 @@ const untouched = { version: 'BASEBALL-PIT-JSON-PAYLOAD-v1.0.0', encoding: 'JSON
 assert.throws(() => decodePersonnelAuditPayload(untouched, value => { assert.equal(value, untouched); throw new Error('PIT快照內容雜湊或大小不一致'); }), /雜湊/);
 assert.throws(() => decodePersonnelAuditPayload({ ...legacyPayload, version: 'BASEBALL-PIT-JSON-PAYLOAD-v9.0.0' }, noFallback));
 assert.equal(legacyFallbackCalls, 1);
+const legacyGzipEnvelope = raw => {
+  const data = gzipSync(raw).toString('base64');
+  return { version: 'BASEBALL-PIT-JSON-PAYLOAD-v1.1.0', encoding: 'GZIP_BASE64',
+    rawBytes: raw.length, compressedBytes: Buffer.from(data, 'base64').length,
+    base64Bytes: data.length, payloadHash: digest(raw), data };
+};
+const legacyGzip = legacyGzipEnvelope(legacyRaw);
+assert.deepEqual(decodePersonnelAuditPayload(legacyGzip, noFallback), JSON.parse(legacyRaw));
+for (const mutation of [
+  { compressedBytes: 0 }, { compressedBytes: -1 }, { compressedBytes: String(legacyGzip.compressedBytes) },
+  { compressedBytes: 2_000_001 }, { compressedBytes: legacyGzip.compressedBytes + 1 },
+  { rawBytes: legacyGzip.rawBytes + 1 }, { rawBytes: 16_000_001 },
+  { base64Bytes: legacyGzip.base64Bytes + 4 },
+  { data: legacyGzip.data + '\n', base64Bytes: legacyGzip.base64Bytes + 1 },
+  { payloadHash: '0'.repeat(64) },
+]) assert.throws(() => decodePersonnelAuditPayload({ ...legacyGzip, ...mutation }, noFallback));
+const invalidGzip = Buffer.from('secret-not-a-gzip-stream');
+assert.throws(() => decodePersonnelAuditPayload({ ...legacyGzip, data: invalidGzip.toString('base64'),
+  compressedBytes: invalidGzip.length, base64Bytes: invalidGzip.toString('base64').length }, noFallback));
+assert.throws(() => decodePersonnelAuditPayload(legacyGzipEnvelope(Buffer.from([0x22, 0xff, 0x22])), noFallback), /UTF-8/);
+assert.throws(() => decodePersonnelAuditPayload(legacyGzipEnvelope(Buffer.from('{malformed')), noFallback), SyntaxError);
+const bomb = legacyGzipEnvelope(Buffer.alloc(16_000_002, 0x20)); bomb.rawBytes = 16_000_000;
+assert.throws(() => decodePersonnelAuditPayload(bomb, noFallback), error => error.code === 'ERR_BUFFER_TOO_LARGE');
+assert.equal(legacyFallbackCalls, 1);
 const id = number => `KBO:${number}:FULL:${'a'.repeat(64)}`;
 function row(number = 1) {
   const game = { leagueId: 'KBO', gamePk: number, awayTeamId: 1, homeTeamId: 2, gameNumber: 1, gameDate: '2026-09-22T10:00:00.000Z' };
@@ -82,6 +106,31 @@ assert.equal(recoveredExport.contextEnvelopeIntegrity, 'VERIFIED_BY_AUDIT_LEGACY
 assert.equal(recoveredExport.analysisEvidenceIntegrity, 'VERIFIED_BY_AUDIT_LEGACY_DECODER');
 assert.deepEqual(recoveredExport.frozenContext, one.frozenContext);
 assert.equal(recoveredExport.fullSnapshotIntegrity, 'NOT_RECHECKED');
+const recoveredGzip = row();
+recoveredGzip.frozen_context_payload = legacyGzipEnvelope(Buffer.from(JSON.stringify(decode(recoveredGzip.frozen_context_payload))));
+recoveredGzip.market_analysis_payload = legacyGzipEnvelope(Buffer.from(JSON.stringify(decode(recoveredGzip.market_analysis_payload))));
+const recoveredGzipExport = exportPersonnelAuditRow(recoveredGzip, noFallback);
+assert.equal(recoveredGzipExport.ok, true);
+assert.equal(recoveredGzipExport.contextEnvelopeIntegrity, 'VERIFIED_BY_AUDIT_LEGACY_DECODER');
+assert.equal(recoveredGzipExport.analysisEvidenceIntegrity, 'VERIFIED_BY_AUDIT_LEGACY_DECODER');
+assert.deepEqual(recoveredGzipExport.analysisEvidence, one.analysisEvidence);
+assert.equal(recoveredGzipExport.analysisEvidenceDiagnostic, null);
+assert.equal(recoveredGzipExport.analysisUsageStatus, 'SAVED_DECLARATIONS_ONLY');
+const gzipAnalysisBad = structuredClone(recoveredGzip); gzipAnalysisBad.market_analysis_payload.payloadHash = '0'.repeat(64);
+const gzipAnalysisFailure = exportPersonnelAuditRow(gzipAnalysisBad, noFallback);
+assert.equal(gzipAnalysisFailure.ok, true);
+assert.equal(gzipAnalysisFailure.analysisEvidenceIntegrity, 'FAILED_OR_UNAVAILABLE');
+assert.equal(gzipAnalysisFailure.analysisEvidenceDiagnostic.reason, 'PAYLOAD_HASH_OR_RAW_SIZE_MISMATCH');
+assert.equal(gzipAnalysisFailure.analysisEvidenceDiagnostic.stage, 'ANALYSIS_DECODE');
+assert.equal(gzipAnalysisFailure.analysisEvidenceDiagnostic.encoding, 'GZIP_BASE64');
+assert.equal(gzipAnalysisFailure.analysisEvidenceDiagnostic.declaredCompressedBytes, gzipAnalysisBad.market_analysis_payload.compressedBytes);
+assert.equal(gzipAnalysisFailure.analysisUsageStatus, 'ANALYSIS_EVIDENCE_UNREADABLE');
+assert.ok(!JSON.stringify(gzipAnalysisFailure.analysisEvidenceDiagnostic).includes(gzipAnalysisBad.market_analysis_payload.data));
+const analysisJsonBad = row(); analysisJsonBad.market_analysis_payload = 'secret-invalid-envelope-json';
+const analysisJsonFailure = exportPersonnelAuditRow(analysisJsonBad, decode);
+assert.equal(analysisJsonFailure.analysisEvidenceDiagnostic.reason, 'JSON_PARSE_FAILED');
+assert.equal(analysisJsonFailure.analysisEvidenceDiagnostic.stage, 'ANALYSIS_ENVELOPE_JSON');
+assert.ok(!JSON.stringify(analysisJsonFailure).includes('secret-invalid-envelope-json'));
 assert.equal(one.ok, true); assert.equal(one.contextIdentity.status, 'MATCH');
 assert.equal(one.contextEnvelopeIntegrity, 'VERIFIED_BY_EXISTING_DECODER'); assert.equal(one.fullSnapshotIntegrity, 'NOT_RECHECKED');
 assert.deepEqual(one.frozenContext.away.bullpen.players[0].usageGames, [{ pitches: 12 }]);
