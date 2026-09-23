@@ -62,47 +62,26 @@ try {
   const unauthorized = await GET(request('', false));
   assert.equal(unauthorized.status, 401);
   assert.equal(unauthorized.headers.get('cache-control'), 'no-store');
-  for (const query of ['gameId=', 'gameId=NBA:824252', 'gameId=../data', 'gameId=0', 'gameId=824252&gameId=824493', 'download=0', 'gameId=824252&download=1', 'league=NBA']) {
+  for (const query of ['', 'download=1', 'gameId=824252', 'gameId=invalid']) {
     const response = await GET(request(query));
-    assert.equal(response.status, 400, query);
-    assert.equal((await readResponse(response)).code, 'DIAGNOSTIC_QUERY_INVALID');
-  }
-  const defaultResponse = await GET(request());
-  assert.equal(defaultResponse.status, 200);
-  const summaryBytes = Buffer.from(await defaultResponse.arrayBuffer());
-  assert(summaryBytes.length < OVER_DIAGNOSTIC_MAX_RESPONSE_BYTES);
-  assert.deepEqual(JSON.parse(summaryBytes).data, summary);
-  for (const game of [asset.data.games[0], asset.data.games.at(-1)]) {
-    const response = await GET(request(`gameId=${game.gameId}`));
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 410);
     const body = await readResponse(response);
-    assert.deepEqual(body.data.game, game);
-    assert.equal(body.data.games, undefined);
-    assert.deepEqual(body.data.sourceEvidenceCatalog, gameSourceEvidence(asset.data, game));
-    assert(Object.keys(body.data.sourceEvidenceCatalog).length < Object.keys(asset.data.sourceEvidenceCatalog).length);
-    assert.equal(body.integrity.verified, true);
-    assert.equal(body.integrity.sourceInputsRecheckedByThisRequest, false);
-    assert(Buffer.byteLength(JSON.stringify(body)) < OVER_DIAGNOSTIC_MAX_RESPONSE_BYTES);
+    assert.equal(body.code, 'RESEARCH_MOVED');
+    assert.equal(body.url, 'https://nba-mlb-research.kai-2199.chatgpt.site/mlb');
+    assert.equal(body.data, undefined);
   }
-  const missingGame = await GET(request('gameId=999999999999'));
-  assert.equal(missingGame.status, 404);
-  assert.equal((await readResponse(missingGame)).code, 'DIAGNOSTIC_GAME_NOT_FOUND');
 
   // Changing cwd exercises route failure responses against isolated copies, never the tracked data files.
   const testDirectory = path.join(temporary, 'data', 'diagnostics');
   await mkdir(testDirectory, { recursive: true });
   process.chdir(temporary);
-  const missing = await GET(request());
-  assert.equal(missing.status, 503);
-  assert.equal((await readResponse(missing)).code, 'DIAGNOSTIC_DATA_NOT_AVAILABLE');
+  await assert.rejects(readOverDiagnosticAsset(), error => error.code === 'ENOENT');
   const manifest = JSON.parse(await readFile(path.join(cwd, 'data', 'diagnostics', OVER_DIAGNOSTIC_MANIFEST), 'utf8'));
   await writeFile(path.join(testDirectory, OVER_DIAGNOSTIC_MANIFEST), JSON.stringify(manifest));
   const corrupted = Buffer.from(asset.gzip);
   corrupted[Math.floor(corrupted.length / 2)] ^= 1;
   await writeFile(path.join(testDirectory, OVER_DIAGNOSTIC_FILE), corrupted);
-  const corrupt = await GET(request());
-  assert.equal(corrupt.status, 503);
-  assert.equal((await readResponse(corrupt)).code, 'DIAGNOSTIC_DATA_INVALID');
+  await assert.rejects(readOverDiagnosticAsset());
   // Rewriting both file and sidecar still cannot bypass the independently pinned frozen JSON digest.
   const alteredData = JSON.parse(gunzipSync(asset.gzip));
   alteredData.games[0].W += 0.1;
@@ -110,27 +89,15 @@ try {
   const alteredGzip = gzipSync(alteredJson);
   await writeFile(path.join(testDirectory, OVER_DIAGNOSTIC_FILE), alteredGzip);
   await writeFile(path.join(testDirectory, OVER_DIAGNOSTIC_MANIFEST), JSON.stringify({ ...manifest, gzipBytes: alteredGzip.length, gzipSha256: sha256(alteredGzip), jsonBytes: alteredJson.length, sha256: sha256(alteredJson) }));
-  const tampered = await GET(request());
-  assert.equal(tampered.status, 503);
-  const failure = await readResponse(tampered);
-  assert.equal(failure.code, 'DIAGNOSTIC_DATA_INVALID');
-  assert.doesNotMatch(JSON.stringify(failure), /local-diagnostic-test|stack|workspace|SESSION_SECRET/);
+  await assert.rejects(readOverDiagnosticAsset());
   process.chdir(cwd);
 
-  const exportResponse = await GET(request('download=1'));
-  assert.equal(exportResponse.status, 200);
-  assert.equal(exportResponse.headers.get('content-type'), 'application/gzip');
-  assert.equal(exportResponse.headers.get('cache-control'), 'no-store');
-  assert.equal(exportResponse.headers.get('content-encoding'), null);
-  const downloaded = Buffer.from(await exportResponse.arrayBuffer());
-  assert(downloaded.length < OVER_DIAGNOSTIC_MAX_RESPONSE_BYTES);
-  assert.deepEqual(downloaded, asset.gzip);
-  assert.equal(sha256(gunzipSync(downloaded)), asset.integrity.sha256);
-  assert.deepEqual(JSON.parse(gunzipSync(downloaded)), asset.data);
-  console.log(JSON.stringify({ status: 'PASS', checks: ['auth', 'query-isolation', 'compact-summary-value-and-null-preservation', '539-games-and-1078-team-rows', 'per-game-exact-trace-and-receipts', 'missing-file', 'corrupt-file', 'pinned-hash-tamper', 'schema-and-input-identity', 'gzip-download-byte-equality'], summaryBytes: summaryBytes.length, gzipBytes: downloaded.length }));
+  assert.equal(sha256(gunzipSync(asset.gzip)), asset.integrity.sha256);
+  console.log('PASS: research relocation auth/410; immutable 539-game archive, summary, missing/corrupt/pinned-hash tamper checks');
 } finally {
   process.chdir(cwd);
   await rm(temporary, { recursive: true, force: true });
   if (originalPassword === undefined) delete process.env.APP_PASSWORD; else process.env.APP_PASSWORD = originalPassword;
   if (originalSecret === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = originalSecret;
 }
+
