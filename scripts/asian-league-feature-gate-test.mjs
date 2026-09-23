@@ -223,6 +223,10 @@ assert.ok(namedOnly.dataGateV10.rows.every(row => typeof row.ready === 'boolean'
 const projectedCpblFeatures = featuresFor('CPBL');
 projectedCpblFeatures.away.starter = {
   ...projectedCpblFeatures.away.starter,
+  confirmed: false,
+  identityConfirmed: false,
+  playerIdentityVerified: true,
+  projected: true,
   assignmentStatus: 'PROJECTED_ROTATION_SCENARIO',
   performanceSource: 'CPBL_OFFICIAL_INDIVIDUAL_STARTER_PIT',
   qualityMetricScope: 'INDIVIDUAL_STARTER_RUN_PREVENTION',
@@ -234,6 +238,39 @@ projectedCpblFeatures.away.starter = {
 const projectedCpbl = await contextFor('CPBL', gameFor('CPBL'), projectedCpblFeatures);
 assert.equal(projectedCpbl.away.starter.performanceAvailable, true, '官方輪值預測可使用新投手已完成的一軍個人先發並高度回歸');
 assert.equal(projectedCpbl.dataGateV10.passedForShadowScore, true);
+assert.equal(projectedCpbl.away.starter.identityConfirmed, false, '已核對投手個人資料不能冒充當場官方先發指派');
+assert.equal(projectedCpbl.away.starter.confirmed, false);
+assert.equal(projectedCpbl.away.starter.playerIdentityVerified, true);
+assert.equal(projectedCpbl.away.starter.qualityFactor, 1.02, '區分指派狀態不得改動已取得的投手能力資料');
+assert.equal(projectedCpbl.starterModelingMode, 'PROJECTED_ASSIGNMENT_WITH_OBSERVED_INDIVIDUAL_PERFORMANCE');
+assert.equal(projectedCpbl.sourceStatuses.starters, 'PROJECTED_ASSIGNMENT_OBSERVED_INDIVIDUAL');
+assert.equal(projectedCpbl.dataGateV10.rows.find(row => row.name === 'starterIdentityAndIndependentPerformance').status, 'PROJECTED');
+assert.notEqual(projectedCpbl.featureProvenance.find(row => row.feature === '先發身分')?.status, '已確認');
+
+const reportedCpblFeatures = featuresFor('CPBL');
+reportedCpblFeatures.away.starter = {
+  ...reportedCpblFeatures.away.starter,
+  confirmed: false, identityConfirmed: false, playerIdentityVerified: true,
+  assignmentStatus: 'ROSTER_VALIDATED_REPORTED_STARTER',
+  identitySource: 'CPBL_READER_ROSTER_VALIDATED_REPORTED_STARTER',
+};
+const reportedCpbl = await contextFor('CPBL', gameFor('CPBL'), reportedCpblFeatures);
+assert.equal(reportedCpbl.away.starter.performanceAvailable, true);
+assert.equal(reportedCpbl.away.starter.identityConfirmed, false, 'Reader人名與球員名冊吻合仍不是官方當場指派');
+assert.equal(reportedCpbl.sourceStatuses.starters, 'PROJECTED_ASSIGNMENT_OBSERVED_INDIVIDUAL');
+const officialCpbl = await contextFor('CPBL');
+assert.equal(officialCpbl.away.starter.identityConfirmed, true);
+assert.equal(officialCpbl.starterModelingMode, 'VERIFIED_INDIVIDUAL_STARTER_PERFORMANCE');
+const mixedCpblFeatures = structuredClone(projectedCpblFeatures);
+mixedCpblFeatures.home.starter = {
+  ...mixedCpblFeatures.home.starter, confirmed: true,
+  assignmentStatus: 'OFFICIAL_CONFIRMED', identitySource: 'CPBL_OFFICIAL_CURRENT_GAME_STARTER',
+};
+const mixedCpbl = await contextFor('CPBL', gameFor('CPBL', { probableSource: 'CPBL_OFFICIAL_ROTATION_PROJECTED_STARTER' }), mixedCpblFeatures);
+assert.equal(mixedCpbl.home.starter.identityConfirmed, true, '對方仍是輪值預測不能降級本隊已公告的先發');
+assert.equal(mixedCpbl.home.starter.confirmed, true);
+assert.equal(mixedCpbl.home.starter.projected, false);
+assert.equal(mixedCpbl.away.starter.identityConfirmed, false);
 
 const insufficientProjectedCpblFeatures = structuredClone(projectedCpblFeatures);
 insufficientProjectedCpblFeatures.away.starter.season.battersFaced = 8;

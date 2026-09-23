@@ -61,6 +61,16 @@ try {
     assert.equal(await verifyRepriceSnapshot('MLB', game, legacy), true);
   }
   const signed = await signRepriceSnapshot('MLB', game, base);
+  const oldPersonnel = await signRepriceSnapshot('MLB', game, {
+    ...base, versions: { ...expected, dataVersion: 'BASEBALL-POINT-IN-TIME-DATA-SNAPSHOT-2026-09-v11.0.3' },
+  });
+  const originalPersonnelSnapshot = JSON.stringify(oldPersonnel);
+  const oldPersonnelResponse = await post(oldPersonnel);
+  assert.equal(oldPersonnelResponse.status, 409);
+  const oldPersonnelPayload = await oldPersonnelResponse.json();
+  assert.equal(oldPersonnelPayload.code, 'CORE_REFRESH_REQUIRED');
+  assert.ok(oldPersonnelPayload.snapshotCompatibility.reasons.includes('DATA_VERSION_CHANGED'));
+  assert.equal(JSON.stringify(oldPersonnel), originalPersonnelSnapshot, '舊人員資料必須重新分析，不得重寫歷史快照');
   const tampered = await post({ ...signed, versions: { ...expected, dataVersion: 'tampered-data' } });
   const tamperedPayload = await tampered.json();
   assert.equal(tampered.status, 409);
