@@ -148,6 +148,7 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(context.analysisReadiness.coreInputsReady, true);
   assert.equal(context.analysisReadiness.distributionEngineReady, true);
   assert.equal(context.analysisReadiness.status, 'READY_SHADOW_RUNTIME_PIT');
+  assert.equal(context.sourceStatuses.starterAssignments, '客：官方當場先發／主：官方當場先發', `${league}已確認先發指派的顯示應使用同一個已驗證契約`);
   assert.deepEqual(context.analysisReadiness.blockers, []);
   const distribution = buildDistributionSnapshot({ context });
   assert.equal(distribution.leagueId, league);
@@ -271,6 +272,7 @@ assert.equal(mixedCpbl.home.starter.identityConfirmed, true, '對方仍是輪值
 assert.equal(mixedCpbl.home.starter.confirmed, true);
 assert.equal(mixedCpbl.home.starter.projected, false);
 assert.equal(mixedCpbl.away.starter.identityConfirmed, false);
+assert.equal(mixedCpbl.sourceStatuses.starterAssignments, '客：輪值推估／主：官方當場先發');
 
 const insufficientProjectedCpblFeatures = structuredClone(projectedCpblFeatures);
 insufficientProjectedCpblFeatures.away.starter.season.battersFaced = 8;
