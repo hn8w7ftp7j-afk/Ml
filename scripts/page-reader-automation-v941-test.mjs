@@ -22,7 +22,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.39', 'Parallel league analysis release retains one shared release version');
+assert.equal(APP_VERSION, '11.9.40', 'Parallel league analysis release retains one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -151,7 +151,7 @@ assert.match(readerIngestRoute, /trackOpenBetClosingSnapshots\(normalized\)/, 'c
 mustMatch(/summarizeBetLedger/, 'ledger statistics missing');
 mustMatch(/此方向已經記錄；盤口或水位變動也不再新增/, 'single-position bet suppression text missing');
 assert.doesNotMatch(page, /加注目前盤/, 'same direction must never expose a reprice add-on action');
-mustMatch(/紀錄實際下注/, 'actual-bet action missing');
+assert.match(betActionPolicy, /紀錄實際下注/, 'actual-bet action missing');
 mustMatch(/每筆實際下注金額/, 'stake preset must be labelled as an actual-ledger amount rather than a model Unit');
 assert.doesNotMatch(page, />1 Unit 金額</, 'formal Unit is disabled and must not appear as an active setting');
 assert.match(page, /unit: null/, 'actual ledger writes must not claim a model Unit');
@@ -327,16 +327,16 @@ mustMatch(/狀態模型等效條件勝率 \${pct\(row\.modelProbability\)}（排
 assert.doesNotMatch(page, /provisionalBaseline|連續合理性校準/, 'UI must not describe removed Tai888 probability feedback as active');
 mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
 mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
-mustMatch(/模型估計EV（W）/, 'raw distribution EV must explicitly be a model estimate');
+mustMatch(/模型估計EV W/, 'raw distribution EV must explicitly be a model estimate');
 mustMatch(/保守估計 R \{signedPct\(robustEV\)\}/, 'robust EV must be secondary to S and explicitly be a conservative estimate');
 mustMatch(/function modelEvValue\(row\)[\s\S]*row\?\.rawWeightedEV/, 'W display must fall back to the raw distribution EV when qualification fields are null');
 mustMatch(/function robustEvValue\(row\)[\s\S]*row\?\.rawRobustEV/, 'R display must fall back to the raw robust EV when qualification fields are null');
 mustMatch(/W\/R差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
 mustMatch(/S分數、W與R完整顯示/, 'provider status must report S-first display mode');
-mustMatch(/Tai888與外部市場都不回灌模型概率/, 'Tai888 and external markets must remain execution/audit inputs only');
+mustMatch(/Tai888只提供待評估的成交盤口與水位，不改寫模型概率/, 'Tai888 and external markets must remain execution/audit inputs only');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
-mustMatch(/前台以固定S分數為主/, 'the public presentation must be S-first');
+mustMatch(/前台固定以S分數為主/, 'the public presentation must be S-first');
 assert.doesNotMatch(page, /不顯示W\/R|不顯示為EV/, 'qualification failures must not suppress calculated EV');
 
 // Batch analysis must leave the mobile lifecycle and reconnect to durable server work.

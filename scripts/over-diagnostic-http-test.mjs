@@ -54,7 +54,7 @@ try {
   assert.ok((await page.text()).includes('<h1>研究回測｜全場大分</h1>'), 'built research page must render its current heading');
   const homepage = await request('/', { headers });
   assert.equal(homepage.status, 200);
-  assert.match(await homepage.text(), /研究回測/);
+  assert.doesNotMatch(await homepage.text(), /href="\/diagnostics\/over"/);
   const health = await request('/api/health');
   assert.equal(health.status, 200);
   assert.equal((await health.json()).version, APP_VERSION);

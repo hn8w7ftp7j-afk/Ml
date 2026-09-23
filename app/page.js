@@ -4586,7 +4586,6 @@ export default function Home() {
       <NbaEntry/>
       <Link prefetch={false} className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球資料與研究</small></Link>
       <Link prefetch={false} className="sportModuleLink" href="/external-audit"><b>外部來源</b><small>獨立稽核，不改評分</small></Link>
-      <Link prefetch={false} className="sportModuleLink" href="/diagnostics/over"><b>研究回測</b><small>歷史模擬｜非實際帳本</small></Link>
     </nav>
 
     <nav className="mainTabs">
@@ -4598,7 +4597,6 @@ export default function Home() {
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>設定</button>
     </nav>
 
-    {activeLeague.id === 'MLB' && <section className="sourceBanner researchNotice" aria-label="MLB 全場大分持續觀察"><strong>MLB 全場大分｜正常保留・持續觀察</strong><span>全場大分正常保留於分析、全部方向與候選順序，仍依原有分數門檻與 QA 判定；繼續追蹤歷史模擬及後續結果，不代表已驗證為正 EV。原模型、記帳、取消與結算不變。<Link prefetch={false} href="/diagnostics/over">查看研究回測與樣本限制</Link></span></section>}
 
     {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}

@@ -47,7 +47,6 @@ assert.match(ranking, /modelEvValue\(row\) != null/, 'all-direction list must re
 assert.match(ranking, /Number\(right\.score \?\? -Infinity\) - Number\(left\.score \?\? -Infinity\)[\s\S]*Number\(right\.weightedEV \?\? -Infinity\)/, 'all-direction list must sort by S, then W');
 assert.doesNotMatch(ranking, /\.filter\([^)]*(rankingQualified|formulaDiagnosticScore|robustEV)/, 'score, R and rank gates must not filter the all-direction W list');
 assert.match(ranking, /const rankingEligible = !researchPolicy && currentAnalysisExecutable/, 'research rows must never advertise current ranking eligibility');
-assert.match(page, /activeLeague\.id === 'MLB'[\s\S]*MLB 全場大分｜正常保留・持續觀察/, 'homepage research notice must be scoped to MLB');
-assert.match(page, /研究回測[\s\S]*歷史模擬｜非實際帳本/, 'research history must be distinguished from actual ledger');
+assert.doesNotMatch(page, /aria-label="MLB 全場大分持續觀察"|href="\/diagnostics\/over"/, 'standalone research must not appear in the daily workspace');
 
 console.log('page S-first eight-slot presentation test passed');

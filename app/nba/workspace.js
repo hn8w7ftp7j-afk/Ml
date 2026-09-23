@@ -75,7 +75,7 @@ function GameDetails({ data, onPlayer }) {
 }
 
 function TeamDetails({ data, onHistory, onPlayer }) {
-  return <div className={styles.sections}><section className={styles.panel}><div className={styles.sectionHead}><h2>{teamName(data.team)}</h2><button type="button" onClick={onHistory}>查看歷史研究</button></div><StatList rows={data.statistics} title="所選球季統計"/><p className={styles.muted}>數值依來源回傳的球季核對；沒有的進階指標保留空值。</p></section>
+  return <div className={styles.sections}><section className={styles.panel}><div className={styles.sectionHead}><h2>{teamName(data.team)}</h2>{onHistory && <button type="button" onClick={onHistory}>查看歷史研究</button>}</div><StatList rows={data.statistics} title="所選球季統計"/><p className={styles.muted}>數值依來源回傳的球季核對；沒有的進階指標保留空值。</p></section>
     <section className={styles.panel}><h2>球員名單</h2><p className={styles.muted}>名單為本次取得的目前陣容，不代表歷史球季當時的完整名單。</p>{data.players?.length ? <div className={styles.playerGrid}>{data.players.map(player => <article className={styles.player} key={player.id}><strong>{player.name || player.displayName}</strong><p>{player.jersey ? `#${player.jersey} ` : ''}{player.position || '位置待確認'}</p><p><small className={styles.mono}>{player.id}</small></p><button type="button" onClick={() => onPlayer(player)}>球員球季統計</button></article>)}</div> : <Empty>球員名單尚未取得。</Empty>}</section>
   </div>;
 }
@@ -112,6 +112,7 @@ function Sources({ result }) {
 }
 
 export default function NbaWorkspace({ onClose }) {
+  const researchEnabled = !onClose;
   const [view, setView] = useState('schedule');
   const [date, setDate] = useState('');
   const [season, setSeason] = useState('2026');
@@ -194,7 +195,7 @@ export default function NbaWorkspace({ onClose }) {
 
   return <main className={styles.workspace} aria-label="NBA 資料工作區">
     <header className={styles.header}><div><p className={styles.eyebrow}>NBA・BASKETBALL DATA</p><h1>NBA 籃球資料</h1><p>賽程、球員狀態與歷史統計，同一個網站接著看。</p></div><div className={styles.headerActions}>{onClose ? <button type="button" onClick={onClose}>返回原本聯盟</button> : <a href="/">返回網站</a>}<span>{NBA_MODULE_VERSION}</span></div></header>
-    <nav className={styles.tabs} aria-label="NBA 資料頁籤">{VIEWS.map(([id, label]) => <button type="button" key={id} aria-pressed={topView === id} className={topView === id ? styles.active : ''} onClick={() => setView(id)}>{label}</button>)}</nav>
+    <nav className={styles.tabs} aria-label="NBA 資料頁籤">{VIEWS.filter(([id]) => researchEnabled || id !== 'history').map(([id, label]) => <button type="button" key={id} aria-pressed={topView === id} className={topView === id ? styles.active : ''} onClick={() => setView(id)}>{label}</button>)}</nav>
     <div className={styles.toolbar}>
       {view === 'schedule' && <><label>台灣日期<input type="date" value={date} onInput={event => { if (validDate(event.currentTarget.value)) setDate(event.currentTarget.value); }} onChange={event => { if (validDate(event.target.value)) setDate(event.target.value); }}/></label><button type="button" onClick={() => setDate(taipeiDate())}>今天</button></>}
       {(view === 'team' || view === 'history') && <><label>球隊<select value={teamId} onChange={event => setTeamId(event.target.value)}><option value="">選擇球隊</option>{teams.length ? teams.map(team => <option key={team.id} value={team.sourceId || shortId(team.id)}>{teamName(team)}</option>) : teamId && <option value={teamId}>已選球隊 {teamId}</option>}</select></label><label>球季<select value={season} onChange={event => setSeason(event.target.value)}>{years.map(year => <option key={year} value={year}>{year - 1}–{String(year).slice(-2)}</option>)}</select></label>{view === 'history' && <label>賽事類型<select value={seasonType} onChange={event => setSeasonType(event.target.value)}><option value="regular">例行賽</option><option value="preseason">季前賽（獨立）</option><option value="postseason">季後賽（獨立）</option></select></label>}</>}
@@ -208,9 +209,9 @@ export default function NbaWorkspace({ onClose }) {
     <SourceStatus result={result} retained={view !== 'sources' && screen.retained}/>
     {result?.qa?.status === 'BLOCK' && <div className={styles.error} role="alert">NBA 資料未通過身分或完整性檢查，請查看「資料與 QA」。</div>}
     {view === 'sources' ? <Sources result={result}/> : data && result.qa?.status !== 'BLOCK' ? <>
-      {view === 'schedule' && <section><div className={styles.sectionHead}><h2>{date}・賽程與賽果</h2><span>{data.games?.length || 0} 場</span></div>{data.games?.length ? <div className={styles.gameGrid}>{data.games.map(game => <GameCard game={game} key={game.id} onOpen={openGame}/>)}</div> : <Empty>{result.status === 'unavailable' ? '目前無法確認賽程，請稍後重新讀取。' : '來源目前沒有這個台灣日期的 NBA 賽事。可選歷史日期查看賽果，或到「歷史研究」選擇球隊。'}</Empty>}</section>}
+      {view === 'schedule' && <section><div className={styles.sectionHead}><h2>{date}・賽程與賽果</h2><span>{data.games?.length || 0} 場</span></div>{data.games?.length ? <div className={styles.gameGrid}>{data.games.map(game => <GameCard game={game} key={game.id} onOpen={openGame}/>)}</div> : <Empty>{result.status === 'unavailable' ? '目前無法確認賽程，請稍後重新讀取。' : '來源目前沒有這個台灣日期的 NBA 賽事。可選其他日期查看賽程與賽果。'}</Empty>}</section>}
       {(view === 'teams' || (view === 'history' && !teamId)) && <section><h2>{view === 'history' ? '選擇研究球隊' : 'NBA 球隊'}</h2>{data.teams?.length ? <div className={styles.teamGrid}>{data.teams.map(team => <button type="button" className={styles.teamCard} key={team.id} onClick={() => view === 'history' ? setTeamId(team.sourceId || shortId(team.id)) : openTeam(team)}><b>{team.abbreviation || 'NBA'}</b><strong>{teamName(team)}</strong><span>查看資料 →</span></button>)}</div> : <Empty>球隊資料暫時無法取得。</Empty>}</section>}
-      {view === 'team' && <TeamDetails data={data} onHistory={() => setView('history')} onPlayer={openPlayer}/>}
+      {view === 'team' && <TeamDetails data={data} onHistory={researchEnabled ? () => setView('history') : undefined} onPlayer={openPlayer}/>}
       {view === 'game' && <GameDetails data={data} onPlayer={openPlayer}/>}
       {view === 'player' && <PlayerDetails data={data}/>}
       {view === 'history' && teamId && <Research result={result} seasonType={seasonType} onOpen={openGame}/>}
