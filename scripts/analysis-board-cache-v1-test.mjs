@@ -43,13 +43,14 @@ assert.deepEqual(restoreAnalysisBoardCache(distinctEntry, { league: 'MLB', date:
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'league caches must remain isolated');
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 73 * 60 * 60 * 1000 }), [], 'expired recovery data must not be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 1 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-shared-distribution model snapshots must not survive the cache contract bump');
+assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 7 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-v3 personnel receipts and stale projection metrics require a fresh analysis');
+assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 6 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'the official starter identity repair requires fresh personnel evidence under the new shared cache contract');
 const legacyAsianEntry = { ...entry, version: 1, league: 'KBO' };
 assert.deepEqual(restoreAnalysisBoardCache(legacyAsianEntry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'pre-V11 Asian fallback scores must never be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 2 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-V11 MLB advanced-policy snapshots must never be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 3 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-W-first snapshots must never be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 4 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-v1.9.1 score-display snapshots must not restore null warning scores');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 5 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'old personnel identities and duplicate lineup slots must require a fresh analysis');
-assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 6 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'the official starter identity repair requires fresh personnel evidence under the new shared cache contract');
 
 const store = upsertAnalysisBoardCache({}, entry);
 assert.equal(store[analysisBoardCacheKey('MLB', '2026-08-23')].board.length, 1);
@@ -77,3 +78,4 @@ assert.equal(
 );
 
 console.log('analysis board cache: mobile reload recovery and league isolation PASS');
+

@@ -1,0 +1,29 @@
+[
+  {
+    "file": "cpbl-2026-A-317.json",
+    "url": "https://stats.cpbl.com.tw/api/proxy/v1/games/2026-A-317",
+    "originalSha256": "0edb22fa364506578ef15d522245a41da494c2f28ddf836af232e193ad6f02ac",
+    "transformation": "Retained GameId/GameStatus/GameDate/Field plus Team/Pitchers/Hitters for both sides; no row changes"
+  },
+  {
+    "file": "kbo-daily-20260918.json",
+    "url": "https://www.koreabaseball.com/ws/Main.asmx/GetKboGameList",
+    "method": "POST",
+    "date": "20260918",
+    "originalSha256": "945eb88c9d0b6e3706af35d7a581713976df73cac23c2898da76e8170f18e12d",
+    "transformation": "None"
+  },
+  {
+    "file": "npb-s2026090101406-en.html",
+    "url": "https://npb.jp/bis/eng/2026/games/s2026090101406.html",
+    "originalSha256": "20082f3671fb5cc743ab3e9963aca393d1b8a9a53f67daa4b19e70eb6de9ff48",
+    "transformation": "None"
+  },
+  {
+    "file": "npb-calendar-2026-09.html",
+    "url": "https://npb.jp/bis/eng/2026/calendar/index_09.html",
+    "fetchedAt": "2026-09-23T06:53:18.777738+00:00",
+    "sha256": "f10f2d863d898c9ff8950114f42de8d9f3a2a66fc985981843fb524584edd878",
+    "transformation": "None"
+  }
+]

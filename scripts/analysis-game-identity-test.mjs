@@ -24,7 +24,7 @@ assert.equal(analysisDisplayGame(refreshed).awayProbable, '최승용', 'header m
 assert.equal(JSON.stringify(payload), original);
 const displayItem = { ...refreshed, game: analysisDisplayGame(refreshed), customData: { ...payload, context: { game: frozen, leagueId: 'KBO', away: { starter: { id: 10, teamId: 604, name: '최승용', assignmentStatus: 'PROJECTED' } } } } };
 assert.equal(analysisStarterDisplay(displayItem, 'away'), '최승용（輪值推估）', 'retained header must preserve assignment provenance labels');
-assert.equal(analysisStarterDisplay(displayItem, 'home'), '류현진', 'fallback must use retained identity, not the live schedule');
+assert.equal(analysisStarterDisplay(displayItem, 'home'), '류현진（賽程人選／未核對）', 'fallback must use retained identity, not the live schedule');
 assert.equal(preserveCompletedReaderResult(preserved, { ok: true, task: { game }, payload: { ...payload, game: { ...game, gamePk: 456 } } }), preserved);
 
 // Exercise the actual synchronous commit path, including stale-result rejection.
@@ -55,3 +55,4 @@ assert.equal(boardRef.current[0].game.homeProbable, '류현진');
 assert.equal(boardRef.current[0].pendingReaderEvidenceHash, null);
 assert.equal(boardRef.current[0].customData.analysis, analysis, 'identity repair must not recalculate scores');
 console.log('PASS frozen analysis identity, retained header, wrong-game rejection and stale commit');
+

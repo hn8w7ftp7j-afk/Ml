@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './asian-personnel-handoff-test.mjs';
 import './kbo-official-tbf-test.mjs';
 import './kbo-lineup-relief-test.mjs';
 import { uncertaintyFor } from '../lib/asian-joint-score-v1.js';

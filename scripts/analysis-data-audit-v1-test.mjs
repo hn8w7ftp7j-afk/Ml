@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import './analysis-evidence-v2-test.mjs';
+import './personnel-receipt-v3-test.mjs';
 import { buildAnalysisDataAudit, ANALYSIS_DATA_AUDIT_V1_VERSION } from '../lib/analysis-data-audit-v1.js';
 
 const find = (audit, id) => audit.rows.find(row => row.id === id);
