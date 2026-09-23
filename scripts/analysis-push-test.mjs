@@ -32,6 +32,7 @@ const context = vm.createContext({
   createBackgroundAnalysisAuthorization: async () => ({ timestamp: '1', signature: 'test' }),
   analyzeRequest: async () => Response.json({ ok: true }),
   completionMessage,
+  saveNotificationResult: async () => {},
   sendPush: async (device, message) => { if (deliveryFails) throw new Error('offline'); notifications.push({ device, message }); return { status: 'sent' }; },
 });
 vm.runInContext(source + '\nthis.board=analyzeBoardWorkflow; this.all=analyzeAllLeaguesWorkflow;', context);
