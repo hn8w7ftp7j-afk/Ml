@@ -4,19 +4,36 @@ const pairButton = byId('pair'), syncButton = byId('sync'), unpairButton = byId(
 const message = byId('message'), state = byId('state'), dot = byId('dot'), leagueGrid = byId('leagueGrid');
 const LEAGUES = [['MLB', '美棒'], ['NPB', '日棒'], ['KBO', '韓棒'], ['CPBL', '中職']];
 const STALE_MS = 180000;
+async function send(payload) {
+  let timer;
+  try {
+    const result = await Promise.race([
+      chrome.runtime.sendMessage(payload),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Reader 背景程式未回應，請到擴充功能頁重新載入 Reader。')), payload.type === 'GET_READER_STATUS' ? 8000 : 240000); }),
+    ]);
+    if (!result) throw new Error('Reader 未回傳狀態，請重新載入擴充功能。');
+    return result;
+  } finally { clearTimeout(timer); }
+}
+byId('repair').addEventListener('click', async () => {
+  const button = byId('repair'); button.disabled = true;
+  try { const result = await send({ type: 'REPAIR_READER' }); await refresh(); show(result.message || result.error || '修復未完成', result.ok ? 'ok' : 'error'); }
+  catch (error) { show(error.message, 'error'); }
+  finally { button.disabled = false; }
+});
 
 pairButton.addEventListener('click', async () => {
   if (!password.value) return show('請輸入配對密碼。', 'error');
   pairButton.disabled = true;
-  try { const result = await chrome.runtime.sendMessage({ type: 'PAIR_READER', password: password.value, deviceName: deviceName.value }); if (!result?.ok) throw new Error(result?.error || '配對失敗'); password.value = ''; await refresh(); show(result.message || '配對完成', result.syncOk === false ? 'error' : 'ok'); }
+  try { const result = await send({ type: 'PAIR_READER', password: password.value, deviceName: deviceName.value }); if (!result?.ok) throw new Error(result?.error || '配對失敗'); password.value = ''; await refresh(); show(result.message || '配對完成', result.syncOk === false ? 'error' : 'ok'); }
   catch (error) { show(error.message, 'error'); } finally { pairButton.disabled = false; }
 });
 syncButton.addEventListener('click', async () => {
   syncButton.disabled = true; syncButton.textContent = '正在檢查四個分頁…'; show('依聯盟分開讀取，不會互相覆蓋。');
-  try { const result = await chrome.runtime.sendMessage({ type: 'SYNC_NOW' }); await refresh(); show(result?.message || '檢查完成', result?.ok ? 'ok' : 'error'); }
+  try { const result = await send({ type: 'SYNC_NOW' }); await refresh(); show(result?.message || '檢查完成', result?.ok ? 'ok' : 'error'); }
   catch (error) { show(error.message, 'error'); } finally { syncButton.disabled = false; syncButton.textContent = '立即同步四個分頁'; }
 });
-autoToggle.addEventListener('change', async () => { const result = await chrome.runtime.sendMessage({ type: 'SET_AUTO_ENABLED', enabled: autoToggle.checked }); show(result.enabled ? '自動同步已開啟。' : '自動同步已暫停。', result.enabled ? 'ok' : ''); });
+autoToggle.addEventListener('change', async () => { const result = await send({ type: 'SET_AUTO_ENABLED', enabled: autoToggle.checked }); show(result.enabled ? '自動同步已開啟。' : '自動同步已暫停。', result.enabled ? 'ok' : ''); });
 unpairButton.addEventListener('click', async () => { await chrome.storage.local.remove(['readerToken', 'pairedAt', 'readerStatuses', 'pairError', 'lastSuccessfulPayloadHashes', 'lastSuccessfulSyncAts']); await refresh(); show('已移除裝置配對。'); });
 
 function render(statuses) {
@@ -38,11 +55,25 @@ function render(statuses) {
   state.textContent = `${healthy}/4 個分頁正常`; dot.className = healthy === 4 ? 'ok' : healthy ? '' : 'error';
 }
 async function refresh() {
-  const result = await chrome.runtime.sendMessage({ type: 'GET_READER_STATUS' }), paired = Boolean(result?.paired);
+  const result = await send({ type: 'GET_READER_STATUS' });
+  if (!result.ok) throw new Error(result.error || '無法取得 Reader 狀態');
+  const paired = Boolean(result.paired);
   pairPanel.classList.toggle('hidden', paired); statusPanel.classList.toggle('hidden', !paired);
   if (!paired) { show(result?.error || '第一次使用請輸入一次配對密碼。'); return; }
   autoToggle.checked = result.autoEnabled !== false; render(result.statuses || {});
 }
 function age(value) { if (!value) return '尚未同步'; const seconds = Math.floor((Date.now() - value) / 1000); return seconds < 60 ? `${seconds}秒前` : `${Math.floor(seconds / 60)}分鐘前`; }
 function show(value, type = '') { message.textContent = value; message.className = `message ${type}`.trim(); }
-refresh().catch(error => show(error.message, 'error'));
+async function initialize() {
+  await refresh();
+  if (!statusPanel.classList.contains('hidden') && autoToggle.checked) {
+    show('正在偵測 Tai888 分頁…');
+    const result = await send({ type: 'SYNC_NOW' });
+    await refresh();
+    show(result.message || result.error || '偵測未完成', result.ok ? 'ok' : 'error');
+  } else if (!statusPanel.classList.contains('hidden')) show('自動同步已暫停，可按立即同步手動偵測。');
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.readerStatuses) render(changes.readerStatuses.newValue || {});
+});
+initialize().catch(error => show(error.message, 'error'));
