@@ -49,6 +49,7 @@ assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 2 }, { league: '
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 3 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-W-first snapshots must never be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 4 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-v1.9.1 score-display snapshots must not restore null warning scores');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 5 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'old personnel identities and duplicate lineup slots must require a fresh analysis');
+assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 6 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'the official starter identity repair requires fresh personnel evidence under the new shared cache contract');
 
 const store = upsertAnalysisBoardCache({}, entry);
 assert.equal(store[analysisBoardCacheKey('MLB', '2026-08-23')].board.length, 1);
