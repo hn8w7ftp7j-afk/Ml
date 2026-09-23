@@ -12,7 +12,7 @@ async function api(body) {
 export default function AnalysisNotificationControl() {
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('iPhone 請先加入主畫面，再從主畫面開啟並啟用通知。');
+  const [message, setMessage] = useState('');
   useEffect(() => {
     let active = true;
     if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
@@ -61,8 +61,7 @@ export default function AnalysisNotificationControl() {
   }
   return <section className="panel" aria-label="分析完成通知">
     <strong>分析完成通知：{enabled ? '本裝置已啟用' : '未啟用'}</strong>
-    <p role="status">{message}</p>
-    <p>背景分析完成後通知本裝置；部分失敗會如實標示。通知只含完成數量，不含盤口或下注金額。是否即時顯示仍受網路、勿擾模式與系統設定影響。</p>
+    {message && <p role="status">{message}</p>}
     {!enabled ? <button disabled={busy} onClick={enable}>啟用分析完成通知</button> : <>
       <button disabled={busy} onClick={() => action('test')}>送出測試通知</button>
       <button disabled={busy} onClick={() => action('unsubscribe')}>關閉本裝置通知</button>
