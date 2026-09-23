@@ -61,6 +61,16 @@ assert.deepEqual(exportPersonnelAuditRow(legacy, decode).contextIdentity.missing
 assert.deepEqual(exportPersonnelAuditRow(legacy, decode).contextIdentity.mismatches, []);
 const corrupt = row(2); corrupt.frozen_context_payload.payloadHash = '0'.repeat(64);
 assert.equal(exportPersonnelAuditRow(corrupt, decode).ok, false);
+const oldVersion = exportPersonnelAuditRow(row(), () => { throw new Error('PIT快照內容編碼版本不相容'); });
+assert.equal(oldVersion.diagnostic.reason, 'PAYLOAD_VERSION_UNSUPPORTED');
+assert.equal(oldVersion.diagnostic.stage, 'CONTEXT_DECODE');
+assert.equal(oldVersion.diagnostic.version, 'BASEBALL-PIT-JSON-PAYLOAD-v1.2.0');
+const mismatch = exportPersonnelAuditRow(row(), () => { throw new Error('PIT快照內容雜湊或大小不一致'); });
+assert.equal(mismatch.diagnostic.reason, 'PAYLOAD_HASH_OR_RAW_SIZE_MISMATCH');
+const sensitiveError = exportPersonnelAuditRow(row(), () => { throw new Error('secret-source-response-do-not-leak'); });
+assert.equal(sensitiveError.diagnostic.reason, 'UNCLASSIFIED_READ_OR_DECODE_FAILURE');
+assert.ok(!JSON.stringify(sensitiveError).includes('secret-source-response-do-not-leak'));
+assert.ok(!JSON.stringify(sensitiveError).includes(original.frozen_context_payload.data));
 const wrongId = row(); wrongId.external_game_id = '2';
 assert.equal(exportPersonnelAuditRow(wrongId, decode).code, 'ROW_IDENTITY_MISMATCH');
 const marketCorrupt = row(); marketCorrupt.market_analysis_payload.payloadHash = '0'.repeat(64);
@@ -102,10 +112,22 @@ assert.equal(unpack(response.body).results[0].snapshotId, id(1));
 
 if (process.argv[2]) {
   const actual = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).results[0];
+  const record = actual.record;
+  const actualRow = { snapshot_id: record.snapshotId, league_id: record.leagueId, external_game_id: String(record.gameIdentity.gamePk),
+    game_identity: record.gameIdentity, game_start: record.gameStart, data_as_of: record.dataAsOf, analysis_as_of: record.analysisAsOf,
+    created_at: record.databasePersistedAt, analysis_type: record.analysisType, parent_snapshot_id: record.parentSnapshotId,
+    input_hash: record.inputHash, core_fingerprint: record.coreFingerprint, model_version: record.versions?.modelVersion,
+    versions: record.versions, provider_timestamps: record.providerTimestamps,
+    frozen_context_payload: record.frozenContextPayload, market_analysis_payload: record.marketAnalysisPayload };
+  const actualExport = exportPersonnelAuditRow(actualRow, decode);
+  assert.equal(actualExport.ok, true);
+  assert.equal(actualExport.contextEnvelopeIntegrity, 'VERIFIED_BY_EXISTING_DECODER');
+  assert.notEqual(actualExport.contextIdentity.status, 'MISMATCH');
+  assert.equal(unpack(buildPersonnelAuditPage([actualRow], query, { decode })).results[0].snapshotId, record.snapshotId);
   const projected = projectPersonnelContext(actual.hydratedContext || actual.bundle.frozenContext);
   assert.deepEqual(projected.context.away, (actual.hydratedContext || actual.bundle.frozenContext).away);
   assert.deepEqual(projected.context.home, (actual.hydratedContext || actual.bundle.frozenContext).home);
   assert.deepEqual(projected.context.sourceEvidence.contents, {});
-  console.log(JSON.stringify({ realSample: actual.snapshotId, originalBytes: Buffer.byteLength(JSON.stringify(actual.hydratedContext)), projectedBytes: Buffer.byteLength(JSON.stringify(projected.context)), rawBodyOmissions: projected.omitted.length }));
+  console.log(JSON.stringify({ realSample: actual.snapshotId, identity: actualExport.contextIdentity.status, originalBytes: Buffer.byteLength(JSON.stringify(actual.hydratedContext)), projectedBytes: Buffer.byteLength(JSON.stringify(projected.context)), rawBodyOmissions: projected.omitted.length }));
 }
 console.log('personnel-audit-export: PASS (query, integrity, identity, projection, pagination, bounds, auth, rate limit, read-only SQL)');
