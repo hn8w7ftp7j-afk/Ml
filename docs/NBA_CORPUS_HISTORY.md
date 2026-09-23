@@ -1,7 +1,10 @@
 # NBA historical odds corpus research
 
-The NBA history tab now has an independent corpus panel. It reads a private,
-authenticated append-only research store, not a public bundled odds fixture.
+The NBA corpus interface has moved to the private independent site:
+https://nba-mlb-research.kai-2199.chatgpt.site/
+The main site has no research tab; old corpus and research APIs return authenticated
+410 RESEARCH_MOVED responses. Old corpus POST no longer writes to the main DB.
+The new site owns its bundled seed and append-only R2 research versions.
 `research/nba-history/` is ignored. Never commit uploaded source images, Drive
 references, or research payloads to this public repository.
 
@@ -40,12 +43,12 @@ Create a delivery JSON from the result: set `league: "NBA"` and
 `modelInputEnabled: false`; replace each entry's `snapshots` with `snapshotCount`
 and `sourceRows` (original row IDs). Omit the bulky per-team `reports` from the UI
 payload; retain them with the private reproducibility archive. Upload through
-NBA → 歷史研究 → 全部歷史盤口研究 → 匯入歷史研究報告.
+the independent site → NBA → 匯入歷史研究報告.
 
-The POST is authenticated, same-origin, rate limited and size limited. The store
+The POST is authenticated, same-origin and size limited. The store
 reconciles unique rows, candidate/matched/included counts, training cutoffs and
 aggregate MAE/RMSE/bias before insertion. Revisions use canonical key ordering so
-PostgreSQL JSONB ordering cannot invalidate an unchanged payload. Writes append;
+JSON key ordering cannot invalidate an unchanged payload. Writes append;
 readback must match the revision before a persisted receipt is returned.
 The research table is independent of pregame evidence, ledgers and model inputs.
 
@@ -60,3 +63,4 @@ Rows without enough history stay pending rather than disappearing.
 Unit and SQL transport-double tests are not live DB or browser acceptance.
 Production must separately verify import receipt, reload, filters, pagination,
 authentication and the displayed totals against the saved artifact.
+

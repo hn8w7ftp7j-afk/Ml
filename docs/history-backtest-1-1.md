@@ -1,3 +1,5 @@
+> 已移至獨立私人研究站：https://nba-mlb-research.kai-2199.chatgpt.site/mlb 。主站不再顯示研究入口；舊頁面導向新站，舊 API 驗證登入後回 410 RESEARCH_MOVED。以下為原始研究方法與資料紀錄。
+
 # Historical backtest 1.1 — frozen over diagnostics
 
 This integration adds `/diagnostics/over` to the existing application. It uses the
@@ -96,3 +98,4 @@ expanded details, downloads, reload recovery, authentication and mobile layout.
 Build and local HTTP success alone are not authenticated production-browser or
 mobile visual acceptance. Report any remaining acceptance gaps explicitly.
 Do not promote this research integration as a verified profitable model.
+
