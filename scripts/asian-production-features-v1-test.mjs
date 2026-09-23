@@ -346,7 +346,7 @@ const cpblGame = {
 };
 const cpblHistory = Array.from({ length: 6 }, (_, i) => ({
   ...cpblGame, providerGameId: `cpbl-fallback-past-${i}`, gamePk: `cpbl-fallback-past-${i}`,
-  gameDate: `2099-08-${29 - i}T10:00:00Z`, awayScore: 3, homeScore: 2,
+  officialDate: `2099-08-${29 - i}`, gameDate: `2099-08-${29 - i}T10:00:00Z`, statusCode: 'F', awayScore: 3, homeScore: 2,
 }));
 const cpblStarterPayload = { Data: { Game: {
   Visiting: { Team: { Code: 'ACN011' }, Pitchers: [{ PitcherAcnt: 'AUDIT-A', PitcherName: '真實客投', RoleType: '先發', InningPitchedCnt: 5, InningPitchedDiv3Cnt: 0, PlateAppearances: 22, EarnedRunCnt: 2, HittingCnt: 5, BasesONBallsCnt: 1 }] },
@@ -361,7 +361,13 @@ const cpblFallbackSnapshot = (await buildAsianProductionFeatureSnapshot({
   leagueId: 'CPBL', game: cpblGame, history: cpblHistory,
   fetchImpl: async url => ({ ok: true, json: async () => {
     if (url.endsWith(`/games/${cpblGame.providerGameId}`)) return cpblPregameStarterPayload;
-    if (url.includes('/games/')) return cpblStarterPayload;
+    if (url.includes('/games/')) {
+      const past = cpblHistory.find(row => url.endsWith(`/games/${row.providerGameId}`));
+      assert.ok(past, 'historical response must belong to the requested official game');
+      const payload = structuredClone(cpblStarterPayload);
+      Object.assign(payload.Data.Game, { GameId: past.providerGameId, GameStatus: 'FINISHED', PreExeDate: past.gameDate });
+      return payload;
+    }
     if (url.includes('/players/AUDIT-')) {
       const away = url.endsWith('AUDIT-A');
       return { Data: { Player: { Basic: { Acnt: away ? 'AUDIT-A' : 'AUDIT-H', Team: { Code: away ? 'ACN011' : 'AEO011' }, PitchingHabbit: 'R', IsForeign: '1' } } } };

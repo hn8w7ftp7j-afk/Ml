@@ -43,6 +43,7 @@ assert.deepEqual(restoreAnalysisBoardCache(distinctEntry, { league: 'MLB', date:
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'KBO', date: '2026-08-23', now: NOW }), [], 'league caches must remain isolated');
 assert.deepEqual(restoreAnalysisBoardCache(entry, { league: 'MLB', date: '2026-08-23', now: NOW + 73 * 60 * 60 * 1000 }), [], 'expired recovery data must not be restored');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 1 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-shared-distribution model snapshots must not survive the cache contract bump');
+assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 8 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'new roster eligibility and actual appearance inputs require fresh live analysis');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 7 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'pre-v3 personnel receipts and stale projection metrics require a fresh analysis');
 assert.deepEqual(restoreAnalysisBoardCache({ ...entry, version: 6 }, { league: 'MLB', date: '2026-08-23', now: NOW }), [], 'the official starter identity repair requires fresh personnel evidence under the new shared cache contract');
 const legacyAsianEntry = { ...entry, version: 1, league: 'KBO' };

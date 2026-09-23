@@ -287,7 +287,10 @@ const disguisedTeamRa = featuresFor('NPB');
 disguisedTeamRa.away.starter.performanceSource = 'OFFICIAL_TEAM_RESULTS_TEAM_RATE_PRIOR';
 const disguisedTeamRaContext = await contextFor('NPB', gameFor('NPB'), disguisedTeamRa);
 assert.equal(disguisedTeamRaContext.away.starter.performanceAvailable, false, '即使標記 independent，整隊比分來源仍不得冒充個別先發能力');
-assert.equal(disguisedTeamRaContext.away.starter.projectionMode, 'LEAGUE_NEUTRAL_ROTATION_SCENARIO');
+assert.equal(disguisedTeamRaContext.away.starter.projectionMode, 'OFFICIAL_ASSIGNMENT_NEUTRAL_PERFORMANCE');
+assert.equal(disguisedTeamRaContext.away.starter.confirmed, true, '拒絕無效能力資料不得撤銷已確認的官方先發身分');
+assert.equal(disguisedTeamRaContext.away.starter.identityConfirmed, true);
+assert.equal(disguisedTeamRaContext.away.starter.projected, false);
 assert.equal(disguisedTeamRaContext.away.starter.qualityFactor, 1, '被拒絕的整隊RA不得滲入先發平均值');
 assert.equal(disguisedTeamRaContext.dataGateV10.passedForShadowScore, true, '無效個人資料應改走中性預測，不應整場停分');
 
