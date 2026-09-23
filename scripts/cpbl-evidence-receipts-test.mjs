@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { captureAsianSource, auditAsianSourceEvidence } from '../lib/asian-source-evidence-v1.js';
 import { cpblFeatureBindings, inspectFeatureMapping } from '../lib/cpbl-feature-evidence-v1.js';
-import { bullpenSnapshot, starterSnapshot } from '../lib/asian-production-features-v1.js';
+import { bullpenSnapshot, starterSnapshot, parseCpblCurrentPersonnel } from '../lib/asian-production-features-v1.js';
 import { buildAnalysisDataAudit } from '../lib/analysis-data-audit-v1.js';
 const raw = JSON.stringify({ Data: { Game: { Visiting: { Team: { Code:'AKP011' }, Pitchers:[{PitcherAcnt:'a'}], Hitters:[{HitterAcnt:'h'}] }, Home: {Team:{Code:'AJL011'},Pitchers:[{PitcherAcnt:'b'}]} } } });
 const capture = captureAsianSource({url:'https://stats.cpbl.com.tw/api/proxy/v1/games/test-game',raw,representation:'JSON',fetchedAt:'2026-09-08T09:00:00Z',httpStatus:200});
@@ -13,6 +13,38 @@ assert.deepEqual(home[0].path,['Data','Game','Home','Pitchers']);
 assert.equal(inspectFeatureMapping({sourceBindings:away},()=>raw).status,'MAPPED_PATHS_PRESENT');
 assert.equal(inspectFeatureMapping({sourceBindings:[{...away[0],path:['missing']}]},()=>raw).status,'PENDING');
 assert.equal(inspectFeatureMapping({},()=>raw).status,'PENDING');
+
+// A verified pregame starting nine must describe its actual acquisition path,
+// while historical projections retain their separate transformation contract.
+const currentGame = { providerGameId:'2026-A-317', gamePk:317, gameDate:'2026-09-08T10:35:00Z', statusCode:'S',
+  awayCode:'TSG', homeCode:'RKM', awayTeamId:706, homeTeamId:703 };
+const announcedNine = prefix => Array.from({length:9},(_,i)=>({
+  HitterAcnt:`${prefix}${i}`, HitterName:`球員${prefix}${i}`, Lineup:i+1, PlateAppearances:0,
+}));
+const currentRaw=JSON.stringify({Data:{Game:{GameId:currentGame.providerGameId,GameStatus:'SCHEDULED',
+  Visiting:{Team:{Code:'AKP011'},Hitters:announcedNine('1'),Pitchers:[]},
+  Home:{Team:{Code:'AJL011'},Hitters:announcedNine('2'),Pitchers:[]},
+}}});
+const currentCapture=captureAsianSource({url:`https://stats.cpbl.com.tw/api/proxy/v1/games/${currentGame.providerGameId}`,
+  raw:currentRaw,representation:'JSON',fetchedAt:'2026-09-08T09:00:00Z',httpStatus:200});
+const currentLineup=parseCpblCurrentPersonnel(JSON.parse(currentRaw),currentGame,currentCapture.event).lineups.away;
+const currentEvidence=structuredClone(currentLineup.sourceEvidence);
+const currentParams={game:currentGame,featureName:'away.lineup',parsedInput:currentLineup,
+  events:[currentCapture.event,capture.event],contents:{...params.contents,[currentCapture.event.contentHash]:currentCapture.content}};
+const currentBindings=cpblFeatureBindings(currentParams);
+assert.equal(currentBindings.length,1);
+assert.equal(currentBindings[0].eventId,currentCapture.event.id);
+assert.deepEqual(currentBindings[0].path,['Data','Game','Visiting','Hitters']);
+assert.equal(currentBindings[0].transformation,'VERIFY_GAME_TEAM_STATUS_PREGAME_RECEIPT;NINE_ANNOUNCED_STARTING_SLOTS');
+assert.equal(inspectFeatureMapping({sourceBindings:currentBindings},()=>currentRaw).status,'MAPPED_PATHS_PRESENT');
+assert.deepEqual(currentLineup.sourceEvidence,currentEvidence);
+assert.equal(currentEvidence.publishedAt,null);
+assert.equal(currentEvidence.fetchedAt,currentCapture.event.fetchedAt);
+assert.equal(currentEvidence.pregameReceiptVerified,true);
+assert.equal(cpblFeatureBindings({...currentParams,parsedInput:{...currentLineup,assignmentStatus:'PROJECTED'}})[0].transformation,
+  'FIRST_NINE_STARTING_SLOTS;HISTORICAL_LINEUP_PROJECTION');
+assert.equal(cpblFeatureBindings({...currentParams,parsedInput:{...currentLineup,asOfProviderGameId:'2026-A-318'}}).length,0);
+console.log('CPBL current lineup provenance: announced slots, current game binding, honest receipt time and historical fallback PASS');
 const audit = auditAsianSourceEvidence({inputCutoffAt:'2026-09-08T09:10:00Z',game:{gameDate:'2026-09-08T10:35:00Z'},sourceEvidence:{...params,features:[{featureName:'weather',complete:true,derivationVersion:'fixture',requiredFeatures:['history'],parsedInput:{available:false,source:'UNAVAILABLE'}}]}});
 assert.equal(audit.rows.find(x=>x.featureName==='weather').availability,'NOT_CONNECTED');
 const details = [{game:{gamePk:1,gameDate:'2026-09-07T10:00:00Z',awayTeamId:706},detail:{away:{pitchers:[{officialPlayerId:'a',name:'投手甲',starter:false,inningsPitched:4,earnedRuns:2}]}}}];

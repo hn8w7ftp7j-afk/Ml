@@ -340,20 +340,26 @@ assert.ok(observedHistory.sourceObservations.every(row => row.publishedAt === nu
 
 const cpblGame = {
   gamePk: 'cpbl-fallback-integrity', providerGameId: 'cpbl-fallback-integrity',
-  officialDate: '2026-08-31', gameDate: '2026-08-31T10:00:00Z',
+  officialDate: '2099-08-31', gameDate: '2099-08-31T10:00:00Z',
   awayTeamId: 701, homeTeamId: 702, awayCode: 'CTB', homeCode: 'FUB', venue: '大巨蛋',
 };
 const cpblHistory = Array.from({ length: 6 }, (_, i) => ({
   ...cpblGame, providerGameId: `cpbl-fallback-past-${i}`, gamePk: `cpbl-fallback-past-${i}`,
-  gameDate: `2026-08-${29 - i}T10:00:00Z`, awayScore: 3, homeScore: 2,
+  gameDate: `2099-08-${29 - i}T10:00:00Z`, awayScore: 3, homeScore: 2,
 }));
 const cpblStarterPayload = { Data: { Game: {
   Visiting: { Team: { Code: 'ACN011' }, Pitchers: [{ PitcherAcnt: 'AUDIT-A', PitcherName: '真實客投', RoleType: '先發', InningPitchedCnt: 5, InningPitchedDiv3Cnt: 0, PlateAppearances: 22, EarnedRunCnt: 2, HittingCnt: 5, BasesONBallsCnt: 1 }] },
   Home: { Team: { Code: 'AEO011' }, Pitchers: [{ PitcherAcnt: 'AUDIT-H', PitcherName: '真實主投', RoleType: '先發', InningPitchedCnt: 5, InningPitchedDiv3Cnt: 0, PlateAppearances: 25, EarnedRunCnt: 4, HittingCnt: 8, BasesONBallsCnt: 2 }] },
 } } };
+const cpblPregameStarterPayload = structuredClone(cpblStarterPayload);
+Object.assign(cpblPregameStarterPayload.Data.Game, { GameId: cpblGame.providerGameId, GameStatus: 'SCHEDULED' });
+for (const key of ['Visiting', 'Home']) for (const row of cpblPregameStarterPayload.Data.Game[key].Pitchers) {
+  for (const field of ['InningPitchedCnt', 'InningPitchedDiv3Cnt', 'PlateAppearances', 'EarnedRunCnt', 'HittingCnt', 'BasesONBallsCnt']) row[field] = 0;
+}
 const cpblFallbackSnapshot = (await buildAsianProductionFeatureSnapshot({
   leagueId: 'CPBL', game: cpblGame, history: cpblHistory,
   fetchImpl: async url => ({ ok: true, json: async () => {
+    if (url.endsWith(`/games/${cpblGame.providerGameId}`)) return cpblPregameStarterPayload;
     if (url.includes('/games/')) return cpblStarterPayload;
     if (url.includes('/players/AUDIT-')) {
       const away = url.endsWith('AUDIT-A');
