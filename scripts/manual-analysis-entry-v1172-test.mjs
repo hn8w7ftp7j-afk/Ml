@@ -13,12 +13,12 @@ assert.doesNotMatch(
 );
 assert.match(
   page,
-  /onClick=\{\(\) => oneClickAnalyze\(\)\}/,
+  /onClick=\{\(\) => startWithCompletionNotification\(\(\) => oneClickAnalyze\(\)\)\}/,
   'single-league analysis must remain a manual button action',
 );
 assert.match(
   page,
-  /onClick=\{\(\) => oneClickAnalyzeAll\(\)\}/,
+  /onClick=\{\(\) => startWithCompletionNotification\(\(\) => oneClickAnalyzeAll\(\)\)\}/,
   'all-league analysis must remain a manual button action',
 );
 assert.match(
