@@ -367,6 +367,13 @@ export function parseTai888Capture(capture, now = new Date()) {
     const fingerprint = marketFingerprint(game);
     if (seen.has(key)) {
       const previous = seen.get(key);
+      const previousGame = unique[previous.index];
+      const sharedConflict = ['fullRunline', 'fullTotal', 'first5Runline', 'first5Total'].some(property => {
+        const canonical = property.endsWith('Runline') ? canonicalRunline : canonicalTotal;
+        return previousGame[property] && game[property]
+          && JSON.stringify(canonical(previousGame[property])) !== JSON.stringify(canonical(game[property]));
+      });
+      if (sharedConflict && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
       const richness = marketRichness(game);
       if (richness > previous.richness) {
         unique[previous.index] = game;
@@ -393,7 +400,11 @@ export function parseTai888Capture(capture, now = new Date()) {
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),
     boardDate,
     games: unique.slice(0, 40),
-    parseIssues: conflictingGameKeys.map(key => `conflicting-duplicate:${key}`),
+    parseIssues: [
+      ...conflictingGameKeys.map(key => `conflicting-duplicate:${key}`),
+      ...(Array.isArray(capture?.diagnostics?.conflictingGameKeys) && capture.diagnostics.conflictingGameKeys.length
+        ? ['conflicting-normalized-rows'] : []),
+    ],
   };
 }
 

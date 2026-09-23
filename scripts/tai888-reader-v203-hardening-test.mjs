@@ -219,6 +219,17 @@ const conflictingNormalized = normalizer.normalizeRowRecords(
 assert.equal(conflictingNormalized.diagnostics.gameCount, 1);
 assert.equal(conflictingNormalized.diagnostics.conflictingGameKeys.length, 1, 'conflicting duplicate rows must not be silently deduplicated');
 
+for (const partialFirst of [true, false]) {
+  const partialAway = structuredClone(conflictingAway);
+  const partialHome = structuredClone(conflictingHome);
+  for (const row of [partialAway, partialHome]) row.cells = row.cells.filter(cell => cell.left < 700);
+  const groups = partialFirst ? [partialAway, partialHome, structuredClone(away), structuredClone(home)]
+    : [structuredClone(away), structuredClone(home), partialAway, partialHome];
+  groups.forEach((row, index) => { row.order = index + 2; });
+  const result = normalizer.normalizeRowRecords([header, league, ...groups], { documentLooksStandardMlb: true });
+  assert.equal(result.diagnostics.conflictingGameKeys.length, 1, 'coverage differences cannot hide shared price conflicts');
+}
+
 const secondGame = structuredClone(parsed.games[0]);
 secondGame.awayCode = 'BOS';
 secondGame.homeCode = 'TOR';
@@ -293,7 +304,7 @@ assert.equal(backgroundAssessment.marketActivityAt, '2026-08-14T16:56:00.000Z', 
 
 const captureConflict = candidate();
 captureConflict.capture.diagnostics.conflictingGameKeys = ['BAL|MIN|08-15|01:10'];
-assert.equal(assessBoardCandidate(captureConflict, now).ok, true, 'duplicate DOM prices select one canonical game instead of blocking the board');
+assert.equal(assessBoardCandidate(captureConflict, now).ok, false, 'conflicting DOM prices must stop upload');
 assert.equal(assessBoardCandidate(captureConflict, now).ignoredDuplicateGameCount, 1);
 
 const missingMarket = candidate();
@@ -331,9 +342,8 @@ assert.equal(assessBoardCandidate(invalidWater, now).ok, false, 'all eight direc
 const conflictingFrame = candidate({ frameId: 10 });
 conflictingFrame.parsed.games[0].fullTotal.overWater = 0.95;
 const conflict = selectAuthoritativeBoard([completeFrame, conflictingFrame], { now });
-assert.equal(conflict.ok, true, 'duplicate host/iframe observations must resolve to one authoritative frame');
-assert.equal(conflict.selected.candidate.frameId, 9);
-assert.equal(conflict.ignoredDuplicateFrameCount, 1);
+assert.equal(conflict.ok, false, 'conflicting host/iframe prices must stop upload');
+assert.equal(conflict.error, 'conflicting-duplicate-frames');
 
 assert.equal(shouldSkipSuccessfulPayload({
   reason: 'alarm', payloadHash: 'new', lastSuccessfulPayloadHash: 'old', lastSuccessfulSyncAt: now, now,

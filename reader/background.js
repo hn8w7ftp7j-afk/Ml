@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from './board-selector.js';
 
-const VERSION = '2.1.19';
+const VERSION = '2.1.22';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];
@@ -37,7 +37,8 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (message?.type === 'PAIR_READER') { pair(message.password, message.deviceName).then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'SYNC_NOW') { syncNow('manual').then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
-  if (message?.type === 'GET_READER_STATUS') { readerStatus().then(reply); return true; }
+  if (message?.type === 'GET_READER_STATUS') { readerStatus().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
+  if (message?.type === 'REPAIR_READER') { repairReader().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'SET_AUTO_ENABLED') { chrome.storage.local.set({ autoEnabled: Boolean(message.enabled) }).then(async () => { await ensureAlarm(); reply({ ok: true, enabled: Boolean(message.enabled) }); }); return true; }
   if (message?.type === 'TAI888_BOARD_MUTATED') { const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null; clearTimeout(mutationTimer); mutationTimer = setTimeout(() => syncNow('mutation', preferredTabId).catch(() => {}), 3500); }
   if (message?.type === 'TAI888_FRAME_READY') { const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null; clearTimeout(mutationTimer); mutationTimer = setTimeout(() => syncNow('frame-ready', preferredTabId).catch(() => {}), 1800); }
@@ -151,7 +152,11 @@ async function performSync(reason, preferredTabId) {
   if (!stored.readerToken) throw new Error('尚未配對，請先輸入一次 Reader 配對密碼。');
   if (reason !== 'manual' && stored.autoEnabled === false) return { ok: true, skipped: true, message: '自動同步已關閉' };
   const tabs = [...new Map((await chrome.tabs.query({ url: PATTERNS })).map(tab => [tab.id, tab])).values()];
-  if (!tabs.length) throw new Error('找不到 Tai888 分頁。請開啟四個聯盟的「讓分＆大小」頁。');
+  if (!tabs.length) {
+    const message = '找不到 Tai888 分頁，請確認網站存取權限，並開啟 tai888.in 的「讓分＆大小」頁。';
+    await chrome.storage.local.set({ readerStatuses: Object.fromEntries(LEAGUES.map(league => [league, { ok: false, state: 'missing', league, message, readerVersion: VERSION }])) });
+    return { ok: false, message };
+  }
   let scan = await collectCandidates(tabs);
   if (scan.silentTabIds.length && await recoverTabs(tabs, scan.silentTabIds, { force: reason === 'manual' })) scan = await collectCandidates(tabs);
   let candidates = scan.candidates;
@@ -160,12 +165,18 @@ async function performSync(reason, preferredTabId) {
     const own = candidates.filter(item => item.parsed.league === league);
     if (!own.length) {
       const disconnected = scan.silentTabIds.length > 0;
-      statuses[league] = { ok: false, state: disconnected ? 'disconnected' : 'missing', league, message: disconnected ? `${LABELS[league]} Reader 未連線，已自動重試；請重新整理該 Tai888 分頁（F5）` : `找不到${LABELS[league]}標準盤分頁（可能尚未開盤）`, readerVersion: VERSION };
+      statuses[league] = { ok: false, state: disconnected ? 'disconnected' : 'missing', league, message: disconnected ? `${LABELS[league]} Reader 未連線，無法連上頁面讀取程式；請按「修復讀取」或在該分頁按 F5` : `找不到${LABELS[league]}標準盤分頁（可能尚未開盤）`, readerVersion: VERSION };
       continue;
     }
     const selection = selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
     if (!selection.ok) {
-      const detail = selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
+      const detail = selection.error === 'conflicting-duplicate-rows'
+        ? '同場盤口重複且數字不一致，已停止上傳；請重新整理 Tai888 分頁後再同步'
+        : selection.error === 'conflicting-duplicate-frames'
+        ? '同一分頁內盤口不一致，已停止同步；請重新整理該 Tai888 分頁後再同步'
+        : selection.error === 'conflicting-duplicate-tabs'
+          ? '同聯盟分頁盤口不一致，已停止同步；請只保留正確盤日的分頁後再同步'
+          : selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
       statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
@@ -189,3 +200,19 @@ async function performSync(reason, preferredTabId) {
   return { ok: successes > 0, results, message: `四聯盟檢查完成｜${successes} 個分頁同步成功` };
 }
 async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, error: stored.pairError || '', readerVersion: VERSION }; }
+
+// A missing content script cannot receive RECOVER. Reload only after the user
+// explicitly clicks repair, only on allowlisted tabs that did not respond.
+async function repairReader() {
+  if (running) await running.catch(() => {});
+  const tabs = await chrome.tabs.query({ url: PATTERNS });
+  const scan = await collectCandidates(tabs);
+  const failed = [];
+  let reloaded = 0;
+  for (const tabId of scan.silentTabIds) {
+    try { await chrome.tabs.reload(tabId); reloaded += 1; }
+    catch { failed.push(tabId); }
+  }
+  if (reloaded) return { ok: failed.length === 0, message: `已重新整理 ${reloaded} 個未連線分頁，載入完成後請按「立即同步」。${failed.length ? '部分分頁無法重新整理，請手動按 F5。' : ''}` };
+  return syncNow('manual');
+}
