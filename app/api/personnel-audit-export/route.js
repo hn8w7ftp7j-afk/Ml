@@ -31,6 +31,7 @@ export async function GET(request) {
       FROM baseball_analysis_pit_snapshots
       WHERE created_at <= ${query.until}::timestamptz
         AND snapshot_id > ${query.after} AND analysis_type = 'FULL'
+        AND (${query.payloadVersion}::text IS NULL OR frozen_context_payload->>'version' = ${query.payloadVersion})
       ORDER BY snapshot_id LIMIT ${query.limit + 1}
     `;
     const packed = buildPersonnelAuditPage(rows, query, { decode: decodeAnalysisPitPayload });
