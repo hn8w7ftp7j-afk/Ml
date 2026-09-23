@@ -448,6 +448,14 @@
       });
       if (seen.has(key)) {
         const previous = seen.get(key);
+        const previousGame = unique[previous.index];
+        const sharedConflict = [2, 3, 6, 7].some(index => {
+          const a = previousGame.cells[index]?.pair || [];
+          const b = game.cells[index]?.pair || [];
+          return a.length === 2 && b.length === 2 && a.every(clean) && b.every(clean)
+            && JSON.stringify(a.map(clean)) !== JSON.stringify(b.map(clean));
+        });
+        if (sharedConflict && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
         const richness = marketRichness(game);
         if (richness > previous.richness) {
           unique[previous.index] = game;
