@@ -162,6 +162,7 @@ const invalidResult = (await buildAsianProductionFeatureSnapshot({ leagueId:'CPB
   fetchImpl: async url => url.endsWith(invalidGame.providerGameId)
     ? { ok:true, status:200, text:async()=>JSON.stringify(completePayload(completedGames[6],7)) } : fetchImpl(url),
 })).featureSnapshot;
+assert.deepEqual(context.rotationInputDiagnostics, snapshot.rotationInputDiagnostics, '保存的分析context須保留候選擷取及缺漏診斷');
 assert.deepEqual(invalidResult.rotationInputDiagnostics.missingCompletedDetails,
   [{ providerGameId:invalidGame.providerGameId, reason:'CPBL_DETAIL_IDENTITY_NOT_VERIFIED' }]);
 assert.equal(invalidResult.rotationInputDiagnostics.completedDetailsFetched,6);
