@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './ranking-display-test.mjs';
 import fs from 'node:fs';
 import { APP_VERSION } from '../lib/app-version.js';
 
@@ -191,11 +192,11 @@ assert.match(rankingUi, /evaluateBetAction/, 'ranking rows must render the canon
 assert.doesNotMatch(rankingUi, /\(recordable \|\| betState\.latest\) &&/, 'ranking action must never disappear merely because durable recording is temporarily blocked');
 assert.match(betActionPolicy, /'永久帳本暫停'/, 'ranking action must explain a cloud-ledger outage instead of disappearing');
 assert.match(rankingUi, /全部方向/, 'ranking UI must explicitly identify all-direction display');
-assert.match(rankingUi, /負EV、R≤0、QA BLOCK與低分方向都不刪除/, 'ranking UI must explain that all analyzed directions remain visible');
+assert.match(rankingUi, /保留全部已分析方向/, 'ranking UI must explain that all analyzed directions remain visible');
 assert.match(rankingUi, /Reader覆蓋/, 'ranking UI must disclose Reader slate coverage for cross-snapshot comparisons');
 assert.match(rankingUi, /盤口雜湊/, 'ranking UI must expose a short Reader snapshot identity');
-assert.match(rankingUi, /不能與其他時點、其他盤口快照混合比較/, 'ranking UI must prevent cross-snapshot score comparisons');
-assert.match(rankingUi, /排名資格：否/, 'ranking UI must label non-qualified directions instead of filtering them out');
+assert.match(rankingUi, /僅比較同一版盤口/, 'ranking UI must prevent cross-snapshot score comparisons');
+assert.match(rankingUi, /<RankingDiagnostics entry=\{entry\}/, 'ranking UI must show compact blocked and unqualified reasons instead of filtering rows out');
 mustMatch(/BET_PERIODS/, 'ledger quick period controls missing');
 mustMatch(/BetLedgerDashboard/, 'unified four-league ledger dashboard missing');
 mustMatch(/selectedLeague=\{betLeague\}/, 'ledger league drill-down state missing');
@@ -348,4 +349,3 @@ mustMatch(/running: 1, total: 1/, 'single-request phases must report one active 
 mustMatch(/restoredBoardNeedsValidationRef\.current = restoredBoard\.length > 0[\s\S]*manualAnalysisScopesRef\.current\.has/, 'restored scores must wait for a manual analysis action before Reader repricing starts');
 
 console.log('Page Reader automation, four-league navigation, storage continuity, board authority and all-score presentation PASS');
-
