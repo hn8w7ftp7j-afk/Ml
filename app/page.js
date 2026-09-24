@@ -17,6 +17,7 @@ import { APP_VERSION } from '../lib/app-version.js';
 import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
 import { analysisSourceStatusDisplay } from '../lib/npb-identity-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
+import { rankingWarningPresentation, rankingStatusText } from '../lib/ranking-display.js';
 import NbaEntry from './nba/entry.js';
 import GameAnalysisCopy from './game-analysis-copy.js';
 import Link from 'next/link';
@@ -1318,6 +1319,17 @@ function diagnosticVerdict(row, formulaScore, qaPassed, leagueValidated, game) {
   if (formulaScore >= 8.0) return { icon: '🟢', label: '8.0級模型方向', ranking: true, reason: `雙EV為正且達8.0${scenarioWarning}` };
   if (formulaScore >= 7.5) return { icon: '🟢', label: '7.5級模型方向', ranking: true, reason: `雙EV為正且達7.5${scenarioWarning}` };
   return { icon: '🟢', label: '7.2級模型方向', ranking: true, reason: `雙EV為正且達7.2${scenarioWarning}` };
+}
+
+function RankingDiagnostics({ entry, warnings }) {
+  const { visible, details } = rankingWarningPresentation(warnings);
+  const status = rankingStatusText(entry);
+  return <>
+    <small className="rankingMetrics"><span title="模型估計 EV">W {signedPct(entry.weightedEV)}</span><span title="保守估計 EV">R {signedPct(entry.robustEV)}</span></small>
+    {status && <small className="warningText">{status}</small>}
+    {visible.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}
+    {details.length > 0 && <details className="rankingDetails"><summary>檢查明細</summary>{details.map(note => <small key={note}>{note}</small>)}</details>}
+  </>;
 }
 
 function ReaderRecovery({ action, onRecheck, busy = false }) {
@@ -4734,39 +4746,39 @@ export default function Home() {
       </details>}
     </>}
 
-    {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜S分數由高到低</h2><span className="state shadow">全部顯示｜模型分析</span></div>
-      <div className="emptySmall">此處顯示這一版Reader快照中已開盤且成功完成分析的全部方向，先依固定S分數由高到低排列，同分再依W、R排序；負EV、R≤0、QA BLOCK與低分方向都不刪除。全場大分正常保留，排名資格仍依原有規則判定；此處排列不代表推薦或已驗證獲利。市場差距與極高EV只顯示WARNING，不改原始分數。尚未開盤或市場資料錯誤的固定槽位保留在各場今日盤口，不能與其他時點、其他盤口快照混合比較。</div>
-      <div className="emptySmall">盤日 {date}｜Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜最晚盤口 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</div>
+    {tab === 'ranking' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button className="active" onClick={() => setTab('ranking')}>全部方向</button><button onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>全部方向｜分數由高到低</h2><span className="state shadow">模型估計</span></div>
+      <div className="rankingMeta">{date}｜盤口時間 {rankingProvenance.latestLineAsOf ? localTime(rankingProvenance.latestLineAsOf) : '—'}</div>
+      <details className="rankingDetails rankingSourceDetails"><summary>資料與排序說明</summary>
+        <p>依 S 分數、W、R 排序；保留全部已分析方向，不代表推薦。僅比較同一版盤口。</p>
+        <small>W：模型估計 EV｜R：保守估計 EV</small>
+        <small>Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</small>
+      </details>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
         const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
         const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority, queued: betState.queued });
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
-        const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
         const warnings = diagnosticWarnings(entry.row);
         const icon = entry.researchPolicy ? '🧪' : scoreIcon(entry.score, entry.qaPassed && entry.qualified);
-        const status = entry.researchPolicy ? `排名資格：否｜${entry.researchPolicy.label}` : entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : !entry.currentAnalysisExecutable ? '目前版本排名資格：待複核｜保留原模型分數與資格判定' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
         return <div className={`rankRow ${entry.researchPolicy ? 'researchOnlyRow' : ''} ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}>
           <b>{entry.researchPolicy ? '研究' : index + 1}</b>
           <strong className={`rankScore ${entry.researchPolicy ? 'researchOnlyScore' : entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong>
-          <div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><ResearchMarketBadge policy={entry.researchPolicy}/><small>模型估計EV W {signedPct(entry.weightedEV)}｜保守估計 R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div>
+          <div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><RankingDiagnostics entry={entry} warnings={warnings}/>{entry.inactiveNotice && <small>{entry.inactiveNotice}</small>}</div>
           <div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? entry.researchPolicy ? 'researchLedger' : 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{researchLedgerActionText(action, entry.researchPolicy)}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div>
         </div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
     {tab === 'betOrder' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button onClick={() => setTab('ranking')}>全部方向</button><button className="active" onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>影子候選順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
-      <div className="emptySmall">先按比賽開始時間由早到晚，再於同場依序排列全場讓分、全場大小、上半讓分、上半大小；同一市場有多個7.0分以上方向時，分數較高者排前。MLB 全場大分正常保留，與其他方向依原有規則顯示，持續觀察不代表已驗證獲利。已下注項目保留標記，時間未定賽事排在最後。</div>
+      <details className="rankingDetails rankingSourceDetails"><summary>排序說明</summary><p>依開賽時間排列；同場依全場讓分、全場大小、上半讓分、上半大小排序，同市場按分數排序，時間未定排最後。</p><small>W：模型估計 EV｜R：保守估計 EV</small></details>
       {shadowBetOrderGames.length ? shadowBetOrderGames.map((group, gameIndex) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
           const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
           const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority, queued: betState.queued });
           const scoreText = entry.score.toFixed(1);
-          const qaText = entry.qaPassed && entry.qualified ? 'PASS' : 'BLOCK';
           const warnings = diagnosticWarnings(entry.row);
           const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
-          const status = entry.rankingEligible ? '排名資格：是' : !entry.qualified ? '排名資格：否｜模型QA未通過' : !entry.qaPassed ? '排名資格：否｜資料QA未通過' : !entry.currentAnalysisExecutable ? '目前版本排名資格：待複核｜保留原模型分數與資格判定' : `排名資格：否｜${entry.row?.rankingQualificationReason || '未達排名條件'}`;
-          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><small>模型估計EV W {signedPct(entry.weightedEV)}｜保守估計 R {signedPct(entry.robustEV)}｜資料／數學 QA：{qaText}｜{status}</small>{warnings.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}{entry.inactiveNotice && <small>實際下注紀錄狀態：{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/></div></div>;
+          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><RankingDiagnostics entry={entry} warnings={warnings}/>{entry.inactiveNotice && <small>{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/></div></div>;
         })}
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
@@ -4781,4 +4793,3 @@ export default function Home() {
 
   </main>;
 }
-

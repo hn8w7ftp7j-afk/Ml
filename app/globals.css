@@ -90,3 +90,12 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
   .heroControls label{line-height:1.45}
   button,select,input{font-size:16px}
 }
+.rankingMeta{font-size:12px;color:var(--muted);margin-bottom:8px}
+.rankingDetails{margin-top:8px;font-size:12px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.rankingDetails summary{cursor:pointer;width:fit-content;min-height:32px;display:list-item;padding:5px 0}
+.rankingDetails summary:focus-visible{outline:2px solid #7ab8ff;outline-offset:3px}
+.rankingDetails p{margin:6px 0}
+.rankingDetails small{display:block;margin-top:5px}
+.rankingSourceDetails{margin:0 0 12px}
+.rankRow .rankingMetrics{display:flex;flex-wrap:wrap;gap:4px 14px}
+.rankingMetrics span{white-space:nowrap}
