@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { fetchExternalJson } from '../../../lib/external-json-transport.js';
+import { createRequestTiming } from '../../../lib/request-timing.js';
 import {
   ODDS_API_EVENT_MARKETS,
   REFERENCE_LINES_VERSION,
@@ -122,19 +124,7 @@ function sanitizeTargets(rows, schedule) {
 }
 
 async function fetchJson(url, options, timeoutMs = 25000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
-    const text = await response.text();
-    let data;
-    try { data = JSON.parse(text); }
-    catch { throw Object.assign(new Error(`盤源回傳格式錯誤（${response.status}）`), { code: 'INVALID_JSON', httpStatus: response.status }); }
-    if (!response.ok) throw Object.assign(new Error(data?.message || data?.error || `盤源請求失敗（${response.status}）`), { httpStatus: response.status });
-    return data;
-  } finally {
-    clearTimeout(timer);
-  }
+  return fetchExternalJson(url, options, timeoutMs);
 }
 
 async function loadJbot(date, schedule) {
@@ -290,6 +280,11 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const timing = createRequestTiming('/api/reference-lines');
+  return timing.finish(await handlePost(request, timing));
+}
+
+async function handlePost(request, timing) {
   try {
     const auth = await requireApiAuth(request);
     if (auth) return auth;
@@ -305,7 +300,7 @@ export async function POST(request) {
     const requestedSchedule = sanitizeSchedule(body?.schedule, league);
     if (!validDateString(date)) return NextResponse.json({ ok: false, error: '日期格式必須為 YYYY-MM-DD' }, { status: 400 });
     if (!requestedSchedule.length) return NextResponse.json({ ok: false, error: '今日賽事清單為空，無法配對參考盤' }, { status: 400 });
-    const fullOfficialSlate = await fetchLeagueTaipeiSlate(league, date);
+    const fullOfficialSlate = await timing.measure('schedule', () => fetchLeagueTaipeiSlate(league, date));
     const schedule = validateLeagueScheduleSubset(league, requestedSchedule, fullOfficialSlate, date);
     const targets = sanitizeTargets(body?.targets, schedule);
     const receiptsFor = async attempts => Promise.all(schedule.map(async game => ({ gamePk: game.gamePk,
@@ -362,12 +357,12 @@ export async function POST(request) {
     const attempts = status.providers.filter(provider => !provider.configured).map(provider => referenceAttempt(provider.id, 'CONFIGURATION', { status: 'NOT_CONFIGURED', reasonCode: 'NO_SOURCE' }));
     const results = [];
     if (status.providers.find(provider => provider.id === 'JBOT_TAIWAN_SPORTS_LOTTERY')?.configured) {
-      try { results.push(await loadJbot(date, fullOfficialSlate)); attempts.push(referenceAttempt('JBOT_TAIWAN_SPORTS_LOTTERY', 'PRICES')); }
+      try { results.push(await timing.measure('provider_a', () => loadJbot(date, fullOfficialSlate))); attempts.push(referenceAttempt('JBOT_TAIWAN_SPORTS_LOTTERY', 'PRICES')); }
       catch (error) { failures.push(`JBot：${String(error?.message || error)}`); attempts.push(referenceAttempt('JBOT_TAIWAN_SPORTS_LOTTERY', 'PRICES', { status: 'FAILED', reasonCode: referenceFailureCode(error), httpStatus: error.httpStatus || null })); }
     }
     if (status.providers.find(provider => provider.id === 'THE_ODDS_API_CONSENSUS')?.configured) {
       try {
-        const oddsResult = await loadOddsApi(date, fullOfficialSlate, targets, attempts);
+        const oddsResult = await timing.measure('provider_b', () => loadOddsApi(date, fullOfficialSlate, targets, attempts));
         failures.push(...(Array.isArray(oddsResult?.failures) ? oddsResult.failures.map(message => `The Odds API：${message}`) : []));
         results.push(oddsResult);
       }
@@ -377,7 +372,11 @@ export async function POST(request) {
     const sourceHealth = recordReferenceSourceHealth(league, failures, { games: result.games.length });
     if (failures.length) console.warn('REFERENCE_SOURCE_HEALTH', sourceHealth);
     if (!result.games.length && failures.length) {
-      return NextResponse.json({ ok: false, games: [], receipts: await receiptsFor(attempts), error: failures.join('；') || '沒有可用的合法參考盤來源' }, { status: 502 });
+      const quotaExhausted = sourceHealth.reasons.includes('QUOTA_EXHAUSTED');
+      return NextResponse.json({ ok: false, games: [], receipts: await receiptsFor(attempts),
+        code: quotaExhausted ? 'QUOTA_EXHAUSTED' : 'EXTERNAL_SOURCE_FAILED',
+        error: quotaExhausted ? '外部資料服務額度已用盡，暫時無法取得資料；系統會短暫暫停重複請求。' : failures.join('；') || '沒有可用的合法參考盤來源',
+      }, { status: 502, headers: { 'Cache-Control': 'no-store' } });
     }
 
     const requestedGamePks = new Set((targets.length ? targets : schedule).map(game => Number(game.gamePk)));
@@ -386,7 +385,7 @@ export async function POST(request) {
     for (const game of schedule) if (!filteredGames.some(row => Number(row.gamePk) === Number(game.gamePk) && row.markets?.length)) {
       attempts.push(referenceAttempt('REFERENCE_MATCHER', 'CONTRACT_MATCH', { gamePk: game.gamePk, status: 'UNMATCHED', reasonCode: 'NO_MATCHED_CONTRACT' }));
     }
-    const signedGames = await signMarketGames(league, filteredGames);
+    const signedGames = await timing.measure('signing', () => signMarketGames(league, filteredGames));
     const payload = {
       ok: true,
       league,
