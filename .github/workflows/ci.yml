@@ -67,6 +67,7 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run test:push
       - run: node scripts/job-status-transport-test.mjs
+      - run: node scripts/external-json-transport-test.mjs
       - run: node scripts/analysis-notification-on-start-test.mjs
       - run: node scripts/score-model-integrity-v102-test.mjs
       - run: npm run test:pit-audit
