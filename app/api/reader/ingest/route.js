@@ -187,7 +187,7 @@ export async function POST(request) {
       isolateIdentityFailures: true,
     });
     if (normalized.identityIssues.length) {
-      console.warn('[READER_IDENTITY_ISOLATED]', { league, boardDate, issues: normalized.identityIssues });
+      console.warn('[READER_IDENTITY_ISOLATED]', JSON.stringify({ league, boardDate, issues: normalized.identityIssues }));
     }
 
     const storage = await storeReaderSnapshot(normalized);
