@@ -317,6 +317,7 @@ function statusText(value) {
 
 function coveragePendingText(coverage) {
   return [
+    coverage?.identityBlocked ? `場次待核對 ${coverage.identityBlocked} 場` : '',
     coverage?.locked ? `鎖盤等待 ${coverage.locked} 場` : '',
     coverage?.notRendered ? `Reader未呈現 ${coverage.notRendered} 場` : '',
   ].filter(Boolean).join('｜') || '等待開盤 0 場';

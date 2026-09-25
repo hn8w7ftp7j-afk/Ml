@@ -343,3 +343,5 @@ assert.equal(conflict.games.length, 0);
 assert.equal(conflict.conflicts.length, 1);
 
 console.log('client analysis state: strict QA, retryable Reader hashes and same-game merge PASS');
+
+assert.deepEqual(readerCoverageCounts({ rawGameCount: 17, matchedGameCount: 7, unopenedGameCount: 10, scheduleGameCount: 17, identityBlockedGameCount: 2, lockedGameCount: 8, notRenderedGameCount: 0 }), { total: 17, captured: 17, open: 7, waiting: 10, locked: 8, notRendered: 0, identityBlocked: 2 });
