@@ -2741,7 +2741,9 @@ export default function Home() {
           latestReaderSource: task?.actualSource || null,
           readerPayloadHash: null,
           status: preserve ? 'done' : 'unopened',
-          statusLabel: preserve
+          statusLabel: task?.unavailableReason === 'reader-identity-unresolved'
+            ? '場次待核對｜暫停使用此場盤口'
+            : preserve
             ? readerMissing
               ? 'Reader目前未呈現盤口｜保留上一版分析'
               : 'Reader目前部分市場尚未開盤｜保留上一版分析'
@@ -3350,7 +3352,9 @@ export default function Home() {
       const readerGame = readerByPk.get(Number(game.gamePk));
       const hasOpenMarkets = Boolean(readerGame?.markets?.length);
       const hasPrevious = Boolean(cachedByPk.get(Number(game.gamePk))?.customData?.analysis);
-      const unavailableReason = readerGame?.unavailableReason === 'not-rendered-by-reader'
+      const unavailableReason = readerGame?.unavailableReason === 'reader-identity-unresolved'
+        ? 'Reader場次待核對'
+        : readerGame?.unavailableReason === 'not-rendered-by-reader'
         ? 'Reader目前未呈現盤口'
         : 'Tai888目前尚未開盤';
       return {
@@ -3778,7 +3782,9 @@ export default function Home() {
           availableMarkets: pendingMarketNames,
           blockedMarkets: [],
         } : null);
-        const waitingReason = foundCredit?.unavailableReason === 'not-rendered-by-reader'
+        const waitingReason = foundCredit?.unavailableReason === 'reader-identity-unresolved'
+          ? 'Reader場次待核對'
+          : foundCredit?.unavailableReason === 'not-rendered-by-reader'
           ? 'Reader目前未呈現盤口'
           : coverageRegression ? 'Reader目前部分市場尚未開盤' : 'Tai888目前尚未開盤';
         return {
@@ -4125,7 +4131,9 @@ export default function Home() {
             preservedCurrentReaderGame: preserve,
             readerWaitingHandled: true,
             status: preserve ? 'done' : 'unopened',
-            statusLabel: preserve
+            statusLabel: actual.unavailableReason === 'reader-identity-unresolved'
+              ? '場次待核對｜暫停使用此場盤口'
+              : preserve
               ? !actual.markets?.length
                 ? 'Reader目前未呈現盤口｜保留上一版分析'
                 : 'Reader目前部分市場尚未開盤｜保留上一版分析'
