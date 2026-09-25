@@ -60,6 +60,7 @@ function assertMonotonic(previous, envelope, boardChanged) {
 
 function snapshotMatchesSchedule(snapshot, schedule, league) {
   if (!readerSnapshotIsComplete(snapshot)) return false;
+  if (snapshot.identityIssues?.length) return false;
   if (snapshot?.league !== league) return false;
   const expected = schedule.map(game => Number(game.gamePk)).sort((left, right) => left - right);
   const actual = [...snapshot.games, ...(snapshot.unopenedGames || [])]
@@ -183,7 +184,11 @@ export async function POST(request) {
       receivedAt: envelope.receivedAt,
       envelope,
       fullSchedule,
+      isolateIdentityFailures: true,
     });
+    if (normalized.identityIssues.length) {
+      console.warn('[READER_IDENTITY_ISOLATED]', { league, boardDate, issues: normalized.identityIssues });
+    }
 
     const storage = await storeReaderSnapshot(normalized);
     if (!storage.allRequiredWritesSucceeded) {
@@ -195,7 +200,8 @@ export async function POST(request) {
       ok: true,
       league,
       heartbeat: false,
-      message: `Tai888 Reader 已同步｜已開盤 ${normalized.matchedGameCount} 場｜市場 ${normalized.marketCount || 0} 個｜未開盤 ${normalized.unopenedGameCount || 0} 場`,
+      message: `Tai888 Reader 已同步｜已開盤 ${normalized.matchedGameCount} 場｜市場 ${normalized.marketCount || 0} 個｜未開盤 ${(normalized.unopenedGameCount || 0) - normalized.identityBlockedGameCount} 場${normalized.identityBlockedGameCount ? `｜場次待核對 ${normalized.identityBlockedGameCount} 場` : ''}`,
+      identityBlockedGameCount: normalized.identityBlockedGameCount,
       boardDate: normalized.boardDate,
       payloadHash: normalized.payloadHash,
       rawBoardHash: normalized.rawBoardHash,

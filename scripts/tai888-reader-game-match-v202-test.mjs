@@ -82,3 +82,32 @@ assert.throws(
 );
 
 console.log('Reader 2.0.3 full-board matching: aliases, deterministic doubleheaders, no merge, and partial/ambiguous rejection PASS');
+
+// Production may isolate an unresolved matchup, but never attach any of its prices.
+const isolateOptions = { ...options, isolateIdentityFailures: true };
+const isolated = normalizeTai888ReaderPayload(ambiguous, ambiguousSchedule, isolateOptions);
+assert.deepEqual(isolated.games.map(row => row.gamePk), [103]);
+assert.equal(isolated.identityBlockedGameCount, 2);
+assert.equal(isolated.identityIssues.length, 1);
+assert.deepEqual(isolated.identityIssues[0].boardTimes, ['11:10', '11:10']);
+assert.equal(isolated.unopenedGames.every(row => row.unavailableReason === 'reader-identity-unresolved'
+  && !row.source.executable && row.markets.length === 0 && row.marketCoverage.blockedMarkets.length === 4), true);
+assert.deepEqual(isolated.games[0].markets, result.games[2].markets);
+const distant = structuredClone(fullPayload);
+distant.games[0].boardTime = '23:59';
+const distantResult = normalizeTai888ReaderPayload(distant, schedule, isolateOptions);
+assert.deepEqual(distantResult.games.map(row => row.gamePk), [103]);
+assert.equal(distantResult.identityBlockedGameCount, 2);
+const allBlocked = normalizeTai888ReaderPayload(payload(ambiguous.games.slice(0, 2)), ambiguousSchedule.slice(0, 2), isolateOptions);
+assert.equal(allBlocked.games.length, 0);
+assert.equal(allBlocked.unopenedGames.every(row => !row.source.executable && !row.markets.length), true);
+const recovered = normalizeTai888ReaderPayload(fullPayload, schedule, isolateOptions);
+assert.equal(recovered.identityBlockedGameCount, 0);
+assert.deepEqual(recovered.games, result.games);
+const wrongDate = structuredClone(ambiguous);
+wrongDate.games[0].boardDate = '2026-08-13';
+assert.throws(() => normalizeTai888ReaderPayload(wrongDate, ambiguousSchedule, isolateOptions), /日期/);
+const wrongTeam = structuredClone(ambiguous);
+wrongTeam.games[0].awayCode = 'ZZZ';
+assert.throws(() => normalizeTai888ReaderPayload(wrongTeam, ambiguousSchedule, isolateOptions), /球隊/);
+console.log('Reader identity isolation: ambiguous/out-of-window/all-blocked fail closed, unrelated prices retained, recovery PASS');
