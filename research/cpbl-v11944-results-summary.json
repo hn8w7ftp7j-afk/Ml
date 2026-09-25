@@ -1,0 +1,167 @@
+{
+  "sourceCommit": "8cff679ec5943efcd9a191eb1c65c7a2bef9476e",
+  "sourceBlob": "54d4b7d83492cddd6298f0c40ce6c3ef817974a7",
+  "sourceVersion": "11.9.44",
+  "type": "COMPLETED_GAME_PATH_RETROSPECTIVE_REPLAY",
+  "limitations": [
+    "No archived pre-target receipts: reserved-game path and actual full production accuracy cannot be replayed.",
+    "Counts measure potential detail requests, not wall-clock network latency or cache hit rate.",
+    "Prospective evaluation is not running automatically. No production formula change."
+  ],
+  "metrics": {
+    "old": {
+      "sides": 660,
+      "covered": 639,
+      "correct": 59,
+      "recalled": 412
+    },
+    "current": {
+      "sides": 660,
+      "covered": 639,
+      "correct": 59,
+      "recalled": 416
+    },
+    "candidate": {
+      "sides": 660,
+      "covered": 628,
+      "correct": 266,
+      "recalled": 549
+    }
+  },
+  "byTeam": {
+    "701": {
+      "old": {
+        "sides": 111,
+        "covered": 108,
+        "correct": 11,
+        "recalled": 76
+      },
+      "current": {
+        "sides": 111,
+        "covered": 108,
+        "correct": 11,
+        "recalled": 77
+      },
+      "candidate": {
+        "sides": 111,
+        "covered": 106,
+        "correct": 44,
+        "recalled": 92
+      }
+    },
+    "702": {
+      "old": {
+        "sides": 110,
+        "covered": 106,
+        "correct": 5,
+        "recalled": 60
+      },
+      "current": {
+        "sides": 110,
+        "covered": 106,
+        "correct": 5,
+        "recalled": 60
+      },
+      "candidate": {
+        "sides": 110,
+        "covered": 105,
+        "correct": 47,
+        "recalled": 91
+      }
+    },
+    "703": {
+      "old": {
+        "sides": 109,
+        "covered": 105,
+        "correct": 8,
+        "recalled": 72
+      },
+      "current": {
+        "sides": 109,
+        "covered": 105,
+        "correct": 8,
+        "recalled": 72
+      },
+      "candidate": {
+        "sides": 109,
+        "covered": 103,
+        "correct": 47,
+        "recalled": 95
+      }
+    },
+    "704": {
+      "old": {
+        "sides": 110,
+        "covered": 107,
+        "correct": 9,
+        "recalled": 70
+      },
+      "current": {
+        "sides": 110,
+        "covered": 107,
+        "correct": 9,
+        "recalled": 72
+      },
+      "candidate": {
+        "sides": 110,
+        "covered": 105,
+        "correct": 49,
+        "recalled": 86
+      }
+    },
+    "705": {
+      "old": {
+        "sides": 110,
+        "covered": 107,
+        "correct": 10,
+        "recalled": 67
+      },
+      "current": {
+        "sides": 110,
+        "covered": 107,
+        "correct": 10,
+        "recalled": 67
+      },
+      "candidate": {
+        "sides": 110,
+        "covered": 105,
+        "correct": 40,
+        "recalled": 92
+      }
+    },
+    "706": {
+      "old": {
+        "sides": 110,
+        "covered": 106,
+        "correct": 16,
+        "recalled": 67
+      },
+      "current": {
+        "sides": 110,
+        "covered": 106,
+        "correct": 16,
+        "recalled": 68
+      },
+      "candidate": {
+        "sides": 110,
+        "covered": 104,
+        "correct": 39,
+        "recalled": 93
+      }
+    }
+  },
+  "changedPredictions": [],
+  "requests": {
+    "games": 330,
+    "oldTotal": 3526,
+    "currentTotal": 3763,
+    "maximum": 16,
+    "additionalRequestGames": 123
+  },
+  "computeTiming": {
+    "totalMs": 254.54236500000366,
+    "maxMs": 2.053961000000072,
+    "includesNetwork": false
+  },
+  "sidesWithPreTargetReceipts": 0
+}
