@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './reader-team-order-test.mjs';
 import { parseTai888Capture } from '../reader/parser.js';
 import { selectAuthoritativeBoard } from '../reader/board-selector.js';
 import { validateTai888ReaderEnvelope } from '../lib/tai888-reader-parser-v2.js';
