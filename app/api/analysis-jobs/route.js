@@ -144,6 +144,14 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
+  const startedAt = Date.now();
+  const stages = [];
+  const measure = async (stage, read) => {
+    const start = Date.now();
+    let outcome = 'failed';
+    try { const value = await read(); outcome = 'ok'; return value; }
+    finally { stages.push({ stage, ms: Date.now() - start, outcome }); }
+  };
   try {
     const auth = await requireApiAuth(request); if (auth) return auth;
     const searchParams = new URL(request.url).searchParams;
@@ -164,12 +172,19 @@ export async function GET(request) {
     }
     if (!RUN_ID.test(runId)) return NextResponse.json({ ok: false, error: '缺少有效背景工作編號' }, { status: 400 });
     const run = getRun(runId);
-    if (!(await run.exists)) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_NOT_FOUND', error: '找不到背景分析工作' }, { status: 404 });
-    const workflowStatus = await run.status;
-    const publishedResult = workflowStatus === 'completed' ? null : await getNotificationResult(runId);
+    if (!(await measure('exists', async () => await run.exists))) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_NOT_FOUND', error: '找不到背景分析工作' }, { status: 404 });
+    const workflowStatus = await measure('workflow_status', async () => await run.status);
+    // Independent, optional stores must not serialize every active poll or
+    // prevent the authoritative workflow status from being returned on failure.
+    const progressRead = requestedLeague && !summaryOnly
+      && !['completed', 'failed', 'cancelled'].includes(workflowStatus)
+      ? measure('progress', () => getAnalysisJobProgress(runId, requestedLeague, searchParams.get('afterRevision'))).catch(() => null)
+      : Promise.resolve(null);
+    const publishedResult = workflowStatus === 'completed' ? null
+      : await measure('notification_result', () => getNotificationResult(runId)).catch(() => null);
     const status = publishedResult ? 'completed' : workflowStatus;
     if (status === 'completed') {
-      const result = publishedResult || await run.returnValue;
+      const result = publishedResult || await measure('result', async () => await run.returnValue);
       if (requestedLeague && Array.isArray(result?.batches)) {
         const batch = result.batches.find(value => value?.league === requestedLeague);
         if (!batch) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_LEAGUE_NOT_FOUND', error: '背景工作沒有這個聯盟' }, { status: 404 });
@@ -205,13 +220,12 @@ export async function GET(request) {
       }
       return NextResponse.json({ ok: true, runId, status, result });
     }
-    let progress = null;
-    if (requestedLeague && !summaryOnly && !['failed', 'cancelled'].includes(status)) {
-      try { progress = await getAnalysisJobProgress(runId, requestedLeague, searchParams.get('afterRevision')); } catch {}
-    }
+    const progress = await progressRead;
     return NextResponse.json({ ok: true, runId, status, progress });
   } catch (error) {
     return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_STATUS_FAILED', error: String(error?.message || error) }, { status: 500 });
+  } finally {
+    // No run IDs, query parameters, result bodies or raw errors in telemetry.
+    try { console.info(JSON.stringify({ event: 'JOB_STATUS_TIMING', ms: Date.now() - startedAt, stages })); } catch {}
   }
 }
-
