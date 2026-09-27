@@ -172,8 +172,8 @@ export async function GET(request) {
     }
     if (!RUN_ID.test(runId)) return NextResponse.json({ ok: false, error: '缺少有效背景工作編號' }, { status: 400 });
     const run = getRun(runId);
-    if (!(await measure('exists', () => run.exists))) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_NOT_FOUND', error: '找不到背景分析工作' }, { status: 404 });
-    const workflowStatus = await measure('workflow_status', () => run.status);
+    if (!(await measure('exists', async () => await run.exists))) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_NOT_FOUND', error: '找不到背景分析工作' }, { status: 404 });
+    const workflowStatus = await measure('workflow_status', async () => await run.status);
     // Independent, optional stores must not serialize every active poll or
     // prevent the authoritative workflow status from being returned on failure.
     const progressRead = requestedLeague && !summaryOnly
@@ -184,7 +184,7 @@ export async function GET(request) {
       : await measure('notification_result', () => getNotificationResult(runId)).catch(() => null);
     const status = publishedResult ? 'completed' : workflowStatus;
     if (status === 'completed') {
-      const result = publishedResult || await measure('result', () => run.returnValue);
+      const result = publishedResult || await measure('result', async () => await run.returnValue);
       if (requestedLeague && Array.isArray(result?.batches)) {
         const batch = result.batches.find(value => value?.league === requestedLeague);
         if (!batch) return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_LEAGUE_NOT_FOUND', error: '背景工作沒有這個聯盟' }, { status: 404 });
@@ -229,4 +229,3 @@ export async function GET(request) {
     try { console.info(JSON.stringify({ event: 'JOB_STATUS_TIMING', ms: Date.now() - startedAt, stages })); } catch {}
   }
 }
-
