@@ -14,6 +14,7 @@ import {
   readerCaptureForBet,
   readerCoverageCounts,
   readerHashKey,
+  readerPitMatchesGameRevision,
   readerTaskGameRevisionIsStale,
   readerRevisionKey,
   shouldAcceptReaderStatus,
@@ -97,6 +98,19 @@ assert.equal(bindVerifiedReaderContractForBet(legacyPitRow, [{ ...currentVerifie
   'a changed current water must not bind to the historical PIT row');
 assert.equal(bindVerifiedReaderContractForBet(legacyPitRow, [currentVerifiedMarket], { verified: false }), legacyPitRow,
   'an unverified Reader capture must never enable the historical PIT action');
+const staleHashedPitRow = { ...legacyPitRow, readerGameMarketHash: 'old-game-hash', clientVerifiedReaderContract: true };
+const mismatchedBoundRow = bindVerifiedReaderContractForBet(staleHashedPitRow, [currentVerifiedMarket], { verified: true });
+assert.equal(mismatchedBoundRow.readerGameMarketHash, 'old-game-hash', 'binding cannot replace immutable PIT game evidence with the live hash');
+assert.equal(mismatchedBoundRow.clientVerifiedReaderContract, false, 'prior client authorization must be revoked when game evidence changed');
+assert.equal(staleHashedPitRow.clientVerifiedReaderContract, true, 'binding must not mutate the frozen source row');
+const frozenRevisionItem = { customData: { analysis: { results: [{ readerGameMarketHash: 'frozen-game-hash' }] } } };
+assert.equal(readerPitMatchesGameRevision(frozenRevisionItem, 'frozen-game-hash'), true);
+assert.equal(readerPitMatchesGameRevision(frozenRevisionItem, 'new-game-hash'), false);
+assert.equal(readerPitMatchesGameRevision({ customData: { analysis: {} } }, 'new-game-hash'), false,
+  'missing frozen PIT evidence cannot authorize a current Reader capture');
+assert.equal(readerPitMatchesGameRevision({
+  customData: { analysis: { ...frozenRevisionItem.customData.analysis, directionSlots: [{ readerGameMarketHash: 'conflicting-game-hash' }] } },
+}, 'frozen-game-hash'), false, 'conflicting immutable directions must not be accepted as the current game revision');
 assert.deepEqual(
   readerCoverageCounts({ matchedGameCount: 8, scheduleGameCount: 11 }),
   { total: 11, captured: 8, open: 8, waiting: 3, locked: 0, notRendered: 3 },

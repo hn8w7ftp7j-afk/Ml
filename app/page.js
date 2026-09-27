@@ -59,6 +59,7 @@ import {
   liveReaderHashMatches,
   mergeReaderStatusHighWater,
   readerCaptureForBet,
+  readerPitMatchesGameRevision,
   readerCoverageCounts,
   readerHashKey,
   readerAnalysisNeedsRevalidation,
@@ -3755,6 +3756,7 @@ export default function Home() {
           && (!hasOpenRows || coverageRegression);
         const resumed = hasOpenRows && !coverageRegression && previous && !previousBlocked
           && previous?.customData?.pitPersistence?.confirmed === true
+          && readerPitMatchesGameRevision(previous, foundCredit?.readerProvenance?.readerGameMarketHash)
           ? advanceUnchangedReaderGame(previous, foundCredit.markets, credit.payloadHash, credit.pageActivityAt, Date.now(), {
             actualSource: foundCredit.source,
             marketCoverage: foundCredit.marketCoverage,
@@ -3765,6 +3767,7 @@ export default function Home() {
           && hasOpenRows
           && !coverageRegression
           && previous?.customData?.pitPersistence?.confirmed === true
+          && readerPitMatchesGameRevision(previous, foundCredit?.readerProvenance?.readerGameMarketHash)
           && foundCredit?.source?.provider === 'TAI888_READER_AUTO'
           && foundCredit?.readerProvenance?.provider === 'TAI888_READER_AUTO'
           && foundCredit.readerProvenance.payloadHash === credit.payloadHash
