@@ -23,7 +23,7 @@ mustMatch(/latest\.boardDate > currentDateRef\.current[\s\S]*!manualDateSelectio
 // so a display-version bump cannot erase local settings or the emergency bet backup.
 mustMatch(/import \{ APP_VERSION \} from '\.\.\/lib\/app-version\.js'/, 'UI must use the shared release version');
 mustMatch(/const VERSION = APP_VERSION/, 'UI badge must use the shared release version');
-assert.equal(APP_VERSION, '11.9.44', 'Personnel evidence release retains one shared release version');
+assert.equal(APP_VERSION, '11.9.45', 'Probability display release retains one shared release version');
 assert.equal(packageJson.version, APP_VERSION, 'package and UI release identities must match');
 assert.equal(packageLock.version, APP_VERSION, 'lockfile release identity must match the package');
 assert.equal(packageLock.packages?.['']?.version, APP_VERSION, 'root lockfile release identity must match the package');
@@ -324,12 +324,12 @@ mustMatch(/資料／數學 QA：\{qaLabel\}/, 'data QA must be presented separat
 
 
 
-mustMatch(/狀態模型等效條件勝率 \${pct\(row\.modelProbability\)}（排除等效走水）/, 'resolved-only probability must identify the unmodified state-model probability');
+const probabilityDetails = fs.readFileSync('app/probability-details.js', 'utf8');
+assert.match(probabilityDetails, /等效輸贏比例.*row\?\.modelProbability/, 'effective ratio must not be called event win probability');
 assert.doesNotMatch(page, /provisionalBaseline|連續合理性校準/, 'UI must not describe removed Tai888 probability feedback as active');
-mustMatch(/等效贏 \${pct\(row\.equivalentWinProbability\)}／等效輸 \${pct\(row\.equivalentLossProbability\)}／等效走水 \${pct\(row\.equivalentPushProbability\)}/, 'equivalent settlement probabilities used by model probability and W must be visible');
-mustMatch(/全贏 \${pct\(row\.fullWinProbability\)}／部分贏 \${pct\(row\.partialWinProbability\)}／純走水 \${pct\(row\.pushProbability\)}／混合中性 \${pct\(row\.mixedNeutralProbability\)}／部分輸 \${pct\(row\.partialLossProbability\)}／全輸 \${pct\(row\.fullLossProbability\)}/, 'all visible settlement probability buckets must be shown');
-mustMatch(/模型估計EV W/, 'raw distribution EV must explicitly be a model estimate');
-mustMatch(/保守估計 R \{signedPct\(robustEV\)\}/, 'robust EV must be secondary to S and explicitly be a conservative estimate');
+for (const field of ['equivalentWinProbability', 'equivalentLossProbability', 'equivalentPushProbability', 'fullWinProbability', 'partialWinProbability', 'pushProbability', 'mixedNeutralProbability', 'partialLossProbability', 'fullLossProbability']) assert.ok(probabilityDetails.includes(`row?.${field}`), `${field} must remain visible`);
+mustMatch(/預期淨報酬 W/, 'W must be explicitly labeled as expected net return');
+mustMatch(/保守情境淨報酬 R \{signedPct\(robustEV\)\}/, 'R must be explicitly labeled as conservative scenario net return');
 mustMatch(/function modelEvValue\(row\)[\s\S]*row\?\.rawWeightedEV/, 'W display must fall back to the raw distribution EV when qualification fields are null');
 mustMatch(/function robustEvValue\(row\)[\s\S]*row\?\.rawRobustEV/, 'R display must fall back to the raw robust EV when qualification fields are null');
 mustMatch(/W\/R差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');

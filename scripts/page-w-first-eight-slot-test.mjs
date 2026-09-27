@@ -26,7 +26,7 @@ const resultStart = page.indexOf('function ResultRow(');
 const resultEnd = page.indexOf('function DirectionSlotRow(', resultStart);
 assert.ok(resultStart >= 0 && resultEnd > resultStart, 'result-row component missing');
 const resultRow = page.slice(resultStart, resultEnd);
-const orderedLabels = ['S 分數', '模型估計EV W', '保守估計 R', '資料／數學 QA：', '排名資格：'];
+const orderedLabels = ['S 分數', '預期淨報酬 W', '保守情境淨報酬 R', '資料／數學 QA：', '排名資格：'];
 let previous = -1;
 for (const label of orderedLabels) {
   const position = resultRow.indexOf(label, previous + 1);
