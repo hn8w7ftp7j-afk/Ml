@@ -3767,6 +3767,7 @@ export default function Home() {
           && (!hasOpenRows || coverageRegression);
         const resumed = hasOpenRows && !coverageRegression && previous && !previousBlocked
           && previous?.customData?.pitPersistence?.confirmed === true
+          && readerPitMatchesGameRevision(previous, foundCredit?.readerProvenance?.readerGameMarketHash)
           ? advanceUnchangedReaderGame(previous, foundCredit.markets, credit.payloadHash, credit.pageActivityAt, Date.now(), {
             actualSource: foundCredit.source,
             marketCoverage: foundCredit.marketCoverage,
