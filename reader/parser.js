@@ -104,8 +104,11 @@ function pairLines(cell) {
   return [clean(lines.slice(0, midpoint).join(' ')), clean(lines.slice(midpoint).join(' '))];
 }
 
-function parseRunline(cell) {
-  const [awayRow, homeRow] = pairLines(cell);
+function parseRunline(cell, awayIndex = 0) {
+  // Market rows follow visual team order, not a fixed away/home order.
+  const rows = pairLines(cell);
+  const awayRow = rows[awayIndex];
+  const homeRow = rows[1 - awayIndex];
   const awayLine = lineTokenIn(awayRow);
   const homeLine = lineTokenIn(homeRow);
   // A Tai888 runline belongs to exactly one side.  If both visual rows contain
@@ -332,7 +335,7 @@ export function parseTai888Capture(capture, now = new Date()) {
       for (const [marketName, property, headerKey, parser] of MARKET_FIELDS) {
         const index = map[headerKey];
         const cell = index >= 0 ? cells[index] : null;
-        const parsed = index >= 0 ? parser(cell) : null;
+        const parsed = index >= 0 ? parser(cell, awayIndex) : null;
         parsedMarkets[property] = parsed;
         marketStates[marketName] = marketCellState(cell, parsed, row?.marketLocked === true);
       }
