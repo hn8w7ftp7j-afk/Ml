@@ -97,10 +97,25 @@ export async function POST(request) {
     if (body.action === 'merge') return response(await mergeCloudBets(body.bets));
     if (body.action === 'upsert') {
       const candidate = betUpsertCandidate(body.bet);
+      // Preserve the exact attempted contract for incident recovery. A click
+      // is not a durable ticket; only a verified persistence receipt is success.
+      console.info('[BET_LEDGER_ATTEMPT]', {
+        league: String(candidate.league || '').slice(0, 8),
+        date: String(candidate.date || '').slice(0, 10),
+        gamePk: Number(candidate.gamePk) || null,
+        market: String(candidate.market || '').slice(0, 40),
+        pick: String(candidate.pick || '').slice(0, 160),
+        water: Number.isFinite(Number(candidate.water)) ? Number(candidate.water) : null,
+        stake: Number.isFinite(Number(candidate.stake)) ? Number(candidate.stake) : null,
+        pitSnapshotId: String(candidate.pitSnapshotId || '').slice(0, 500),
+      });
       // Only return an existing trusted record for an exact repeated intent.
       // This never creates a bet or relaxes the evidence gate below.
       const recovered = await recoverPersistedCloudBet(candidate);
-      if (recovered) return mutationResponse(recovered);
+      if (recovered) {
+        console.info('[BET_LEDGER_PERSISTED]', { betId: recovered.betId, created: false, idempotent: true });
+        return mutationResponse(recovered);
+      }
       const verification = await verifyCloudBetEvidenceV110(candidate);
       if (verification.pitVerified !== true) {
         console.warn('[BET_LEDGER_REJECTED]', {
@@ -121,6 +136,9 @@ export async function POST(request) {
         }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
       }
       const mutation = await upsertCloudBet(candidate, { verification });
+      console.info('[BET_LEDGER_PERSISTED]', {
+        betId: mutation.betId, created: mutation.created === true, idempotent: mutation.idempotent === true,
+      });
       return mutationResponse(mutation);
     }
     if (body.action === 'cancel') return response(await cancelOpenCloudBet(body.id));
