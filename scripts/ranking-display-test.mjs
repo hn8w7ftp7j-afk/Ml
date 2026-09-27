@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { load } from 'cheerio';
 import { transform } from 'next/dist/build/swc/index.js';
 import { rankingWarningPresentation, rankingStatusText } from '../lib/ranking-display.js';
+import { profitProbabilityText } from '../lib/probability-display.js';
+import { ProbabilityDetailsForTest as ProbabilityDetails } from './probability-display-test.mjs';
 
 const informational = '缺少5分鐘內獨立國際市場同賽事同期間價格；外部稽核無資料；不影響模型W/R、S分數與排名';
 const wr = '模型W/R差距11.4586個百分點，超過5個百分點參考線；R包含情境下行情形及資料風險扣減，不代表單獨的情境不穩定；保留評分與排名';
@@ -52,12 +54,12 @@ const compiled = await transform(diagnostics, {
   jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } },
 });
 const Component = vm.runInNewContext(`${compiled.code}; RankingDiagnostics`, {
-  React, rankingWarningPresentation, rankingStatusText,
+  React, rankingWarningPresentation, rankingStatusText, profitProbabilityText, ProbabilityDetails,
   signedPct: value => `${value > 0 ? '+' : ''}${(value * 100).toFixed(2)}%`,
 });
 const html = renderToStaticMarkup(React.createElement(Component, { entry: { ...eligible, weightedEV: 0.52, robustEV: 0.40 }, warnings }));
 const $ = load(html);
-assert.equal($('details').length, 1);
+assert.equal($('details').length, 2);
 assert.equal($('details[open]').length, 0);
 assert.ok($('details').text().includes(informational));
 $('details').remove();

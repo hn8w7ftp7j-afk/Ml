@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { netProfitProbabilities } from '../lib/probability-display.js';
 import { analyzeMarkets, buildDistributionSnapshot, independentMinimumWater, MODEL_VERSION, RULES_VERSION, SHADOW_ANALYSIS_MODE } from '../lib/analysis-v11.js';
 import { finalizeDeterministicAnalysis } from '../lib/deterministic-finalizer-v10.js';
 import { MLB_STATE_RUN_MODEL_V13_VERSION } from '../lib/joint-score-v13.js';
@@ -65,6 +66,10 @@ assert.equal(analysis.scenarioSummary.targetPriceCalibratesDistribution, false);
 assert.equal(analysis.scenarioSummary.marketProbabilityCalibrationApplied, false);
 assert.equal(analysis.alignmentAudit.targetMarketCalibration, 'DISABLED_EXECUTION_PRICE_ONLY');
 for (const row of analysis.results) {
+  const net = netProfitProbabilities(row);
+  assert.equal(net.available, true, net.reason);
+  assert.ok(Math.abs(net.profit + net.loss + net.flat - 1) < 1e-9);
+  assert.ok(Math.abs(net.profit - row.settlementEvents.filter(event => event.calculation.profit > 0).reduce((sum, event) => sum + event.modelEventProbability, 0)) < 1e-9);
   assert.equal(row.settlementEvidenceVersion, 'SETTLEMENT-EVENT-TRACE-v1');
   assert.ok(Math.abs(row.settlementEvents.reduce((sum, event) => sum + event.modelEventProbability, 0) - 1) < 1e-9);
   assert.ok(Math.abs(row.settlementEvents.reduce((sum, event) => sum + event.modelEventProbability * event.calculation.profit, 0) - row.modelEV) < 1e-9, 'saved event probability and actual per-leg payoff reconstruct W in profit-per-unit units');

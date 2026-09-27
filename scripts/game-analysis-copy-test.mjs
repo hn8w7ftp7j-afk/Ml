@@ -98,3 +98,4 @@ assert.match(component,/finally \{ busy.current = false; \}/);
 assert.match(component,/readOnly value=\{manualText\}/);
 assert.doesNotMatch(component,/fetch\(|oneClickAnalyze|onBet|onCancel/);
 console.log('PASS per-card wiring and copy-only action boundary; actual clipboard interaction requires browser acceptance');
+import './probability-display-test.mjs';

@@ -20,6 +20,8 @@ import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.
 import { rankingWarningPresentation, rankingStatusText } from '../lib/ranking-display.js';
 import NbaEntry from './nba/entry.js';
 import GameAnalysisCopy from './game-analysis-copy.js';
+import ProbabilityDetails from './probability-details.js';
+import { profitProbabilityText } from '../lib/probability-display.js';
 import Link from 'next/link';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
 import {
@@ -1326,7 +1328,9 @@ function RankingDiagnostics({ entry, warnings }) {
   const { visible, details } = rankingWarningPresentation(warnings);
   const status = rankingStatusText(entry);
   return <>
-    <small className="rankingMetrics"><span title="模型估計 EV">W {signedPct(entry.weightedEV)}</span><span title="保守估計 EV">R {signedPct(entry.robustEV)}</span></small>
+    <small>預估獲利機率 {profitProbabilityText(entry.row)}（模型估計）</small>
+    <small className="rankingMetrics"><span>預期淨報酬 W {signedPct(entry.weightedEV)}</span><span>保守情境淨報酬 R {signedPct(entry.robustEV)}</span></small>
+    <ProbabilityDetails row={entry.row}/>
     {status && <small className="warningText">{status}</small>}
     {visible.map(warning => <small className="warningText" key={warning}>⚠️ {warning}</small>)}
     {details.length > 0 && <details className="rankingDetails"><summary>檢查明細</summary>{details.map(note => <small key={note}>{note}</small>)}</details>}
@@ -1393,8 +1397,8 @@ function ResultRow({ row, game, limitations = [], onBet, onCancel, onRecheck, re
   const rankText = verdict.ranking
     ? `是（${verdict.label}）`
     : `否（${verdict.reason}）`;
-  const scoreTitle = `S分數 ${scoreLabel}｜模型估計EV W ${signedPct(modelEV)}｜保守估計 R ${signedPct(robustEV)}｜資料／數學QA ${qaLabel}｜排名資格 ${rankText}`;
-  const probabilityDetail = `狀態模型等效條件勝率 ${pct(row.modelProbability)}（排除等效走水）｜等效贏 ${pct(row.equivalentWinProbability)}／等效輸 ${pct(row.equivalentLossProbability)}／等效走水 ${pct(row.equivalentPushProbability)}｜結算機率：全贏 ${pct(row.fullWinProbability)}／部分贏 ${pct(row.partialWinProbability)}／純走水 ${pct(row.pushProbability)}／混合中性 ${pct(row.mixedNeutralProbability)}／部分輸 ${pct(row.partialLossProbability)}／全輸 ${pct(row.fullLossProbability)}｜損益兩平 ${pct(breakEven)}｜W/R差距 ${pct(row.evCalibration?.rawScenarioSpread)}（含資料風險扣減）${marketGapText}`;
+  const scoreTitle = `S分數 ${scoreLabel}｜預期淨報酬 W ${signedPct(modelEV)}｜保守情境淨報酬 R ${signedPct(robustEV)}｜資料／數學QA ${qaLabel}｜排名資格 ${rankText}`;
+  const probabilityDetail = `等效比例損益兩平門檻 ${pct(breakEven)}（不是獲利機率門檻）｜W/R差距 ${pct(row.evCalibration?.rawScenarioSpread)}（含資料風險扣減）${marketGapText}`;
   const exact = betState?.exact || null;
   const latest = betState?.latest || null;
   return <div className={`scoreRow ${researchPolicy ? 'researchOnlyRow' : ''}`}>
@@ -1406,13 +1410,15 @@ function ResultRow({ row, game, limitations = [], onBet, onCancel, onRecheck, re
       <div className="scorePick">{translateTeamText(row.pick) || '水位未提供｜不評分'}</div>
       <ResearchMarketBadge policy={researchPolicy}/>
       <div className="scorePrice">信用盤水位 {waterText(row.water)}</div>
-      <div className="scoreMeta"><strong>模型估計EV W {signedPct(modelEV)}｜保守估計 R {signedPct(robustEV)}</strong>{robustEV != null && robustEV <= 0 ? '｜觀察／不排名' : ''}</div>
+      <div className="scoreMeta"><strong>預期淨報酬 W {signedPct(modelEV)}｜保守情境淨報酬 R {signedPct(robustEV)}</strong>{robustEV != null && robustEV <= 0 ? '｜觀察／不排名' : ''}</div>
+      <div className="scoreMeta">預估獲利機率 {profitProbabilityText(row)}（模型估計，非歷史命中率）</div>
       <div className={`qaLine ${qaLabel === 'BLOCK' ? 'pending' : ''}`}>資料／數學 QA：{qaLabel}{qaReason ? `（${qaReason}）` : ''}</div>
       <div className="qaLine">{externalAuditText}｜不影響W/R、S分數與排名</div>
       {!externalAuditFresh && <details className="details"><summary>外部稽核資料說明</summary><p>{externalVerificationExplanation(row?.marketVerification, externalAuditFresh)}</p></details>}
       <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}</div>
       {inactiveNotice && <div className="scoreMeta">實際下注紀錄狀態：{inactiveNotice}</div>}
       <div className="scoreMeta">{probabilityDetail}</div>
+      <ProbabilityDetails row={row}/>
       {auditWarnings.map(warning => <div className="warningLine" key={warning}>⚠️ {warning}</div>)}
       {limitations.map(note => <div className="warningLine" key={note}>⚠️ 聯盟模型限制：{note} 此方向影響尚未量化。</div>)}
     </div>
@@ -1453,7 +1459,7 @@ function DirectionSlotRow({ row, game }) {
       <div className="scorePick">{directionLabel(row, game)}</div>
       <ResearchMarketBadge policy={researchPolicy}/>
       <div className="scorePrice">盤口／水位：{status === 'UNOPENED' ? '尚未開盤' : '—'}</div>
-      <div className="scoreMeta"><strong>模型估計EV W —｜保守估計 R —</strong></div>
+      <div className="scoreMeta"><strong>預期淨報酬 W —｜保守情境淨報酬 R —</strong></div>
       <div className={`qaLine ${blocked ? 'pending' : ''}`}>資料／數學 QA：{qaStateLabel}{reason ? `（${reason}）` : ''}</div>
       <div className="qaLine pending">排名資格：否｜{researchPolicy ? `${researchPolicy.label}｜` : ''}{statusLabel}</div>
     </div>
