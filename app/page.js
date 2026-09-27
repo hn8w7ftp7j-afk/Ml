@@ -14,6 +14,7 @@ import { analysisDisplayGame, analysisGameIdentity, sameAnalysisGame } from '../
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/performance-evidence-v1.js';
 import { APP_VERSION } from '../lib/app-version.js';
+import { loadBetAttemptJournal, saveBetAttemptJournal } from '../lib/bet-attempt-journal.js';
 import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
 import { analysisSourceStatusDisplay } from '../lib/npb-identity-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
@@ -59,6 +60,7 @@ import {
   liveReaderHashMatches,
   mergeReaderStatusHighWater,
   readerCaptureForBet,
+  readerPitMatchesGameRevision,
   readerCoverageCounts,
   readerHashKey,
   readerAnalysisNeedsRevalidation,
@@ -1796,9 +1798,23 @@ export default function Home() {
   const cloudSyncBusyRef = useRef(false);
   const betMutationBusyRef = useRef(false);
   const [betQueueEntries, setBetQueueEntries] = useState([]);
+  const [betAttemptStorageWarning, setBetAttemptStorageWarning] = useState('');
   const betQueueRef = useRef(null);
-  const betQueueCapturesRef = useRef(new Map());
-  if (!betQueueRef.current) betQueueRef.current = createBetRecordQueue(setBetQueueEntries);
+  const betAttemptJournalWritableRef = useRef(false);
+  if (!betQueueRef.current) betQueueRef.current = createBetRecordQueue(entries => {
+    setBetQueueEntries(entries);
+    // A damaged journal must not be overwritten by a fresh click. Restore its
+    // validated subset for readback while retaining the original for recovery.
+    if (!betAttemptJournalWritableRef.current) return;
+    const saved = saveBetAttemptJournal(entries);
+    setBetAttemptStorageWarning(saved.ok ? '' : saved.message);
+  });
+  useEffect(() => {
+    const saved = loadBetAttemptJournal();
+    betAttemptJournalWritableRef.current = saved.ok;
+    if (saved.ok || saved.entries.length) betQueueRef.current.restore(saved.entries);
+    if (!saved.ok) setBetAttemptStorageWarning(`${saved.message} 本次操作僅暫存於頁面，關閉前請確認永久帳本。`);
+  }, []);
   const betQueueActive = betQueueEntries.some(entry => ['queued', 'saving'].includes(entry.status));
   useEffect(() => {
     if (!betQueueActive) return;
@@ -1811,13 +1827,9 @@ export default function Home() {
     };
   }, [betQueueActive]);
   useEffect(() => {
-    for (const entry of betQueueEntries) {
-      const captured = betQueueCapturesRef.current.get(entry.key);
-      if (entry.status === 'uncertain' && captured && findConfirmedRecordedBet({ ok: true, bets }, captured)) {
-        betQueueRef.current.confirm(entry.key);
-      }
-    }
-  }, [bets, betQueueEntries]);
+    if (cloudLedgerStatus.state !== 'ready') return;
+    betQueueRef.current.reconcile({ ok: true, bets });
+  }, [bets, betQueueEntries, cloudLedgerStatus.state]);
   const cloudLedgerGenerationRef = useRef(0);
   const cloudSyncRetryAtRef = useRef(0);
   const backgroundJobPollsRef = useRef(new Map());
@@ -3765,6 +3777,7 @@ export default function Home() {
           && hasOpenRows
           && !coverageRegression
           && previous?.customData?.pitPersistence?.confirmed === true
+          && readerPitMatchesGameRevision(previous, foundCredit?.readerProvenance?.readerGameMarketHash)
           && foundCredit?.source?.provider === 'TAI888_READER_AUTO'
           && foundCredit?.readerProvenance?.provider === 'TAI888_READER_AUTO'
           && foundCredit.readerProvenance.payloadHash === credit.payloadHash
@@ -4510,10 +4523,8 @@ export default function Home() {
     };
     // Capture at click time, before the user switches league/date/amount.
     const capturedBet = JSON.parse(JSON.stringify(bet));
-    if (!betQueueRef.current.enqueue(positionIdentity, `${bet.matchup}｜${translateTeamText(bet.pick)}`, () => persistQueuedBet(capturedBet))) {
-      setNotice('此方向已在記錄隊列中；不會重複新增。');
-    } else {
-      betQueueCapturesRef.current.set(positionIdentity, capturedBet);
+    if (!betQueueRef.current.enqueue(positionIdentity, `${bet.matchup}｜${translateTeamText(bet.pick)}`, () => persistQueuedBet(capturedBet), capturedBet)) {
+      setNotice(betQueueRef.current.lastError?.message || '此方向已在記錄隊列中；不會重複新增。');
     }
   }
 
@@ -4532,6 +4543,7 @@ export default function Home() {
       const postData = await requestJSON('/api/bets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', bet }) }, 30000);
       const receipt = await confirmCloudBetMutation(postData, bet,
         () => requestJSON(`/api/bets?confirmBetId=${encodeURIComponent(postData.betId)}`, {}, 30000));
+      outcome.betId = receipt.bet.id;
       const data = receipt.data;
       betsRef.current = data.bets;
       setBets(data.bets);
@@ -4570,7 +4582,7 @@ export default function Home() {
       if (uncertainOutcome && recovered) {
         const persisted = findConfirmedRecordedBet(recovered, bet);
         if (persisted) {
-          outcome = { status: 'confirmed', message: '已從永久帳本確認紀錄存在' };
+          outcome = { status: 'confirmed', betId: persisted.id, message: '已從永久帳本確認紀錄存在' };
           setError('');
           setNotice(`已從永久帳本確認紀錄存在：${translateTeamText(persisted.pick)}｜${Number(persisted.water).toFixed(3)}｜${Number(persisted.stake).toLocaleString()}元；未重複新增。`);
         } else {
@@ -4720,7 +4732,8 @@ export default function Home() {
 
     {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
-    {betQueueEntries.length > 0 && <section className="panel" aria-label="下注紀錄隊列"><strong>紀錄隊列｜依點選順序處理</strong><p>只記錄已自行下注的事實，不會替你下注。處理中可繼續點選其他方向；請保持本頁開啟，重新整理不會保留尚未完成的隊列。</p><ul aria-live="polite">{betQueueEntries.map(entry => <li key={entry.key}>{entry.label}：{({ queued: '排隊中', saving: '儲存確認中', confirmed: '已記錄 ✓', failed: '記錄失敗', uncertain: '結果待確認，請先回讀帳本，勿重複新增' })[entry.status]}{entry.message ? `｜${entry.message}` : ''}</li>)}</ul></section>}
+    {betAttemptStorageWarning && <p role="alert">{betAttemptStorageWarning}</p>}
+    {betQueueEntries.length > 0 && <section className="panel" aria-label="下注紀錄隊列"><strong>紀錄隊列｜依點選順序處理</strong><p>重分析後保留記錄狀態；重新整理後會回讀帳本確認，不會自動重送。</p><ul aria-live="polite">{betQueueEntries.map(entry => <li key={entry.key}>{entry.label}：{({ queued: '排隊中', saving: '儲存確認中', confirmed: '已記錄 ✓', failed: '記錄失敗', uncertain: '結果待確認，請先回讀帳本，勿重複新增' })[entry.status]}{entry.message ? `｜${entry.message}` : ''}</li>)}</ul></section>}
     {cloudLedgerStatus.state === 'unavailable' && <div className="noticeBox" role="status"><span>帳本尚未同步完成：{cloudLedgerStatus.message} </span><button type="button" className="mini" disabled={cloudLedgerBusy} onClick={() => probeCloudLedgerRecovery()}>{cloudLedgerBusy ? '正在回讀帳本…' : '重新讀取帳本'}</button></div>}
     {betQueueEntries.some(entry => entry.status === 'uncertain') && <button type="button" className="secondary" disabled={cloudLedgerBusy || betQueueActive} onClick={() => probeCloudLedgerRecovery()}>回讀帳本確認待確認紀錄（不重新送出）</button>}
     <LoadingLine progress={progress}/>

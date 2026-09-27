@@ -30,6 +30,9 @@ assert.equal(blockedRetry.recordable, false);
 assert.equal(blockedRetry.canRecheck, true);
 assert.match(blockedRetry.title, /尚未入單/);
 assert.equal(evaluateBetAction({ item: { ...rejectedItem, customData: { ...rejectedItem.customData, analysis: { pitSnapshotId: 'new-pit' } } }, row: boundRow, now, queued: rejected }).recordable, true);
+const refreshedRetry = evaluateBetAction({ item: { ...rejectedItem, customData: { ...rejectedItem.customData, analysis: { pitSnapshotId: 'new-pit' } } }, row: boundRow, now, queued: rejected });
+assert.equal(refreshedRetry.text, '記錄未成功｜重試', 'a new analysis cannot erase a rejected record request');
+assert.equal(refreshedRetry.failureMessage, rejected.message);
 assert.equal(evaluateBetAction({ item: rejectedItem, row: boundRow, now, queued: rejected, latest: { status: 'OPEN' } }).kind, 'cancel');
 assert.equal(evaluateBetAction({ item: rejectedItem, row: boundRow, now, queued: { status: 'uncertain' } }).recordable, false);
 const failedAction = evaluateBetAction({ item: baseItem, row: boundRow, now, queued: { status: 'failed', message: '明確拒絕' } });
@@ -45,6 +48,36 @@ const advancedBoardItem = {
 const [sameGameBoundRow] = bindVerifiedReaderContractsForItem(advancedBoardItem, [baseRow]);
 assert.equal(sameGameBoundRow.clientVerifiedReaderContract, true, 'an unrelated league-board revision must not lock an unchanged signed game contract');
 assert.equal(evaluateBetAction({ item: advancedBoardItem, row: sameGameBoundRow, now }).recordable, true);
+
+// A different direction in the same game can move while this pick/water stays
+// identical. Installing new Reader metadata must not relabel the old PIT.
+const replacedReaderItem = {
+  ...baseItem,
+  readerPayloadHash: 'new-board-hash',
+  readerProvenance: { ...baseItem.readerProvenance, payloadHash: 'new-board-hash', readerGameMarketHash: 'new-game-hash' },
+  customMarkets: [{ ...baseRow, readerGameMarketHash: 'new-game-hash', executable: true }],
+  customData: { ...baseItem.customData, analysis: { readerGameMarketHash: baseRow.readerGameMarketHash } },
+};
+const eligibleOldRow = { ...baseRow, evCalibration: { actualReaderEligible: true }, clientVerifiedReaderContract: true };
+const [stalePitRow] = bindVerifiedReaderContractsForItem(replacedReaderItem, [eligibleOldRow]);
+assert.equal(stalePitRow.readerGameMarketHash, baseRow.readerGameMarketHash, 'the immutable PIT hash must not be overwritten by current Reader metadata');
+assert.notEqual(stalePitRow.clientVerifiedReaderContract, true);
+const stalePitAction = evaluateBetAction({ item: replacedReaderItem, row: stalePitRow, now });
+assert.equal(stalePitAction.recordable, false, 'old actualReaderEligible must not bypass a game-content mismatch');
+assert.equal(stalePitAction.readerReasonCode, 'PIT_READER_REVISION_MISMATCH');
+assert.equal(stalePitAction.canRecheck, true);
+assert.equal(evaluateBetAction({ item: replacedReaderItem, row: eligibleOldRow, now }).recordable, false,
+  'the action gate must also protect callers that did not run the binder');
+for (const patch of [
+  { pendingReaderAnalysis: true }, { preservedCurrentReaderGame: true },
+  { readerWaitingHandled: true }, { latestMarketCoverage: {} }, { latestReaderSource: {} },
+]) {
+  const pendingItem = { ...baseItem, ...patch };
+  assert.equal(evaluateBetAction({ item: pendingItem, row: boundRow, now }).recordable, false,
+    'this game waiting on replacement analysis must not use its old saved PIT');
+  assert.equal(evaluateBetAction({ item: pendingItem, row: boundRow, now, latest: { status: 'OPEN' } }).kind, 'cancel',
+    'reanalysis must preserve existing recorded bets and their cancellation action');
+}
 
 const [changedGameRow] = bindVerifiedReaderContractsForItem({
   ...advancedBoardItem,
