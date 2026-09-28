@@ -1,11 +1,25 @@
 import assert from 'node:assert/strict';
 import { sha256 } from '../lib/snapshot-v9.js';
-import { buildCalibrationStatusFromBetsV109, buildPitPredictionFromBetV109, contractTypeV109, marketFamilyV109, settledBetToPitObservationV109 } from '../lib/calibration-ledger-v109.js';
+import { buildCalibrationStatusFromBetsV109, buildPitPredictionFromBetV109, contractTypeV109, featureObservedAtsFromContextV109, marketFamilyV109, settledBetToPitObservationV109 } from '../lib/calibration-ledger-v109.js';
 
 assert.equal(marketFamilyV109('全場大小'), 'FULL_TOTAL');
 assert.equal(marketFamilyV109('上半讓分'), 'FIRST5_SIDE');
 assert.equal(contractTypeV109('大8平'), 'TOTAL_OVER');
 assert.equal(contractTypeV109('洋基讓1平'), 'SIDE_GIVING');
+
+const mlbInjuryReceipt = '2026-09-29T01:40:00.000Z';
+const mlbInjurySemanticDate = '2026-09-29T00:00:00.000Z';
+const mlbFeatureTimes = featureObservedAtsFromContextV109({
+  leagueId: 'MLB',
+  fetchedAt: '2026-09-29T01:41:00.000Z',
+  featureProvenance: [
+    { featureName: 'awayInjuries', fetchedAt: mlbInjuryReceipt, asOf: mlbInjurySemanticDate },
+    { featureName: 'homeInjuries', fetchedAt: mlbInjuryReceipt, asOf: mlbInjurySemanticDate },
+  ],
+});
+assert.equal(mlbFeatureTimes.awayInjuries, mlbInjuryReceipt, 'MLB injury PIT time must use the immutable fetch receipt, not the semantic roster date');
+assert.equal(mlbFeatureTimes.homeInjuries, mlbInjuryReceipt, 'both injury sides must preserve receipt-time provenance');
+
 
 const bet = {
   id: 'bet-v109-1', league: 'MLB', gamePk: 778899,
