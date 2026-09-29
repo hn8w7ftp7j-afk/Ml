@@ -22,7 +22,7 @@ market.readerGameMarketHash = readerGameMarketContentHash([market]);
 const signed = await signMarketRow('MLB', game, market);
 const versions = { modelVersion: 'model-test', rulesVersion: 'rules-test', dataVersion: 'data-test',
   scoreFormulaVersion: 'score-test', settlementRuleVersion: 'settlement-test', uncertaintySetVersion: 'uncertainty-test' };
-const frozenContext = { leagueId: 'MLB', game, fetchedAt: new Date(now - 600_000).toISOString(), featureProvenance: [], ...versions };
+const frozenContext = { leagueId: 'MLB', game, fetchedAt: new Date(now - 600_000).toISOString(), featureProvenance: [{ featureName: 'fixtureInput', fetchedAt: new Date(now - 600_000).toISOString() }], ...versions };
 const distributionSnapshot = { distributionId: 'distribution-test', distributionHash: 'e'.repeat(64), gamePk: game.gamePk,
   scenarios: [{ id: 'central', weight: 1, cells: [{ awayRuns: 4, homeRuns: 4, probability: 1 }] }] };
 const analysis = { leagueId: 'MLB', analysisType: 'FULL', analysisMode: 'SHADOW', inputHash: 'b'.repeat(64),

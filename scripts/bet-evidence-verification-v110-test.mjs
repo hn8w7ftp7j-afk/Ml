@@ -36,7 +36,7 @@ const versions = {
 const frozenContext = {
   leagueId: 'MLB', game, fetchedAt: '2026-08-25T07:58:00.000Z',
   modelVersion: versions.modelVersion, rulesVersion: versions.rulesVersion, dataVersion: versions.dataVersion,
-  featureProvenance: [],
+  featureProvenance: [{ featureName: 'awayInjuries', fetchedAt: '2026-08-25T07:57:00.000Z', asOf: '2026-08-26' }],
 };
 const distributionSnapshot = {
   distributionId: 'distribution-123', distributionHash: 'e'.repeat(64), gamePk: game.gamePk,
@@ -84,6 +84,16 @@ assert.equal(verified.pitVerified, true);
 assert.equal(verified.version, 'BASEBALL-BET-EVIDENCE-SERVER-VERIFICATION-v11.8.35');
 assert.equal(verified.pit.weightedEV, 0.04);
 assert.equal(verified.pit.inputHash, inputHash);
+
+for (const featureProvenance of [[], [{ featureName: 'awayInjuries', asOf: '2026-08-25' }],
+  [{ featureName: 'awayInjuries', fetchedAt: '2026-08-25T07:59:00.000Z' }],
+  [{ featureName: 'awayInjuries', fetchedAt: '2026-08-25T07:57:00.000Z', dependencyReceipts: [{ fetchedAt: '2026-08-25T07:59:00.000Z' }] }]]) {
+  const rejected = await verifyCloudBetEvidenceV110(candidate, { ...dependencies,
+    loadPitReplay: async () => ({ ...replay, frozenContext: { ...frozenContext, featureProvenance } }),
+  });
+  assert.equal(rejected.pitVerified, false, 'missing evidence or receipts after data cutoff must fail before persistence');
+  assert.equal(rejected.pitErrorCode, 'PIT_FEATURE_TIME_INVALID');
+}
 
 const unrelatedGameMovedSnapshot = {
   ...snapshot,
