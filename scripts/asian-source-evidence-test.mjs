@@ -36,7 +36,7 @@ assert.equal(history(missing).status, 'PENDING');
 const broken = structuredClone(context); broken.sourceEvidence.contents[first.content.contentHash].data = 'broken';
 assert.equal(history(broken).status, 'FAILED');
 assert.equal(auditAsianSourceEvidence({}).status, 'PENDING');
-assert.deepEqual(featureObservedAtsFromContextV109({ leagueId: 'NPB', fetchedAt: cutoff, featureProvenance: [{ feature: 'lineup', asOf: cutoff }] }), {}, 'no fabricated individual timestamps');
+assert.deepEqual(featureObservedAtsFromContextV109({ leagueId: 'NPB', fetchedAt: cutoff, featureProvenance: [{ feature: 'lineup', asOf: cutoff }] }), { lineup: null, invalidFeatureEvidence: null }, 'missing receipt evidence remains invalid, never fabricated');
 assert.deepEqual(featureObservedAtsFromContextV109({ leagueId: 'NPB', featureProvenance: [{ feature: 'lineup', fetchedAt: cutoff }] }), { lineup: cutoff });
 assert.equal(auditAsianSourceEvidence({ ...context, game: { gameDate: '2026-09-08T06:00:00Z' } }).pregameCutoffStatus, 'FAILED');
 console.log('Asian source evidence: acquisition identity, content deduplication, cutoff, pending, corruption, legacy alias and immutability checks passed');

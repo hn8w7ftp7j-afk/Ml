@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './pit-feature-time-evidence-test.mjs';
 import { sha256 } from '../lib/snapshot-v9.js';
 import { buildCalibrationStatusFromBetsV109, buildPitPredictionFromBetV109, contractTypeV109, featureObservedAtsFromContextV109, marketFamilyV109, settledBetToPitObservationV109 } from '../lib/calibration-ledger-v109.js';
 
@@ -7,11 +8,11 @@ assert.equal(marketFamilyV109('上半讓分'), 'FIRST5_SIDE');
 assert.equal(contractTypeV109('大8平'), 'TOTAL_OVER');
 assert.equal(contractTypeV109('洋基讓1平'), 'SIDE_GIVING');
 
-const mlbInjuryReceipt = '2026-09-29T01:40:00.000Z';
+const mlbInjuryReceipt = '2026-09-28T19:40:00.000Z';
 const mlbInjurySemanticDate = '2026-09-29T00:00:00.000Z';
 const mlbFeatureTimes = featureObservedAtsFromContextV109({
   leagueId: 'MLB',
-  fetchedAt: '2026-09-29T01:41:00.000Z',
+  fetchedAt: '2026-09-28T19:41:00.000Z',
   featureProvenance: [
     { featureName: 'awayInjuries', fetchedAt: mlbInjuryReceipt, asOf: mlbInjurySemanticDate },
     { featureName: 'homeInjuries', fetchedAt: mlbInjuryReceipt, asOf: mlbInjurySemanticDate },
@@ -31,6 +32,21 @@ const bet = {
   featureObservedAts: { lineup: '2026-08-24T17:59:00.000Z' },
   modelVersion: 'model-v109', settlementRuleVersion: 'settlement-v109',
 };
+const injuryBet = { ...bet, gameDate: '2026-09-29T02:00:00.000Z',
+  analysisAsOf: '2026-09-28T19:42:00.000Z', placedAt: '2026-09-28T19:43:00.000Z',
+  lineAsOf: '2026-09-28T19:41:30.000Z', featureObservedAts: mlbFeatureTimes };
+assert.equal(buildPitPredictionFromBetV109(injuryBet).ok, true, 'a future roster date with pre-analysis receipts must be recordable');
+const futureTimes = featureObservedAtsFromContextV109({ leagueId: 'MLB', featureProvenance: [
+  { featureName: 'awayInjuries', fetchedAt: '2026-09-28T19:44:00.000Z', asOf: '2026-09-27' },
+] });
+assert.ok(buildPitPredictionFromBetV109({ ...injuryBet, featureObservedAts: futureTimes }).errors.includes('FEATURE_FROM_FUTURE:awayInjuries'), 'a genuinely late receipt must still be rejected');
+for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
+  assert.deepEqual(featureObservedAtsFromContextV109({ leagueId, fetchedAt: mlbInjuryReceipt,
+    featureProvenance: [{ featureName: 'lineup', asOf: mlbInjuryReceipt, observedAt: mlbInjuryReceipt }] }), { lineup: null, invalidFeatureEvidence: null }, 'Asian source times must not fall back to semantic dates');
+}
+
+assert.equal(buildPitPredictionFromBetV109({ ...injuryBet, dataAsOf: '2026-09-28T19:39:00.000Z' }).ok, false, 'repricing must not move the model input cutoff');
+
 const prediction = buildPitPredictionFromBetV109(bet);
 assert.equal(prediction.ok, true);
 assert.equal(prediction.prediction.marketFamily, 'FULL_TOTAL');
