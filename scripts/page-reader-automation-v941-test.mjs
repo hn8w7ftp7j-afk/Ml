@@ -333,7 +333,7 @@ mustMatch(/保守估計 R \{signedPct\(robustEV\)\}/, 'robust EV must be seconda
 mustMatch(/function modelEvValue\(row\)[\s\S]*row\?\.rawWeightedEV/, 'W display must fall back to the raw distribution EV when qualification fields are null');
 mustMatch(/function robustEvValue\(row\)[\s\S]*row\?\.rawRobustEV/, 'R display must fall back to the raw robust EV when qualification fields are null');
 mustMatch(/W\/R差距 \${pct\(row\.evCalibration\?\.rawScenarioSpread\)}/, 'W/R scenario spread must be visible');
-mustMatch(/S分數、W與R完整顯示/, 'provider status must report S-first display mode');
+mustMatch(/盤口已同步/, 'provider status must show concise sync state');
 mustMatch(/Tai888只提供待評估的成交盤口與水位，不改寫模型概率/, 'Tai888 and external markets must remain execution/audit inputs only');
 assert.doesNotMatch(page, /公式診斷分/, 'website must not expose a second diagnostic-score language');
 assert.doesNotMatch(page, /Raw W EV|保守 R EV/, 'website must use the agreed weighted/robust EV labels');
