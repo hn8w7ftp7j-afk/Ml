@@ -15,4 +15,7 @@ const response=await GET(new Request('http://localhost/api/pit-history-export?sn
 assert.equal(response.status,400);
 const source=fs.readFileSync(new URL('../lib/pit-history-export.js',import.meta.url),'utf8');
 assert.ok(!/\b(?:INSERT INTO|UPDATE\s+\w+\s+SET|DELETE FROM|CREATE TABLE|ALTER TABLE)\b/.test(source));
+assert.match(source, /analysisPitRecordFromDatabaseRowForAudit/);
+assert.match(source, /buildAnalysisPitReplayBundleForAudit/);
+assert.match(source, /EXCLUDED_FORENSIC_AUDIT/);
 console.log('PASS: export authentication, batch bounds, snapshot identities and read-only SQL');

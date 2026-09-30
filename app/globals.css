@@ -101,3 +101,5 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .rankingMetrics span{white-space:nowrap}
 
 .queueSummary.panel{padding:12px 14px;border-radius:12px;box-shadow:none;font-size:13px}.queueSummary>summary{cursor:pointer;line-height:1.6}.queueSummary>summary>span:first-child{font-weight:700;margin-right:10px}.queueSummary>summary>span:last-child{color:#a9bdd0}.queueSummary ul{padding-left:20px;margin-bottom:0}.queueSummary li{margin:10px 0;overflow-wrap:anywhere}.queueSummary li details{margin-top:4px;color:#a9bdd0}
+.allLeaguePills .batch-no_games,.allLeaguePills .batch-no_open_markets{background:#243244;color:#b8c6d6}.leagueDot.batch-no_games,.leagueDot.batch-no_open_markets{background:#8298ad;box-shadow:0 0 0 3px rgba(130,152,173,.14)}.allLeaguePills .batch-result_pending{background:#493718;color:#ffd27e}
+.recordedBetsSummary>summary{cursor:pointer;line-height:1.6;overflow-wrap:anywhere}.recordedBetsSummary .betRow{grid-template-columns:minmax(0,1fr)}

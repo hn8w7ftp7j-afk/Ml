@@ -90,10 +90,17 @@ results, not a forecast of future shot volume or wagering performance.
 
 ## Verification and limits
 
+The final NHL release uses 11.9.50. Main `e38e38d` (11.9.49, reliability/history/PIT
+integrity work) was merged before publication; its code and package test scripts
+were preserved. Only the three shared release-version conflicts required
+resolution.
+
 - Full `npm test`: PASS, including NHL/NBA and existing baseball suites.
 - Production build: PASS; rechecked after the research diagnostics display.
 - Personnel parser, confirmation identity and actual client handlers: PASS.
 - Shot research: 20 groups PASS on the retained 215-game report before expansion.
+- Expanded NHL module regression: PASS, including 21 shot-research groups with
+  all 1,298 eligible games and all four strength reports independently reproduced.
 - Real CONFIRMED-goalie transitions, historical pregame personnel snapshots,
   physical-phone testing, and real Tai888 NHL contracts remain unverified.
 - Full-season source acquisition does not establish predictive calibration.

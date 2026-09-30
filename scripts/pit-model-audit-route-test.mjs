@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { GET } from '../app/api/pit-model-audit/route.js';
 import { createSessionToken } from '../lib/security.js';
 process.env.APP_PASSWORD = 'test-only';
@@ -13,4 +14,7 @@ for (const league of ['NPB', 'KBO', 'CPBL']) {
   const response = await GET(request(`${league}:2247585195061026:FULL:${'a'.repeat(64)}`));
   assert.equal(response.status, 409, 'valid Asian IDs reach the store; absent fixture remains unavailable, never PASS');
 }
+const source = readFileSync(new URL('../app/api/pit-model-audit/route.js', import.meta.url), 'utf8');
+assert.match(source, /await loadAnalysisPitReplayForAudit\(/);
+assert.doesNotMatch(source, /await loadAnalysisPitReplay\(/);
 console.log('PIT audit route: authentication, safe integer, league isolation and Asian routing boundaries passed');

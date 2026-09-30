@@ -152,3 +152,39 @@ assert.equal(damagedPage.state.saves, 0);
 assert.equal(damagedPage.values.get(BET_ATTEMPT_JOURNAL_KEY), damagedRaw, 'later clicks and reconciliation must preserve the damaged original');
 assert.equal(damagedPage.state.warning, warningBeforeClick, 'the storage warning must survive later queue events');
 console.log('Bet reanalysis recovery: immutable tickets, stale PIT, rejected reload, actual page StrictMode/readiness effects and partial-corruption preservation PASS');
+
+// Read-only historical labels survive reanalysis, game start and sync outages.
+// These labels cannot grant a new recording or cancellation action.
+for (const pending of [false, true]) {
+  for (const ledgerState of ['ready', 'loading', 'unavailable']) {
+    for (const afterStart of [false, true]) {
+      const recorded = evaluateBetAction({ item: { ...reanalysed, pendingReaderAnalysis: pending },
+        row: newRow, latest: savedBet, cloudLedgerState: ledgerState,
+        now: afterStart ? Date.parse('2026-09-28T00:00:00Z') : now });
+      assert.match(recorded.text, /已下注/, 'a saved original ticket must not become only an availability gate label');
+      assert.equal(recorded.recordable, false);
+      assert.equal(recorded.kind, !afterStart && ledgerState === 'ready' ? 'cancel' : 'none');
+      const readOnly = evaluateBetAction({ item: reanalysed, row: newRow, latest: savedBet,
+        now, betsEnabled: false, cloudLedgerState: ledgerState });
+      assert.match(readOnly.text, /已下注/);
+      assert.equal(readOnly.kind, 'none');
+      assert.equal(readOnly.recordable, false);
+      assert.equal(readOnly.disabled, true);
+    }
+  }
+}
+assert.doesNotMatch(evaluateBetAction({ item: reanalysed, row: newRow, now, cloudLedgerState: 'loading' }).text, /已下注/,
+  'a missing record cannot be promoted to a successful saved ticket');
+const scopeStart = page.indexOf('  const recordedScopeBets = useMemo(');
+const scopeEnd = page.indexOf('\n\n  function getBetState(', scopeStart);
+assert.ok(scopeStart > 0 && scopeEnd > scopeStart);
+const scopeContext = vm.createContext({ date, visibleBets: [savedBet,
+  { ...savedBet, id: 'cancelled', status: 'CANCELLED' },
+  { ...savedBet, id: 'other-day', date: '2026-10-01' }], useMemo: fn => fn(), Date });
+vm.runInContext(page.slice(scopeStart, scopeEnd) + '\nglobalThis.scope = recordedScopeBets;', scopeContext);
+assert.deepEqual(Array.from(scopeContext.scope, bet => bet.id), [savedBet.id]);
+assert.match(page, /\['board', 'ranking', 'betOrder'\]\.includes\(tab\) && recordedScopeBets.length/);
+assert.match(page, /保留上次取得的紀錄；目前雲端狀態尚待確認/);
+assert.doesNotMatch(page, /const betState = (?:betsEnabled|bettingEnabled) \? getBetState/,
+  'historical record visibility must not depend on permissions to create new records');
+console.log('Read-only historical labels across reanalysis/start/outage and date-scoped known ledger PASS');

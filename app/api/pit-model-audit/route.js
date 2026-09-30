@@ -1,7 +1,7 @@
 import { hydrateAsianSourceEvidence } from '../../../lib/asian-source-store-v1.js';
 import { NextResponse } from 'next/server';
 import { requireApiAuth, checkRateLimit, rateLimitResponse } from '../../../lib/security.js';
-import { loadAnalysisPitReplay } from '../../../lib/analysis-pit-snapshot-store-v1.js';
+import { loadAnalysisPitReplayForAudit } from '../../../lib/analysis-pit-snapshot-store-v1.js';
 import { auditSavedAsianPit } from '../../../lib/saved-asian-pit-audit.js';
 import { auditSavedPitModel } from '../../../lib/saved-pit-model-audit.js';
 
@@ -17,10 +17,14 @@ export async function GET(request) {
   const rate = checkRateLimit(request, { id: 'pit-model-audit', limit: 6, windowMs: 60_000 });
   if (!rate.allowed) return rateLimitResponse(rate);
   try {
-    const bundle = await loadAnalysisPitReplay({ league: match[1], snapshotId, expected: { gamePk: Number(match[2]) } });
+    const bundle = await loadAnalysisPitReplayForAudit({ league: match[1], snapshotId, expected: { gamePk: Number(match[2]) } });
+    if (!bundle) return json({ ok: false, code: 'SAVED_PIT_SNAPSHOT_NOT_FOUND',
+      message: '找不到指定的原始快照；未補抓或重建歷史資料。' }, 404);
     if (new URL(request.url).searchParams.get('artifact') === 'source') {
       const artifact = bundle.marketAnalysis?.replayEnvironment?.sourceArtifact;
-      return artifact ? json({ ok: true, snapshotId, artifact, originalSnapshotModified: false })
+      return artifact ? json({ ok: true, snapshotId, artifact, originalSnapshotModified: false,
+        diagnosticOnly: true, featureTimeAudit: bundle.featureTimeAudit,
+        calibrationEligibility: 'EXCLUDED_FORENSIC_AUDIT', productionReuseAllowed: false, persistenceAllowed: false })
         : json({ ok: false, code: 'HISTORICAL_ARTIFACT_NOT_RECORDED' }, 404);
     }
     if (match[1] === 'MLB') return json({ ok: true, audit: auditSavedPitModel(bundle) });

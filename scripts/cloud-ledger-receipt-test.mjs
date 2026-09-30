@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { betIdentity, betPositionIdentity } from '../lib/bet-ledger.js';
+import { loadCompactCloudLedger, mergeKnownLedgerRecords } from '../lib/compact-cloud-ledger-client.js';
 import {
   cloudBetMutationOutcomeUncertain,
   confirmCloudBetMutation,
@@ -73,7 +74,7 @@ function harness(requestJSON, recovery = async () => undefined) {
     setCloudLedgerStatus: value => { state.ledgerStatus = value; },
     reportCloudLedgerFailure: value => { state.failure = value; },
     translateTeamText: value => value,
-    requestJSON, confirmCloudBetMutation, findConfirmedRecordedBet,
+    requestJSON, confirmCloudBetMutation, findConfirmedRecordedBet, mergeKnownLedgerRecords,
     cloudBetMutationOutcomeUncertain, probeCloudLedgerRecovery: recovery,
   };
   const handler = new Function(...Object.keys(env), `${recordSource}; return recordBet;`)(...Object.values(env));
@@ -210,7 +211,7 @@ const initialEnv = {
   migrateLegacyLocalBets: bets => bets, window: { location: { search: '' } }, LEAGUE_IDS: ['MLB'],
   setLeague: () => {}, setSettings: () => {}, betsRef: { current: [] }, setBets: () => {},
   setStorageReady: () => {}, cloudSyncBusyRef: { current: false }, setCloudLedgerBusy: () => {},
-  cloudBetMigrationComplete: () => true, requestJSON: async () => ({ ok: true }),
+  cloudBetMigrationComplete: () => true, requestJSON: async () => ({ ok: true }), loadCompactCloudLedger,
   requireCloudLedgerResponse, betMutationBusyRef: { current: false },
   markCloudBetMigrationComplete: () => {}, setCalibrationStatus: () => {}, cloudSyncRetryAtRef: { current: 0 },
   setCloudLedgerStatus: value => { initialState.status = value.state; },

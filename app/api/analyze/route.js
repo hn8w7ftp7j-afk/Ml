@@ -40,7 +40,8 @@ import {
   analysisPitSnapshotId,
   persistAnalysisPitSnapshotForResponse,
 } from '../../../lib/analysis-pit-snapshot-store-v1.js';
-import { enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
+import { assertPitPersistenceIntegrity, enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
+import { assertPitFeatureTimes } from '../../../lib/pit-feature-time-evidence.js';
 import {
   attestIncomingMarketRows,
   normalizeSignedReaderProvenance,
@@ -385,6 +386,7 @@ export async function POST(request) {
         warnings: context?.warnings || [],
       }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
     }
+    assertPitFeatureTimes(context, context?.fetchedAt);
     const contract = leagueAnalysisContract(league);
     const versions = {
       modelVersion: context.modelVersion || contract.modelVersion || MODEL_VERSION,
@@ -463,6 +465,7 @@ export async function POST(request) {
           previousMarkets,
           readerSnapshot: readerProvenance,
         }, { requiredWhenConfigured: true });
+        assertPitPersistenceIntegrity(pitPersistence);
         safePayload.pitPersistence = pitPersistence;
         assertLeagueGamePrestart(league, game);
         cacheSet(cacheKey, signature, safePayload);
@@ -571,6 +574,7 @@ export async function POST(request) {
       previousMarkets,
       readerSnapshot: readerProvenance,
     }, { requiredWhenConfigured: true });
+    assertPitPersistenceIntegrity(pitPersistence);
     safePayload.pitPersistence = pitPersistence;
     assertLeagueGamePrestart(league, game);
     cacheSet(cacheKey, signature, safePayload);
