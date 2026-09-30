@@ -8,7 +8,7 @@ import Link from 'next/link';
 import PersonnelPanel from './personnel-panel.js';
 import NhlResearchPanel from './research-panel.js';
 import ObservedShotPanel from './observed-shot-panel.js';
-import { NHL_WORKSPACE_EVENT, readNhlWorkspace, saveNhlWorkspace, mergeNhlWorkspace, persistNhlWorkspaceResult, preferNhlWorkspaceRecord } from '../../lib/nhl/client-workspace.js';
+import { NHL_WORKSPACE_EVENT, readNhlWorkspace, saveNhlWorkspace, mergeNhlWorkspace, persistNhlWorkspaceResult, preferNhlWorkspaceRecord, validNhlWorkspaceRecord } from '../../lib/nhl/client-workspace.js';
 
 const TABS = [['schedule', '賽程與結果'], ['team', '球隊與球員'], ['goalie', '門將與陣容'], ['research', '歷史 Shadow'], ['sources', '資料與 Reader']];
 const taipeiDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -148,8 +148,8 @@ export default function NhlWorkspace() {
   function loadSchedule(target = date) {
     return run(`schedule:${target}`, async () => {
       const result = await request('schedule', { date: target });
-      if (result.date !== target) throw new Error('回應日期不符，已保留原本賽程。');
-      setBoards(value => ({ ...value, [target]: result }));
+      if (!validNhlWorkspaceRecord('boards', target, result)) throw new Error('賽程日期或聯盟身分不符，已保留原本賽程。');
+      setBoards(value => ({ ...value, [target]: preferNhlWorkspaceRecord(value[target], result) }));
       persistNhlWorkspaceResult('boards', target, result);
     });
   }
@@ -157,7 +157,7 @@ export default function NhlWorkspace() {
     setSelectedGame(id);
     return run(`game:${id}`, async () => {
       const result = await request('game', { gameId: id });
-      if (result.game?.gameId !== id) throw new Error('賽事識別不符，已停止更新。');
+      if (!validNhlWorkspaceRecord('details', id, result)) throw new Error('賽事識別不符，已停止更新。');
       setDetails(value => ({ ...value, [id]: preferNhlWorkspaceRecord(value[id], result) }));
       persistNhlWorkspaceResult('details', id, result);
     });
@@ -168,8 +168,8 @@ export default function NhlWorkspace() {
     const key = `${team.abbrev}:${season}`;
     return run(`team:${key}`, async () => {
       const result = await request('team', { team: team.abbrev, teamId: String(team.teamId), season: String(season) });
-      if (result.roster?.teamId !== team.teamId) throw new Error('球隊識別不符。');
-      setRosters(value => ({ ...value, [key]: result }));
+      if (result.roster?.teamId !== team.teamId || !validNhlWorkspaceRecord('rosters', key, result)) throw new Error('球隊、球季或球員身分不符，已保留原本名單。');
+      setRosters(value => ({ ...value, [key]: preferNhlWorkspaceRecord(value[key], result) }));
       persistNhlWorkspaceResult('rosters', key, result);
     });
   }

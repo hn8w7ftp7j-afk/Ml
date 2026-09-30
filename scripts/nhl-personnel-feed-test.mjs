@@ -54,6 +54,32 @@ assert.equal(mismatch.status, 'NO_MATCHING_GAME'); assert.equal(mismatch.ok, tru
 assert.deepEqual(mismatch.players, []); assert.equal(mismatch.observedMatchups[0].officialDate, '2026-06-14');
 assert.equal(parseNhlLineupArticle(html.replace('HURRICANES at (1P) GOLDEN KNIGHTS', 'GOLDEN KNIGHTS at HURRICANES'), opts).status, 'NO_MATCHING_GAME');
 assert.equal(parseNhlLineupArticle(html.replace('</div>', '<h2>HURRICANES at GOLDEN KNIGHTS</h2></div>'), opts).code, 'NHL_PERSONNEL_DUPLICATE_MATCHUP');
+// Live NHL 2026-09-30 headings append W-L-OT records, e.g.
+// PENGUINS (0-0-0) at FLYERS (0-0-0). Only this exact numeric suffix
+// may be removed; arbitrary parenthesized text is not a team alias.
+const withRecords = html.replace('(1M) HURRICANES at (1P) GOLDEN KNIGHTS', 'HURRICANES (0-0-0) at GOLDEN KNIGHTS (0-1-0)');
+assert.equal(parseNhlLineupArticle(withRecords, opts).matched, true);
+assert.equal(parseNhlLineupArticle(withRecords, opts).revision, parsed.revision);
+assert.equal(parseNhlLineupArticle(withRecords.replace('HURRICANES (0-0-0)', 'OTHER HURRICANES (0-0-0)'), opts).matched, false);
+assert.equal(parseNhlLineupArticle(withRecords.replace('(0-0-0)', '(different team)'), opts).matched, false);
+assert.equal(parseNhlLineupArticle(withRecords.replace('(0-0-0)', '(0-0)'), opts).matched, false);
+// Explicit parser counterexample: NHL can publish 11 forwards / 7 defensemen.
+// Player count does not prove position; retain the source grouping and roster ID.
+const nonstandard = structuredClone(facts);
+nonstandard.away.lines[3].pop();
+nonstandard.away.pairs.push(['Test Seventh Defenseman']);
+nonstandard.away.rosterPlayers.push([9999991, 'Test Seventh Defenseman', 'D']);
+const elevenSeven = parseNhlLineupArticle(article(nonstandard), { ...opts, rosters: identities(nonstandard) });
+assert.equal(elevenSeven.teams.away.lineupStatus, 'PROJECTED');
+assert.equal(elevenSeven.teams.away.lineCombinations.flat().length, 11);
+assert.equal(elevenSeven.teams.away.defensivePairings.flat().length, 7);
+assert.equal(elevenSeven.teams.away.defensivePairings.at(-1)[0].playerId, 9999991);
+assert.equal(elevenSeven.teams.away.listedGoalies.length, 2);
+assert.equal(elevenSeven.goalies.away.status, 'PROJECTED');
+assert.ok(elevenSeven.qa.warnings.includes('NHL_PERSONNEL_NONSTANDARD_OR_PARTIAL_LINEUP'));
+const mixedGroup = structuredClone(nonstandard);
+mixedGroup.away.lines[3][1] = mixedGroup.away.pairs[0].shift();
+assert.equal(parseNhlLineupArticle(article(mixedGroup), { ...opts, rosters: identities(mixedGroup) }).teams.away.lineupStatus, 'BLOCK');
 assert.equal(parseNhlLineupArticle(html, { ...opts, game: { ...game, league: 'NBA' } }).code, 'NHL_PERSONNEL_GAME_IDENTITY_INVALID');
 assert.equal(parseNhlLineupArticle(html.replace(facts.sourceUrl, 'https://attacker.example/news/'), opts).code, 'NHL_PERSONNEL_CANONICAL_IDENTITY_MISMATCH');
 assert.equal(parseNhlLineupArticle(article(facts, '', { dateModified: '2026-09-07T00:00:00Z' }), opts).code, 'NHL_PERSONNEL_SOURCE_FROM_FUTURE');
