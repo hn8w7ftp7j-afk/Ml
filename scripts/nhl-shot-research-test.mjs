@@ -7,6 +7,7 @@ import { nhlShotResearchEvidence } from '../lib/nhl/shot-research-evidence.js';
 import { nhlFrozenShotResearchArtifacts } from '../lib/nhl/shot-research-frozen.js';
 import { readNhlShotCheckpoint } from '../lib/nhl/shot-research-archive.js';
 import { fileURLToPath } from 'node:url';
+import { readNhlShotResearchReport, encodeNhlShotResearchReport, decodeNhlShotResearchReport } from './nhl-shot-research-report-file.mjs';
 
 const archiveDirectory = fileURLToPath(new URL('./fixtures/nhl/xg-research', import.meta.url));
 const fixture = name => /^xg-research\/pbp-\d{10}\.json$/.test(name)
@@ -252,8 +253,17 @@ test('frozen coefficients never train inside a request or score their own traini
   assert.deepEqual(nhlFrozenShotResearchArtifacts(), fixture('xg-research/frozen-artifacts.json'));
 });
 
+test('compressed research report round-trips every field and rejects corrupted evidence', () => {
+  const stored = readNhlShotResearchReport(archiveDirectory);
+  const archived = encodeNhlShotResearchReport(stored);
+  assert.deepEqual(decodeNhlShotResearchReport(archived), stored);
+  assert.throws(() => decodeNhlShotResearchReport({ ...archived, payloadSha256: '0'.repeat(64) }), /NHL_SHOT_REPORT_ARCHIVE_INVALID/);
+  assert.throws(() => decodeNhlShotResearchReport({ ...archived, gzipBase64: `${archived.gzipBase64} ` }), /NHL_SHOT_REPORT_ARCHIVE_INVALID/);
+  assert.throws(() => decodeNhlShotResearchReport({ ...archived, payloadBytes: 256_000_001 }), /NHL_SHOT_REPORT_ARCHIVE_INVALID/);
+});
+
 test('bundled production research evidence exactly matches reproducible actual-data report and clones defensively', () => {
-  const bundled = nhlShotResearchEvidence(); const stored = fixture('xg-research/research-report.json');
+  const bundled = nhlShotResearchEvidence(); const stored = readNhlShotResearchReport(archiveDirectory);
   assert.deepEqual(bundled, compactNhlShotResearchEvidence(stored));
   const expanded = stored.coverage.map(row => {
     if (row.game.gameId === dataset.game.gameId) return dataset;
