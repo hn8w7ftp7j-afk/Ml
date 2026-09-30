@@ -198,6 +198,37 @@ const rerun = await persistBetUpdates(updates, originals, {
 });
 assert.deepEqual(rerun, { updated: 0, skipped: 4 }, 'Already-settled/cancelled records cannot be counted twice');
 
+const legacy = {
+  ...ticket('legacy-false-zero'), league: 'CPBL', market: '上半大小', pick: '小4平', status: 'SETTLED',
+  resultSnapshot: { final: true, first5Complete: false, awayFirst5: null, homeFirst5: null,
+    selectedPeriod: 'FIRST5', selectedAwayRuns: 0, selectedHomeRuns: 0 },
+  settlement: { outcome: 'WIN', netProfit: 9650 },
+};
+const repairCandidates = await listCloudBetSettlementCandidates({
+  database: async (parts) => {
+    assert.match(parts.join('?'), /status = 'SETTLED'[\s\S]*first5Complete' = 'false'::jsonb/);
+    return [{ payload: legacy }, { payload: { ...legacy, id: 'valid-zero', resultSnapshot: { ...legacy.resultSnapshot, first5Complete: true } } }];
+  },
+});
+assert.deepEqual(repairCandidates.map(b => b.id), [legacy.id]);
+const legacyUpdates = await settleBetTickets([legacy], { fetchResult: async () => officialFinal });
+let concurrentLegacy = structuredClone(legacy);
+const repairDatabase = async (parts, ...values) => {
+  assert.match(parts.join('?'), /WHERE id = \? AND status = 'SETTLED'/);
+  assert.match(parts.join('?'), /payload->'resultSnapshot' = \?::jsonb[\s\S]*payload->'settlement' = \?::jsonb/);
+  const [status, json, id, oldResult, oldSettlement] = values;
+  if (concurrentLegacy.status !== 'SETTLED' || JSON.stringify(concurrentLegacy.resultSnapshot) !== oldResult
+    || JSON.stringify(concurrentLegacy.settlement) !== oldSettlement) return [];
+  const patch = JSON.parse(json);
+  assert.deepEqual(patch.settlementCorrections[0].settlement, legacy.settlement);
+  concurrentLegacy = { ...concurrentLegacy, ...patch, status };
+  return [{ id }];
+};
+assert.deepEqual(await persistBetUpdates(legacyUpdates, [legacy], { database: repairDatabase }), { updated: 1, skipped: 0 });
+assert.equal(concurrentLegacy.resultSnapshot.first5Complete, true);
+assert.deepEqual(concurrentLegacy.analysisSnapshot, legacy.analysisSnapshot);
+assert.deepEqual(await persistBetUpdates(legacyUpdates, [legacy], { database: repairDatabase }), { updated: 0, skipped: 1 }, 'Stale rechecks cannot overwrite a concurrently repaired result');
+
 const store = fs.readFileSync(new URL('../lib/cloud-bet-store.js', import.meta.url), 'utf8');
 const settleFunction = store.slice(store.indexOf('export async function settleOpenCloudBets'));
 assert.match(settleFunction, /onGroupSettled:[\s\S]*await persistBetUpdates\(groupUpdates, previous\)/);

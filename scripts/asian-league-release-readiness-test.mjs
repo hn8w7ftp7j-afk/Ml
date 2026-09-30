@@ -19,7 +19,7 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(readiness.fullGameScoreAvailable, true);
   assert.equal(readiness.fullGameResultFeedAvailable, leagueId === 'CPBL');
   assert.equal(readiness.fullGameAutoSettlementReady, leagueId === 'CPBL');
-  assert.equal(readiness.first5ResultFeedAvailable, false);
+  assert.equal(readiness.first5ResultFeedAvailable, leagueId === 'CPBL');
   assert.equal(readiness.mlbFallbackAllowed, false);
   assert.equal(readiness.tai888ProbabilityInputAllowed, false);
   assert.ok(readiness.availableServices.includes('OFFICIAL_SCHEDULE'));
@@ -27,7 +27,7 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   assert.deepEqual(readiness.displayAnalysisBlockers, []);
   assert.ok(readiness.availableServices.includes('OFFICIAL_PIT_PLAYER_FEATURES'));
   assert.ok(readiness.availableServices.includes('INDEPENDENT_JOINT_SCORE_DISTRIBUTION'));
-  assert.ok(readiness.settlementBlockers.some(row => row.code === 'FIRST5_OFFICIAL_RESULT_FEED_NOT_CONNECTED'));
+  assert.equal(readiness.settlementBlockers.some(row => row.code === 'FIRST5_OFFICIAL_RESULT_FEED_NOT_CONNECTED'), leagueId !== 'CPBL');
   assert.ok(readiness.formalRecommendationBlockers.some(row => row.code === 'LOCKED_OOS_FORWARD_VALIDATION_INCOMPLETE'));
   assert.equal(readiness.displayAnalysisBlockers.some(row => row.code === 'LOCKED_OOS_FORWARD_VALIDATION_INCOMPLETE'), false,
     'OOS／forward 驗證只能封鎖正式下注，不得混入 W 顯示 blocker');
