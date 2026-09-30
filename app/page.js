@@ -1414,7 +1414,8 @@ function ResultRow({ row, game, limitations = [], onBet, onCancel, onRecheck, re
       <div className="qaLine">{externalAuditText}｜不影響W/R、S分數與排名</div>
       {!externalAuditFresh && <details className="details"><summary>外部稽核資料說明</summary><p>{externalVerificationExplanation(row?.marketVerification, externalAuditFresh)}</p></details>}
       <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}</div>
-      {inactiveNotice && <div className="scoreMeta">實際下注紀錄狀態：{inactiveNotice}</div>}
+      {betState?.latest && <div className="scoreMeta">已下注 ✓｜原下注：{translateTeamText(betState.latest.pick)}｜{waterText(betState.latest.water)}</div>}
+      {inactiveNotice && <div className="scoreMeta">新增下注狀態：{inactiveNotice}</div>}
       <div className="scoreMeta">{probabilityDetail}</div>
       {auditWarnings.map(warning => <div className="warningLine" key={warning}>⚠️ {warning}</div>)}
       {limitations.map(note => <div className="warningLine" key={note}>⚠️ 聯盟模型限制：{note} 此方向影響尚未量化。</div>)}
@@ -1662,7 +1663,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
             ? <div className="marketPlaceholder">尚未開盤｜Reader持續監看</div>
             : rows.length ? rows.map((row, index) => directionStatus(row) === 'CALCULATED' || modelEvValue(row) != null
               ? (() => {
-                const betState = betsEnabled ? getBetState(item, row) : { latest: null, cancelled: null };
+                const betState = getBetState(item, row);
                 const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled, readerAuthority, queued: betState?.queued });
                 return <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} limitations={savedLeagueLimitations(analysis.dataAudit)} betState={betState} action={action} onRecheck={onRecheck ? () => onRecheck(item) : undefined} recoveryBusy={recoveryBusy} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice}/>;
               })()
@@ -2609,6 +2610,11 @@ export default function Home() {
   const visibleBets = useMemo(
     () => bets.filter(bet => normalizeLeagueId(bet?.league) === league),
     [bets, league],
+  );
+  const recordedScopeBets = useMemo(
+    () => visibleBets.filter(bet => bet.date === date && bet.status !== 'CANCELLED')
+      .sort((left, right) => Date.parse(right.placedAt || 0) - Date.parse(left.placedAt || 0)),
+    [visibleBets, date],
   );
 
   function getBetState(item, row) {
@@ -4801,6 +4807,12 @@ export default function Home() {
 
     {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
+    {['board', 'ranking', 'betOrder'].includes(tab) && recordedScopeBets.length > 0 && <details className="panel recordedBetsSummary" open>
+      <summary>{league} {date}｜已下注 {recordedScopeBets.length} 筆{cloudLedgerStatus.state !== 'ready' ? '｜帳本待同步' : ''}</summary>
+      {recordedScopeBets.map(bet => <div className="betRow" key={bet.id}>
+        <div><strong>已下注 ✓｜{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}</span><small>{localTime(bet.placedAt)}｜{statusText(bet.status)}</small></div>
+      </div>)}
+    </details>}
     {betAttemptStorageWarning && <p role="alert">{betAttemptStorageWarning}</p>}
     {betQueueEntries.length > 0 && <details className="panel queueSummary" aria-label="下注紀錄隊列">
       <summary><span>紀錄狀態</span><span aria-live="polite">{[
