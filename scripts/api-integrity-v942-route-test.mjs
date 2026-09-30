@@ -37,8 +37,8 @@ function statsGame({ gamePk = 880001, gameDate = '2099-08-11T23:00:00Z', gameNum
     scheduledInnings: 9,
     status: { detailedState: 'Scheduled', statusCode: 'S' },
     teams: {
-      away: { team: { id: 111, name: 'Boston Red Sox' } },
-      home: { team: { id: 141, name: 'Toronto Blue Jays' } },
+      away: { team: { id: 111, name: 'Boston Red Sox' }, probablePitcher: { id: 9001, fullName: 'Fixture Away Starter' } },
+      home: { team: { id: 141, name: 'Toronto Blue Jays' }, probablePitcher: { id: 9002, fullName: 'Fixture Home Starter' } },
     },
     venue: { id: 13, name: 'Rogers Centre' },
   };
@@ -167,6 +167,15 @@ try {
 
     if (/^\/api\/v1\/teams\/(?:111|141)\/roster$/.test(targetPath)) {
       return new Response(JSON.stringify({ roster: [] }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (/^\/api\/v1\/people\/(?:9001|9002)\/stats$/.test(targetPath)) {
+      // Known official starters have an actual mocked acquisition receipt.
+      // Empty person-history data preserves the existing neutral innings
+      // fallback without inventing observation times for a missing identity.
+      return new Response(JSON.stringify({ stats: [{ group: { displayName: 'pitching' }, splits: [] }] }), {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
     }

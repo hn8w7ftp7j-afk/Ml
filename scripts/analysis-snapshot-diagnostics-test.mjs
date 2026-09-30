@@ -7,7 +7,8 @@ let cases = 0;
 const check = async (name, fn) => { await fn(); cases++; };
 const hash = char => char.repeat(64);
 const game = { leagueId: 'MLB', league: 'MLB', gamePk: 123, officialDate: '2026-09-06', gameDate: '2026-09-06T10:00:00Z', gameNumber: 1, awayTeamId: 1, homeTeamId: 2, away: 'Away', home: 'Home' };
-const context = { leagueId: 'MLB', game, fetchedAt: '2026-09-06T07:00:00Z', away: {}, home: {}, featureProvenance: [] };
+const context = { leagueId: 'MLB', game, fetchedAt: '2026-09-06T07:00:00Z', away: {}, home: {},
+  featureProvenance: [{ featureName: 'fixtureObservedInput', fetchedAt: '2026-09-06T06:59:00Z' }] };
 const versions = { modelVersion: 'M1', rulesVersion: 'R1', dataVersion: 'D1', scoreFormulaVersion: 'S1', settlementRuleVersion: 'SET1', uncertaintySetVersion: 'U1' };
 const distribution = { distributionId: 'dist1', distributionHash: hash('a'), gamePk: 123, scenarios: [{ id: 'central', weight: 1, cells: [{ awayRuns: 4, homeRuns: 4, probability: 1 }] }] };
 const analysis = { leagueId: 'MLB', analysisType: 'FULL', inputHash: hash('b'), coreFingerprint: hash('c'), priceFingerprint: hash('d'), calculationFingerprint: hash('e'), auxiliaryFingerprint: hash('f'), distributionId: 'dist1', distributionHash: hash('a'),
@@ -49,6 +50,19 @@ await check('different original market cannot be treated as matched input', asyn
   const report = await readSnapshotDiagnostics(query, { loadSnapshot: async ({ snapshotId }) => snapshotId === left.snapshotId ? left : changed });
   assert.equal(report.comparison.sameMarket, false); assert.equal(report.status, 'INPUTS_DIFFER_NOT_CONTROLLED_COMPARISON');
 });
+await check('hash-valid historical receipt failures remain inspectable without Production authority', async () => {
+  const timeInvalid = { ...right, dataAsOf: '2026-09-06T06:58:00Z' };
+  const saved = JSON.stringify(timeInvalid);
+  const report = await readSnapshotDiagnostics(query, { loadSnapshot: async ({ snapshotId }) => snapshotId === left.snapshotId ? left : timeInvalid });
+  assert.equal(report.status, 'SAME_SAVED_INPUTS_OUTPUT_COMPARISON');
+  assert.equal(report.comparison.featureTimeAudit.ok, false);
+  assert.equal(report.comparison.featureTimeAudit.after.ok, false);
+  assert.ok(report.comparison.featureTimeAudit.after.errors.includes('FEATURE_FROM_FUTURE:fixtureObservedInput'));
+  assert.equal(report.comparison.calibrationEligibility, 'EXCLUDED_FORENSIC_AUDIT');
+  assert.equal(report.comparison.productionReuseAllowed, false);
+  assert.equal(report.comparison.persistenceAllowed, false);
+  assert.equal(JSON.stringify(timeInvalid), saved);
+});
 await check('missing and tampered payloads do not produce a comparison', async () => {
   const report = await readSnapshotDiagnostics(query, { loadSnapshot: async ({ snapshotId }) => snapshotId === left.snapshotId ? left : null });
   assert.equal(report.status, 'UNRECONSTRUCTABLE_MISSING_SNAPSHOT'); assert.deepEqual(report.missing, [right.snapshotId]);
@@ -64,6 +78,7 @@ await check('diagnostic store path has no schema or settlement writes and lists 
   const section = source.slice(source.indexOf('export async function listAnalysisPitComparisonSnapshots'), source.indexOf('export async function persistAnalysisPitSnapshot('));
   assert.doesNotMatch(section, /ensureAnalysisPitSchema|INSERT INTO|UPDATE |DELETE FROM|CREATE TABLE|settleOpen/);
   assert.match(section, /external_game_id = \$\{gamePk\} AND analysis_type = 'FULL'/); assert.match(section, /LIMIT 21/); assert.match(section, /rows\.slice\(0, 20\)/);
-  assert.match(section, /buildAnalysisPitReplayBundle\(record/);
+  assert.match(section, /buildAnalysisPitReplayBundleForAudit\(record/);
+  assert.match(section, /selectAnalysisPitSnapshot\(snapshotId, league, \{ forensicReadOnly: true \}\)/);
 });
 console.log(JSON.stringify({ suite: 'analysis-snapshot-diagnostics', cases, ok: true }));

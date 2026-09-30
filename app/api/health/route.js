@@ -45,6 +45,7 @@ import {
   analysisDirectionHistoryDatabaseConfigured,
 } from '../../../lib/analysis-direction-history-v1.js';
 import { ASIAN_LEAGUE_READINESS_VERSION } from '../../../lib/asian-league-readiness.js';
+import { operationalReadiness } from '../../../lib/operational-readiness.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,15 +72,18 @@ export async function GET(request) {
   const readerSnapshot = await loadReaderSnapshot('MLB');
   const readerStatus = readerSnapshotStatus(readerSnapshot, Date.now(), 'MLB');
   const referenceStatus = referenceProviderStatus();
+  const leagues = publicLeagueRegistry();
   return NextResponse.json({
     ok: ready,
     alive: true,
     ready,
+    configurationReady: ready,
     readinessBasis: 'CONFIGURATION_ONLY_PERSISTENCE_CONFIRMED_PER_ANALYSIS',
+    operationalReadiness: operationalReadiness({ configuredReady: ready, formalScoringEnabled: FORMAL_SCORING_ENABLED, leagues }),
     readinessReasons,
     version,
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
-    leagues: publicLeagueRegistry(),
+    leagues,
     modelVersion: MODEL_VERSION,
     modelEvFormulaVersion: MODEL_EV_FORMULA_VERSION,
     robustEvVersion: ROBUST_EV_VERSION,
@@ -128,7 +132,8 @@ export async function GET(request) {
     gptScoringEnabled: false,
     actualBetLedgerEnabled: true,
     currentPriceComparisonEnabled: true,
-    automaticSettlementEnabled: true,
+    automaticSettlementEnabled: databaseConfigured && cronSecretConfigured,
+    automaticSettlementBasis: 'CONFIGURED_CRON_NOT_ALL_MARKETS_VERIFIED',
     continuousCalibrationVersion: CONTINUOUS_CALIBRATION_V109_VERSION,
     productionPitReplayVersion: MLB_PRODUCTION_PIT_REPLAY_V109_VERSION,
     coreRefreshPolicyVersion: ANALYSIS_REFRESH_POLICY_V109_VERSION,

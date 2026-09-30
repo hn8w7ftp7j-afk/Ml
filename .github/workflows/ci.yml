@@ -66,6 +66,7 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run test:push
+      - run: npm run test:reliability
       - run: node scripts/job-status-transport-test.mjs
       - run: node scripts/job-status-latency-test.mjs
       - run: node scripts/external-json-transport-test.mjs
