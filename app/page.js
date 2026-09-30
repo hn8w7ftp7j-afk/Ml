@@ -17,6 +17,7 @@ import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/p
 import { APP_VERSION } from '../lib/app-version.js';
 import { loadBetAttemptJournal, saveBetAttemptJournal } from '../lib/bet-attempt-journal.js';
 import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
+import { personnelFreshnessView, personnelScheduleObservation, PERSONNEL_SCHEDULE_POLL_MS } from '../lib/personnel-freshness-view.js';
 import { analysisSourceStatusDisplay } from '../lib/npb-identity-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
 import { rankingWarningPresentation, rankingStatusText } from '../lib/ranking-display.js';
@@ -1344,6 +1345,15 @@ function ReaderRecovery({ action, onRecheck, busy = false }) {
   </div>;
 }
 
+function PersonnelFreshness({ item, observation, now, onRecheck, busy = false, compact = false }) {
+  const view = personnelFreshnessView(item, { observation, now });
+  if (!view || (compact && !view.needsRecheck)) return null;
+  return <div className={compact ? 'warningText' : 'sourceBanner'} data-personnel-status={view.status} style={{ flexWrap: 'wrap' }}>
+    <span title={view.detail}>{view.label}</span>
+    {view.needsRecheck && onRecheck && <button type="button" className="textButton" disabled={busy || ['running', 'queued'].includes(item.status)} onClick={() => onRecheck(item)} title={view.detail}>重新分析此場</button>}
+  </div>;
+}
+
 function ResearchMarketBadge({ policy }) {
   return policy ? <div className="researchMarketBadge"><strong>🧪 {policy.label}</strong><span>{policy.reason} 原始 S、W、R 照常保存；不列候選，不代表模型優勢已獲驗證。</span></div> : null;
 }
@@ -1533,7 +1543,7 @@ function BullpenEvidence({ row, league }) {
   </div>;
 }
 
-function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null }) {
+function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getBetState, now, betsEnabled = true, shadowMode = false, cloudLedgerState = 'ready', readerAuthority = null, personnelObservation = null }) {
   const analysisCardRef = useRef(null);
   const displayedGame = analysisDisplayGame(item);
   const displayedItem = { ...item, game: displayedGame };
@@ -1616,6 +1626,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
       <div><h2>{matchup(displayedGame)}</h2><p>{localTime(displayedGame.gameDate)}｜{analysisStarterDisplay(displayedItem, 'away')} 對 {analysisStarterDisplay(displayedItem, 'home')}</p></div>
       <span className={`state ${item.status}`}>{preservingPreviousReaderAnalysis && !retainedAnalysisUpdating ? '保留已完成分析｜目前Reader盤口待複核' : waitingLabel}</span>
     </div>
+    <PersonnelFreshness item={item} observation={personnelObservation} now={now} onRecheck={onRecheck} busy={recoveryBusy}/>
     {liveWaiting?.open && <button type="button" disabled={recoveryBusy} onClick={() => onRecheck?.(item)}>分析此場</button>}
     {actualRows.some(row => isResearchOnlyMarket(row, item.game)) && <div className="sourceBanner researchNotice"><strong>MLB 全場大分：僅供研究</strong><span>原始分析照常保留，已退出候選順序與排名資格；已自行下注的紀錄、取消及結算仍照常處理。上半場大分、小分及其他聯盟不套用此限制。</span></div>}
     <GameAnalysisCopy key={`${displayedGame.leagueId || displayedGame.league}:${displayedGame.gamePk}:${pitPersistence?.snapshotId || analysis.inputHash || analysis.analysisAsOf || 'pending'}`} cardRef={analysisCardRef} matchup={matchup(displayedGame)} available={Object.keys(analysis).length > 0} receipt={{ game: displayedGame, analysis, persistence: pitPersistence, appVersion: APP_VERSION, retained: preservingPreviousReaderAnalysis || item.restoredFromCache === true }}/>
@@ -1633,7 +1644,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
       {analysis.replayEnvironment?.modelValidation?.url && <a href={analysis.replayEnvironment.modelValidation.url} target="_blank" rel="noreferrer">所屬模型版本歷史成效驗收</a>}
       {pitPersistence?.confirmed && analysis.replayEnvironment?.sourceArtifact && <p><a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(pitPersistence.snapshotId)}&artifact=source`} target="_blank" rel="noreferrer">讀取此快照保存的重播來源封存</a></p>}
     </details>
-    {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT快照保存已確認（不等於資料全數驗證）' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
+    {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT已保存｜人員依分析時點' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
     {liveWaiting ? <div className="sourceBanner actualSource"><strong>{liveWaiting.label}</strong><span>最新Reader盤口時間：{localTime(liveWaiting.observedAt)}｜盤口狀態不代表分析已完成。</span></div> : item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}（卡片來源紀錄）｜分析記錄盤口時間：{localTime(analysis.lineAsOf)}；兩者各依原欄位顯示，逐方向盤口時間與版本請見完整分析匯出。</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{waitingLabel}</div>}
@@ -1737,6 +1748,10 @@ export default function Home() {
   const [notificationResultNotice, setNotificationResultNotice] = useState('');
   const [date, setDate] = useState(taipeiDate());
   const [schedule, setSchedule] = useState([]);
+  const scheduleRequestsRef = useRef(new Map());
+  const [personnelObservations, setPersonnelObservations] = useState({});
+  const personnelObservationsRef = useRef(personnelObservations);
+  personnelObservationsRef.current = personnelObservations;
   const [gamePicker, setGamePicker] = useState({ scope: '', games: [], selected: '', loading: false });
   const gamePickerRequestRef = useRef(0);
   const [board, setBoard] = useState([]);
@@ -2590,6 +2605,30 @@ export default function Home() {
   // Reader polling above is read-only. Analysis/repricing requires an explicit
   // analysis button; neither entry, timers nor a completed job may start it.
   useEffect(() => {
+    if (!storageReady || !analysisEnabled) return undefined;
+    const scope = `${league}:${date}`;
+    let active = true;
+    let pending = false;
+    const observePersonnelSchedule = async () => {
+      if (!active || pending || document.visibilityState !== 'visible'
+        || currentLeagueRef.current !== league || currentDateRef.current !== date
+        || operationBusyRef.current || readerPollBusyRef.current || allLeagueBusyRef.current || allLeagueRunning
+        || ['preparing', 'running'].includes(independentRunsRef.current.get(scope)?.status)) return;
+      if (!boardRef.current.some(item => analysisHasCalculatedDirections(item.customData)
+        && gameIsPrestartNow(item.game, Date.now()))) return;
+      const previous = Date.parse(personnelObservationsRef.current[scope]?.observedAt || '');
+      if (Number.isFinite(previous) && Date.now() - previous < PERSONNEL_SCHEDULE_POLL_MS) return;
+      pending = true;
+      try { await fetchScheduleForLeague(league, date, { monitorOnly: true }); }
+      catch { /* Failed observation cannot confirm personnel or erase saved analysis. */ }
+      finally { pending = false; }
+    };
+    void observePersonnelSchedule();
+    const timer = window.setInterval(observePersonnelSchedule, PERSONNEL_SCHEDULE_POLL_MS);
+    document.addEventListener('visibilitychange', observePersonnelSchedule);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', observePersonnelSchedule); };
+  }, [league, date, storageReady, analysisEnabled, allLeagueRunning]);
+  useEffect(() => {
     // A previous league's poll may release the shared Reader lock after this
     // league queued a manual click. Drain from the active render so the old
     // closure cannot either lose that click or run it for the wrong league.
@@ -2628,15 +2667,28 @@ export default function Home() {
     setBoard(current => current.map(item => item.game.gamePk === gamePk ? updater(item) : item));
   }
 
-  async function fetchScheduleForLeague(targetLeague, targetDate, { commit = false } = {}) {
+  async function fetchScheduleForLeague(targetLeague, targetDate, { commit = false, monitorOnly = false } = {}) {
     const config = leagueConfig(targetLeague);
     if (!config.scheduleEndpoint) throw new Error(`${config.label}正式賽程尚未接入，不能進行分析`);
-    const data = await requestJSONWithTransientRetry(
-      `${config.scheduleEndpoint}?league=${encodeURIComponent(targetLeague)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`,
-      {},
-      40000,
-    );
+    const scope = `${targetLeague}:${targetDate}`;
+    let pending = scheduleRequestsRef.current.get(scope);
+    if (!pending) {
+      pending = requestJSONWithTransientRetry(
+        `${config.scheduleEndpoint}?league=${encodeURIComponent(targetLeague)}&date=${encodeURIComponent(targetDate)}&t=${Date.now()}`,
+        {}, 40000,
+      );
+      scheduleRequestsRef.current.set(scope, pending);
+    }
+    let data;
+    try { data = await pending; }
+    finally { if (scheduleRequestsRef.current.get(scope) === pending) scheduleRequestsRef.current.delete(scope); }
+    const observation = personnelScheduleObservation(data, { league: targetLeague, date: targetDate });
+    if (observation) setPersonnelObservations(current => {
+      if (Date.parse(current[scope]?.observedAt || '') >= Date.parse(observation.observedAt)) return current;
+      return { ...current, [scope]: observation };
+    });
     const rows = Array.isArray(data.games) ? data.games.filter(game => gameIsPrestartNow(game, Date.now())) : [];
+    if (monitorOnly) return rows;
     if (data.ok === true && data.league === targetLeague && data.date === targetDate
       && Array.isArray(data.identitySlate) && typeof data.identityAsOf === 'string') {
       const evidence = { league: targetLeague, date: targetDate,
@@ -4835,7 +4887,7 @@ export default function Home() {
       {!analysisEnabled && <LeagueSetupPanel config={activeLeague}/>}
 
       {analysisEnabled && !activeBoard.length && <section className="emptyBoard"><div>⚾</div><h2>尚未建立今日盤口</h2><p>按上方按鈕後，Reader已同步的Tai888信用盤會一次列出。</p></section>}
-      {analysisEnabled && activeBoard.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} onRecheck={recheckReaderItem} recoveryBusy={busy || readerPolling || allLeaguePreparing || allLeagueRunning} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={liveReaderAuthority}/>) }
+      {analysisEnabled && activeBoard.map(item => <GameCard key={`${league}-${item.game.gamePk}`} item={item} onBet={recordBet} onCancel={cancelBet} onRecheck={recheckReaderItem} recoveryBusy={busy || readerPolling || allLeaguePreparing || allLeagueRunning} getBetState={getBetState} now={clockNow} betsEnabled={bettingEnabled} shadowMode={shadowMode} cloudLedgerState={cloudLedgerActionState} readerAuthority={liveReaderAuthority} personnelObservation={personnelObservations[`${league}:${date}`]}/>) }
       {analysisEnabled && historicalIdentityBoard.length > 0 && <details className="panel historicalIdentityPanel">
         <summary>歷史識別衝突｜{historicalIdentityBoard.length} 場原始分析保留</summary>
         <p>官方最新清單使用另一個場次識別。以下原始分析僅供查閱，不列入今日盤口、影子排名或候選順序，也不能作為目前 Reader 的下注身分。原下注紀錄與 PIT 均保持原樣。</p>
@@ -4862,7 +4914,7 @@ export default function Home() {
         return <div className={`rankRow ${entry.researchPolicy ? 'researchOnlyRow' : ''} ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}>
           <b>{entry.researchPolicy ? '研究' : index + 1}</b>
           <strong className={`rankScore ${entry.researchPolicy ? 'researchOnlyScore' : entry.score != null && entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong>
-          <div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><RankingDiagnostics entry={entry} warnings={warnings}/>{entry.inactiveNotice && <small>{entry.inactiveNotice}</small>}</div>
+          <div><span>{entry.matchup}｜{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><RankingDiagnostics entry={entry} warnings={warnings}/><PersonnelFreshness item={entry.item} observation={personnelObservations[`${league}:${date}`]} now={clockNow} onRecheck={recheckReaderItem} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning} compact/>{entry.inactiveNotice && <small>{entry.inactiveNotice}</small>}</div>
           <div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? entry.researchPolicy ? 'researchLedger' : 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{researchLedgerActionText(action, entry.researchPolicy)}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/>{betState.latest && <BetPriceComparison bet={betState.latest} currentRow={entry.row} game={entry.item.game}/>}</div>
         </div>;
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
@@ -4878,7 +4930,7 @@ export default function Home() {
           const scoreText = entry.score.toFixed(1);
           const warnings = diagnosticWarnings(entry.row);
           const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
-          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><RankingDiagnostics entry={entry} warnings={warnings}/>{entry.inactiveNotice && <small>{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/></div></div>;
+          return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><RankingDiagnostics entry={entry} warnings={warnings}/><PersonnelFreshness item={entry.item} observation={personnelObservations[`${league}:${date}`]} now={clockNow} onRecheck={recheckReaderItem} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning} compact/>{entry.inactiveNotice && <small>{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/></div></div>;
         })}
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
     </section>}
