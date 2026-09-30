@@ -99,3 +99,5 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .rankingSourceDetails{margin:0 0 12px}
 .rankRow .rankingMetrics{display:flex;flex-wrap:wrap;gap:4px 14px}
 .rankingMetrics span{white-space:nowrap}
+
+.queueSummary.panel{padding:12px 14px;border-radius:12px;box-shadow:none;font-size:13px}.queueSummary>summary{cursor:pointer;line-height:1.6}.queueSummary>summary>span:first-child{font-weight:700;margin-right:10px}.queueSummary>summary>span:last-child{color:#a9bdd0}.queueSummary ul{padding-left:20px;margin-bottom:0}.queueSummary li{margin:10px 0;overflow-wrap:anywhere}.queueSummary li details{margin-top:4px;color:#a9bdd0}

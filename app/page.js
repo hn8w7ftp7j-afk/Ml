@@ -4734,8 +4734,16 @@ export default function Home() {
     {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
     {betAttemptStorageWarning && <p role="alert">{betAttemptStorageWarning}</p>}
-    {betQueueEntries.some(entry => entry.status !== 'confirmed') && <section className="panel" aria-label="下注紀錄隊列"><strong>紀錄進度</strong><ul aria-live="polite">{betQueueEntries.filter(entry => entry.status !== 'confirmed').map(entry => <li key={entry.key}>{entry.label}：{({ queued: '排隊中', saving: '儲存確認中', failed: '記錄失敗', uncertain: '結果待確認，請先回讀帳本，勿重複新增' })[entry.status]}{entry.message && <><span>{/FEATURE_FROM_FUTURE/.test(entry.message) ? '｜資料時間驗證未通過' : ''}</span><details><summary>詳細資訊</summary><p style={{ overflowWrap: 'anywhere' }}>{entry.message}</p></details></>}</li>)}</ul></section>}
-    {betQueueEntries.some(entry => entry.status === 'confirmed') && <details className="panel"><summary>已記錄 {betQueueEntries.filter(entry => entry.status === 'confirmed').length} 筆</summary><ul>{betQueueEntries.filter(entry => entry.status === 'confirmed').map(entry => <li key={entry.key}>{entry.label}：已記錄 ✓</li>)}</ul></details>}
+    {betQueueEntries.length > 0 && <details className="panel queueSummary" aria-label="下注紀錄隊列">
+      <summary><span>紀錄狀態</span><span aria-live="polite">{[
+        ['處理中', betQueueEntries.filter(entry => ['queued', 'saving'].includes(entry.status)).length],
+        ['失敗', betQueueEntries.filter(entry => entry.status === 'failed').length],
+        ['待確認', betQueueEntries.filter(entry => entry.status === 'uncertain').length],
+        ['已記錄', betQueueEntries.filter(entry => entry.status === 'confirmed').length],
+      ].filter(([, count]) => count > 0).map(([label, count]) => `${label} ${count} 筆`).join('・')}</span></summary>
+      <ul>{betQueueEntries.map(entry => <li key={entry.key}>{entry.label}：{({ queued: '排隊中', saving: '儲存確認中', confirmed: '已記錄 ✓', failed: '記錄失敗', uncertain: '結果待確認，請先回讀帳本，勿重複新增' })[entry.status]}{entry.message && entry.status !== 'confirmed' && <><span>{/FEATURE_FROM_FUTURE/.test(entry.message) ? '｜資料時間驗證未通過' : ''}</span><details><summary>詳細資訊</summary><p style={{ overflowWrap: 'anywhere' }}>{entry.message}</p></details></>}</li>)}</ul>
+    </details>}
+
     {cloudLedgerStatus.state === 'unavailable' && <div className="noticeBox" role="status"><span>帳本尚未同步完成：{cloudLedgerStatus.message} </span><button type="button" className="mini" disabled={cloudLedgerBusy} onClick={() => probeCloudLedgerRecovery()}>{cloudLedgerBusy ? '正在回讀帳本…' : '重新讀取帳本'}</button></div>}
     {betQueueEntries.some(entry => entry.status === 'uncertain') && <button type="button" className="secondary" disabled={cloudLedgerBusy || betQueueActive} onClick={() => probeCloudLedgerRecovery()}>回讀帳本確認待確認紀錄（不重新送出）</button>}
     <LoadingLine progress={progress}/>
