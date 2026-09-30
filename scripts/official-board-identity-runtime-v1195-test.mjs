@@ -69,6 +69,7 @@ function clientHarness(scheduleBody) {
     league: 'KBO', date: DATE, boardRef: { current: originalBoard }, currentLeagueRef: { current: 'KBO' },
     currentDateRef: { current: DATE }, analysisGenerationRef: { current: 1 },
     officialIdentityEvidenceRef: { current: new Map() }, setOfficialIdentityRevision: () => {},
+    scheduleRequestsRef: { current: new Map() }, personnelScheduleObservation: () => null, setPersonnelObservations: () => {},
     recordReaderPhase: () => {}, operationBusyRef: { current: false }, readerPollBusyRef: { current: false }, allLeagueBusyRef: { current: false },
     allLeagueRunning: false, readerStatusRef: { current: null }, creditRevisionRef: { current: '' },
     officialPrestartCheckedAtRef: { current: 0 }, lastReferenceRefreshAtRef: { current: 0 }, queuedAnalysisRef: { current: null },
