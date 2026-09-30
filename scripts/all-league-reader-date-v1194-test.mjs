@@ -35,6 +35,7 @@ function harness({ manual = [], latest = id => ({ fresh: true, boardDate: id ===
     },
     // A full route mount while CPBL is visible initializes hidden MLB to today.
     league: 'CPBL', date: TODAY, allLeagueRun: null, allLeagueRunning: false,
+    currentLeagueRef: { current: 'CPBL' }, currentDateRef: { current: TODAY }, requestedRecoveryScopeRef: {},
     readerPollBusyRef: { current: false }, allLeagueBusyRef: { current: false }, operationBusyRef: { current: false },
     analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: { current: false },
     manualAnalysisScopesRef: { current: new Set() },
