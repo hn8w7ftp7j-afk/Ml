@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace } from '../lib/nhl/client-workspace.js';
+import { preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace, validNhlWorkspaceRecord } from '../lib/nhl/client-workspace.js';
 
 // Execute the actual client handlers, not copies of their state logic. The
 // controlled request promises exercise ordering without a browser/framework.
@@ -64,7 +64,7 @@ function harness(initial = {}) {
   };
   const calls = [];
   const context = {
-    preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace,
+    preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace, validNhlWorkspaceRecord,
     ...state, inFlight: { current: new Set() }, activePlayerRequest: { current: null }, CACHE: 'test:nhl',
     localStorage: { getItem: () => initial.saved == null ? null : JSON.stringify(initial.saved) },
     request(action, args = {}) {
@@ -249,4 +249,46 @@ await test('team summary mismatch and failed refresh preserve previous results a
   assert.equal(h.state.teamSummaries['18:20232024:2'].statistics.gamesPlayed, 82);
   assert.equal(h.state.busy['team-summary:18:20232024:2'], false);
 });
+await test('a matching outer date cannot publish a foreign-league or wrong-day nested game', async () => {
+  const date = '2023-10-11';
+  for (const game of [{ ...nhlGame(), league: 'MLB' }, nhlGame('2023020001', '2023-10-12')]) {
+    const prior = { league: 'NHL', date, games: [nhlGame()] };
+    const h = harness({ date, boards: { [date]: prior } });
+    const task = h.api.loadSchedule();
+    h.calls[0].resolve({ league: 'NHL', date, games: [game] });
+    await task;
+    assert.equal(h.state.boards[date], prior, 'Invalid data must never replace the visible board before persistence rejects it');
+    assert.equal(h.state.busy[`schedule:${date}`], false);
+    assert.match(h.state.error, /不符/);
+  }
+});
+
+await test('same team ID with a wrong season or foreign roster member preserves the displayed roster', async () => {
+  const team = { abbrev: 'NSH', teamId: 18 };
+  const prior = { league: 'NHL', roster: { leagueId: 'NHL', ...team, season: 20232024, players: [] } };
+  for (const roster of [
+    { ...prior.roster, season: 20242025 },
+    { ...prior.roster, abbrev: 'TBL' },
+    { ...prior.roster, players: [{ leagueId: 'NHL', teamId: 14, playerId: 8470001 }] },
+  ]) {
+    const h = harness({ rosters: { 'NSH:20232024': prior } });
+    const task = h.api.loadTeam(team, 20232024);
+    h.calls[0].resolve({ league: 'NHL', roster });
+    await task;
+    assert.equal(h.state.rosters['NSH:20232024'], prior);
+    assert.equal(h.state.busy['team:NSH:20232024'], false);
+    assert.match(h.state.error, /不符/);
+  }
+});
+
+await test('a foreign game nested under the correct game ID never replaces visible NHL detail', async () => {
+  const prior = { league: 'NHL', game: nhlGame() };
+  const h = harness({ details: { '2023020001': prior } });
+  const task = h.api.loadGame('2023020001');
+  h.calls[0].resolve({ league: 'NHL', game: { ...nhlGame(), league: 'NBA' } });
+  await task;
+  assert.equal(h.state.details['2023020001'], prior);
+  assert.equal(h.state.busy['game:2023020001'], false);
+});
+
 console.log(`NHL client: ${groups} actual-handler async/state regression groups passed.`);

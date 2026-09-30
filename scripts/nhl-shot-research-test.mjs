@@ -82,6 +82,19 @@ test('empty or truncated completed PBP cannot become a valid training game', () 
   assert.equal(extract(missingSog).code, 'NHL_SHOT_FINAL_EVENT_TOTALS_MISMATCH');
 });
 
+test('retained official SOG conflicts disclose exact totals without admitting the game to research', () => {
+  for (const [gameId, teamId, official, observed] of [['2023020068', 13, 36, 37], ['2023020090', 21, 38, 39]]) {
+    const response = fixture(`xg-research/pbp-${gameId}.json`);
+    const result = extractNhlShotResearch(response.data, { source: response.source });
+    assert.equal(result.ok, false); assert.equal(result.status, 'BLOCK');
+    assert.equal(result.gameId, gameId); assert.deepEqual(result.rows, []);
+    const mismatch = result.totals.find(row => row.teamId === teamId);
+    assert.equal(mismatch.officialShotsOnGoal, official);
+    assert.equal(mismatch.eventShotsOnGoal, observed);
+    assert.equal(mismatch.officialGoals, mismatch.eventGoals);
+  }
+});
+
 test('source hash, game, team, shooter, goalie and roster conflicts fail closed', () => {
   assert.equal(extractNhlShotResearch(pbp, { source: { ...source, contentHash: '0'.repeat(64) } }).code, 'NHL_SHOT_SOURCE_UNVERIFIED');
   assert.equal(extract(pbp, { expectedGame: { gameId: '2023020002' } }).ok, false);
@@ -261,7 +274,9 @@ test('bundled production research evidence exactly matches reproducible actual-d
       'Retained official corpus reproduces the near-optimum cancellation regression without loosening convergence');
   }
   assert.equal(bundled.productionCalibrated, false); assert.equal(bundled.completeSeasonCoverage, false);
-  if (!stored.completeRequestedCoverage) assert.ok(bundled.unavailableCheckpointCount > 0);
+  assert.equal(bundled.retainedOfficialResponses + bundled.unavailableCheckpointCount, bundled.requestedGames);
+  if (!stored.completeRequestedCoverage) assert.ok(bundled.unavailableCheckpointCount > 0 || bundled.qaEligibleGames < bundled.retainedOfficialResponses,
+    'Missing sources and acquired-but-quarantined games are distinct coverage gaps');
   if (bundled.acquisition.providerStopped) assert.ok(bundled.acquisition.failures.some(row => row.code === 'NHL_SOURCE_RATE_LIMITED'));
   assert.ok(bundled.coverage.length <= 10 && bundled.sources.length <= 10);
   assert.ok(Object.values(bundled.reports).every(value => value.folds.length <= 10));
