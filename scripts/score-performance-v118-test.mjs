@@ -113,3 +113,4 @@ assert.match(css, /\.scorePerformancePanel\s*\{[\s\S]*overflow:\s*hidden/, '分�
 assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.scoreMatrixDesktop\s*\{[\s\S]*display:\s*none[\s\S]*\.scoreMatrixMobile\s*\{[\s\S]*display:\s*grid/, '手機矩陣必須改用卡片版，不得依賴橫向表格捲動');
 
 console.log('Score performance v11.8: immutable score buckets, filters, matrix, read-only isolation and mobile layout PASS');
+await import('./score-performance-pagination-test.mjs');

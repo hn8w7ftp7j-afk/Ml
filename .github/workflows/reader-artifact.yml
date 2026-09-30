@@ -38,12 +38,25 @@ jobs:
           npm run e2e:reader
       - run: node scripts/package-reader.mjs release
       - run: npm run report:release
+      - name: Resolve current Reader delivery files
+        id: reader-files
+        run: |
+          node --input-type=module <<'JS' >> "$GITHUB_OUTPUT"
+          import fs from 'node:fs';
+          import { readerArtifactNames } from './lib/reader-artifact-names.js';
+          const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
+          const names = readerArtifactNames(manifest);
+          for (const [key, name] of Object.entries(names)) {
+            if (!fs.existsSync(`release/${name}`)) throw new Error(`Missing Reader delivery file: ${name}`);
+            console.log(`${key}=release/${name}`);
+          }
+          JS
       - uses: actions/upload-artifact@v4
         with:
-          name: Tai888-Reader-v2.1.19-VERIFIED-RESCAN-${{ github.sha }}
+          name: Tai888-Reader-${{ github.sha }}
           path: |
-            release/Tai888-Reader-v2.1.19-VERIFIED-RESCAN.zip
-            release/Tai888-Reader-v2.1.19-VERIFIED-RESCAN.zip.sha256
-            release/Tai888-Reader-v2.1.19-VERIFICATION.md
+            ${{ steps.reader-files.outputs.archiveName }}
+            ${{ steps.reader-files.outputs.shaName }}
+            ${{ steps.reader-files.outputs.reportName }}
           if-no-files-found: error
           retention-days: 14

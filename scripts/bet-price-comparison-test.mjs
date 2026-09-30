@@ -161,3 +161,4 @@ const originalPriceSummary = summarizeOriginalBetPrices([
 assert.deepEqual(originalPriceSummary, { total: 2, better: 1, worse: 1 });
 
 console.log('Placed-versus-current Taiwan price comparison, exact suppression and key-hole delta PASS');
+await import('./bet-price-summary-performance-test.mjs');

@@ -5,6 +5,7 @@ import {
   readerOriginAllowed,
   readerPairingConfigured,
   readerPairPasswordMatches,
+  READER_TOKEN_TTL_SECONDS,
 } from '../../../../lib/reader-auth-v2.js';
 import { MINIMUM_READER_VERSION, readerVersionSupported } from '../../../../lib/tai888-reader-parser-v2.js';
 import { checkRateLimit, cleanText, rateLimitResponse, readJsonBody } from '../../../../lib/security.js';
@@ -55,7 +56,7 @@ export async function POST(request) {
       ok: true,
       token,
       deviceId,
-      expiresInSeconds: 60 * 60 * 24 * 90,
+      expiresInSeconds: READER_TOKEN_TTL_SECONDS,
       message: 'Tai888 Reader 配對完成，已啟用自動同步。',
     }, { headers });
   } catch (error) {
