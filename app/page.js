@@ -305,8 +305,8 @@ function outcomeText(value) {
   if (outcome === 'WIN') return '贏';
   if (outcome === 'LOSS') return '輸';
   if (outcome === 'PUSH') return '走水';
-  if (outcome === 'HALF_WIN') return '贏半';
-  if (outcome === 'HALF_LOSS') return '輸半';
+  if (outcome === 'HALF_WIN') return '部分贏';
+  if (outcome === 'HALF_LOSS') return '部分輸';
   if (outcome === 'VOID') return '作廢';
   if (outcome === 'MIXED') return '混合結算';
   return '待結算';
@@ -1007,7 +1007,7 @@ function SummaryCards({ summary, originalPriceSummary }) {
     ['舊賽果待核驗', summary?.unverifiedSettlements ?? 0],
     ['已取消', summary?.cancelled ?? 0],
     ['贏／輸／走', `${summary?.wins ?? 0}／${summary?.losses ?? 0}／${summary?.pushes ?? 0}`],
-    ['贏半／輸半', `${summary?.halfWins ?? 0}／${summary?.halfLosses ?? 0}`],
+    ['部分贏／部分輸', `${summary?.halfWins ?? 0}／${summary?.halfLosses ?? 0}`],
     ['有效勝率', pct(summary?.winRate)],
     ['總下注金額', moneyText(summary?.placedStake)],
     ['已結算本金', moneyText(summary?.totalStake)],
@@ -1026,12 +1026,13 @@ function BreakdownButton({ label, summary, active = false, onClick }) {
   return <button className={`breakdownButton ${active ? 'active' : ''}`} onClick={onClick}>
     <span>{label}</span>
     <b>{summary?.bets ?? 0} 注｜{summary?.settled ?? 0} 已結算</b>
-    <small>{summary?.wins ?? 0}勝／{summary?.losses ?? 0}敗／{summary?.pushes ?? 0}走｜勝率 {pct(summary?.winRate)}</small>
+    <small>{summary?.wins ?? 0}勝／{summary?.losses ?? 0}敗／{summary?.pushes ?? 0}走｜部分贏 {summary?.halfWins ?? 0}／部分輸 {summary?.halfLosses ?? 0}｜有效勝率 {pct(summary?.winRate)}</small>
     <strong className={Number(summary?.netPnl || 0) >= 0 ? 'positive' : 'negative'}>{moneyText(summary?.netPnl)}</strong>
   </button>;
 }
 
 function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCloudLedgerFailure, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, onCancel }) {
+  const [detailPage, setDetailPage] = useState(0);
   const [priceFeed, setPriceFeed] = useState({});
   const [priceFeedChecked, setPriceFeedChecked] = useState(false);
   const priceFeedBusyRef = useRef(false);
@@ -1041,6 +1042,11 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
     ? periodBets
     : periodBets.filter(bet => normalizeLeagueId(bet?.league) === selectedLeague), [periodBets, selectedLeague]);
   const filteredBets = useMemo(() => leagueBets.filter(bet => matchesBetStatMarket(bet, selectedMarket)), [leagueBets, selectedMarket]);
+  const detailPageSize = 50;
+  const detailPageCount = Math.max(1, Math.ceil(filteredBets.length / detailPageSize));
+  const activeDetailPage = Math.min(detailPage, detailPageCount - 1);
+  const detailBets = filteredBets.slice(activeDetailPage * detailPageSize, (activeDetailPage + 1) * detailPageSize);
+  useEffect(() => { setDetailPage(0); }, [period, selectedLeague, selectedMarket]);
   const unclassifiedFirst5 = leagueBets.filter(bet => bet?.market === '上半大小' && first5TotalStatDirection(bet) == null).length;
   const unclassifiedFull = leagueBets.filter(bet => bet?.market === '全場大小' && fullTotalStatDirection(bet) == null).length;
   const summary = useMemo(() => summarizeBetLedger(filteredBets).overall, [filteredBets]);
@@ -1167,7 +1173,8 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
     {unclassifiedFirst5 > 0 && <p className="muted">{unclassifiedFirst5} 筆上半大小紀錄的方向缺失或衝突：保留在合計與原明細，不擅自歸入大分或小分。</p>}
 
     <div className="ledgerSectionHead"><h3>3. 下注明細</h3><span>{filteredBets.length} 注｜不可變帳本</span></div>
-    {filteredBets.length ? filteredBets.map(bet => <div className="betRow" key={bet.id}>
+    {detailPageCount > 1 && <nav className="periodTabs" aria-label="下注明細分頁"><button disabled={activeDetailPage === 0} onClick={() => setDetailPage(activeDetailPage - 1)}>上一頁</button><span role="status">第 {activeDetailPage + 1}／{detailPageCount} 頁｜每頁 {detailPageSize} 筆｜總計含全部紀錄</span><button disabled={activeDetailPage === detailPageCount - 1} onClick={() => setDetailPage(activeDetailPage + 1)}>下一頁</button></nav>}
+    {filteredBets.length ? detailBets.map(bet => <div className="betRow" key={bet.id}>
       <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : statusText(bet.status)}{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) && bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜下注時 {compactModelMetrics(bet)}｜{hasUnverifiedFirst5Settlement(bet) ? '原始下注保留；缺少正式上半比分，暫不納入結算績效' : String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : '實際下注績效已收錄｜S分數僅作影子分組'}</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
       <div className="betRowResult"><strong>{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : bet.status === 'CANCELLED' ? '已取消' : bet.status === 'MANUAL_REVIEW' ? '需確認賽果' : '待結算'}</strong>{bet.status !== 'SETTLED' && (bet.settlementError || bet.lastResultError) && <small className="settlementPendingReason">{bet.settlementError || bet.lastResultError}</small>}{bet.status === 'OPEN' && Number.isFinite(Date.parse(bet.gameDate || '')) && Date.now() < Date.parse(bet.gameDate) && <button className="mini cancel" disabled={cloudLedgerBusy || cloudLedgerStatus?.state !== 'ready'} onClick={() => onCancel(bet)}>取消下注</button>}<small>下注證據永久保留；取消只變更狀態，不會刪除</small></div>
     </div>) : <div className="emptySmall">這個篩選範圍目前沒有下注紀錄。</div>}
@@ -1186,7 +1193,7 @@ function ScorePerformanceMetrics({ summary, compact = false }) {
     ['勝', summary?.wins ?? 0],
     ['敗', summary?.losses ?? 0],
     ['走', summary?.pushes ?? 0],
-    ['勝半／輸半', `${summary?.halfWins ?? 0}／${summary?.halfLosses ?? 0}`],
+    ['部分贏／部分輸', `${summary?.halfWins ?? 0}／${summary?.halfLosses ?? 0}`],
     ['有效勝率', pct(summary?.winRate)],
     ['總本金', moneyText(summary?.totalStake)],
     ['退水', moneyText(summary?.rebate)],

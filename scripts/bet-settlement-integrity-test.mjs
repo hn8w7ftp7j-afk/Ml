@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import './cpbl-result-linescore-test.mjs';
 import fs from 'node:fs';
 import { settleBetTicket, settleBetTickets, settleBetTicketFromResult } from '../lib/bet-settlement-service.js';
 import { stableAsianGamePk } from '../lib/asian-baseball.js';
+import { summarizeBetLedger } from '../lib/bet-stats.js';
 
 for (const route of ['app/api/analyze/route.js', 'app/api/reprice/route.js']) {
   const source = fs.readFileSync(new URL(`../${route}`, import.meta.url), 'utf8');
@@ -49,6 +51,37 @@ assert.equal(verifiedZeroFirstFive.status, 'SETTLED', 'An explicitly verified 0-
 assert.equal(verifiedZeroFirstFive.resultSnapshot.selectedAwayRuns, 0);
 assert.equal(verifiedZeroFirstFive.resultSnapshot.selectedHomeRuns, 0);
 assert.equal(verifiedZeroFirstFive.settlement.netProfit, 9_650, 'Verified zero-score result retains the existing water and per-leg rebate rules');
+
+// Production incident: legacy CPBL null first-five scores were coerced to
+// zero. Exclusion alone did not repair them because SETTLED was terminal.
+const unsupportedLegacy = {
+  ...incompleteScoreBet, league: 'CPBL', status: 'SETTLED',
+  resultSnapshot: { ...completeScoreResult, awayFirst5: null, homeFirst5: null,
+    first5Complete: false, selectedPeriod: 'FIRST5', selectedAwayRuns: 0, selectedHomeRuns: 0 },
+  settlement: verifiedZeroFirstFive.settlement,
+};
+const originalLegacy = structuredClone(unsupportedLegacy);
+assert.equal(summarizeBetLedger([unsupportedLegacy]).overall.unverifiedSettlements, 1);
+const reopenedLegacy = settleBetTicketFromResult(unsupportedLegacy, { ...completeScoreResult, first5Complete: false });
+assert.equal(reopenedLegacy.status, 'MANUAL_REVIEW');
+assert.equal(reopenedLegacy.settlement, null);
+assert.equal(reopenedLegacy.settlementCorrections.length, 1);
+assert.deepEqual(reopenedLegacy.settlementCorrections[0].settlement, originalLegacy.settlement);
+assert.deepEqual(reopenedLegacy.settlementCorrections[0].resultSnapshot, originalLegacy.resultSnapshot);
+const correctedLegacy = settleBetTicketFromResult(unsupportedLegacy, { ...completeScoreResult, awayFirst5: 3, homeFirst5: 2 });
+assert.equal(correctedLegacy.settlement.netProfit, -9850, 'Real first-five evidence replaces fabricated 0-0, retaining credit settlement rules');
+assert.equal(correctedLegacy.settlementCorrections.length, 1);
+assert.equal(settleBetTicketFromResult(correctedLegacy, completeScoreResult), correctedLegacy, 'A corrected verified terminal ticket remains immutable');
+assert.deepEqual(unsupportedLegacy, originalLegacy, 'Original incident evidence is never mutated');
+const failedRecheck = await settleBetTickets([unsupportedLegacy], {
+  fetchResult: async () => { throw new Error('official result unavailable'); },
+});
+assert.equal(failedRecheck[0].status, 'MANUAL_REVIEW');
+assert.equal(failedRecheck[0].settlement, null, 'An outage cannot retain a known invalid financial result');
+assert.equal(failedRecheck[0].settlementCorrections.length, 1);
+const correctedBatch = await settleBetTickets([unsupportedLegacy], { fetchResult: async () => completeScoreResult });
+assert.equal(correctedBatch[0].status, 'SETTLED');
+assert.equal(correctedBatch[0].resultSnapshot.first5Complete, true);
 
 // Re-running settlement must preserve a completed/cancelled ticket byte for
 // byte, including its original timestamps, and must not even request a score.
