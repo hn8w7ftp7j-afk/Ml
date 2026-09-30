@@ -9,8 +9,12 @@ assert.equal(result.status, 'NOT_VERIFIED');
 assert.equal(result.checks.formalModelRelease.status, 'BLOCK');
 assert.equal(result.checks.ledgerReadback.status, 'NOT_VERIFIED');
 assert.equal(result.settlementCapabilities.length, 4);
-assert.equal(result.settlementCapabilities.find(row => row.league === 'NPB').declaredFullGameReady, false);
-assert.equal(result.settlementCapabilities.find(row => row.league === 'CPBL').declaredFirst5Ready, false);
+for (const league of ['NPB', 'KBO', 'CPBL']) {
+  const capability = result.settlementCapabilities.find(row => row.league === league);
+  assert.equal(capability.declaredFullGameReady, true);
+  assert.equal(capability.declaredFirst5Ready, true);
+  assert.equal(capability.verificationStatus, 'NOT_VERIFIED', 'a connected feed must not claim live end-to-end verification');
+}
 assert.equal(result.settlementCapabilities.find(row => row.league === 'MLB').declaredFullGameReady, null, 'no inferred verification for undeclared capability');
 const released = operationalReadiness({ configuredReady: true, formalScoringEnabled: true });
 assert.equal(released.ready, false);

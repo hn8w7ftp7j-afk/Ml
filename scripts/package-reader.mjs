@@ -4,26 +4,14 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { readerArtifactNames, READER_PACKAGE_FILES } from '../lib/reader-artifact-names.js';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const OUTPUT_DIR = path.resolve(ROOT, process.argv[2] || 'release');
-const ARCHIVE_NAME = 'Tai888-Reader-v2.1.23-TEAM-ORDER-SAFE.zip';
-const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
+const { archiveName: ARCHIVE_NAME, shaName: SHA_NAME } = readerArtifactNames(manifest);
 const FIXED_TIME = new Date('1980-01-01T00:00:00.000Z');
-const FILES = [
-  'README.md',
-  'manifest.json',
-  'background.js',
-  'board-selector.js',
-  'capture-policy.js',
-  'league-registry.js',
-  'parser.js',
-  'popup.css',
-  'popup.html',
-  'popup.js',
-  'row-normalizer.js',
-  'tai888-content.js',
-];
+const FILES = READER_PACKAGE_FILES;
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -139,7 +127,6 @@ function buildArchive(workRoot, outputFile) {
   }
 }
 
-const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
 assert.equal(manifest.version, '2.1.23');

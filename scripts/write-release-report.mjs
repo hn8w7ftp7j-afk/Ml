@@ -3,96 +3,73 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { readerArtifactNames, READER_PACKAGE_FILES } from '../lib/reader-artifact-names.js';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
-const RELEASE = path.join(ROOT, 'release');
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'reader/manifest.json'), 'utf8'));
-const ARCHIVE_NAME = `Tai888-Reader-v${manifest.version}-VERIFIED-RESCAN.zip`;
-const SHA_NAME = `${ARCHIVE_NAME}.sha256`;
-const REPORT_NAME = `Tai888-Reader-v${manifest.version}-VERIFICATION.md`;
+const { archiveName: ARCHIVE_NAME, shaName: SHA_NAME, reportName: REPORT_NAME } = readerArtifactNames(manifest);
 const requiredGates = ['tests', 'audit', 'build', 'e2e', 'package'];
 const flags = new Map(process.argv.slice(2).map(argument => {
   const [name, ...rest] = argument.replace(/^--/, '').split('=');
   return [name, rest.join('=') || ''];
 }));
-
 for (const gate of requiredGates) {
   assert.equal(flags.get(gate), 'passed', `release report requires --${gate}=passed after that gate succeeds`);
 }
-
+const RELEASE = path.resolve(ROOT, flags.get('output-dir') || 'release');
+const relative = path.relative(ROOT, RELEASE);
+assert.ok(!relative.startsWith('..') && !path.isAbsolute(relative), 'release report must stay inside the project');
 const archive = path.join(RELEASE, ARCHIVE_NAME);
 const shaFile = path.join(RELEASE, SHA_NAME);
 assert.equal(fs.existsSync(archive), true, 'Reader archive is missing');
 assert.equal(fs.existsSync(shaFile), true, 'Reader SHA-256 file is missing');
 execFileSync('unzip', ['-tq', archive], { cwd: ROOT, stdio: 'pipe' });
-
 const bytes = fs.readFileSync(archive);
 const digest = createHash('sha256').update(bytes).digest('hex');
-const declared = fs.readFileSync(shaFile, 'utf8').trim().split(/\s+/)[0];
-assert.equal(declared, digest, 'SHA-256 sidecar does not match the archive');
-const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const testCount = String(packageJson.scripts.test || '').split(' && ').filter(Boolean).length;
+const declared = fs.readFileSync(shaFile, 'utf8').trim().split(/\s+/);
+assert.equal(declared[0], digest, 'SHA-256 sidecar does not match the archive');
+assert.equal(declared[1], ARCHIVE_NAME, 'SHA-256 sidecar names another archive');
 const archiveEntries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+assert.deepEqual(archiveEntries, READER_PACKAGE_FILES.map(file => `Tai888-Reader/${file}`), 'Reader archive file allow-list mismatch');
+for (const file of READER_PACKAGE_FILES) {
+  const archived = execFileSync('unzip', ['-p', archive, `Tai888-Reader/${file}`]);
+  assert.deepEqual(archived, fs.readFileSync(path.join(ROOT, 'reader', file)), `archive/source mismatch: ${file}`);
+}
+const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
 const dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).trim());
-const sourceRef = process.env.GITHUB_SHA || `${commit}${dirty ? '+working-tree' : ''}`;
-const generatedAt = new Date().toISOString();
+const sourceRef = `${commit}${dirty ? '+working-tree' : ''}`;
+const workflowUrl = process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
+  ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null;
+const report = `# Tai888 Reader ${manifest.version_name} / 網站 ${packageJson.version} 交付核對
 
-const report = `# Tai888 Reader ${manifest.version_name} / Baseball EV ${packageJson.version} 驗證報告
-
-- 產生時間：${generatedAt}
-- 原始碼基線：\`${sourceRef}\`
-- 網站版本：\`${packageJson.version}\`
-- Next.js：\`${packageJson.dependencies.next}\`
-- Reader：\`${manifest.version_name}\`
+- 產生時間：${new Date().toISOString()}
+- 原始碼：\`${sourceRef}\`
 - ZIP：\`${ARCHIVE_NAME}\`
-- 檔案大小：\`${bytes.length} bytes\`
+- 檔案大小：${bytes.length} bytes
 - SHA-256：\`${digest}\`
-- ZIP 來源檔案：\`${archiveEntries.length}\`
+- 來源檔案：${archiveEntries.length}
+${workflowUrl ? `- CI 執行紀錄：[查看工作流程](${workflowUrl})` : '- CI 執行紀錄：未提供'}
 
-## Release gates
+## 本腳本直接核對
 
-| Gate | 結果 | 範圍 |
-|---|---:|---|
-| 專案測試 | PASS | ${testCount} 支主測試及 pre/post gates；Reader ${manifest.version} 回歸包含 KBO 真實五場與「鬥山熊」繁體別名、背景分頁存活、NPB 真實標題、跨聯盟 DOM、partial market、freshness isolation、server/auth/integrity 與 W-first 八方向 UI |
-| Production build | PASS | Next.js ${packageJson.dependencies.next} 正式建置 |
-| Production dependency audit | PASS | \`npm audit --omit=dev --audit-level=high\`，0 high/critical vulnerabilities |
-| Reader full-flow | PASS | Production route handlers + live MLB official slate：Pair → ingest → signed credit → FULL analyze → 同 hash heartbeat → signed PRICE_ONLY_REPRICE；四聯盟另由 deterministic fixture/unit gates 驗證 |
-| Reader 封裝 | PASS | JS syntax、exact manifest allowlist、隱私靜態檢查、ZIP CRC、archive/source 一致性 |
-| 可重現性 | PASS | 兩次獨立封裝 byte-identical |
+| 項目 | 結果 | 證據 |
+|---|---|---|
+| ZIP 完整性 | PASS | unzip CRC 核對 |
+| SHA-256 | PASS | ZIP 位元組與 sidecar 的雜湊、檔名一致 |
+| 版本與來源檔案 | PASS | ZIP 白名單與目前 reader/ 逐檔位元組一致 |
 
-## 整合與來源判定
+## 呼叫者回報的前置檢查
 
-- Reader ${manifest.version} 保留 Tai888 KBO 實際使用的「鬥山熊」繁體隊名與背景分頁存活修正，並以真實五場盤面回歸驗證不再漏場。
-- 本 ZIP 只取自目前 \`reader/\` 的固定 12 檔白名單；封裝器會把交付目錄內不同內容的舊 Tai888 ZIP 移至相鄰的 ignored quarantine 目錄。
-- MLB 保留 W-first 影子分析；NPB／KBO／CPBL 即使完整 ingest，網站分析仍以 \`LEAGUE_NOT_READY\` fail closed，直到各自獨立資料與比分引擎發布。
+| 檢查 | 狀態 |
+|---|---|
+${requiredGates.map(gate => `| ${gate} | REPORTED_PASS |`).join('\n')}
 
-## 主要安全邊界
+上述狀態來自呼叫參數。本腳本沒有重跑測試、建置、依賴稽核、E2E 或兩次封裝；實際執行範圍與結果須查看對應執行紀錄。E2E 參數不代表正式站操作成功，也不證明依賴完全沒有漏洞。
 
-- 每聯盟選一個最可信的權威 tab/frame；同頁與多頁均可同時存在四聯盟，第五個非盤口 Tai888 頁面不會中止同步，不同聯盟不互相覆蓋。
-- 所有提交場次都須與該聯盟官方台北盤日一對一配對，雙重賽身分必須唯一；1/4～4/4 市場均可合法寫入，每個 AVAILABLE 市場仍須兩方向完整，BLOCKED 只封鎖該市場。
-- activityAt、market hash 與 lineAsOf 以聯盟實際盤面內容隔離；其他聯盟、導覽、時鐘或無關 DOM mutation 不刷新舊盤時間。
-- 最新 snapshot 完整取代前版市場狀態；4/4 退回 2/4 或 0/4 時，不會 merge 殘留已消失的舊水位。
-- URL 中繼資料只保留 Tai888 origin/path 與固定 \`#/BS\`；query、任意 hash、頁面標題與原始 frame URL 不保存也不上傳。
-- Server 自算盤面雜湊；精確 \`boardDate + hash + pageActivityAt\` 版本只在全部分析成功後才被畫面承認，同 hash 心跳仍會重簽並快速重算。
-- 盤口、快照與官方賽事身分均由 Server HMAC 綁定；偽造／竄改 fail-closed。
-- 正式下注當下重驗 Reader 版本、水位時效、完整 QA 與官方預定開打時間。
-- \`APP_PASSWORD\`、\`SESSION_SECRET\`、\`READER_PAIR_SECRET\` 各自獨立；不得回退使用 Tai888 帳密。
+## 正式站驗證
 
-## 已知架構風險與部署狀態
-
-Vercel Runtime Cache 是區域性、暫時性快取，沒有可用的原子 compare-and-swap。極端跨區並行仍可能舊盤覆蓋新盤。因此目前只能運行一台 Reader；徹底解法是改用支援條件寫入／交易的持久資料庫。
-
-本報告只證明目前來源樹與本機／CI gates；不代表已 push、部署或啟用正式環境變數。部署後仍須另做 production smoke 與單 Reader 操作確認。
+Production 部署、API、Reader 真實盤面、UI 與實際帳本功能：NOT_VERIFIED。本腳本未連線查核正式站，不由旗標推定部署或功能已通過。
 `;
-
-fs.mkdirSync(RELEASE, { recursive: true });
 fs.writeFileSync(path.join(RELEASE, REPORT_NAME), report, 'utf8');
-process.stdout.write(`${JSON.stringify({
-  ok: true,
-  report: path.join(RELEASE, REPORT_NAME),
-  bytes: bytes.length,
-  sha256: digest,
-  testCount,
-  sourceRef,
-})}\n`);
+process.stdout.write(`${JSON.stringify({ ok: true, report: path.join(RELEASE, REPORT_NAME), bytes: bytes.length, sha256: digest, sourceRef })}\n`);

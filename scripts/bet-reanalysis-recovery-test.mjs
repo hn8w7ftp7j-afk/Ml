@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { betMatches, betPriceMatches, betPositionIdentity } from '../lib/bet-ledger.js';
+import { betDisplayMatches, betPriceMatches, betPositionIdentity } from '../lib/bet-ledger.js';
 import { bindVerifiedReaderContractsForItem, readerPitMatchesGameRevision } from '../lib/client-analysis-state.js';
 import { evaluateBetAction } from '../lib/bet-action-state-v118.js';
 import { createBetRecordQueue } from '../lib/bet-record-queue.js';
@@ -30,7 +30,7 @@ const item = { status: 'done', game: { gamePk: candidate.gamePk, gameDate: '2026
   customData: { pitPersistence: { confirmed: true }, analysis: { pitSnapshotId: 'old-pit', results: [row] } },
   pendingReaderAnalysis: true };
 const context = vm.createContext({ bets: [savedBet], date, league: 'MLB', betQueueEntries: [],
-  betMatches, betPriceMatches, betPositionIdentity, Date });
+  betDisplayMatches, betPriceMatches, betPositionIdentity, Date });
 vm.runInContext(page.slice(start, end), context);
 
 // Same selected price, but a different market in this game has moved. The
@@ -54,6 +54,44 @@ assert.equal(context.getBetState(reanalysed, newRow).latest, null, 'same numeric
 context.league = 'MLB';
 context.bets = [JSON.parse(originalTicket)];
 assert.equal(context.getBetState(reanalysed, newRow).latest.id, savedBet.id, 'fresh server ledger read preserves the exact original ticket');
+
+// A favorite flip changes the contract price, not the selected team's existing
+// historical ticket. Display matching must not rewrite server position keys.
+const oldRunline = { ...savedBet, id: 'original-runline-ticket', market: '全場讓分',
+  pick: '洋基讓0.5', away: '洋基', home: '紅襪' };
+const currentRunline = { ...newRow, market: '全場讓分', pick: '洋基受讓0.5', water: 0.96 };
+const frozenRunline = JSON.stringify(oldRunline);
+context.bets = [oldRunline];
+const flippedState = context.getBetState(reanalysed, currentRunline);
+assert.equal(flippedState.latest.id, oldRunline.id, 'same selected team retains its original ticket across giving/receiving changes');
+assert.equal(flippedState.latest.pick, '洋基讓0.5');
+assert.equal(flippedState.latest.water, oldRunline.water);
+assert.equal(flippedState.exact, null, 'a favorite flip must never be shown as the exact placed contract');
+assert.equal(evaluateBetAction({ item: reanalysed, row: currentRunline, now, ...flippedState }).recordable, false);
+assert.notEqual(betPositionIdentity(date, candidate.gamePk, oldRunline, 'MLB'),
+  betPositionIdentity(date, candidate.gamePk, currentRunline, 'MLB'), 'display recovery must leave canonical write identities unchanged');
+for (const changedRow of [
+  { ...currentRunline, pick: '紅襪讓0.5' },
+  { ...currentRunline, market: '上半讓分' },
+  { ...currentRunline, pick: '大8.5' },
+]) assert.equal(context.getBetState(reanalysed, changedRow).latest, null);
+assert.equal(betDisplayMatches(oldRunline, '2026-09-29', candidate.gamePk, currentRunline, 'MLB'), false);
+assert.equal(betDisplayMatches(oldRunline, date, candidate.gamePk + 1, currentRunline, 'MLB'), false);
+assert.equal(betDisplayMatches(oldRunline, date, candidate.gamePk, currentRunline, 'NPB'), false);
+assert.equal(betDisplayMatches({ ...oldRunline, date: undefined }, date, candidate.gamePk, currentRunline, 'MLB'), false,
+  'legacy records without a date cannot expand into a role-flip display match');
+assert.equal(betDisplayMatches({ ...oldRunline, pick: '讓0.5' }, date, candidate.gamePk, { ...currentRunline, pick: '受讓0.5' }, 'MLB'), false,
+  'missing selected teams cannot match across roles');
+context.bets = [{ ...oldRunline, status: 'CANCELLED' }];
+const cancelledFlip = context.getBetState(reanalysed, currentRunline);
+assert.equal(cancelledFlip.latest, null);
+assert.equal(cancelledFlip.cancelled.id, oldRunline.id);
+const flippedReadyItem = { ...reanalysed, customMarkets: [currentRunline],
+  customData: { pitPersistence: { confirmed: true }, analysis: { pitSnapshotId: 'new-pit', results: [currentRunline] } } };
+assert.equal(evaluateBetAction({ item: flippedReadyItem, row: currentRunline, now, ...cancelledFlip }).recordable, true,
+  'a cancelled historical display match must not block a verified current contract');
+assert.equal(JSON.stringify(oldRunline), frozenRunline);
+context.bets = [savedBet];
 
 // A rejected click remains a rejected click after reanalysis and reload. Its
 // restored metadata never executes the writer or claims a completed ticket.

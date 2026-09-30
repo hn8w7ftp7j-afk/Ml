@@ -17,9 +17,11 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(readiness.canCalculateModelEvW, true);
   assert.equal(readiness.canCalculateRobustEvR, true);
   assert.equal(readiness.fullGameScoreAvailable, true);
-  assert.equal(readiness.fullGameResultFeedAvailable, leagueId === 'CPBL');
-  assert.equal(readiness.fullGameAutoSettlementReady, leagueId === 'CPBL');
-  assert.equal(readiness.first5ResultFeedAvailable, leagueId === 'CPBL');
+  assert.equal(readiness.fullGameResultFeedAvailable, true);
+  assert.equal(readiness.fullGameAutoSettlementReady, true);
+  assert.equal(readiness.first5ResultFeedAvailable, true);
+  assert.ok(readiness.availableServices.includes('OFFICIAL_FIRST5_LINESCORE'));
+  if (leagueId !== 'CPBL') assert.ok(readiness.availableServices.includes('OFFICIAL_FULL_GAME_LINESCORE'));
   assert.equal(readiness.mlbFallbackAllowed, false);
   assert.equal(readiness.tai888ProbabilityInputAllowed, false);
   assert.ok(readiness.availableServices.includes('OFFICIAL_SCHEDULE'));
@@ -27,7 +29,7 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   assert.deepEqual(readiness.displayAnalysisBlockers, []);
   assert.ok(readiness.availableServices.includes('OFFICIAL_PIT_PLAYER_FEATURES'));
   assert.ok(readiness.availableServices.includes('INDEPENDENT_JOINT_SCORE_DISTRIBUTION'));
-  assert.equal(readiness.settlementBlockers.some(row => row.code === 'FIRST5_OFFICIAL_RESULT_FEED_NOT_CONNECTED'), leagueId !== 'CPBL');
+  assert.deepEqual(readiness.settlementBlockers, [], '已接入的逐局賽果介面不得再宣告未接入');
   assert.ok(readiness.formalRecommendationBlockers.some(row => row.code === 'LOCKED_OOS_FORWARD_VALIDATION_INCOMPLETE'));
   assert.equal(readiness.displayAnalysisBlockers.some(row => row.code === 'LOCKED_OOS_FORWARD_VALIDATION_INCOMPLETE'), false,
     'OOS／forward 驗證只能封鎖正式下注，不得混入 W 顯示 blocker');
@@ -42,8 +44,8 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
 const npb = asianLeagueReleaseReadiness('NPB');
 const kbo = asianLeagueReleaseReadiness('KBO');
 const cpbl = asianLeagueReleaseReadiness('CPBL');
-assert.ok(npb.settlementBlockers.some(row => row.code === 'NPB_FULL_GAME_OFFICIAL_INNINGS_NOT_CONNECTED'));
-assert.ok(kbo.settlementBlockers.some(row => row.code === 'KBO_FULL_GAME_OFFICIAL_INNINGS_NOT_CONNECTED'));
+assert.equal(npb.settlementBlockers.some(row => row.blocks.includes('FULL_GAME_AUTO_SETTLEMENT')), false);
+assert.equal(kbo.settlementBlockers.some(row => row.blocks.includes('FULL_GAME_AUTO_SETTLEMENT')), false);
 assert.equal(cpbl.settlementBlockers.some(row => row.blocks.includes('FULL_GAME_AUTO_SETTLEMENT')), false);
 assert.deepEqual(npb.displayAnalysisBlockers, []);
 assert.deepEqual(kbo.displayAnalysisBlockers, []);

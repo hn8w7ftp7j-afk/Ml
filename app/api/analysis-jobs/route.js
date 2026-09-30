@@ -218,6 +218,18 @@ export async function GET(request) {
           },
         });
       }
+      if (summaryOnly) {
+        return NextResponse.json({
+          ok: true, runId, status,
+          result: {
+            ok: result.ok, league: result.league, date: result.date,
+            total: result.total, completed: result.completed,
+            results: (result.results || []).map(row => ({
+              ok: row?.ok === true, status: row?.status, code: row?.code, blocked: row?.blocked === true,
+            })),
+          },
+        });
+      }
       return NextResponse.json({ ok: true, runId, status, result });
     }
     const progress = await progressRead;

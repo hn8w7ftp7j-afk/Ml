@@ -56,7 +56,7 @@ for (const id of ['NPB', 'KBO', 'CPBL']) {
   assert.match(item.statusLabel, /官方資料未確認時採保守預測/);
   assert.doesNotMatch(item.statusLabel, /資料不足即BLOCK/);
   assert.deepEqual(item.analysisReadiness.displayAnalysisBlockers, []);
-  assert.equal(item.analysisReadiness.settlementBlockers.some(row => row.code === 'FIRST5_OFFICIAL_RESULT_FEED_NOT_CONNECTED'), item.id !== 'CPBL');
+  assert.equal(item.analysisReadiness.settlementBlockers.some(row => row.code === 'FIRST5_OFFICIAL_RESULT_FEED_NOT_CONNECTED'), false);
   assert.ok(item.analysisReadiness.formalRecommendationBlockers.every(row => !row.blocks.includes('MODEL_EV_W')));
 }
 

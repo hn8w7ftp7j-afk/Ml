@@ -1,5 +1,7 @@
 'use client';
 import { createJobStatusReader } from '../lib/job-status-reader.js';
+import { reconcileInactiveIndependentRuns } from '../lib/independent-analysis-status.js';
+import { backgroundStartWasDefinitivelyRejected, createBackgroundStartRequestJournal } from '../lib/background-start-request-journal.js';
 import { applyAnalysisJobProgress } from '../lib/analysis-job-progress.js';
 import { validateCompletedGamesWithReader } from '../lib/completed-game-reader-validation.js';
 import AnalysisNotificationControl from './analysis-notification-control.js';
@@ -15,6 +17,7 @@ import { analysisDisplayGame, analysisGameIdentity, sameAnalysisGame } from '../
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { QUALITY_GROUPS, qualityGroupForBet, savedVersionForBet } from '../lib/performance-evidence-v1.js';
 import { APP_VERSION } from '../lib/app-version.js';
+import { moneyText } from '../lib/money-display.js';
 import { loadBetAttemptJournal, saveBetAttemptJournal } from '../lib/bet-attempt-journal.js';
 import { analysisStarterDisplay } from '../lib/analysis-starter-display.js';
 import { personnelFreshnessView, personnelScheduleObservation, PERSONNEL_SCHEDULE_POLL_MS } from '../lib/personnel-freshness-view.js';
@@ -27,7 +30,7 @@ import Link from 'next/link';
 import { MARKET_ORDER, breakEvenProbability, hasActualWater } from '../lib/markets.js';
 import {
   betIdentity,
-  betMatches,
+  betDisplayMatches,
   betPositionIdentity,
   betPriceMatches,
 } from '../lib/bet-ledger.js';
@@ -40,7 +43,7 @@ import {
   requireCloudLedgerResponse,
 } from '../lib/cloud-ledger-receipt.js';
 import { priceComparisonLabel, verifiedClosingPriceForBet } from '../lib/bet-price-feed.js';
-import { summarizeOriginalBetPrices } from '../lib/bet-price-summary.js';
+import { summarizeOriginalBetPricesAsync } from '../lib/bet-price-summary.js';
 import { BET_PERIODS, FULL_TOTAL_STAT_FILTERS, fullTotalStatDirection, FIRST5_TOTAL_STAT_FILTERS, matchesBetStatMarket, betStatMarketLabel, first5TotalStatDirection, filterBetLedgerByPeriod, hasUnverifiedFirst5Settlement, summarizeBetLedger } from '../lib/bet-stats.js';
 import { RUNLINE_STAT_GROUPS, runlineStatRole } from '../lib/bet-stats.js';
 import {
@@ -129,6 +132,7 @@ const ANALYSIS_BOARD_CACHE_STORAGE = 'sports-positive-ev-analysis-board-v1';
 const ANALYSIS_JOB_STORAGE = 'sports-positive-ev-background-jobs-v1';
 // A failed durable write must not strand a workflow while this tab stays open.
 const backgroundJobsInMemory = new Map();
+const backgroundStartRequests = createBackgroundStartRequestJournal();
 const supersededBackgroundRuns = new Set();
 const ALL_LEAGUE_ANALYSIS_STORAGE = 'sports-positive-ev-all-league-analysis-v1';
 const APP_OPERATION_BUSY_KEY = 'sports-positive-ev-operation-busy';
@@ -174,7 +178,6 @@ const signedPct = value => value == null || !Number.isFinite(Number(value))
   ? '—'
   : `${Number(value) > 0 ? '+' : ''}${(Number(value) * 100).toFixed(2)}%`;
 const waterText = value => hasActualWater(value) ? Number(value).toFixed(3) : '水位未提供';
-const moneyText = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value) >= 0 ? '+' : ''}${Math.round(Number(value)).toLocaleString()}元`;
 const matchup = game => `${translateTeamText(game?.away || '')} 對 ${translateTeamText(game?.home || '')}`;
 
 function markAppOperationBusy(active) {
@@ -734,7 +737,15 @@ async function requestJSONDirect(url, options = {}, timeoutMs = 180000, { allowA
     const text = await response.text();
     let data;
     try { data = JSON.parse(text); }
-    catch { throw new Error(`伺服器回傳格式錯誤（${response.status}）`); }
+    catch {
+      const error = new Error(`伺服器回傳格式錯誤（${response.status}）`);
+      error.status = response.status;
+      error.code = 'INVALID_JSON';
+      const retryAfterSeconds = Number(response.headers.get('retry-after'));
+      error.retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000 : 0;
+      throw error;
+    }
     if (!response.ok || (data.ok === false && !allowApplicationFailure)) {
       const error = new Error(data.error || `請求失敗（${response.status}）`);
       error.status = response.status;
@@ -831,25 +842,46 @@ function transientAnalysisError(error) {
 }
 
 async function startBackgroundAnalysisJob(payload) {
-  const requestId = uid();
+  const pendingStart = backgroundStartRequests.claim(payload, uid);
+  const requestId = pendingStart.requestId;
   const options = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId },
-    body: JSON.stringify(payload),
+    body: pendingStart.body,
   };
-  let job = await requestJSONWithTransientRetry('/api/analysis-jobs', options, BACKGROUND_JOB_START_TIMEOUT_MS, {
-    delaysMs: ANALYSIS_TRANSIENT_RETRY_DELAYS_MS,
-  });
-  if (job?.runId) return job;
-  const deadline = Date.now() + BACKGROUND_JOB_RECOVERY_TIMEOUT_MS;
-  while (job?.requestId && Date.now() < deadline) {
-    await new Promise(resolve => window.setTimeout(resolve, 1500));
-    job = await requestJSON(`/api/analysis-jobs?requestId=${encodeURIComponent(job.requestId)}&t=${Date.now()}`, {}, 15000);
-    if (job?.runId) return job;
+  let recovering = false;
+  try {
+    let job = await requestJSONWithTransientRetry('/api/analysis-jobs', options, BACKGROUND_JOB_START_TIMEOUT_MS, {
+      delaysMs: ANALYSIS_TRANSIENT_RETRY_DELAYS_MS,
+    });
+    if (job?.runId) {
+      backgroundStartRequests.release(pendingStart);
+      return job;
+    }
+    recovering = true;
+    const deadline = Date.now() + BACKGROUND_JOB_RECOVERY_TIMEOUT_MS;
+    while (job?.requestId && Date.now() < deadline) {
+      await new Promise(resolve => window.setTimeout(resolve, 1500));
+      job = await requestJSON(`/api/analysis-jobs?requestId=${encodeURIComponent(job.requestId)}&t=${Date.now()}`, {}, 15000, { allowApplicationFailure: true });
+      if (job?.runId) {
+        backgroundStartRequests.release(pendingStart);
+        return job;
+      }
+      if (job?.status === 'failed') {
+        const error = new Error(job.error || '伺服器未能啟動背景工作，請重試');
+        error.code = 'BACKGROUND_JOB_START_FAILED';
+        error.definitiveStartRejected = true;
+        throw error;
+      }
+    }
+    const error = new Error('背景工作已送出，但暫時無法取得工作編號；本頁已保留請求，請稍後重試');
+    error.code = 'BACKGROUND_JOB_RECOVERY_PENDING';
+    throw error;
+  } catch (error) {
+    if (error?.definitiveStartRejected === true
+      || (!recovering && backgroundStartWasDefinitivelyRejected(error))) backgroundStartRequests.release(pendingStart);
+    throw error;
   }
-  const error = new Error('背景工作已送出，但暫時無法取得工作編號；請再按一次即可接回原工作');
-  error.code = 'BACKGROUND_JOB_RECOVERY_PENDING';
-  throw error;
 }
 
 async function requestAnalysisWithResume(options) {
@@ -1018,7 +1050,7 @@ function SummaryCards({ summary, originalPriceSummary }) {
   ];
   return <div className="ledgerSummary">
     {values.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
-    <div className="originalPriceSummary"><span>原下注盤優劣</span><strong>總數 {originalPriceSummary?.total ?? 0}｜<b className="positive">優 {originalPriceSummary?.better ?? 0}</b>｜<b className="negative">劣 {originalPriceSummary?.worse ?? 0}</b></strong></div>
+    <div className="originalPriceSummary"><span>原下注盤優劣</span><strong>{originalPriceSummary == null ? '計算中…' : originalPriceSummary.unavailable ? '暫時無法計算' : <>總數 {originalPriceSummary.total}｜<b className="positive">優 {originalPriceSummary.better}</b>｜<b className="negative">劣 {originalPriceSummary.worse}</b></>}</strong></div>
   </div>;
 }
 
@@ -1035,6 +1067,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
   const [detailPage, setDetailPage] = useState(0);
   const [priceFeed, setPriceFeed] = useState({});
   const [priceFeedChecked, setPriceFeedChecked] = useState(false);
+  const [originalPriceSummaryState, setOriginalPriceSummaryState] = useState(null);
   const priceFeedBusyRef = useRef(false);
   const priceFeedRetryAtRef = useRef(0);
   const periodBets = useMemo(() => filterBetLedgerByPeriod(bets, period), [bets, period]);
@@ -1050,10 +1083,18 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
   const unclassifiedFirst5 = leagueBets.filter(bet => bet?.market === '上半大小' && first5TotalStatDirection(bet) == null).length;
   const unclassifiedFull = leagueBets.filter(bet => bet?.market === '全場大小' && fullTotalStatDirection(bet) == null).length;
   const summary = useMemo(() => summarizeBetLedger(filteredBets).overall, [filteredBets]);
-  const originalPriceSummary = useMemo(
-    () => summarizeOriginalBetPrices(filteredBets, priceFeed),
-    [filteredBets, priceFeed],
-  );
+  const originalPriceSummary = originalPriceSummaryState?.bets === filteredBets
+    && originalPriceSummaryState?.prices === priceFeed ? originalPriceSummaryState.summary : null;
+  useEffect(() => {
+    let disposed = false;
+    void summarizeOriginalBetPricesAsync(filteredBets, priceFeed, { cancelled: () => disposed })
+      .then(summary => {
+        if (!disposed && summary) setOriginalPriceSummaryState({ bets: filteredBets, prices: priceFeed, summary });
+      }).catch(() => {
+        if (!disposed) setOriginalPriceSummaryState({ bets: filteredBets, prices: priceFeed, summary: { unavailable: true } });
+      });
+    return () => { disposed = true; };
+  }, [filteredBets, priceFeed]);
   const priceBetIds = useMemo(() => filteredBets
     .filter(bet => bet?.status === 'OPEN' && bet?.id)
     .slice(0, 300)
@@ -1204,6 +1245,7 @@ function ScorePerformanceMetrics({ summary, compact = false }) {
 }
 
 function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
+  const [detailPage, setDetailPage] = useState(0);
   const [period, setPeriod] = useState('ALL');
   const [selectedLeague, setSelectedLeague] = useState('ALL');
   const [selectedMarket, setSelectedMarket] = useState('ALL');
@@ -1224,6 +1266,11 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
     modelVersion, dataVersion, dataQuality,
     bucketId: selectedBucket,
   }), [bets, period, selectedLeague, selectedMarket, selectedBucket, modelVersion, dataVersion, dataQuality]);
+  const detailPageSize = 50;
+  const detailPageCount = Math.max(1, Math.ceil(details.length / detailPageSize));
+  const activeDetailPage = Math.min(detailPage, detailPageCount - 1);
+  const detailBets = details.slice(activeDetailPage * detailPageSize, (activeDetailPage + 1) * detailPageSize);
+  useEffect(() => { setDetailPage(0); }, [period, selectedLeague, selectedMarket, selectedBucket, modelVersion, dataVersion, dataQuality]);
   const periodLabel = BET_PERIODS.find(item => item.id === period)?.label || '全部';
   const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : selectedLeague;
   const marketLabel = selectedMarket === 'ALL' ? '全部市場' : selectedMarket;
@@ -1307,7 +1354,8 @@ function ScorePerformanceDashboard({ bets, cloudLedgerStatus }) {
     </div>
 
     <div className="ledgerSectionHead"><h3>3. 符合條件的下注明細</h3><span>{details.length} 筆｜直接讀取原帳本</span></div>
-    {details.length ? details.map(bet => <div className="betRow scorePerformanceBetRow" key={bet.id}>
+    {detailPageCount > 1 && <nav className="periodTabs" aria-label="分數績效明細分頁"><button disabled={activeDetailPage === 0} onClick={() => setDetailPage(activeDetailPage - 1)}>上一頁</button><span role="status">第 {activeDetailPage + 1}／{detailPageCount} 頁｜每頁 {detailPageSize} 筆｜統計含全部符合條件紀錄</span><button disabled={activeDetailPage === detailPageCount - 1} onClick={() => setDetailPage(activeDetailPage + 1)}>下一頁</button></nav>}
+    {details.length ? detailBets.map(bet => <div className="betRow scorePerformanceBetRow" key={bet.id}>
       <div><strong><span className="leagueBadge inline">{bet.league}</span>{scorePerformanceScoreForBet(bet) != null ? `S ${scorePerformanceScoreForBet(bet).toFixed(1)}｜` : 'S —｜'}{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : statusText(bet.status)}{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) && bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜本金 {moneyText(bet.stake)}｜下注時 {compactModelMetrics(bet)}</small></div>
       <div className="betRowResult"><strong>{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) ? moneyText(bet.settlement?.netProfit) : '未列入已結算績效'}</strong><small>原始帳本唯讀顯示</small><small>模型：{savedVersionForBet(bet) === 'UNKNOWN' ? '未保存版本' : savedVersionForBet(bet)}</small><small>資料：{savedVersionForBet(bet, 'dataVersion') === 'UNKNOWN' ? '未保存版本' : savedVersionForBet(bet, 'dataVersion')}｜{QUALITY_GROUPS[qualityGroupForBet(bet)]}</small></div>
     </div>) : <div className="emptySmall">目前篩選條件沒有可顯示的下注紀錄。</div>}
@@ -2244,6 +2292,7 @@ export default function Home() {
           if (session?.runId === runId) {
             session.status = 'completed';
             session.message = batch.ok ? '分析完成' : '分析結束｜部分項目未完成';
+            session.needsRecovery = false;
           }
           if (requestedRecoveryScopeRef.current === scope) requestedRecoveryScopeRef.current = null;
           if (completedRun) completedRun = updateAllLeagueAnalysisLeague(completedRun, batch.league, {
@@ -2484,6 +2533,38 @@ export default function Home() {
   }, [storageReady, league, date, allLeagueRun?.state, allLeagueRun?.runId]);
   useEffect(() => {
     if (!storageReady) return undefined;
+    let active = true;
+    let polling = false;
+    let timer;
+    const reconcile = async () => {
+      if (!active || polling) return;
+      window.clearTimeout(timer);
+      polling = true;
+      try {
+        if (document.visibilityState === 'visible') {
+          const changed = await reconcileInactiveIndependentRuns(independentRunsRef.current, {
+            getVisibleScope: () => `${currentLeagueRef.current}:${currentDateRef.current}`,
+            isActive: () => active,
+            readStatus: runId => requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&summary=1&t=${Date.now()}`, {}, 30000),
+          });
+          if (active && changed) setIndependentRunRevision(value => value + 1);
+        }
+      } finally {
+        polling = false;
+        if (active) timer = window.setTimeout(reconcile, 15000);
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void reconcile(); };
+    void reconcile();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [storageReady, league, date, independentRunRevision]);
+  useEffect(() => {
+    if (!storageReady) return undefined;
     // Restoring a receipt is a network operation, not a reason to lock entry.
     // Only explicit recovery or a run started in this session may attach.
     const sessionRun = independentRunsRef.current.get(`${league}:${date}`);
@@ -2522,6 +2603,7 @@ export default function Home() {
       if (sessionRun?.runId === saved.runId && result?.detached !== true) {
         sessionRun.status = 'completed';
         sessionRun.message = result?.discarded ? '完成｜待重新核對盤口' : '分析完成';
+        sessionRun.needsRecovery = false;
         setIndependentRunRevision(value => value + 1);
       }
       if (saved.batchMode === 'all-leagues' && resultActuallyLoaded && result?.recoveryPersisted === true) {
@@ -2547,6 +2629,7 @@ export default function Home() {
       if (generation === analysisGenerationRef.current && currentDateRef.current === date) {
         if (sessionRun?.runId === saved.runId) {
           sessionRun.status = 'failed'; sessionRun.message = String(cause?.message || cause);
+          sessionRun.needsRecovery = false;
           setIndependentRunRevision(value => value + 1);
         }
         setError(String(cause?.message || cause));
@@ -2674,7 +2757,7 @@ export default function Home() {
   );
 
   function getBetState(item, row) {
-    const records = bets.filter(bet => betMatches(bet, date, item.game.gamePk, row, league))
+    const records = bets.filter(bet => betDisplayMatches(bet, date, item.game.gamePk, row, league))
       .sort((left, right) => Date.parse(right.placedAt || 0) - Date.parse(left.placedAt || 0));
     const activeRecords = records.filter(bet => bet.status !== 'CANCELLED');
     return {
@@ -4822,7 +4905,7 @@ export default function Home() {
     queuedAnalysisRef.current = null;
     setQueuedAnalysis(null);
     const returningRun = independentRunsRef.current.get(`${nextLeague}:${nextDate}`);
-    if (returningRun?.status === 'running'
+    if (returningRun?.status === 'running' || returningRun?.needsRecovery === true
       || (allLeagueRun?.state === 'running' && allLeagueRun?.leagues?.[nextLeague]?.status === 'running')) {
       requestedRecoveryScopeRef.current = `${nextLeague}:${nextDate}`;
     }

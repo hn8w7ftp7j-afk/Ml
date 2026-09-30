@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { appPasswordConfigured, checkRateLimit, cleanText, createSessionToken, passwordMatches, positiveInteger, readJsonBody, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured, validDateString, validateSameOrigin, verifySessionToken } from '../lib/security.js';
+import { appPasswordConfigured, checkRateLimit, cleanText, createSessionToken, passwordMatches, positiveInteger, readJsonBody, requestIsAuthenticated, requireApiAuth, sessionSecretConfigured, siteAuthConfigured, validDateString, validateSameOrigin, verifySessionToken } from '../lib/security.js';
 import { marketIsOpen, validateMarketPair } from '../lib/markets.js';
 
 process.env.APP_PASSWORD = 'test-password';
@@ -25,6 +25,14 @@ assert.equal(await passwordMatches('wrong-password'), false);
 const token = await createSessionToken(60);
 assert.equal(await verifySessionToken(token), true);
 assert.equal(await verifySessionToken(`${token}x`), false);
+for (const cookie of ['mlb_session=%', 'mlb_session=%E0%A4%A', 'mlb_session=%FF']) {
+  const malformed = new Request('https://example.com/api/nba', { headers: { cookie } });
+  assert.equal(await requestIsAuthenticated(malformed), false, '損壞的 session cookie 應視為未登入');
+  assert.equal((await requireApiAuth(malformed)).status, 401, '損壞的 session cookie 不得造成 API 500');
+}
+assert.equal(await requestIsAuthenticated(new Request('https://example.com/api/nba', {
+  headers: { cookie: `unrelated=%; mlb_session=${encodeURIComponent(token)}` },
+})), true, '無關的損壞 cookie 不應阻擋有效 session');
 assert.equal(siteAuthConfigured(), true);
 assert.equal(sessionSecretConfigured(), true);
 

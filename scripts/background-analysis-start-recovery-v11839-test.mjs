@@ -15,7 +15,8 @@ assert.match(route, /requestClaim\.runId[\s\S]*recovered: true/, 'a lost 202 res
 assert.match(route, /status: 'starting'[\s\S]*recovered: true/, 'a concurrent retry must wait for the first start attempt');
 assert.match(route, /completeAnalysisJobRequest\(requestKey, run\.runId\)/, 'the run id must be saved before the accepted response');
 assert.match(route, /searchParams\.get\('requestId'\)[\s\S]*getAnalysisJobRequest\(requestKey\)/, 'the client must be able to reconnect while the first request is still starting');
-assert.match(page, /startBackgroundAnalysisJob\([\s\S]*requestJSONWithTransientRetry\('\/api\/analysis-jobs',[\s\S]*Idempotency-Key': requestId/, 'Safari transport retries must reuse one idempotency key');
+const startHelper = page.slice(page.indexOf('async function startBackgroundAnalysisJob('), page.indexOf('async function requestAnalysisWithResume('));
+assert.match(startHelper, /Idempotency-Key': requestId[\s\S]*requestJSONWithTransientRetry\('\/api\/analysis-jobs', options/, 'Safari transport retries must pass the same keyed options to the actual start request');
 assert.match(page, /requestId=\$\{encodeURIComponent\(job\.requestId\)\}/, 'a starting response must poll the durable request mapping');
 assert.equal((page.match(/startBackgroundAnalysisJob\(\{/g) || []).length, 3, 'single-league, independent-league and four-league starts must use recovery');
 assert.match(page, /function isInterruptedPreSubmitRun\(run\)[\s\S]*!run \|\| run\.runId[\s\S]*送出伺服器背景工作前中斷/, 'legacy pre-submit failures must be recognized without touching a real durable run');
