@@ -60,3 +60,31 @@ assert.equal(result.total, 3);
 assert.equal(publications.at(-1).failed, 1);
 assert.deepEqual(publications.at(-1).runningGamePks, []);
 console.log('PASS: actual workflow publishes first result before next game, continues after 422, preserves final result');
+
+// MLB has two in-flight steps. Finishing the fast one must publish while its
+// sibling is held, in both single-league and all-league jobs.
+for (const name of ['analyzeBoardWorkflow', 'analyzeAllLeaguesWorkflow']) {
+  const published = [];
+  let releaseSlow;
+  const slow = new Promise(resolve => { releaseSlow = resolve; });
+  const mlb = { ...batch, league: 'MLB', tasks: tasks.slice(0, 2).map(task => ({
+    ...task, game: { ...task.game, league: 'MLB' }, body: { game: { ...task.game, league: 'MLB' } },
+  })) };
+  const run = new AsyncFunction('saveAnalysisJobProgress', 'createAnalysisJobProgress', 'FatalError', 'RetryableError', 'getWorkflowMetadata', 'createBackgroundAnalysisAuthorization', 'analyzeRequest', 'sendPush', 'completionMessage', `${workflowSource}\nreturn ${name}(arguments[9]);`);
+  const promise = run(async (_id, value) => { published.push(structuredClone(value)); return true; },
+    createAnalysisJobProgress, Error, Error, () => ({ workflowRunId: 'run-partial-mlb' }),
+    async () => ({ timestamp: '1', signature: 'test' }), async request => {
+      const input = await request.json();
+      if (input.game.gamePk === 2) { await slow; throw new Error('controlled failure'); }
+      return Response.json({ ok: true, game: input.game, analysis: { results: [{}] } });
+    }, async () => {}, () => {}, name === 'analyzeBoardWorkflow' ? mlb : { date: batch.date, batches: [mlb, { ...batch, tasks: [] }] });
+  await new Promise(setImmediate);
+  assert.ok(published.some(value => value.completed === 1 && value.runningGamePks.includes(2)), `${name}: fast result published before slow sibling`);
+  releaseSlow();
+  const final = await promise;
+  const result = final.batches?.[0] || final;
+  assert.equal(result.completed, 1);
+  assert.equal(result.results.filter(row => !row.ok).length, 1);
+  if (final.batches) assert.equal(final.batches.length, 2, 'failed game does not stop next league');
+}
+console.log('PASS: both workflows publish fast MLB game before held sibling, isolate rejected step and continue later leagues');
