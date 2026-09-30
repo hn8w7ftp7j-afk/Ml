@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {
   allLeagueBoardDate,
   allLeagueAnalysisProgress,
+  allLeagueAnalysisOutcomeText,
   allLeagueRunContainsDate,
   createAllLeagueAnalysisRun,
   mergePreparedLeagueBoard,
@@ -21,6 +22,24 @@ assert.deepEqual(Object.keys(run.leagues), ['MLB', 'NPB', 'KBO', 'CPBL']);
 run = updateAllLeagueAnalysisLeague(run, 'MLB', { status: 'done', total: 2, completed: 2 });
 run = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'no_games', boardDate: '2026-08-29' });
 assert.equal(allLeagueAnalysisProgress(run).terminal, 2);
+assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(run)), '成功 1 聯盟｜略過 1 聯盟｜未開始 2 聯盟');
+let failedRun = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'failed', message: '舊工作 Reader 過期' });
+failedRun = updateAllLeagueAnalysisLeague(failedRun, 'KBO', { status: 'failed' });
+failedRun = updateAllLeagueAnalysisLeague(failedRun, 'CPBL', { status: 'done' });
+const failedProgress = allLeagueAnalysisProgress(failedRun);
+assert.equal(failedProgress.terminal, 4, 'all four workflows can finish even if two leagues fail');
+assert.equal(allLeagueAnalysisOutcomeText(failedProgress), '成功 2 聯盟｜失敗 2 聯盟');
+assert.equal(failedProgress.succeeded + failedProgress.partial + failedProgress.failed + failedProgress.skipped
+  + failedProgress.resultPending + failedProgress.running + failedProgress.idle, 4);
+let mixedRun = createAllLeagueAnalysisRun('2026-08-30');
+for (const [id, status] of [['MLB', 'partial'], ['NPB', 'result_pending'], ['KBO', 'running'], ['CPBL', 'no_open_markets']]) {
+  mixedRun = updateAllLeagueAnalysisLeague(mixedRun, id, { status });
+}
+assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(mixedRun)), '部分完成 1 聯盟｜略過 1 聯盟｜結果待載入 1 聯盟｜進行中 1 聯盟');
+assert.match(page, /四聯盟工作｜已結束 \{allLeagueProgress\.terminal\}\/\{allLeagueProgress\.total\}/);
+assert.match(page, /allLeagueAnalysisOutcomeText\(allLeagueProgress\)/);
+assert.match(page, /保存的工作結果[\s\S]{0,150}不代表 Reader 即時狀態/, 'saved failure messages cannot impersonate current Reader status');
+assert.doesNotMatch(page, /四聯盟分析 \{allLeagueProgress\.terminal\}\/4/, 'terminal count must not be labelled as four successful analyses');
 assert.equal(allLeagueBoardDate(run, 'MLB'), '2026-08-30');
 assert.equal(allLeagueBoardDate(run, 'NPB'), '2026-08-29');
 assert.equal(allLeagueRunContainsDate(run, '2026-08-29'), true);

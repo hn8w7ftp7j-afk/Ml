@@ -43,7 +43,8 @@ check('client supplied evidence cannot override verified PIT evidence', () => {
 });
 const hash = value => value.repeat(64);
 const game = { leagueId: 'MLB', league: 'MLB', gamePk: 123, officialDate: '2026-09-06', gameDate: '2026-09-06T10:00:00Z', gameNumber: 1, awayTeamId: 1, homeTeamId: 2, away: 'Away', home: 'Home' };
-const context = { leagueId: 'MLB', game, fetchedAt: '2026-09-06T07:00:00Z', away: {}, home: {}, featureProvenance: [] };
+const context = { leagueId: 'MLB', game, fetchedAt: '2026-09-06T07:00:00Z', away: {}, home: {},
+  featureProvenance: [{ featureName: 'fixtureObservedInput', fetchedAt: '2026-09-06T06:59:00Z' }] };
 const versions = { modelVersion: 'M1', rulesVersion: 'R1', dataVersion: 'D1', scoreFormulaVersion: 'S1', settlementRuleVersion: 'SET1', uncertaintySetVersion: 'U1' };
 const distribution = { distributionId: 'dist1', distributionHash: hash('a'), gamePk: game.gamePk, scenarios: [{ id: 'central', weight: 1, cells: [{ awayRuns: 4, homeRuns: 4, probability: 1 }] }] };
 const analysis = { leagueId: 'MLB', analysisType: 'FULL', inputHash: hash('b'), coreFingerprint: hash('c'), priceFingerprint: hash('d'), calculationFingerprint: hash('e'), auxiliaryFingerprint: hash('f'), distributionId: distribution.distributionId, distributionHash: distribution.distributionHash,

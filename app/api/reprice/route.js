@@ -36,7 +36,8 @@ import {
   analysisPitSnapshotId,
   persistAnalysisPitSnapshotForResponse,
 } from '../../../lib/analysis-pit-snapshot-store-v1.js';
-import { enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
+import { assertPitPersistenceIntegrity, enforceUnconfirmedPitShadowSafety } from '../../../lib/pit-persistence-safety-v110.js';
+import { assertPitFeatureTimes } from '../../../lib/pit-feature-time-evidence.js';
 import { assessRepriceSnapshotCompatibilityV1 } from '../../../lib/reprice-snapshot-compatibility-v1.js';
 
 export const runtime = 'nodejs';
@@ -254,6 +255,7 @@ export async function POST(request) {
         snapshotCompatibility,
       }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
+    assertPitFeatureTimes(context, snapshot.dataAsOf || context.fetchedAt);
     const coreFreshness = assessCoreSnapshotFreshnessV109(context);
     if (!coreFreshness.fresh) {
       return NextResponse.json({
@@ -397,6 +399,7 @@ export async function POST(request) {
       previousMarkets,
       readerSnapshot: readerProvenance,
     }, { requiredWhenConfigured: true });
+    assertPitPersistenceIntegrity(pitPersistence);
     safePayload.pitPersistence = pitPersistence;
     assertLeagueGamePrestart(league, game);
     if (pitPersistence.required && !pitPersistence.confirmed) {

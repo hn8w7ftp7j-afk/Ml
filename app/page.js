@@ -103,9 +103,11 @@ import {
   cloudLedgerAutomaticRefreshAllowed,
   cloudLedgerRetryDelay,
 } from '../lib/cloud-ledger-sync-policy.js';
+import { loadCompactCloudLedger, mergeKnownLedgerRecords } from '../lib/compact-cloud-ledger-client.js';
 import {
   allLeagueBoardDate,
   allLeagueAnalysisProgress,
+  allLeagueAnalysisOutcomeText,
   allLeagueRunContainsDate,
   allLeagueStatusLabel,
   createAllLeagueAnalysisRun,
@@ -1424,7 +1426,8 @@ function ResultRow({ row, game, limitations = [], onBet, onCancel, onRecheck, re
       <div className="qaLine">{externalAuditText}｜不影響W/R、S分數與排名</div>
       {!externalAuditFresh && <details className="details"><summary>外部稽核資料說明</summary><p>{externalVerificationExplanation(row?.marketVerification, externalAuditFresh)}</p></details>}
       <div className={`qaLine ${verdict.ranking ? '' : 'pending'}`}>{verdict.icon} 排名資格：{rankText}</div>
-      {inactiveNotice && <div className="scoreMeta">實際下注紀錄狀態：{inactiveNotice}</div>}
+      {latest && <div className="scoreMeta">已下注 ✓｜原紀錄：{translateTeamText(latest.pick)}｜{waterText(latest.water)}</div>}
+      {inactiveNotice && <div className="scoreMeta">新增紀錄狀態：{inactiveNotice}</div>}
       <div className="scoreMeta">{probabilityDetail}</div>
       {auditWarnings.map(warning => <div className="warningLine" key={warning}>⚠️ {warning}</div>)}
       {limitations.map(note => <div className="warningLine" key={note}>⚠️ 聯盟模型限制：{note} 此方向影響尚未量化。</div>)}
@@ -1673,7 +1676,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
             ? <div className="marketPlaceholder">尚未開盤｜Reader持續監看</div>
             : rows.length ? rows.map((row, index) => directionStatus(row) === 'CALCULATED' || modelEvValue(row) != null
               ? (() => {
-                const betState = betsEnabled ? getBetState(item, row) : { latest: null, cancelled: null };
+                const betState = getBetState(item, row);
                 const action = evaluateBetAction({ item, row, now, betsEnabled, cloudLedgerState, latest: betState?.latest, cancelled: betState?.cancelled, readerAuthority, queued: betState?.queued });
                 return <ResultRow key={`${directionIdentity(row)}-${index}`} row={row} game={item.game} limitations={savedLeagueLimitations(analysis.dataAudit)} betState={betState} action={action} onRecheck={onRecheck ? () => onRecheck(item) : undefined} recoveryBusy={recoveryBusy} onBet={value => onBet(item, value)} onCancel={onCancel} now={now} inactiveNotice={row.clientInactiveNotice}/>;
               })()
@@ -2076,7 +2079,7 @@ export default function Home() {
     cloudSyncBusyRef.current = true;
     setCloudLedgerBusy(true);
     try {
-      const data = await requestJSON('/api/bets', {}, 30000);
+      const data = await loadCompactCloudLedger(requestJSON);
       requireCloudLedgerResponse(data);
       if (generation !== cloudLedgerGenerationRef.current || betMutationBusyRef.current) return;
       betsRef.current = data.bets;
@@ -2118,10 +2121,11 @@ export default function Home() {
           : { action: 'merge', bets: migrateLegacyLocalBets(betsRef.current) }),
       }, 120000);
       requireCloudLedgerResponse(data);
+      const completeReadback = await loadCompactCloudLedger(requestJSON);
       if (generation === cloudLedgerGenerationRef.current && !betMutationBusyRef.current) {
         if (!migrationComplete) markCloudBetMigrationComplete();
-        betsRef.current = data.bets;
-        setBets(data.bets);
+        betsRef.current = completeReadback.bets;
+        setBets(completeReadback.bets);
         setCalibrationStatus(data.calibration || null);
         cloudSyncRetryAtRef.current = 0;
         setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
@@ -2152,9 +2156,16 @@ export default function Home() {
     cloudSyncBusyRef.current = true;
     setCloudLedgerBusy(true);
     const migrationComplete = cloudBetMigrationComplete();
-    requestJSON('/api/bets', migrationComplete ? {} : {
+    const initialRead = migrationComplete
+      ? loadCompactCloudLedger(requestJSON)
+      : requestJSON('/api/bets', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', bets: migratedBets }),
     }, 30000).then(data => {
+      requireCloudLedgerResponse(data);
+      markCloudBetMigrationComplete();
+      return loadCompactCloudLedger(requestJSON);
+    });
+    initialRead.then(data => {
       requireCloudLedgerResponse(data);
       if (disposed || generation !== cloudLedgerGenerationRef.current || betMutationBusyRef.current) return;
       if (!migrationComplete) markCloudBetMigrationComplete();
@@ -2648,6 +2659,11 @@ export default function Home() {
   const visibleBets = useMemo(
     () => bets.filter(bet => normalizeLeagueId(bet?.league) === league),
     [bets, league],
+  );
+  const recordedScopeBets = useMemo(
+    () => visibleBets.filter(bet => bet.date === date && bet.status !== 'CANCELLED')
+      .sort((left, right) => Date.parse(right.placedAt || 0) - Date.parse(left.placedAt || 0)),
+    [visibleBets, date],
   );
 
   function getBetState(item, row) {
@@ -4663,8 +4679,9 @@ export default function Home() {
         () => requestJSON(`/api/bets?confirmBetId=${encodeURIComponent(postData.betId)}`, {}, 30000));
       outcome.betId = receipt.bet.id;
       const data = receipt.data;
-      betsRef.current = data.bets;
-      setBets(data.bets);
+      const knownRecords = mergeKnownLedgerRecords(betsRef.current, data.bets);
+      betsRef.current = knownRecords;
+      setBets(knownRecords);
       setCalibrationStatus(data.calibration || null);
       cloudSyncRetryAtRef.current = 0;
       setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
@@ -4749,8 +4766,9 @@ export default function Home() {
       requireCloudLedgerResponse(postData);
       const data = await requestJSON(`/api/bets?confirmBetId=${encodeURIComponent(bet.id)}`, {}, 30000);
       requireCancelledBet(data, bet.id);
-      betsRef.current = data.bets;
-      setBets(data.bets);
+      const knownRecords = mergeKnownLedgerRecords(betsRef.current, data.bets);
+      betsRef.current = knownRecords;
+      setBets(knownRecords);
       setCalibrationStatus(data.calibration || null);
       setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
       setError('');
@@ -4823,6 +4841,7 @@ export default function Home() {
       <div><div className="eyebrow">BASEBALL DATA & BET LEDGER</div><h1>{activeLeague.label}｜盤口與實際下注系統</h1></div>
       <div className="headerBadges"><details><summary>系統資訊</summary><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{activeLeague.statusLabel}</span></details><button type="button" className="appRefreshButton" title="重新整理並取得最新版" onClick={() => window.location.reload()}>↻ 更新</button><span className="version">v{VERSION}</span></div>
     </header>
+    {shadowMode && <p className="muted" role="note">模型尚在驗證；分數與 EV 僅供研究，不是正式投注建議。</p>}
     {notificationResultNotice && <p role="status">{notificationResultNotice}</p>}
 
     <nav className="leagueTabs" aria-label="聯盟切換">
@@ -4853,6 +4872,13 @@ export default function Home() {
 
     {error && <div className="errorBox global" role="alert"><strong>發生問題</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {notice && <div className="noticeBox" role="status" aria-live="polite">{notice}</div>}
+    {['board', 'ranking', 'betOrder'].includes(tab) && recordedScopeBets.length > 0 && <details className="panel recordedBetsSummary">
+      <summary>{league} {date}｜已知已下注紀錄 {recordedScopeBets.length} 筆{cloudLedgerStatus.state !== 'ready' ? '｜帳本待同步' : ''}</summary>
+      {cloudLedgerStatus.state !== 'ready' && <p className="muted">保留上次取得的紀錄；目前雲端狀態尚待確認，不代表同步完成。</p>}
+      {recordedScopeBets.map(bet => <div className="betRow" key={bet.id}>
+        <div><strong>已下注 ✓｜{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}</span><small>{localTime(bet.placedAt)}｜{statusText(bet.status)}</small></div>
+      </div>)}
+    </details>}
     {betAttemptStorageWarning && <p role="alert">{betAttemptStorageWarning}</p>}
     {betQueueEntries.length > 0 && <details className="panel queueSummary" aria-label="下注紀錄隊列">
       <summary><span>紀錄狀態</span><span aria-live="polite">{[
@@ -4878,7 +4904,7 @@ export default function Home() {
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? '盤口已同步' : readerStatus?.fresh ? '盤口已同步｜待驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
           <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
         </div>
-        {allLeagueRunContainsDate(allLeagueRun, date) && <div className="allLeagueState" aria-live="polite"><div><strong>四聯盟分析 {allLeagueProgress.terminal}/4</strong><span>目前聯盟：{activeLeague.id}｜盤日 {date}｜{allLeagueStatusLabel(activeLeagueBatchStatus)}</span></div><div className="allLeaguePills">{LEAGUE_IDS.map(id => {
+        {allLeagueRunContainsDate(allLeagueRun, date) && <div className="allLeagueState" aria-live="polite"><div><strong>四聯盟工作｜已結束 {allLeagueProgress.terminal}/{allLeagueProgress.total}</strong><span>{allLeagueAnalysisOutcomeText(allLeagueProgress)}</span><span>{allLeagueRunning ? '目前工作' : '保存的工作結果'}｜{localTime(allLeagueRun?.completedAt || allLeagueRun?.startedAt)}｜不代表 Reader 即時狀態</span><span>目前聯盟：{activeLeague.id}｜盤日 {date}｜{allLeagueStatusLabel(activeLeagueBatchStatus)}</span></div><div className="allLeaguePills">{LEAGUE_IDS.map(id => {
           const state = allLeagueRun?.leagues?.[id] || {};
           return <span className={`batch-${state.status || 'idle'}`} title={state.message || ''} key={id}>{id} {state.boardDate || '—'}｜{allLeagueStatusLabel(state.status)}{state.status === 'preparing' && state.message?.startsWith('等待Reader') && <small>{state.message}</small>}</span>;
         })}</div>{LEAGUE_IDS.some(id => allLeagueRun?.leagues?.[id]?.status === 'failed') && <div className="allLeagueErrors">{LEAGUE_IDS.filter(id => allLeagueRun?.leagues?.[id]?.status === 'failed').map(id => <small key={id}>{id} {allLeagueRun.leagues[id].boardDate || '—'}：{allLeagueRun.leagues[id].message || '分析失敗'}</small>)}</div>}</div>}
@@ -4906,7 +4932,7 @@ export default function Home() {
         <small>Reader覆蓋 {readerCoverage.captured}/{readerCoverage.total}場｜已開盤 {readerCoverage.open}場｜盤口雜湊 {readerStatus?.payloadHash ? String(readerStatus.payloadHash).slice(0, 12) : '—'}｜模型 {rankingProvenance.modelVersions.length ? rankingProvenance.modelVersions.join('、') : '—'}</small>
       </details>
       {shadowRanking.length ? shadowRanking.map((entry, index) => {
-        const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
+        const betState = getBetState(entry.item, entry.row);
         const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority, queued: betState.queued });
         const scoreText = entry.score == null ? '—' : entry.score.toFixed(1);
         const warnings = diagnosticWarnings(entry.row);
@@ -4925,7 +4951,7 @@ export default function Home() {
       {shadowBetOrderGames.length ? shadowBetOrderGames.map((group, gameIndex) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
-          const betState = bettingEnabled ? getBetState(entry.item, entry.row) : { exact: null, latest: null, records: [] };
+          const betState = getBetState(entry.item, entry.row);
           const action = evaluateBetAction({ item: entry.item, row: entry.row, now: clockNow, betsEnabled: bettingEnabled, cloudLedgerState: cloudLedgerActionState, latest: betState.latest, cancelled: betState.cancelled, readerAuthority: liveReaderAuthority, queued: betState.queued });
           const scoreText = entry.score.toFixed(1);
           const warnings = diagnosticWarnings(entry.row);

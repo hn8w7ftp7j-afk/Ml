@@ -38,8 +38,10 @@ try {
   const route = await import('../app/api/reprice/route.js');
   const game = { leagueId: 'MLB', league: 'MLB', gamePk: 990701, gameDate: new Date(Date.now() + 6 * 60 * 60_000).toISOString(), awayTeamId: 111, homeTeamId: 141, away: 'Boston Red Sox', home: 'Toronto Blue Jays', status: 'Scheduled', statusCode: 'S' };
   const expected = expectedFor('MLB');
+  const fetchedAt = new Date().toISOString();
   const base = {
-    frozenContext: { leagueId: 'MLB', game, fetchedAt: new Date().toISOString(), modelVersion: expected.modelVersion },
+    frozenContext: { leagueId: 'MLB', game, fetchedAt, modelVersion: expected.modelVersion,
+      featureProvenance: [{ featureName: 'fixtureCore', fetchedAt }] },
     inputHash: 'immutable-input', coreFingerprint: 'immutable-core', distributionId: 'immutable-distribution', distributionHash: 'immutable-hash',
     versions: expected,
   };
@@ -92,4 +94,3 @@ try {
     else process.env[key] = value;
   }
 }
-

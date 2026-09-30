@@ -114,6 +114,8 @@ let mutation = { ...receipt, created: true, idempotent: false };
 let confirmedRows = [fixture];
 globalThis.__betReceiptRouteFixture = {
   cancelOpenCloudBet: async () => [], cloudBetStats: () => ({}), listCloudBets: async () => [fixture],
+  listCloudBetsReadPage: async () => ({ bets: [fixture], view: 'full',
+    pagination: { limit: 5000, totalRecords: 1, returnedRecords: 1, invalidRecordsOnPage: 0, hasMore: false, nextCursor: null } }),
   listCloudBetsByIds: async ids => { calls.push('readByIds'); assert.deepEqual(ids, [fixture.id]); return confirmedRows; },
   mergeCloudBets: async () => [], settleOpenCloudBets: async () => [],
   recoverPersistedCloudBet: async value => { calls.push('recover'); assert.equal(value.id, undefined); return recovered; },
@@ -132,7 +134,7 @@ register('data:text/javascript,' + encodeURIComponent(`
   export async function load(url, context, nextLoad) {
     if (!url.startsWith('test-bet-receipt:')) return nextLoad(url, context);
     const names = url.endsWith(':store')
-      ? ['cancelOpenCloudBet', 'cloudBetStats', 'listCloudBets', 'listCloudBetsByIds', 'mergeCloudBets', 'settleOpenCloudBets', 'upsertCloudBet', 'recoverPersistedCloudBet']
+      ? ['cancelOpenCloudBet', 'cloudBetStats', 'listCloudBets', 'listCloudBetsReadPage', 'listCloudBetsByIds', 'mergeCloudBets', 'settleOpenCloudBets', 'upsertCloudBet', 'recoverPersistedCloudBet']
       : ['verifyCloudBetEvidenceV110'];
     return { format: 'module', shortCircuit: true,
       source: names.map(name => 'export const ' + name + ' = (...args) => globalThis.__betReceiptRouteFixture.' + name + '(...args);').join('\\n') };
