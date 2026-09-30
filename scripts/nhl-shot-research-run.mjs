@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchNhlJson } from '../lib/nhl/data.js';
 import { validateNhlIdentity } from '../lib/nhl/identity.js';
 import { readNhlShotCheckpoint } from '../lib/nhl/shot-research-archive.js';
+import { NHL_SHOT_REPORT_FILE, encodeNhlShotResearchReport, decodeNhlShotResearchReport } from './nhl-shot-research-report-file.mjs';
 import { extractNhlShotResearch, chronologicalNhlShotValidation, freezeNhlShotResearchArtifacts, NHL_SHOT_RESEARCH_VERSION } from '../lib/nhl/shot-research.js';
 
 const args = process.argv.slice(2);
@@ -156,7 +157,9 @@ const report = { leagueId: 'NHL', version: NHL_SHOT_RESEARCH_VERSION, generatedA
   attempts: attempts.filter(row => row.code !== 'OFFLINE_CHECKPOINT_UNAVAILABLE'), unavailableCheckpointCount: attempts.filter(row => row.code === 'OFFLINE_CHECKPOINT_UNAVAILABLE').length,
   sources: datasets.map(row => row.source), coverage: datasets.map(row => ({ game: row.game, rows: row.rows.length, rowHash: row.rowHash,
     strengths: Object.fromEntries([...new Set(row.rows.map(shot => shot.strength))].map(strength => [strength, row.rows.filter(shot => shot.strength === strength).length])), exclusions: row.exclusions, warnings: row.warnings })), reports };
-await saveAtomic(path.join(output, 'research-report.json'), `${JSON.stringify(report, null, 2)}\n`);
+const reportArchive = encodeNhlShotResearchReport(report);
+if (JSON.stringify(decodeNhlShotResearchReport(reportArchive)) !== JSON.stringify(report)) throw new Error('Report archive round-trip failed');
+await saveAtomic(path.join(output, NHL_SHOT_REPORT_FILE), `${JSON.stringify(reportArchive)}\n`);
 const latestStart = Math.max(...datasets.map(dataset => Date.parse(dataset.game.startTimeUTC)));
 const artifacts = freezeNhlShotResearchArtifacts(datasets, { asOf: new Date(latestStart + 48 * 3600_000 + 1).toISOString(),
   generatedAt: report.generatedAt, completeSeasonCoverage: report.completeSeasonCoverage });

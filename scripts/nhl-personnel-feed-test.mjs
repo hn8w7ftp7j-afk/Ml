@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { allowedNhlPersonnelUrl, nhlPersonnelArticleUrl, parseNhlLineupArticle, fetchNhlPersonnelArticle, fetchNhlPersonnel, compareNhlPersonnelVersions, mergeNhlPersonnelIdentitySources } from '../lib/nhl/personnel-feed.js';
+import { makeNhlPersonnelObservation, validateNhlPersonnelObservation } from '../lib/nhl/personnel-observation.js';
 
 const facts = JSON.parse(await readFile(new URL('./fixtures/nhl/personnel-official-20260614-facts.json', import.meta.url), 'utf8'));
 const game = facts.game;
@@ -77,6 +78,17 @@ assert.equal(elevenSeven.teams.away.defensivePairings.at(-1)[0].playerId, 999999
 assert.equal(elevenSeven.teams.away.listedGoalies.length, 2);
 assert.equal(elevenSeven.goalies.away.status, 'PROJECTED');
 assert.ok(elevenSeven.qa.warnings.includes('NHL_PERSONNEL_NONSTANDARD_OR_PARTIAL_LINEUP'));
+const elevenSevenSnapshot = makeNhlPersonnelObservation(game, elevenSeven, { now });
+assert.equal(validateNhlPersonnelObservation(elevenSevenSnapshot, game.gameId, { now }).ok, true);
+for (const malformed of ['empty', 'oversized', 'mixed', 'warning-removed']) {
+  const candidate = structuredClone(elevenSevenSnapshot);
+  const lines = candidate.personnel.teams.away.lineCombinations;
+  if (malformed === 'empty') lines[3] = [];
+  if (malformed === 'oversized') lines[0].push(lines[1][0]);
+  if (malformed === 'mixed') lines[3][0] = candidate.personnel.teams.away.defensivePairings[0][0];
+  if (malformed === 'warning-removed') candidate.personnel.qa.warnings = [];
+  assert.equal(validateNhlPersonnelObservation(candidate, game.gameId, { now }).ok, false, malformed);
+}
 const mixedGroup = structuredClone(nonstandard);
 mixedGroup.away.lines[3][1] = mixedGroup.away.pairs[0].shift();
 assert.equal(parseNhlLineupArticle(article(mixedGroup), { ...opts, rosters: identities(mixedGroup) }).teams.away.lineupStatus, 'BLOCK');

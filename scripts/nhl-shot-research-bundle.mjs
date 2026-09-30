@@ -3,9 +3,11 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { readNhlShotResearchReport } from './nhl-shot-research-report-file.mjs';
 import { compactNhlShotResearchEvidence } from '../lib/nhl/shot-research.js';
 const root = new URL('../', import.meta.url);
-const report = JSON.parse(await fs.readFile(new URL('scripts/fixtures/nhl/xg-research/research-report.json', root), 'utf8'));
+const report = readNhlShotResearchReport(fileURLToPath(new URL('scripts/fixtures/nhl/xg-research', root)));
 const artifact = JSON.parse(await fs.readFile(new URL('scripts/fixtures/nhl/xg-research/frozen-artifacts.json', root), 'utf8'));
 assert.equal(report.leagueId, 'NHL'); assert.equal(artifact.leagueId, 'NHL');
 assert.equal(report.generatedAt, artifact.generatedAt);
