@@ -114,7 +114,7 @@ async function readGame(gameId) {
   }
   if (!response) { attempts.push({ gameId, ok: false, code: 'OFFLINE_CHECKPOINT_UNAVAILABLE' }); return; }
   acquired.push({ gameId, source: response.source, qaStatus: data?.status, rows: data?.rows?.length || 0, code: data?.code || null });
-  if (!data?.ok) { attempts.push({ gameId, ok: false, code: data?.code || 'NHL_SHOT_QA_FAILED' }); return; }
+  if (!data?.ok) { attempts.push({ gameId, ok: false, code: data?.code || 'NHL_SHOT_QA_FAILED', ...(data?.totals ? { totals: data.totals } : {}) }); return; }
   for (const attempt of attempts.filter(row => row.gameId === gameId && row.code === 'CORRUPT_CHECKPOINT_SOURCE_HASH')) {
     attempt.recovered = true; attempt.replacementSourceHash = response.source.contentHash;
   }
