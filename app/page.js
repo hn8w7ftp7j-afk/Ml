@@ -1,6 +1,7 @@
 'use client';
 import { createJobStatusReader } from '../lib/job-status-reader.js';
 import { applyAnalysisJobProgress } from '../lib/analysis-job-progress.js';
+import { validateCompletedGamesWithReader } from '../lib/completed-game-reader-validation.js';
 import AnalysisNotificationControl from './analysis-notification-control.js';
 import { readerWaitingDisplay } from '../lib/reader-waiting-display.js';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
@@ -2294,7 +2295,11 @@ export default function Home() {
                 const full = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(expectedRunId)}&league=${encodeURIComponent(id)}`, {}, 30000);
                 if (!stillCurrentRun()) return;
                 if (full.status !== 'completed' || full.result?.league !== id || full.result?.date !== batchDate) throw new Error('結果聯盟或日期不符');
-                const next = materializeAllLeagueResult(full.result, loadAnalysisBoardCache(id, batchDate), compactAnalysisData);
+                let next = materializeAllLeagueResult(full.result, loadAnalysisBoardCache(id, batchDate), compactAnalysisData);
+                if (currentLeagueRef.current === id && currentDateRef.current === batchDate) {
+                  next = await verifyCompletedBoard(next, id, batchDate, analysisGenerationRef.current);
+                  if (!stillCurrentRun()) return;
+                }
                 if (next.some(item => !analysisItemMatchesScope(item, { league: id, date: batchDate }))) throw new Error('結果賽事識別不符');
                 const recovery = saveCompletedAnalysisReceipt({ runId: expectedRunId, league: id, date: batchDate }, full.result);
                 allLeagueBoardsRef.current.set(`${id}:${batchDate}`, next);
@@ -2427,6 +2432,23 @@ export default function Home() {
     readerStatusHighWaterRef.current = null;
     setReaderStatus(null);
   }, [date, league, storageReady]);
+  useEffect(() => {
+    // Switching to a finished league from the explicitly started all-league run
+    // still needs current prices; cached display data alone never unlocks bets.
+    if (!storageReady || allLeagueRun?.state !== 'completed'
+      || submittedAllLeagueRunRef.current !== allLeagueRun?.runId
+      || !allLeagueRun?.leagues?.[league]?.resultLoaded
+      || !boardRef.current.some(item => item.status === 'done' && !item.readerPayloadHash)) return;
+    const generation = analysisGenerationRef.current;
+    let active = true;
+    void verifyCompletedBoard(boardRef.current, league, date, generation).then(next => {
+      if (!active || generation !== analysisGenerationRef.current
+        || currentLeagueRef.current !== league || currentDateRef.current !== date) return;
+      boardRef.current = next;
+      setBoard(next);
+    });
+    return () => { active = false; };
+  }, [storageReady, league, date, allLeagueRun?.state, allLeagueRun?.runId]);
   useEffect(() => {
     if (!storageReady) return undefined;
     // Restoring a receipt is a network operation, not a reason to lock entry.
@@ -2910,6 +2932,30 @@ export default function Home() {
     }), now));
   }
 
+  async function verifyCompletedBoard(board, targetLeague, targetDate, generation) {
+    const games = board.filter(item => item.status === 'done' && item.customData?.analysis
+      && gameIsPrestartNow(item.game)).map(item => item.game);
+    if (!games.length) return board;
+    try {
+      const credit = await requestJSON('/api/credit-lines', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uid() },
+        body: JSON.stringify({ league: targetLeague, date: targetDate, schedule: games }),
+      }, 20000);
+      if (generation !== analysisGenerationRef.current || currentLeagueRef.current !== targetLeague
+        || currentDateRef.current !== targetDate) return board;
+      if (credit?.readerStatus) commitReaderStatus({ ...credit.readerStatus,
+        fresh: credit.readerFresh === true && credit.blocked !== true,
+        boardDate: credit.boardDate, payloadHash: credit.payloadHash,
+        rawBoardHash: credit.rawBoardHash, observedAt: credit.observedAt,
+        receivedAt: credit.receivedAt, pageActivityAt: credit.pageActivityAt,
+      });
+      return validateCompletedGamesWithReader(board, credit, { league: targetLeague, date: targetDate });
+    } catch {
+      // Displayed results survive a failed verification. No new authority is granted.
+      return board;
+    }
+  }
+
   function pollBackgroundJob(runId, generation, targetDate, gamePks = [], { completedReceipt = null, displayOnly = false } = {}) {
     const pollKey = `${runId}|||${generation}|||${targetDate}`;
     const currentPoll = backgroundJobPollsRef.current.get(pollKey);
@@ -2917,6 +2963,7 @@ export default function Home() {
     const poll = (async () => {
       let readerWaitDelayMs = 2500;
       let lastProgressRevision = -1;
+      let lastReaderCheck = 0;
       while (generation === analysisGenerationRef.current && currentDateRef.current === targetDate) {
         try {
           const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&league=${encodeURIComponent(league)}&afterRevision=${lastProgressRevision}&t=${Date.now()}`, {}, 30000);
@@ -2928,8 +2975,10 @@ export default function Home() {
             const rows = Array.isArray(result.results) ? result.results : [];
             if (displayOnly && !completedReceipt) {
               if (result.league !== league || result.date !== targetDate) throw Object.assign(new Error('結果聯盟或日期不符'), { backgroundFatal: true });
-              const next = materializeAllLeagueResult(result, boardRef.current, compactAnalysisData);
+              let next = materializeAllLeagueResult(result, boardRef.current, compactAnalysisData);
               if (next.some(item => !analysisItemMatchesScope(item, { league, date: targetDate }))) throw Object.assign(new Error('結果賽事識別不符'), { backgroundFatal: true });
+              next = await verifyCompletedBoard(next, league, targetDate, generation);
+              if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return { detached: true };
               const recovery = saveCompletedAnalysisReceipt({ runId, league, date: targetDate }, result);
               allLeagueBoardsRef.current.set(`${league}:${targetDate}`, next);
               boardRef.current = next;
@@ -3205,14 +3254,26 @@ export default function Home() {
             setProgress({ active: true, done: partial.settled, running: partial.running, total: partial.total,
               label: `分析進度：成功 ${partial.completed} 場${partial.failed ? `｜失敗或資料不足 ${partial.failed} 場` : ''}｜處理中 ${partial.running} 場｜排隊 ${partial.queued} 場` });
             lastProgressRevision = state.progress.revision;
+            lastReaderCheck = 0;
           } else if (lastProgressRevision < 0) {
             setProgress(value => ({ ...value, active: true, running: 0, label: '伺服器背景分析中｜等待逐場進度' }));
+          }
+          // Recheck finished games while the remaining games are still running.
+          // Retry even without a new progress revision (Reader may recover).
+          if (Date.now() - lastReaderCheck >= 10000
+            && boardRef.current.some(item => item.status === 'done' && item.customData?.analysis)) {
+            lastReaderCheck = Date.now();
+            const next = await verifyCompletedBoard(boardRef.current, league, targetDate, generation);
+            if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) return { detached: true };
+            boardRef.current = next;
+            setBoard(next);
+            allLeagueBoardsRef.current.set(`${league}:${targetDate}`, next);
           }
         } catch (cause) {
           if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
             return { detached: true, total: 0, completed: 0, results: [] };
           }
-          if ((completedReceipt || displayOnly) && !cause?.backgroundFatal && ![401, 403, 404].includes(Number(cause?.status))) {
+          if (completedReceipt && !cause?.backgroundFatal && ![401, 403, 404].includes(Number(cause?.status))) {
             // A finished job cannot make progress by retrying forever. Keep its
             // receipt intact for a later explicit retry and release the controls.
             throw new Error(`先前結果暫時無法載入，已保留紀錄。可稍後再按「載入先前分析」，或直接手動分析。${cause?.message || ''}`);
@@ -3443,11 +3504,12 @@ export default function Home() {
     try {
       const prepared = await Promise.all(LEAGUE_IDS.map(async id => {
         const selectedDate = id === 'MLB' ? targetDate : (leagueDatesRef.current[id] || date);
-        const batchDate = await allLeagueTargetDate(id, selectedDate);
-        clearBackgroundJob(id, batchDate);
-        leagueDatesRef.current[id] = batchDate;
-        manualAnalysisScopesRef.current.add(`${id}:${batchDate}`);
+        let batchDate = selectedDate;
         try {
+          batchDate = await allLeagueTargetDate(id, selectedDate);
+          clearBackgroundJob(id, batchDate);
+          leagueDatesRef.current[id] = batchDate;
+          manualAnalysisScopesRef.current.add(`${id}:${batchDate}`);
           const batch = await prepareAllLeagueBatch(id, batchDate, waiting => {
             run = updateAllLeagueAnalysisLeague(run, id, {
               status: 'preparing', boardDate: batchDate,
@@ -3474,7 +3536,7 @@ export default function Home() {
             boardDate: batchDate,
             code: cause?.code || '',
             stage: cause?.stage || 'preflight',
-            message: `${cause?.code ? `[${cause.code}] ` : ''}${String(cause?.message || cause)}`,
+            message: String(cause?.message || '此聯盟資料暫時無法取得，請稍後重試'),
           });
           publishAllLeagueRun(run);
           return { id, batchDate, cause };
@@ -3530,6 +3592,9 @@ export default function Home() {
         }) && reconnectSaved;
       }
       publishAllLeagueRun(run);
+      const visibleBatch = batches.find(batch => batch.league === currentLeagueRef.current
+        && batch.date === currentDateRef.current && batch.tasks.length);
+      if (visibleBatch) requestedRecoveryScopeRef.current = `${visibleBatch.league}:${visibleBatch.date}`;
       setBackgroundJobRevision(value => value + 1);
       const failedPreparations = LEAGUE_IDS.filter(id => run.leagues?.[id]?.status === 'failed').length;
       setNotice(reconnectSaved
@@ -4680,7 +4745,10 @@ export default function Home() {
     queuedAnalysisRef.current = null;
     setQueuedAnalysis(null);
     const returningRun = independentRunsRef.current.get(`${nextLeague}:${nextDate}`);
-    if (returningRun?.status === 'running') requestedRecoveryScopeRef.current = `${nextLeague}:${nextDate}`;
+    if (returningRun?.status === 'running'
+      || (allLeagueRun?.state === 'running' && allLeagueRun?.leagues?.[nextLeague]?.status === 'running')) {
+      requestedRecoveryScopeRef.current = `${nextLeague}:${nextDate}`;
+    }
     currentLeagueRef.current = nextLeague;
     currentDateRef.current = nextDate;
     leagueDatesRef.current[nextLeague] = nextDate;

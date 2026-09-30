@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
-import { allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
+import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
 
 const ids = ['MLB', 'NPB', 'KBO', 'CPBL'];
 const date = '2026-09-10';
@@ -32,6 +32,7 @@ async function runSummary({ fresh = true, failLeague = '', switchLeague = false 
     storageReady: true, date, allLeagueRun: run, allLeagueRunRef: { current: run },
     submittedAllLeagueRunRef: { current: fresh ? run.runId : null },
     allLeagueBoardsRef: { current: new Map() }, currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date }, boardRef: { current: [] },
+    analysisGenerationRef: { current: 1 }, verifyCompletedBoard: async board => board,
     LEAGUE_IDS: ids, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, materializeAllLeagueResult,
     requestJSON: async url => {
       requests.push(url);
@@ -69,3 +70,40 @@ assert.equal(result.published.leagues.MLB.status, 'result_pending');
 result = await runSummary({ switchLeague: true });
 assert.equal(result.shown[0].game.league, 'NPB', 'late MLB result cannot overwrite selected NPB');
 console.log('All-league result delivery: actual summary effect, four boards, failure isolation, manual entry and league switching PASS');
+
+// Execute the real all-league click: one failed preflight must not block the
+// healthy leagues or leave the visible board polling only the final summary.
+const savedJobs = [], submittedJobs = [];
+let publishedRun;
+const noop = () => {};
+const clickContext = {
+  date, league: 'MLB', LEAGUE_IDS: ids,
+  readerPollBusyRef: { current: false }, independentRunsRef: { current: new Map() },
+  allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false,
+  leagueDatesRef: { current: Object.fromEntries(ids.map(id => [id, date])) }, allLeagueRun: null,
+  loadAllLeagueAnalysisRun: () => null, clearAllLeagueBackgroundJobs: noop,
+  analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: {}, manualAnalysisScopesRef: { current: new Set() },
+  markAppOperationBusy: noop, setAllLeaguePreparing: noop, setError: noop, setNotice: noop,
+  createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, publishAllLeagueRun: run => { publishedRun = run; },
+  allLeagueTargetDate: async (_id, date) => date, clearBackgroundJob: noop,
+  prepareAllLeagueBatch: async id => {
+    if (id === 'NPB') throw Object.assign(new Error('盤口已過期'), { code: 'READER_STALE' });
+    const result = batches.find(batch => batch.league === id);
+    return { league: id, date, tasks: result.results.map(row => row.task), preparedBoard: [], emptyReason: null };
+  },
+  startBackgroundAnalysisJob: async input => { submittedJobs.push(input); return { runId: 'submitted-all-run' }; },
+  submittedAllLeagueRunRef: {}, saveBackgroundJob: job => { savedJobs.push(job); return true; },
+  currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date }, requestedRecoveryScopeRef: {},
+  setBackgroundJobRevision: noop,
+};
+vm.createContext(clickContext);
+vm.runInContext(page.slice(page.indexOf('  async function oneClickAnalyzeAll('), page.indexOf('  function recheckReaderItem(')), clickContext);
+assert.equal(await clickContext.oneClickAnalyzeAll(), true);
+assert.equal(submittedJobs[0].batches.length, 3);
+assert.equal(savedJobs.length, 3);
+assert.equal(clickContext.requestedRecoveryScopeRef.current, `MLB:${date}`, 'visible league must attach to incremental progress immediately');
+assert.equal(publishedRun.leagues.NPB.message, '盤口已過期');
+assert.equal(publishedRun.leagues.NPB.code, 'READER_STALE', 'diagnostic code remains available without prefixing user text');
+assert.equal(publishedRun.leagues.MLB.status, 'running');
+assert.equal(clickContext.allLeagueBusyRef.current, false);
+console.log('PASS actual all-league click: failed Reader isolated, healthy jobs submitted, incremental polling attached and preparation lock released');

@@ -72,23 +72,21 @@ export async function analyzeBoardWorkflow(input) {
   for (let offset = 0; offset < input.tasks.length; offset += concurrency) {
     const batch = input.tasks.slice(offset, offset + concurrency);
     await publishProgressStep(getWorkflowMetadata().workflowRunId, input, results, batch.map(task => Number(task.game.gamePk)));
-    const settled = await Promise.allSettled(batch.map(task => analyzeGameStep(task)));
-    for (let index = 0; index < settled.length; index += 1) {
-      const result = settled[index];
-      results.push(result.status === 'fulfilled'
-        ? result.value
-        : {
-          ok: false,
-          status: 500,
-          error: String(result.reason?.message || result.reason || '背景分析失敗'),
-          code: 'BACKGROUND_STEP_FAILED',
-          blocking: [],
-          warnings: [],
-          retryable: true,
-          task: resultTask(batch[index]),
-        });
-    }
-    await publishProgressStep(getWorkflowMetadata().workflowRunId, input, results, []);
+    const pending = new Set(batch.map(task => Number(task.game.gamePk)));
+    await Promise.allSettled(batch.map(async task => {
+      let result;
+      try { result = await analyzeGameStep(task); }
+      catch (error) {
+        result = { ok: false, status: 500,
+          error: String(error?.message || error || '背景分析失敗'),
+          code: 'BACKGROUND_STEP_FAILED', blocking: [], warnings: [], retryable: true,
+          task: resultTask(task) };
+      }
+      results.push(result);
+      pending.delete(Number(task.game.gamePk));
+      // Publish each settlement without waiting for its slower sibling.
+      await publishProgressStep(getWorkflowMetadata().workflowRunId, input, [...results], [...pending]);
+    }));
   }
   const output = {
     ok: results.every(result => result.ok),
@@ -123,23 +121,21 @@ export async function analyzeAllLeaguesWorkflow(input) {
     for (let offset = 0; offset < tasks.length; offset += concurrency) {
       const group = tasks.slice(offset, offset + concurrency);
       await publishProgressStep(getWorkflowMetadata().workflowRunId, batch, results, group.map(task => Number(task.game.gamePk)));
-      const settled = await Promise.allSettled(group.map(task => analyzeGameStep(task)));
-      for (let index = 0; index < settled.length; index += 1) {
-        const result = settled[index];
-        results.push(result.status === 'fulfilled'
-          ? result.value
-          : {
-            ok: false,
-            status: 500,
-            error: String(result.reason?.message || result.reason || '背景分析失敗'),
-            code: 'BACKGROUND_STEP_FAILED',
-            blocking: [],
-            warnings: [],
-            retryable: true,
-            task: resultTask(group[index]),
-          });
-      }
-      await publishProgressStep(getWorkflowMetadata().workflowRunId, batch, results, []);
+      const pending = new Set(group.map(task => Number(task.game.gamePk)));
+      await Promise.allSettled(group.map(async task => {
+        let result;
+        try { result = await analyzeGameStep(task); }
+        catch (error) {
+          result = { ok: false, status: 500,
+            error: String(error?.message || error || '背景分析失敗'),
+            code: 'BACKGROUND_STEP_FAILED', blocking: [], warnings: [], retryable: true,
+            task: resultTask(task) };
+        }
+        results.push(result);
+        pending.delete(Number(task.game.gamePk));
+        // Publish each settlement without waiting for its slower sibling.
+        await publishProgressStep(getWorkflowMetadata().workflowRunId, batch, [...results], [...pending]);
+      }));
     }
     batches.push({
       ok: results.every(result => result.ok),
