@@ -2602,7 +2602,8 @@ export default function Home() {
       const resultActuallyLoaded = result?.detached !== true && result?.discarded !== true;
       if (sessionRun?.runId === saved.runId && result?.detached !== true) {
         sessionRun.status = 'completed';
-        sessionRun.message = result?.discarded ? '完成｜待重新核對盤口' : '分析完成';
+        sessionRun.message = result?.discarded ? '完成｜待重新核對盤口'
+          : result?.results?.some(row => !row.ok) ? '分析結束｜部分項目未完成' : '分析完成';
         sessionRun.needsRecovery = false;
         setIndependentRunRevision(value => value + 1);
       }
@@ -4942,7 +4943,7 @@ export default function Home() {
           ? allLeagueRun?.leagues?.[id]?.status || 'idle'
           : 'idle';
         return <button key={id} className={league === id ? 'active' : ''} onClick={() => selectLeague(id)} aria-pressed={league === id}>
-          <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{independentStatus ? `｜${({ preparing: '準備中', running: '分析中', completed: '已完成', failed: '失敗，可重試' })[independentStatus.status]}` : ''}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small>
+          <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{independentStatus ? `｜${({ preparing: '準備中', running: '分析中', completed: independentStatus.message || '程序結束', failed: '失敗，可重試' })[independentStatus.status]}` : ''}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small>
         </button>;
       })}
       <NbaEntry/>

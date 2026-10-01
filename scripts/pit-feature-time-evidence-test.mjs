@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { inspectPitFeatureTimes, receiptInstant } from '../lib/pit-feature-time-evidence.js';
 
 const before = '2026-09-28T19:40:00.000Z';
@@ -48,6 +49,32 @@ for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
   assert.equal(check([{ feature: '打線', observedAt: before, asOf: before }], { leagueId }).ok, false);
 }
 const original = JSON.stringify(context);
+const asianSource = fs.readFileSync(new URL('../lib/asian-baseball.js', import.meta.url), 'utf8');
+const inactiveUmpire = { feature: '主審', featureName: '主審', status: '缺失',
+  normalizationVersion: 'ASIAN-INACTIVE-UMPIRE-v1', modelUsage: 'NOT_USED', value: null,
+  fetchedAt: null, sourceEventIds: [], publishedAt: null, dataCutoff: null };
+assert.match(asianSource, /normalizationVersion: 'ASIAN-INACTIVE-UMPIRE-v1', modelUsage: 'NOT_USED', value: null/);
+for (const leagueId of ['NPB', 'KBO', 'CPBL']) {
+  const inactive = { leagueId, contextVersion: 'ASIAN-SHADOW-CONTEXT-2026-09-v2.2.1',
+    umpire: {}, sourceEvidence: { events: [], features: [] } };
+  const audit = check([inactiveUmpire], inactive);
+  assert.equal(audit.ok, true, `${leagueId}: inactive umpire cannot block analysis`);
+  assert.deepEqual(audit.featureObservedAts, { 'neutralState:主審': cutoff });
+  assert.deepEqual(audit.neutralFeatures, ['主審']);
+  for (const mutation of [
+    { normalizationVersion: 'unknown' }, { modelUsage: 'USED' }, { value: {} },
+    { status: '已確認' }, { fetchedAt: after }, { sourceEventIds: ['missing'] },
+    { sourceReceipts: [{}] }, { dependencyReceipts: [] }, { observedAt: after },
+  ]) assert.equal(check([{ ...inactiveUmpire, ...mutation }], inactive).ok, false);
+  for (const mutation of [
+    { umpire: { runFactor: 1.1 } }, { umpire: [] }, { umpire: null },
+    { contextVersion: 'unknown' }, { fetchedAt: after },
+    { sourceEvidence: { events: [], features: [{ featureName: 'umpire' }] } },
+  ]) assert.equal(check([inactiveUmpire], { ...inactive, ...mutation }).ok, false);
+  assert.equal(check([inactiveUmpire, { featureName: '打線', fetchedAt: null }], inactive).ok, false,
+    'used feature receipts are still mandatory');
+}
+assert.equal(check([inactiveUmpire], { umpire: {} }).ok, false, 'MLB receives no new exemption');
 Object.freeze(context.featureProvenance[0]);
 Object.freeze(context.featureProvenance);
 Object.freeze(context);
