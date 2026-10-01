@@ -67,7 +67,7 @@ for (const date of [undefined, '', '2098-09-20', '2099-09-22']) assert.equal(sta
 
 // Exercise the actual context builder, not only the guard. A source conflict
 // must reject the context before lineup/model assembly and remain a 409.
-const contextFor = ({ feed = liveFeed(), feedStatus = 200, invalidStats = false, statsOverride = null } = {}) => buildGameContextV13(game, {
+const contextFor = ({ feed = liveFeed(), feedStatus = 200, invalidStats = false, statsOverride = null, contextGame = game } = {}) => buildGameContextV13(contextGame, {
   timeoutMs: 100,
   fetchImpl: async input => {
     const url = new URL(input);
@@ -84,6 +84,28 @@ const contextFor = ({ feed = liveFeed(), feedStatus = 200, invalidStats = false,
   },
 });
 const valid = await contextFor();
+// Unannounced starters issue no person-log request. Their neutral estimate
+// still has the real feed receipt, not a null-time placeholder or fake clock.
+for (const missingSides of [['away'], ['home'], ['away', 'home']]) {
+  const contextGame = { ...game };
+  const feed = liveFeed();
+  for (const side of missingSides) {
+    contextGame[`${side}ProbableId`] = null;
+    contextGame[`${side}Probable`] = null;
+    delete feed.gameData.probablePitchers[side];
+  }
+  const context = await contextFor({ contextGame, feed });
+  const evidence = context.featureProvenance.find(row => row.featureName === 'starterExpectedInnings');
+  assert.equal(evidence.sourceTimeStatus, 'RECEIPT_TIMES_RECORDED');
+  assert.ok(evidence.dependencyReceipts.length > 0);
+  assert.ok(evidence.dependencyReceipts.every(receipt => receipt.sourceRecord && Number.isFinite(Date.parse(receipt.fetchedAt))));
+  assert.ok(evidence.dependencyReceipts.some(receipt => receipt.sourceRecord.includes('/feed/live')));
+  assert.equal(evidence.fetchedAt, evidence.dependencyReceipts.map(receipt => receipt.fetchedAt).sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1));
+  for (const side of missingSides) {
+    assert.equal(evidence.value[side].expectedInnings, 4.5);
+    assert.equal(evidence.value[side].expectedInningsStatus, 'PROJECTED');
+  }
+}
 assert.equal(valid.away.starter.id, 10);
 assert.equal(valid.home.starter.id, 11);
 assert.equal(valid.away.starter.throws, 'L');
