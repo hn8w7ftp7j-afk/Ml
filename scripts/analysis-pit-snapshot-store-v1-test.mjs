@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   ANALYSIS_PIT_SNAPSHOT_SCHEMA_VERSION,
+  analysisPitRecordFromDatabaseRow,
   analysisPitProductionPersistenceRequired,
   analysisPitSemanticIdentityHash,
   analysisPitSemanticIdentityDiff,
@@ -103,6 +104,20 @@ const input = {
 };
 
 const first = buildAnalysisPitSnapshotRecord(input);
+const preciseContext = { ...context, fetchedAt: '2099-08-25T08:00:00.789Z' };
+const preciseRecord = buildAnalysisPitSnapshotRecord({ ...input, frozenContext: preciseContext,
+  analysis: { ...analysis, dataAsOf: preciseContext.fetchedAt,
+    analysisAsOf: '2099-08-25T08:03:00.997Z', lineAsOf: '2099-08-25T08:02:00.123Z' } });
+const driverRow = Object.fromEntries(Object.entries(preciseRecord)
+  .map(([key, value]) => [key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`), value]));
+for (const key of ['game_start', 'data_as_of', 'analysis_as_of', 'line_as_of']) driverRow[key] = new Date(driverRow[key]);
+const preciseReadback = analysisPitRecordFromDatabaseRow(driverRow);
+for (const key of ['gameStart', 'dataAsOf', 'analysisAsOf', 'lineAsOf']) {
+  assert.equal(preciseReadback[key], preciseRecord[key], `Neon Date readback preserves ${key} milliseconds`);
+}
+assert.throws(() => analysisPitRecordFromDatabaseRow({ ...driverRow,
+  data_as_of: new Date('2099-08-25T08:00:00.000Z') }), /CONTEXT_RECEIPT_FROM_FUTURE/,
+  'actually earlier cutoffs still fail; do not add timestamp tolerance');
 const duplicate = buildAnalysisPitSnapshotRecord(input);
 const asyncFirst = await buildAnalysisPitSnapshotRecordAsync(input);
 const reverseKeys = value => Object.fromEntries(Object.entries(value).reverse());
