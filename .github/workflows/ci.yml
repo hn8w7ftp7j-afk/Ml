@@ -65,6 +65,7 @@ jobs:
       - run: npm install --global npm@11
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
+      - run: npm run test:mlb-full-total-v2
       - run: npm run test:push
       - run: node scripts/job-status-transport-test.mjs
       - run: node scripts/job-status-latency-test.mjs
