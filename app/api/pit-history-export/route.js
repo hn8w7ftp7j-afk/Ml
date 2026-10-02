@@ -3,14 +3,16 @@ import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { requireApiAuth, checkRateLimit, rateLimitResponse } from '../../../lib/security.js';
 import { parseHistorySnapshotIds, exportHistorySnapshot } from '../../../lib/pit-history-export.js';
+import { HISTORY_EXPORT_HEADERS, historyExportHeaders } from '../../../lib/history-export-options.js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
-const headers = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
+const headers = HISTORY_EXPORT_HEADERS;
 export async function GET(request) {
   const auth = await requireApiAuth(request); if (auth) return auth;
+  const p = new URL(request.url).searchParams;
   let scopes;
-  try { scopes = parseHistorySnapshotIds(new URL(request.url).searchParams.get('snapshotIds')); }
+  try { scopes = parseHistorySnapshotIds(p.get('snapshotIds')); }
   catch { return NextResponse.json({ ok: false, code: 'INVALID_SNAPSHOT_BATCH' }, { status: 400, headers }); }
   const rate = checkRateLimit(request, { id: 'pit-history-export', limit: 30, windowMs: 600000 });
   if (!rate.allowed) return rateLimitResponse(rate);
@@ -22,5 +24,5 @@ export async function GET(request) {
   const raw = Buffer.from(JSON.stringify({ schema: 'pit-history-export-v1', results, productionWrites: false }));
   const payload = gzipSync(raw).toString('base64');
   if (payload.length > 2800000) return NextResponse.json({ ok: false, code: 'EXPORT_BATCH_TOO_LARGE', message: '請減少每批快照數量。' }, { status: 413, headers });
-  return NextResponse.json({ ok: true, encoding: 'gzip-base64', sha256: createHash('sha256').update(raw).digest('hex'), rawBytes: raw.length, payload }, { headers });
+  return NextResponse.json({ ok: true, encoding: 'gzip-base64', sha256: createHash('sha256').update(raw).digest('hex'), rawBytes: raw.length, payload }, { headers: historyExportHeaders(p, 'pit-history-export.json') });
 }
