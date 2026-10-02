@@ -38,7 +38,7 @@
     "test:bet-recovery": "node scripts/bet-attempt-journal-test.mjs && node scripts/bet-reanalysis-recovery-test.mjs"
   },
   "dependencies": {
-    "@neondatabase/serverless": "1.0.2",
+    "@neondatabase/serverless": "1.1.0",
     "@vercel/functions": "3.9.3",
     "cheerio": "1.2.0",
     "decimal.js": "10.6.0",
