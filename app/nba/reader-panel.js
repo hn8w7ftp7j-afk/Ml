@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 import { matchNbaReaderGame, nbaReaderDisplayStatus } from '../../lib/nba/reader-display.js';
+import NbaAnalysisPanel from './analysis-panel';
 import styles from './nba.module.css';
 
 const DOWNLOAD = '/downloads/Tai888-Reader-v2.1.27-NBA-READ.zip';
@@ -49,6 +50,14 @@ export default function NbaReaderPanel({ date, scheduleResult }) {
   const board = state.date === date ? state.board : null;
   const status = nbaReaderDisplayStatus(board, now);
   const games = board?.games || [];
+  useEffect(() => {
+    if (!board) return;
+    const deadlines = [Date.parse(board.observedAt || '') + 3 * 60_000, Date.parse(board.pageActivityAt || board.observedAt || '') + 3 * 60_000,
+      ...(scheduleResult?.data?.games || []).map(game => Date.parse(game.startTime || ''))].filter(value => Number.isFinite(value) && value > Date.now());
+    if (!deadlines.length) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(1, Math.min(...deadlines) - Date.now() + 1));
+    return () => clearTimeout(timer);
+  }, [board, scheduleResult, now]);
   return <section aria-label="NBA 今日盤口">
     <div className={styles.toolbar}><a href={DOWNLOAD}>下載 Reader v2.1.27</a><button type="button" className={styles.refresh} disabled={state.loading} onClick={() => setRevision(value => value + 1)}>{state.loading ? '讀取中…' : '重新讀取盤口'}</button></div>
     {state.error && <p className={styles.error} role="alert">{state.error}{state.error.includes('登入') && <a href="/login?next=/nba">重新登入</a>}</p>}
@@ -59,6 +68,10 @@ export default function NbaReaderPanel({ date, scheduleResult }) {
         const home = teamName(row.home, row.homeCode);
         const match = matchNbaReaderGame(row, scheduleResult);
         const type = { preseason: '季前賽', regular: '例行賽', postseason: '季後賽' }[match.game?.seasonType];
+        const game = match.game;
+        const canAnalyze = match.status === 'matched' && status === 'fresh' && game?.status === 'scheduled' && !game.completed
+          && game.timeConfirmed === true && Date.parse(game.startTime || '') > now && row.marketStatus !== 'locked' && row.fullTotal != null;
+        const validUntil = Math.min(Date.parse(game?.startTime || ''), Date.parse(board?.observedAt || '') + 3 * 60_000, Date.parse(board?.pageActivityAt || board?.observedAt || '') + 3 * 60_000);
         return <article key={`${row.boardDate}:${row.boardTime}:${row.awayCode}:${row.homeCode}`} className={styles.panel}>
           <div className={styles.cardMeta}><time>{row.boardDate} {row.boardTime}（台灣）</time><span>{type || '賽事類型待核對'}</span></div>
           <h2>{away}（客）對 {home}（主）</h2>
@@ -69,6 +82,7 @@ export default function NbaReaderPanel({ date, scheduleResult }) {
             <Market title="上半讓分" value={row.firstHalfRunline} away={away} home={home} locked={row.marketStatus === 'locked'}/>
             <Market title="上半大小" value={row.firstHalfTotal} total locked={row.marketStatus === 'locked'}/>
           </div>
+          {canAnalyze && <NbaAnalysisPanel key={JSON.stringify([game.id, board.observedAt, row.fullTotal])} date={date} game={game} row={row} observedAt={board.observedAt} validUntil={validUntil} away={away} home={home}/>}
         </article>;
       })}</div>}
   </section>;

@@ -175,7 +175,7 @@ export default function NbaWorkspace({ onClose }) {
   const years = Array.from({ length: 28 }, (_, index) => new Date().getUTCFullYear() + 1 - index);
 
   return <main className={styles.workspace} aria-label="NBA 資料工作區">
-    <header className={styles.header}><div><p className={styles.eyebrow}>NBA・BASKETBALL DATA</p><h1>NBA 籃球盤口與資料</h1><p>當日盤口、賽程與球員狀態。</p></div><div className={styles.headerActions}>{onClose ? <button type="button" onClick={onClose}>返回原本聯盟</button> : <a href="/">返回網站</a>}<span>{NBA_MODULE_VERSION}</span></div></header>
+    <header className={styles.header}><div><p className={styles.eyebrow}>NBA・BASKETBALL DATA</p><h1>NBA 籃球盤口與分析</h1><p>全場大小分析、當日盤口、賽程與球員狀態。</p></div><div className={styles.headerActions}>{onClose ? <button type="button" onClick={onClose}>返回原本聯盟</button> : <a href="/">返回網站</a>}<span>{NBA_MODULE_VERSION}</span></div></header>
     <nav className={styles.tabs} aria-label="NBA 資料頁籤">{VIEWS.map(([id, label]) => <button type="button" key={id} aria-pressed={topView === id} className={topView === id ? styles.active : ''} onClick={() => setView(id)}>{label}</button>)}</nav>
     <div className={styles.toolbar}>
       {(view === 'schedule' || view === 'markets') && <><label>台灣日期<input type="date" value={date} onInput={event => { if (validDate(event.currentTarget.value)) setDate(event.currentTarget.value); }} onChange={event => { if (validDate(event.target.value)) setDate(event.target.value); }}/></label><button type="button" onClick={() => setDate(taipeiDate())}>今天</button></>}
