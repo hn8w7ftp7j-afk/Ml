@@ -17,6 +17,11 @@ for (const label of ['美國職籃', '美国职篮', '美國職業籃球', '美�
 }
 assert.equal(registry.identify('NBA 美籃導覽'), null, 'navigation is not a league section');
 assert.equal(registry.identify('聯盟：WNBA 美國女子職籃（1）'), null);
+for (const description of ['美國職業籃球-熱身賽(2)', '美國職籃 季前賽(2)', 'NBA Cup(2)', '另一個賽季名稱(2)', '(2)']) {
+  assert.equal(registry.standardMarker(`聯盟：NBA ${description}`, 'NBA'), true, 'NBA identity must survive competition display-name changes');
+}
+assert.equal(registry.identify('聯盟：NBA2 另一個聯盟'), null);
+assert.equal(registry.identify('聯盟：WNBA 熱身賽(2)'), null);
 assert.equal(registry.identify('聯盟：NBA 美國職籃 聯盟：MLB 美國職棒'), null);
 for (const suffix of ['第一節', '前五局', '特殊分數', '新合約']) {
   assert.equal(registry.standardMarker(`聯盟：NBA 美國職籃 ${suffix}（1）`, 'NBA'), false);
@@ -95,6 +100,28 @@ const normalizerHeaders = ['時間', '主客隊伍', '讓分', '大小盤', '獨
 const spans = normalizerHeaders.map((_, index) => [index * 100, (index + 1) * 100]);
 const rectCell = (text, index, top) => ({ text, lines: text ? [text] : [], rows: text ? [{ text, top, left: spans[index][0] }] : [], left: spans[index][0], right: spans[index][1] });
 const record = (order, top, values) => ({ order, top, bottom: top + 20, text: values.filter(Boolean).join(' '), cells: values.map((text, index) => rectCell(text, index, top)).filter(value => value.text) });
+// Reproduce the user's Tai888 NBA warm-up board, including the actual heading,
+// space-separated team codes, swapped unsupported columns and empty halves.
+const warmupRecords = [
+  record(0, 0, ['時間', '主客隊伍', '讓球', '大小盤', '單雙', '獨贏', '上半讓球', '上半大小']),
+  record(1, 30, ['聯盟： NBA 美國職業籃球-熱身賽(2)']),
+  record(2, 60, ['10-05', 'UTA 爵士', '0.950', '236.5 大 0.940', '單 0.930', '1.430', '', '']),
+  record(3, 82, ['07:05', 'DEN 金塊[主]', '5+50 0.950', '小 0.940', '雙 0.950', '0.530', '', '']),
+  record(4, 105, ['10-05', 'GSW 勇士', '3+25 0.950', '222.5 大 0.940', '單 0.930', '0.560', '', '']),
+  record(5, 127, ['07:05', 'LAC 快艇[主]', '0.950', '小 0.940', '雙 0.950', '1.360', '', '']),
+];
+const warmupNormalized = normalizer.normalizeRowRecords(warmupRecords, { expectedLeague: 'NBA' });
+assert.equal(warmupNormalized.diagnostics.gameCount, 2, 'actual warm-up heading must not discard both NBA games');
+const warmupParsed = parseTai888Capture({ ...capture({ half: false }), tables: warmupNormalized.tables, diagnostics: warmupNormalized.diagnostics }, now);
+assert.equal(warmupParsed.games.length, 2);
+assert.deepEqual(warmupParsed.games.map(game => [game.awayCode, game.homeCode, game.boardTime, game.fullRunline.lineSide, game.fullRunline.line, game.fullTotal.line]), [
+  ['UTAH', 'DEN', '07:05', 'home', '5+50', '236.5'],
+  ['GS', 'LAC', '07:05', 'away', '3+25', '222.5'],
+]);
+assert.ok(warmupParsed.games.every(game => !game.firstHalfRunline && !game.firstHalfTotal));
+assert.equal(normalizer.normalizeRowRecords(warmupRecords, { expectedLeague: 'MLB' }).diagnostics.gameCount, 0);
+for (const heading of ['聯盟：NBA 美國職業籃球－熱身賽（2）', '聯盟：NBA 美國職業籃球-热身赛(2)', '聯盟：NBA 美國職業籃球 - 季前賽 (2)']) assert.equal(registry.standardMarker(heading, 'NBA'), true);
+for (const suffix of ['-熱身賽 第一節(2)', '-熱身賽 主隊總得分(2)', '-熱身賽 LIVE(2)', '-熱身賽 新合約(2)']) assert.equal(registry.standardMarker(`聯盟：NBA 美國職業籃球${suffix}`, 'NBA'), false);
 for (const [away, home, awayCode, homeCode] of [
   ['波士頓塞爾提克', '洛杉磯湖人', 'BOS', 'LAL'],
   ['金州勇士', '明尼蘇達灰狼', 'GS', 'MIN'],
@@ -129,7 +156,7 @@ assert.equal(createHash('sha256').update(canonicalReaderPayload(baseball)).diges
 assert.deepEqual(readerMarketProperties('NBA'), ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
 const background = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(background, /const endpoint = league === 'NBA' \? '\/api\/nba\/reader' : '\/api\/reader\/ingest'/);
-assert.match(background, /const VERSION = '2\.1\.27'/);
+assert.match(background, /const VERSION = '2\.1\.28'/);
 // Execute v2.1.26 recovery behaviors against a stale and then current tab.
 let contentVersion = '2.1.26';
 const reloaded = [];
@@ -146,11 +173,11 @@ vm.runInContext(background.replace(/^import .*?;\n/gm, ''), backgroundContext);
 let scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 0, 'stale content scripts cannot masquerade as the new installed Reader');
 assert.deepEqual([...scanned.silentTabIds], [7]);
-contentVersion = '2.1.27';
+contentVersion = '2.1.28';
 scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 1);
 const report = await vm.runInContext('readerDiagnostics()', backgroundContext);
-assert.equal(report.report.readerVersion, '2.1.27');
+assert.equal(report.report.readerVersion, '2.1.28');
 assert.equal(report.report.boards[0].league, 'NBA');
 assert.equal(Object.hasOwn(report.report, 'readerToken'), false);
 assert.equal(Object.hasOwn(report.report.boards[0], 'pageUrl'), false);

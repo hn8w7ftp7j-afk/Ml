@@ -6,7 +6,7 @@ import { matchNbaReaderGame, nbaReaderDisplayStatus } from '../../lib/nba/reader
 import NbaAnalysisPanel from './analysis-panel';
 import styles from './nba.module.css';
 
-const DOWNLOAD = '/downloads/Tai888-Reader-v2.1.27-NBA-READ.zip';
+const DOWNLOAD = '/downloads/Tai888-Reader-v2.1.28-NBA-READ.zip';
 const teamName = (team, code) => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || code || '待核對';
 const water = value => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : '—';
 const time = value => Number.isFinite(Date.parse(value || ''))
@@ -59,10 +59,10 @@ export default function NbaReaderPanel({ date, scheduleResult }) {
     return () => clearTimeout(timer);
   }, [board, scheduleResult, now]);
   return <section aria-label="NBA 今日盤口">
-    <div className={styles.toolbar}><a href={DOWNLOAD}>下載 Reader v2.1.27</a><button type="button" className={styles.refresh} disabled={state.loading} onClick={() => setRevision(value => value + 1)}>{state.loading ? '讀取中…' : '重新讀取盤口'}</button></div>
+    <div className={styles.toolbar}><a href={DOWNLOAD}>下載 Reader v2.1.28</a><button type="button" className={styles.refresh} disabled={state.loading} onClick={() => setRevision(value => value + 1)}>{state.loading ? '讀取中…' : '重新讀取盤口'}</button></div>
     {state.error && <p className={styles.error} role="alert">{state.error}{state.error.includes('登入') && <a href="/login?next=/nba">重新登入</a>}</p>}
     <aside className={styles.sourceStatus} aria-label="NBA 盤口狀態"><div><strong>{status === 'fresh' ? 'NBA 盤口已同步' : status === 'stale' ? 'NBA 盤口已過期・保留上次內容' : '等待 NBA 盤口同步'}</strong><span>盤日 {date}・已讀 {games.length} 場</span>{board?.observedAt && <span>來源時間 {time(board.observedAt)}・Reader {board.readerVersion}</span>}</div></aside>
-    {!games.length ? <div className={styles.empty}><p>電腦更新 Reader v2.1.27 後，開啟 Tai888「NBA → 讓分／大小」標準盤，按 Reader「立即同步」，再按「重新讀取盤口」。</p></div>
+    {!games.length ? <div className={styles.empty}><p>電腦更新 Reader v2.1.28 後，開啟 Tai888「NBA → 讓分／大小」標準盤，按 Reader「立即同步」，再按「重新讀取盤口」。</p></div>
       : <div className={styles.sections}>{games.map(row => {
         const away = teamName(row.away, row.awayCode);
         const home = teamName(row.home, row.homeCode);

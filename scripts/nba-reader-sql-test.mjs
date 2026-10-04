@@ -9,7 +9,7 @@ import { loadNbaReaderSnapshot, storeNbaReaderSnapshot } from '../lib/nba/reader
 
 const now = Date.now(); const deviceId = 'nba-reader-sql-fixture'; const boardDate = new Date(now).toISOString().slice(0, 10);
 function snapshot(offset = 0, line = '220+50', activityOffset = offset) {
-  const payload = { version: 'TAI888-READER-DOM-v2.2.0', readerVersion: '2.1.27', league: 'NBA', deviceId,
+  const payload = { version: 'TAI888-READER-DOM-v2.2.0', readerVersion: '2.1.28', league: 'NBA', deviceId,
     sourceHost: 'tai888.in', pageUrl: 'https://tai888.in/newapp/#/BB', boardDate,
     observedAt: new Date(now - 2000 + offset).toISOString(), pageActivityAt: new Date(now - 3000 + activityOffset).toISOString(),
     expectedGameCount: 1, detectedGameCount: 1, parseIssues: [],

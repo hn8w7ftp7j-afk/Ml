@@ -35,7 +35,7 @@ function game(overrides = {}) {
     accountData: 'must-not-leak-account', ...overrides };
 }
 function payload(overrides = {}) {
-  const value = { version: 'TAI888-READER-DOM-v2.2.0', readerVersion: '2.1.27', league: 'NBA', deviceId,
+  const value = { version: 'TAI888-READER-DOM-v2.2.0', readerVersion: '2.1.28', league: 'NBA', deviceId,
     sourceHost: 'www1.tai888.in', pageUrl: 'https://www1.tai888.in/newapp/#/BB', boardDate,
     observedAt: new Date(now - 1000).toISOString(), pageActivityAt: new Date(now - 1500).toISOString(),
     expectedGameCount: 1, detectedGameCount: 1, games: [game()], parseIssues: [],
@@ -47,7 +47,7 @@ const normalize = body => normalizeNbaReaderPayload(body, { now, deviceId, heade
 function rejects(body, code) { assert.throws(() => normalize(body), error => error.code === code, code); }
 let requestCount = 0;
 function request(body, headers = {}, query = '') {
-  const defaults = body ? { Authorization: `Bearer ${readerToken}`, 'Content-Type': 'application/json', 'X-Device-Id': deviceId, 'X-Reader-Version': '2.1.27' } : { cookie };
+  const defaults = body ? { Authorization: `Bearer ${readerToken}`, 'Content-Type': 'application/json', 'X-Device-Id': deviceId, 'X-Reader-Version': '2.1.28' } : { cookie };
   return new Request(`https://mlb-positive-ev.vercel.app/api/nba/reader${query ? `?${query}` : ''}`, {
     method: body ? 'POST' : 'GET', headers: { ...defaults, 'X-Forwarded-For': `192.0.2.${++requestCount}`, ...headers },
     ...(body ? { body: JSON.stringify(body) } : {}) });

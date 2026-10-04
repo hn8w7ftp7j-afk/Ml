@@ -18,11 +18,11 @@ const cookie = `mlb_session=${await createSessionToken()}`;
 const request = (path, options = {}) => fetch(`${origin}${path}`, { ...options, signal: AbortSignal.timeout(20_000) });
 const post = body => request('/api/nba/reader', {
   method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Device-Id': deviceId,
-    'X-Reader-Version': '2.1.27', Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }, body: JSON.stringify(body),
+    'X-Reader-Version': '2.1.28', Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }, body: JSON.stringify(body),
 });
 const now = Date.now();
 function payload(overrides = {}) {
-  const result = { league: 'NBA', version: 'TAI888-READER-DOM-v2.2.0', readerVersion: '2.1.27', deviceId,
+  const result = { league: 'NBA', version: 'TAI888-READER-DOM-v2.2.0', readerVersion: '2.1.28', deviceId,
     sourceHost: 'www.tai888.in', pageUrl: 'https://www.tai888.in/newapp/', boardDate: date,
     observedAt: new Date(now).toISOString(), pageActivityAt: new Date(now).toISOString(),
     expectedGameCount: 1, detectedGameCount: 1, parseIssues: [], games: [{
