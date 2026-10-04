@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import './ranking-display-test.mjs';
 import fs from 'node:fs';
 import { APP_VERSION } from '../lib/app-version.js';
+import { readerArtifactNames } from '../lib/reader-artifact-names.js';
 
 const page = fs.readFileSync('app/page.js', 'utf8');
 const css = fs.readFileSync('app/globals.css', 'utf8');
@@ -13,6 +14,8 @@ const betPricesRoute = fs.readFileSync('app/api/bet-prices/route.js', 'utf8');
 const readerIngestRoute = fs.readFileSync('app/api/reader/ingest/route.js', 'utf8');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+const readerManifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
+const readerArtifact = readerArtifactNames(readerManifest);
 const mustMatch = (pattern, label) => assert.match(page, pattern, label);
 mustMatch(/>全部方向<\//, 'ranking tab must identify the all-direction score output');
 mustMatch(/const hasCurrentPrestartGame = board\.some\(item => gameIsPrestartNow\(item\?\.game, stamp\)\)/, '跨盤日必須依是否仍有未開賽場次判斷，不得被昨日已完成快取卡片卡住');
@@ -54,10 +57,10 @@ assert.doesNotMatch(analyzeRoute, /simulationsPerScenario:\s*4000/, 'analyze API
 assert.match(analyzeRoute, /getOrBuildGameDistribution/, 'analyze API must reuse the same-game core distribution');
 mustMatch(/const STORAGE = 'sports-positive-ev-v10-0-0'/, 'v10 storage continuity must be preserved');
 mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain enabled');
-mustMatch(/const READER_DOWNLOAD_PATH = '\/downloads\/Tai888-Reader-v2\.1\.23-TEAM-ORDER-SAFE\.zip'/, 'Reader download must point at the packaged production artifact');
+assert.ok(page.includes(`const READER_DOWNLOAD_PATH = '/downloads/${readerArtifact.archiveName}'`), 'Reader download must point at the current manifest production artifact');
 mustMatch(/href=\{READER_DOWNLOAD_PATH\}/, 'Reader download link must use the packaged production path');
-assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.23-TEAM-ORDER-SAFE.zip'), 'Reader production zip must exist');
-assert.ok(fs.existsSync('public/downloads/Tai888-Reader-v2.1.23-TEAM-ORDER-SAFE.zip.sha256'), 'Reader checksum must exist');
+assert.ok(fs.existsSync(`public/downloads/${readerArtifact.archiveName}`), 'Reader production zip must exist');
+assert.ok(fs.existsSync(`public/downloads/${readerArtifact.shaName}`), 'Reader checksum must exist');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
 mustMatch(/mlb-positive-ev-v9-4-4/, 'legacy MLB migration chain must remain available');
 

@@ -1,4 +1,4 @@
-import { canonicalReaderPayload } from './parser.js';
+import { canonicalReaderPayload, readerMarketProperties } from './parser.js';
 
 export const BOARD_ACTIVITY_TTL_MS = 5 * 60 * 1000;
 // Kept for diagnostic compatibility only. Candidate selection is board-based,
@@ -13,7 +13,7 @@ const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/
 const DATE_TOKEN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_TOKEN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const TEAM_CODE = /^[A-Z][A-Z0-9]{0,11}$/;
-const LEAGUES = new Set(['MLB', 'NPB', 'KBO', 'CPBL']);
+const LEAGUES = new Set(['MLB', 'NPB', 'KBO', 'CPBL', 'NBA']);
 
 const finiteInteger = value => {
   const number = Number(value);
@@ -51,7 +51,7 @@ function validateTotal(value, name, issues) {
   return 2;
 }
 
-export function validateStandardReaderGame(game) {
+export function validateStandardReaderGame(game, league = '') {
   const issues = [];
   if (!TEAM_CODE.test(String(game?.awayCode || ''))) issues.push('invalid-away-code');
   if (!TEAM_CODE.test(String(game?.homeCode || ''))) issues.push('invalid-home-code');
@@ -62,14 +62,14 @@ export function validateStandardReaderGame(game) {
   let directionCount = 0;
   directionCount += validateRunline(game?.fullRunline, 'full-runline', issues);
   directionCount += validateTotal(game?.fullTotal, 'full-total', issues);
-  directionCount += validateRunline(game?.first5Runline, 'first5-runline', issues);
-  directionCount += validateTotal(game?.first5Total, 'first5-total', issues);
+  directionCount += validateRunline(game?.[readerMarketProperties(league)[2]], league === 'NBA' ? 'first-half-runline' : 'first5-runline', issues);
+  directionCount += validateTotal(game?.[readerMarketProperties(league)[3]], league === 'NBA' ? 'first-half-total' : 'first5-total', issues);
   if (directionCount !== 8) issues.push(`direction-count:${directionCount}`);
 
   return { ok: issues.length === 0, issues, directionCount };
 }
 
-function validateLockedReaderGame(game) {
+function validateLockedReaderGame(game, league = '') {
   const issues = [];
   if (!TEAM_CODE.test(String(game?.awayCode || ''))) issues.push('invalid-away-code');
   if (!TEAM_CODE.test(String(game?.homeCode || ''))) issues.push('invalid-home-code');
@@ -77,13 +77,13 @@ function validateLockedReaderGame(game) {
   if (!DATE_TOKEN.test(String(game?.boardDate || ''))) issues.push('invalid-date');
   if (!TIME_TOKEN.test(String(game?.boardTime || ''))) issues.push('invalid-time');
   if (game?.marketStatus !== 'locked') issues.push('missing-explicit-lock');
-  if ([game?.fullRunline, game?.fullTotal, game?.first5Runline, game?.first5Total].some(Boolean)) {
+  if (readerMarketProperties(league).some(property => game?.[property])) {
     issues.push('locked-game-has-market');
   }
   return { ok: issues.length === 0, issues, directionCount: 0 };
 }
 
-function validateAvailableReaderGame(game) {
+function validateAvailableReaderGame(game, league = '') {
   const identity = [];
   if (!TEAM_CODE.test(String(game?.awayCode || ''))) identity.push('invalid-away-code');
   if (!TEAM_CODE.test(String(game?.homeCode || ''))) identity.push('invalid-home-code');
@@ -95,8 +95,8 @@ function validateAvailableReaderGame(game) {
   const definitions = [
     ['full-runline', game?.fullRunline, validateRunline],
     ['full-total', game?.fullTotal, validateTotal],
-    ['first5-runline', game?.first5Runline, validateRunline],
-    ['first5-total', game?.first5Total, validateTotal],
+    [league === 'NBA' ? 'first-half-runline' : 'first5-runline', game?.[readerMarketProperties(league)[2]], validateRunline],
+    [league === 'NBA' ? 'first-half-total' : 'first5-total', game?.[readerMarketProperties(league)[3]], validateTotal],
   ];
   for (const [name, value, validate] of definitions) {
     if (value == null) continue;
@@ -154,8 +154,8 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   const dates = new Set();
   for (const [index, game] of games.entries()) {
     const validation = game?.marketStatus === 'locked'
-      ? validateLockedReaderGame(game)
-      : validateAvailableReaderGame(game);
+      ? validateLockedReaderGame(game, parsed.league)
+      : validateAvailableReaderGame(game, parsed.league);
     issues.push(...validation.issues.map(issue => `game-${index + 1}:${issue}`));
     const identity = `${game?.boardDate || ''}|${game?.boardTime || ''}|${game?.awayCode || ''}|${game?.homeCode || ''}`;
     if (identities.has(identity)) issues.push(`duplicate-game:${identity}`);
@@ -235,7 +235,7 @@ function sharedContractsDisagree(left, right) {
     const other = rightGames.get(identity(game));
     if (!other) return false;
     if (game.marketStatus !== other.marketStatus) return true;
-    return ['fullRunline', 'fullTotal', 'first5Runline', 'first5Total'].some(key =>
+    return readerMarketProperties(left.candidate?.parsed?.league).some(key =>
       game[key] != null && other[key] != null
       && JSON.stringify(game[key]) !== JSON.stringify(other[key]));
   });
@@ -274,7 +274,7 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     if (!complete.length) continue;
     const fullBoards = complete.filter(row => row.detectedGameCount === row.expectedGameCount
       && row.candidate.parsed.games.every(game => game.marketStatus === 'locked'
-        || validateStandardReaderGame(game).ok));
+        || validateStandardReaderGame(game, row.candidate.parsed.league).ok));
     const completeDisagree = new Set(fullBoards.map(row => row.payloadFingerprint)).size > 1;
     const overlapDisagrees = validTabFrames.some((left, index) =>
       validTabFrames.slice(index + 1).some(right => sharedContractsDisagree(left, right)));

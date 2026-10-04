@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.1.23",
-  "version_name": "2.1.23 TEAM-ORDER-SAFE",
-  "description": "一個 Reader 獨立讀取 Tai888 美棒、日棒、韓棒與中職四個標準盤分頁。",
+  "version": "2.1.27",
+  "version_name": "2.1.27 NBA-READ",
+  "description": "一個 Reader 獨立讀取 Tai888 美棒、日棒、韓棒、中職與 NBA 標準盤分頁。",
   "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [
     "https://*.tai888.in/*",

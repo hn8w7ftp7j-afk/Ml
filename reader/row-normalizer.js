@@ -7,16 +7,37 @@
   const DEFINITIONS = Object.freeze([
     { key: 'time', label: '時間', patterns: [/^時間$/, /^时间$/, /開賽/, /开赛/] },
     { key: 'teams', label: '主客隊伍', patterns: [/主客隊伍/, /主客队伍/, /^隊伍$/, /^队伍$/] },
-    { key: 'runline', label: '讓球', patterns: [/^讓球$/, /^让球$/, /^全場讓球$/, /^全场让球$/] },
+    { key: 'runline', label: '讓球', patterns: [/^(?:全場|全场)?(?:讓球|让球|讓分|让分)$/] },
     { key: 'total', label: '大小盤', patterns: [/^大小盤$/, /^大小盘$/, /^全場大小$/, /^全场大小$/] },
     { key: 'moneyline', label: '獨贏', patterns: [/^獨贏$/, /^独赢$/] },
     { key: 'oneLoseTwoWin', label: '一輸二贏', patterns: [/一輸二贏/, /一输二赢/] },
-    { key: 'first5Runline', label: '上半讓球', patterns: [/上半讓球/, /上半让球/, /前5.*讓球/, /前五.*讓球/] },
-    { key: 'first5Total', label: '上半大小', patterns: [/上半大小/, /前5.*大小/, /前五.*大小/] },
+    { key: 'first5Runline', label: '上半讓球', patterns: [/上半(?:場|场)?(?:讓球|让球|讓分|让分)/, /前5.*讓球/, /前五.*讓球/] },
+    { key: 'first5Total', label: '上半大小', patterns: [/上半(?:場|场)?大小/, /前5.*大小/, /前五.*大小/] },
   ]);
 
   const TEAM_CODE = /(?:^|\s)([A-Z][A-Z0-9]{0,11})\s*-/g;
   const TEAM_NAME_ALIASES = Object.freeze({
+    NBA: Object.freeze([
+      ['ATL', ['亞特蘭大老鷹', '亚特兰大老鹰', '老鷹', '老鹰']],
+      ['BOS', ['波士頓塞爾提克', '波士顿凯尔特人', '塞爾提克', '塞爾特人', '凯尔特人']],
+      ['BKN', ['布魯克林籃網', '布鲁克林篮网', '籃網', '篮网']],
+      ['CHA', ['夏洛特黃蜂', '夏洛特黄蜂', '黃蜂', '黄蜂']],
+      ['CHI', ['芝加哥公牛', '公牛']], ['CLE', ['克里夫蘭騎士', '克利夫兰骑士', '騎士', '骑士']],
+      ['DAL', ['達拉斯獨行俠', '达拉斯独行侠', '達拉斯小牛', '达拉斯小牛', '獨行俠', '独行侠', '小牛']],
+      ['DEN', ['丹佛金塊', '丹佛掘金', '金塊', '掘金']], ['DET', ['底特律活塞', '活塞']],
+      ['GS', ['金州勇士', '勇士']], ['HOU', ['休士頓火箭', '休斯顿火箭', '火箭']],
+      ['IND', ['印第安納溜馬', '印第安纳步行者', '溜馬', '步行者']],
+      ['LAC', ['洛杉磯快艇', '洛杉矶快船', '快艇', '快船']], ['LAL', ['洛杉磯湖人', '洛杉矶湖人', '湖人']],
+      ['MEM', ['曼菲斯灰熊', '孟菲斯灰熊', '灰熊']], ['MIA', ['邁阿密熱火', '迈阿密热火', '熱火', '热火']],
+      ['MIL', ['密爾瓦基公鹿', '密尔沃基雄鹿', '公鹿', '雄鹿']], ['MIN', ['明尼蘇達灰狼', '明尼苏达森林狼', '灰狼', '森林狼']],
+      ['NO', ['紐奧良鵜鶘', '新奥尔良鹈鹕', '鵜鶘', '鹈鹕']], ['NY', ['紐約尼克', '纽约尼克斯', '尼克斯', '尼克']],
+      ['OKC', ['奧克拉荷馬雷霆', '俄克拉荷马城雷霆', '雷霆']], ['ORL', ['奧蘭多魔術', '奥兰多魔术', '魔術', '魔术']],
+      ['PHI', ['費城76人', '费城76人', '費城七六人', '七六人', '76人']],
+      ['PHX', ['鳳凰城太陽', '菲尼克斯太阳', '太陽', '太阳']], ['POR', ['波特蘭拓荒者', '波特兰开拓者', '拓荒者', '开拓者']],
+      ['SAC', ['沙加緬度國王', '萨克拉门托国王', '國王', '国王']], ['SA', ['聖安東尼奧馬刺', '圣安东尼奥马刺', '馬刺', '马刺']],
+      ['TOR', ['多倫多暴龍', '多伦多猛龙', '暴龍', '猛龙']], ['UTAH', ['猶他爵士', '犹他爵士', '爵士']],
+      ['WSH', ['華盛頓巫師', '华盛顿奇才', '巫師', '奇才']],
+    ]),
     NPB: Object.freeze([
       ['YOM', ['讀賣巨人', '读卖巨人', '巨人']], ['HAN', ['阪神虎', '阪神']],
       ['YDB', ['橫濱DeNA海星', '横滨DeNA海星', '橫濱DeNA灣星', '横滨DeNA湾星', '橫濱海星', '横滨海星', '橫濱灣星', '横滨湾星']],
@@ -76,11 +97,13 @@
     return DEFINITIONS.find(definition => definition.patterns.some(pattern => pattern.test(value))) || null;
   }
 
-  function buildHeaderProfile(record) {
+  function buildHeaderProfile(record, expectedLeague = '') {
     const columns = {};
     for (const cell of Array.isArray(record?.cells) ? record.cells : []) {
       const definition = headerDefinition(cell?.text || (cell?.lines || []).join(' '));
       if (!definition || columns[definition.key]) continue;
+      if (expectedLeague === 'NBA' && definition.key.startsWith('first5')
+        && !/^上半/.test(clean(cell?.text || (cell?.lines || []).join(' ')))) continue;
       const left = number(cell?.left, NaN);
       const right = number(cell?.right, NaN);
       if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) continue;
@@ -349,7 +372,8 @@
       if (profile) latestHeader = record;
       if (isLeagueMarker(record.text)) {
         const league = leagueRegistry.identify?.(clean(record.text));
-        current = league ? { league, records: latestHeader ? [latestHeader, record] : [record] } : null;
+        current = league && leagueRegistry.standardMarker(clean(record.text), league)
+          ? { league, records: latestHeader ? [latestHeader, record] : [record] } : null;
         if (current) sections.push(current);
         continue;
       }
@@ -363,7 +387,7 @@
     const originalRecordCount = number(options.originalRecordCount, sorted.length);
     const headers = [];
     for (const record of sorted) {
-      const profile = buildHeaderProfile(record);
+      const profile = buildHeaderProfile(record, expectedLeague);
       if (profile) headers.push(profile);
     }
 
@@ -377,7 +401,7 @@
     let singleRows = 0;
 
     for (const record of sorted) {
-      const profile = buildHeaderProfile(record);
+      const profile = buildHeaderProfile(record, expectedLeague);
       if (profile) {
         currentProfile = profile;
         pendingAway = null;
@@ -443,7 +467,8 @@
       const timeText = game.cells[0]?.pair?.join('|') || '';
       const key = `${game.awayCode}|${game.homeCode}|${timeText}`;
       const fingerprint = JSON.stringify({
-        cells: game.cells.map(cell => cell?.pair || []),
+        // Only supported markets participate; different moneylines are separate contracts.
+        cells: [2, 3, 6, 7].map(index => game.cells[index]?.pair || []),
         marketLocked: game.marketLocked === true,
       });
       if (seen.has(key)) {
@@ -486,6 +511,8 @@
         league: expectedLeague,
         expectedGameCount,
         conflictingGameKeys,
+        wrongPeriodHeader: expectedLeague === 'NBA' && sorted.some(record => buildHeaderProfile(record)
+          && record.cells.some(cell => /前\s*(?:5|五)|\bF5\b/i.test(clean(cell?.text || (cell?.lines || []).join(' '))))),
       },
     };
   }
@@ -516,6 +543,7 @@
         league: expectedLeague || sections[0].league,
         expectedGameCount,
         conflictingGameKeys: [...new Set(conflicts)],
+        wrongPeriodHeader: normalized.some(value => value.diagnostics?.wrongPeriodHeader === true),
         sectionCount: sections.length,
       },
     };

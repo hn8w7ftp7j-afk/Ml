@@ -2,7 +2,7 @@ const byId = id => document.getElementById(id);
 const pairPanel = byId('pairPanel'), statusPanel = byId('statusPanel'), password = byId('password'), deviceName = byId('deviceName');
 const pairButton = byId('pair'), syncButton = byId('sync'), unpairButton = byId('unpair'), autoToggle = byId('auto');
 const message = byId('message'), state = byId('state'), dot = byId('dot'), leagueGrid = byId('leagueGrid');
-const LEAGUES = [['MLB', '美棒'], ['NPB', '日棒'], ['KBO', '韓棒'], ['CPBL', '中職']];
+const LEAGUES = [['MLB', '美棒'], ['NPB', '日棒'], ['KBO', '韓棒'], ['CPBL', '中職'], ['NBA', '美籃']];
 const STALE_MS = 180000;
 async function send(payload) {
   let timer;
@@ -21,6 +21,19 @@ byId('repair').addEventListener('click', async () => {
   catch (error) { show(error.message, 'error'); }
   finally { button.disabled = false; }
 });
+byId('diagnostics').addEventListener('click', async () => {
+  const button = byId('diagnostics'); button.disabled = true;
+  try {
+    const result = await send({ type: 'GET_READER_DIAGNOSTICS' });
+    if (!result?.ok) throw new Error(result?.error || '診斷讀取失敗');
+    const url = URL.createObjectURL(new Blob([JSON.stringify(result.report, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a'); link.href = url; link.download = 'Tai888-Reader-diagnostics.json';
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    show('診斷已下載，僅包含盤口與讀取狀態，不含配對密碼、Cookie 或 Token。');
+  } catch (error) { show(error.message, 'error'); }
+  finally { button.disabled = false; }
+});
 
 pairButton.addEventListener('click', async () => {
   if (!password.value) return show('請輸入配對密碼。', 'error');
@@ -29,9 +42,9 @@ pairButton.addEventListener('click', async () => {
   catch (error) { show(error.message, 'error'); } finally { pairButton.disabled = false; }
 });
 syncButton.addEventListener('click', async () => {
-  syncButton.disabled = true; syncButton.textContent = '正在檢查四個分頁…'; show('依聯盟分開讀取，不會互相覆蓋。');
+  syncButton.disabled = true; syncButton.textContent = '正在檢查五個聯盟…'; show('依聯盟分開讀取，不會互相覆蓋。');
   try { const result = await send({ type: 'SYNC_NOW' }); await refresh(); show(result?.message || '檢查完成', result?.ok ? 'ok' : 'error'); }
-  catch (error) { show(error.message, 'error'); } finally { syncButton.disabled = false; syncButton.textContent = '立即同步四個分頁'; }
+  catch (error) { show(error.message, 'error'); } finally { syncButton.disabled = false; syncButton.textContent = '立即同步'; }
 });
 autoToggle.addEventListener('change', async () => { const result = await send({ type: 'SET_AUTO_ENABLED', enabled: autoToggle.checked }); show(result.enabled ? '自動同步已開啟。' : '自動同步已暫停。', result.enabled ? 'ok' : ''); });
 unpairButton.addEventListener('click', async () => { await chrome.storage.local.remove(['readerToken', 'pairedAt', 'readerStatuses', 'pairError', 'lastSuccessfulPayloadHashes', 'lastSuccessfulSyncAts']); await refresh(); show('已移除裝置配對。'); });
@@ -48,11 +61,11 @@ function render(statuses) {
     const serverOpen = Number(item.matchedGameCount || 0), serverLocked = Number(item.unopenedGameCount || 0);
     const detail = document.createElement('span');
     detail.textContent = ok
-      ? `${serverOpen > 0 ? '可分析' : '尚無可分析盤'}｜本機開${local.openCount ?? '—'} 鎖${local.lockedCount ?? '—'} 市場${local.marketCount ?? '—'}｜後端開${serverOpen} 未開${serverLocked} 市場${item.marketCount ?? 0}${item.partialGameCount ? ` 部分開${item.partialGameCount}場` : ''}｜${age(last)}${serverOpen === 0 && local.sample ? `｜樣本：${local.sample}` : ''}`
+      ? `${id === 'NBA' ? '盤口已同步' : serverOpen > 0 ? '可分析' : '尚無可分析盤'}｜本機開${local.openCount ?? '—'} 鎖${local.lockedCount ?? '—'} 市場${local.marketCount ?? '—'}｜後端${id === 'NBA' ? '配對' : '開'}${serverOpen} 未開${serverLocked} 市場${item.marketCount ?? 0}${item.partialGameCount ? ` 部分開${item.partialGameCount}場` : ''}｜${age(last)}${serverOpen === 0 && local.sample ? `｜樣本：${local.sample}` : ''}`
       : (item.message || '尚未偵測');
     card.append(title, detail); leagueGrid.append(card);
   }
-  state.textContent = `${healthy}/4 個分頁正常`; dot.className = healthy === 4 ? 'ok' : healthy ? '' : 'error';
+  state.textContent = `${healthy}/${LEAGUES.length} 個聯盟已同步`; dot.className = healthy === LEAGUES.length ? 'ok' : healthy ? '' : 'error';
 }
 async function refresh() {
   const result = await send({ type: 'GET_READER_STATUS' });

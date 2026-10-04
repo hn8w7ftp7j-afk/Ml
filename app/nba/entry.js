@@ -27,7 +27,7 @@ export default function NbaEntry() {
   }, [opened, mounted]);
   function close() { dialog.current?.close(); setOpened(false); }
   return <>
-    <button type="button" onClick={() => setOpened(true)} disabled={!mounted} aria-busy={!mounted} aria-haspopup="dialog"><span className="leagueDot"/><b>NBA</b><small>籃球資料</small></button>
+    <button type="button" onClick={() => setOpened(true)} disabled={!mounted} aria-busy={!mounted} aria-haspopup="dialog"><span className="leagueDot"/><b>NBA</b><small>籃球盤口與資料</small></button>
     {mounted && createPortal(<dialog className={styles.dialog} ref={dialog} aria-label="NBA 籃球資料" onClose={() => setOpened(false)}>
       <div className={styles.closeBar}><button type="button" onClick={close} aria-label="關閉 NBA">關閉 NBA ×</button></div>
       {opened && <NbaErrorBoundary><NbaWorkspace onClose={close}/></NbaErrorBoundary>}

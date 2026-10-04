@@ -1,11 +1,11 @@
-import { parseTai888Capture, canonicalReaderPayload } from './parser.js';
+import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from './board-selector.js';
 
-const VERSION = '2.1.23';
+const VERSION = '2.1.27';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
-const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL'];
-const LABELS = { MLB: '美棒', NPB: '日棒', KBO: '韓棒', CPBL: '中職' };
+const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA'];
+const LABELS = { MLB: '美棒', NPB: '日棒', KBO: '韓棒', CPBL: '中職', NBA: '美籃' };
 const ALARM = 'tai888-reader-auto-sync';
 let running;
 let pendingRerun = false;
@@ -26,6 +26,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set(values);
   await chrome.storage.local.remove(['readerStatus', 'pairError']);
   await ensureAlarm();
+  // Existing tabs retain their old content scripts after an extension update.
+  const tabs = await chrome.tabs.query({ url: PATTERNS });
+  await Promise.all(tabs.map(tab => chrome.tabs.reload(tab.id).catch(() => {})));
 });
 chrome.runtime.onStartup.addListener(ensureAlarm);
 chrome.alarms.onAlarm.addListener(event => { if (event.name === ALARM) syncNow('alarm').catch(() => {}); });
@@ -38,6 +41,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (message?.type === 'PAIR_READER') { pair(message.password, message.deviceName).then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'SYNC_NOW') { syncNow('manual').then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'GET_READER_STATUS') { readerStatus().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
+  if (message?.type === 'GET_READER_DIAGNOSTICS') { readerDiagnostics().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'REPAIR_READER') { repairReader().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'SET_AUTO_ENABLED') { chrome.storage.local.set({ autoEnabled: Boolean(message.enabled) }).then(async () => { await ensureAlarm(); reply({ ok: true, enabled: Boolean(message.enabled) }); }); return true; }
   if (message?.type === 'TAI888_BOARD_MUTATED') { const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null; clearTimeout(mutationTimer); mutationTimer = setTimeout(() => syncNow('mutation', preferredTabId).catch(() => {}), 3500); }
@@ -55,8 +59,9 @@ function iso(value) { const time = Date.parse(String(value || '')); return Numbe
 function integer(value, max = 10000) { const number = Number(value); return Number.isInteger(number) && number >= 0 && number <= max ? number : 0; }
 function localBoardDiagnostic(payload, capture) {
   const games = Array.isArray(payload?.games) ? payload.games : [];
-  const marketCount = games.reduce((count, game) => count + [game?.fullRunline, game?.fullTotal, game?.first5Runline, game?.first5Total].filter(Boolean).length, 0);
-  const openCount = games.filter(game => game?.marketStatus !== 'locked' && [game?.fullRunline, game?.fullTotal, game?.first5Runline, game?.first5Total].some(Boolean)).length;
+  const properties = readerMarketProperties(payload?.league);
+  const marketCount = games.reduce((count, game) => count + properties.filter(property => game?.[property]).length, 0);
+  const openCount = games.filter(game => game?.marketStatus !== 'locked' && properties.some(property => game?.[property])).length;
   const lockedCount = games.length - openCount;
   const firstRow = capture?.tables?.[0]?.rows?.[0];
   const sample = [2, 3, 6, 7].map(index => {
@@ -72,7 +77,7 @@ function sanitizeCapture(raw) {
     version: /^TAI888-DOM-CAPTURE-v2\.[12]\.0$/.test(input.version || '') ? input.version : '', league,
     sourceHost: safeHost(`https://${input.sourceHost || ''}`) || safeHost(input.pageUrl), pageUrl: safeUrl(input.pageUrl), frameUrl: safeUrl(input.frameUrl), observedAt: iso(input.observedAt),
     tables: Array.isArray(input.tables) ? input.tables.slice(0, 12) : [],
-    diagnostics: { recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
+    diagnostics: { recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, wrongPeriodHeader: input.diagnostics?.wrongPeriodHeader === true, conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
   };
 }
 async function request(url, options, timeout = 45000) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeout); try { return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' }); } finally { clearTimeout(timer); } }
@@ -88,6 +93,7 @@ async function collectCandidates(tabs) {
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0, url: tab.url }]);
     for (const frame of frames || []) try {
       const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, { frameId: frame.frameId });
+      if (answer?.capture?.readerVersion !== VERSION) continue;
       responded = responded || answer?.ok === true;
       const rawCaptures = Array.isArray(answer?.capture?.captures) ? answer.capture.captures : answer?.capture ? [answer.capture] : [];
       for (const rawCapture of rawCaptures) {
@@ -98,6 +104,26 @@ async function collectCandidates(tabs) {
     if (!responded) silentTabIds.push(tab.id);
   }
   return { candidates, silentTabIds };
+}
+
+async function readerDiagnostics() {
+  const tabs = await chrome.tabs.query({ url: PATTERNS });
+  const scan = await collectCandidates(tabs);
+  const boards = scan.candidates.map(candidate => {
+    const selection = selectAuthoritativeBoard([candidate], { now: Date.now(), league: candidate.parsed.league });
+    return {
+      tabId: candidate.tabId, frameId: candidate.frameId, league: candidate.parsed.league,
+      error: selection.error || '', issues: selection.assessed.flatMap(row => row.issues || []),
+      diagnostics: candidate.capture.diagnostics,
+      tables: candidate.capture.tables.map(table => ({
+        rows: (table.rows || []).map(row => ({
+          marketLocked: row.marketLocked === true,
+          cells: (row.cells || []).map(cell => ({ pair: (cell.pair || []).map(value => String(value).slice(0, 200)) })),
+        })),
+      })),
+    };
+  });
+  return { ok: true, report: { readerVersion: VERSION, createdAt: new Date().toISOString(), silentTabIds: scan.silentTabIds, boards } };
 }
 
 async function recoverTabs(tabs, tabIds, { force = false } = {}) {
@@ -159,6 +185,17 @@ async function performSync(reason, preferredTabId) {
   }
   let scan = await collectCandidates(tabs);
   if (scan.silentTabIds.length && await recoverTabs(tabs, scan.silentTabIds, { force: reason === 'manual' })) scan = await collectCandidates(tabs);
+  if (reason === 'manual' && scan.silentTabIds.length) {
+    let reloaded = 0;
+    for (const tabId of scan.silentTabIds) {
+      try { await chrome.tabs.reload(tabId); reloaded += 1; } catch {}
+    }
+    if (reloaded) {
+      const message = `已更新 ${reloaded} 個分頁內的 Reader 程式，頁面載入後會自動重新讀取。`;
+      await chrome.storage.local.set({ readerStatuses: Object.fromEntries(LEAGUES.map(league => [league, { ok: false, state: 'idle', league, message, readerVersion: VERSION }])) });
+      return { ok: false, message };
+    }
+  }
   let candidates = scan.candidates;
   const statuses = { ...(stored.readerStatuses || {}) }; const hashes = { ...(stored.lastSuccessfulPayloadHashes || {}) }; const times = { ...(stored.lastSuccessfulSyncAts || {}) }; const results = [];
   for (const league of LEAGUES) {
@@ -186,18 +223,19 @@ async function performSync(reason, preferredTabId) {
     const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
     if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[league], lastSuccessfulSyncAt: times[league] })) { results.push({ league, ok: true, skipped: true }); continue; }
     try {
-      const response = await request(`${ORIGIN}/api/reader/ingest`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(payload) });
+      const endpoint = league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
+      const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(payload) });
       const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
       const now = Date.now(); hashes[league] = payloadHash; times[league] = now;
       const matchedGameCount = integer(data.matchedGameCount, 40);
       const unopenedGameCount = integer(data.unopenedGameCount, 40);
-      statuses[league] = { ok: true, state: 'synced', league, executable: matchedGameCount > 0, captureOnly: false, message: data.message, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount, unopenedGameCount, marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), localDiagnostic, boardDate: data.boardDate, readerVersion: VERSION };
+      statuses[league] = { ok: true, state: 'synced', league, executable: league === 'NBA' ? data.executable === true : matchedGameCount > 0, captureOnly: league === 'NBA', message: data.message, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount, unopenedGameCount, marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), localDiagnostic, boardDate: data.boardDate, readerVersion: VERSION };
       results.push({ league, ok: true, message: data.message });
     } catch (error) { statuses[league] = { ok: false, state: 'error', league, message: error.message, lastAttemptAt: Date.now(), readerVersion: VERSION }; results.push({ league, ok: false, error: error.message }); }
   }
   await chrome.storage.local.set({ readerStatuses: statuses, lastSuccessfulPayloadHashes: hashes, lastSuccessfulSyncAts: times, pairError: '' });
   const successes = results.filter(item => item.ok).length;
-  return { ok: successes > 0, results, message: `四聯盟檢查完成｜${successes} 個分頁同步成功` };
+  return { ok: successes > 0, results, message: `五聯盟檢查完成｜${successes} 個分頁同步成功` };
 }
 async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, error: stored.pairError || '', readerVersion: VERSION }; }
 

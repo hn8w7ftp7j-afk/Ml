@@ -2,7 +2,14 @@ const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/
 const WATER_TOKEN = /^\d(?:\.\d{3})$/;
 const HOME_MARKER = /[\[［【(（]\s*主\s*[\]］】)）]/u;
 const TEAM_CODE = /(?:^|\s)([A-Z][A-Z0-9]{0,11})\s*-/g;
-const LEAGUES = Object.freeze(['MLB', 'NPB', 'KBO', 'CPBL']);
+const LEAGUES = Object.freeze(['MLB', 'NPB', 'KBO', 'CPBL', 'NBA']);
+const BASEBALL_MARKET_PROPERTIES = Object.freeze(['fullRunline', 'fullTotal', 'first5Runline', 'first5Total']);
+const NBA_MARKET_PROPERTIES = Object.freeze(['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
+
+// NBA halves use basketball periods; never expose them as baseball first-five markets.
+export function readerMarketProperties(league) {
+  return league === 'NBA' ? NBA_MARKET_PROPERTIES : BASEBALL_MARKET_PROPERTIES;
+}
 
 const clean = value => String(value || '')
   .replace(/[\u0000-\u001F\u007F]/g, ' ')
@@ -160,14 +167,14 @@ function headerIndex(headers, patterns) {
   return headers.findIndex(value => patterns.some(pattern => pattern.test(clean(value))));
 }
 
-function mapHeaders(headers) {
+function mapHeaders(headers, league = '') {
   return {
     time: headerIndex(headers, [/^時間$/, /^时间$/, /開賽/, /开赛/]),
     teams: headerIndex(headers, [/主客隊伍/, /主客队伍/, /^隊伍$/, /^队伍$/]),
-    runline: headerIndex(headers, [/^讓球$/, /^让球$/, /^全場讓球$/, /^全场让球$/]),
+    runline: headerIndex(headers, [/^(?:全場|全场)?(?:讓球|让球|讓分|让分)$/]),
     total: headerIndex(headers, [/^大小盤$/, /^大小盘$/, /^全場大小$/, /^全场大小$/]),
-    first5Runline: headerIndex(headers, [/上半讓球/, /上半让球/, /前5.*讓球/, /前五.*讓球/]),
-    first5Total: headerIndex(headers, [/上半大小/, /前5.*大小/, /前五.*大小/]),
+    first5Runline: headerIndex(headers, league === 'NBA' ? [/上半(?:場|场)?(?:讓球|让球|讓分|让分)/] : [/上半(?:場|场)?(?:讓球|让球|讓分|让分)/, /前5.*讓球/, /前五.*讓球/]),
+    first5Total: headerIndex(headers, league === 'NBA' ? [/上半(?:場|场)?大小/] : [/上半(?:場|场)?大小/, /前5.*大小/, /前五.*大小/]),
   };
 }
 
@@ -259,17 +266,14 @@ function fallbackDateTime(row, cells, timeIndex, now) {
   };
 }
 
-function marketFingerprint(game) {
-  return JSON.stringify({
-    fullRunline: canonicalRunline(game?.fullRunline),
-    fullTotal: canonicalTotal(game?.fullTotal),
-    first5Runline: canonicalRunline(game?.first5Runline),
-    first5Total: canonicalTotal(game?.first5Total),
-  });
+function marketFingerprint(game, league) {
+  return JSON.stringify(Object.fromEntries(readerMarketProperties(league).map(property => [
+    property, property.endsWith('Runline') ? canonicalRunline(game?.[property]) : canonicalTotal(game?.[property]),
+  ])));
 }
 
-function marketRichness(game) {
-  return [game?.fullRunline, game?.fullTotal, game?.first5Runline, game?.first5Total]
+function marketRichness(game, league) {
+  return readerMarketProperties(league).map(property => game?.[property])
     .reduce((count, market) => count + (market ? 1 : 0), 0);
 }
 
@@ -307,11 +311,14 @@ function marketCellState(cell, parsed, explicitLock = false) {
 }
 
 export function parseTai888Capture(capture, now = new Date()) {
+  const league = LEAGUES.includes(capture?.league) ? capture.league : '';
   const tables = Array.isArray(capture?.tables) ? capture.tables : [];
   const games = [];
+  let wrongPeriodHeader = league === 'NBA' && capture?.diagnostics?.wrongPeriodHeader === true;
   for (const table of tables.slice(0, 12)) {
     const headers = (table?.headers || []).map(clean);
-    const map = mapHeaders(headers);
+    if (league === 'NBA' && headers.some(header => /前\s*(?:5|五)|\bF5\b/i.test(header))) wrongPeriodHeader = true;
+    const map = mapHeaders(headers, league);
     if (map.teams < 0 || map.time < 0) continue;
     for (const row of (table?.rows || []).slice(0, 60)) {
       const cells = Array.isArray(row?.cells) ? row.cells : [];
@@ -336,8 +343,9 @@ export function parseTai888Capture(capture, now = new Date()) {
         const index = map[headerKey];
         const cell = index >= 0 ? cells[index] : null;
         const parsed = index >= 0 ? parser(cell, awayIndex) : null;
-        parsedMarkets[property] = parsed;
-        marketStates[marketName] = marketCellState(cell, parsed, row?.marketLocked === true);
+        const outputProperty = league === 'NBA' ? property.replace('first5', 'firstHalf') : property;
+        parsedMarkets[outputProperty] = parsed;
+        marketStates[league === 'NBA' ? outputProperty : marketName] = marketCellState(cell, parsed, row?.marketLocked === true);
       }
       const game = {
         awayCode: away.code,
@@ -351,7 +359,7 @@ export function parseTai888Capture(capture, now = new Date()) {
         rawRowText: clean(row?.text || ''),
         marketStatus: row?.marketLocked === true ? 'locked' : 'open',
       };
-      const markets = [game.fullRunline, game.fullTotal, game.first5Runline, game.first5Total];
+      const markets = readerMarketProperties(league).map(property => game[property]);
       // A complete date/time/team identity with zero captured market values is
       // non-executable by definition. Tai888 renders some locked games without
       // textual lock metadata, so retain it only as an unopened game. Partial
@@ -367,17 +375,17 @@ export function parseTai888Capture(capture, now = new Date()) {
   const conflictingGameKeys = [];
   for (const game of games) {
     const key = `${game.boardDate}|${game.awayCode}|${game.homeCode}|${game.boardTime}`;
-    const fingerprint = marketFingerprint(game);
+    const fingerprint = marketFingerprint(game, league);
     if (seen.has(key)) {
       const previous = seen.get(key);
       const previousGame = unique[previous.index];
-      const sharedConflict = ['fullRunline', 'fullTotal', 'first5Runline', 'first5Total'].some(property => {
+      const sharedConflict = readerMarketProperties(league).some(property => {
         const canonical = property.endsWith('Runline') ? canonicalRunline : canonicalTotal;
         return previousGame[property] && game[property]
           && JSON.stringify(canonical(previousGame[property])) !== JSON.stringify(canonical(game[property]));
       });
       if (sharedConflict && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
-      const richness = marketRichness(game);
+      const richness = marketRichness(game, league);
       if (richness > previous.richness) {
         unique[previous.index] = game;
         seen.set(key, { fingerprint, richness, index: previous.index });
@@ -387,7 +395,7 @@ export function parseTai888Capture(capture, now = new Date()) {
       if (previous.fingerprint !== fingerprint && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
       continue;
     }
-    seen.set(key, { fingerprint, richness: marketRichness(game), index: unique.length });
+    seen.set(key, { fingerprint, richness: marketRichness(game, league), index: unique.length });
     unique.push(game);
   }
   const boardDate = unique.map(game => game.boardDate).find(Boolean) || '';
@@ -396,14 +404,15 @@ export function parseTai888Capture(capture, now = new Date()) {
     // Keep the wire contract at v2.1.0 until every deployed backend has been
     // upgraded. Capture internals are v2.2.0, but the v2.1 payload shape is a
     // strict compatible subset and avoids rejecting Reader 2.1.13 during rollout.
-    version: 'TAI888-READER-DOM-v2.1.0',
-    league: LEAGUES.includes(capture?.league) ? capture.league : '',
+    version: league === 'NBA' ? 'TAI888-READER-DOM-v2.2.0' : 'TAI888-READER-DOM-v2.1.0',
+    league,
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
     pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),
     boardDate,
     games: unique.slice(0, 40),
     parseIssues: [
+      ...(wrongPeriodHeader ? ['wrong-period-header:NBA:first-five'] : []),
       ...conflictingGameKeys.map(key => `conflicting-duplicate:${key}`),
       ...(Array.isArray(capture?.diagnostics?.conflictingGameKeys) && capture.diagnostics.conflictingGameKeys.length
         ? ['conflicting-normalized-rows'] : []),
@@ -432,8 +441,13 @@ export function canonicalReaderPayload(payload) {
         && game.marketStates && Object.keys(game.marketStates).length ? { marketStates: game.marketStates } : {}),
       fullRunline: canonicalRunline(game.fullRunline),
       fullTotal: canonicalTotal(game.fullTotal),
-      first5Runline: canonicalRunline(game.first5Runline),
-      first5Total: canonicalTotal(game.first5Total),
+      ...(payload?.league === 'NBA' ? {
+        firstHalfRunline: canonicalRunline(game.firstHalfRunline),
+        firstHalfTotal: canonicalTotal(game.firstHalfTotal),
+      } : {
+        first5Runline: canonicalRunline(game.first5Runline),
+        first5Total: canonicalTotal(game.first5Total),
+      }),
     })),
   });
 }

@@ -6,6 +6,14 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
+  const READER_VERSION = '2.1.27';
+  function notifyBackground(message) {
+    // An extension update can invalidate this context and throw synchronously.
+    try {
+      if (!chrome.runtime?.id) return;
+      Promise.resolve(chrome.runtime.sendMessage(message)).catch(() => {});
+    } catch {}
+  }
   // This timestamp is deliberately independent from capture().observedAt.
   // A capture request must not make a frozen page look newly active.
   const activityByLeague = Object.fromEntries((globalThis.Tai888LeagueRegistry?.ids || []).map(league => [league, 0]));
@@ -342,6 +350,7 @@
     const captures = captureAll();
     return {
       version: 'TAI888-MULTI-LEAGUE-CAPTURE-v2.2.0',
+      readerVersion: READER_VERSION,
       captures,
     };
   }
@@ -361,12 +370,12 @@
 
   function announceFrameReady(reason) {
     attachObserver();
-    chrome.runtime.sendMessage({ type: 'TAI888_FRAME_READY', reason }).catch(() => {});
+    notifyBackground({ type: 'TAI888_FRAME_READY', reason });
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'TAI888_READER_PING') {
-      sendResponse({ ok: true, readyState: document.readyState, visible: document.visibilityState === 'visible', frameUrl: currentTai888PageUrl() });
+      sendResponse({ ok: true, readerVersion: READER_VERSION, readyState: document.readyState, visible: document.visibilityState === 'visible', frameUrl: currentTai888PageUrl() });
       return;
     }
     if (message?.type === 'TAI888_READER_RECOVER') {
@@ -432,7 +441,7 @@
       const activeLeagues = captures
         .map(item => item.league)
         .filter(league => verifiedBoardRefreshAt > 0 || before[league] !== fingerprintByLeague[league]);
-      if (activeLeagues.length) chrome.runtime.sendMessage({ type: 'TAI888_BOARD_MUTATED', leagues: activeLeagues }).catch(() => {});
+      if (activeLeagues.length) notifyBackground({ type: 'TAI888_BOARD_MUTATED', leagues: activeLeagues });
     }, 2500);
   }
 

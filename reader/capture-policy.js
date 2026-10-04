@@ -8,7 +8,7 @@
     const value = clean(text);
     return /(?:時間|时间)/.test(value)
       && /(?:主客隊伍|主客队伍|隊伍|队伍)/.test(value)
-      && /(?:讓球|让球)/.test(value)
+      && /(?:讓球|让球|讓分|让分)/.test(value)
       && /(?:大小盤|大小盘)/.test(value);
   }
 
@@ -20,6 +20,7 @@
     const value = clean(text);
     const teamCodes = value.match(/(?:^|\s)[A-Z][A-Z0-9]{0,11}\s*-/g) || [];
     return teamCodes.length >= 1
+      || /[\[［【(（]\s*主\s*[\]］】)）]/u.test(value)
       || (/\b\d{1,2}-\d{1,2}\b/.test(value) && /(?:0|1)\.\d{3}/.test(value));
   }
 
