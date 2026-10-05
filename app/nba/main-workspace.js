@@ -7,12 +7,13 @@ import { NBA_JOB_STORAGE, validNbaJob, mergeNbaAnalysisResults, nbaResultQuoteCu
 import AnalysisNotificationControl from '../analysis-notification-control.js';
 import AllLeagueProgress from '../all-league-progress.js';
 import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-start-request-journal.js';
+import { nbaLatestBoardDate, nbaCompletionSummary } from '../../lib/nba/analysis-ui-policy.js';
 
 const NbaDataWorkspace = dynamic(() => import('./workspace.js'), { ssr: false });
 const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球隊待核對';
 const num = value => Number.isFinite(value) ? value.toFixed(2) : '—';
 const localTime = value => Number.isFinite(Date.parse(value || '')) ? new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—';
-const statusText = value => ({ queued: '排隊中', running: '分析中', ready: '分析完成', insufficient: '資料不足', blocked: '核對未通過', failed: '分析失敗' }[value] || '尚未分析');
+const statusText = value => ({ queued: '排隊中', running: '分析中', ready: '校正分析完成', reference: '跨季基準（未校正）', insufficient: '資料不足', blocked: '核對未通過', failed: '分析失敗' }[value] || '尚未分析');
 const store = job => { try { localStorage.setItem(NBA_JOB_STORAGE, JSON.stringify(job)); return true; } catch { return false; } };
 async function api(url, options = {}, timeout = 30000) {
   const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...options, signal: AbortSignal.timeout(timeout) });
@@ -25,6 +26,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   const result = row.result;
   const assessment = result?.assessment;
   const prediction = result?.prediction;
+  const reference = result?.status === 'reference' ? result.referencePrediction : null;
   const current = nbaResultQuoteCurrent(row, now);
   const canAnalyze = row.canAnalyze && now - Date.parse(row.observedAt) < 180000
     && now - Date.parse(row.pageActivityAt || row.observedAt) < 180000 && Date.parse(row.game.startTime) > now;
@@ -33,7 +35,8 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
       <span className={`state ${row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{statusText(row.jobState)}</span></div>
     <div className="sourceBanner"><strong>NBA｜Tai888 Reader</strong><span>盤口時間 {localTime(row.observedAt)}｜全場大小・節奏與休息修正</span></div>
     {prediction && <div className="detailGrid"><div><span>原比分總分</span><b>{num(prediction.baseTotal)}</b></div><div><span>校正後總分</span><b>{num(prediction.total)}</b></div><div><span>總分修正</span><b>{prediction.correction > 0 ? '+' : ''}{num(prediction.correction)}</b></div><div><span>參考方向</span><b>{assessment?.direction === 'over' ? '大分' : assessment?.direction === 'under' ? '小分' : '未定'}</b></div></div>}
-    {result?.status === 'ready' && !current && <p className="muted">上一版分析｜盤口已更新、過期或場次已開賽；不是目前盤口的分析。</p>}
+    {reference && <><div className="noticeBox">季前賽跨季基準預估，尚未校正；不是原模型的勝率或 EV。</div><div className="detailGrid"><div><span>主隊基準得分</span><b>{num(reference.homePoints)}</b></div><div><span>客隊基準得分</span><b>{num(reference.awayPoints)}</b></div><div><span>基準總分</span><b>{num(reference.total)}</b></div><div><span>來源球季</span><b>{reference.sourceSeasonYear - 1}–{String(reference.sourceSeasonYear).slice(-2)} 例行賽</b></div></div></>}
+    {['ready', 'reference'].includes(result?.status) && !current && <p className="muted">上一版分析｜盤口已更新、過期或場次已開賽；不是目前盤口的分析。</p>}
     {result?.status === 'insufficient' && <div className="noticeBox">同球季、同賽事類型校正樣本不足：目前 {result.training?.availableGames ?? 0} 筆，至少需要 {result.training?.minimumResiduals ?? 50} 筆。不以其他球季或例行賽填補。</div>}
     {(row.reason || row.jobError) && <p className="muted">{row.jobError || row.reason}</p>}
     {[['fullTotal', '全場大小'], ['fullRunline', '全場讓分'], ['firstHalfTotal', '上半大小'], ['firstHalfRunline', '上半讓分']].map(([key, label]) => {
@@ -46,7 +49,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     })}
     <button className="secondary" disabled={busy || !canAnalyze} onClick={() => onAnalyze(row.game.sourceId)}>{row.result ? '重新分析這一場' : '分析這一場'}</button>
     <details className="details"><summary>分析原因與資料截止</summary>
-      {assessment ? <><p>歷史節奏 {num(assessment.paceProxy?.estimatedPace)}；以兩隊賽前最近五場節奏與前場日期間隔修正總分，不是直接將大分改選小分。</p>
+      {reference ? <><p>主隊預估＝（主隊上季平均得分 {num(reference.home.pointsFor)}＋客隊上季平均失分 {num(reference.away.pointsAgainst)}）÷2；客隊同樣計算。</p><p>主隊 {reference.home.games} 場、客隊 {reference.away.games} 場；資料截止 {reference.through}，全部早於本場。</p>{reference.limitations.map(text => <p key={text}>{text}</p>)}</> : assessment ? <><p>歷史節奏 {num(assessment.paceProxy?.estimatedPace)}；以兩隊賽前最近五場節奏與前場日期間隔修正總分，不是直接將大分改選小分。</p>
         {['away', 'home'].map(side => <p key={side}>{name(row.game[side])}：節奏樣本 {assessment.paceProxy?.[side]?.count ?? 0} 場；前場 {assessment.restProxy?.[side]?.priorDate || '—'}，日期間隔 {assessment.restProxy?.[side]?.gapDays ?? '—'} 天。</p>)}
         <p>校正 {assessment.calibrationSamples} 筆，截止 {assessment.calibrationThrough}；誤差分布 {assessment.distributionSamples} 筆，截止 {assessment.distributionThrough}。分析盤口 {result.quote?.line}｜{localTime(result.observedAt)}。</p></> : <p>尚無可核對的分析原因。</p>}
       <p>歷史分布估計不是已驗證的賽前勝率或 EV；此 NBA 模型目前不開放下注執行。傷停和陣容尚未納入修正。</p>
@@ -75,10 +78,11 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
   const requestRevision = useRef(0);
   const operation = useRef(false);
   const jobRef = useRef(job); jobRef.current = job;
+  const explicitDate = useRef(false);
   const running = starting || ['starting', 'running'].includes(job?.status);
   const busy = running || otherBusy;
   useEffect(() => { onBusyChange(running); }, [running, onBusyChange]);
-  useEffect(() => { onDateChange(date); }, [date, onDateChange]);
+  useEffect(() => { onDateChange(date, explicitDate.current); }, [date, onDateChange]);
   useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(NBA_JOB_STORAGE) || 'null'); if (validNbaJob(saved)) { setJob(saved); if (saved.status === 'running' || saved.status === 'starting') setDate(saved.date); } } catch {} }, []);
   useEffect(() => {
     const incoming = notificationJob || (allRun?.runId && Number(allRun.leagues?.NBA?.total) > 0 ? { runId: allRun.runId, date: allRun.leagues.NBA.boardDate, startedAt: allRun.startedAt } : null);
@@ -92,6 +96,12 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
   async function load(target = date) {
     const revision = ++requestRevision.current; setLoading(true); setError('');
     try {
+      if (!explicitDate.current && !['running', 'starting'].includes(jobRef.current?.status)) {
+        const reader = await api('/api/nba/reader');
+        if (revision !== requestRevision.current) return null;
+        const latest = nbaLatestBoardDate(reader, target);
+        if (latest !== target) { target = latest; dateRef.current = latest; setDate(latest); setRows([]); setProgress(null); setSelected(''); }
+      }
       const board = await api(`/api/nba/analysis-board?date=${encodeURIComponent(target)}`);
       if (revision !== requestRevision.current || target !== dateRef.current) return null;
       setReaderStatus(board.readerStatus);
@@ -103,7 +113,8 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
     } catch (cause) { if (revision === requestRevision.current && target === dateRef.current) setError(cause.message); return null; }
     finally { if (revision === requestRevision.current) setLoading(false); }
   }
-  useEffect(() => { if (active) void load(date); }, [active, date]);
+  useEffect(() => { if (active && !operation.current) void load(date); }, [active, date]);
+  useEffect(() => { if (!active || busy) return; const timer = setInterval(() => { void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [active, busy]);
   useEffect(() => {
     if (!validNbaJob(job) || job.status === 'failed' && !reconnectRevision) return;
     let activePoll = true; let timer;
@@ -127,7 +138,7 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
             onBatchProgress?.({ ...batch, runId: job.runId });
           }
           const nbaFinished = batch && Array.isArray(batch.results) && batch.results.length === batch.total && !(batch.runningGamePks?.length);
-          if (state.status === 'completed' || nbaFinished) { const next = { ...job, status: 'completed' }; store(next); setJob(next); setMessage('NBA 工作已結束；已完成、資料不足與失敗逐場顯示。'); return; }
+          if (state.status === 'completed' || nbaFinished) { const next = { ...job, status: 'completed' }; store(next); setJob(next); setMessage(nbaCompletionSummary(batch)); return; }
           if (['failed', 'cancelled'].includes(state.status)) throw new Error('NBA 背景工作未完成，可重新分析。');
         }
       } catch (cause) {
@@ -150,10 +161,10 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
       const tasks = board.tasks.filter(task => !id || task.nbaQuery.id === id);
       if (!tasks.length) { setMessage('目前沒有可分析的賽前全場大小盤；各場原因已列出。'); return; }
       const requestId = `nba-analysis-${crypto.randomUUID()}`;
-      const handle = { requestId, date, status: 'starting', startedAt: new Date().toISOString() };
+      const handle = { requestId, date: board.date, status: 'starting', startedAt: new Date().toISOString() };
       if (!store(handle)) setMessage('此裝置無法保存工作編號，完成前請保持網站開啟。');
       let started;
-      try { started = await api('/api/analysis-jobs', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId }, body: JSON.stringify({ league: 'NBA', date, tasks }) }, 75000); }
+      try { started = await api('/api/analysis-jobs', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId }, body: JSON.stringify({ league: 'NBA', date: board.date, tasks }) }, 75000); }
       catch (cause) {
         if (backgroundStartWasDefinitivelyRejected(cause) || cause.jobStatus === 'failed') {
           const failed = { ...handle, status: 'failed' }; store(failed); setJob(failed); setError(cause.message); return;
@@ -166,14 +177,15 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
     } catch (cause) { setError(cause.message); }
     finally { operation.current = false; setStarting(false); }
   }
-  const changeDate = value => { if (!validDate(value)) return; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
+  const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
   return <div hidden={!active} aria-label="NBA 主站分析">
     <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
     {message && <div className="noticeBox" role="status">{message}</div>}
     {view !== 'data' && <><section className="heroCard"><div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 NBA｜單場或本日全部</h2></div>
       <AnalysisNotificationControl ref={notification}/><div className="heroControls">
-        <label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => changeDate(event.target.value)}/></label>
+        <label>台灣日期<input type="date" value={date} disabled={busy} onInput={event => changeDate(event.currentTarget.value)} onChange={event => changeDate(event.target.value)}/></label>
+        <button className="secondary" disabled={busy || loading} onClick={() => { explicitDate.current = false; onDateChange(dateRef.current, false); void load(); }}>跟隨最新盤日</button>
         <button className="secondary" disabled={loading || busy} onClick={() => load()}>{loading ? '讀取中…' : '讀取賽程與盤口（不分析）'}</button>
         <label>選擇單場比賽<select value={selected} disabled={busy} onChange={event => setSelected(event.target.value)}><option value="">請選擇一場</option>{rows.map(row => <option key={row.game.id} value={row.game.sourceId}>{name(row.game.away)} @ {name(row.game.home)}｜{localTime(row.game.startTime)}</option>)}</select></label>
         <button className="primary" disabled={busy || !selected} onClick={() => start(selected)}>只分析這一場</button>

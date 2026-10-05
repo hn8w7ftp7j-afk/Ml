@@ -50,7 +50,11 @@ assert.equal(during.status, 'blocked'); assert.equal(during.issues[0].code, 'NBA
 const changedDuring = await loadNbaAnalysis(query, options(schedule, snapshot, { loadReader: (() => { let reads = 0; return async () => ++reads === 1 ? snapshot : { ...snapshot, observedAt: new Date(epoch + 1).toISOString() }; })() }));
 assert.equal(changedDuring.status, 'blocked'); assert.equal(changedDuring.issues[0].code, 'NBA_ANALYSIS_QUOTE_CHANGED');
 const insufficient = await loadNbaAnalysis(query, options(schedule, snapshot, { analyzeModel: () => ({ status: 'insufficient', training: { seasonYear: 2027, seasonType: 'preseason', availableGames: 0, minimumResiduals: 50 }, issues: [{ code: 'NBA_MODEL_HISTORY_INSUFFICIENT', message: 'fixture' }] }) }));
-assert.equal(insufficient.status, 'insufficient'); assert.equal(insufficient.training.seasonYear, 2027); assert.equal(insufficient.executable, false);
+assert.equal(insufficient.status, 'reference'); assert.equal(insufficient.training.seasonYear, 2027); assert.equal(insufficient.executable, false);
+assert.equal(insufficient.referencePrediction.calibrated, false);
+assert.equal(insufficient.referencePrediction.probabilityEstimate, null);
+const missing = await loadNbaAnalysis(query, options(schedule, snapshot, { trainingData: { history: [] }, analyzeModel: () => ({ status: 'insufficient' }) }));
+assert.equal(missing.status, 'insufficient');
 
 // New forecasting endpoint never expands the baseball analysis/ledger registry.
 assert.equal(requestedLeagueId('NBA'), null); assert.equal(leagueCanAnalyze('NBA'), false); assert.equal(cloudBetLeagueCanWrite('NBA'), false);
