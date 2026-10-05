@@ -103,4 +103,10 @@ assert.ok(page.includes('NbaMainWorkspace active={nbaSelected}'));
 assert.ok(!page.includes('<NbaEntry/>'));
 assert.ok(page.includes('ANALYSIS_LEAGUE_IDS.map(async id'));
 assert.ok(read('app/nba/page.js').includes("redirect('/?sport=NBA')"));
+// Execute the actual client state initializer: taipeiDate requires an explicit timestamp.
+const nbaWorkspace = read('app/nba/main-workspace.js');
+const dateInitializer = nbaWorkspace.match(/const \[date, setDate\] = useState\((.*)\);/)[1];
+const { taipeiDate } = await import('../lib/nba/identity.js');
+const initializedDate = vm.runInNewContext(dateInitializer, { taipeiDate, Date })();
+assert.match(initializedDate, /^\d{4}-\d{2}-\d{2}$/);
 console.log('Unified NBA analysis PASS: five-league submission, NBA-first latest-server-quote execution, per-game progress, insufficient/error isolation, identity/date/quote binding, result recovery and baseball ledger boundaries');

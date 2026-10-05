@@ -56,7 +56,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
 }
 
 export default function NbaMainWorkspace({ active, allRun, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress }) {
-  const [date, setDate] = useState(taipeiDate());
+  const [date, setDate] = useState(() => taipeiDate(Date.now()));
   const [rows, setRows] = useState([]);
   const [view, setView] = useState('board');
   const [loading, setLoading] = useState(false);
