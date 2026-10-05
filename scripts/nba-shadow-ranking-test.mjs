@@ -8,9 +8,9 @@ const make=(id,marketQuotes=quotes)=>{
  return {game,quote:marketQuotes,observedAt,pageActivityAt:observedAt,canAnalyze:true,result:{...analyzeNbaPreseason(game,marketQuotes),league:'NBA',gameId:game.id,date,observedAt}};
 };
 const row=make(401999001), all=buildNbaShadowRanking([row],date,now);
-assert.equal(all.entries.length,8);assert.equal(all.currentGames,1);
+assert.equal(all.entries.length,8);assert.ok(all.entries.every(x=>Number.isFinite(x.score)&&x.score>=1&&x.score<=8.9));assert.equal(all.currentGames,1);
 assert.equal(new Set(all.entries.map(x=>x.stableKey)).size,8);
-assert.ok(all.entries.every((x,i)=>!i||all.entries[i-1].expectedNet>=x.expectedNet));
+assert.ok(all.entries.every((x,i)=>!i||all.entries[i-1].score>=x.score));
 assert.ok(all.entries.some(x=>x.expectedNet<0));
 for (const key of Object.keys(quotes)) {
  const filtered=buildNbaShadowRanking([row],date,now,key);assert.equal(filtered.entries.length,2);assert.ok(filtered.entries.every(x=>x.marketKey===key));

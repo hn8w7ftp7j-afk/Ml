@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 import { taipeiDate, validDate } from '../../lib/nba/identity.js';
 import { NBA_JOB_STORAGE, validNbaJob, mergeNbaAnalysisResults, nbaResultQuoteCurrent } from '../../lib/nba/analysis-job-display.js';
+import { nbaMarketScore } from '../../lib/nba/market-score.js';
 import NbaShadowRanking from './shadow-ranking.js';
 import AnalysisNotificationControl from '../analysis-notification-control.js';
 import AllLeagueProgress from '../all-league-progress.js';
@@ -38,7 +39,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
       <span className={`state ${row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{statusText(row.jobState)}</span></div>
     <div className="sourceBanner"><strong>NBA｜Tai888 Reader</strong><span>盤口時間 {localTime(row.observedAt)}｜{preseason ? '季前賽歷史校正・全場與上半場' : '全場大小・節奏與休息修正'}</span></div>
     {prediction && !preseason && <div className="detailGrid"><div><span>原比分總分</span><b>{num(prediction.baseTotal)}</b></div><div><span>校正後總分</span><b>{num(prediction.total)}</b></div><div><span>總分修正</span><b>{prediction.correction > 0 ? '+' : ''}{num(prediction.correction)}</b></div><div><span>參考方向</span><b>{assessment?.direction === 'over' ? '大分' : assessment?.direction === 'under' ? '小分' : '未定'}</b></div></div>}
-    {preseason && <><div className="detailGrid"><div><span>主隊預估得分</span><b>{num(prediction.home)}</b></div><div><span>客隊預估得分</span><b>{num(prediction.away)}</b></div><div><span>全場預估總分</span><b>{num(preseason.fullTotal)}</b></div><div><span>上半預估總分</span><b>{num(preseason.halfTotal)}</b></div></div><p className="muted">季前賽校正 {preseason.trainingSamples} 場；誤差樣本 {preseason.distributionSamples} 筆。下方百分比為模型估計勝率。</p></>}
+    {preseason && <><div className="detailGrid"><div><span>主隊預估得分</span><b>{num(prediction.home)}</b></div><div><span>客隊預估得分</span><b>{num(prediction.away)}</b></div><div><span>全場預估總分</span><b>{num(preseason.fullTotal)}</b></div><div><span>上半預估總分</span><b>{num(preseason.halfTotal)}</b></div></div><p className="muted">季前賽校正 {preseason.trainingSamples} 場；誤差樣本 {preseason.distributionSamples} 筆。左側為 S 分數；勝率與 W／R 列於明細。</p></>}
     {reference && <><div className="noticeBox">季前賽跨季基準預估，尚未校正；不是原模型的勝率或 EV。</div><div className="detailGrid"><div><span>主隊基準得分</span><b>{num(reference.homePoints)}</b></div><div><span>客隊基準得分</span><b>{num(reference.awayPoints)}</b></div><div><span>基準總分</span><b>{num(reference.total)}</b></div><div><span>來源球季</span><b>{reference.sourceSeasonYear - 1}–{String(reference.sourceSeasonYear).slice(-2)} 例行賽</b></div></div></>}
     {['ready', 'reference'].includes(result?.status) && !current && <p className="muted">上一版分析｜盤口已更新、過期或場次已開賽；不是目前盤口的分析。</p>}
     {result?.status === 'insufficient' && <div className="noticeBox">同球季、同賽事類型校正樣本不足：目前 {result.training?.availableGames ?? 0} 筆，至少需要 {result.training?.minimumResiduals ?? 50} 筆。不以其他球季或例行賽填補。</div>}
@@ -54,7 +55,8 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
         {modelMarket?.status === 'blocked' && <p className="muted">{modelMarket.reason}</p>}
         {market && choices.map(([side, pick, water, legacyEstimate]) => {
           const estimate = modelMarket?.status === 'ready' ? modelMarket.sides[side] : null;
-          return <div className="scoreRow" key={pick}><div className="score pass">{estimate ? `${(estimate.winProbability * 100).toFixed(1)}%` : '—'}</div><div><div className="scorePick">{pick}</div><div className="scorePrice">水位 {num(water)}</div><div className="scoreMeta">{estimate ? `模型估計勝率 ${(estimate.winProbability * 100).toFixed(2)}%｜走水 ${(estimate.pushProbability * 100).toFixed(2)}%` : supported ? statusText(row.jobState) : '盤口保留顯示，此模型尚未支援'}</div>{estimate ? <div className="scoreMeta">每 100 元模型淨額：{num(estimate.expectedNet)} 元（含 1.5% 退水）</div> : analyzed ? <div className="scoreMeta">歷史分布估計淨額：每 100 元 {num(legacyEstimate)} 元（含退水）</div> : null}</div><span className="state shadow">{estimate ? '模型估計' : supported ? '分析參考' : '未支援'}</span></div>;
+          const scoring = nbaMarketScore(estimate);
+          return <div className="scoreRow" key={pick}><div className={`score ${scoring?.score >= 8.5 ? 'strongest' : 'pass'}`} title="S 分數">{scoring ? scoring.score.toFixed(1) : '—'}</div><div><div className="scorePick">{pick}</div><div className="scorePrice">水位 {num(water)}</div><div className="scoreMeta">{estimate ? `模型估計勝率 ${(estimate.winProbability * 100).toFixed(2)}%｜走水 ${(estimate.pushProbability * 100).toFixed(2)}%` : supported ? statusText(row.jobState) : '盤口保留顯示，此模型尚未支援'}</div>{estimate ? <div className="scoreMeta">W {num(estimate.expectedNet)}%｜R {num(estimate.robustExpectedNet)}%（每 100 元含退水淨額）{!scoring ? '｜請重新分析產生分數' : ''}</div> : analyzed ? <div className="scoreMeta">歷史分布估計淨額：每 100 元 {num(legacyEstimate)} 元（含退水）</div> : null}</div><span className="state shadow">{estimate ? '模型估計' : supported ? '分析參考' : '未支援'}</span></div>;
         })}
       </div>;
     })}
