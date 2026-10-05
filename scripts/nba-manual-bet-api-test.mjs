@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { GET, POST } from '../app/api/nba/bet-records/route.js';
+import { createSessionToken } from '../lib/security.js';
+process.env.APP_PASSWORD = 'synthetic-manual-archive-test';
+process.env.SESSION_SECRET = 'synthetic-manual-archive-test-secret';
+const cookie = `mlb_session=${await createSessionToken()}`;
+let calls = 0; globalThis.fetch = async () => { calls++; throw Error('No external or database calls allowed'); };
+const req = (method, authenticated = true, origin = 'http://localhost', body = {}) => new Request('http://localhost/api/nba/bet-records?date=bad', { method, headers: { ...(authenticated ? {cookie} : {}), origin }, ...(method === 'POST' ? {body:JSON.stringify(body)} : {}) });
+assert.equal((await GET(req('GET',false))).status,401);
+assert.equal((await POST(req('POST',false))).status,401);
+assert.equal((await POST(req('POST',true,'https://other.example'))).status,403);
+assert.equal((await GET(req('GET'))).status,400);
+const rejected = await POST(req('POST',true,'http://localhost',{alreadyPlaced:false}));
+assert.equal(rejected.status,400); assert.match((await rejected.json()).error,/已自行完成/);
+assert.equal(calls,0);
+console.log('NBA manual archive API PASS: auth, same-origin, date and confirmation reject before DB; no gambling execution');

@@ -24,3 +24,9 @@ npm run build
 ## Shadow ranking and S display — v11.9.66
 
 The NBA workspace now exposes an independent shadow-ranking tab, with full/half and total/spread filters. It lists every valid analyzed side, including negative net estimates, sorted by S score, then W and R, using the same production deterministic-score mapping as MLB. Win probability, push probability, exact quote/water, favorite/underdog role and sample count come directly from the same analysis payload as the game card; W is NBA model net per 100 units; R is the minimum of W and each prior preseason season stress estimate, requiring at least two seasons with 30 residuals each. S inputs use decimal return units, not probabilities. R is a historical scenario stress metric, not a confidence bound or a verified betting EV. Missing stress evidence leaves S blank until reanalysis. Both game cards and rankings display S to one decimal, with W/R and win/push probabilities in detail. All score outputs remain non-executable and ineligible for formal bets. Completed games join as each job result arrives. Changed prices, stale snapshots, started games, insufficient/reference results and mismatched identities are excluded. Reanalyzing from ranking preserves the selected view. Existing job restoration supplies the same rankings after reload.
+
+## 已完成下注的手動紀錄（v11.9.68）
+
+NBA 單場、全部方向及候選順序可填寫「記錄已下注」。必須明確確認本人已自行完成下注，輸入實際金額、合約盤口、水位及讓分方；不傳送投注交易、不改模型執行資格。
+
+使用同一永久資料庫內的 `nba_manual_bet_records_v1` 保存獨立手動紀錄，NBA「下注紀錄」分頁按盤日查閱。來源固定為本人申報，未驗證、未結算，不加入棒球的 PIT 校準及已驗證績效；沒有沿用棒球前五局結算。相同日期／場次／市場／方向重複送出只回傳原紀錄，不因重分析或變盤改寫金額合約。只有伺服器取得永久資料庫回傳確認後才顯示已記錄；讀寫失敗會停留於待確認狀態，不以本機儲存替代。

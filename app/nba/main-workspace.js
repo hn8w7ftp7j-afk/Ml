@@ -6,6 +6,7 @@ import { taipeiDate, validDate } from '../../lib/nba/identity.js';
 import { NBA_JOB_STORAGE, validNbaJob, mergeNbaAnalysisResults, nbaResultQuoteCurrent } from '../../lib/nba/analysis-job-display.js';
 import { nbaMarketScore } from '../../lib/nba/market-score.js';
 import NbaShadowRanking from './shadow-ranking.js';
+import { NbaBetRecordProvider, NbaBetRecordButton, NbaBetRecords } from './bet-records.js';
 import AnalysisNotificationControl from '../analysis-notification-control.js';
 import AllLeagueProgress from '../all-league-progress.js';
 import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-start-request-journal.js';
@@ -56,7 +57,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
         {market && choices.map(([side, pick, water, legacyEstimate]) => {
           const estimate = modelMarket?.status === 'ready' ? modelMarket.sides[side] : null;
           const scoring = nbaMarketScore(estimate);
-          return <div className="scoreRow" key={pick}><div className={`score ${scoring?.score >= 8.5 ? 'strongest' : 'pass'}`} title="S 分數">{scoring ? scoring.score.toFixed(1) : '—'}</div><div><div className="scorePick">{pick}</div><div className="scorePrice">水位 {num(water)}</div><div className="scoreMeta">{estimate ? `模型估計勝率 ${(estimate.winProbability * 100).toFixed(2)}%｜走水 ${(estimate.pushProbability * 100).toFixed(2)}%` : supported ? statusText(row.jobState) : '盤口保留顯示，此模型尚未支援'}</div>{estimate ? <div className="scoreMeta">W {num(estimate.expectedNet)}%｜R {num(estimate.robustExpectedNet)}%（每 100 元含退水淨額）{!scoring ? '｜請重新分析產生分數' : ''}</div> : analyzed ? <div className="scoreMeta">歷史分布估計淨額：每 100 元 {num(legacyEstimate)} 元（含退水）</div> : null}</div><span className="state shadow">{estimate ? '模型估計' : supported ? '分析參考' : '未支援'}</span></div>;
+          return <div className="scoreRow" key={pick}><div className={`score ${scoring?.score >= 8.5 ? 'strongest' : 'pass'}`} title="S 分數">{scoring ? scoring.score.toFixed(1) : '—'}</div><div><div className="scorePick">{pick}</div><div className="scorePrice">水位 {num(water)}</div><div className="scoreMeta">{estimate ? `模型估計勝率 ${(estimate.winProbability * 100).toFixed(2)}%｜走水 ${(estimate.pushProbability * 100).toFixed(2)}%` : supported ? statusText(row.jobState) : '盤口保留顯示，此模型尚未支援'}</div>{estimate ? <div className="scoreMeta">W {num(estimate.expectedNet)}%｜R {num(estimate.robustExpectedNet)}%（每 100 元含退水淨額）{!scoring ? '｜請重新分析產生分數' : ''}</div> : analyzed ? <div className="scoreMeta">歷史分布估計淨額：每 100 元 {num(legacyEstimate)} 元（含退水）</div> : null}</div><span className="state shadow">{estimate ? '模型估計' : supported ? '分析參考' : '未支援'}</span><NbaBetRecordButton entry={{ game: row.game, marketKey: key, side, line: market.line, lineSide: total ? null : market.lineSide, water, away: name(row.game.away), home: name(row.game.home) }}/></div>;
         })}
       </div>;
     })}
@@ -196,8 +197,8 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
     finally { operation.current = false; setStarting(false); }
   }
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
-  return <div hidden={!active} aria-label="NBA 主站分析">
-    <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button></nav>
+  return <NbaBetRecordProvider date={date} active={active}><div hidden={!active} aria-label="NBA 主站分析">
+    <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'records' ? 'active' : ''} onClick={() => setView('records')}>下注紀錄</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
     {message && <div className="noticeBox" role="status">{message}</div>}
     {view !== 'data' && <><section className="heroCard"><div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 NBA｜單場或本日全部</h2></div>
@@ -214,9 +215,10 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? 'NBA 盤口已同步' : 'NBA Reader 等待同步／盤口已過期'}</strong><span>季前賽支援全場與上半場大小、讓分；需盤口開盤及歷史樣本核對通過。例行賽沿用全場大小模型。</span></div><AllLeagueProgress run={allRun}/></section>
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
-      {(view === 'ranking' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
+      {(view === 'ranking' || view === 'records' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
       {!rows.length && <section className="emptyBoard"><div>🏀</div><h2>{loading ? '讀取 NBA 賽程與盤口中…' : '尚無此日 NBA 盤口'}</h2><p>沒有開盘、盤口過期或資料不足會分別顯示，不會假裝已分析成功。</p></section>}
     </>}
+    {view === 'records' && <NbaBetRecords/>}
     {view === 'data' && <NbaDataWorkspace/>}
-  </div>;
+  </div></NbaBetRecordProvider>;
 }

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { NbaBetRecordButton } from './bet-records.js';
 import { buildNbaShadowRanking, buildNbaShadowOrder, NBA_RANK_MARKETS } from '../../lib/nba/shadow-ranking.js';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球隊待核對';
@@ -18,7 +19,7 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
         {entry.score == null && <div className="scoreMeta">需重新分析以產生 W／R 評分</div>}
         <div className="scoreMeta">模型估計勝率 {pct(entry.winProbability)}｜走水 {pct(entry.pushProbability)}｜水位 {num(entry.water)}</div>
         <small>{time(entry.game.startTime)}（台灣）｜盤口 {time(entry.observedAt)}｜誤差樣本 {entry.samples ?? '—'} 筆</small>
-      </div><button className="mini secondary" disabled={busy} onClick={() => onAnalyze(entry.game.sourceId)}>重新分析</button>
+      </div><div className="rankActionStack"><NbaBetRecordButton entry={{ ...entry, away: name(entry.game.away), home: name(entry.game.home) }}/><button className="mini secondary" disabled={busy} onClick={() => onAnalyze(entry.game.sourceId)}>重新分析</button></div>
     </div>;
   return <section className="panel nbaShadowRanking" aria-label="NBA 影子排名">
     <div className="rankingViewTabs" aria-label="影子排名檢視"><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>全部方向</button><button className={view === 'order' ? 'active' : ''} onClick={() => setView('order')}>影子候選順序</button></div>
