@@ -134,7 +134,7 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
           if (batch && job.date === dateRef.current) {
             const next = mergeNbaAnalysisResults(batch, rowsRef.current, job.date);
             setRows(next); rowsRef.current = next;
-            setProgress({ completed: batch.results?.filter(row => row.ok).length || 0, settled: batch.results?.length || 0, total: batch.total, blocked: batch.results?.filter(row => row.blocked).length || 0 });
+            setProgress({ summary: nbaCompletionSummary(batch) });
             onBatchProgress?.({ ...batch, runId: job.runId });
           }
           const nbaFinished = batch && Array.isArray(batch.results) && batch.results.length === batch.total && !(batch.runningGamePks?.length);
@@ -194,7 +194,7 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
         <button className="secondary" disabled={starting || !job} onClick={() => { setDate(job.date); setReconnectRevision(value => value + 1); }}>載入先前分析（不重算）</button>
         <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.28-NBA-READ.zip" download>下載 Reader v2.1.28</a>
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? 'NBA 盤口已同步' : 'NBA Reader 等待同步／盤口已過期'}</strong><span>全場大小分析；讓分及上半盤口保留顯示，尚未套用此模型。</span></div><AllLeagueProgress run={allRun}/></section>
-      {progress && <div className="progressBox" role="status">NBA｜已處理 {progress.settled}/{progress.total} 場｜有效分析 {progress.completed}｜資料不足／核對阻擋 {progress.blocked}</div>}
+      {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {(view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
       {!rows.length && <section className="emptyBoard"><div>🏀</div><h2>{loading ? '讀取 NBA 賽程與盤口中…' : '尚無此日 NBA 盤口'}</h2><p>沒有開盘、盤口過期或資料不足會分別顯示，不會假裝已分析成功。</p></section>}
     </>}
