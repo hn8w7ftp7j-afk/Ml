@@ -8,6 +8,7 @@ import AnalysisNotificationControl from '../analysis-notification-control.js';
 import AllLeagueProgress from '../all-league-progress.js';
 import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-start-request-journal.js';
 import { nbaLatestBoardDate, nbaCompletionSummary } from '../../lib/nba/analysis-ui-policy.js';
+import { prepareNbaNotification } from '../../lib/nba/analysis-notification-start.js';
 
 const NbaDataWorkspace = dynamic(() => import('./workspace.js'), { ssr: false });
 const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球隊待核對';
@@ -114,7 +115,12 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
     finally { if (revision === requestRevision.current) setLoading(false); }
   }
   useEffect(() => { if (active && !operation.current) void load(date); }, [active, date]);
-  useEffect(() => { if (!active || busy) return; const timer = setInterval(() => { void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [active, busy]);
+  useEffect(() => { if (!active || busy) return; const timer = setInterval(() => { if (!operation.current) void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [active, busy]);
+  useEffect(() => {
+    const resume = () => { if (document.visibilityState !== 'hidden' && validNbaJob(jobRef.current)) setReconnectRevision(value => value + 1); };
+    window.addEventListener('focus', resume); document.addEventListener('visibilitychange', resume);
+    return () => { window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
+  }, []);
   useEffect(() => {
     if (!validNbaJob(job) || job.status === 'failed' && !reconnectRevision) return;
     let activePoll = true; let timer;
@@ -153,9 +159,9 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
   }, [job?.runId, job?.requestId, job?.date, reconnectRevision]);
 
   async function start(id = '') {
-    if (operation.current || busy) return; operation.current = true; setStarting(true); setError('');
+    if (operation.current || busy) return; operation.current = true; setStarting(true); setError(''); setProgress(null); setMessage('正在核對最新 NBA 盤口並送出分析工作…');
     try {
-      await notification.current?.prepare();
+      prepareNbaNotification(notification.current);
       const board = await load(date);
       if (!board) return;
       const tasks = board.tasks.filter(task => !id || task.nbaQuery.id === id);
@@ -189,8 +195,8 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
         <button className="secondary" disabled={loading || busy} onClick={() => load()}>{loading ? '讀取中…' : '讀取賽程與盤口（不分析）'}</button>
         <label>選擇單場比賽<select value={selected} disabled={busy} onChange={event => setSelected(event.target.value)}><option value="">請選擇一場</option>{rows.map(row => <option key={row.game.id} value={row.game.sourceId}>{name(row.game.away)} @ {name(row.game.home)}｜{localTime(row.game.startTime)}</option>)}</select></label>
         <button className="primary" disabled={busy || !selected} onClick={() => start(selected)}>只分析這一場</button>
-        <button className="primary giant" disabled={busy} onClick={() => start()}>{running ? 'NBA 背景分析中…' : '分析本日全部 NBA'}</button>
-        <button className="secondary allLeagueAnalyzeButton" disabled={busy} onClick={async () => { await notification.current?.prepare(); onAnalyzeAll(); }}>一鍵分析全部聯盟（含 NBA）</button>
+        <button className="primary giant" disabled={busy} onClick={() => start()}>{starting ? '正在送出 NBA 分析…' : running ? 'NBA 背景分析中…' : '分析本日全部 NBA'}</button>
+        <button className="secondary allLeagueAnalyzeButton" disabled={busy} onClick={() => { prepareNbaNotification(notification.current); onAnalyzeAll(); }}>一鍵分析全部聯盟（含 NBA）</button>
         <button className="secondary" disabled={starting || !job} onClick={() => { setDate(job.date); setReconnectRevision(value => value + 1); }}>載入先前分析（不重算）</button>
         <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.28-NBA-READ.zip" download>下載 Reader v2.1.28</a>
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? 'NBA 盤口已同步' : 'NBA Reader 等待同步／盤口已過期'}</strong><span>全場大小分析；讓分及上半盤口保留顯示，尚未套用此模型。</span></div><AllLeagueProgress run={allRun}/></section>
