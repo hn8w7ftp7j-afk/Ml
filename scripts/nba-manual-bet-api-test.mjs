@@ -12,5 +12,7 @@ assert.equal((await POST(req('POST',true,'https://other.example'))).status,403);
 assert.equal((await GET(req('GET'))).status,400);
 const rejected = await POST(req('POST',true,'http://localhost',{alreadyPlaced:false}));
 assert.equal(rejected.status,400); assert.match((await rejected.json()).error,/已自行完成/);
+assert.equal((await POST(req('POST',true,'http://localhost',{action:'cancel',id:'bad'}))).status,400);
+assert.equal((await POST(req('POST',true,'http://localhost',{action:'erase'}))).status,400);
 assert.equal(calls,0);
 console.log('NBA manual archive API PASS: auth, same-origin, date and confirmation reject before DB; no gambling execution');

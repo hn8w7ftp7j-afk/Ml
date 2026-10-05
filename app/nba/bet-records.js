@@ -26,8 +26,12 @@ export function NbaBetRecordProvider({ date, active, children }) {
     const payload = { date, gameId: entry.game.id, marketKey: entry.marketKey, side: entry.side,
       away: entry.away, home: entry.home, startTime: entry.game.startTime,
       line: entry.line, lineSide: entry.lineSide, water: entry.water, stake: 10000, alreadyPlaced: true };
-    const identity = key(payload);
-    if (status !== 'ready' || inFlight.current.has(identity) || records.some(row => key(row) === identity)) return;
+    if (records.some(row => key(row) === key(payload))) return;
+    return mutate(payload, key(payload));
+  }
+  async function changeStatus(record, action) { return mutate({ action, id: record.id }, key(record)); }
+  async function mutate(payload, identity) {
+    if (status !== 'ready' || inFlight.current.has(identity)) return;
     const current = revision.current; inFlight.current.add(identity);
     setPending(new Set(inFlight.current)); setError('');
     try {
@@ -40,7 +44,7 @@ export function NbaBetRecordProvider({ date, active, children }) {
     } catch (cause) { if (current === revision.current) { setError(cause.message); setFailed(old => new Set([...old, identity])); } }
     finally { inFlight.current.delete(identity); setPending(new Set(inFlight.current)); }
   }
-  return <Ledger.Provider value={{ date, records, status, error, load, save, pending, failed }}>
+  return <Ledger.Provider value={{ date, records, status, error, load, save, changeStatus, pending, failed }}>
     {error && active && <div className="errorBox" role="alert">{error}</div>}{children}
   </Ledger.Provider>;
 }
@@ -49,7 +53,8 @@ export function NbaBetRecordButton({ entry }) {
   const recorded = ledger.records.find(row => key(row) === key({ ...entry, gameId: entry.game.id, date: ledger.date }));
   const identity = key({ ...entry, gameId: entry.game.id, date: ledger.date });
   const saving = ledger.pending.has(identity);
-  return <div className="nbaRecordAction"><button className={`mini ${recorded ? 'recorded' : 'secondary'}`} title="保存你已自行完成的下注；每筆固定 10,000 元，不會送單" disabled={ledger.status !== 'ready' || Boolean(recorded) || saving} onClick={() => ledger.save(entry)}>{recorded ? '已下注 ✓' : saving ? '記錄中…' : ledger.status === 'loading' ? '帳本同步中…' : ledger.failed.has(identity) ? '記錄失敗｜重試' : '紀錄實際下注'}</button>
+  const cancelled = recorded?.status === 'CANCELLED';
+  return <div className="nbaRecordAction"><button className={`mini ${recorded ? 'recorded' : 'secondary'}`} title={recorded ? '只取消網站紀錄，不會撤銷實際下注' : '保存你已自行完成的下注；每筆固定 10,000 元，不會送單'} disabled={ledger.status !== 'ready' || cancelled || saving} onClick={() => recorded ? ledger.changeStatus(recorded, 'cancel') : ledger.save(entry)}>{saving ? '保存中…' : cancelled ? '已取消' : recorded ? '已下注 ✓｜取消下注' : ledger.status === 'loading' ? '帳本同步中…' : ledger.failed.has(identity) ? '記錄失敗｜重試' : '紀錄實際下注'}</button>
     {recorded && <small>原盤 {recorded.line}｜水位 {recorded.water}｜{recorded.stake.toLocaleString('zh-TW')} 元</small>}
     {ledger.status === 'failed' && <button className="mini secondary" onClick={ledger.load}>重試帳本同步</button>}
   </div>;
@@ -59,7 +64,7 @@ export function NbaBetRecords() {
   return <section className="panel" aria-label="NBA 下注紀錄"><div className="panelHead"><h2>NBA｜下注紀錄</h2><button className="mini secondary" onClick={ledger.load}>重新讀取</button></div>
     <p>{ledger.date}｜每筆固定 10,000 元｜實際下注紀錄｜待結算</p>
     {ledger.error && <p className="errorBox" role="alert">{ledger.error}</p>}
-    {ledger.records.map(record => <div className="nbaArchivedRecord" key={record.id}><strong>{record.away}（客）@ {record.home}（主）</strong><p>{marketNames[record.marketKey]}｜{pick(record)}｜{record.line}｜水位 {record.water}</p><p>實際金額 {record.stake.toLocaleString('zh-TW')} 元｜已永久保存</p><small>保存時間 {new Date(record.recordedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}{record.note ? `｜${record.note}` : ''}</small></div>)}
+    {ledger.records.map(record => <div className="nbaArchivedRecord" key={record.id}><strong>{record.away}（客）@ {record.home}（主）</strong><p>{marketNames[record.marketKey]}｜{pick(record)}｜{record.line}｜水位 {record.water}</p><p>實際金額 {record.stake.toLocaleString('zh-TW')} 元｜{record.status === 'CANCELLED' ? '已取消紀錄' : '已下注 ✓'}</p><button className={`mini ${record.status === 'CANCELLED' ? 'secondary' : 'cancel'}`} disabled={ledger.status !== 'ready' || ledger.pending.has(key(record))} onClick={() => ledger.changeStatus(record, record.status === 'CANCELLED' ? 'restore' : 'cancel')}>{ledger.pending.has(key(record)) ? '保存中…' : record.status === 'CANCELLED' ? '恢復原紀錄' : '取消下注紀錄'}</button><small>保存時間 {new Date(record.recordedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}{record.note ? `｜${record.note}` : ''}</small></div>)}
     {!ledger.records.length && <p>{ledger.status === 'loading' ? '帳本同步中…' : ledger.status === 'ready' ? '此日期尚無已記錄的下注。' : '帳本尚未同步完成。'}</p>}
   </section>;
 }
