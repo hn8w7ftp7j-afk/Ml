@@ -23,7 +23,7 @@ const reader = { league: 'NBA', status: 'fresh', observedAt, pageActivityAt: obs
 const board = buildNbaAnalysisBoard(date, schedule, reader, now);
 assert.equal(board.tasks.length, 1); assert.equal(board.tasks[0].nbaQuery.date, date);
 assert.equal(buildNbaAnalysisBoard(date, schedule, { ...reader, observedAt: new Date(now - 180001).toISOString() }, now).tasks.length, 0);
-assert.equal(buildNbaAnalysisBoard(date, schedule, { ...reader, games: [{ ...quote, fullTotal: null, firstHalfTotal: quote.fullTotal }] }, now).tasks.length, 0);
+assert.equal(buildNbaAnalysisBoard(date, schedule, { ...reader, games: [{ ...quote, fullTotal: null, firstHalfTotal: quote.fullTotal }] }, now).tasks.length, 1);
 assert.equal(buildNbaAnalysisBoard(date, schedule, { ...reader, games: [{ ...quote, marketStatus: 'locked' }] }, now).tasks.length, 0);
 assert.equal(buildNbaAnalysisBoard(date, { ...schedule, data: { games: [{ ...game, status: 'live' }] } }, reader, now).emptyReason, 'no_games');
 assert.equal(buildNbaAnalysisBoard(date, schedule, null, now).emptyReason, 'no_open_markets');

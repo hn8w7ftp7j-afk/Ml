@@ -1,0 +1,60 @@
+{
+  "modelVersion": "nba-preseason-history-ridge-v1",
+  "features": 198,
+  "residuals": 168,
+  "validation": [
+    {
+      "seasonYear": 2025,
+      "samples": 69,
+      "strictlyEarlierDate": true,
+      "metrics": {
+        "fullTotal": {
+          "modelMAE": 14.81305584298557,
+          "previousRegularBaselineMAE": 15.742287282747107
+        },
+        "fullMargin": {
+          "modelMAE": 11.770008792837947,
+          "previousRegularBaselineMAE": 12.480186919470034
+        },
+        "halfTotal": {
+          "modelMAE": 8.96677518673454,
+          "previousRegularBaselineMAE": 9.724908648379307
+        },
+        "halfMargin": {
+          "modelMAE": 8.736602114530418,
+          "previousRegularBaselineMAE": 8.85031270362468
+        }
+      },
+      "historicalBettingWinRate": null,
+      "reason": "historical_pregame_credit_quotes_not_available"
+    },
+    {
+      "seasonYear": 2026,
+      "samples": 65,
+      "strictlyEarlierDate": true,
+      "metrics": {
+        "fullTotal": {
+          "modelMAE": 17.77964358644978,
+          "previousRegularBaselineMAE": 16.892307692307703
+        },
+        "fullMargin": {
+          "modelMAE": 10.393263091297325,
+          "previousRegularBaselineMAE": 10.281283482899708
+        },
+        "halfTotal": {
+          "modelMAE": 9.859645866050204,
+          "previousRegularBaselineMAE": 9.908862090011079
+        },
+        "halfMargin": {
+          "modelMAE": 8.554777956843843,
+          "previousRegularBaselineMAE": 8.421388367729834
+        }
+      },
+      "historicalBettingWinRate": null,
+      "reason": "historical_pregame_credit_quotes_not_available"
+    }
+  ],
+  "sourceCount": 378,
+  "excludedNonNbaGames": 19,
+  "archiveHash": "93fd0f95843535d32fca6fdbba3ce70377f0508b5a10a77ede2b769bc2970b04"
+}

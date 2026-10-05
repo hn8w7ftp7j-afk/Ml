@@ -44,7 +44,7 @@ for (const change of [{ status: 'live' }, { completed: true }, { timeConfirmed: 
   await blocked('NBA_ANALYSIS_GAME_STARTED', { ...schedule, data: { games: [candidate] } }, b);
 }
 await blocked('NBA_ANALYSIS_TOTAL_UNAVAILABLE', schedule, { ...snapshot, games: [{ ...row, marketStatus: 'locked', fullTotal: null }] });
-await blocked('NBA_ANALYSIS_TOTAL_UNAVAILABLE', schedule, { ...snapshot, games: [{ ...row, fullTotal: null, firstHalfTotal: row.fullTotal }] });
+await blocked('NBA_ANALYSIS_TOTAL_UNAVAILABLE', { ...schedule, data: { games: [{ ...game, seasonType: 'regular' }] } }, { ...snapshot, games: [{ ...row, fullTotal: null, firstHalfTotal: row.fullTotal }] });
 const during = await loadNbaAnalysis(query, options(schedule, snapshot, { analyzeModel: () => { modelCalls++; return { status: 'ready' }; }, now: (() => { let calls = 0; return () => ++calls > 2 ? epoch + 180001 : epoch; })() }));
 assert.equal(during.status, 'blocked'); assert.equal(during.issues[0].code, 'NBA_ANALYSIS_EXPIRED_DURING_REQUEST');
 const changedDuring = await loadNbaAnalysis(query, options(schedule, snapshot, { loadReader: (() => { let reads = 0; return async () => ++reads === 1 ? snapshot : { ...snapshot, observedAt: new Date(epoch + 1).toISOString() }; })() }));
