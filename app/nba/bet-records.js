@@ -54,7 +54,7 @@ export function NbaBetRecordButton({ entry }) {
   const identity = key({ ...entry, gameId: entry.game.id, date: ledger.date });
   const saving = ledger.pending.has(identity);
   const cancelled = recorded?.status === 'CANCELLED';
-  return <div className="nbaRecordAction"><button className={`mini ${recorded ? 'recorded' : 'secondary'}`} title={recorded ? '只取消網站紀錄，不會撤銷實際下注' : '保存你已自行完成的下注；每筆固定 10,000 元，不會送單'} disabled={ledger.status !== 'ready' || cancelled || saving} onClick={() => recorded ? ledger.changeStatus(recorded, 'cancel') : ledger.save(entry)}>{saving ? '保存中…' : cancelled ? '已取消' : recorded ? '已下注 ✓｜取消下注' : ledger.status === 'loading' ? '帳本同步中…' : ledger.failed.has(identity) ? '記錄失敗｜重試' : '紀錄實際下注'}</button>
+  return <div className="nbaRecordAction"><button className={`mini ${recorded && !cancelled ? 'recorded' : 'secondary'}`} title={cancelled ? '恢復原本的 10,000 元紀錄與原盤口、水位，不會送單' : recorded ? '只取消網站紀錄，不會撤銷實際下注' : '保存你已自行完成的下注；每筆固定 10,000 元，不會送單'} disabled={ledger.status !== 'ready' || saving} onClick={() => recorded ? ledger.changeStatus(recorded, cancelled ? 'restore' : 'cancel') : ledger.save(entry)}>{saving ? '保存中…' : cancelled ? '重新記錄下注' : recorded ? '已下注 ✓｜取消下注' : ledger.status === 'loading' ? '帳本同步中…' : ledger.failed.has(identity) ? '記錄失敗｜重試' : '紀錄實際下注'}</button>
     {recorded && <small>原盤 {recorded.line}｜水位 {recorded.water}｜{recorded.stake.toLocaleString('zh-TW')} 元</small>}
     {ledger.status === 'failed' && <button className="mini secondary" onClick={ledger.load}>重試帳本同步</button>}
   </div>;
