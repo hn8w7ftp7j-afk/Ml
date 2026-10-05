@@ -105,3 +105,4 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .recordedBetsSummary>summary{cursor:pointer;line-height:1.6;overflow-wrap:anywhere}.recordedBetsSummary .betRow{grid-template-columns:minmax(0,1fr)}
 [data-nba-game] .score{font-size:20px;white-space:nowrap}
 @media(max-width:720px){[data-nba-game] .scoreRow>.state{grid-column:2;justify-self:start}}
+.nbaShadowRanking{padding:20px}.nbaShadowRanking .nbaRankRow{grid-template-columns:28px 104px minmax(0,1fr) auto;gap:12px}.nbaRankNet{font-size:21px;white-space:nowrap}.nbaRankNet.positive{color:#7de5ae}.nbaRankNet small{display:block;font-size:11px;color:#9eb2c7;font-weight:400}.nbaShadowRanking .rankingViewTabs{overflow-x:auto;flex-wrap:wrap}@media(max-width:720px){.nbaShadowRanking{padding:14px}.nbaShadowRanking .nbaRankRow{grid-template-columns:22px 88px minmax(0,1fr);gap:8px}.nbaShadowRanking .nbaRankRow>.mini{grid-column:3}.nbaRankNet{font-size:19px}}

@@ -20,3 +20,7 @@ npm run build
 ```
 
 `nba-preseason-model-test.mjs` covers all four markets, exact partial-credit cash settlement, away/home favorite mapping, future/same-day exclusion, training integrity, single-market service execution, merged job results and price freshness. Existing NBA and multi-league tests protect authentication, event matching, workflow progress and baseball isolation.
+
+## Shadow ranking — v11.9.65
+
+The NBA workspace now exposes an independent shadow-ranking tab, with full/half and total/spread filters. It lists every valid analyzed side, including negative net estimates, sorted by model net per 100 units. Win probability, push probability, exact quote/water, favorite/underdog role and sample count come directly from the same analysis payload as the game card; no baseball S score is fabricated. Completed games join as each job result arrives. Changed prices, stale snapshots, started games, insufficient/reference results and mismatched identities are excluded. Reanalyzing from ranking preserves the selected view. Existing job restoration supplies the same rankings after reload.

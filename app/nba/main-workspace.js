@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 import { taipeiDate, validDate } from '../../lib/nba/identity.js';
 import { NBA_JOB_STORAGE, validNbaJob, mergeNbaAnalysisResults, nbaResultQuoteCurrent } from '../../lib/nba/analysis-job-display.js';
+import NbaShadowRanking from './shadow-ranking.js';
 import AnalysisNotificationControl from '../analysis-notification-control.js';
 import AllLeagueProgress from '../all-league-progress.js';
 import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-start-request-journal.js';
@@ -44,7 +45,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     {(row.reason || row.jobError) && <p className="muted">{row.jobError || row.reason}</p>}
     {[['fullTotal', '全場大小'], ['fullRunline', '全場讓分'], ['firstHalfTotal', '上半大小'], ['firstHalfRunline', '上半讓分']].map(([key, label]) => {
       const modelMarket = result?.marketAnalyses?.[key];
-      const supported = !!preseason || key === 'fullTotal';
+      const supported = row.game.seasonType === 'preseason' || key === 'fullTotal';
       const analyzed = preseason ? modelMarket?.status === 'ready' && modelMarket.quote : key === 'fullTotal' && result?.status === 'ready' && result.quote;
       const market = analyzed || row.quote?.[key]; const total = key.endsWith('Total');
       const choices = total ? [['over', '大分', market?.overWater, assessment?.positiveExpectedNet], ['under', '小分', market?.underWater, assessment?.negativeExpectedNet]] : [['away', `${name(row.game.away)}（客）`, market?.awayWater], ['home', `${name(row.game.home)}（主）`, market?.homeWater]];
@@ -194,7 +195,7 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
   }
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
   return <div hidden={!active} aria-label="NBA 主站分析">
-    <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button></nav>
+    <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
     {message && <div className="noticeBox" role="status">{message}</div>}
     {view !== 'data' && <><section className="heroCard"><div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 NBA｜單場或本日全部</h2></div>
@@ -210,7 +211,8 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
         <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.28-NBA-READ.zip" download>下載 Reader v2.1.28</a>
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? 'NBA 盤口已同步' : 'NBA Reader 等待同步／盤口已過期'}</strong><span>季前賽支援全場與上半場大小、讓分；需盤口開盤及歷史樣本核對通過。例行賽沿用全場大小模型。</span></div><AllLeagueProgress run={allRun}/></section>
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
-      {(view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
+      {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
+      {(view === 'ranking' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
       {!rows.length && <section className="emptyBoard"><div>🏀</div><h2>{loading ? '讀取 NBA 賽程與盤口中…' : '尚無此日 NBA 盤口'}</h2><p>沒有開盘、盤口過期或資料不足會分別顯示，不會假裝已分析成功。</p></section>}
     </>}
     {view === 'data' && <NbaDataWorkspace/>}
