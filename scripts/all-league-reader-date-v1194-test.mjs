@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { LEAGUE_IDS } from '../lib/leagues.js';
+import { ANALYSIS_LEAGUE_IDS } from '../lib/analysis-leagues.js';
 import { createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
 
 // Execute the actual page's resolver and four-league submission flow. Provider
@@ -24,7 +25,7 @@ function harness({ manual = [], latest = id => ({ fresh: true, boardDate: id ===
   const saved = [];
   const submitted = [];
   const context = vm.createContext({
-    Date, Number, String, encodeURIComponent, LEAGUE_IDS, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
+    Date, Number, String, encodeURIComponent, LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, nbaRunning: false, nbaDate: TODAY, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
     independentRunsRef: { current: new Map() },
     manualDateSelectionRef: { current: new Set(manual) },
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, TODAY])) },
@@ -49,6 +50,7 @@ function harness({ manual = [], latest = id => ({ fresh: true, boardDate: id ===
       return { league: id, date, preparedBoard: [], emptyReason: total ? null : 'no_games',
         tasks: Array.from({ length: total }, (_, index) => ({ game: { league: id, gamePk: 1000 + index } })) };
     },
+    prepareNbaBatch: async date => ({ league: 'NBA', date, tasks: [], preparedBoard: [], emptyReason: 'no_open_markets' }),
     startBackgroundAnalysisJob: async payload => { submitted.push(payload); return { runId: 'isolated-date-run' }; },
     saveBackgroundJob: value => { saved.push(value); return true; },
   });
@@ -124,7 +126,7 @@ await test('one unavailable league date lookup does not change or prevent the ot
   } });
   assert.equal(await state.context.oneClickAnalyzeAll(), true);
   assert.equal(state.submitted[0].batches.find(batch => batch.league === 'MLB').date, TODAY);
-  assert.deepEqual([...state.submitted[0].batches.filter(batch => batch.league !== 'MLB').map(batch => batch.tasks.length)], [4, 5, 3]);
+  assert.deepEqual([...state.submitted[0].batches.filter(batch => batch.league !== 'MLB').map(batch => batch.tasks.length)], [4, 5, 3, 0]);
 });
 
 await test('empty and failed preflights never create an empty workflow or overwrite failure evidence', async () => {

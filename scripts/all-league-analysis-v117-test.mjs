@@ -18,25 +18,26 @@ const route = read('app/api/analysis-jobs/route.js');
 const workflow = read('workflows/analyze-board.js');
 
 let run = createAllLeagueAnalysisRun('2026-08-30', 1_777_777_777_000);
-assert.deepEqual(Object.keys(run.leagues), ['MLB', 'NPB', 'KBO', 'CPBL']);
+assert.deepEqual(Object.keys(run.leagues), ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA']);
 run = updateAllLeagueAnalysisLeague(run, 'MLB', { status: 'done', total: 2, completed: 2 });
 run = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'no_games', boardDate: '2026-08-29' });
 assert.equal(allLeagueAnalysisProgress(run).terminal, 2);
-assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(run)), '成功 1 聯盟｜略過 1 聯盟｜未開始 2 聯盟');
+assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(run)), '成功 1 聯盟｜略過 1 聯盟｜未開始 3 聯盟');
 let failedRun = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'failed', message: '舊工作 Reader 過期' });
 failedRun = updateAllLeagueAnalysisLeague(failedRun, 'KBO', { status: 'failed' });
 failedRun = updateAllLeagueAnalysisLeague(failedRun, 'CPBL', { status: 'done' });
+failedRun = updateAllLeagueAnalysisLeague(failedRun, 'NBA', { status: 'partial' });
 const failedProgress = allLeagueAnalysisProgress(failedRun);
-assert.equal(failedProgress.terminal, 4, 'all four workflows can finish even if two leagues fail');
-assert.equal(allLeagueAnalysisOutcomeText(failedProgress), '成功 2 聯盟｜失敗 2 聯盟');
+assert.equal(failedProgress.terminal, 5, 'all five workflows can finish even if two leagues fail');
+assert.equal(allLeagueAnalysisOutcomeText(failedProgress), '成功 2 聯盟｜部分完成 1 聯盟｜失敗 2 聯盟');
 assert.equal(failedProgress.succeeded + failedProgress.partial + failedProgress.failed + failedProgress.skipped
-  + failedProgress.resultPending + failedProgress.running + failedProgress.idle, 4);
+  + failedProgress.resultPending + failedProgress.running + failedProgress.idle, 5);
 let mixedRun = createAllLeagueAnalysisRun('2026-08-30');
-for (const [id, status] of [['MLB', 'partial'], ['NPB', 'result_pending'], ['KBO', 'running'], ['CPBL', 'no_open_markets']]) {
+for (const [id, status] of [['MLB', 'partial'], ['NPB', 'result_pending'], ['KBO', 'running'], ['CPBL', 'no_open_markets'], ['NBA', 'no_games']]) {
   mixedRun = updateAllLeagueAnalysisLeague(mixedRun, id, { status });
 }
-assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(mixedRun)), '部分完成 1 聯盟｜略過 1 聯盟｜結果待載入 1 聯盟｜進行中 1 聯盟');
-assert.match(page, /四聯盟工作｜已結束 \{allLeagueProgress\.terminal\}\/\{allLeagueProgress\.total\}/);
+assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(mixedRun)), '部分完成 1 聯盟｜略過 2 聯盟｜結果待載入 1 聯盟｜進行中 1 聯盟');
+assert.match(page, /全部聯盟工作｜已結束 \{allLeagueProgress\.terminal\}\/\{allLeagueProgress\.total\}/);
 assert.match(page, /allLeagueAnalysisOutcomeText\(allLeagueProgress\)/);
 assert.match(page, /保存的工作結果[\s\S]{0,150}不代表 Reader 即時狀態/, 'saved failure messages cannot impersonate current Reader status');
 assert.doesNotMatch(page, /四聯盟分析 \{allLeagueProgress\.terminal\}\/4/, 'terminal count must not be labelled as four successful analyses');
@@ -88,7 +89,7 @@ assert.match(route, /new Set\(leagues\)\.size === leagues\.length/, 'batch leagu
 assert.match(route, /requestedLeague[\s\S]*result\?\.batches[\s\S]*find\(value => value\?\.league === requestedLeague\)/, 'one league tab must retrieve only its own batch result');
 assert.match(route, /summaryOnly[\s\S]*result\.batches\.map[\s\S]*results: \(batch\.results \|\| \[\]\)\.map/, 'global progress polling must omit large per-game analysis payloads');
 assert.match(page, /一鍵分析全部聯盟/, 'the UI needs one all-league action');
-assert.match(page, /for \(const id of LEAGUE_IDS\)[\s\S]*allLeagueTargetDate\(id,[\s\S]*prepareAllLeagueBatch\(id, batchDate,/, 'every league must resolve and precheck its own Reader board date');
+assert.match(page, /for \(const id of ANALYSIS_LEAGUE_IDS\)[\s\S]*allLeagueTargetDate\(id,[\s\S]*prepareAllLeagueBatch\(id, batchDate,/, 'every league must resolve and precheck its own Reader board date');
 assert.match(page, /mode: 'all-leagues'[\s\S]*batches: batches\.map/, 'the client must submit one isolated batch per prepared league');
 assert.match(page, /const BACKGROUND_JOB_START_TIMEOUT_MS = 75_000/, 'workflow submission timeout must exceed the 60 second server route ceiling');
 assert.match(page, /startBackgroundAnalysisJob\([\s\S]*requestJSONWithTransientRetry\('\/api\/analysis-jobs',[\s\S]*BACKGROUND_JOB_START_TIMEOUT_MS/, 'all-league submission must retry safely without aborting before the server route ceiling');

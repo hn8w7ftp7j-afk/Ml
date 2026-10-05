@@ -1,7 +1,25 @@
 # NBA full-game total analysis
 
-The production NBA Reader screen calls an authenticated `/api/nba/analysis`
-endpoint for each matched prestart full-game total. The endpoint reads its
+The production home page now selects NBA inline in the same app shell, hero
+controls and game-card/market-row layout as the baseball leagues. `/nba`
+redirects to `/?sport=NBA`; it no longer opens a separate modal. The primary
+all-league action includes MLB, NPB, KBO, CPBL and NBA in one durable workflow.
+NBA uses a separate result renderer/cache, never the baseball scoring/ledger
+registry. Old four-league saved runs remain four-league runs, not incomplete
+five-league work.
+
+An authenticated `/api/nba/analysis-board` preflight returns normalized schedule
+rows, stored prices, prestart eligibility and identity-only NBA tasks. The
+workflow prioritizes the short NBA pass before the four baseball groups and
+re-resolves each same event's latest **server** quote immediately before its
+analysis, avoiding quotes expiring behind a long baseball queue. The actual
+used quote/time remain bound to its result. Progress is published after each
+game; insufficient samples or one failed NBA game never stop later games or
+baseball groups. Saved run handles and request IDs restore original work after
+reload without launching a new analysis. Notification recovery routes NBA
+results to its renderer without admitting them to baseball caches.
+
+The single-game `/api/nba/analysis` endpoint remains authenticated. It reads its
 price from the saved Reader board and its event from the validated NBA schedule;
 clients cannot submit prices, scores, historical features or lineup inputs.
 It verifies the quote again before returning. Expired/changed quotes, started
@@ -32,6 +50,11 @@ certified pregame EV or calibrated current win probabilities. The research
 `promotionEligible` remain false. Full-game spreads and first-half markets keep
 their Reader display; they do not inherit this total correction. Baseball
 analysis registries, ranking, hashes and betting ledgers are unchanged.
+
+NBA currently supports full-game totals only. Spreads and half-game markets
+remain visible and explicitly unsupported, with no invented score/probability
+or NBA betting button. Expired/updated quotes do not authorize execution;
+retained prior results are explicitly labeled as an earlier analysis.
 
 Historical research and downloads stay at the independent research site.
 The production screen does not import the historical win-rate dashboard.

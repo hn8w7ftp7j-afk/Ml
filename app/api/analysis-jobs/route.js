@@ -12,6 +12,8 @@ import {
   validateSameOrigin,
 } from '../../../lib/security.js';
 import { isLeagueId } from '../../../lib/leagues.js';
+import { ANALYSIS_LEAGUE_IDS, isAnalysisLeagueId } from '../../../lib/analysis-leagues.js';
+import { normalizeNbaAnalysisTasks } from '../../../lib/nba/analysis-job.js';
 import { readCookie } from '../../../lib/security.js';
 import { deviceHash, getNotificationResult, PUSH_COOKIE } from '../../../lib/analysis-push.js';
 import {
@@ -31,6 +33,7 @@ const REQUEST_ID = /^[a-zA-Z0-9-]{16,100}$/;
 const EMPTY_REASONS = new Set(['no_games', 'no_open_markets']);
 
 function normalizeTasks(tasks, league, prefix = '') {
+  if (league === 'NBA') return normalizeNbaAnalysisTasks(tasks, tasks[0]?.nbaQuery?.date);
   return tasks.map((task, index) => {
     const requestId = REQUEST_ID.test(String(task?.requestId || ''))
       ? String(task.requestId)
@@ -92,22 +95,24 @@ export async function POST(request) {
           league,
           date: batchDate,
           emptyReason: EMPTY_REASONS.has(batch?.emptyReason) ? batch.emptyReason : null,
-          tasks: normalizeTasks(tasks, league, `${league}-${batchIndex}-`),
+          tasks: league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, batchDate) : normalizeTasks(tasks, league, `${league}-${batchIndex}-`),
         };
       });
       const leagues = normalizedBatches.map(batch => batch.league);
       const valid = /^\d{4}-\d{2}-\d{2}$/.test(date)
         && normalizedBatches.length > 0
-        && normalizedBatches.length <= 4
-        && normalizedBatches.every(batch => isLeagueId(batch.league)
+        && normalizedBatches.length <= ANALYSIS_LEAGUE_IDS.length
+        && normalizedBatches.every(batch => isAnalysisLeagueId(batch.league)
           && /^\d{4}-\d{2}-\d{2}$/.test(batch.date)
           && batch.tasks.length <= 20)
         && new Set(leagues).size === leagues.length;
       if (!valid) {
-        return NextResponse.json({ ok: false, code: 'INVALID_ALL_LEAGUE_BACKGROUND_JOB', error: '四聯盟背景分析工作內容無效' }, { status: 400 });
+        return NextResponse.json({ ok: false, code: 'INVALID_ALL_LEAGUE_BACKGROUND_JOB', error: '全部聯盟背景分析工作內容無效' }, { status: 400 });
       }
+      // NBA's short, quote-bound pass runs first; preserve baseball group order.
+      normalizedBatches.sort((left, right) => Number(right.league === 'NBA') - Number(left.league === 'NBA'));
       const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
-      const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches, pushDevice, preflightFailures: 4 - normalizedBatches.length }]);
+      const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches, pushDevice, preflightFailures: ANALYSIS_LEAGUE_IDS.length - normalizedBatches.length }]);
       if (requestClaim?.claimed) {
         try { await completeAnalysisJobRequest(requestKey, run.runId); }
         catch {}
@@ -123,10 +128,10 @@ export async function POST(request) {
     }
     const league = cleanText(body?.league, 10).toUpperCase();
     const tasks = Array.isArray(body?.tasks) ? body.tasks : [];
-    if (!isLeagueId(league) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !tasks.length || tasks.length > 20) {
+    if (!isAnalysisLeagueId(league) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !tasks.length || tasks.length > 20) {
       return NextResponse.json({ ok: false, code: 'INVALID_BACKGROUND_JOB', error: '背景分析工作內容無效' }, { status: 400 });
     }
-    const normalizedTasks = normalizeTasks(tasks, league);
+    const normalizedTasks = league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, date) : normalizeTasks(tasks, league);
     const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
     const run = await start(analyzeBoardWorkflow, [{ league, date, tasks: normalizedTasks, pushDevice }]);
     if (requestClaim?.claimed) {
@@ -139,7 +144,8 @@ export async function POST(request) {
       try { await failAnalysisJobRequest(requestKey, error?.message || error); }
       catch {}
     }
-    return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_START_FAILED', error: String(error?.message || error) }, { status: 500 });
+    const invalidNba = String(error?.message || '').startsWith('NBA 分析身分') || String(error?.message || '').startsWith('NBA 工作場次');
+    return NextResponse.json({ ok: false, code: invalidNba ? 'INVALID_NBA_BACKGROUND_JOB' : 'BACKGROUND_JOB_START_FAILED', error: String(error?.message || error) }, { status: invalidNba ? 400 : 500 });
   }
 }
 
@@ -167,7 +173,7 @@ export async function GET(request) {
     const runId = searchParams.get('runId') || '';
     const requestedLeague = cleanText(searchParams.get('league'), 10).toUpperCase();
     const summaryOnly = searchParams.get('summary') === '1';
-    if (requestedLeague && !isLeagueId(requestedLeague)) {
+    if (requestedLeague && requestedLeague !== 'NBA' && !isLeagueId(requestedLeague)) {
       return NextResponse.json({ ok: false, error: '聯盟識別無效' }, { status: 400 });
     }
     if (!RUN_ID.test(runId)) return NextResponse.json({ ok: false, error: '缺少有效背景工作編號' }, { status: 400 });

@@ -28,7 +28,7 @@ assert.match(
 );
 assert.match(
   page,
-  /for \(const id of LEAGUE_IDS\)[\s\S]*(?:const )?batchDate = await allLeagueTargetDate\(id,[\s\S]*manualAnalysisScopesRef\.current\.add\(`\$\{id\}:\$\{batchDate\}`\)/,
+  /for \(const id of ANALYSIS_LEAGUE_IDS\)[\s\S]*allLeagueTargetDate\(id,[\s\S]*manualAnalysisScopesRef\.current\.add\(`\$\{id\}:\$\{batchDate\}`\)/,
   'manual all-league analysis must enable Reader follow-up for all four leagues on each league board date',
 );
 

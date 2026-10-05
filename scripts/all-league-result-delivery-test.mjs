@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
 import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
+import { ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun } from '../lib/analysis-leagues.js';
 
 const ids = ['MLB', 'NPB', 'KBO', 'CPBL'];
 const date = '2026-09-10';
@@ -33,7 +34,7 @@ async function runSummary({ fresh = true, failLeague = '', switchLeague = false 
     submittedAllLeagueRunRef: { current: fresh ? run.runId : null },
     allLeagueBoardsRef: { current: new Map() }, currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date }, boardRef: { current: [] },
     analysisGenerationRef: { current: 1 }, verifyCompletedBoard: async board => board,
-    LEAGUE_IDS: ids, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, materializeAllLeagueResult,
+    LEAGUE_IDS: ids, analysisLeagueIdsForRun, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, materializeAllLeagueResult,
     requestJSON: async url => {
       requests.push(url);
       if (url.includes('summary=1')) return { status: 'completed', result: { batches } };
@@ -77,7 +78,7 @@ const savedJobs = [], submittedJobs = [];
 let publishedRun;
 const noop = () => {};
 const clickContext = {
-  date, league: 'MLB', LEAGUE_IDS: ids,
+  date, league: 'MLB', LEAGUE_IDS: ids, ANALYSIS_LEAGUE_IDS, nbaRunning: false, nbaDate: date,
   readerPollBusyRef: { current: false }, independentRunsRef: { current: new Map() },
   allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false,
   leagueDatesRef: { current: Object.fromEntries(ids.map(id => [id, date])) }, allLeagueRun: null,
@@ -86,6 +87,7 @@ const clickContext = {
   markAppOperationBusy: noop, setAllLeaguePreparing: noop, setError: noop, setNotice: noop,
   createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, publishAllLeagueRun: run => { publishedRun = run; },
   allLeagueTargetDate: async (_id, date) => date, clearBackgroundJob: noop,
+  prepareNbaBatch: async date => ({ league: 'NBA', date, tasks: [], preparedBoard: [], emptyReason: 'no_open_markets' }),
   prepareAllLeagueBatch: async id => {
     if (id === 'NPB') throw Object.assign(new Error('盤口已過期'), { code: 'READER_STALE' });
     const result = batches.find(batch => batch.league === id);
@@ -99,7 +101,7 @@ const clickContext = {
 vm.createContext(clickContext);
 vm.runInContext(page.slice(page.indexOf('  async function oneClickAnalyzeAll('), page.indexOf('  function recheckReaderItem(')), clickContext);
 assert.equal(await clickContext.oneClickAnalyzeAll(), true);
-assert.equal(submittedJobs[0].batches.length, 3);
+assert.equal(submittedJobs[0].batches.length, 4);
 assert.equal(savedJobs.length, 3);
 assert.equal(clickContext.requestedRecoveryScopeRef.current, `MLB:${date}`, 'visible league must attach to incremental progress immediately');
 assert.equal(publishedRun.leagues.NPB.message, '盤口已過期');

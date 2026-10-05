@@ -4,6 +4,7 @@ import { FatalError, RetryableError, getWorkflowMetadata } from 'workflow';
 import { completionMessage, saveNotificationResult, sendPush } from '../lib/analysis-push.js';
 import { POST as analyzeRequest } from '../app/api/analyze/route.js';
 import { createBackgroundAnalysisAuthorization } from '../lib/security.js';
+import { analyzeNbaJobTask } from '../lib/nba/analysis-job.js';
 
 function resultTask(task) {
   const { body: omittedBody, requestId: omittedRequestId, ...context } = task;
@@ -12,6 +13,8 @@ function resultTask(task) {
 
 async function analyzeGameStep(task) {
   'use step';
+
+  if (task.league === 'NBA') return analyzeNbaJobTask(task);
 
   const authorization = await createBackgroundAnalysisAuthorization(task.body);
   const response = await analyzeRequest(new Request('https://background-analysis.internal/api/analyze', {
@@ -106,8 +109,8 @@ export async function analyzeBoardWorkflow(input) {
 export async function analyzeAllLeaguesWorkflow(input) {
   'use workflow';
 
-  if (!input || !Array.isArray(input.batches) || !input.batches.length || input.batches.length > 4) {
-    throw new FatalError('四聯盟背景分析缺少有效工作');
+  if (!input || !Array.isArray(input.batches) || !input.batches.length || input.batches.length > 5) {
+    throw new FatalError('全部聯盟背景分析缺少有效工作');
   }
   const batches = [];
   for (const batch of input.batches) {
@@ -162,4 +165,3 @@ export async function analyzeAllLeaguesWorkflow(input) {
   }
   return output;
 }
-
