@@ -4977,7 +4977,7 @@ export default function Home() {
   return <main className="appShell">
     <header className="appHeader">
       <div><div className="eyebrow">SPORTS DATA & ANALYSIS</div><h1>{nbaSelected ? 'NBA 籃球｜盤口與分析系統' : `${activeLeague.label}｜盤口與實際下注系統`}</h1></div>
-      <div className="headerBadges"><details><summary>系統資訊</summary><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{nbaSelected ? '季前四盤／例行大小｜模型驗證中' : activeLeague.statusLabel}</span><a href="/model-validation">查看四聯盟驗證結果</a></details><button type="button" className="appRefreshButton" title="重新整理並取得最新版" onClick={() => window.location.reload()}>↻ 更新</button><span className="version">v{VERSION}</span></div>
+      <div className="headerBadges"><details><summary>系統資訊</summary><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{nbaSelected ? '季前・例行四盤｜模型驗證中' : activeLeague.statusLabel}</span><a href="/model-validation">查看四聯盟驗證結果</a></details><button type="button" className="appRefreshButton" title="重新整理並取得最新版" onClick={() => window.location.reload()}>↻ 更新</button><span className="version">v{VERSION}</span></div>
     </header>
     {shadowMode && <p className="muted" role="note">模型尚在驗證；分數與 EV 僅供研究，不是正式投注建議。</p>}
     {notificationResultNotice && <p role="status">{notificationResultNotice}</p>}

@@ -1,0 +1,31 @@
+{
+  "sourceArchiveSha256": "1aa1340373e0cbf881d06ab88d6f93705da7ae32b3a229dd99c068a2660d820b",
+  "verifiedGames": 1315,
+  "strictPointInTime": false,
+  "modelSelection": "fixed_existing_score_spec_no_outcome_tuning",
+  "metrics": {
+    "regular": {
+      "samples": 1182,
+      "totalMAE": 9.941918151204762,
+      "marginMAE": 9.224590357214687
+    },
+    "postseason": {
+      "samples": 61,
+      "totalMAE": 10.389263355687222,
+      "marginMAE": 9.924203022891776
+    }
+  },
+  "validation": {
+    "from": "2026-03-01",
+    "samples": 340,
+    "quarterTotalMAE": 9.448766093043746,
+    "quarterMarginMAE": 9.664702796243807,
+    "fullScoreDividedByTwoTotalMAE": 9.582617420826184
+  },
+  "holdoutBasis": "late-season chronological monitoring using fixed inherited parameters; not an untouched model-selection or PIT sample",
+  "limitations": [
+    "Retrospective single-season development; no independent betting win-rate or profitability claim.",
+    "Same-date and future games excluded from every fit.",
+    "Actual first two quarters; overtime excluded."
+  ]
+}

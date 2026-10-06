@@ -1,0 +1,26 @@
+import fs from 'node:fs';
+import {createHash} from 'node:crypto';
+import {gzipSync} from 'node:zlib';
+import {defaultTraining as full} from '../lib/nba/analysis-training.js';
+import {runConservative} from '../lib/nba/analysis-core/score-conservative.js';
+import {createScorePredictor} from '../lib/nba/analysis-core/score-recent.js';
+const input=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+if(input.kind!=='NBA_VERIFIED_ARCHIVED_QUARTER_HISTORY'||input.sourceArchiveSha256!==full.provenance.sourceArchiveSha256)throw Error('ARCHIVE_MISMATCH');
+const history=input.rows.map(row=>({...row,homeScore:row.homeHalf,awayScore:row.awayHalf}));
+const predictions=runConservative(history,full.scorePlan,createScorePredictor(full.scoreStudy.candidates.find(x=>x.id==='recent'),full.scoreStudy));
+const byId=new Map(predictions.map(p=>[p.gameId,p]));
+const pairedResiduals=[],observations=[];
+for(const row of history){const p=byId.get(row.gameId);if(p?.status!=='ready')continue;
+ pairedResiduals.push({gameId:row.gameId,date:row.date,year:row.year,seasonType:row.seasonType,rawHome:row.homeScore-p.predictedHome,rawAway:row.awayScore-p.predictedAway});
+ observations.push({gameId:row.gameId,date:row.date,year:row.year,seasonType:row.seasonType,total:row.homeScore+row.awayScore-p.calibratedHome-p.calibratedAway,margin:row.homeScore-row.awayScore-p.calibratedHome+p.calibratedAway});
+}
+const training={kind:'NBA_QUARTER_SCORE_FIXED_TRAINING',strictPointInTime:false,provenance:{sourceArchiveSha256:input.sourceArchiveSha256,inputSha256:createHash('sha256').update(fs.readFileSync(process.argv[2])).digest('hex'),quarterBasis:'verified_first_two_periods_excludes_overtime'},history,pairedResiduals,observations};
+const encoded=gzipSync(JSON.stringify(training),{level:9}).toString('base64');
+fs.writeFileSync('lib/nba/quarter-training.js',`// Generated from hash-verified archived quarter scores. Never a pregame capture claim.\nimport {gunzipSync} from 'node:zlib';\nif(typeof window!=='undefined')throw Error('NBA_QUARTER_TRAINING_SERVER_ONLY');\nconst freeze=x=>{if(x&&typeof x==='object'){Object.values(x).forEach(freeze);Object.freeze(x);}return x;};\nexport const quarterTraining=freeze(JSON.parse(gunzipSync(Buffer.from('${encoded}','base64')).toString()));\n`);
+const metrics=Object.fromEntries(['regular','postseason'].map(type=>{const rows=observations.filter(x=>x.seasonType===type);return[type,{samples:rows.length,totalMAE:rows.reduce((s,r)=>s+Math.abs(r.total),0)/rows.length,marginMAE:rows.reduce((s,r)=>s+Math.abs(r.margin),0)/rows.length}];}));
+const holdout=observations.filter(r=>r.seasonType==='regular'&&r.date>='2026-03-01');
+const fullPred=new Map(full.predictions.map(r=>[r.gameId,r]));
+const scores=new Map(input.rows.map(r=>[r.gameId,r]));
+const validation={from:'2026-03-01',samples:holdout.length,quarterTotalMAE:holdout.reduce((s,r)=>s+Math.abs(r.total),0)/holdout.length,quarterMarginMAE:holdout.reduce((s,r)=>s+Math.abs(r.margin),0)/holdout.length,fullScoreDividedByTwoTotalMAE:holdout.reduce((s,r)=>{const score=scores.get(r.gameId),p=fullPred.get(r.gameId);return s+Math.abs(score.homeHalf+score.awayHalf-(p.calibratedHome+p.calibratedAway)/2);},0)/holdout.length};
+fs.writeFileSync('docs/nba-quarter-validation.json',JSON.stringify({sourceArchiveSha256:input.sourceArchiveSha256,verifiedGames:history.length,strictPointInTime:false,modelSelection:'fixed_existing_score_spec_no_outcome_tuning',metrics,validation,holdoutBasis:'late-season chronological monitoring using fixed inherited parameters; not an untouched model-selection or PIT sample',limitations:['Retrospective single-season development; no independent betting win-rate or profitability claim.','Same-date and future games excluded from every fit.','Actual first two quarters; overtime excluded.']},null,2)+'\n');
+console.log(JSON.stringify({history:history.length,observations:observations.length,metrics}));
