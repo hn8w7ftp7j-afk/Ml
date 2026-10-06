@@ -67,6 +67,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
         {['away', 'home'].map(side => <p key={side}>{name(row.game[side])}：節奏樣本 {assessment.paceProxy?.[side]?.count ?? 0} 場；前場 {assessment.restProxy?.[side]?.priorDate || '—'}，日期間隔 {assessment.restProxy?.[side]?.gapDays ?? '—'} 天。</p>)}
         <p>校正 {assessment.calibrationSamples} 筆，截止 {assessment.calibrationThrough}；誤差分布 {assessment.distributionSamples} 筆，截止 {assessment.distributionThrough}。分析盤口 {result.quote?.line}｜{localTime(result.observedAt)}。</p></> : <p>尚無可核對的分析原因。</p>}
       <p>歷史分布估計不是已驗證的賽前勝率或 EV；此 NBA 模型目前不開放下注執行。傷停和陣容尚未納入修正。</p>
+      {result?.status === 'ready' && <p>{result.persistence?.persisted ? '本次預測與原盤口已永久保存，可供日後前瞻驗證。' : '本次預測尚未取得永久保存確認，不能計入前瞻驗證樣本。'}</p>}
       {result?.issues?.map((issue, index) => <p key={index}>{issue.message}</p>)}
     </details>
   </section>;
