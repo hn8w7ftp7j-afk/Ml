@@ -6,6 +6,7 @@ import { register } from 'node:module';
 import { parseKboOfficialSchedulePayload, reconcileKboDailyIdentity } from '../lib/asian-baseball.js';
 import { LEAGUE_IDS, leagueConfig } from '../lib/leagues.js';
 import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
+import { analysisLeagueIdsForRun } from '../lib/analysis-leagues.js';
 import { gameIsPrestartNow, touchReaderHeartbeat } from '../lib/client-analysis-state.js';
 import { isHistoricalIdentityConflict, reconcileOfficialBoardIdentity } from '../lib/official-board-identity-v1195.js';
 import { createAnalysisBoardCacheEntry, restoreAnalysisBoardCache } from '../lib/analysis-board-cache-v1.js';
@@ -220,7 +221,7 @@ try {
       const published = [];
       const cleared = [];
       const context = vm.createContext({ Date, Number, String, encodeURIComponent, LEAGUE_IDS,
-        allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague,
+        allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, analysisLeagueIdsForRun,
         storageReady: true, date: DATE, allLeagueRun: running, allLeagueRunRef: { current: running },
         useEffect: effect => effect(), loadAllLeagueAnalysisRun: () => older,
         publishAllLeagueRun: value => { published.push(value); },
