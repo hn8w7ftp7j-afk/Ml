@@ -83,6 +83,7 @@ const runMap = new Map([[scope('NPB'), run]]);
 const guardContext = vm.createContext({
   readerPollBusyRef: { current: false }, independentRunsRef: { current: runMap },
   allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false,
+  nbaRunning: false,
   setNotice() {},
 });
 vm.runInContext(`${guard}\nreturn true; }`, guardContext);
