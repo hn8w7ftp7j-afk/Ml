@@ -1,9 +1,12 @@
 'use client';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { nbaManualRecordStats } from '../../lib/nba/manual-bet-stats.js';
 const Ledger = createContext(null);
 const marketNames = { fullTotal: '全場大小', fullRunline: '全場讓分', firstHalfTotal: '上半大小', firstHalfRunline: '上半讓分' };
 const key = value => [value.date, value.gameId, value.marketKey, value.side].join('|');
 const pick = value => value.side === 'over' ? '大分' : value.side === 'under' ? '小分' : `${value[value.side]} ${value.side === value.lineSide ? '讓分' : '受讓'}`;
+const results = { WIN: '全贏', LOSS: '全輸', PARTIAL_WIN: '部分贏', PARTIAL_LOSS: '部分輸', PUSH: '走水' };
+const money = value => value.toLocaleString('zh-TW', { maximumFractionDigits: 2 });
 async function request(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000), ...options });
   const result = await response.json();
@@ -13,6 +16,7 @@ async function request(url, options = {}) {
 export function NbaBetRecordProvider({ date, active, children }) {
   const [records, setRecords] = useState([]), [status, setStatus] = useState('loading');
   const [error, setError] = useState(''), [pending, setPending] = useState(new Set()), [failed, setFailed] = useState(new Set());
+  const [settling, setSettling] = useState(false), [settlementNotice, setSettlementNotice] = useState('');
   const revision = useRef(0), inFlight = useRef(new Set());
   async function load() {
     const current = ++revision.current; setStatus('loading'); setError('');
@@ -21,7 +25,7 @@ export function NbaBetRecordProvider({ date, active, children }) {
       if (current === revision.current) { setRecords(result.records); setStatus('ready'); }
     } catch (cause) { if (current === revision.current) { setError(cause.message); setStatus('failed'); } }
   }
-  useEffect(() => { setRecords([]); setFailed(new Set()); if (active) void load(); return () => { revision.current++; }; }, [date, active]);
+  useEffect(() => { setRecords([]); setFailed(new Set()); setSettlementNotice(''); if (active) void load(); return () => { revision.current++; }; }, [date, active]);
   async function save(entry) {
     const payload = { date, gameId: entry.game.id, marketKey: entry.marketKey, side: entry.side,
       away: entry.away, home: entry.home, startTime: entry.game.startTime,
@@ -30,6 +34,18 @@ export function NbaBetRecordProvider({ date, active, children }) {
     return mutate(payload, key(payload));
   }
   async function changeStatus(record, action) { return mutate({ action, id: record.id }, key(record)); }
+  async function settle() {
+    if (settling || status !== 'ready') return;
+    const current = revision.current; setSettling(true); setError(''); setSettlementNotice('');
+    try {
+      const result = await request('/api/nba/bet-records', { method: 'POST', signal: AbortSignal.timeout(60000), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settle', date }) });
+      if (current === revision.current) {
+        setRecords(result.records);
+        setSettlementNotice(`本次處理 ${result.summary.checked} 筆，已結算 ${result.summary.settled} 筆；未完賽或尚待官方確認的紀錄仍保留待結算${result.summary.deferred ? `，另 ${result.summary.deferred} 筆將於下次核對` : ''}。`);
+      }
+    } catch (cause) { if (current === revision.current) setError(cause.message); }
+    finally { setSettling(false); }
+  }
   async function mutate(payload, identity) {
     if (status !== 'ready' || inFlight.current.has(identity)) return;
     const current = revision.current; inFlight.current.add(identity);
@@ -44,7 +60,7 @@ export function NbaBetRecordProvider({ date, active, children }) {
     } catch (cause) { if (current === revision.current) { setError(cause.message); setFailed(old => new Set([...old, identity])); } }
     finally { inFlight.current.delete(identity); setPending(new Set(inFlight.current)); }
   }
-  return <Ledger.Provider value={{ date, records, status, error, load, save, changeStatus, pending, failed }}>
+  return <Ledger.Provider value={{ date, records, status, error, load, save, changeStatus, pending, failed, settle, settling, settlementNotice }}>
     {error && active && <div className="errorBox" role="alert">{error}</div>}{children}
   </Ledger.Provider>;
 }
@@ -61,10 +77,14 @@ export function NbaBetRecordButton({ entry }) {
 }
 export function NbaBetRecords() {
   const ledger = useContext(Ledger);
-  return <section className="panel" aria-label="NBA 下注紀錄"><div className="panelHead"><h2>NBA｜下注紀錄</h2><button className="mini secondary" onClick={ledger.load}>重新讀取</button></div>
-    <p>{ledger.date}｜每筆固定 10,000 元｜實際下注紀錄｜待結算</p>
+  const stats = nbaManualRecordStats(ledger.records);
+  return <section className="panel" aria-label="NBA 下注紀錄"><div className="panelHead"><h2>NBA｜下注紀錄</h2><div><button className="mini secondary" disabled={ledger.settling || ledger.status !== 'ready'} onClick={ledger.settle}>{ledger.settling ? '核對官方賽果中…' : '核對賽果並結算'}</button><button className="mini secondary" onClick={ledger.load}>重新讀取</button></div></div>
+    <p>{ledger.date}｜每筆固定 10,000 元｜{ledger.status === 'ready' ? `已結算 ${stats.settled} 筆｜待結算 ${stats.pending} 筆` : '帳本尚未完成同步'}</p>
+    {ledger.status === 'ready' && <p>實際紀錄：{stats.wins} 贏／{stats.losses} 輸／{stats.pushes} 走水｜勝率 {stats.winRate == null ? '—' : `${(stats.winRate * 100).toFixed(2)}%`}｜損益 {money(stats.profit)} 元｜ROI {stats.roi == null ? '—' : `${(stats.roi * 100).toFixed(2)}%`}</p>}
+    <small>勝率按正負結算筆數計算，走水與取消紀錄不計；損益依保存的原盤口、水位及有效輸贏金額 1.5% 退水。本人申報紀錄不列入模型驗證樣本。</small>
+    {ledger.settlementNotice && <p role="status">{ledger.settlementNotice}</p>}
     {ledger.error && <p className="errorBox" role="alert">{ledger.error}</p>}
-    {ledger.records.map(record => <div className="nbaArchivedRecord" key={record.id}><strong>{record.away}（客）@ {record.home}（主）</strong><p>{marketNames[record.marketKey]}｜{pick(record)}｜{record.line}｜水位 {record.water}</p><p>實際金額 {record.stake.toLocaleString('zh-TW')} 元｜{record.status === 'CANCELLED' ? '已取消紀錄' : '已下注 ✓'}</p><button className={`mini ${record.status === 'CANCELLED' ? 'secondary' : 'cancel'}`} disabled={ledger.status !== 'ready' || ledger.pending.has(key(record))} onClick={() => ledger.changeStatus(record, record.status === 'CANCELLED' ? 'restore' : 'cancel')}>{ledger.pending.has(key(record)) ? '保存中…' : record.status === 'CANCELLED' ? '恢復原紀錄' : '取消下注紀錄'}</button><small>保存時間 {new Date(record.recordedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}{record.note ? `｜${record.note}` : ''}</small></div>)}
+    {ledger.records.map(record => <div className="nbaArchivedRecord" key={record.id}><strong>{record.away}（客）@ {record.home}（主）</strong><p>{marketNames[record.marketKey]}｜{pick(record)}｜{record.line}｜水位 {record.water}</p><p>實際金額 {record.stake.toLocaleString('zh-TW')} 元｜{record.status === 'CANCELLED' ? '已取消紀錄' : '已下注 ✓'}</p>{record.settlement && <p>{results[record.settlement.result]}｜{record.settlement.scores.period === 'FIRST_HALF' ? '上半' : '全場含延長'}比分 {record.settlement.scores.away}：{record.settlement.scores.home}｜損益 {money(record.settlement.profit)} 元｜退水 {money(record.settlement.rebate)} 元</p>}<button className={`mini ${record.status === 'CANCELLED' ? 'secondary' : 'cancel'}`} disabled={ledger.status !== 'ready' || ledger.pending.has(key(record))} onClick={() => ledger.changeStatus(record, record.status === 'CANCELLED' ? 'restore' : 'cancel')}>{ledger.pending.has(key(record)) ? '保存中…' : record.status === 'CANCELLED' ? '恢復原紀錄' : '取消下注紀錄'}</button><small>保存時間 {new Date(record.recordedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}{record.note ? `｜${record.note}` : ''}</small></div>)}
     {!ledger.records.length && <p>{ledger.status === 'loading' ? '帳本同步中…' : ledger.status === 'ready' ? '此日期尚無已記錄的下注。' : '帳本尚未同步完成。'}</p>}
   </section>;
 }

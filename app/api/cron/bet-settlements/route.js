@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { settleOpenCloudBets } from '../../../../lib/cloud-bet-store.js';
+import { settleOpenNbaManualRecords } from '../../../../lib/nba/manual-bet-settlement-service.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -18,6 +19,9 @@ export async function GET(request) {
     });
   }
   try {
+    let nba;
+    try { nba = await settleOpenNbaManualRecords({ limit: 100, timeBudgetMs: 15000 }); }
+    catch { nba = { status: 'unavailable', settled: 0 }; }
     // Settlement must not depend on a user opening the ledger page. Process all
     // leagues from the durable OPEN ledger; each ticket is still settled only
     // from its verified official final result and the versioned Tai888 contract.
@@ -27,7 +31,7 @@ export async function GET(request) {
       acc[status] = (acc[status] || 0) + 1;
       return acc;
     }, {});
-    return NextResponse.json({ ok: true, summary }, {
+    return NextResponse.json({ ok: true, summary, nba }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
