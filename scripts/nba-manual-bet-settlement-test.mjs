@@ -60,4 +60,6 @@ assert.equal(stats.settled,1);assert.equal(stats.pending,1);assert.equal(stats.p
 let loads=0,officialLoads=0,archives=0;
 const summary=await settleOpenNbaManualRecords({now:()=>now,list:async()=>[record,{...record,id:'other',side:'under'}],load:async()=>{loads++;return result;},official:async()=>{officialLoads++;return official;},archive:async(r,s)=>{archives++;return{settlement:s};}});
 assert.equal(loads,1);assert.equal(officialLoads,1);assert.equal(archives,2);assert.equal(summary.settled,2);
+const future=await settleOpenNbaManualRecords({now:()=>now,list:async()=>[{...record,startTime:new Date(now+60000).toISOString()}],load:async()=>{throw Error('future game must not be fetched');}});
+assert.equal(future.pending,1);assert.equal(future.reasons.NOT_STARTED,1);
 console.log('NBA verified manual settlement PASS: real official score crosscheck, four markets, credit decimal tails, OT/half separation, fail-closed source/identity, append-only idempotence, original contract preservation, active-only stats and one fetch per game');

@@ -25,7 +25,7 @@ export function NbaBetRecordProvider({ date, active, children }) {
       if (current === revision.current) { setRecords(result.records); setStatus('ready'); }
     } catch (cause) { if (current === revision.current) { setError(cause.message); setStatus('failed'); } }
   }
-  useEffect(() => { setRecords([]); setFailed(new Set()); if (active) void load(); return () => { revision.current++; }; }, [date, active]);
+  useEffect(() => { setRecords([]); setFailed(new Set()); setSettlementNotice(''); if (active) void load(); return () => { revision.current++; }; }, [date, active]);
   async function save(entry) {
     const payload = { date, gameId: entry.game.id, marketKey: entry.marketKey, side: entry.side,
       away: entry.away, home: entry.home, startTime: entry.game.startTime,
@@ -41,7 +41,7 @@ export function NbaBetRecordProvider({ date, active, children }) {
       const result = await request('/api/nba/bet-records', { method: 'POST', signal: AbortSignal.timeout(60000), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settle', date }) });
       if (current === revision.current) {
         setRecords(result.records);
-        setSettlementNotice(`已核對 ${result.summary.checked} 筆，已結算 ${result.summary.settled} 筆，待官方確認 ${result.summary.pending} 筆${result.summary.deferred ? `，其餘 ${result.summary.deferred} 筆將於下次核對` : ''}。`);
+        setSettlementNotice(`本次處理 ${result.summary.checked} 筆，已結算 ${result.summary.settled} 筆；未完賽或尚待官方確認的紀錄仍保留待結算${result.summary.deferred ? `，另 ${result.summary.deferred} 筆將於下次核對` : ''}。`);
       }
     } catch (cause) { if (current === revision.current) setError(cause.message); }
     finally { setSettling(false); }

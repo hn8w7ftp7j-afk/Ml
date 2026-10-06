@@ -37,6 +37,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: npm install --global npm@11
       - run: npm ci --ignore-scripts
       - name: Verify NBA immutable contracts and capture time in PostgreSQL
         env:
