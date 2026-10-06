@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { nbaQuoteFingerprint } from '../lib/nba/quote-fingerprint.js';
 import { loadNbaAnalysis, validNbaAnalysisQuery } from '../lib/nba/analysis-service.js';
 import { createSessionToken } from '../lib/security.js';
 import { requestedLeagueId, leagueCanAnalyze } from '../lib/leagues.js';
@@ -66,3 +67,19 @@ for (const params of ['', 'date=2026-02-30&id=401999001&observedAt=' + encodeURI
   const res = await GET(new Request(`https://fixture.test/api/nba/analysis?${params}`, { headers: { cookie } })); assert.equal(res.status, 400); assert.equal(res.headers.get('Cache-Control'), 'no-store');
 }
 console.log('NBA analysis service: trusted quote/schedule binding, freshness, event identity, start/lock guards, request expiry, private route, query rejection and baseball isolation PASS');
+
+const bound = { ...query, quoteFingerprint: nbaQuoteFingerprint(row) };
+const heartbeat = { ...snapshot, observedAt: new Date(epoch + 1000).toISOString(), pageActivityAt: new Date(epoch + 1000).toISOString(), clientPayloadHash: 'new-heartbeat' };
+assert.equal((await loadNbaAnalysis(bound, options(schedule, heartbeat, { now: epoch + 2000 }))).status, 'ready');
+const duringHeartbeat = await loadNbaAnalysis(bound, options(schedule, snapshot, { now: epoch + 2000, loadReader: (() => { let reads = 0; return async () => ++reads === 1 ? snapshot : heartbeat; })() }));
+assert.equal(duringHeartbeat.status, 'ready');
+assert.equal(duringHeartbeat.observedAt, query.observedAt); // Task binding retained; actual source timestamp separately archived.
+const otherGame = { ...row, captureKey: 'other', away: team(8), home: team(9), fullTotal: { ...row.fullTotal, line: '230' } };
+assert.equal((await loadNbaAnalysis(bound, options(schedule, snapshot, { now: epoch + 2000, loadReader: (() => { let reads = 0; return async () => ++reads === 1 ? snapshot : { ...heartbeat, games: [row, otherGame] }; })() }))).status, 'ready');
+for (const changedRow of [{ ...row, fullTotal: { ...row.fullTotal, line: '221' } }, { ...row, fullTotal: { ...row.fullTotal, overWater: .90 } }, { ...row, marketStatus: 'locked', fullTotal: null }, { ...row, home: team(6) }]) {
+ const result = await loadNbaAnalysis(bound, options(schedule, snapshot, { now: epoch + 2000, loadReader: (() => { let reads = 0; return async () => ++reads === 1 ? snapshot : { ...heartbeat, games: [changedRow] }; })() }));
+ assert.equal(result.status, 'blocked'); assert.equal(result.issues[0].code, 'NBA_ANALYSIS_QUOTE_CHANGED');
+}
+await blocked('NBA_ANALYSIS_QUOTE_CHANGED', schedule, { ...heartbeat, games: [{ ...row, fullTotal: { ...row.fullTotal, line: '222' } }] }, { now: epoch + 2000 }, bound);
+assert.equal(validNbaAnalysisQuery({...query,quoteFingerprint:'bad'}),false);
+console.log('NBA heartbeat race PASS: same contract and other-game updates allowed; real price/water/lock/identity changes blocked');
