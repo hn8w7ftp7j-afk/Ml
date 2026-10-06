@@ -18,7 +18,15 @@ function rejected(request, code, error, status) {
 }
 async function trackMarketLineHistory(snapshot) {
   try {
-    return await recordMarketLineHistory(snapshot);
+    const result = await recordMarketLineHistory(snapshot);
+    if (result.inserted > 0) console.info('[NBA_MARKET_LINE_HISTORY_SAVED]', {
+      league: snapshot?.league,
+      boardDate: snapshot?.boardDate,
+      checked: result.checked,
+      inserted: result.inserted,
+      unchanged: result.unchanged,
+    });
+    return result;
   } catch (error) {
     console.error('[NBA_MARKET_LINE_HISTORY_WRITE_FAILED]', String(error?.message || error));
     return {
