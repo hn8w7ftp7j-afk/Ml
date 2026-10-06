@@ -86,3 +86,4 @@ console.log('NBA heartbeat race PASS: same contract and other-game updates allow
 
 const halfOnlyDefault = await loadNbaAnalysis(query, options({...schedule,data:{games:[{...game,seasonType:'regular',neutralSite:false}]}},{...snapshot,games:[{...row,fullTotal:null,firstHalfTotal:row.fullTotal}]},{analyzeModel:undefined}));
 assert.equal(halfOnlyDefault.status,'insufficient');assert.equal(halfOnlyDefault.modelVersion,'nba-regular-four-market-v1');assert.notEqual(halfOnlyDefault.issues[0]?.code,'NBA_ANALYSIS_TOTAL_UNAVAILABLE');
+assert.equal(halfOnlyDefault.scope,'NBA_same_season_full_and_half_markets');assert.deepEqual(halfOnlyDefault.unsupportedMarkets,[]);
