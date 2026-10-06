@@ -5,6 +5,7 @@ const input = {status:'ready',league:'NBA',gameId:'nba:espn:game:123',date:'2026
  quoteHash:'a'.repeat(64),quote:{line:'220平',overWater:.94,underWater:.92},generatedAt:'2026-10-07T01:00:00Z'};
 const capture=buildNbaAnalysisCapture(input);
 assert.equal(capture.payload.strictPregameReplay,false);assert.equal(capture.payload.promotionEligible,false);
+assert.equal(capture.payload.engineVersion,'11.9.74');
 assert.equal(capture.revision,buildNbaAnalysisCapture({...input,generatedAt:'2026-10-07T01:01:00Z'}).revision);
 assert.notEqual(capture.revision,buildNbaAnalysisCapture({...input,quote:{...input.quote,line:'221平'}}).revision);
 assert.notEqual(capture.revision,buildNbaAnalysisCapture({...input,modelVersion:'synthetic-v2'}).revision);

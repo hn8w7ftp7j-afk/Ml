@@ -8,7 +8,7 @@ export default function ModelValidationPage() {
     <a className="secondary" href="/">回到分析主站</a>
     <section className="panel"><h2>目前尚未全部通過完整驗證</h2><p>功能上線、歷史重播與新比賽驗證是三個不同階段。下表只列保存原盤口與可核對賽前資料的樣本；不把缺資料的場次當成有效回測。</p>
       <p>驗證日期 {audit.date}｜引擎來源 {audit.engineVersion}｜原始程式 {audit.sourceCommit.slice(0, 7)}。這是固定版本的回測紀錄，後續改版須重新驗證。</p>
-      <div style={{ overflowX: 'auto' }}><table><thead><tr><th>聯盟</th><th>有效場次／結算方向</th><th>勝率</th><th>含退水 ROI</th><th>與原回測比較</th></tr></thead><tbody>{audit.leagues.map(row => <tr key={row.league}><td>{row.label}</td><td>{row.games == null ? '尚待驗證' : `${row.games} 場／${row.settled} 筆`}</td><td>{pct(row.winRate)}</td><td>{pct(row.roi)}</td><td>{row.comparison}</td></tr>)}</tbody></table></div>
+      <div style={{ overflowX: 'auto' }}><table><thead><tr><th>聯盟</th><th>可重播場次／已結算選定方向</th><th>勝率</th><th>含退水 ROI</th><th>與原回測比較</th></tr></thead><tbody>{audit.leagues.map(row => <tr key={row.league}><td>{row.label}</td><td>{row.games == null ? '尚待驗證' : `${row.games} 場／${row.settled} 筆`}</td><td>{pct(row.winRate)}</td><td>{pct(row.roi)}</td><td>{row.comparison}</td></tr>)}</tbody></table></div>
       <small>勝率＝正結算筆數÷正負結算筆數，走水排除；部分輸贏依原信用盤比例結算。ROI 使用結算方向的原水位與本金，退水 1.5%。同場多個方向有相關性，不能當成獨立場次。</small>
     </section>
     {audit.leagues.map(row => <section className="panel" key={row.league}><h2>{row.label}</h2><p>{row.coverage}</p><p>{row.limitation}</p></section>)}
