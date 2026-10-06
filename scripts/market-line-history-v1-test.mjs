@@ -80,6 +80,13 @@ const nbaRows = buildMarketLineHistoryRows(nba);
 assert.equal(nbaRows.length, 1);
 assert.equal(nbaRows[0].game_key, '19:30|LAL|GSW');
 assert.equal(nbaRows[0].game_pk, null);
+const nextDayNba = structuredClone(nba);
+nextDayNba.boardDate = '2026-10-07';
+nextDayNba.games[0].boardDate = '2026-10-07';
+nextDayNba.pageActivityAt = '2026-10-07T13:00:00.000Z';
+const nextDayRows = buildMarketLineHistoryRows(nextDayNba);
+assert.equal(nextDayRows[0].game_key, nbaRows[0].game_key, 'compact NBA key may repeat across dates because board_date is a separate identity dimension');
+assert.notEqual(nextDayRows[0].board_date, nbaRows[0].board_date, 'board_date must isolate repeated NBA matchup/time keys');
 assert.ok(nbaRows[0].markets.length < 150, 'NBA direct market representation should be very compact');
 assert.ok(marketLineHistoryStorageBytes(nba) < 250);
 
