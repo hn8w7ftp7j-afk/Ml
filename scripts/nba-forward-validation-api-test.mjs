@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { GET, POST } from '../app/api/nba/validation/route.js';
+import { createSessionToken } from '../lib/security.js';
+process.env.APP_PASSWORD = 'synthetic-forward-validation-test';
+process.env.SESSION_SECRET = 'synthetic-forward-validation-test-secret';
+const cookie = `mlb_session=${await createSessionToken()}`;
+let calls = 0; globalThis.fetch = async () => { calls++; throw Error('External calls forbidden in rejection tests'); };
+const req = (method, authenticated = true, origin = 'http://localhost', body = {}, query = '?date=bad') => new Request(`http://localhost/api/nba/validation${query}`, {
+  method, headers: { ...(authenticated ? { cookie } : {}), origin }, ...(method === 'POST' ? { body: JSON.stringify(body) } : {}) });
+assert.equal((await GET(req('GET', false))).status, 401);
+assert.equal((await POST(req('POST', false))).status, 401);
+assert.equal((await POST(req('POST', true, 'https://other.example'))).status, 403);
+assert.equal((await GET(req('GET'))).status, 400);
+assert.equal((await GET(req('GET', true, 'http://localhost', {}, '?date=2026-10-06&date=2026-10-07'))).status, 400);
+assert.equal((await GET(req('GET', true, 'http://localhost', {}, '?prediction=999'))).status, 400);
+assert.equal((await POST(req('POST', true, 'http://localhost', { action: 'evaluate', date: '2026-02-30' }))).status, 400);
+assert.equal((await POST(req('POST', true, 'http://localhost', { action: 'evaluate', result: { score: 999 } }))).status, 400);
+assert.equal((await POST(req('POST', true, 'http://localhost', { action: 'evaluate', limit: 51 }))).status, 400);
+assert.equal((await POST(req('POST', true, 'http://localhost', { action: 'erase' }))).status, 400);
+assert.equal(calls, 0);
+console.log('NBA forward validation API PASS: authenticated read-only GET, same-origin/rate-limited evaluation, bounded dates, no client prediction/result injection');

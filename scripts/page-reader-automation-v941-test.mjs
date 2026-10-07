@@ -88,7 +88,7 @@ mustMatch(/setLeagueBoardDate\(league, latest\.boardDate\)/, 'Reader date auto-s
 mustMatch(/<span className="kicker">v\{VERSION\} 四聯盟 PIT 影子驗證<\/span>/, 'visible model card must use the current app release instead of a stale hard-coded version');
 mustMatch(/readerHashKey\(date, readerStatus\?\.payloadHash\)/, 'Reader hash key must include date and payload hash');
 mustMatch(/liveReaderHashMatches/, 'live Reader hash confirmation missing');
-mustMatch(/const READER_RECHECK_INTERVAL_MS = 30 \* 1000/, 'Reader thirty-second recheck cadence missing');
+mustMatch(/const READER_RECHECK_INTERVAL_MS = 10 \* 1000/, 'Reader ten-second recheck cadence missing');
 mustMatch(/setInterval\(refreshReader, READER_RECHECK_INTERVAL_MS\)/, 'Reader status polling interval missing');
 assert.doesNotMatch(page, /pollReaderAndReprice\(\);/, 'entry, Reader timers and bet mutations must never invoke automatic repricing');
 mustMatch(/touchReaderHeartbeat/, 'same-content Reader heartbeat must refresh freshness without repricing');
