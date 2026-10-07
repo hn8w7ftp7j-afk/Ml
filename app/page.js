@@ -152,7 +152,10 @@ const ANALYSIS_REQUEST_TIMEOUT_MS = 120_000;
 const BACKGROUND_JOB_START_TIMEOUT_MS = 75_000;
 const BACKGROUND_JOB_RECOVERY_TIMEOUT_MS = 45_000;
 const ANALYSIS_TRANSIENT_RETRY_DELAYS_MS = [0, 2500, 6000];
-const READER_RECHECK_INTERVAL_MS = 30 * 1000;
+// Reader captures arrive independently from the app. Keep the visible board close
+// to the newest accepted market revision so a just-moved line is not shown for
+// up to half a minute before the existing signed reprice/rebuild path runs.
+const READER_RECHECK_INTERVAL_MS = 10 * 1000;
 const REFERENCE_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const OFFICIAL_PRESTART_RECHECK_MS = 60 * 1000;
 const CORE_DATA_BLOCK_RECHECK_MS = 5 * 60 * 1000;
