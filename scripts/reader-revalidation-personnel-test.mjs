@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import './npb-identity-display-test.mjs';
 import { readerAnalysisNeedsRevalidation, advanceUnchangedReaderGame, touchReaderHeartbeat } from '../lib/client-analysis-state.js';
 import { compactAnalysisContext } from '../lib/analysis-transport-v1.js';
@@ -35,4 +36,7 @@ for (const mismatch of ['game', 'team', 'league']) {
  if (mismatch === 'league') wrong.customData.context.leagueId = 'NPB';
  assert.equal(analysisStarterDisplay(wrong, 'away'), '賽程未提供先發', mismatch + ' must not leak personnel');
 }
-console.log('Reader recovery and frozen personnel display PASS');
+const pageSource = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
+assert.match(pageSource, /const READER_RECHECK_INTERVAL_MS = 10 \* 1000;/,
+  'visible boards must recheck Reader revisions within 10 seconds so moved lines enter signed reprice promptly');
+console.log('Reader recovery, fast market-revision pickup and frozen personnel display PASS');
