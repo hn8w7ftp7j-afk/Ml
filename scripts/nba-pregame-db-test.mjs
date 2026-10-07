@@ -10,7 +10,9 @@ globalThis.__nbaTestNeon = () => async (parts, ...values) => {
   if (query.startsWith('INSERT')) {
     const [gameId, revision, , serialized] = values; const key = `${gameId}:${revision}`;
     if (records.has(key)) return [];
-    const row = { revision, payload: JSON.parse(serialized) }; records.set(key, row); return [structuredClone(row)];
+    const reorder = value => Array.isArray(value) ? value.map(reorder) : value && typeof value === 'object'
+      ? Object.fromEntries(Object.keys(value).sort().reverse().map(name => [name, reorder(value[name])])) : value;
+    const row = { revision, payload: reorder(JSON.parse(serialized)) }; records.set(key, row); return [structuredClone(row)];
   }
   if (query.startsWith('SELECT')) return [...records.values()].filter(row => row.payload.gameId === values[0] && (!values[1] || row.revision === values[1])).map(row => structuredClone(row));
   throw new Error('Unexpected SQL');
@@ -30,6 +32,7 @@ const newer = { ...payload, sources: [{ ...payload.sources[0], hash: 'b'.repeat(
 assert.equal((await saveNbaPregame(newer)).inserted, true);
 assert.equal((await loadNbaPregame(game.id)).length, 2);
 assert.ok(statements.every(sql => sql.includes('sports_nba_pregame_v1') && !/\b(?:UPDATE|DELETE|TRUNCATE)\b/.test(sql)));
+assert.ok(statements.filter(sql => sql.startsWith('INSERT')).every(sql => /WHERE NOW\(\) </.test(sql) && /::timestamptz <= NOW\(\)/.test(sql)));
 records.values().next().value.payload.injuryStatus = 'tampered';
 await assert.rejects(() => loadNbaPregame(game.id));
 delete globalThis.__nbaTestNeon;

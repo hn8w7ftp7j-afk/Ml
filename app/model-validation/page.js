@@ -14,6 +14,6 @@ export default function ModelValidationPage() {
     </section>
     {audit.leagues.map(row => <section className="panel" key={row.league}><h2>{row.label}</h2><p>{row.coverage}</p><p>{row.limitation}</p></section>)}
     <section className="panel"><h2>NBA 新版四盤口的歷史誤差</h2><p>核對 {quarterAudit.verifiedGames} 場分節比分。固定沿用既有比分模型規格；每場只使用同球季、同賽制、較早日期的資料。</p><p>{quarterAudit.validation.from} 起共 {quarterAudit.validation.samples} 場例行賽：上半總分平均絕對誤差 {quarterAudit.validation.quarterTotalMAE.toFixed(2)} 分；全場底模除二比較值 {quarterAudit.validation.fullScoreDividedByTwoTotalMAE.toFixed(2)} 分；上半分差平均絕對誤差 {quarterAudit.validation.quarterMarginMAE.toFixed(2)} 分。</p><p>這是單季歷史時間切分檢查，不能換算為原盤口下注勝率，也未證明獨立前瞻改善。</p></section>
-    <section className="panel"><h2>NBA 已補上的驗證基礎</h2><p>新分析會永久保存伺服器產生的預測與原盤口，資料庫核對保存時間早於開賽。本人申報下注可依 NBA 官方與 ESPN 交叉核對的賽果結算，支援全場與上半場大小、讓分。</p><p>本人申報下注的勝率與損益只代表實際紀錄，不作模型驗證樣本。未保存的舊預測、賽前傷停或陣容資料不能事後補成當時已知。</p></section>
+    <section className="panel"><h2>NBA 已補上的驗證基礎</h2><p>新分析會永久保存伺服器產生的預測、原盤口及當時的 S／W／R，資料庫核對保存時間早於開賽。每場每盤口採最後完整賽前版本；赛後以 NBA 官方與 ESPN 核對比分，獨立統計模型成績。</p><p>每小時排程更新已完賽比分與分節歷史；只供較晚日期的預測使用。同季樣本不足不分析，資料衝突或永久保存失敗不假裝更新完成。</p><p><a className="secondary" href="/nba/validation">查看 NBA 原盤口前瞻成績與資料更新</a></p><p>本人申報下注的勝率與損益只代表實際紀錄，不作模型驗證樣本。未保存的舊預測、賽前傷停或陣容資料不能事後補成當時已知；人員觀測目前尚未校正納入比分。</p></section>
   </main>;
 }

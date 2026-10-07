@@ -14,6 +14,7 @@ import { nbaLatestBoardDate, nbaCompletionSummary } from '../../lib/nba/analysis
 import { prepareNbaNotification } from '../../lib/nba/analysis-notification-start.js';
 
 const NbaDataWorkspace = dynamic(() => import('./workspace.js'), { ssr: false });
+const NbaForwardValidationPanel = dynamic(() => import('./forward-validation-panel.js'), { ssr: false });
 const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球隊待核對';
 const num = value => Number.isFinite(value) ? value.toFixed(2) : '—';
 const localTime = value => Number.isFinite(Date.parse(value || '')) ? new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—';
@@ -69,6 +70,8 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
         {['away', 'home'].map(side => <p key={side}>{name(row.game[side])}：節奏樣本 {assessment.paceProxy?.[side]?.count ?? 0} 場；前場 {assessment.restProxy?.[side]?.priorDate || '—'}，日期間隔 {assessment.restProxy?.[side]?.gapDays ?? '—'} 天。</p>)}
         <p>校正 {assessment.calibrationSamples} 筆，截止 {assessment.calibrationThrough}；誤差分布 {assessment.distributionSamples} 筆，截止 {assessment.distributionThrough}。分析盤口 {result.quote?.line}｜{localTime(result.observedAt)}。</p></> : <p>尚無可核對的分析原因。</p>}
       <p>歷史分布估計不是已驗證的賽前勝率或 EV；此 NBA 模型目前不開放下注執行。傷停和陣容尚未納入修正。</p>
+      {result?.trainingPipeline && <p>歷史資料更新：{result.trainingPipeline.status || '已核對'}；新增歷史 {result.trainingPipeline.liveGames ?? 0} 場。完賽資料只供較晚日期使用。</p>}
+      {result?.personnelEvidence && <p>本場人員來源核對：{result.personnelEvidence.status}；傷停 {result.personnelEvidence.coverage?.injuries}；先發 {result.personnelEvidence.coverage?.lineups}。資料不完整不代表全員健康；目前只保存觀測，不修改模型比分。</p>}
       {result?.status === 'ready' && <p>{result.persistence?.persisted ? '本次預測與原盤口已永久保存，可供日後前瞻驗證。' : '本次預測尚未取得永久保存確認，不能計入前瞻驗證樣本。'}</p>}
       {result?.issues?.map((issue, index) => <p key={index}>{issue.message}</p>)}
     </details>
@@ -204,7 +207,8 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
     <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'records' ? 'active' : ''} onClick={() => setView('records')}>下注紀錄</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
     {message && <div className="noticeBox" role="status">{message}</div>}
-    {view !== 'data' && <><section className="heroCard"><div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 NBA｜單場或本日全部</h2></div>
+    <button className={view === 'validation' ? 'primary' : 'secondary'} onClick={() => setView('validation')}>模型前瞻驗證</button>
+    {!['data', 'validation'].includes(view) && <><section className="heroCard"><div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 NBA｜單場或本日全部</h2></div>
       <AnalysisNotificationControl ref={notification}/><div className="heroControls">
         <label>台灣日期<input type="date" value={date} disabled={busy} onInput={event => changeDate(event.currentTarget.value)} onChange={event => changeDate(event.target.value)}/></label>
         <button className="secondary" disabled={busy || loading} onClick={() => { explicitDate.current = false; onDateChange(dateRef.current, false); void load(); }}>跟隨最新盤日</button>
@@ -223,5 +227,6 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
     </>}
     {view === 'records' && <NbaBetRecords/>}
     {view === 'data' && <NbaDataWorkspace/>}
+    {view === 'validation' && <NbaForwardValidationPanel/>}
   </div></NbaBetRecordProvider>;
 }
