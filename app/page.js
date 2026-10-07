@@ -1614,6 +1614,7 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
   const liveWaiting = readerWaitingDisplay(item, readerAuthority, now);
   const waitingLabel = liveWaiting?.message || item.statusLabel;
   const latestCoverage = item.latestMarketCoverage || null;
+  const latestReaderMarkets = Array.isArray(item.latestReaderMarkets) ? item.latestReaderMarkets : [];
   const coverage = liveWaiting?.coverage || latestCoverage || item.marketCoverage || {};
   const preservingPreviousReaderAnalysis = (Boolean(latestCoverage)
     || item.preservedCurrentReaderGame === true
@@ -1708,12 +1709,17 @@ function GameCard({ item, onBet, onCancel, onRecheck, recoveryBusy = false, getB
       {pitPersistence?.confirmed && analysis.replayEnvironment?.sourceArtifact && <p><a href={`/api/pit-model-audit?snapshotId=${encodeURIComponent(pitPersistence.snapshotId)}&artifact=source`} target="_blank" rel="noreferrer">讀取此快照保存的重播來源封存</a></p>}
     </details>
     {pitPersistence && <div className={`sourceBanner ${pitPersistence.confirmed ? 'dataStatusBanner' : 'shadowBanner'}`}><strong>{pitPersistence.confirmed ? 'PIT已保存｜人員依分析時點' : 'PIT永久保存未確認'}</strong><span>{pitPersistence.status || 'UNKNOWN'}｜{pitPersistence.reason || '未提供原因'}｜{pitPersistence.snapshotId ? String(pitPersistence.snapshotId).slice(0, 36) : '無快照識別'}</span></div>}
+    {preservingPreviousReaderAnalysis && latestReaderMarkets.length > 0 && <div className="sourceBanner actualSource"><strong>目前 Reader 最新盤｜重新計算中</strong>{MARKET_ORDER.map(market => {
+      const rows = latestReaderMarkets.filter(row => row?.market === market);
+      if (!rows.length) return null;
+      return <span key={`live-${market}`}><b>{market}：</b>{rows.map(row => `${translateTeamText(row.pick)} ${waterText(row.water)}`).join(' ／ ')}</span>;
+    })}<span>下方 W／R／S 與盤口屬上一版分析，重新計算完成前不代表目前盤口。</span></div>}
     {liveWaiting ? <div className="sourceBanner actualSource"><strong>{liveWaiting.label}</strong><span>最新Reader盤口時間：{localTime(liveWaiting.observedAt)}｜盤口狀態不代表分析已完成。</span></div> : item.actualSource && <div className="sourceBanner actualSource"><strong>{item.actualSource.label}</strong><span>盤口內容時間：{localTime(item.actualSource.observedAt)}（卡片來源紀錄）｜分析記錄盤口時間：{localTime(analysis.lineAsOf)}；兩者各依原欄位顯示，逐方向盤口時間與版本請見完整分析匯出。</span></div>}
     {item.error && <div className="errorBox">{item.error}</div>}
     {!item.referenceData && !item.error && <div className="emptyGame">{waitingLabel}</div>}
     {item.referenceData && <>
       {(item.actualSource || item.marketCoverage || actualRows.length > 0) && <div className="actualBox">
-        <div className="actualHead"><strong>Tai888 實際信用盤</strong><span>{preservingPreviousReaderAnalysis ? 'Reader最新' : ''}已開 {openMarketCount}/4 市場{preservingPreviousReaderAnalysis ? '｜保留上一版分析' : ''}</span></div>
+        <div className="actualHead"><strong>{preservingPreviousReaderAnalysis ? '上一版分析盤口（非目前Reader）' : 'Tai888 實際信用盤'}</strong><span>已開 {openMarketCount}/4 市場{preservingPreviousReaderAnalysis ? '｜等待最新盤重新計算' : ''}</span></div>
         {liveWaiting?.open
           ? <div className="readerWaitingSummary"><strong>{liveWaiting.message}</strong><span>盤口已收到；尚未計算的方向不會冒充分析結果。</span></div>
           : allDirectionsUnopened
@@ -3007,6 +3013,7 @@ export default function Home() {
         marketCoverage: task?.marketCoverage || previous.marketCoverage || null,
         latestMarketCoverage: null,
         latestReaderSource: null,
+        latestReaderMarkets: null,
         readerProvenance: task?.readerProvenance || previous.readerProvenance || null,
         readerPayloadHash: task?.readerPayloadHash || previous.readerPayloadHash || null,
         pendingReaderEvidenceHash: null,
@@ -4083,6 +4090,7 @@ export default function Home() {
           marketCoverage: retainingPreviousRevision ? previous?.marketCoverage || null : foundCredit?.marketCoverage || previous?.marketCoverage || null,
           latestMarketCoverage: waitingForReader || pendingReaderAnalysis ? currentMarketCoverage : null,
           latestReaderSource: waitingForReader || pendingReaderAnalysis ? foundCredit?.source || null : null,
+          latestReaderMarkets: waitingForReader || pendingReaderAnalysis ? foundCredit?.markets || [] : null,
           readerProvenance: capturedHistoricalPit ? foundCredit.readerProvenance : retainingPreviousRevision ? previous?.readerProvenance || null : foundCredit?.readerProvenance || previous?.readerProvenance || null,
           readerPayloadHash: resumed?.readerPayloadHash || (capturedHistoricalPit ? credit.payloadHash : null),
           customMarkets: resumed?.customMarkets || (capturedHistoricalPit ? foundCredit.markets : retainingPreviousRevision ? previous?.customMarkets || [] : represented ? foundCredit.markets || [] : previous?.customMarkets || []),
@@ -4118,6 +4126,7 @@ export default function Home() {
           readerPayloadHash: null,
           latestMarketCoverage: null,
           latestReaderSource: null,
+          latestReaderMarkets: null,
           pendingReaderAnalysis: false,
           preservedCurrentReaderGame: false,
           readerWaitingHandled: false,
@@ -4415,6 +4424,7 @@ export default function Home() {
             ...current,
             latestMarketCoverage: actual.marketCoverage || null,
             latestReaderSource: actual.source || null,
+            latestReaderMarkets: actual.markets || [],
             readerPayloadHash: null,
             pendingReaderAnalysis: false,
             preservedCurrentReaderGame: preserve,
@@ -4526,6 +4536,7 @@ export default function Home() {
             readerPayloadHash: null,
             latestMarketCoverage: actual.marketCoverage || null,
             latestReaderSource: actual.source || null,
+            latestReaderMarkets: actual.markets || [],
             pendingReaderEvidenceHash: directRepriceEvidenceHash || null,
             pendingReaderAnalysis: true,
             preservedCurrentReaderGame: false,
@@ -4570,6 +4581,7 @@ export default function Home() {
               marketCoverage: actual.marketCoverage || current.marketCoverage || null,
               latestMarketCoverage: null,
               latestReaderSource: null,
+              latestReaderMarkets: null,
               pendingReaderEvidenceHash: null,
               readerProvenance: actual.readerProvenance || current.readerProvenance || null,
               readerPayloadHash: credit.payloadHash,
