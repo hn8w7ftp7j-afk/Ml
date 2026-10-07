@@ -27,6 +27,9 @@ assert.match(poll, /creditRevision === creditRevisionRef\.current\s*&& !blockedR
 assert.doesNotMatch(page, /needsCoreRefresh[\s\S]{0,240}oneClickAnalyze\(\)/, 'core expiry must not use the foreground full-board retry timer');
 assert.match(poll, /sameBlockedEvidence[\s\S]*retryAt > Date\.now\(\)/, 'the same blocked per-game evidence must be suppressed during backoff');
 assert.match(poll, /rebuildTasks\.push\(rebuildTask\)/, 'missing snapshots must be collected for durable rebuild');
+assert.match(page, /latestReaderMarkets: waitingForReader \|\| pendingReaderAnalysis \? foundCredit\?\.markets \|\| \[\] : null/, 'changed Reader markets must be retained separately from the old analysed contract');
+assert.match(page, /目前 Reader 最新盤｜重新計算中/, 'pending cards must show the live Reader contract instead of visually presenting the old analysed line as current');
+assert.match(page, /上一版分析盤口（非目前Reader）/, 'retained W\/R\/S rows must be explicitly labelled as the prior contract while repricing');
 assert.match(poll, /if \(!snapshot \|\| !item\.referenceData \|\| !coreSnapshotReusable\(item\)\) \{[\s\S]*readerPayloadHash: null[\s\S]*rebuildTasks\.push\(rebuildTask\)/, 'stale core snapshots must revoke execution and use durable rebuild instead of looping through reprice 409');
 assert.match(poll, /runDurableAnalysisTasks\(rebuildTasks, generation, targetDate/, 'automatic rebuilds must use the durable Workflow route');
 assert.doesNotMatch(poll, /const rebuilt = await analyzeBoardItem\(/, 'Reader polling must not rebuild distributions in the foreground');
