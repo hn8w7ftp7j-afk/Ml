@@ -39,4 +39,7 @@ for (const mismatch of ['game', 'team', 'league']) {
 const pageSource = fs.readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
 assert.match(pageSource, /const READER_RECHECK_INTERVAL_MS = 10 \* 1000;/,
   'visible boards must recheck Reader revisions within 10 seconds so moved lines enter signed reprice promptly');
+assert.match(pageSource, /includeMarkets=1/, 'read-only Reader polling must request the latest per-game contracts for UI drift detection');
+assert.match(pageSource, /sameReaderGameMarkets\(item\?\.customMarkets, latestMarkets\)/, 'the UI must compare the displayed analysed contract against the latest Reader contract');
+assert.match(pageSource, /latestReaderMarkets: latestMarkets/, 'a changed Reader contract must be retained for immediate display before a manual recalculation finishes');
 console.log('Reader recovery, fast market-revision pickup and frozen personnel display PASS');
