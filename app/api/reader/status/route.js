@@ -65,6 +65,32 @@ export async function GET(request) {
   const snapshot = await loadReaderSnapshot(league, date);
   const complete = readerSnapshotIsComplete(snapshot);
   const publicView = readerSnapshotPublicView(snapshot, { complete, now: Date.now(), league });
+  const includeMarkets = siteIdentity === true && searchParams.get('includeMarkets') === '1';
+  const latestGames = includeMarkets && complete && publicView?.fresh === true
+    ? [...(snapshot?.games || []), ...(snapshot?.unopenedGames || [])].map(row => ({
+      gamePk: Number(row?.gamePk) || null,
+      marketStatus: row?.marketStatus || null,
+      markets: Array.isArray(row?.markets) ? row.markets.map(market => ({
+        market: market?.market || '',
+        pick: market?.pick || '',
+        water: Number.isFinite(Number(market?.water)) ? Number(market.water) : null,
+        executable: market?.executable === true,
+        lineAsOf: market?.lineAsOf || snapshot?.pageActivityAt || null,
+        sourceType: market?.sourceType || null,
+        provider: market?.provider || null,
+      })) : [],
+      marketCoverage: row?.marketCoverage || null,
+      source: row?.source ? {
+        provider: row.source.provider || null,
+        label: row.source.label || null,
+        sourceType: row.source.sourceType || null,
+        observedAt: row.source.observedAt || snapshot?.observedAt || null,
+        receivedAt: row.source.receivedAt || snapshot?.receivedAt || null,
+        pageActivityAt: row.source.pageActivityAt || snapshot?.pageActivityAt || null,
+        executable: row.source.executable === true,
+      } : null,
+    })).filter(row => Number.isSafeInteger(row.gamePk) && row.gamePk > 0)
+    : undefined;
   return NextResponse.json({
     ok: true,
     league,
@@ -72,5 +98,6 @@ export async function GET(request) {
     storeVersion: READER_STORE_VERSION,
     freshnessTtlSeconds: READER_FRESH_SECONDS,
     ...publicView,
+    ...(includeMarkets ? { games: latestGames || [] } : {}),
   }, { headers: { ...headers, 'Cache-Control': 'no-store' } });
 }
