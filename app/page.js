@@ -72,6 +72,7 @@ import {
   readerHashKey,
   readerAnalysisNeedsRevalidation,
   readerTaskGameRevisionIsStale,
+  sameReaderGameMarkets,
   shouldAcceptReaderStatus,
   shouldAcknowledgeReaderHash,
   touchReaderHeartbeat,
@@ -2716,7 +2717,7 @@ export default function Home() {
         // not pin the app to yesterday and hide the new board's full slate.
         const hasCurrentPrestartGame = board.some(item => gameIsPrestartNow(item?.game, stamp));
         const [value, latest] = await Promise.all([
-          requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(date)}&t=${stamp}`, {}, 20000),
+          requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&date=${encodeURIComponent(date)}&includeMarkets=1&t=${stamp}`, {}, 20000),
           requestJSON(`/api/reader/status?league=${encodeURIComponent(league)}&t=${stamp}`, {}, 20000),
         ]);
         if (!active) return;
@@ -2734,6 +2735,34 @@ export default function Home() {
           return;
         }
         commitReaderStatus(value);
+        if (value?.fresh === true && Array.isArray(value?.games) && value.games.length) {
+          const latestByPk = new Map(value.games.map(row => [Number(row?.gamePk), row]));
+          setBoard(current => current.map(item => {
+            if (!gameIsPrestartNow(item?.game, stamp) || ['running', 'queued'].includes(item?.status)) return item;
+            const latest = latestByPk.get(Number(item?.game?.gamePk));
+            if (!latest) return item;
+            const latestMarkets = Array.isArray(latest?.markets) ? latest.markets : [];
+            const sameContract = latestMarkets.length > 0 && sameReaderGameMarkets(item?.customMarkets, latestMarkets);
+            if (sameContract) return item;
+            const preserve = analysisHasCalculatedDirections(item?.customData);
+            if (!preserve) return item;
+            return {
+              ...item,
+              readerPayloadHash: null,
+              latestMarketCoverage: latest?.marketCoverage || null,
+              latestReaderSource: latest?.source || null,
+              latestReaderMarkets: latestMarkets,
+              pendingReaderAnalysis: latestMarkets.length > 0,
+              preservedCurrentReaderGame: latestMarkets.length === 0,
+              readerWaitingHandled: latestMarkets.length === 0,
+              status: 'done',
+              statusLabel: latestMarkets.length
+                ? 'Reader盤口已更新｜保留上一版分析｜等待重新分析'
+                : 'Reader目前尚未完整開盤｜保留上一版分析',
+              error: '',
+            };
+          }));
+        }
         if (value?.fresh || hasCurrentPrestartGame || operationBusyRef.current
           || allLeagueRunning || allLeagueBusyRef.current || readerPollBusyRef.current) return;
         if (!active || !latest?.fresh || !/^\d{4}-\d{2}-\d{2}$/.test(String(latest.boardDate || ''))) return;
