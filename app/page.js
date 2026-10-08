@@ -25,7 +25,7 @@ import { analysisSourceStatusDisplay } from '../lib/npb-identity-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
 import { rankingWarningPresentation, rankingStatusText } from '../lib/ranking-display.js';
 import NbaMainWorkspace from './nba/main-workspace.js';
-import { nbaLatestBoardDate } from '../lib/nba/analysis-ui-policy.js';
+import { loadNbaUpcomingBoard } from '../lib/nba/analysis-ui-policy.js';
 import { ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun } from '../lib/analysis-leagues.js';
 import GameAnalysisCopy from './game-analysis-copy.js';
 import Link from 'next/link';
@@ -1807,6 +1807,7 @@ export default function Home() {
   const [league, setLeague] = useState('MLB');
   const [nbaSelected, setNbaSelected] = useState(false);
   const [nbaDate, setNbaDate] = useState(taipeiDate());
+  const [nbaPreparedScope, setNbaPreparedScope] = useState(null);
   const nbaExplicitDateRef = useRef(false);
   const onNbaDateChange = useCallback((value, explicit) => { nbaExplicitDateRef.current = Boolean(explicit); setNbaDate(value); }, []);
   const [nbaRunning, setNbaRunning] = useState(false);
@@ -3706,12 +3707,14 @@ export default function Home() {
   }
 
   async function prepareNbaBatch(targetDate) {
-    if (!nbaExplicitDateRef.current) {
-      const reader = await requestJSON('/api/nba/reader', {}, 20000);
-      targetDate = nbaLatestBoardDate(reader, targetDate);
-    }
-    const board = await requestJSON(`/api/nba/analysis-board?date=${encodeURIComponent(targetDate)}`, {}, 60000);
-    return { league: 'NBA', date: targetDate, tasks: board.tasks, emptyReason: board.emptyReason, preparedBoard: [] };
+    const board = await loadNbaUpcomingBoard({
+      selectedDate: targetDate, manual: nbaExplicitDateRef.current,
+      loadReader: () => requestJSON('/api/nba/reader', {}, 20000),
+      loadBoard: value => requestJSON(`/api/nba/analysis-board?date=${encodeURIComponent(value)}`, {}, 60000),
+    });
+    setNbaDate(board.date);
+    setNbaPreparedScope({ date: board.date });
+    return { league: 'NBA', date: board.date, tasks: board.tasks, emptyReason: board.emptyReason, preparedBoard: [] };
   }
 
   async function oneClickAnalyzeAll() {
@@ -3760,7 +3763,11 @@ export default function Home() {
             });
             publishAllLeagueRun(run);
           });
-          if (id === 'NBA') batchDate = batch.date;
+          if (id === 'NBA') {
+            batchDate = batch.date;
+            leagueDatesRef.current[id] = batchDate;
+            manualAnalysisScopesRef.current.add(`${id}:${batchDate}`);
+          }
           run = updateAllLeagueAnalysisLeague(run, id, {
             status: batch.emptyReason || 'queued',
             boardDate: batchDate,
@@ -5042,7 +5049,7 @@ export default function Home() {
       <Link prefetch={false} className="sportModuleLink" href="/external-audit"><b>外部來源</b><small>獨立稽核，不改評分</small></Link>
     </nav>
 
-    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress}/>
+    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress}/>
     <div hidden={nbaSelected}>
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>

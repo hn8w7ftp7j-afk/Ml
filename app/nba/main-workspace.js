@@ -10,7 +10,7 @@ import { NbaBetRecordProvider, NbaBetRecordButton, NbaBetRecords } from './bet-r
 import AnalysisNotificationControl from '../analysis-notification-control.js';
 import AllLeagueProgress from '../all-league-progress.js';
 import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-start-request-journal.js';
-import { nbaLatestBoardDate, nbaCompletionSummary } from '../../lib/nba/analysis-ui-policy.js';
+import { loadNbaUpcomingBoard, nbaCompletionSummary } from '../../lib/nba/analysis-ui-policy.js';
 import { prepareNbaNotification } from '../../lib/nba/analysis-notification-start.js';
 
 const NbaDataWorkspace = dynamic(() => import('./workspace.js'), { ssr: false });
@@ -78,7 +78,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   </section>;
 }
 
-export default function NbaMainWorkspace({ active, allRun, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress }) {
+export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress }) {
   const [date, setDate] = useState(() => taipeiDate(Date.now()));
   const [rows, setRows] = useState([]);
   const [view, setView] = useState('board');
@@ -103,6 +103,10 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
   const busy = running || otherBusy;
   useEffect(() => { onBusyChange(running); }, [running, onBusyChange]);
   useEffect(() => { onDateChange(date, explicitDate.current); }, [date, onDateChange]);
+  useEffect(() => {
+    if (!validDate(preparedScope?.date) || operation.current || preparedScope.date === dateRef.current) return;
+    dateRef.current = preparedScope.date; setDate(preparedScope.date); setRows([]); setSelected(''); setProgress(null);
+  }, [preparedScope]);
   useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(NBA_JOB_STORAGE) || 'null'); if (validNbaJob(saved)) { setJob(saved); if (saved.status === 'running' || saved.status === 'starting') setDate(saved.date); } } catch {} }, []);
   useEffect(() => {
     const incoming = notificationJob || (allRun?.runId && Number(allRun.leagues?.NBA?.total) > 0 ? { runId: allRun.runId, date: allRun.leagues.NBA.boardDate, startedAt: allRun.startedAt } : null);
@@ -113,17 +117,20 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
   }, [allRun?.runId, allRun?.leagues?.NBA?.total, notificationJob]);
   useEffect(() => { if (!active) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [active]);
 
-  async function load(target = date) {
+  async function load(target = dateRef.current, { followLatest = true } = {}) {
     const revision = ++requestRevision.current; setLoading(true); setError('');
     try {
-      if (!explicitDate.current && !['running', 'starting'].includes(jobRef.current?.status)) {
-        const reader = await api('/api/nba/reader');
-        if (revision !== requestRevision.current) return null;
-        const latest = nbaLatestBoardDate(reader, target);
-        if (latest !== target) { target = latest; dateRef.current = latest; setDate(latest); setRows([]); setProgress(null); setSelected(''); }
-      }
-      const board = await api(`/api/nba/analysis-board?date=${encodeURIComponent(target)}`);
+      const board = await loadNbaUpcomingBoard({
+        selectedDate: target,
+        manual: !followLatest || explicitDate.current || ['running', 'starting'].includes(jobRef.current?.status),
+        loadReader: () => api('/api/nba/reader'),
+        loadBoard: value => api(`/api/nba/analysis-board?date=${encodeURIComponent(value)}`),
+      });
       if (revision !== requestRevision.current || target !== dateRef.current) return null;
+      if (board.date !== target) {
+        dateRef.current = board.date; setDate(board.date); onDateChange(board.date, explicitDate.current);
+        setRows([]); setProgress(null); setSelected('');
+      }
       setReaderStatus(board.readerStatus);
       setRows(current => board.rows.map(row => {
         const previous = current.find(old => old.game.id === row.game.id);
@@ -181,7 +188,7 @@ export default function NbaMainWorkspace({ active, allRun, notificationJob, onAn
     if (operation.current || busy) return; operation.current = true; setStarting(true); setError(''); setProgress(null); setMessage('正在核對最新 NBA 盤口並送出分析工作…');
     try {
       prepareNbaNotification(notification.current);
-      const board = await load(date);
+      const board = await load(dateRef.current, { followLatest: !id });
       if (!board) return;
       const tasks = board.tasks.filter(task => !id || task.nbaQuery.id === id);
       if (!tasks.length) { setMessage('目前沒有可分析的賽前盤口；各場原因已列出。'); return; }
