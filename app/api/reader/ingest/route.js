@@ -69,20 +69,29 @@ function temporalError(message, code) {
 }
 
 function assertMonotonic(previous, envelope, boardChanged) {
-  if (!previous) return;
+  if (!previous) return { duplicateCapture: false };
   const previousObserved = Date.parse(previous.observedAt || '');
   const previousActivity = Date.parse(previous.pageActivityAt || '');
   const observed = Date.parse(envelope.observedAt);
   const activity = Date.parse(envelope.pageActivityAt);
-  if (Number.isFinite(previousObserved) && observed <= previousObserved) {
-    throw temporalError('Reader observedAt 未向前推進，已拒絕重播快照', 'READER_OBSERVED_AT_NOT_ADVANCING');
-  }
   if (Number.isFinite(previousActivity) && activity < previousActivity) {
     throw temporalError('Reader pageActivityAt 時間倒退，已拒絕舊盤覆蓋', 'READER_ACTIVITY_TIME_REGRESSION');
+  }
+  if (Number.isFinite(previousObserved) && observed < previousObserved) {
+    throw temporalError('Reader observedAt 時間倒退，已拒絕舊盤覆蓋', 'READER_OBSERVED_AT_REGRESSION');
   }
   if (boardChanged && Number.isFinite(previousActivity) && activity <= previousActivity) {
     throw temporalError('Reader 盤口內容變更但頁面活動時間未推進，已拒絕重播', 'READER_CHANGED_BOARD_WITHOUT_ACTIVITY');
   }
+  // Two content-frame captures can legitimately share the same millisecond.
+  // Equality is not a replay when the board fingerprint changed and page
+  // activity advanced. For an identical board, treat it as an idempotent
+  // duplicate instead of turning a valid Reader sync into a 409.
+  return {
+    duplicateCapture: Number.isFinite(previousObserved)
+      && observed === previousObserved
+      && !boardChanged,
+  };
 }
 
 function snapshotMatchesSchedule(snapshot, schedule, league) {
@@ -159,7 +168,38 @@ export async function POST(request) {
     }
 
     const unchangedBoard = previous?.rawBoardHash === envelope.rawBoardHash;
-    assertMonotonic(previous, envelope, !unchangedBoard);
+    const temporal = assertMonotonic(previous, envelope, !unchangedBoard);
+    if (unchangedBoard && temporal.duplicateCapture
+      && previous?.deviceId === token.deviceId
+      && previous?.sourceHost === envelope.sourceHost
+      && previous?.boardDate === envelope.boardDate
+      && previous?.league === league
+      && snapshotMatchesSchedule(previous, schedule, league)) {
+      return NextResponse.json({
+        ok: true,
+        league,
+        heartbeat: true,
+        duplicateCapture: true,
+        message: `Tai888 Reader 重複毫秒擷取已安全忽略｜已開盤 ${previous.matchedGameCount} 場｜市場 ${previous.marketCount || 0} 個`,
+        boardDate: previous.boardDate,
+        payloadHash: previous.payloadHash,
+        rawBoardHash: previous.rawBoardHash,
+        rawGameCount: previous.rawGameCount,
+        matchedGameCount: previous.matchedGameCount,
+        marketCount: previous.marketCount || 0,
+        directionCount: previous.directionCount || 0,
+        partialGameCount: previous.partialGameCount || 0,
+        unopenedGameCount: previous.unopenedGameCount || 0,
+        scheduleGameCount: previous.scheduleGameCount,
+        unmatched: previous.unmatched || [],
+        receivedAt: previous.receivedAt,
+        observedAt: previous.observedAt,
+        pageActivityAt: previous.pageActivityAt,
+        runtimeCache: true,
+        allRequiredWritesSucceeded: true,
+        freshness: readerSnapshotStatus(previous, Date.now(), league),
+      }, { headers });
+    }
     if (unchangedBoard
       && previous?.deviceId === token.deviceId
       && previous?.sourceHost === envelope.sourceHost
