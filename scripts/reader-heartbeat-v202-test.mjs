@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 process.env.READER_STORE_MEMORY_ONLY = 'true';
 
 const {
@@ -94,4 +95,8 @@ assert.equal(readerSnapshotStatus({
   pageActivityAt: '2026-08-12T00:00:30.000Z',
 }, Date.parse('2026-08-12T00:10:01.000Z'), 'MLB').fresh, false);
 
-console.log('Reader 2.0.3 heartbeat: page activity controls lineAsOf/freshness; replay, rollback and stale activity rejected');
+const ingestRoute = fs.readFileSync(new URL('../app/api/reader/ingest/route.js', import.meta.url), 'utf8');
+assert.match(ingestRoute, /observed < previousObserved/, 'strictly older observedAt must still be rejected');
+assert.match(ingestRoute, /observed === previousObserved[\s\S]*!boardChanged/, 'same-millisecond identical captures must be treated as idempotent duplicates');
+assert.match(ingestRoute, /duplicateCapture: true/, 'duplicate captures must return an explicit accepted heartbeat instead of 409');
+console.log('Reader heartbeat: freshness/replay guards plus same-millisecond duplicate acceptance PASS');
