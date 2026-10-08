@@ -8,7 +8,7 @@ for (const prepare of [() => new Promise(() => {}), () => Promise.reject(new Err
   let submissions = 0, boardReads = 0, job;
   const board = { date: '2026-10-06', tasks: [{ nbaQuery: { id: '401898388' }, game: { id: 'nba:espn:game:401898388' } }] };
   const context = vm.createContext({ operation: { current: false }, busy: false, notification: { current: { prepare } }, prepareNbaNotification,
-    date: '2026-10-05', load: async () => { boardReads++; return board; }, crypto: { randomUUID: () => 'fixture-uuid' }, Date,
+    date: '2026-10-05', dateRef: { current: '2026-10-05' }, load: async () => { boardReads++; return board; }, crypto: { randomUUID: () => 'fixture-uuid' }, Date,
     setStarting() {}, setError() {}, setMessage() {}, setProgress() {}, setRows() {}, store: () => true, setJob: value => { job = value; },
     api: async (url, options) => { submissions++; assert.equal(url, '/api/analysis-jobs'); assert.equal(JSON.parse(options.body).date, board.date); return { runId: 'fixture-run-id' }; } });
   vm.runInContext(start + '\nthis.startNba = start;', context);
