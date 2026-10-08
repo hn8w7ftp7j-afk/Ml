@@ -64,18 +64,23 @@ function waterIn(value) {
 function tokenCandidates(value) {
   return clean(value)
     .replace(/[＋]/g, '+')
-    .replace(/[－–—]/g, '-')
+    .replace(/[－–—−]/g, '-')
+    // DOM text nodes may split the base, sign and percentage into spans.
+    // Join only adjacent contract fragments, never across direction/water rows.
+    .replace(/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)\s*([+-])\s*(\d{1,3})(?=\s|$)/g, '$1$2$3')
+    .replace(/(\d+)\s+平(?=\s|$)/g, '$1平')
     .split(/\s+/)
-    .map(token => token.replace(/^[^0-9]+|[^0-9平+\-./]+$/g, ''))
-    .filter(token => token && LINE_TOKEN.test(token) && !WATER_TOKEN.test(token));
+    .map(token => token.replace(/^[^0-9+\-]+|[^0-9平+\-./]+$/g, ''))
+    .filter(token => token && !WATER_TOKEN.test(token) && /[\d+\-]/.test(token));
 }
 
 function lineTokenIn(value) {
   const candidates = tokenCandidates(value);
-  return candidates.find(token => /平|[+-]|\//.test(token))
-    || candidates.find(token => /^\d+\.5$/.test(token))
-    || candidates[0]
-    || '';
+  // A second line or a detached signed tail is conflicting evidence. Do not
+  // silently pick the first token (e.g. `224平 -50` → `224平`).
+  if (candidates.some(token => !LINE_TOKEN.test(token))) return null;
+  const unique = [...new Set(candidates)];
+  return unique.length > 1 ? null : unique[0] || '';
 }
 
 function pairLines(cell) {
@@ -118,6 +123,7 @@ function parseRunline(cell, awayIndex = 0) {
   const homeRow = rows[1 - awayIndex];
   const awayLine = lineTokenIn(awayRow);
   const homeLine = lineTokenIn(homeRow);
+  if (awayLine === null || homeLine === null) return null;
   // A Tai888 runline belongs to exactly one side.  If both visual rows contain
   // a line token, ownership cannot be proven and guessing would invert the bet.
   if ((!awayLine && !homeLine) || (awayLine && homeLine)) return null;
@@ -139,6 +145,7 @@ function parseTotal(cell) {
   const [topRow, bottomRow] = pairLines(cell);
   const topLine = lineTokenIn(topRow);
   const bottomLine = lineTokenIn(bottomRow);
+  if (topLine === null || bottomLine === null) return null;
   if (topLine && bottomLine && topLine !== bottomLine) return null;
   const line = topLine || bottomLine;
   if (!line) return null;
@@ -161,6 +168,16 @@ function parseTotal(cell) {
     confidence: 1,
     rawRows: [topRow, bottomRow],
   };
+}
+
+// rawRows emitted by the parser are already in away/home order for spreads.
+// The NBA intake can independently verify that the uploaded contract matches
+// these captured market rows before discarding diagnostic text.
+export function parseReaderMarketRows(key, rawRows) {
+  if (!Array.isArray(rawRows) || rawRows.length !== 2
+    || rawRows.some(row => typeof row !== 'string' || row.length > 500)) return null;
+  const cell = { pair: rawRows };
+  return key.endsWith('Total') ? parseTotal(cell) : parseRunline(cell);
 }
 
 function headerIndex(headers, patterns) {

@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.28';
+  const READER_VERSION = '2.1.29';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
