@@ -230,7 +230,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         <button className="primary" disabled={busy || !selected} onClick={() => start(selected)}>只分析這一場</button>
         <button className="secondary" disabled={busy || loading} onClick={() => { explicitDate.current = false; onDateChange(dateRef.current, false); void load(); }}>跟隨最新盤日</button>
         <button className="secondary" disabled={starting || !job} onClick={() => { setDate(job.date); setReconnectRevision(value => value + 1); }}>載入先前分析</button>
-        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.28-NBA-READ.zip" download>下載 Reader v2.1.28</a>
+        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.29-NBA-READ.zip" download>下載 Reader v2.1.29</a>
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun}/></section>

@@ -156,7 +156,7 @@ assert.equal(createHash('sha256').update(canonicalReaderPayload(baseball)).diges
 assert.deepEqual(readerMarketProperties('NBA'), ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
 const background = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(background, /const endpoint = league === 'NBA' \? '\/api\/nba\/reader' : '\/api\/reader\/ingest'/);
-assert.match(background, /const VERSION = '2\.1\.28'/);
+assert.match(background, /const VERSION = '2\.1\.29'/);
 // Execute v2.1.26 recovery behaviors against a stale and then current tab.
 let contentVersion = '2.1.26';
 const reloaded = [];
@@ -173,11 +173,11 @@ vm.runInContext(background.replace(/^import .*?;\n/gm, ''), backgroundContext);
 let scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 0, 'stale content scripts cannot masquerade as the new installed Reader');
 assert.deepEqual([...scanned.silentTabIds], [7]);
-contentVersion = '2.1.28';
+contentVersion = '2.1.29';
 scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 1);
 const report = await vm.runInContext('readerDiagnostics()', backgroundContext);
-assert.equal(report.report.readerVersion, '2.1.28');
+assert.equal(report.report.readerVersion, '2.1.29');
 assert.equal(report.report.boards[0].league, 'NBA');
 assert.equal(Object.hasOwn(report.report, 'readerToken'), false);
 assert.equal(Object.hasOwn(report.report.boards[0], 'pageUrl'), false);
