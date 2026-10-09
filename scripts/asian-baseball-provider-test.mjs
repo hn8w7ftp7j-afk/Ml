@@ -125,6 +125,14 @@ const cpbl = parseCpblSchedulePayload({ Data: { Games: [
 assert.equal(cpbl.length, 2);
 assert.equal(cpbl.find(game => game.statusCode === 'S').awayScore, null, 'CPBL SCHEDULED 的官方 0 只是 placeholder');
 assert.equal(cpbl.find(game => game.statusCode === 'F').innings, 11, 'CPBL 必須使用 InningSeq，不可誤用 GameSno');
+const cpblReserved = parseCpblSchedulePayload({ Data: { Games: [{
+  GameId: '2099-A-103', KindCode: 'A', GameStatus: 'RESERVED', PreExeDate: '2099-08-18T19:05:00', GameSno: 103, InningSeq: 0,
+  Visiting: { Team: { Code: 'ADD011', Name: '統一7-ELEVEn獅' }, Score: 0 },
+  Home: { Team: { Code: 'ACN011', Name: '中信兄弟' }, Score: 0 }, Field: { Abbe: '洲際' },
+}] } }, '2099-08-18');
+assert.equal(cpblReserved.length, 1);
+assert.equal(cpblReserved[0].statusCode, 'S', 'CPBL RESERVED 是已排定未開賽，不得誤判成延期');
+assert.equal(filterLeaguePrestartGames('CPBL', cpblReserved, Date.parse('2099-08-18T09:00:00Z')).length, 1);
 
 const fetchImpl = async url => {
   if (String(url).includes('/announcement/starter/')) return { ok: true, text: async () => '' };
