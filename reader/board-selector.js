@@ -162,7 +162,10 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
     identities.add(identity);
     if (game?.boardDate) dates.add(game.boardDate);
   }
-  if (dates.size !== 1) issues.push(`board-date-count:${dates.size}`);
+  // NBA standard boards legitimately list today and tomorrow together.
+  // Validate the entire source before splitting for date-keyed storage.
+  if (dates.size !== 1 && (parsed.league !== 'NBA' || dates.size === 0)) issues.push(`board-date-count:${dates.size}`);
+  if (dates.size > 1 && !dates.has(parsed.boardDate)) issues.push('board-date-mismatch');
   if (dates.size === 1 && parsed.boardDate !== [...dates][0]) issues.push('board-date-mismatch');
 
   const observedTime = Date.parse(capture.observedAt || '');
@@ -343,4 +346,15 @@ export function shouldSkipSuccessfulPayload({
     && payloadHash === lastSuccessfulPayloadHash
     && ageMs >= 0
     && ageMs < minimumHeartbeatMs;
+}
+
+// Called only after source-wide authority/conflict validation. Each upload
+// preserves the game date and contracts; never relabel tomorrow as today.
+export function readerPayloadsByDate(payload) {
+  if (payload.league !== 'NBA') return [payload];
+  const dates = [...new Set(payload.games.map(game => game.boardDate))].sort();
+  return dates.map(boardDate => {
+    const games = payload.games.filter(game => game.boardDate === boardDate);
+    return { ...payload, boardDate, games, expectedGameCount: games.length, detectedGameCount: games.length };
+  });
 }

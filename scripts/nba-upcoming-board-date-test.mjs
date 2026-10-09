@@ -30,7 +30,8 @@ async function resolve({ selectedDate = today, manual = false, reader = stale, b
 }
 assert.equal((await resolve()).board.date, tomorrow, 'stale Reader must not strand completed today');
 assert.deepEqual((await resolve()).requests, ['reader', today, tomorrow]);
-assert.deepEqual((await resolve({ reader: fresh })).requests, ['reader', tomorrow]);
+assert.deepEqual((await resolve({ reader: fresh })).requests, ['reader', today, tomorrow]);
+assert.deepEqual((await resolve({ reader: fresh, boards: { [today]: { ...next, date: today, emptyReason: null } } })).requests, ['reader', today], 'a fresh tomorrow pointer cannot skip today upcoming games');
 assert.equal((await resolve({ reader: null })).board.date, tomorrow, 'missing Reader still follows the official upcoming slate');
 assert.equal((await resolve({ selectedDate: '2026-10-07', reader: null })).board.date, tomorrow, 'automatic stale tab advances to the current Taipei slate first');
 assert.deepEqual((await resolve({ manual: true })).requests, [today], 'manual history date remains authoritative');

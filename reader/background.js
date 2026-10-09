@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties } from './parser.js';
-import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from './board-selector.js';
+import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
 
-const VERSION = '2.1.29';
+const VERSION = '2.1.30';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA'];
@@ -217,24 +217,42 @@ async function performSync(reason, preferredTabId) {
       statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
-    const selected = selection.selected; const payload = selected.candidate.parsed;
-    const localDiagnostic = localBoardDiagnostic(payload, selected.candidate.capture);
-    Object.assign(payload, { league, readerVersion: VERSION, deviceId: stored.deviceId, pageActivityAt: selected.pageActivityAt, expectedGameCount: selected.expectedGameCount, detectedGameCount: selected.detectedGameCount });
-    const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
-    if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[league], lastSuccessfulSyncAt: times[league] })) { results.push({ league, ok: true, skipped: true }); continue; }
-    try {
-      const endpoint = league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
-      const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(payload) });
-      const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
-      const now = Date.now(); hashes[league] = payloadHash; times[league] = now;
-      const matchedGameCount = integer(data.matchedGameCount, 40);
-      const unopenedGameCount = integer(data.unopenedGameCount, 40);
-      statuses[league] = { ok: true, state: 'synced', league, executable: league === 'NBA' ? data.executable === true : matchedGameCount > 0, captureOnly: league === 'NBA', message: data.message, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount, unopenedGameCount, marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), localDiagnostic, boardDate: data.boardDate, readerVersion: VERSION };
-      results.push({ league, ok: true, message: data.message });
-    } catch (error) { statuses[league] = { ok: false, state: 'error', league, message: error.message, lastAttemptAt: Date.now(), readerVersion: VERSION }; results.push({ league, ok: false, error: error.message }); }
+    const selected = selection.selected; const sourcePayload = selected.candidate.parsed;
+    Object.assign(sourcePayload, { league, readerVersion: VERSION, deviceId: stored.deviceId, pageActivityAt: selected.pageActivityAt, expectedGameCount: selected.expectedGameCount, detectedGameCount: selected.detectedGameCount });
+    const payloads = readerPayloadsByDate(sourcePayload);
+    const accepted = [], failures = [];
+    for (const payload of payloads) {
+      const syncKey = league === 'NBA' ? `${league}:${payload.boardDate}` : league;
+      try {
+        const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
+        if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[syncKey], lastSuccessfulSyncAt: times[syncKey], now: Date.now() })) {
+          // A skipped day still contributes to the aggregate only if its
+          // previously acknowledged receipt is available.
+          const receipt = league === 'NBA'
+            ? stored.readerStatuses?.[league]?.dateStatuses?.find(item => item.boardDate === payload.boardDate)
+            : stored.readerStatuses?.[league];
+          if (receipt) { accepted.push(receipt); results.push({ league, boardDate: payload.boardDate, ok: true, skipped: true }); continue; }
+        }
+        const endpoint = league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
+        const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(payload) });
+        const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
+        const now = Date.now(); hashes[syncKey] = payloadHash; times[syncKey] = now;
+        accepted.push({ boardDate: payload.boardDate, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: data.executable === true });
+        results.push({ league, boardDate: payload.boardDate, ok: true, message: data.message });
+      } catch (error) { failures.push({ boardDate: payload.boardDate, error: error.message }); results.push({ league, boardDate: payload.boardDate, ok: false, error: error.message }); }
+    }
+    const sum = key => accepted.reduce((count, item) => count + Number(item[key] || 0), 0);
+    statuses[league] = { ok: failures.length === 0, state: failures.length ? 'error' : 'synced', league,
+      executable: league === 'NBA' ? accepted.some(item => item.executable) : sum('matchedGameCount') > 0,
+      captureOnly: league === 'NBA', message: failures.length ? failures.map(item => `${item.boardDate}：${item.error}`).join('；') : `已同步 ${accepted.length} 個日期`,
+      lastSyncAt: accepted.length ? Math.min(...accepted.map(item => item.lastSyncAt)) : 0, lastAttemptAt: Date.now(),
+      rawGameCount: sum('rawGameCount'), matchedGameCount: sum('matchedGameCount'), unopenedGameCount: sum('unopenedGameCount'), marketCount: sum('marketCount'), directionCount: sum('directionCount'), partialGameCount: sum('partialGameCount'),
+      localDiagnostic: localBoardDiagnostic(sourcePayload, selected.candidate.capture), boardDate: sourcePayload.boardDate,
+      boardDates: payloads.map(item => item.boardDate), dateStatuses: accepted, dateErrors: failures, readerVersion: VERSION };
+
   }
   await chrome.storage.local.set({ readerStatuses: statuses, lastSuccessfulPayloadHashes: hashes, lastSuccessfulSyncAts: times, pairError: '' });
-  const successes = results.filter(item => item.ok).length;
+  const successes = LEAGUES.filter(league => statuses[league]?.ok === true && statuses[league]?.state === 'synced').length;
   return { ok: successes > 0, results, message: `五聯盟檢查完成｜${successes} 個分頁同步成功` };
 }
 async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, error: stored.pairError || '', readerVersion: VERSION }; }
