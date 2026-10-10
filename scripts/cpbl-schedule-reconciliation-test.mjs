@@ -9,6 +9,21 @@ const rawGame = (id, date, state, awayScore = 0, homeScore = 0) => ({
 });
 const parse = rows => parseCpblSchedulePayload({ Data: { Games: rows } });
 
+// 2026-10-10 official daily API returned E-2; filtering to A hid a real game.
+const competitionRows = ['A', 'E', 'C', 'D', 'F', 'B'].map(kind => ({
+  ...rawGame(2, '2026-10-10', 'SCHEDULED'), GameId: `2026-${kind}-2`, KindCode: kind,
+  PreExeDate: '2026-10-10T17:05:00',
+  Visiting: { Team: { Code: 'ACN011' }, Score: 0 },
+  Home: { Team: { Code: 'ADD011' }, Score: 0 }, Field: { Abbe: '亞太主' },
+}));
+const competitions = parseCpblSchedulePayload({ Data: { Games: competitionRows } }, '2026-10-10');
+assert.deepEqual(competitions.map(row => row.providerGameId).sort(), ['2026-A-2', '2026-C-2', '2026-E-2']);
+assert.equal(new Set(competitions.map(row => row.gamePk)).size, 3, 'competition kind remains part of identity');
+assert.ok(competitions.every(row => row.gameDate === '2026-10-10T09:05:00.000Z' && row.awayScore === null));
+assert.equal(parse([{ ...competitionRows[1], KindCode: undefined }])[0].providerGameId, '2026-E-2');
+assert.equal(parse([{ ...competitionRows[1], KindCode: 'A' }]).length, 0, 'conflicting official kind cannot be relabeled');
+assert.equal(parseCpblSchedulePayload({ Data: { Games: [competitionRows[1]] } }, '2026-10-11').length, 0);
+
 // Minimal fixtures reproduce the actual August/September 2026 calendar bug:
 // the same official IDs remained POSTPONED in August after moving to September.
 const septemberRaw = [

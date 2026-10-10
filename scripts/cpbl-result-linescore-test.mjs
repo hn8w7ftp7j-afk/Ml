@@ -12,6 +12,17 @@ assert.equal(result.awayFirst5, 4);
 assert.equal(result.homeFirst5, 0);
 assert.equal(result.first5Complete, true);
 assert.equal(game.first5Complete, undefined);
+for (const kind of ['E', 'C']) {
+  const id = `2026-${kind}-311`;
+  const postseason = parseCpblResultLinescore(html.replaceAll(game.providerGameId, id), { ...game, providerGameId: id });
+  assert.equal(postseason.awayFirst5, 4);
+  assert.equal(postseason.homeFirst5, 0);
+  assert.throws(() => parseCpblResultLinescore(html, { ...game, providerGameId: id }), /識別不一致/);
+}
+for (const kind of ['B', 'D', 'F']) {
+  const id = `2026-${kind}-311`;
+  assert.throws(() => parseCpblResultLinescore(html.replaceAll(game.providerGameId, id), { ...game, providerGameId: id }), /識別不一致/);
+}
 for (const change of [{ providerGameId: '2026-A-312' }, { officialDate: '2026-09-06' },
   { away: game.home, home: game.away }, { awayScore: 5 }, { innings: 10 }, { statusCode: 'I' }]) {
   assert.throws(() => parseCpblResultLinescore(html, { ...game, ...change }), { code: 'OFFICIAL_FIRST5_RESULT_INVALID' });

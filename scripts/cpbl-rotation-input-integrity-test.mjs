@@ -20,7 +20,7 @@ const raw326 = { Data: { Game: { GameId: '2026-A-326', GameStatus: 'START', PreE
 const calendar326 = { ...raw326.Data.Game, GameStatus: 'RESERVED', KindCode: 'A', InningSeq: 3,
   Visiting: { ...raw326.Data.Game.Visiting, Score: 99 }, Home: { ...raw326.Data.Game.Home, Score: 98 } };
 const suspended = parseCpblSchedulePayload({ Data: { Games: [calendar326] } })[0];
-assert.equal(suspended.statusCode, 'D');
+assert.equal(suspended.statusCode, 'S', 'RESERVED alone is not an explicit postponement; detail evidence still verifies the historical appearance');
 assert.equal(suspended.statusEnglish, 'RESERVED');
 assert.equal(suspended.awayScore, null, '保留賽進行中分數不得進入完賽得分樣本');
 assert.equal(suspended.homeScore, null);
