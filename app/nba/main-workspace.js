@@ -193,7 +193,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
     try {
       prepareNbaNotification(notification.current);
       const board = await load(dateRef.current, { followLatest: !id });
-      if (!board) return;
+      if (!board) { setMessage(''); return; }
       const tasks = board.tasks.filter(task => !id || task.nbaQuery.id === id);
       if (!tasks.length) { setMessage('目前無可分析盤口，請查看各場狀態。'); return; }
       const requestId = `nba-analysis-${crypto.randomUUID()}`;
@@ -210,7 +210,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       const next = { ...handle, runId: started.runId || '', status: started.runId ? 'running' : 'starting' }; store(next); setJob(next);
       setRows(current => current.map(row => tasks.some(task => task.game.id === row.game.id) ? { ...row, jobState: 'queued', jobError: '' } : row));
       setMessage('分析中，結果會逐場顯示。');
-    } catch (cause) { setError(cause.message); }
+    } catch (cause) { setMessage(''); setError(cause.message); }
     finally { operation.current = false; setStarting(false); }
   }
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
@@ -237,7 +237,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
       {(view === 'ranking' || view === 'records' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
-      {!rows.length && <section className="emptyBoard"><div>🏀</div><h2>{loading ? '讀取 NBA 賽程與盤口中…' : '此日期沒有 NBA 賽事'}</h2></section>}
+      {!rows.length && <section className="emptyBoard"><div>🏀</div><h2>{loading ? '讀取 NBA 賽程與盤口中…' : error ? 'NBA 賽程核對失敗，請更新盤口重試' : '此日期沒有 NBA 賽事'}</h2></section>}
     </>}
     {view === 'records' && <><div className="nbaRecordDate"><label>台灣日期<input type="date" value={date} disabled={busy} onChange={event => changeDate(event.target.value)}/></label></div><NbaBetRecords/></>}
     {view === 'data' && <NbaDataWorkspace/>}

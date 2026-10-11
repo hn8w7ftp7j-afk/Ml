@@ -67,6 +67,28 @@ await test('an empty valid schedule is empty with predictable arrays, not an ups
   assert.equal(result.status, 'empty');
   for (const key of ['games', 'teams', 'players', 'injuries', 'statistics', 'lineups']) assert.ok(Array.isArray(result.data[key]));
 });
+await test('external preseason opponent in adjacent day cannot erase supported NBA games', async () => {
+  const foreign = event({ id: '900004', date: '2026-04-13T20:00:00Z', type: 1, complete: false });
+  foreign.competitions[0].competitors[1] = { id: '134478', homeAway: 'away', team: { id: '134478', uid: 's:40~l:46~t:134478', abbreviation: 'LON', displayName: 'London Lions' } };
+  const raw = scoreboard([event(), foreign]);
+  for (const fallback of [false, true]) {
+    const result = await loadNbaData({ view: 'schedule', date: '2026-04-13' }, { now, fetchImpl: async url => fallback && /dates=\d+-/.test(url) ? new Response('', { status: 400 }) : jsonResponse(raw) });
+    assert.equal(result.status, 'ready'); assert.notEqual(result.qa.status, 'BLOCK');
+    assert.equal(result.data.games.length, 1); assert.equal(result.data.games[0].sourceId, '900001');
+    assert.ok(result.data.excludedGames.every(row => row.id === '900004' && row.sourceUrl && row.retrievedAt));
+    assert.ok(result.qa.issues.some(row => row.code === 'UNSUPPORTED_PRESEASON_OPPONENT'));
+  }
+  for (const mutate of [
+    row => { row.season.type = 2; },
+    row => { row.competitions[0].competitors[1].team.abbreviation = 'CLE'; },
+    row => { row.competitions[0].competitors[0].team.abbreviation = 'LAL'; },
+    row => { row.competitions[0].competitors[1].team.uid = 's:1~l:10~t:134478'; },
+  ]) {
+    const bad = structuredClone(foreign); mutate(bad);
+    const result = await loadNbaData({ view: 'schedule', date: '2026-04-13' }, { now, fetchImpl: fetchValue(scoreboard([event(), bad])) });
+    assert.equal(result.qa.status, 'BLOCK'); assert.equal(result.data.games.length, 0);
+  }
+});
 await test('historical date-range 400 falls back to two source-traced UTC days', async () => {
   const calls=[];
   const fetchImpl=async url=>{calls.push(url);if(url.includes('20260412-'))return new Response('',{status:400});return jsonResponse(scoreboard([event()]));};
