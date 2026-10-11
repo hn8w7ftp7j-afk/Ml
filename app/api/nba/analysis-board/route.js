@@ -14,5 +14,8 @@ export async function GET(request) {
   const rate = checkRateLimit(request, { id: 'nba-analysis-board', limit: 60, windowMs: 60_000 });
   if (!rate.allowed) return rateLimitResponse(rate);
   try { return response({ ok: true, ...await loadNbaAnalysisBoard(query.get('date')) }); }
-  catch { return response({ ok: false, error: 'NBA 賽程或盤口暫時無法核對，請重試。' }, 503); }
+  catch (error) {
+    console.error('[NBA_ANALYSIS_BOARD_FAILED]', { date: query.get('date'), code: error?.code || 'NBA_BOARD_UNAVAILABLE', issueCodes: error?.issueCodes || [] });
+    return response({ ok: false, error: 'NBA 賽程或盤口暫時無法核對，請重試。', code: error?.code || 'NBA_BOARD_UNAVAILABLE' }, 503);
+  }
 }
