@@ -8,6 +8,8 @@ const entry = ({ gamePk, gameDate, market, pick, score }) => ({
   market,
   pick,
   score,
+  weightedEV: 6.56,
+  robustEV: 1,
   rankingEligible: true,
 });
 
@@ -55,3 +57,13 @@ const missingScoreCandidate = buildBetOrderEntries([{
 assert.deepEqual(missingScoreCandidate, [], '缺少公式分數的方向不得進入候選順序');
 
 console.log('Bet order: 7.0+ formula score, QA status preservation, start time, game grouping and market order PASS');
+
+const valid = entry({ gamePk: 7, gameDate: '2099-08-25T05:00:00.000Z', market: '全場讓分', pick: '雙EV為正', score: 7 });
+for (const value of [-2.57, 0, null, undefined, NaN, Infinity, '1']) {
+  for (const field of ['weightedEV', 'robustEV']) {
+    assert.deepEqual(buildBetOrderEntries([{ ...valid, [field]: value }]), [], `${field}=${value} 不得進入候選`);
+  }
+}
+assert.equal(buildBetOrderEntries([valid]).length, 1);
+assert.deepEqual(valid.robustEV, 1, '篩選不得改寫原始R');
+console.log('Bet order: finite strictly positive W/R required PASS');
