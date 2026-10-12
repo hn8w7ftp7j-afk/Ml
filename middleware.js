@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requestIsAuthenticated, siteAuthConfigured } from './lib/security.js';
+import { renewAuthenticatedSession, requestIsAuthenticated, siteAuthConfigured } from './lib/security.js';
 
 const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health', '/api/reader/pair', '/api/reader/ingest', '/api/reader/capture', '/api/reader/status', '/api/nhl/reader', '/api/nba/reader', '/api/cron/mlb-advanced-snapshots', '/api/cron/analysis-direction-settlements', '/api/cron/bet-settlements']);
 const PUBLIC_PWA_PATHS = new Set(['/manifest.webmanifest', '/sw.js']);
@@ -9,6 +9,14 @@ PUBLIC_PATHS.add('/api/cron/nba-maintenance');
 
 export async function middleware(request) {
   const { pathname, search } = request.nextUrl;
+  if (pathname === '/login' && await requestIsAuthenticated(request)) {
+    const next = request.nextUrl.searchParams.get('next') || '/';
+    let target = next.startsWith('/') && !next.startsWith('//') && !next.includes('\\')
+      ? new URL(next, request.url) : new URL('/', request.url);
+    if (target.origin !== new URL(request.url).origin) target = new URL('/', request.url);
+    if (target.pathname === '/login') target.pathname = '/';
+    return renewAuthenticatedSession(request, NextResponse.redirect(target));
+  }
   if (PUBLIC_PATHS.has(pathname)
     || PUBLIC_PWA_PATHS.has(pathname)
     || pathname.startsWith('/icons/')
@@ -23,7 +31,7 @@ export async function middleware(request) {
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     });
   }
-  if (await requestIsAuthenticated(request)) return NextResponse.next();
+  if (await requestIsAuthenticated(request)) return renewAuthenticatedSession(request, NextResponse.next());
   if (pathname.startsWith('/api/')) {
     return NextResponse.json({ ok: false, error: '尚未登入或登入已過期' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   }
