@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.1.30",
-  "version_name": "2.1.30 NBA-READ",
-  "description": "一個 Reader 獨立讀取 Tai888 美棒、日棒、韓棒、中職與 NBA 標準盤分頁。",
+  "version": "2.1.31",
+  "version_name": "2.1.31 NHL-READ",
+  "description": "獨立讀取 Tai888 美棒、日棒、韓棒、中職、NBA 與 NHL 原始盤面證據，各聯盟隔離同步。",
   "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [
     "https://*.tai888.in/*",
@@ -23,6 +23,7 @@
       "js": [
         "capture-policy.js",
         "league-registry.js",
+        "nhl-teams.js",
         "row-normalizer.js",
         "tai888-content.js"
       ],

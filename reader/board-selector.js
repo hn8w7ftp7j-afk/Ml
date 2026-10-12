@@ -13,7 +13,7 @@ const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/
 const DATE_TOKEN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_TOKEN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const TEAM_CODE = /^[A-Z][A-Z0-9]{0,11}$/;
-const LEAGUES = new Set(['MLB', 'NPB', 'KBO', 'CPBL', 'NBA']);
+const LEAGUES = new Set(['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL']);
 
 const finiteInteger = value => {
   const number = Number(value);
@@ -52,6 +52,7 @@ function validateTotal(value, name, issues) {
 }
 
 export function validateStandardReaderGame(game, league = '') {
+  if (league === 'NHL') return validateAvailableReaderGame(game, league);
   const issues = [];
   if (!TEAM_CODE.test(String(game?.awayCode || ''))) issues.push('invalid-away-code');
   if (!TEAM_CODE.test(String(game?.homeCode || ''))) issues.push('invalid-home-code');
@@ -91,6 +92,13 @@ function validateAvailableReaderGame(game, league = '') {
   if (!DATE_TOKEN.test(String(game?.boardDate || ''))) identity.push('invalid-date');
   if (!TIME_TOKEN.test(String(game?.boardTime || ''))) identity.push('invalid-time');
   const issues = [...identity];
+  if (league === 'NHL') {
+    // Captured text is evidence even if its quote grammar is unknown. This
+    // intake never upgrades it to an executable NHL contract.
+    if (!game.rawMarketEvidence?.some(value => value.rawRows?.some(Boolean))) issues.push('nhl-market-evidence-missing');
+    if (game.executable !== false) issues.push('nhl-capture-cannot-execute');
+    return { ok: issues.length === 0, issues, directionCount: 0 };
+  }
   let directionCount = 0;
   const definitions = [
     ['full-runline', game?.fullRunline, validateRunline],
@@ -164,7 +172,7 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   }
   // NBA standard boards legitimately list today and tomorrow together.
   // Validate the entire source before splitting for date-keyed storage.
-  if (dates.size !== 1 && (parsed.league !== 'NBA' || dates.size === 0)) issues.push(`board-date-count:${dates.size}`);
+  if (dates.size !== 1 && (!['NBA', 'NHL'].includes(parsed.league) || dates.size === 0)) issues.push(`board-date-count:${dates.size}`);
   if (dates.size > 1 && !dates.has(parsed.boardDate)) issues.push('board-date-mismatch');
   if (dates.size === 1 && parsed.boardDate !== [...dates][0]) issues.push('board-date-mismatch');
 
@@ -351,7 +359,7 @@ export function shouldSkipSuccessfulPayload({
 // Called only after source-wide authority/conflict validation. Each upload
 // preserves the game date and contracts; never relabel tomorrow as today.
 export function readerPayloadsByDate(payload) {
-  if (payload.league !== 'NBA') return [payload];
+  if (!['NBA', 'NHL'].includes(payload.league)) return [payload];
   const dates = [...new Set(payload.games.map(game => game.boardDate))].sort();
   return dates.map(boardDate => {
     const games = payload.games.filter(game => game.boardDate === boardDate);

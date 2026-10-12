@@ -1,3 +1,4 @@
+import { isAnalysisLeagueId } from '../lib/analysis-leagues.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -116,7 +117,7 @@ const full = { ok: true, league: 'NPB', date, total: 1, completed: 1,
   results: [{ ok: true, status: 200, task: { game: { gamePk: 88 } }, payload: { analysis: { proof: 'x'.repeat(100_000) } } }] };
 const route = vm.createContext({
   Request, Response, URL, NextResponse: Response, requireApiAuth: async () => null,
-  cleanText: value => String(value || ''), isLeagueId: value => ['MLB', 'NPB', 'KBO', 'CPBL'].includes(value),
+  cleanText: value => String(value || ''), isAnalysisLeagueId,
   getRun: () => ({ exists: true, status: 'completed', returnValue: full }),
   console: { info() {} },
 });

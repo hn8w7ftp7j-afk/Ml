@@ -8,9 +8,9 @@ import Link from 'next/link';
 import PersonnelPanel from './personnel-panel.js';
 import NhlResearchPanel from './research-panel.js';
 import ObservedShotPanel from './observed-shot-panel.js';
-import { NHL_WORKSPACE_EVENT, readNhlWorkspace, saveNhlWorkspace, mergeNhlWorkspace, persistNhlWorkspaceResult, preferNhlWorkspaceRecord, validNhlWorkspaceRecord } from '../../lib/nhl/client-workspace.js';
+import { NHL_WORKSPACE_EVENT, readNhlWorkspace, saveNhlWorkspace, mergeNhlWorkspace, persistNhlWorkspaceResult, preferNhlWorkspaceRecord, validNhlWorkspaceRecord, nhlAnalysisKey, canAnalyzeNhlPregame, shiftNhlDate, initialNhlWorkspaceLocation } from '../../lib/nhl/client-workspace.js';
 
-const TABS = [['schedule', '賽程與結果'], ['team', '球隊與球員'], ['goalie', '門將與陣容'], ['research', '歷史 Shadow'], ['sources', '資料與 Reader']];
+const TABS = [['analysis', '分析'], ['schedule', '賽程與結果'], ['team', '球隊與球員'], ['goalie', '門將與陣容'], ['research', '歷史 Shadow'], ['sources', '資料與 Reader']];
 const taipeiDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const clock = (value, zone = 'Asia/Taipei') => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('zh-TW', { timeZone: zone, dateStyle: 'short', timeStyle: 'short', hour12: false }).format(new Date(value)) : '尚未提供';
 const number = value => typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—';
@@ -33,11 +33,54 @@ async function request(action, args = {}) {
   } finally { clearTimeout(timer); }
 }
 
+async function analysisRequest(method, args) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), method === 'POST' ? 115_000 : 28_000);
+  try {
+    const response = await fetch(method === 'GET' ? `/api/nhl/analysis?${new URLSearchParams(args)}` : '/api/nhl/analysis', {
+      method, cache: 'no-store', signal: controller.signal,
+      ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ league: 'NHL', ...args }) } : {}),
+    });
+    const body = await response.json();
+    if (response.status === 401) throw new Error('登入已過期，請重新登入網站。');
+    if (!response.ok || body.ok === false) throw new Error(body.error || body.message || body.code || 'NHL 分析未完成');
+    if (body.league !== 'NHL' || body.date !== args.date) throw new Error('分析日期或聯盟不符，已保留原本結果。');
+    return body;
+  } catch (cause) {
+    if (cause.name === 'AbortError') throw new Error('NHL 分析回應逾時，已完成結果仍保留，可重試。');
+    throw cause;
+  } finally { clearTimeout(timer); }
+}
+
 function Source({ source }) {
   if (!source?.url) return null;
   return <div className="nhlSource">來源：<a href={source.url} target="_blank" rel="noreferrer">{source.provider || 'NHL 官方'}</a>｜取得時間 {clock(source.fetchedAt || source.observedAt)}{source.contentHash && <details><summary>來源版本</summary><span>{source.contentHash}</span></details>}</div>;
 }
 function Stat({ label, value }) { return <div className="nhlStat"><span>{label}</span><strong>{number(value)}</strong></div>; }
+function NhlAnalysisResult({ record, game, busy, error }) {
+  const value = record?.analysis;
+  const started = !canAnalyzeNhlPregame(game);
+  if (!value || value.mode === 'NO_PREGAME_RECORD') return <div className="nhlAnalysisResult" aria-live="polite">
+    <p className="nhlNote">{busy ? '分析中，完成後會立即顯示。' : started ? '未保存賽前分析' : '尚未分析'}</p>
+    {started && <p className="nhlNote">已開賽的比賽只顯示原先保存的賽前紀錄。</p>}
+    {error && <p className="nhlWarning" role="alert">{error}</p>}
+  </div>;
+  const expected = value.model?.scopes?.REGULATION;
+  const probabilities = value.model?.probabilities;
+  const percent = item => typeof item === 'number' && Number.isFinite(item) ? `${(item * 100).toFixed(1)}%` : '待驗證';
+  const name = side => game[side]?.abbrev || (side === 'away' ? '客隊' : '主隊');
+  return <div className="nhlAnalysisResult" aria-live="polite">
+    <div className="nhlAnalysisHeading"><span className="state shadow">{value.mode === 'SAVED_PREGAME_REPLAY' || started ? '賽前紀錄' : 'Shadow 分析'}</span><span className="nhlNote">{clock(value.generatedAt)}</span></div>
+    {value.model?.conditioningFeatures?.length === 0 && <p className="nhlWarning nhlBaselineLabel">歷史基準｜未校準</p>}
+    <div className="nhlStats"><Stat label={`${name('away')} 預估進球｜60 分鐘`} value={expected?.awayGoals}/><Stat label={`${name('home')} 預估進球｜60 分鐘`} value={expected?.homeGoals}/></div>
+    {probabilities && <div className="nhlProbabilityRows"><div><span>{name('away')} 60 分鐘勝</span><strong>{percent(probabilities.regulationAwayWin)}</strong></div><div><span>60 分鐘和局</span><strong>{percent(probabilities.regulationDraw)}</strong></div><div><span>{name('home')} 60 分鐘勝</span><strong>{percent(probabilities.regulationHomeWin)}</strong></div></div>}
+    <p className="nhlNote nhlWarning">{value.market?.missingReason || '盤口規則與正式 W／R／S 尚待驗證。'}</p>
+    <div className="nhlPendingScores" aria-label="正式評分狀態"><span>W：待驗證</span><span>R：待驗證</span><span>S：待驗證</span></div>
+    {value.persistence?.persisted === false && <p className="nhlWarning">雲端保存未完成；這台裝置保留顯示快照。</p>}
+    {error && <p className="nhlWarning" role="alert">{error}</p>}
+    <details><summary>分析資料與來源</summary><p className="nhlNote">資料 QA：{value.qa?.status || '待驗證'}｜模型 {value.model?.version || '待驗證'}</p>{value.qa?.issues?.length > 0 && <p className="nhlNote nhlWarning">{value.qa.issues.join('；')}</p>}<pre>{JSON.stringify({ sources: value.sources, features: value.model?.features, conditioningFeatures: value.model?.conditioningFeatures, history: value.history, readiness: value.readiness, persistence: value.persistence }, null, 2)}</pre></details>
+  </div>;
+}
 function SituationRatios({ value }) {
   if (!value?.ok || value.metricScope !== 'OBSERVED_EVENTS_NOT_PREGAME_FEATURES') return null;
   const percent = x => typeof x === 'number' && Number.isFinite(x) ? `${(x * 100).toFixed(2)}%` : '—';
@@ -80,9 +123,13 @@ function ClubStatistics({ value }) {
 
 export default function NhlWorkspace() {
   const [date, setDate] = useState(taipeiDay);
-  const [tab, setTab] = useState('schedule');
+  const [tab, setTab] = useState('analysis');
   const [boards, setBoards] = useState({});
   const [details, setDetails] = useState({});
+  const [analyses, setAnalyses] = useState({});
+  const [analysisErrors, setAnalysisErrors] = useState({});
+  const [batchProgress, setBatchProgress] = useState({});
+  const [analysisRun, setAnalysisRun] = useState(null);
   const [selectedGame, setSelectedGame] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [rosters, setRosters] = useState({});
@@ -101,20 +148,29 @@ export default function NhlWorkspace() {
   const [ready, setReady] = useState(false);
   const inFlight = useRef(new Set());
   const activePlayerRequest = useRef(null);
+  const analysisInFlight = useRef(new Map());
+  const boardRequests = useRef(new Map());
+  const automaticDates = useRef(new Set());
+  const activeDate = useRef(date);
   const board = boards[date];
   const game = selectedGame ? details[selectedGame]?.game || board?.games?.find(row => row.gameId === selectedGame) : null;
   const rosterKey = selectedTeam ? `${selectedTeam.abbrev}:${selectedTeam.season || 'current'}` : '';
   const roster = rosters[rosterKey];
   const summaryKey = selectedTeam ? `${selectedTeam.teamId}:${selectedTeam.season}:${summaryType}` : '';
   const teamSummary = teamSummaries[summaryKey];
+  const analysisBatchBusy = busy.batch === true;
+  const progress = batchProgress[date];
 
   useEffect(() => {
     try {
+      const entry = initialNhlWorkspaceLocation(typeof window === 'undefined' ? '' : window.location?.search || '');
+      const targetDate = entry.date || date;
+      if (entry.date) setDate(entry.date);
+      if (entry.analysisRun) setAnalysisRun({ runId: entry.analysisRun, date: targetDate });
       const saved = readNhlWorkspace(localStorage);
       if (saved?.league === 'NHL') {
-        if (saved.date && saved.boards?.[saved.date]?.league === 'NHL') setDate(saved.date);
-        if (saved.selectedGame && saved.details?.[saved.selectedGame]?.game?.league === 'NHL' && saved.details[saved.selectedGame].game.gameId === saved.selectedGame) setSelectedGame(saved.selectedGame);
-        setBoards(saved.boards); setDetails(saved.details);
+        if (saved.selectedGame && saved.details?.[saved.selectedGame]?.game?.league === 'NHL' && saved.details[saved.selectedGame].game.gameId === saved.selectedGame && saved.details[saved.selectedGame].game.taipeiDate === targetDate) setSelectedGame(saved.selectedGame);
+        setBoards(saved.boards); setDetails(saved.details); setAnalyses(saved.analyses);
       }
     } catch { /* A damaged local copy never changes a server record. */ }
     setReady(true);
@@ -123,25 +179,53 @@ export default function NhlWorkspace() {
   useEffect(() => {
     if (!ready) return;
     try {
-      saveNhlWorkspace({ date, selectedGame, boards, details, personnel, contexts, rosters, teamSummaries, shotResearch }, localStorage);
+      saveNhlWorkspace({ date, selectedGame, boards, details, analyses, personnel, contexts, rosters, teamSummaries, shotResearch }, localStorage);
     } catch { setError('這台裝置無法保存 NHL 顯示快照；目前結果仍保留在畫面，可重新載入官方資料。'); }
-  }, [boards, details, personnel, contexts, rosters, teamSummaries, shotResearch, date, selectedGame, ready]);
+  }, [boards, details, analyses, personnel, contexts, rosters, teamSummaries, shotResearch, date, selectedGame, ready]);
   useEffect(() => {
     const refresh = () => {
       const saved = readNhlWorkspace(localStorage);
       const restore = (setter, section) => setter(value => mergeNhlWorkspace({ league: 'NHL', [section]: value }, { [section]: saved[section] })[section]);
-      restore(setBoards, 'boards'); restore(setDetails, 'details'); restore(setPersonnel, 'personnel');
+      restore(setBoards, 'boards'); restore(setDetails, 'details'); restore(setAnalyses, 'analyses'); restore(setPersonnel, 'personnel');
       restore(setContexts, 'contexts'); restore(setRosters, 'rosters'); restore(setTeamSummaries, 'teamSummaries');
       restore(setShotResearch, 'shotResearch');
     };
     refresh(); window.addEventListener(NHL_WORKSPACE_EVENT, refresh);
     return () => window.removeEventListener(NHL_WORKSPACE_EVENT, refresh);
   }, []);
+  useEffect(() => {
+    activeDate.current = date;
+    if (!ready || automaticDates.current.has(date)) return;
+    automaticDates.current.add(date);
+    loadSchedule(date);
+    loadSavedAnalyses(date);
+  }, [date, ready]);
+  useEffect(() => {
+    if (!ready || !analysisRun || analysisRun.date !== date) return;
+    let active = true; let timer; let controller;
+    const target = date;
+    const refreshRun = async () => {
+      controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 25_000);
+      try {
+        const response = await fetch(`/api/analysis-jobs?${new URLSearchParams({ runId: analysisRun.runId, league: 'NHL' })}`, { cache: 'no-store', signal: controller.signal });
+        const body = await response.json();
+        if (!response.ok || body.ok === false) throw new Error(body.error || 'NHL 背景分析紀錄讀取失敗。');
+        const batch = body.result || body.progress;
+        if (batch) restoreAnalysisRun(batch, target);
+        if (active && !['completed', 'failed', 'cancelled'].includes(body.status)) timer = setTimeout(refreshRun, 2_000);
+      } catch (cause) {
+        if (active && cause.name !== 'AbortError') setError(cause.message);
+      } finally { clearTimeout(deadline); }
+    };
+    refreshRun();
+    return () => { active = false; clearTimeout(timer); controller?.abort(); };
+  }, [ready, analysisRun, date]);
 
   async function run(key, operation) {
     if (inFlight.current.has(key)) return;
     inFlight.current.add(key); setBusy(value => ({ ...value, [key]: true })); setError('');
-    try { await operation(); }
+    try { return await operation(); }
     catch (cause) { setError(cause.message || '載入失敗，先前資料已保留。'); }
     finally { inFlight.current.delete(key); setBusy(value => ({ ...value, [key]: false })); }
   }
@@ -151,6 +235,128 @@ export default function NhlWorkspace() {
       if (!validNhlWorkspaceRecord('boards', target, result)) throw new Error('賽程日期或聯盟身分不符，已保留原本賽程。');
       setBoards(value => ({ ...value, [target]: preferNhlWorkspaceRecord(value[target], result) }));
       persistNhlWorkspaceResult('boards', target, result);
+      return result;
+    });
+  }
+  function selectDate(target) {
+    activeDate.current = target;
+    setDate(target); setSelectedGame(null);
+  }
+  function storeAnalysis(targetDate, result) {
+    const id = result.gameId || result.analysis?.gameId;
+    const key = nhlAnalysisKey(targetDate, id);
+    const record = { league: 'NHL', date: targetDate, gameId: id, analysis: result.analysis };
+    if (!validNhlWorkspaceRecord('analyses', key, record)) throw new Error('分析的日期或賽事身分不符，已保留原本結果。');
+    setAnalyses(value => ({ ...value, [key]: preferNhlWorkspaceRecord(value[key], record) }));
+    try { persistNhlWorkspaceResult('analyses', key, record); }
+    catch { setAnalysisErrors(value => ({ ...value, [key]: '這台裝置無法保存顯示快照；雲端保存狀態以分析紀錄為準。' })); }
+    return record;
+  }
+  function loadSavedAnalyses(target = date) {
+    return run(`saved-analysis:${target}`, async () => {
+      const result = await analysisRequest('GET', { date: target });
+      if (!Array.isArray(result.analyses)) throw new Error('NHL 分析紀錄格式不符。');
+      for (const item of result.analyses) {
+        const record = item.analysis ? item : { gameId: item.gameId, analysis: item };
+        const key = nhlAnalysisKey(target, record.gameId);
+        if (!validNhlWorkspaceRecord('analyses', key, { ...record, league: 'NHL', date: target })) throw new Error('保存的分析紀錄含不同日期或聯盟，已停止更新。');
+      }
+      for (const item of result.analyses) storeAnalysis(target, item.analysis ? item : { gameId: item.gameId, analysis: item });
+    });
+  }
+  function restoreAnalysisRun(batch, target) {
+    if (batch.league !== 'NHL' || batch.date !== target || !Array.isArray(batch.results)
+      || !Number.isSafeInteger(batch.total) || !Number.isSafeInteger(batch.completed)
+      || batch.completed < 0 || batch.completed > batch.total) throw new Error('背景分析日期或聯盟不符，已保留原本結果。');
+    const readyRows = batch.results.filter(row => row.payload);
+    for (const row of readyRows) {
+      const analysis = row.payload; const task = row.task;
+      const record = { league: 'NHL', date: target, gameId: analysis.gameId, analysis };
+      if (task?.league !== 'NHL' || task?.nhlQuery?.date !== target || task?.nhlQuery?.gameId !== analysis.gameId
+        || task?.game?.gameId !== analysis.gameId || (task.game.league || task.game.leagueId) !== 'NHL'
+        || task.game.awayTeamId !== analysis.game?.awayTeamId || task.game.homeTeamId !== analysis.game?.homeTeamId
+        || task.game.startTimeUTC !== analysis.game?.startTimeUTC
+        || row.saved !== (analysis.persistence?.persisted === true)
+        || !validNhlWorkspaceRecord('analyses', nhlAnalysisKey(target, analysis.gameId), record)) throw new Error('背景分析的賽事身分或保存狀態不符，已停止顯示。');
+    }
+    for (const row of readyRows) storeAnalysis(target, { gameId: row.payload.gameId, analysis: row.payload });
+    setBatchProgress(value => ({ ...value, [target]: { total: batch.total, completed: batch.completed,
+      failed: batch.results.filter(row => row.ok !== true).length, running: batch.completed < batch.total } }));
+  }
+  function analyzeGame(row, target = date, force = false) {
+    const key = nhlAnalysisKey(target, row.gameId);
+    if (analysisInFlight.current.has(key)) return analysisInFlight.current.get(key);
+    const task = (async () => {
+      setBusy(value => ({ ...value, [`analysis:${key}`]: true }));
+      setAnalysisErrors(value => ({ ...value, [key]: '' }));
+      try {
+        const result = await analysisRequest('POST', { date: target, gameId: row.gameId, ...(force ? { force: true } : {}) });
+        if (result.gameId !== row.gameId || result.analysis?.gameId !== row.gameId) throw new Error('分析回傳不同賽事，已保留原本結果。');
+        return storeAnalysis(target, result);
+      } catch (cause) {
+        setAnalysisErrors(value => ({ ...value, [key]: cause.message || '分析未完成，可重試。' }));
+        return null;
+      } finally {
+        analysisInFlight.current.delete(key);
+        setBusy(value => ({ ...value, [`analysis:${key}`]: false }));
+      }
+    })();
+    analysisInFlight.current.set(key, task);
+    return task;
+  }
+  async function analysisBoard(target) {
+    if (boardRequests.current.has(target)) return boardRequests.current.get(target);
+    const task = (async () => {
+      try {
+        const result = await request('schedule', { date: target });
+        if (!validNhlWorkspaceRecord('boards', target, result)) throw new Error('賽程日期或聯盟身分不符。');
+        setBoards(value => ({ ...value, [target]: preferNhlWorkspaceRecord(value[target], result) }));
+        persistNhlWorkspaceResult('boards', target, result);
+        return result;
+      } finally { boardRequests.current.delete(target); }
+    })();
+    boardRequests.current.set(target, task);
+    return task;
+  }
+  async function nextPregameBoard(anchor) {
+    const first = anchor < taipeiDay() ? taipeiDay() : anchor;
+    for (let offset = anchor < taipeiDay() ? 0 : 1; offset <= 7; offset += 1) {
+      const target = shiftNhlDate(first, offset);
+      const result = await analysisBoard(target);
+      if (result.games.some(row => canAnalyzeNhlPregame(row))) return result;
+    }
+    throw new Error('未來 7 天沒有可分析的未開賽賽事。');
+  }
+  function goNextGameDate() {
+    const anchor = date;
+    return run(`next-date:${anchor}`, async () => {
+      const result = await nextPregameBoard(anchor);
+      if (activeDate.current === anchor) selectDate(result.date);
+    });
+  }
+  function analyzeAll() {
+    const anchor = date;
+    setTab('analysis');
+    return run('batch', async () => {
+      let result = await analysisBoard(anchor);
+      if (!result.games.some(row => canAnalyzeNhlPregame(row))) {
+        if (anchor > taipeiDay()) throw new Error('這天沒有可分析的未開賽賽事，請選下一比賽日。');
+        result = await nextPregameBoard(anchor);
+        if (activeDate.current === anchor) selectDate(result.date);
+      }
+      const target = result.date;
+      const queue = result.games.filter(row => canAnalyzeNhlPregame(row));
+      let cursor = 0; let completed = 0; let failed = 0;
+      setBatchProgress(value => ({ ...value, [target]: { total: queue.length, completed: 0, failed: 0, running: true } }));
+      const worker = async () => {
+        while (cursor < queue.length) {
+          const row = queue[cursor++];
+          const record = await analyzeGame(row, target);
+          completed += 1; if (!record || record.analysis.mode === 'NO_PREGAME_RECORD') failed += 1;
+          setBatchProgress(value => ({ ...value, [target]: { total: queue.length, completed, failed, running: completed < queue.length } }));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(2, queue.length) }, worker));
     });
   }
   function loadGame(id) {
@@ -200,12 +406,38 @@ export default function NhlWorkspace() {
   function loadResearch() { return run('research', async () => setResearch(await request('research'))); }
 
   return <main className="appShell nhlApp">
-    <header className="appHeader"><div><div className="eyebrow">NHL DATA & SHADOW RESEARCH</div><h1>NHL｜冰球資料與研究</h1><p>官方賽程、球員與門將資訊。每筆資料保留來源、時間與身分核對結果。</p></div><div className="headerBadges"><span className="state shadow">獨立 NHL 模組</span><span className="version">v{APP_VERSION}</span></div></header>
+    <header className="appHeader"><div><div className="eyebrow">NHL ANALYSIS</div><h1>NHL｜冰球分析</h1><p>賽前 Shadow 分析、官方賽程與保存紀錄。</p></div><div className="headerBadges"><span className="state shadow">NHL Shadow</span><span className="version">v{APP_VERSION}</span></div></header>
     <nav className="leagueTabs" aria-label="聯盟切換">{LEAGUE_IDS.map(id => <Link prefetch={false} className="sportModuleLink" key={id} href={`/?league=${id}`}><b>{id}</b><small>{leagueConfig(id).shortLabel}</small></Link>)}<NbaEntry/><Link prefetch={false} className="sportModuleLink active" href="/nhl" aria-current="page"><b>NHL</b><small>冰球</small></Link></nav>
     <nav className="mainTabs" aria-label="NHL 功能" role="tablist">{TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} aria-controls={`nhl-${id}`} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}</button>)}</nav>
     {error && <div className="errorBox global" role="alert"><strong>更新未完成</strong><span>{error}</span><button onClick={() => setError('')}>關閉</button></div>}
     {Object.values(busy).some(Boolean) && <div className="nhlProgress" role="status">正在載入 NHL 資料；可切換頁籤，已完成結果會保留。</div>}
     <div role="tabpanel" id={`nhl-${tab}`}>
+    {tab === 'analysis' && <>
+      <section className="panel"><div className="nhlToolbar"><label>台灣日期<input type="date" value={date} onChange={event => { if (event.target.value) selectDate(event.target.value); }}/></label>
+        <button className="primary" disabled={!ready || analysisBatchBusy || busy[`next-date:${date}`]} onClick={analyzeAll}>{analysisBatchBusy ? '逐場分析中…' : '一鍵分析 NHL'}</button>
+        <button className="secondary" onClick={() => selectDate(taipeiDay())}>今日</button>
+        <button className="secondary" disabled={analysisBatchBusy || busy[`next-date:${date}`]} onClick={goNextGameDate}>{busy[`next-date:${date}`] ? '查詢賽程中…' : '下一比賽日'}</button>
+        <button className="secondary" disabled={busy[`schedule:${date}`] || busy[`saved-analysis:${date}`]} onClick={() => { loadSchedule(date); loadSavedAnalyses(date); }}>更新賽程與紀錄</button>
+        <a className="secondary nhlReaderDownload" href="/downloads/Tai888-Reader-v2.1.31-NHL-READ.zip" download>下載 NHL Reader v2.1.31</a>
+      </div><p className="nhlNote">今天已全部開賽時，一鍵分析會找下一比賽日。每場完成立即顯示。</p>
+      <p className="nhlNote nhlWarning">Shadow 預估尚未完成正式校準；盤口與 W／R／S 待驗證。</p>
+      {progress && <p className="nhlProgress" role="status">{progress.running ? '分析中' : '本輪結束'}：{progress.completed}／{progress.total} 場{progress.failed > 0 ? `，${progress.failed} 場未完成，可逐場重試` : ''}</p>}
+      </section>
+      {!board && <Empty title={busy[`schedule:${date}`] ? '正在讀取 NHL 賽程' : '賽程尚未取得'}>已保存的分析會保留；可按「更新賽程與紀錄」重試。</Empty>}
+      {board && !board.games?.length && <Empty title="此日沒有 NHL 賽事">可按「下一比賽日」查詢未開賽賽事。</Empty>}
+      {(board?.games || []).map(row => {
+        const key = nhlAnalysisKey(date, row.gameId);
+        const pending = busy[`analysis:${key}`];
+        const pregame = canAnalyzeNhlPregame(row);
+        return <section className="gameCard nhlAnalysisCard" key={key} aria-label={`${row.away?.name || row.away?.abbrev} 對 ${row.home?.name || row.home?.abbrev}`}>
+          <div className="nhlGameHeader"><div><h2>{row.away?.name || row.away?.abbrev} 對 {row.home?.name || row.home?.abbrev}</h2><div className="nhlDates"><span>台灣 {clock(row.startTimeUTC)}｜{phase(row.seasonPhase)}</span></div></div><span className="state">{state(row.gameState)}</span></div>
+          <div className="nhlActions"><button className="primary" disabled={pending || !ready} onClick={() => analyzeGame(row, date, Boolean(analyses[key]) && pregame)}>{pending ? '分析中…' : pregame ? analyses[key] ? '重新分析' : '分析' : '查看賽前紀錄'}</button>
+          <button className="secondary" disabled={busy[`game:${row.gameId}`]} onClick={() => { setTab('goalie'); loadGame(row.gameId); }}>門將與陣容</button>
+          <button className="secondary" disabled={busy[`game:${row.gameId}`]} onClick={() => { setTab('schedule'); loadGame(row.gameId); }}>比賽詳情</button></div>
+          <NhlAnalysisResult record={analyses[key]} game={row} busy={pending} error={analysisErrors[key]}/>
+        </section>;
+      })}
+    </>}
     {tab === 'team' && selectedTeam && <section className="panel">
       <h2>官方球隊賽季統計</h2><p>{selectedTeam.name || selectedTeam.abbrev}｜{selectedTeam.season}｜球隊 ID {selectedTeam.teamId}</p>
       <div className="nhlToolbar"><label>統計賽事類型<select value={summaryType} onChange={event => setSummaryType(Number(event.target.value))}><option value={1}>季前賽｜獨立 Shadow</option><option value={2}>例行賽</option><option value={3}>季後賽</option></select></label>
@@ -220,7 +452,7 @@ export default function NhlWorkspace() {
       </>}
     </section>}
     {tab === 'schedule' && <>
-      <section className="panel"><div className="nhlToolbar"><label>台灣日期<input type="date" value={date} onChange={event => { if (event.target.value) { setDate(event.target.value); setSelectedGame(null); } }}/></label><button className="primary" disabled={busy[`schedule:${date}`]} onClick={() => loadSchedule()}>{busy[`schedule:${date}`] ? '取得官方賽程中…' : '載入 NHL 賽程'}</button><button className="secondary" onClick={() => { const today = taipeiDay(); setDate(today); setSelectedGame(null); }}>回到今天</button></div><p className="nhlNote">按鈕手動更新，不會自動重跑或清除已讀資料。北美晚間比賽通常列在台灣隔天。</p>{board && <><div className="nhlNote">{board.sampleOnly ? '歷史樣本，非完整當日賽程｜' : ''}台灣 {date}｜{board.games?.length || 0} 場｜{board.cache?.hit ? '快取資料' : '本次取得'}。下方保留的資料以來源時間為準。</div><Source source={board.source}/></>}</section>
+      <section className="panel"><div className="nhlToolbar"><label>台灣日期<input type="date" value={date} onChange={event => { if (event.target.value) selectDate(event.target.value); }}/></label><button className="primary" disabled={busy[`schedule:${date}`]} onClick={() => loadSchedule()}>{busy[`schedule:${date}`] ? '取得官方賽程中…' : '載入 NHL 賽程'}</button><button className="secondary" onClick={() => selectDate(taipeiDay())}>回到今天</button></div><p className="nhlNote">切換日期自動載入賽程，已讀資料仍保留。北美晚間比賽通常列在台灣隔天。</p>{board && <><div className="nhlNote">{board.sampleOnly ? '歷史樣本，非完整當日賽程｜' : ''}台灣 {date}｜{board.games?.length || 0} 場｜{board.cache?.hit ? '快取資料' : '本次取得'}。下方保留的資料以來源時間為準。</div><Source source={board.source}/></>}</section>
       {!board && <Empty title="尚未載入這天的 NHL 賽程">選擇台灣日期，再按「載入 NHL 賽程」。</Empty>}
       {board && !board.games?.length && <Empty title="官方賽程此日沒有賽事">已依台灣日期篩選。可選其他日期或稍後手動更新。</Empty>}
       {(board?.games || []).map(row => <section className="gameCard" key={row.gameId}><div className="nhlGameHeader"><div><h2>{row.away?.name || row.away?.abbrev} 對 {row.home?.name || row.home?.abbrev}</h2><div className="nhlDates"><span>台灣 {clock(row.startTimeUTC)}</span><span>美東 {clock(row.startTimeUTC, 'America/New_York')}｜官方比賽日 {row.officialDate || '尚未提供'}</span><span>{row.venue || '球場待公布'}｜{phase(row.seasonPhase)}</span></div></div><div><span className="state">{state(row.gameState)}</span>{row.final && <div className="nhlGameScore">{number(row.final.awayGoals)} : {number(row.final.homeGoals)}</div>}</div></div><div className="nhlSource">Game ID {row.gameId}｜球隊 ID {row.awayTeamId}／{row.homeTeamId}｜身分 QA {row.identity?.status || '待核對'}</div><div className="nhlActions"><button className="secondary" disabled={busy[`game:${row.gameId}`]} onClick={() => loadGame(row.gameId)}>比賽詳情與節次</button><button className="secondary" onClick={() => loadTeam(row.away, row.season)}>{row.away?.abbrev} 球員</button><button className="secondary" onClick={() => loadTeam(row.home, row.season)}>{row.home?.abbrev} 球員</button><button className="secondary" onClick={() => { setTab('goalie'); loadGame(row.gameId); }}>門將與陣容</button></div>{selectedGame === row.gameId && <GameNotices detail={details[row.gameId]}/>}
@@ -232,7 +464,7 @@ export default function NhlWorkspace() {
     {tab === 'team' && <section className="panel"><h2>球隊與球員</h2>{!selectedTeam ? <p className="nhlNote">先在賽程選擇一隊的「球員」按鈕。</p> : <><h3>{selectedTeam.name || selectedTeam.abbrev}｜球隊 ID {selectedTeam.teamId}</h3><button className="secondary" disabled={busy[`team:${rosterKey}`]} onClick={() => loadTeam(selectedTeam, selectedTeam.season)}>更新球隊資料</button>{roster && <><Source source={roster.roster?.source}/><div className="nhlTableWrap"><table className="nhlTable nhlRoster"><thead><tr><th>球員</th><th>位置</th><th>官方 ID</th><th>持桿</th></tr></thead><tbody>{roster.roster?.players?.map(row => <tr key={row.playerId}><td><button onClick={() => loadPlayer(row.playerId)}>{row.name || row.playerId}</button></td><td>{row.position || '—'}</td><td>{row.playerId}</td><td>{row.shootsCatches || '—'}</td></tr>)}</tbody></table></div>{roster.statistics?.ok ? <ClubStatistics value={roster.statistics}/> : <p className="nhlNote nhlWarning">名單已取得；球員統計來源本次未完成更新。</p>}</>}{player && <section className="panel"><h3>{player.player?.name}｜{player.player?.playerId}</h3><Source source={player.source}/><div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>賽季</th><th>聯盟／類型</th><th>出賽</th><th>進球</th><th>助攻</th><th>積分</th><th>撲救率</th></tr></thead><tbody>{(player.seasonTotals || []).filter(row => row.leagueAbbrev === 'NHL').map((row, i) => <tr key={`${row.season}-${i}`}><td>{row.season}</td><td>{row.leagueAbbrev}／{row.gameTypeId === 2 ? '例行賽' : row.gameTypeId === 3 ? '季後賽' : row.gameTypeId}</td><td>{number(row.gamesPlayed)}</td><td>{number(row.goals)}</td><td>{number(row.assists)}</td><td>{number(row.points)}</td><td>{number(row.savePctg)}</td></tr>)}</tbody></table></div></section>}</>}</section>}
     {tab === 'goalie' && <section className="panel"><h2>門將與陣容</h2>{!game ? <p className="nhlNote">先從賽程選擇一場比賽。</p> : <><h3>{game.away?.name} 對 {game.home?.name}</h3><GameNotices detail={details[game.gameId]}/><button className="secondary" disabled={busy[`game:${game.gameId}`]} onClick={() => loadGame(game.gameId)}>更新門將與比賽資料</button><PersonnelPanel value={personnel[game.gameId]} versions={personnelVersions[game.gameId]} busy={busy[`personnel:${game.gameId}`]} onLoad={() => loadPersonnel(game.gameId)} onVersions={() => loadPersonnelVersions(game.gameId)}/><p className="nhlNote">官方賽後 Boxscore 的門將出賽記錄會獨立列出，不當成賽前已確認先發。缺少資料時保持未知，不補為零。</p>{game.playerStatistics && ['away', 'home'].map(side => <div key={side}><h3>{side === 'away' ? '客隊' : '主隊'}｜官方門將名單與出場時間</h3><div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>球員</th><th>Player ID</th><th>Save %</th><th>出場時間</th></tr></thead><tbody>{game.playerStatistics[side]?.goalies?.map(row => <tr key={row.playerId}><td>{row.name?.default || row.name || '—'}</td><td>{row.playerId}</td><td>{number(row.savePctg)}</td><td>{row.toi || '—'}</td></tr>)}</tbody></table></div></div>)}<p className="nhlNote">5v5 官方事件統計顯示在比賽詳情；獨立射門 xG 研究與歷史校準結果位於「歷史 Shadow」。缺少 exposure 時不計算每 60 分鐘效率。</p><button className="secondary" disabled={busy[`versions:${game.gameId}`]} onClick={() => loadVersions(game.gameId)}>查看來源版本紀錄</button>{versions[game.gameId] && <div className="nhlSource">{versions[game.gameId].length ? versions[game.gameId].map(row => <p key={row.revision}>{clock(row.observedAt)}｜{row.revision}</p>) : '尚無已保存來源版本'}</div>}<Source source={game.source}/></>}</section>}
     {tab === 'research' && <section className="panel"><h2>歷史資料與 Shadow 驗證</h2><p className="nhlNote">逐場歷史比分、節次及數學檢查。季前賽獨立保存；模型研究不混入正式長期績效。</p><button className="primary" disabled={busy.research} onClick={loadResearch}>{busy.research ? '載入歷史驗證中…' : '載入歷史與驗證結果'}</button>{research && <><NhlResearchPanel history={research.expandedHistory} shots={research.shotResearch}/><h3>逐場工程回歸樣本（獨立小資料集）</h3><div className="nhlStats"><Stat label="工程回歸樣本" value={research.games?.length}/><Stat label="完整逐節比分" value={research.completePeriodGames}/></div><p className="nhlNote">{research.message}</p><div className="nhlTableWrap"><table className="nhlTable"><thead><tr><th>台灣日期</th><th>賽事</th><th>結果</th><th>資料 QA</th><th>詳情</th></tr></thead><tbody>{research.games?.map(row => <tr key={row.gameId}><td>{row.taipeiDate}</td><td>{row.away?.abbrev} @ {row.home?.abbrev}</td><td>{row.final?.awayGoals} : {row.final?.homeGoals} {row.outcomeType}</td><td>{row.qa?.status || row.identity?.status}</td><td><button className="secondary" onClick={() => { setDate(row.taipeiDate); setBoards(value => ({ ...value, [row.taipeiDate]: value[row.taipeiDate]?.sampleOnly === false || (value[row.taipeiDate] && !value[row.taipeiDate].sampleOnly) ? value[row.taipeiDate] : { league: 'NHL', date: row.taipeiDate, sampleOnly: true, games: research.games.filter(item => item.taipeiDate === row.taipeiDate), source: row.source } })); setDetails(value => ({ ...value, [row.gameId]: value[row.gameId]?.game?.gameId === row.gameId ? value[row.gameId] : { league: 'NHL', game: row, acquisition: 'ARCHIVED_OFFICIAL_HISTORICAL_SAMPLE', warning: '官方歷史研究樣本；非本次即時更新資料。' } })); setSelectedGame(row.gameId); setTab('schedule'); }}>查看</button></td></tr>)}</tbody></table></div>{research.validation && <><div className="nhlStats"><Stat label="回溯 Walk-forward 場次" value={research.validation.retrospective.folds}/><Stat label="正規時間 Brier" value={research.validation.retrospective.regulationBrier}/><Stat label="比分平方誤差" value={research.validation.retrospective.regulationSquaredError}/><Stat label="嚴格賽前快照驗證場次" value={research.validation.strictPointInTime.folds}/></div><p className="nhlNote">使用 48 小時結果隔離。Brier 與比分誤差越低越好；這個小樣本僅供工程檢查，沒有通過正式預測效力或校準驗證。</p><details><summary>逐場訓練範圍與驗證證據</summary><pre>{JSON.stringify(research.validation, null, 2)}</pre></details></>}<p className="nhlNote nhlWarning">歷史結果資料不等於當時的傷病、門將或盤口快照；沒有時間證據的欄位不參與賽前回測。</p></>}</section>}
-    {tab === 'sources' && <section className="panel"><h2>資料品質與 Reader</h2><p className="noticeBox">等待真實 Tai888 NHL 盤驗證</p><p className="nhlNote">NHL Reader 資料介面與市場身分欄位獨立保存。尚未核實的盤型、OT／Shootout 規則不會被當成已驗證市場。</p><button className="secondary" disabled={busy.status} onClick={() => run('status', async () => setStatus(await request('status')))}>更新資料狀態</button><div className="nhlStatusRows">{[['賽程／Game identity', 'NHL 官方 Schedule／Gamecenter'], ['球隊／球員身分', 'NHL 官方 Roster／Player'], ['日期', 'UTC、台灣與美東時間分開顯示'], ['比分', '三節、Regulation、OT、Shootout 分開核對'], ['球員傷病／陣容／先發門將', '須具備來源、發布時間與球員所屬隊伍證據'], ['5v5／xG／High-Danger', '可保留獨立欄位；來源未提供時明確缺資料'], ['Cache', 'NHL 獨立命名空間；失敗保留畫面上一次結果'], ['永久來源快照', status?.persistenceConfigured ? '已設定；逐次寫入另行確認' : '尚未設定'], ['投注與正式績效', '本輪新增資料與研究介面；NHL 實盤功能尚未啟用']].map(([label, detail]) => <div className="nhlStatusRow" key={label}><strong>{label}</strong><span>{detail}</span></div>)}</div>{status?.sources && <div className="nhlSource">{Object.entries(status.sources).filter(([, value]) => value.productionEnabled !== false).map(([key, value]) => <p key={key}><a href={value.url} target="_blank" rel="noreferrer">{key}｜{value.provider}</a></p>)}</div>}</section>}
+    {tab === 'sources' && <section className="panel"><h2>資料品質與 Reader</h2><p className="noticeBox">等待真實 Tai888 NHL 盤驗證</p><p className="nhlNote">NHL Reader 需要 v{status?.reader?.minimumReaderVersion || '2.1.31'} 以上。NHL Reader 資料介面與市場身分欄位獨立保存。尚未核實的盤型、OT／Shootout 規則不會被當成已驗證市場。</p><div className="nhlActions"><a className="secondary nhlReaderDownload" href="/downloads/Tai888-Reader-v2.1.31-NHL-READ.zip" download>下載 NHL Reader</a><button className="secondary" disabled={busy.status} onClick={() => run('status', async () => setStatus(await request('status')))}>更新資料狀態</button></div><div className="nhlStatusRows">{[['賽程／Game identity', 'NHL 官方 Schedule／Gamecenter'], ['球隊／球員身分', 'NHL 官方 Roster／Player'], ['日期', 'UTC、台灣與美東時間分開顯示'], ['比分', '三節、Regulation、OT、Shootout 分開核對'], ['球員傷病／陣容／先發門將', '須具備來源、發布時間與球員所屬隊伍證據'], ['5v5／xG／High-Danger', '可保留獨立欄位；來源未提供時明確缺資料'], ['Cache', 'NHL 獨立命名空間；失敗保留畫面上一次結果'], ['永久來源快照', status?.persistenceConfigured ? '已設定；逐次寫入另行確認' : '尚未設定'], ['投注與正式績效', '本輪新增資料與研究介面；NHL 實盤功能尚未啟用']].map(([label, detail]) => <div className="nhlStatusRow" key={label}><strong>{label}</strong><span>{detail}</span></div>)}</div>{status?.sources && <div className="nhlSource">{Object.entries(status.sources).filter(([, value]) => value.productionEnabled !== false).map(([key, value]) => <p key={key}><a href={value.url} target="_blank" rel="noreferrer">{key}｜{value.provider}</a></p>)}</div>}</section>}
     </div>
   </main>;
 }

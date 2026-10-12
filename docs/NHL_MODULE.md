@@ -1,6 +1,18 @@
-# NHL data and historical Shadow module
+# NHL pregame Shadow, data and historical research module
 
 This module is part of the existing Next.js app and Vercel Production project. `/nhl` and `/api/nhl` share the existing login, layout, navigation and infrastructure. NHL is intentionally not passed through the baseball `LEAGUE_IDS`, first-five-inning provider, eight-direction analysis or four-league ticket tables. Returning to an existing league uses `/?league=...` and its existing persisted workspace.
+
+## Pregame integration, 2026-10-12 (v11.9.90)
+
+- `/nhl` now opens the analysis tab, loads today's official Taiwan-date schedule and restores saved analyses. Per-game and progressive NHL batch controls discover the next unstarted slate when today's games have ended.
+- Authenticated `POST /api/nhl/analysis` accepts only NHL/date/official game ID/force. `GET ?date=...` restores durable pregame records. `/api/nhl/analysis-board` provides independently validated future NHL tasks to the six-league workflow, without sending them through baseball `/api/analyze`.
+- The existing conditional empirical linked-period model and its formulas are unchanged. The bundled 1,312-game 2023-24 official period corpus is hash checked; its chronological selection currently chooses an unconditional historical baseline. The UI labels it `歷史基準｜未校準`. Current personnel/context observations are disclosed separately; they are not invented team-strength or goalie adjustments.
+- Sixty-minute regulation and final scores including OT/Shootout are distinct. Complete distributions are losslessly compressed into immutable NHL `ANALYSIS` observations. Canonical outer hashes survive PostgreSQL JSONB key reordering; compact browser responses omit distribution archives.
+- A game that has already started can only replay an actually saved pregame snapshot. Acquisition or calculation crossing puck drop never produces a backdated forecast. Failed sources and persistence remain explicit; no in-memory record is represented as a durable write.
+- Reader 2.1.31 adds scoped NHL raw-row capture, canonical team identities, signed upload to `/api/nhl/reader`, multi-date evidence and server numeric reparsing. Actual Tai888 NHL DOM/capture/settlement-rule verification remains separate from synthetic engineering tests.
+- Formal market manifest and payoff OOS calibration are still missing. W, R, S and execution remain unavailable; adding NHL to orchestration does not enable wagers or claim formal calibration. NHL research completion is counted as partial in the combined workflow.
+
+Production acceptance must exercise a real future game, API/data flow, permanent write/read recovery and UI interaction. Real Reader upload and actual mobile-device verification cannot be inferred from local tests or a Ready deployment.
 
 ## Shipped data architecture
 

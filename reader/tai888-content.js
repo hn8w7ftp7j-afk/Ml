@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.30';
+  const READER_VERSION = '2.1.31';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -322,6 +322,7 @@
       captures.push({
         version: 'TAI888-DOM-CAPTURE-v2.2.0',
         league,
+        ...(league === 'NHL' ? { pageLeagueLabel: normalized.diagnostics.pageLeagueLabel } : {}),
         sourceHost: tai888SourceHost(),
         pageUrl: currentTai888PageUrl(),
         observedAt: new Date().toISOString(),
