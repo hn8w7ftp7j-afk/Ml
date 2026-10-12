@@ -272,10 +272,12 @@ export default function NhlWorkspace() {
     for (const row of readyRows) {
       const analysis = row.payload; const task = row.task;
       const record = { league: 'NHL', date: target, gameId: analysis.gameId, analysis };
+      const taskStart = Date.parse(task?.game?.startTimeUTC);
+      const analysisStart = Date.parse(analysis.game?.startTimeUTC);
       if (task?.league !== 'NHL' || task?.nhlQuery?.date !== target || task?.nhlQuery?.gameId !== analysis.gameId
         || task?.game?.gameId !== analysis.gameId || (task.game.league || task.game.leagueId) !== 'NHL'
         || task.game.awayTeamId !== analysis.game?.awayTeamId || task.game.homeTeamId !== analysis.game?.homeTeamId
-        || task.game.startTimeUTC !== analysis.game?.startTimeUTC
+        || !Number.isFinite(taskStart) || !Number.isFinite(analysisStart) || taskStart !== analysisStart
         || row.saved !== (analysis.persistence?.persisted === true)
         || !validNhlWorkspaceRecord('analyses', nhlAnalysisKey(target, analysis.gameId), record)) throw new Error('背景分析的賽事身分或保存狀態不符，已停止顯示。');
     }

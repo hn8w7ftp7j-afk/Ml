@@ -50,6 +50,9 @@ await test('future official game gets unchanged independent score model and immu
   assert.equal(result.mode, 'PREGAME_SHADOW'); assert.equal(result.persistence.persisted, true);
   assert.equal(result.readiness.formalRecommendations, false); assert.equal(result.readiness.realBetExecutionEnabled, false);
   assert.equal(result.market.weightedEV, null); assert.equal(result.market.robustEV, null); assert.equal(result.market.score, null);
+  assert.equal(result.market.status, 'WAITING_REAL_DATA');
+  assert.equal(result.market.missingReason, '尚無本場已核對的 NHL Reader 盤口。',
+    'An absent Reader snapshot is missing data, not corrupt captured evidence');
   assert.equal(result.model.expectedGoals.away, result.model.scopes.REGULATION.awayGoals);
   assert.equal(result.model.finalExpectedGoals.away, result.model.scopes.FINAL.awayGoals);
   const p = result.model.probabilities;
@@ -176,7 +179,9 @@ await test('actual Reader team and timestamp must uniquely agree with the offici
   const wrongIdentity = structuredClone(captured); wrongIdentity.games[0].homeTeamId = 10;
   assert.equal((await run(wrongIdentity)).market.status, 'WAITING_REAL_DATA');
   const corrupt = structuredClone(captured); corrupt.games[0].rawRows[0].lineText = '6+10';
-  assert.equal((await run(corrupt)).market.status, 'WAITING_REAL_DATA');
+  const corruptedResult = await run(corrupt);
+  assert.equal(corruptedResult.market.status, 'WAITING_REAL_DATA');
+  assert.equal(corruptedResult.market.missingReason, 'Reader 原始來源或快照完整性未通過核對，盤口不加入分析。');
 });
 
 await test('date recovery validates before returning a durable replay and strips raw archives', async () => {
