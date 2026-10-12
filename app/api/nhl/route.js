@@ -41,8 +41,12 @@ export async function GET(request) {
   try {
     const action = params.get('action') || 'status';
     if (action === 'status') return response({ ok: true, version: NHL_DATA_VERSION, sources: NHL_SOURCES,
-      reader: { version: NHL_READER_INTERFACE_VERSION, status: 'WAITING_REAL_DATA', message: NHL_READER_WAITING_MESSAGE, verifiedMarketCount: 0 },
-      persistenceConfigured: nhlPersistenceConfigured(), scope: 'NHL_DATA_AND_SHADOW_RESEARCH', realBetExecutionEnabled: false });
+      reader: { version: NHL_READER_INTERFACE_VERSION, status: 'WAITING_REAL_DATA', message: NHL_READER_WAITING_MESSAGE, verifiedMarketCount: 0,
+        captureSupported: true, minimumReaderVersion: '2.1.31' },
+      persistenceConfigured: nhlPersistenceConfigured(), scope: 'NHL_PREGAME_SHADOW_AND_DATA',
+      pregameAnalysisEnabled: true, historicalReplayRequiresSavedPregameSnapshot: true,
+      readyForFormal: false, realBetExecutionEnabled: false,
+      missingFormalEvidence: ['VERIFIED_TAI888_NHL_MARKET_CONTRACT', 'NHL_PAYOFF_OOS_CALIBRATION'] });
     if (action === 'research') return response(await cachedNhlData(`historical-research-v2:${nhlShotResearchEvidence().fullReportHash}`, async () => ({
       ...nhlHistoricalResearch(), expandedHistory: await loadBundledNhlHistoryValidation(), shotResearch: nhlShotResearchEvidence(),
     }), { ttlMs: 3600_000 }));

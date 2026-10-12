@@ -107,6 +107,7 @@ Object.assign(batch, {
   clearAllLeagueBackgroundJobs: () => {}, clearBackgroundJob: () => {}, markAppOperationBusy: () => {},
   setAllLeaguePreparing: () => {}, setNotice: () => {}, setBackgroundJobRevision: () => {},
   publishAllLeagueRun: value => { batch.allLeagueRun = value; },
+  prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareAllLeagueBatch: async (league, date) => ({ league, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   startBackgroundAnalysisJob: async payload => { allSubmissions.push(payload); return { runId: 'test-all-date' }; },
   saveBackgroundJob: () => true,

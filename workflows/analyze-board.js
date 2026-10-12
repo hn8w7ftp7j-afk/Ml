@@ -5,6 +5,7 @@ import { completionMessage, saveNotificationResult, sendPush } from '../lib/anal
 import { POST as analyzeRequest } from '../app/api/analyze/route.js';
 import { createBackgroundAnalysisAuthorization } from '../lib/security.js';
 import { analyzeNbaJobTask } from '../lib/nba/analysis-job.js';
+import { analyzeNhlJobTask } from '../lib/nhl/analysis-job.js';
 
 function resultTask(task) {
   const { body: omittedBody, requestId: omittedRequestId, ...context } = task;
@@ -15,6 +16,7 @@ async function analyzeGameStep(task) {
   'use step';
 
   if (task.league === 'NBA') return analyzeNbaJobTask(task);
+  if (task.league === 'NHL') return analyzeNhlJobTask(task);
 
   const authorization = await createBackgroundAnalysisAuthorization(task.body);
   const response = await analyzeRequest(new Request('https://background-analysis.internal/api/analyze', {
@@ -109,13 +111,13 @@ export async function analyzeBoardWorkflow(input) {
 export async function analyzeAllLeaguesWorkflow(input) {
   'use workflow';
 
-  if (!input || !Array.isArray(input.batches) || !input.batches.length || input.batches.length > 5) {
+  if (!input || !Array.isArray(input.batches) || !input.batches.length || input.batches.length > 6) {
     throw new FatalError('全部聯盟背景分析缺少有效工作');
   }
   const batches = [];
   for (const batch of input.batches) {
     const tasks = Array.isArray(batch?.tasks) ? batch.tasks : [];
-    if (!batch?.league || tasks.length > 20) throw new FatalError('四聯盟背景分析工作內容無效');
+    if (!batch?.league || tasks.length > 20) throw new FatalError('全部聯盟背景分析工作內容無效');
     const results = [];
     const concurrency = batch.league === 'MLB' ? 2 : 1;
     // League groups intentionally run one after another. A failure within one

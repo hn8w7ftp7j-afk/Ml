@@ -11,7 +11,7 @@ let authorized = true;
 const route = vm.createContext({
   Request, Response, URL, NextResponse: Response,
   requireApiAuth: async () => authorized ? null : Response.json({}, { status: 401 }),
-  cleanText: v => String(v || ''), isLeagueId: v => ['NPB', 'CPBL', 'MLB', 'KBO'].includes(v),
+  cleanText: v => String(v || ''), isAnalysisLeagueId: v => ['NPB', 'CPBL', 'MLB', 'KBO', 'NBA', 'NHL'].includes(v),
   getRun: () => ({ exists: true, status, get returnValue() { assert.equal(status, 'completed'); return returned; } }),
   getNotificationResult: async id => results.get(id),
 });

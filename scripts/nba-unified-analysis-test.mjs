@@ -5,6 +5,7 @@ import { ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun, isAnalysisLeagueId } from
 import { LEAGUE_IDS, requestedLeagueId, leagueCanAnalyze } from '../lib/leagues.js';
 import { cloudBetLeagueCanWrite } from '../lib/cloud-bet-store.js';
 import { buildNbaAnalysisBoard } from '../lib/nba/analysis-board.js';
+import { normalizeNhlAnalysisTasks } from '../lib/nhl/analysis-job.js';
 import { normalizeNbaAnalysisTasks, analyzeNbaJobTask } from '../lib/nba/analysis-job.js';
 import { mergeNbaAnalysisResults, nbaResultQuoteCurrent } from '../lib/nba/analysis-job-display.js';
 import { createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueAnalysisProgress } from '../lib/all-league-analysis-v117.js';
@@ -63,7 +64,7 @@ assert.equal(requestedLeagueId('NBA'), null); assert.equal(leagueCanAnalyze('NBA
 const submitted = []; let authorized = true;
 const route = vm.createContext({ Request, Response, URL, NextResponse: Response, crypto: globalThis.crypto, Date,
   cleanText: (v, max = 1000) => String(v || '').slice(0, max), isLeagueId: v => LEAGUE_IDS.includes(v),
-  isAnalysisLeagueId, ANALYSIS_LEAGUE_IDS, normalizeNbaAnalysisTasks,
+  isAnalysisLeagueId, ANALYSIS_LEAGUE_IDS, normalizeNbaAnalysisTasks, normalizeNhlAnalysisTasks,
   requireApiAuth: async () => authorized ? null : Response.json({}, { status: 401 }), validateSameOrigin: () => true,
   checkRateLimit: () => ({ allowed: true }), validAnalysisJobRequestKey: () => false,
   readJsonBody: request => request.json(), deviceHash: () => null, readCookie: () => '', PUSH_COOKIE: 'unused',
@@ -75,7 +76,7 @@ vm.runInContext(strip(read('app/api/analysis-jobs/route.js')) + '\nthis.post=POS
 const post = body => route.post(new Request('https://fixture.test/api/analysis-jobs', { method: 'POST', body: JSON.stringify(body) }));
 const batches = ANALYSIS_LEAGUE_IDS.map(league => ({ league, date, tasks: league === 'NBA' ? [task] : [], emptyReason: league === 'NBA' ? null : 'no_games' }));
 assert.equal((await post({ mode: 'all-leagues', date, batches })).status, 202);
-assert.equal(submitted[0].input.batches.length, 5); assert.equal(submitted[0].input.batches[0].league, 'NBA');
+assert.equal(submitted[0].input.batches.length, 6); assert.equal(submitted[0].input.batches[0].league, 'NBA');
 assert.equal((await post({ league: 'NBA', date, tasks: [task] })).status, 202);
 assert.equal(submitted[1].input.league, 'NBA');
 assert.equal((await post({ mode: 'all-leagues', date, batches: [...batches, batches[0]] })).status, 400);
@@ -109,4 +110,4 @@ const dateInitializer = nbaWorkspace.match(/const \[date, setDate\] = useState\(
 const { taipeiDate } = await import('../lib/nba/identity.js');
 const initializedDate = vm.runInNewContext(dateInitializer, { taipeiDate, Date })();
 assert.match(initializedDate, /^\d{4}-\d{2}-\d{2}$/);
-console.log('Unified NBA analysis PASS: five-league submission, NBA-first latest-server-quote execution, per-game progress, insufficient/error isolation, identity/date/quote binding, result recovery and baseball ledger boundaries');
+console.log('Unified NBA analysis PASS: six-league submission, NBA-first latest-server-quote execution, per-game progress, insufficient/error isolation, identity/date/quote binding, result recovery and baseball ledger boundaries');

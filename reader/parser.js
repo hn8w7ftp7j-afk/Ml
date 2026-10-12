@@ -1,14 +1,17 @@
+import './nhl-teams.js';
+
 const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
 const WATER_TOKEN = /^\d(?:\.\d{3})$/;
 const HOME_MARKER = /[\[［【(（]\s*主\s*[\]］】)）]/u;
 const TEAM_CODE = /(?:^|\s)([A-Z][A-Z0-9]{0,11})\s*-/g;
-const LEAGUES = Object.freeze(['MLB', 'NPB', 'KBO', 'CPBL', 'NBA']);
+const LEAGUES = Object.freeze(['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL']);
 const BASEBALL_MARKET_PROPERTIES = Object.freeze(['fullRunline', 'fullTotal', 'first5Runline', 'first5Total']);
 const NBA_MARKET_PROPERTIES = Object.freeze(['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
+const NHL_MARKET_PROPERTIES = Object.freeze(['fullRunline', 'fullTotal']);
 
 // NBA halves use basketball periods; never expose them as baseball first-five markets.
 export function readerMarketProperties(league) {
-  return league === 'NBA' ? NBA_MARKET_PROPERTIES : BASEBALL_MARKET_PROPERTIES;
+  return league === 'NHL' ? NHL_MARKET_PROPERTIES : league === 'NBA' ? NBA_MARKET_PROPERTIES : BASEBALL_MARKET_PROPERTIES;
 }
 
 const clean = value => String(value || '')
@@ -195,16 +198,18 @@ function mapHeaders(headers, league = '') {
   };
 }
 
-function teamCodes(cell) {
+function teamCodes(cell, league = '') {
   const pair = explicitPair(cell);
   const lines = pair || cellLines(cell);
   const found = new Map();
   for (const [index, line] of lines.entries()) {
     const matches = [...line.matchAll(TEAM_CODE)];
     for (const [matchIndex, match] of matches.entries()) {
-      const code = match[1].toUpperCase();
+      const rawCode = match[1].toUpperCase();
       const nextIndex = matches[matchIndex + 1]?.index ?? line.length;
       const teamText = clean(line.slice(match.index, nextIndex));
+      const code = league === 'NHL' ? globalThis.Tai888NhlTeams.resolve(teamText)?.code : rawCode;
+      if (!code) continue;
       const candidate = {
         code,
         text: teamText,
@@ -284,12 +289,14 @@ function fallbackDateTime(row, cells, timeIndex, now) {
 }
 
 function marketFingerprint(game, league) {
+  if (league === 'NHL') return JSON.stringify(game.rawMarketEvidence);
   return JSON.stringify(Object.fromEntries(readerMarketProperties(league).map(property => [
     property, property.endsWith('Runline') ? canonicalRunline(game?.[property]) : canonicalTotal(game?.[property]),
   ])));
 }
 
 function marketRichness(game, league) {
+  if (league === 'NHL') return (game.rawMarketEvidence || []).filter(value => value.rawRows?.some(Boolean)).length;
   return readerMarketProperties(league).map(property => game?.[property])
     .reduce((count, market) => count + (market ? 1 : 0), 0);
 }
@@ -341,7 +348,7 @@ export function parseTai888Capture(capture, now = new Date()) {
       const cells = Array.isArray(row?.cells) ? row.cells : [];
       const requiredIndexes = Object.values(map).filter(index => index >= 0);
       if (!requiredIndexes.length || cells.length <= Math.max(...requiredIndexes)) continue;
-      const teams = teamCodes(cells[map.teams]);
+      const teams = teamCodes(cells[map.teams], league);
       if (teams.length !== 2) continue;
       const homeIndexes = teams
         .map((team, index) => team.homeMarked ? index : -1)
@@ -357,6 +364,7 @@ export function parseTai888Capture(capture, now = new Date()) {
       const parsedMarkets = {};
       const marketStates = {};
       for (const [marketName, property, headerKey, parser] of MARKET_FIELDS) {
+        if (league === 'NHL' && property.startsWith('first5')) continue;
         const index = map[headerKey];
         const cell = index >= 0 ? cells[index] : null;
         const parsed = index >= 0 ? parser(cell, awayIndex) : null;
@@ -375,13 +383,25 @@ export function parseTai888Capture(capture, now = new Date()) {
         marketStates,
         rawRowText: clean(row?.text || ''),
         marketStatus: row?.marketLocked === true ? 'locked' : 'open',
+        ...(league === 'NHL' ? {
+          league: 'NHL', awayAbbrev: away.code, homeAbbrev: home.code,
+          awayTeamId: globalThis.Tai888NhlTeams.byCode(away.code).teamId,
+          homeTeamId: globalThis.Tai888NhlTeams.byCode(home.code).teamId,
+          teamEvidence: Array.isArray(row.teamEvidence) ? row.teamEvidence.map(clean) : [away.text, home.text],
+          rawMarketEvidence: (Array.isArray(row.marketEvidence) ? row.marketEvidence : headers.map((label, index) => ({ label, key: Object.keys(map).find(key => map[key] === index) || `unclassified-${index}`, pair: pairLines(cells[index]) })))
+            .filter(value => !['time', 'teams'].includes(value.key) && value.label)
+            .map(value => ({ key: clean(value.key), label: clean(value.label), rawRows: Array.isArray(value.pair)
+              ? ((value.key === 'runline' || value.key === 'moneyline') && !Array.isArray(row.marketEvidence)
+                ? [value.pair[awayIndex], value.pair[homeIndex]] : value.pair).map(clean).slice(0, 2) : [] })),
+          executable: false,
+        } : {}),
       };
       const markets = readerMarketProperties(league).map(property => game[property]);
       // A complete date/time/team identity with zero captured market values is
       // non-executable by definition. Tai888 renders some locked games without
       // textual lock metadata, so retain it only as an unopened game. Partial
       // markets remain open and will fail the strict 4-market/8-direction gate.
-      if (!markets.some(Boolean)) game.marketStatus = 'locked';
+      if (!markets.some(Boolean) && !(league === 'NHL' && game.rawMarketEvidence.some(value => value.rawRows.some(Boolean)))) game.marketStatus = 'locked';
       if (game.marketStatus === 'locked' && markets.some(Boolean)) game.marketStatus = 'open';
       games.push(game);
     }
@@ -396,7 +416,10 @@ export function parseTai888Capture(capture, now = new Date()) {
     if (seen.has(key)) {
       const previous = seen.get(key);
       const previousGame = unique[previous.index];
-      const sharedConflict = readerMarketProperties(league).some(property => {
+      const sharedConflict = league === 'NHL' ? previousGame.rawMarketEvidence.some(value => {
+        const other = game.rawMarketEvidence.find(market => market.key === value.key);
+        return value.rawRows?.some(Boolean) && other?.rawRows?.some(Boolean) && JSON.stringify(value) !== JSON.stringify(other);
+      }) : readerMarketProperties(league).some(property => {
         const canonical = property.endsWith('Runline') ? canonicalRunline : canonicalTotal;
         return previousGame[property] && game[property]
           && JSON.stringify(canonical(previousGame[property])) !== JSON.stringify(canonical(game[property]));
@@ -424,6 +447,7 @@ export function parseTai888Capture(capture, now = new Date()) {
     version: league === 'NBA' ? 'TAI888-READER-DOM-v2.2.0' : 'TAI888-READER-DOM-v2.1.0',
     league,
     sourceHost: sanitizeTai888Host(capture?.sourceHost) || sanitizeTai888Host(pageUrl),
+    ...(league === 'NHL' ? { pageLeagueLabel: clean(capture?.pageLeagueLabel || capture?.diagnostics?.pageLeagueLabel) } : {}),
     pageUrl,
     observedAt: clean(capture?.observedAt) || new Date().toISOString(),
     boardDate,
@@ -442,6 +466,14 @@ export function canonicalReaderPayload(payload) {
     const leftKey = `${left?.boardDate || ''}|${left?.boardTime || ''}|${left?.awayCode || ''}|${left?.homeCode || ''}`;
     const rightKey = `${right?.boardDate || ''}|${right?.boardTime || ''}|${right?.awayCode || ''}|${right?.homeCode || ''}`;
     return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+  });
+  if (payload?.league === 'NHL') return JSON.stringify({
+    version: payload.version, league: 'NHL', sourceHost: payload.sourceHost || '',
+    boardDate: payload.boardDate || '', pageLeagueLabel: payload.pageLeagueLabel || '',
+    games: orderedGames.map(game => ({ awayCode: game.awayCode, homeCode: game.homeCode,
+      boardDate: game.boardDate, boardTime: game.boardTime, marketStatus: game.marketStatus,
+      teamEvidence: game.teamEvidence, rawMarketEvidence: game.rawMarketEvidence,
+    })),
   });
   return JSON.stringify({
     version: payload?.version || '',
@@ -467,4 +499,29 @@ export function canonicalReaderPayload(payload) {
       }),
     })),
   });
+}
+export function nhlReaderEvidencePayload(payload) {
+  const games = (payload?.games || []).map(game => {
+    const eventLabel = `${game.awayRaw} @ ${game.homeRaw}`;
+    const identity = `NHL:${game.boardDate}:${game.boardTime}:${game.awayCode}:${game.homeCode}`;
+    const rawRows = (game.rawMarketEvidence || []).filter(value => value.rawRows?.some(Boolean)).map((value, index) => ({
+      sourceRowId: `${identity}:${value.key || index}`, eventLabel,
+      marketLabel: value.label, lineText: value.rawRows.filter(Boolean).join(' | '),
+      settlementRuleText: null,
+    }));
+    return { league: 'NHL', boardDate: game.boardDate, boardTime: game.boardTime,
+      startTime: game.boardTime, awayAbbrev: game.awayAbbrev, homeAbbrev: game.homeAbbrev,
+      awayTeamId: game.awayTeamId, homeTeamId: game.homeTeamId,
+      awayRaw: game.awayRaw, homeRaw: game.homeRaw, teamEvidence: game.teamEvidence,
+      rawRowText: game.rawRowText,
+      marketStatus: game.marketStatus, rawRows, rawMarketEvidence: game.rawMarketEvidence,
+      parsedMarkets: { fullRunline: game.fullRunline, fullTotal: game.fullTotal }, executable: false,
+    };
+  });
+  return { league: 'NHL', provider: 'TAI888_READER', interfaceVersion: 'NHL-READER-EVIDENCE-v1',
+    boardDate: payload.boardDate, observedAt: payload.observedAt, pageActivityAt: payload.pageActivityAt,
+    pageUrl: payload.pageUrl, readerVersion: payload.readerVersion, pageLeagueLabel: payload.pageLeagueLabel,
+    expectedGameCount: payload.expectedGameCount, detectedGameCount: payload.detectedGameCount,
+    games, rawRows: games.flatMap(game => game.rawRows), executable: false,
+  };
 }

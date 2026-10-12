@@ -99,15 +99,21 @@
 
   function buildHeaderProfile(record, expectedLeague = '') {
     const columns = {};
+    const extraColumns = [];
     for (const cell of Array.isArray(record?.cells) ? record.cells : []) {
       const definition = headerDefinition(cell?.text || (cell?.lines || []).join(' '));
-      if (!definition || columns[definition.key]) continue;
+      if (!definition) {
+        const left = number(cell?.left, NaN); const right = number(cell?.right, NaN);
+        if (Number.isFinite(left) && Number.isFinite(right) && right > left && clean(cell.text)) extraColumns.push({ left, right, label: clean(cell.text) });
+        continue;
+      }
+      if (columns[definition.key]) continue;
       if (expectedLeague === 'NBA' && definition.key.startsWith('first5')
         && !/^上半/.test(clean(cell?.text || (cell?.lines || []).join(' ')))) continue;
       const left = number(cell?.left, NaN);
       const right = number(cell?.right, NaN);
       if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) continue;
-      columns[definition.key] = { left, right, label: definition.label };
+      columns[definition.key] = { left, right, label: clean(cell?.text || (cell?.lines || []).join(' ')) };
     }
     if (!columns.time || !columns.teams) return null;
     const marketKeys = ['runline', 'total', 'first5Runline', 'first5Total'];
@@ -116,6 +122,7 @@
       order: number(record?.order),
       top: number(record?.top),
       columns,
+      extraColumns,
       headers: DEFINITIONS.map(definition => definition.label),
     };
   }
@@ -174,6 +181,7 @@
       rawText: clean(record?.text),
       marketLocked: record?.marketLocked === true,
       mapped,
+      extraMapped: (profile?.extraColumns || []).map((column, index) => ({ ...mergeColumn(record, column), key: `unclassified-${index}`, label: column.label })),
       profile,
     };
   }
@@ -181,7 +189,10 @@
   function namedTeamMatches(text, league) {
     const value = clean(text);
     const matches = [];
-    for (const [code, aliases] of TEAM_NAME_ALIASES[league] || []) {
+    const definitions = league === 'NHL'
+      ? (globalThis.Tai888NhlTeams?.teams || []).map(team => [team.code, team.names])
+      : TEAM_NAME_ALIASES[league] || [];
+    for (const [code, aliases] of definitions) {
       let best = null;
       for (const alias of aliases) {
         const index = value.indexOf(alias);
@@ -200,11 +211,16 @@
     const found = new Map();
     for (const row of sourceRows) {
       const rowText = clean(row.text);
-      const matches = [...rowText.matchAll(TEAM_CODE)];
+      const codePattern = expectedLeague === 'NHL' && globalThis.Tai888NhlTeams
+        ? new RegExp(`(?:^|\\s)(${globalThis.Tai888NhlTeams.teams.flatMap(team => team.codes).join('|')})(?:\\s*-\\s*|\\s+|$)`, 'g')
+        : TEAM_CODE;
+      const matches = [...rowText.matchAll(codePattern)];
       for (const [matchIndex, match] of matches.entries()) {
-        const code = match[1].toUpperCase();
+        const rawCode = match[1].toUpperCase();
         const nextIndex = matches[matchIndex + 1]?.index ?? rowText.length;
         const teamText = clean(rowText.slice(match.index, nextIndex));
+        const code = expectedLeague === 'NHL' ? globalThis.Tai888NhlTeams?.resolve(teamText)?.code : rawCode;
+        if (!code) continue;
         const candidate = {
           code,
           text: teamText,
@@ -227,7 +243,7 @@
         }
       }
     }
-    if (!found.size) {
+    if (!found.size && expectedLeague !== 'NHL') {
       for (const match of clean(mappedRow?.rawText).matchAll(TEAM_CODE)) {
         const code = match[1].toUpperCase();
         if (!found.has(code)) {
@@ -325,7 +341,13 @@
       return pairedCell(awayValue, homeValue);
     });
     cells[1] = pairedCell(codedTeamText(away), codedTeamText(home));
-    return { cells, text: mappedRow.rawText, awayCode: away.code, homeCode: home.code, marketLocked: mappedRow.marketLocked };
+    return { cells, text: mappedRow.rawText, awayCode: away.code, homeCode: home.code, marketLocked: mappedRow.marketLocked,
+      teamEvidence: [away.text, home.text],
+      marketEvidence: [
+        ...DEFINITIONS.map((definition, index) => ({ key: definition.key, label: mappedRow.profile?.columns?.[definition.key]?.label || '', pair: cells[index].pair })).filter(value => !['time', 'teams'].includes(value.key) && value.label),
+        ...(mappedRow.extraMapped || []).map(cell => ({ key: cell.key, label: cell.label, pair: pairedValues(cell, away, home, awayIndex, homeIndex) })),
+      ],
+    };
   }
 
   function buildFromSplit(awayRow, homeRow, expectedLeague = '') {
@@ -352,6 +374,11 @@
       awayCode: away.code,
       homeCode: home.code,
       marketLocked: awayRow.marketLocked || homeRow.marketLocked,
+      teamEvidence: [away.text, home.text],
+      marketEvidence: [
+        ...DEFINITIONS.map((definition, index) => ({ key: definition.key, label: awayRow.profile?.columns?.[definition.key]?.label || '', pair: cells[index].pair })).filter(value => !['time', 'teams'].includes(value.key) && value.label),
+        ...(awayRow.extraMapped || []).map(cell => ({ key: cell.key, label: cell.label, pair: [cell.text, homeRow.extraMapped?.find(other => other.key === cell.key)?.text || ''] })),
+      ],
     };
   }
 
@@ -459,7 +486,8 @@
     const unique = [];
     const seen = new Map();
     const conflictingGameKeys = [];
-    const marketRichness = game => [2, 3, 6, 7].reduce((score, index) => {
+    const marketIndexes = expectedLeague === 'NHL' ? [2, 3, 4] : [2, 3, 6, 7];
+    const marketRichness = game => marketIndexes.reduce((score, index) => {
       const pair = Array.isArray(game?.cells?.[index]?.pair) ? game.cells[index].pair : [];
       return score + pair.filter(value => clean(value)).length;
     }, 0);
@@ -468,13 +496,17 @@
       const key = `${game.awayCode}|${game.homeCode}|${timeText}`;
       const fingerprint = JSON.stringify({
         // Only supported markets participate; different moneylines are separate contracts.
-        cells: [2, 3, 6, 7].map(index => game.cells[index]?.pair || []),
+        cells: marketIndexes.map(index => game.cells[index]?.pair || []),
         marketLocked: game.marketLocked === true,
+        ...(expectedLeague === 'NHL' ? { marketEvidence: game.marketEvidence } : {}),
       });
       if (seen.has(key)) {
         const previous = seen.get(key);
         const previousGame = unique[previous.index];
-        const sharedConflict = [2, 3, 6, 7].some(index => {
+        const sharedConflict = expectedLeague === 'NHL' ? previousGame.marketEvidence.some(value => {
+          const other = game.marketEvidence.find(market => market.key === value.key);
+          return value.pair?.some(clean) && other?.pair?.some(clean) && JSON.stringify(value) !== JSON.stringify(other);
+        }) : marketIndexes.some(index => {
           const a = previousGame.cells[index]?.pair || [];
           const b = game.cells[index]?.pair || [];
           return a.length === 2 && b.length === 2 && a.every(clean) && b.every(clean)
@@ -498,7 +530,9 @@
     return {
       tables: unique.length ? [{
         headers: DEFINITIONS.map(definition => definition.label),
-        rows: unique.map(game => ({ cells: game.cells, text: game.text, marketLocked: game.marketLocked === true })),
+        rows: unique.map(game => ({ cells: game.cells, text: game.text, marketLocked: game.marketLocked === true,
+          ...(expectedLeague === 'NHL' ? { teamEvidence: game.teamEvidence, marketEvidence: game.marketEvidence } : {}),
+        })),
       }] : [],
       diagnostics: {
         recordCount: originalRecordCount,
@@ -509,6 +543,7 @@
         singleRows,
         sawLeagueMarker,
         league: expectedLeague,
+        pageLeagueLabel: expectedLeague === 'NHL' ? clean(sorted.find(record => isStandardLeagueRow(record.text, expectedLeague))?.text) : '',
         expectedGameCount,
         conflictingGameKeys,
         wrongPeriodHeader: expectedLeague === 'NBA' && sorted.some(record => buildHeaderProfile(record)
@@ -541,6 +576,7 @@
         singleRows: normalized.reduce((count, value) => count + number(value.diagnostics?.singleRows), 0),
         sawLeagueMarker: true,
         league: expectedLeague || sections[0].league,
+        pageLeagueLabel: normalized.find(value => value.diagnostics?.pageLeagueLabel)?.diagnostics?.pageLeagueLabel || '',
         expectedGameCount,
         conflictingGameKeys: [...new Set(conflicts)],
         wrongPeriodHeader: normalized.some(value => value.diagnostics?.wrongPeriodHeader === true),

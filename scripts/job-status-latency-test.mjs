@@ -1,3 +1,4 @@
+import { isAnalysisLeagueId } from '../lib/analysis-leagues.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -11,7 +12,7 @@ const request = () => new Request('https://site.invalid/api/analysis-jobs?runId=
 function setup(code, notification, progress, status = 'running') {
   const logs = [];
   const ctx = vm.createContext({ Request, Response, URL, NextResponse: Response,
-    requireApiAuth: async () => null, cleanText: x => String(x || ''), isLeagueId: () => true,
+    requireApiAuth: async () => null, cleanText: x => String(x || ''), isAnalysisLeagueId, isLeagueId: value => ['MLB', 'NPB', 'KBO', 'CPBL'].includes(value),
     getRun: () => ({ exists: true, status, returnValue: { results: [], total: 0 } }),
     getNotificationResult: notification, getAnalysisJobProgress: progress,
     console: { info: text => logs.push(JSON.parse(text)) },

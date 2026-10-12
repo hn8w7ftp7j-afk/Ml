@@ -98,6 +98,7 @@ function submissionHarness(storage = new MemoryStorage()) {
     analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: { current: false }, manualAnalysisScopesRef: { current: new Set() },
     submittedAllLeagueRunRef: { current: null },
     allLeagueTargetDate: async (league, date) => date,
+    prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
     prepareNbaBatch: async date => ({ league: 'NBA', date, tasks: [], preparedBoard: [], emptyReason: 'no_open_markets' }),
     leagueConfig: () => ({ label: 'isolated league', capabilities: { analysis: true, reader: true } }),
     fetchScheduleForLeague: async league => Array.from({ length: COUNTS[league] }, (_, index) => game(league, index)),

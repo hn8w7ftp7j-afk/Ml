@@ -18,25 +18,26 @@ const route = read('app/api/analysis-jobs/route.js');
 const workflow = read('workflows/analyze-board.js');
 
 let run = createAllLeagueAnalysisRun('2026-08-30', 1_777_777_777_000);
-assert.deepEqual(Object.keys(run.leagues), ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA']);
+assert.deepEqual(Object.keys(run.leagues), ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL']);
 run = updateAllLeagueAnalysisLeague(run, 'MLB', { status: 'done', total: 2, completed: 2 });
 run = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'no_games', boardDate: '2026-08-29' });
 assert.equal(allLeagueAnalysisProgress(run).terminal, 2);
-assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(run)), '成功 1 聯盟｜略過 1 聯盟｜未開始 3 聯盟');
+assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(run)), '成功 1 聯盟｜略過 1 聯盟｜未開始 4 聯盟');
 let failedRun = updateAllLeagueAnalysisLeague(run, 'NPB', { status: 'failed', message: '舊工作 Reader 過期' });
 failedRun = updateAllLeagueAnalysisLeague(failedRun, 'KBO', { status: 'failed' });
 failedRun = updateAllLeagueAnalysisLeague(failedRun, 'CPBL', { status: 'done' });
 failedRun = updateAllLeagueAnalysisLeague(failedRun, 'NBA', { status: 'partial' });
+failedRun = updateAllLeagueAnalysisLeague(failedRun, 'NHL', { status: 'no_games' });
 const failedProgress = allLeagueAnalysisProgress(failedRun);
-assert.equal(failedProgress.terminal, 5, 'all five workflows can finish even if two leagues fail');
-assert.equal(allLeagueAnalysisOutcomeText(failedProgress), '成功 2 聯盟｜部分完成 1 聯盟｜失敗 2 聯盟');
+assert.equal(failedProgress.terminal, 6, 'all six workflows can finish even if two leagues fail');
+assert.equal(allLeagueAnalysisOutcomeText(failedProgress), '成功 2 聯盟｜部分完成 1 聯盟｜失敗 2 聯盟｜略過 1 聯盟');
 assert.equal(failedProgress.succeeded + failedProgress.partial + failedProgress.failed + failedProgress.skipped
-  + failedProgress.resultPending + failedProgress.running + failedProgress.idle, 5);
+  + failedProgress.resultPending + failedProgress.running + failedProgress.idle, 6);
 let mixedRun = createAllLeagueAnalysisRun('2026-08-30');
-for (const [id, status] of [['MLB', 'partial'], ['NPB', 'result_pending'], ['KBO', 'running'], ['CPBL', 'no_open_markets'], ['NBA', 'no_games']]) {
+for (const [id, status] of [['MLB', 'partial'], ['NPB', 'result_pending'], ['KBO', 'running'], ['CPBL', 'no_open_markets'], ['NBA', 'no_games'], ['NHL', 'partial']]) {
   mixedRun = updateAllLeagueAnalysisLeague(mixedRun, id, { status });
 }
-assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(mixedRun)), '部分完成 1 聯盟｜略過 2 聯盟｜結果待載入 1 聯盟｜進行中 1 聯盟');
+assert.equal(allLeagueAnalysisOutcomeText(allLeagueAnalysisProgress(mixedRun)), '部分完成 2 聯盟｜略過 2 聯盟｜結果待載入 1 聯盟｜進行中 1 聯盟');
 assert.match(page, /全部聯盟工作｜已結束 \{allLeagueProgress\.terminal\}\/\{allLeagueProgress\.total\}/);
 assert.match(page, /allLeagueAnalysisOutcomeText\(allLeagueProgress\)/);
 assert.match(page, /保存的工作結果[\s\S]{0,150}不代表 Reader 即時狀態/, 'saved failure messages cannot impersonate current Reader status');
@@ -105,4 +106,4 @@ assert.match(page, /analysis-jobs\?runId=\$\{encodeURIComponent\(runId\)\}&leagu
 assert.match(page, /const expectedRunId = allLeagueRun\.runId[\s\S]*analysis-jobs\?runId=\$\{encodeURIComponent\(expectedRunId\)\}&summary=1/, 'four-league progress polling must request the compact summary for the captured run only');
 assert.doesNotMatch(page, /leagueTabs[\s\S]{0,900}disabled=\{(?:busy|allLeague)/, 'league tabs must remain switchable during all-league analysis');
 
-console.log('Durable isolated one-click analysis for MLB, NPB, KBO and CPBL PASS');
+console.log('Durable isolated one-click orchestration for baseball, NBA and NHL shadow analysis PASS');

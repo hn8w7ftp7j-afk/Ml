@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace, validNhlWorkspaceRecord } from '../lib/nhl/client-workspace.js';
+import { preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace, validNhlWorkspaceRecord, initialNhlWorkspaceLocation } from '../lib/nhl/client-workspace.js';
 
 // Execute the actual client handlers, not copies of their state logic. The
 // controlled request promises exercise ordering without a browser/framework.
@@ -58,13 +58,13 @@ function deferred() {
 
 function harness(initial = {}) {
   const state = {
-    date: '2026-09-06', busy: {}, error: '', boards: {}, details: {}, rosters: {}, player: null, teamSummaries: {},
+    date: '2026-09-06', busy: {}, error: '', boards: {}, details: {}, analyses: {}, rosters: {}, player: null, teamSummaries: {},
     contexts: {}, versions: {}, status: null, selectedGame: null, selectedTeam: null, tab: 'schedule', ready: false,
     ...initial,
   };
   const calls = [];
   const context = {
-    preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace, validNhlWorkspaceRecord,
+    preferNhlWorkspaceRecord, persistNhlWorkspaceResult, readNhlWorkspace, validNhlWorkspaceRecord, initialNhlWorkspaceLocation,
     ...state, inFlight: { current: new Set() }, activePlayerRequest: { current: null }, CACHE: 'test:nhl',
     localStorage: { getItem: () => initial.saved == null ? null : JSON.stringify(initial.saved) },
     request(action, args = {}) {
@@ -73,7 +73,7 @@ function harness(initial = {}) {
       return request.promise;
     },
   };
-  for (const key of ['date', 'busy', 'error', 'boards', 'details', 'rosters', 'player', 'contexts', 'versions', 'status', 'selectedGame', 'selectedTeam', 'tab', 'ready', 'teamSummaries']) {
+  for (const key of ['date', 'busy', 'error', 'boards', 'details', 'analyses', 'rosters', 'player', 'contexts', 'versions', 'status', 'selectedGame', 'selectedTeam', 'tab', 'ready', 'teamSummaries']) {
     context[`set${key[0].toUpperCase()}${key.slice(1)}`] = next => {
       state[key] = typeof next === 'function' ? next(state[key]) : next;
       context[key] = state[key];
@@ -207,8 +207,8 @@ await test('hydration rejects another league nested under an NHL wrapper and wro
   h.hydrate();
   assert.deepEqual(Object.keys(h.state.boards), ['2023-10-11']);
   assert.deepEqual(Object.keys(h.state.details), [good.gameId]);
-  assert.equal(h.state.date, '2023-10-11', 'Returning from another league must reopen the saved historical board');
-  assert.equal(h.state.selectedGame, good.gameId, 'The previously selected completed detail remains visible');
+  assert.equal(h.state.date, '2026-09-06', 'Entry opens the current Taipei day while preserving older date records');
+  assert.equal(h.state.selectedGame, null, 'A saved historical selection cannot leak into the current day');
   h.calls[0].resolve({ ok: true, league: 'NHL' });
   await h.calls[0].promise;
   assert.equal(h.state.ready, true);

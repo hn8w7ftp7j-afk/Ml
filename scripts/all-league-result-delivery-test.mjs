@@ -87,6 +87,7 @@ const clickContext = {
   markAppOperationBusy: noop, setAllLeaguePreparing: noop, setError: noop, setNotice: noop,
   createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, publishAllLeagueRun: run => { publishedRun = run; },
   allLeagueTargetDate: async (_id, date) => date, clearBackgroundJob: noop,
+  prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareNbaBatch: async date => ({ league: 'NBA', date, tasks: [], preparedBoard: [], emptyReason: 'no_open_markets' }),
   prepareAllLeagueBatch: async id => {
     if (id === 'NPB') throw Object.assign(new Error('盤口已過期'), { code: 'READER_STALE' });
@@ -101,7 +102,7 @@ const clickContext = {
 vm.createContext(clickContext);
 vm.runInContext(page.slice(page.indexOf('  async function oneClickAnalyzeAll('), page.indexOf('  function recheckReaderItem(')), clickContext);
 assert.equal(await clickContext.oneClickAnalyzeAll(), true);
-assert.equal(submittedJobs[0].batches.length, 4);
+assert.equal(submittedJobs[0].batches.length, 5);
 assert.equal(savedJobs.length, 3);
 assert.equal(clickContext.requestedRecoveryScopeRef.current, `MLB:${date}`, 'visible league must attach to incremental progress immediately');
 assert.equal(publishedRun.leagues.NPB.message, '盤口已過期');

@@ -1,3 +1,4 @@
+import { isAnalysisLeagueId } from '../lib/analysis-leagues.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -82,7 +83,7 @@ let progressReads = 0;
 const completed = { league: 'NPB', date: '2026-09-23', total: 1, results: [] };
 const route = vm.createContext({ Request, Response, URL, NextResponse: Response,
   requireApiAuth: async () => authorized ? null : Response.json({}, { status: 401 }),
-  cleanText: v => String(v || ''), isLeagueId: v => ['NPB', 'KBO'].includes(v),
+  cleanText: v => String(v || ''), isAnalysisLeagueId,
   getRun: () => ({ exists, status, returnValue: completed }),
   getNotificationResult: async () => published,
   getAnalysisJobProgress: async (...args) => { progressReads++; return storeContext.get(...args); },

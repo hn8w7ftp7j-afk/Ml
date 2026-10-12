@@ -11,9 +11,9 @@ import {
   requireApiAuth,
   validateSameOrigin,
 } from '../../../lib/security.js';
-import { isLeagueId } from '../../../lib/leagues.js';
 import { ANALYSIS_LEAGUE_IDS, isAnalysisLeagueId } from '../../../lib/analysis-leagues.js';
 import { normalizeNbaAnalysisTasks } from '../../../lib/nba/analysis-job.js';
+import { normalizeNhlAnalysisTasks } from '../../../lib/nhl/analysis-job.js';
 import { readCookie } from '../../../lib/security.js';
 import { deviceHash, getNotificationResult, PUSH_COOKIE } from '../../../lib/analysis-push.js';
 import {
@@ -34,6 +34,7 @@ const EMPTY_REASONS = new Set(['no_games', 'no_open_markets']);
 
 function normalizeTasks(tasks, league, prefix = '') {
   if (league === 'NBA') return normalizeNbaAnalysisTasks(tasks, tasks[0]?.nbaQuery?.date);
+  if (league === 'NHL') return normalizeNhlAnalysisTasks(tasks, tasks[0]?.nhlQuery?.date);
   return tasks.map((task, index) => {
     const requestId = REQUEST_ID.test(String(task?.requestId || ''))
       ? String(task.requestId)
@@ -95,7 +96,9 @@ export async function POST(request) {
           league,
           date: batchDate,
           emptyReason: EMPTY_REASONS.has(batch?.emptyReason) ? batch.emptyReason : null,
-          tasks: league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, batchDate) : normalizeTasks(tasks, league, `${league}-${batchIndex}-`),
+          tasks: league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, batchDate)
+            : league === 'NHL' ? normalizeNhlAnalysisTasks(tasks, batchDate)
+              : normalizeTasks(tasks, league, `${league}-${batchIndex}-`),
         };
       });
       const leagues = normalizedBatches.map(batch => batch.league);
@@ -109,8 +112,10 @@ export async function POST(request) {
       if (!valid) {
         return NextResponse.json({ ok: false, code: 'INVALID_ALL_LEAGUE_BACKGROUND_JOB', error: '全部聯盟背景分析工作內容無效' }, { status: 400 });
       }
-      // NBA's short, quote-bound pass runs first; preserve baseball group order.
-      normalizedBatches.sort((left, right) => Number(right.league === 'NBA') - Number(left.league === 'NBA'));
+      // Short sport-specific passes run before slower baseball requests so NHL
+      // can save its forecast before faceoff. Preserve baseball group order.
+      const priority = league => league === 'NBA' ? 2 : league === 'NHL' ? 1 : 0;
+      normalizedBatches.sort((left, right) => priority(right.league) - priority(left.league));
       const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
       const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches, pushDevice, preflightFailures: ANALYSIS_LEAGUE_IDS.length - normalizedBatches.length }]);
       if (requestClaim?.claimed) {
@@ -131,7 +136,8 @@ export async function POST(request) {
     if (!isAnalysisLeagueId(league) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !tasks.length || tasks.length > 20) {
       return NextResponse.json({ ok: false, code: 'INVALID_BACKGROUND_JOB', error: '背景分析工作內容無效' }, { status: 400 });
     }
-    const normalizedTasks = league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, date) : normalizeTasks(tasks, league);
+    const normalizedTasks = league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, date)
+      : league === 'NHL' ? normalizeNhlAnalysisTasks(tasks, date) : normalizeTasks(tasks, league);
     const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
     const run = await start(analyzeBoardWorkflow, [{ league, date, tasks: normalizedTasks, pushDevice }]);
     if (requestClaim?.claimed) {
@@ -144,8 +150,9 @@ export async function POST(request) {
       try { await failAnalysisJobRequest(requestKey, error?.message || error); }
       catch {}
     }
+    const invalidNhl = String(error?.message || '').startsWith('NHL 分析身分') || String(error?.message || '').startsWith('NHL 工作場次');
     const invalidNba = String(error?.message || '').startsWith('NBA 分析身分') || String(error?.message || '').startsWith('NBA 工作場次');
-    return NextResponse.json({ ok: false, code: invalidNba ? 'INVALID_NBA_BACKGROUND_JOB' : 'BACKGROUND_JOB_START_FAILED', error: String(error?.message || error) }, { status: invalidNba ? 400 : 500 });
+    return NextResponse.json({ ok: false, code: invalidNhl ? 'INVALID_NHL_BACKGROUND_JOB' : invalidNba ? 'INVALID_NBA_BACKGROUND_JOB' : 'BACKGROUND_JOB_START_FAILED', error: String(error?.message || error) }, { status: invalidNhl || invalidNba ? 400 : 500 });
   }
 }
 
@@ -173,7 +180,7 @@ export async function GET(request) {
     const runId = searchParams.get('runId') || '';
     const requestedLeague = cleanText(searchParams.get('league'), 10).toUpperCase();
     const summaryOnly = searchParams.get('summary') === '1';
-    if (requestedLeague && requestedLeague !== 'NBA' && !isLeagueId(requestedLeague)) {
+    if (requestedLeague && !isAnalysisLeagueId(requestedLeague)) {
       return NextResponse.json({ ok: false, error: '聯盟識別無效' }, { status: 400 });
     }
     if (!RUN_ID.test(runId)) return NextResponse.json({ ok: false, error: '缺少有效背景工作編號' }, { status: 400 });
@@ -219,6 +226,8 @@ export async function GET(request) {
                 status: row?.status,
                 code: row?.code,
                 blocked: row?.blocked === true,
+                shadow: row?.shadow === true,
+                saved: row?.saved === true,
               })),
             })),
           },
@@ -231,7 +240,7 @@ export async function GET(request) {
             ok: result.ok, league: result.league, date: result.date,
             total: result.total, completed: result.completed,
             results: (result.results || []).map(row => ({
-              ok: row?.ok === true, status: row?.status, code: row?.code, blocked: row?.blocked === true,
+              ok: row?.ok === true, status: row?.status, code: row?.code, blocked: row?.blocked === true, shadow: row?.shadow === true, saved: row?.saved === true,
             })),
           },
         });
