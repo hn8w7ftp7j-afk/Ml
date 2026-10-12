@@ -46,6 +46,7 @@ const original = board.tasks[0];
 const task = normalizeNhlAnalysisTasks([{ ...original, body: { league: 'MLB', score: 999 }, actualMarkets: [{ line: '999' }], executable: true }], next)[0];
 assert.deepEqual(Object.keys(task).sort(), ['game', 'league', 'nhlQuery']);
 assert.deepEqual(Object.keys(task.nhlQuery).sort(), ['date', 'gameId']);
+assert.equal(task.game.startTimeUTC, '2026-10-12T23:00:00.000Z', 'admitted task times use a canonical instant');
 for (const change of [
   { nhlQuery: { date, gameId: original.nhlQuery.gameId } },
   { game: { ...original.game, league: 'MLB' } },
@@ -71,8 +72,19 @@ assert.match(completionMessage('run-nhl-test', { league: 'NHL', total: 1, comple
 assert.match(completionMessage('run-nhl-test', { league: 'NHL', total: 1, completed: 1, ok: true, results: [result] }).body, /影子分析/);
 const unsaved = await analyzeNhlJobTask(task, async () => ({ ...payload, persistence: { persisted: false } }));
 assert.equal(unsaved.ok, true); assert.equal(unsaved.saved, false);
+for (const serializedTime of ['2026-10-12T23:00:00Z', '2026-10-12T23:00:00.000Z', '2026-10-13T07:00:00+08:00']) {
+  const replay = { ...payload, mode: 'SAVED_PREGAME_REPLAY', game: { ...payload.game, startTimeUTC: serializedTime } };
+  const before = structuredClone(replay);
+  const received = await analyzeNhlJobTask(task, async () => replay);
+  assert.equal(received.ok, true, 'same-instant official/replay ISO formats must retain the same NHL identity');
+  assert.equal(received.saved, true);
+  assert.equal(received.task.game.startTimeUTC, serializedTime, 'recovery context shares the validated snapshot time format');
+  assert.deepEqual(replay, before, 'identity normalization cannot alter saved snapshot evidence');
+}
 for (const change of [
   { gameId: '2026029999' }, { taipeiDate: date }, { game: { ...task.game, awayTeamId: 1 } },
+  { game: { ...task.game, startTimeUTC: '2026-10-12T23:00:01.000Z' } },
+  { game: { ...task.game, startTimeUTC: 'not-an-iso-date' } },
   { mode: 'NO_PREGAME_RECORD', model: null }, { qa: { status: 'BLOCK' } },
   { readiness: { formalRecommendations: true, realBetExecutionEnabled: true } },
 ]) assert.equal((await analyzeNhlJobTask(task, async () => ({ ...payload, ...change }))).ok, false);

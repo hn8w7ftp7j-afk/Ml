@@ -94,10 +94,16 @@ await test('all-league workflow fallback restores only matching NHL game/date id
   const h = harness(); const batch = makeBatch(true); h.api.restoreAnalysisRun(batch, '2026-10-13');
   assert.ok(h.state.analyses['2026-10-13:2026020001']);
   assert.equal(h.state.batchProgress['2026-10-13'].running, false);
+  for (const equivalentTime of ['2026-10-13T02:00:00.000Z', '2026-10-13T10:00:00+08:00']) {
+    const equivalent = makeBatch(true); equivalent.results[0].payload.game.startTimeUTC = equivalentTime;
+    h.api.restoreAnalysisRun(equivalent, '2026-10-13');
+    assert.equal(h.state.analyses['2026-10-13:2026020001'].analysis.game.startTimeUTC, equivalentTime);
+  }
   for (const mutate of [
     value => { value.results[0].saved = false; },
     value => { value.results[0].task.game.awayTeamId = 3; },
     value => { value.results[0].task.game.startTimeUTC = '2026-10-13T02:05:00Z'; },
+    value => { value.results[0].task.game.startTimeUTC = 'invalid'; value.results[0].payload.game.startTimeUTC = 'invalid'; },
     value => { value.results[0].task.nhlQuery.date = '2026-10-14'; },
   ]) {
     const wrong = makeBatch(true); mutate(wrong);
