@@ -10,9 +10,8 @@ const loginPage = fs.readFileSync(new URL('../app/login/page.js', import.meta.ur
 const authRoute = fs.readFileSync(new URL('../app/api/auth/route.js', import.meta.url), 'utf8');
 const middlewareSource = fs.readFileSync(new URL('../middleware.js', import.meta.url), 'utf8');
 const betSettlementCronRoute = fs.readFileSync(new URL('../app/api/cron/bet-settlements/route.js', import.meta.url), 'utf8');
-assert.match(loginPage, /維持登入 7 天/, '登入頁必須顯示實際的7天session期限');
-assert.doesNotMatch(loginPage, /維持登入 30 天/, '登入頁不得保留舊的30天session說明');
-assert.match(authRoute, /const maxAge = 60 \* 60 \* 24 \* 7;/, '伺服器實際session期限必須與登入頁7天說明一致');
+assert.match(loginPage, /保持登入，使用時自動續期/);
+assert.match(authRoute, /createSessionToken\(\), sessionCookieOptions\(\)/);
 assert.match(middlewareSource, /['"]\/api\/cron\/bet-settlements['"]/,
   'Vercel settlement cron must bypass site-login middleware and reach its own CRON_SECRET guard');
 assert.match(betSettlementCronRoute, /process\.env\.CRON_SECRET/,
