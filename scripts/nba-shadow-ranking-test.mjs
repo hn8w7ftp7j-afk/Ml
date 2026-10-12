@@ -32,7 +32,7 @@ const regular={...row,result:{...row.result,modelVersion:'nba-total-pace-rest-v1
 const legacy=buildNbaShadowRanking([regular],date,now);assert.equal(legacy.entries.length,2);assert.ok(legacy.entries.every(x=>x.winProbability===null));
 console.log('NBA shadow ranking PASS: all eight sides, current five-game 20 directions, exact net/water/favorite, filters, progressive results, stale/start/identity guards, deterministic sorting and no invented win probability');
 
-const orderedInput = all.entries.map((entry, i) => ({ ...entry, score: i === 0 ? 6.9 : 7 + i / 10 }));
+const orderedInput = all.entries.map((entry, i) => ({ ...entry, expectedNet: 6.56, robustExpectedNet: 1, score: i === 0 ? 6.9 : 7 + i / 10 }));
 const later = orderedInput.map(entry => ({ ...entry, stableKey: 'later:' + entry.stableKey, game: { ...entry.game, id: 'nba:espn:game:401999999', startTime: '2026-10-06T00:00:00Z' } }));
 const groups = buildNbaShadowOrder([...later, ...orderedInput].reverse());
 assert.equal(groups.length, 2);
@@ -43,3 +43,15 @@ const marketOrder = ['全場讓分','全場大小','上半讓分','上半大小'
 assert.ok(groups.every(group => group.entries.every((entry,i)=>!i || marketOrder.indexOf(group.entries[i-1].market) <= marketOrder.indexOf(entry.market))));
 assert.deepEqual(buildNbaShadowOrder(orderedInput), buildNbaShadowOrder(orderedInput.slice().reverse()));
 console.log('NBA order PASS: shared MLB threshold, chronological game groups, market order, contiguous direction sequence');
+const screenshotEntry = { ...orderedInput[1], score: 7, expectedNet: 6.56, robustExpectedNet: -2.57 };
+assert.deepEqual(buildNbaShadowOrder([screenshotEntry]), [], '截圖的 S7/W6.56/R-2.57 不得進候選');
+for (const field of ['expectedNet', 'robustExpectedNet']) {
+  for (const value of [0, -1, null, undefined, NaN, Infinity]) {
+    assert.deepEqual(buildNbaShadowOrder([{ ...orderedInput[1], [field]: value }]), []);
+  }
+}
+const original = structuredClone(all.entries);
+buildNbaShadowOrder(all.entries);
+assert.deepEqual(all.entries, original, '全部方向含負EV的原始資料必須保留');
+assert.ok(all.entries.some(x => x.expectedNet < 0));
+console.log('NBA order PASS: positive W/R gates, screenshot regression, all-direction preservation');

@@ -5137,8 +5137,8 @@ export default function Home() {
       }) : <div className="emptySmall">目前沒有已完成分析的Reader實際盤方向。</div>}
     </section>}
 
-    {tab === 'betOrder' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button onClick={() => setTab('ranking')}>全部方向</button><button className="active" onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>影子候選順序｜7.0分以上</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
-      <details className="rankingDetails rankingSourceDetails"><summary>排序說明</summary><p>依開賽時間排列；同場依全場讓分、全場大小、上半讓分、上半大小排序，同市場按分數排序，時間未定排最後。</p><small>W：模型估計 EV｜R：保守估計 EV</small></details>
+    {tab === 'betOrder' && <section className="panel" ref={rankingPanelRef}><div className="rankingViewTabs" aria-label="影子排名檢視"><button onClick={() => setTab('ranking')}>全部方向</button><button className="active" onClick={() => setTab('betOrder')}>影子候選順序</button></div><div className="panelHead"><h2>影子候選順序｜7.0分以上・W/R為正</h2><span className="state shadow">依開賽時間｜非推薦</span></div>
+      <details className="rankingDetails rankingSourceDetails"><summary>排序說明</summary><p>依開賽時間排列；同場依全場讓分、全場大小、上半讓分、上半大小排序，同市場按分數排序，時間未定排最後。</p><small>候選條件：S ≥ 7.0、W、R 均大於 0｜W：模型估計 EV｜R：保守估計 EV</small></details>
       {shadowBetOrderGames.length ? shadowBetOrderGames.map((group, gameIndex) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>第 {gameIndex + 1} 場</span><strong>{group.matchup}</strong></div><time>{localTime(group.gameDate)}</time></div>
         {group.entries.map(entry => {
@@ -5149,7 +5149,7 @@ export default function Home() {
           const icon = scoreIcon(entry.score, entry.qaPassed && entry.qualified);
           return <div className={`rankRow betOrderRow ${betState.latest ? 'betRecorded' : ''}`} data-rank-key={entry.stableKey} key={entry.stableKey}><b>{entry.betOrderIndex}</b><strong className={`rankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定S分數">{icon} {scoreText}</strong><div><span>{entry.market}｜{translateTeamText(entry.pick)}｜{waterText(entry.water)}</span><RankingDiagnostics entry={entry} warnings={warnings}/><PersonnelFreshness item={entry.item} observation={personnelObservations[`${league}:${date}`]} now={clockNow} onRecheck={recheckReaderItem} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning} compact/>{entry.inactiveNotice && <small>{entry.inactiveNotice}</small>}</div><div className="rankActionStack"><button className={`mini ${action.kind === 'cancel' ? 'cancel' : betState.latest ? 'recorded' : action.recordable ? 'green' : 'unavailable'}`} disabled={action.disabled} title={action.title} onClick={() => action.kind === 'cancel' ? cancelBet(betState.latest) : recordBet(entry.item, entry.row)}>{action.text}</button><ReaderRecovery action={action} onRecheck={() => recheckReaderItem(entry.item)} busy={busy || readerPolling || allLeaguePreparing || allLeagueRunning}/></div></div>;
         })}
-      </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 的Reader實際盤方向。</div>}
+      </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 且 W、R 都大於 0 的Reader實際盤方向。</div>}
     </section>}
 
     {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}

@@ -95,7 +95,7 @@ const entries = [
   { id: 'legacy-research', league: 'MLB', market: '全場大小', pick: '大8平', score: 8.6 },
   { id: 'low-score', item: { game }, market: '全場讓分', pick: '主隊讓1平', score: 6.9 },
   { id: 'qa-preserved', item: { game }, market: '上半大小', pick: '小4平', score: 7.0, rankingEligible: false, qaPassed: false },
-];
+].map(entry => ({ ...entry, weightedEV: 5, robustEV: 1 }));
 const original = structuredClone(entries);
 const ordered = buildBetOrderEntries(entries);
 assert.equal(BET_ORDER_MIN_SCORE, 7.0, 'do not redefine the existing 7.0 display threshold');
