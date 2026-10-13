@@ -82,7 +82,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   </section>;
 }
 
-export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress }) {
+export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress, onJobChange }) {
   const [date, setDate] = useState(() => taipeiDate(Date.now()));
   const [rows, setRows] = useState([]);
   const [view, setView] = useState('board');
@@ -106,6 +106,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const running = starting || ['starting', 'running'].includes(job?.status);
   const busy = running || otherBusy;
   useEffect(() => { onBusyChange(running); }, [running, onBusyChange]);
+  useEffect(() => { onJobChange?.(job); }, [job, onJobChange]);
   useEffect(() => { onDateChange(date, explicitDate.current); }, [date, onDateChange]);
   useEffect(() => {
     if (!validDate(preparedScope?.date) || operation.current || preparedScope.date === dateRef.current) return;
