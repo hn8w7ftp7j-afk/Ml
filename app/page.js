@@ -24,6 +24,7 @@ import { personnelFreshnessView, personnelScheduleObservation, PERSONNEL_SCHEDUL
 import { analysisSourceStatusDisplay } from '../lib/npb-identity-display.js';
 import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.js';
 import { rankingWarningPresentation, rankingStatusText } from '../lib/ranking-display.js';
+import { nbaLeagueIndicator } from '../lib/nba/league-indicator.js';
 import NbaMainWorkspace from './nba/main-workspace.js';
 import { loadNbaUpcomingBoard } from '../lib/nba/analysis-ui-policy.js';
 import { ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun } from '../lib/analysis-leagues.js';
@@ -1812,6 +1813,7 @@ export default function Home() {
   const nbaExplicitDateRef = useRef(false);
   const onNbaDateChange = useCallback((value, explicit) => { nbaExplicitDateRef.current = Boolean(explicit); setNbaDate(value); }, []);
   const [nbaRunning, setNbaRunning] = useState(false);
+  const [nbaIndicatorJob, setNbaIndicatorJob] = useState(null);
   const [nbaNotificationJob, setNbaNotificationJob] = useState(null);
   useEffect(() => {
     const sync = () => setNbaSelected(new URLSearchParams(window.location.search).get('sport') === 'NBA');
@@ -1858,6 +1860,7 @@ export default function Home() {
   const [allLeagueRun, setAllLeagueRun] = useState(null);
   const allLeagueRunRef = useRef(allLeagueRun);
   allLeagueRunRef.current = allLeagueRun;
+  const nbaIndicator = nbaLeagueIndicator(nbaDate, nbaIndicatorJob, allLeagueRun?.leagues?.NBA, nbaRunning);
   const onNbaBatchProgress = useCallback(batch => {
     const current = allLeagueRunRef.current;
     if (current?.runId !== batch.runId || current.leagues?.NBA?.boardDate !== batch.date) return;
@@ -5064,12 +5067,12 @@ export default function Home() {
           <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{independentStatus ? `｜${({ preparing: '準備中', running: '分析中', completed: independentStatus.message || '程序結束', failed: '失敗，可重試' })[independentStatus.status]}` : ''}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small>
         </button>;
       })}
-      <button type="button" className={nbaSelected ? 'active' : ''} onClick={selectNba} aria-pressed={nbaSelected}><span className={`leagueDot batch-${allLeagueRun?.leagues?.NBA?.status || 'idle'}`}/><b>NBA</b><small>籃球{nbaRunning ? '｜分析中' : ''}</small></button>
+      <button type="button" className={nbaSelected ? 'active' : ''} onClick={selectNba} aria-pressed={nbaSelected}><span className={`leagueDot batch-${nbaIndicator.status}`}/><b>NBA</b><small>籃球{nbaIndicator.label ? `｜${nbaIndicator.label}` : ''}</small></button>
       <Link prefetch={false} className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球分析</small></Link>
       <Link prefetch={false} className="sportModuleLink" href="/external-audit"><b>外部來源</b><small>獨立稽核，不改評分</small></Link>
     </nav>
 
-    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress}/>
+    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress} onJobChange={setNbaIndicatorJob}/>
     <div hidden={nbaSelected}>
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { nbaLeagueIndicator } from '../lib/nba/league-indicator.js';
+const date = '2026-10-14';
+assert.deepEqual(nbaLeagueIndicator(date, { date, status: 'completed' }), { status: 'done', label: '已完成' });
+assert.equal(nbaLeagueIndicator(date, { date, status: 'running' }).status, 'running');
+assert.equal(nbaLeagueIndicator(date, { date, status: 'failed' }).status, 'failed');
+assert.equal(nbaLeagueIndicator('2026-10-15', { date, status: 'completed' }).status, 'idle');
+assert.equal(nbaLeagueIndicator(date, null, { boardDate: date, status: 'done' }).status, 'done');
+assert.equal(nbaLeagueIndicator(date, null, { boardDate: '2026-10-13', status: 'done' }).status, 'idle');
+assert.equal(nbaLeagueIndicator(date, { date, status: 'completed' }, null, true).status, 'running');
+const page = readFileSync(new URL('../app/page.js', import.meta.url), 'utf8');
+const child = readFileSync(new URL('../app/nba/main-workspace.js', import.meta.url), 'utf8');
+assert.match(page, /onJobChange=\{setNbaIndicatorJob\}/);
+assert.match(child, /onJobChange\?\.\(job\)/);
+assert.match(page, /leagueDot batch-\$\{nbaIndicator.status\}/);
+console.log('NBA league indicator: single-job completion, recovery, date isolation, running/failed and all-league fallback PASS');
