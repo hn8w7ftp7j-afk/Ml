@@ -87,7 +87,15 @@ export default function HistoryBrowser() {
   }, [load]);
 
   function updateFilter(key, value) { setDraft(previous => ({ ...previous, [key]: value })); }
-  function submit(event) { event.preventDefault(); load(draft); }
+  function submit(event) {
+    event.preventDefault();
+    // Native date controls can commit their final value without React's change
+    // state having advanced yet. Submit the visible form values, not stale state.
+    const fields = new FormData(event.currentTarget);
+    const filters = Object.fromEntries(Object.keys(EMPTY_HISTORY_FILTERS).map(key => [key, String(fields.get(key) || '')]));
+    setDraft(filters);
+    load(filters);
+  }
 
   return <main className={`appShell ${styles.shell}`}>
     <header className={styles.header}><div><div className="eyebrow">SAVED MARKET LINES</div><h1>歷史盤口</h1><p>查看 Reader 已保存的原盤口與水位，不重算、不改分析。</p></div><Link href="/" className="secondary">回主站</Link></header>
@@ -96,10 +104,10 @@ export default function HistoryBrowser() {
       <p>盤日是 Reader 的盤面日期；下方觀測時間一律顯示台北時間。只列實際保存內容，未保存的市場不補值；筆數不代表全部歷史都已收齊。</p>
     </section>
     <form className={`panel ${styles.filters}`} onSubmit={submit} aria-label="歷史盤口篩選">
-      <label htmlFor="history-league">聯盟<select id="history-league" value={draft.league} disabled={busy} onChange={event => updateFilter('league', event.target.value)}><option value="">全部聯盟</option>{HISTORY_LEAGUES.map(league => <option key={league} value={league}>{league}</option>)}</select></label>
-      <label htmlFor="history-from">起始盤日<input id="history-from" type="date" value={draft.from} disabled={busy} onChange={event => updateFilter('from', event.target.value)}/></label>
-      <label htmlFor="history-through">結束盤日<input id="history-through" type="date" value={draft.through} disabled={busy} onChange={event => updateFilter('through', event.target.value)}/></label>
-      <label htmlFor="history-game" className={styles.gameFilter}>場次識別（選填）<input id="history-game" type="text" value={draft.gameKey} maxLength={80} disabled={busy} placeholder="例如 777 或 19:30|LAL|GSW" onChange={event => updateFilter('gameKey', event.target.value)}/></label>
+      <label htmlFor="history-league">聯盟<select id="history-league" name="league" value={draft.league} disabled={busy} onChange={event => updateFilter('league', event.target.value)}><option value="">全部聯盟</option>{HISTORY_LEAGUES.map(league => <option key={league} value={league}>{league}</option>)}</select></label>
+      <label htmlFor="history-from">起始盤日<input id="history-from" name="from" type="date" value={draft.from} disabled={busy} onChange={event => updateFilter('from', event.target.value)}/></label>
+      <label htmlFor="history-through">結束盤日<input id="history-through" name="through" type="date" value={draft.through} disabled={busy} onChange={event => updateFilter('through', event.target.value)}/></label>
+      <label htmlFor="history-game" className={styles.gameFilter}>場次識別（選填）<input id="history-game" name="gameKey" type="text" value={draft.gameKey} maxLength={80} disabled={busy} placeholder="例如 777 或 19:30|LAL|GSW" onChange={event => updateFilter('gameKey', event.target.value)}/></label>
       <div className={styles.filterActions}><button className="primary" disabled={busy} type="submit">{busy ? '讀取中…' : '查詢盤口'}</button><button className="secondary" disabled={busy} type="button" onClick={() => { setDraft({ ...EMPTY_HISTORY_FILTERS }); load({ ...EMPTY_HISTORY_FILTERS }); }}>清除篩選</button></div>
       {changedFilters && <p className={styles.draftNotice}>篩選條件已變更，按「查詢盤口」更新結果。</p>}
     </form>

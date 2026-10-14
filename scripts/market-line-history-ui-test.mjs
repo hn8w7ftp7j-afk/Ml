@@ -68,4 +68,18 @@ assert.match(ui, /cache: 'no-store'/);
 assert.match(ui, /AbortController/);
 assert.doesNotMatch(middleware, /PUBLIC_PATHS\.add\('\/(?:api\/)?market-line-history'\)/, 'history is not exempted from existing auth');
 assert.doesNotMatch(ui, /method: 'POST'|\.expectedNet|\.score|勝率/, 'read-only browser neither writes nor recomputes scoring');
-console.log('historical market line UI: scoped totals, exact saved prices, Taipei chronology, pagination and integrity states PASS');
+const formSource = readFileSync(new URL('../app/market-line-history/history-browser.js', import.meta.url), 'utf8');
+assert.match(formSource, /new FormData\(event.currentTarget\)/, 'submit must use visible native date/input values, not stale React state');
+for (const name of ['league', 'from', 'through', 'gameKey']) assert.ok(formSource.includes(`name="${name}"`), 'all filters must participate in native form submission');
+const submitBody = formSource.match(/function submit\(event\) \{([\s\S]*?)\n  \}/)?.[1];
+assert.ok(submitBody);
+let submittedFilters, retainedFilters, prevented = false;
+const submit = new Function('event', 'EMPTY_HISTORY_FILTERS', 'FormData', 'setDraft', 'load', submitBody);
+const visible = { league: 'CPBL', from: '2026-10-11', through: '2026-10-12', gameKey: '2885069034028059' };
+submit({ preventDefault() { prevented = true; }, currentTarget: visible }, EMPTY_HISTORY_FILTERS,
+  class NativeFormFixture { constructor(form) { this.form = form; } get(key) { return this.form[key]; } },
+  filters => { retainedFilters = filters; }, filters => { submittedFilters = filters; });
+assert.equal(prevented, true);
+assert.deepEqual(submittedFilters, visible, 'native date values participate even when the draft was not updated');
+assert.deepEqual(retainedFilters, visible, 'submitted visible values remain displayed after the busy rerender');
+console.log('historical market line UI: scoped totals, exact saved prices, Taipei chronology, native form values, pagination and integrity states PASS');
