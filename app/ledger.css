@@ -99,7 +99,7 @@
 
 .leagueScopeTabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 8px;
   margin-top: 11px;
 }
@@ -608,6 +608,16 @@
   .leagueScopeTabs button {
     flex: 0 0 auto;
     min-width: 88px;
+  }
+
+  .ledgerPanel .leagueScopeTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .ledgerPanel .leagueScopeTabs button {
+    min-width: 0;
   }
 
   .breakdownGrid {

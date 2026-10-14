@@ -278,7 +278,8 @@ assert.match(page, /async function cancelBet/, '前端必須能取消尚未開�
 assert.match(page, /action: 'cancel'/, '取消必須呼叫保留證據的狀態轉換API');
 assert.match(page, /不可變帳本/, '帳本UI必須揭露不可變證據政策');
 assert.match(page, /下注證據永久保留；取消只變更狀態，不會刪除/, '帳本UI必須說明取消不會刪除原始證據');
-assert.match(page, /function BetLedgerDashboard\([\s\S]*disabled=\{cloudLedgerBusy \|\| cloudLedgerStatus\?\.state !== 'ready'\}[\s\S]*帳本同步中/, '帳本同步時更新賽果按鈕必須明確禁用');
+assert.match(page, /const ledgerBusy = cloudLedgerBusy \|\| nbaLedgerBusy/, '任一聯盟帳本同步中都不得重複觸發賽果更新');
+assert.match(page, /function BetLedgerDashboard\([\s\S]*disabled=\{ledgerBusy \|\| cloudLedgerStatus\?\.state !== 'ready' \|\| nbaLedger\.state !== 'ready'\}[\s\S]*帳本同步中/, '兩套帳本尚未完整讀取或正在同步時，更新賽果按鈕必須禁用');
 assert.match(page, /async function recordBet\([\s\S]*betMutationBusyRef\.current = true;[\s\S]{0,120}markAppOperationBusy\(true\);[\s\S]*finally \{\s*betMutationBusyRef\.current = false;[\s\S]{0,120}markAppOperationBusy\(false\);/, '下注寫入期間必須阻止PWA更新重載');
 assert.match(page, /async function cancelBet\([\s\S]*betMutationBusyRef\.current = true;[\s\S]{0,120}markAppOperationBusy\(true\);[\s\S]*finally \{\s*betMutationBusyRef\.current = false;[\s\S]{0,120}markAppOperationBusy\(false\);/, '取消寫入期間必須阻止PWA更新重載');
 assert.match(page, /async function probeCloudLedgerRecovery\(\)[\s\S]{0,180}cloudSyncBusyRef\.current \|\| betMutationBusyRef\.current/, '帳本恢復讀取不得與下注狀態寫入並行');
