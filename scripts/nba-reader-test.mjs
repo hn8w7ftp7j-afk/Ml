@@ -12,6 +12,33 @@ import { createReaderToken } from '../lib/reader-auth-v2.js';
 import { createSessionToken } from '../lib/security.js';
 
 register('./next-route-test-loader.mjs', import.meta.url);
+// Only this route fixture replaces the durable history transport. Keep the
+// real intake, authorization, board store and public-view code; never weaken
+// the Production helper for an in-memory test. History failure/ordering uses
+// the actual helper in market-line-history-ingest-test.mjs.
+const historyFixtureModule = 'data:text/javascript,' + encodeURIComponent(`
+  import { buildMarketLineHistoryRows } from ${JSON.stringify(new URL('../lib/market-line-history-v1.js', import.meta.url).href)};
+  const saved = new Map();
+  export async function requireReaderHistorySaved(snapshot) {
+    const rows = buildMarketLineHistoryRows(snapshot);
+    let inserted = 0;
+    for (const row of rows) {
+      const key = [row.league, row.board_date, row.game_key, row.observed_at].join('|');
+      if (!saved.has(key)) { saved.set(key, row.state_hash); inserted++; }
+      else if (saved.get(key) !== row.state_hash) throw Error('synthetic history observation conflict');
+    }
+    return { configured: true, checked: rows.length, inserted, unchanged: rows.length - inserted, failed: 0 };
+  }
+`);
+register('data:text/javascript,' + encodeURIComponent(`
+  export async function resolve(specifier, context, nextResolve) {
+    if (context.parentURL?.endsWith('/app/api/nba/reader/route.js')
+      && specifier.endsWith('/lib/reader-history-receipt.js')) {
+      return { url: ${JSON.stringify(historyFixtureModule)}, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  }
+`), import.meta.url);
 const { GET, POST, OPTIONS } = await import('../app/api/nba/reader/route.js');
 const now = Date.now(); const deviceId = 'nba-reader-fixture-device';
 const previousEnv = Object.fromEntries(['READER_PAIR_SECRET', 'READER_STORE_MEMORY_ONLY', 'APP_PASSWORD', 'SESSION_SECRET', 'VERCEL', 'DATABASE_V2_URL', 'DATABASE_URL'].map(key => [key, process.env[key]]));
@@ -151,18 +178,24 @@ try {
     assert.equal((await GET(request(null, {}, 'league=MLB'))).status, 400);
     assert.equal((await OPTIONS(new Request('https://mlb-positive-ev.vercel.app/api/nba/reader', { method: 'OPTIONS', headers: { Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } }))).status, 204);
   });
-  await test('route POST/GET exposes actual stored markets; replay does not overwrite', async () => {
+  await test('route POST/GET exposes stored markets with synthetic history receipt; exact duplicate is idempotent', async () => {
     const body = payload({ observedAt: new Date(now).toISOString(), pageActivityAt: new Date(now - 100).toISOString() });
     const posted = await POST(request(body)); const receipt = await posted.json();
     assert.equal(posted.status, 200, receipt.error); assert.equal(receipt.gameCount, 1); assert.equal(receipt.marketCount, 4);
     assert.equal(receipt.executable, false); assert.equal(receipt.durable, false); assert.equal(receipt.matchedGameCount, 0);
-    assert.equal((await POST(request(body))).status, 409);
+    assert.equal(receipt.allRequiredWritesSucceeded, true); assert.equal(receipt.historyTracking.configured, true);
+    assert.equal(receipt.historyTracking.failed, 0);
+    const duplicate = await POST(request(body)); const duplicateReceipt = await duplicate.json();
+    assert.equal(duplicate.status, 200, duplicateReceipt.error); assert.equal(duplicateReceipt.duplicateCapture, true);
+    assert.equal(duplicateReceipt.allRequiredWritesSucceeded, true); assert.equal(duplicateReceipt.historyTracking.failed, 0);
+    assert.equal(duplicateReceipt.historyTracking.inserted, 0); assert.equal(duplicateReceipt.historyTracking.unchanged, 1);
+    assert.equal((await loadNbaReaderSnapshot(boardDate)).observedAt, body.observedAt, 'duplicate must not advance or rewrite stored capture time');
     const response = await GET(request(null, {}, `date=${boardDate}`)); const view = await response.json();
     assert.equal(response.status, 200, view.error); assert.equal(view.league, 'NBA'); assert.equal(view.status, 'fresh');
     assert.equal(view.games[0].firstHalfTotal.line, '110-20'); assert.equal(view.games[0].identityStatus, 'team_mapped_game_unverified');
     assert.equal(Object.hasOwn(view, 'deviceId'), false); assert.equal(response.headers.get('Cache-Control'), 'no-store');
   });
-  console.log(`NBA Reader intake/store/API: ${checks} checks passed.`);
+  console.log(`NBA Reader intake/store/API: ${checks} checks passed (synthetic history transport, not live DB/Production).`);
 } finally {
   for (const [key, value] of Object.entries(previousEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
 }

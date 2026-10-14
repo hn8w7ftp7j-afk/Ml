@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 import { bearerToken, verifyReaderToken, readerOriginAllowed, readerCorsHeaders } from '../../../../lib/reader-auth-v2.js';
 import { checkRateLimit, readJsonBody, requireApiAuth } from '../../../../lib/security.js';
 import { validDate } from '../../../../lib/nba/identity.js';
-import { normalizeNbaReaderPayload, nbaReaderPublicView } from '../../../../lib/nba/reader.js';
+import { normalizeNbaReaderPayload, nbaReaderPublicView, assertNbaReaderMonotonic } from '../../../../lib/nba/reader.js';
 import { loadNbaReaderSnapshot, storeNbaReaderSnapshot } from '../../../../lib/nba/reader-store.js';
-import {
-  marketLineHistoryDatabaseConfigured,
-  recordMarketLineHistory,
-} from '../../../../lib/market-line-history-v1.js';
+import { requireReaderHistorySaved } from '../../../../lib/reader-history-receipt.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,29 +13,6 @@ function rejected(request, code, error, status) {
   console.warn('[NBA_READER_CAPTURE_REJECTED]', { code, status });
   return respond(request, { ok: false, code, error }, status);
 }
-async function trackMarketLineHistory(snapshot) {
-  try {
-    const result = await recordMarketLineHistory(snapshot);
-    if (result.inserted > 0) console.info('[NBA_MARKET_LINE_HISTORY_SAVED]', {
-      league: snapshot?.league,
-      boardDate: snapshot?.boardDate,
-      checked: result.checked,
-      inserted: result.inserted,
-      unchanged: result.unchanged,
-    });
-    return result;
-  } catch (error) {
-    console.error('[NBA_MARKET_LINE_HISTORY_WRITE_FAILED]', String(error?.message || error));
-    return {
-      configured: marketLineHistoryDatabaseConfigured(),
-      checked: 0,
-      inserted: 0,
-      unchanged: 0,
-      failed: 1,
-    };
-  }
-}
-
 export async function OPTIONS(request) {
   return new Response(null, { status: readerOriginAllowed(request) ? 204 : 403, headers: readerCorsHeaders(request) });
 }
@@ -67,16 +41,29 @@ export async function POST(request) {
   try {
     const payload = await readJsonBody(request, 600_000);
     const snapshot = normalizeNbaReaderPayload(payload, { deviceId: token.deviceId, headerVersion: request.headers.get('x-reader-version') });
+    const previous = await loadNbaReaderSnapshot(snapshot.boardDate);
+    const duplicateCapture = previous?.clientPayloadHash === snapshot.clientPayloadHash
+      && previous?.observedAt === snapshot.observedAt && previous?.pageActivityAt === snapshot.pageActivityAt;
+    if (!duplicateCapture) assertNbaReaderMonotonic(previous, snapshot);
+    const previousHistoryTracking = previous ? await requireReaderHistorySaved(previous) : null;
+    if (duplicateCapture) return respond(request, {
+      ok: true, captured: true, duplicateCapture: true, allRequiredWritesSucceeded: true,
+      boardDate: previous.boardDate, gameCount: previous.gameCount,
+      rawGameCount: previous.gameCount, matchedGameCount: 0, marketCount: previous.marketCount,
+      directionCount: previous.marketCount * 2, observedAt: previous.observedAt,
+      pageActivityAt: previous.pageActivityAt, identityStatus: 'team_mapped_game_unverified',
+      historyTracking: previousHistoryTracking, message: `NBA 已確認保存 ${previous.gameCount} 場、${previous.marketCount} 個市場`,
+    });
+    const historyTracking = await requireReaderHistorySaved(snapshot);
     const storage = await storeNbaReaderSnapshot(snapshot);
-    const historyTracking = await trackMarketLineHistory(snapshot);
     console.info('[NBA_READER_CAPTURE_ACCEPTED]', { code: 'NBA_READER_CAPTURE_ACCEPTED', status: 200, boardDate: snapshot.boardDate,
       gameCount: snapshot.gameCount, marketCount: snapshot.marketCount, readerVersion: snapshot.readerVersion });
     return respond(request, { ok: true, captured: true, boardDate: snapshot.boardDate, gameCount: snapshot.gameCount,
       rawGameCount: snapshot.gameCount, matchedGameCount: 0, marketCount: snapshot.marketCount, directionCount: snapshot.marketCount * 2,
-      identityStatus: 'team_mapped_game_unverified', ...storage, historyTracking,
+      identityStatus: 'team_mapped_game_unverified', ...storage, historyTracking, allRequiredWritesSucceeded: true,
       message: `NBA 已讀取 ${snapshot.gameCount} 場、${snapshot.marketCount} 個市場` });
   } catch (error) {
     console.warn('[NBA_READER_CAPTURE_REJECTED]', { code: error.code || 'NBA_READER_CAPTURE_FAILED', status: error.status || 503 });
-    return respond(request, { ok: false, code: error.code || 'NBA_READER_CAPTURE_FAILED', error: error.message || 'NBA 盤口未確認保存' }, error.status || 503);
+    return respond(request, { ok: false, allRequiredWritesSucceeded: false, code: error.code || 'NBA_READER_CAPTURE_FAILED', error: error.message || 'NBA 盤口未確認保存', ...(error.historyTracking ? { historyTracking: error.historyTracking } : {}) }, error.status || 503);
   }
 }

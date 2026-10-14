@@ -20,10 +20,7 @@ import {
 import { leagueConfig, requestedLeagueId } from '../../../../lib/leagues.js';
 import { checkRateLimit, cleanText, rateLimitResponse, readJsonBody, validDateString } from '../../../../lib/security.js';
 import { updateOpenCloudBetClosingSnapshots } from '../../../../lib/cloud-bet-store.js';
-import {
-  marketLineHistoryDatabaseConfigured,
-  recordMarketLineHistory,
-} from '../../../../lib/market-line-history-v1.js';
+import { requireReaderHistorySaved } from '../../../../lib/reader-history-receipt.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,29 +32,6 @@ async function trackOpenBetClosingSnapshots(snapshot) {
   } catch (error) {
     console.error('[BET_CLOSING_LINE_UPDATE_FAILED]', String(error?.message || error));
     return { configured: true, checked: 0, updated: 0, skipped: 0, failed: 1 };
-  }
-}
-
-async function trackMarketLineHistory(snapshot) {
-  try {
-    const result = await recordMarketLineHistory(snapshot);
-    if (result.inserted > 0) console.info('[MARKET_LINE_HISTORY_SAVED]', {
-      league: snapshot?.league,
-      boardDate: snapshot?.boardDate,
-      checked: result.checked,
-      inserted: result.inserted,
-      unchanged: result.unchanged,
-    });
-    return result;
-  } catch (error) {
-    console.error('[MARKET_LINE_HISTORY_WRITE_FAILED]', String(error?.message || error));
-    return {
-      configured: marketLineHistoryDatabaseConfigured(),
-      checked: 0,
-      inserted: 0,
-      unchanged: 0,
-      failed: 1,
-    };
   }
 }
 
@@ -169,6 +143,10 @@ export async function POST(request) {
 
     const unchangedBoard = previous?.rawBoardHash === envelope.rawBoardHash;
     const temporal = assertMonotonic(previous, envelope, !unchangedBoard);
+    // Recover a previous accepted board at its original observation time before
+    // a heartbeat or newer board can replace it. This also repairs old-version
+    // archive failures when that original board is still available.
+    const previousHistoryTracking = previous ? await requireReaderHistorySaved(previous) : null;
     if (unchangedBoard && temporal.duplicateCapture
       && previous?.deviceId === token.deviceId
       && previous?.sourceHost === envelope.sourceHost
@@ -197,6 +175,7 @@ export async function POST(request) {
         pageActivityAt: previous.pageActivityAt,
         runtimeCache: true,
         allRequiredWritesSucceeded: true,
+        historyTracking: previousHistoryTracking,
         freshness: readerSnapshotStatus(previous, Date.now(), league),
       }, { headers });
     }
@@ -241,14 +220,7 @@ export async function POST(request) {
         runtimeCache: Boolean(storage?.runtimeCache),
         allRequiredWritesSucceeded: true,
         closingTracking,
-        historyTracking: {
-          configured: marketLineHistoryDatabaseConfigured(),
-          checked: 0,
-          inserted: 0,
-          unchanged: refreshed.matchedGameCount || 0,
-          failed: 0,
-          reason: 'UNCHANGED_BOARD',
-        },
+        historyTracking: previousHistoryTracking,
         freshness: readerSnapshotStatus(refreshed, Date.now(), league),
       }, { headers });
     }
@@ -265,14 +237,12 @@ export async function POST(request) {
       console.warn('[READER_IDENTITY_ISOLATED]', JSON.stringify({ league, boardDate, issues: normalized.identityIssues }));
     }
 
+    const historyTracking = await requireReaderHistorySaved(normalized);
     const storage = await storeReaderSnapshot(normalized);
     if (!storage.allRequiredWritesSucceeded) {
       return NextResponse.json({ ok: false, error: 'Reader 快照未完成所有必要儲存寫入' }, { status: 503, headers });
     }
-    const [closingTracking, historyTracking] = await Promise.all([
-      trackOpenBetClosingSnapshots(normalized),
-      trackMarketLineHistory(normalized),
-    ]);
+    const closingTracking = await trackOpenBetClosingSnapshots(normalized);
     const status = readerSnapshotStatus(normalized, Date.now(), league);
     return NextResponse.json({
       ok: true,
@@ -303,7 +273,7 @@ export async function POST(request) {
   } catch (error) {
     const code = String(error?.code || 'READER_INGEST_REJECTED').slice(0, 100);
     console.warn('[READER_INGEST_REJECTED]', { code, status: Number(error?.status) || 500, message: String(error?.message || error).slice(0, 300) });
-    return NextResponse.json({ ok: false, code, error: String(error?.message || error) }, {
+    return NextResponse.json({ ok: false, allRequiredWritesSucceeded: false, code, error: String(error?.message || error), ...(error.historyTracking ? { historyTracking: error.historyTracking } : {}) }, {
       status: Number(error?.status) || 500,
       headers,
     });

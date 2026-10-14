@@ -10,6 +10,37 @@ import {
 import { readerUnopenedGameMarketContentHash } from '../lib/reader-market-revision-v110.js';
 
 register('./next-route-test-loader.mjs', import.meta.url);
+// This integration suite uses only synthetic in-memory transports. Replace
+// history persistence for Reader ingest alone; authorization, normalization,
+// current-board storage and every other route remain the actual implementation.
+// Actual history failure receipts are tested in market-line-history-ingest-test.
+const readerHistoryFixture = 'data:text/javascript,' + encodeURIComponent(`
+  import { buildMarketLineHistoryRows } from ${JSON.stringify(new URL('../lib/market-line-history-v1.js', import.meta.url).href)};
+  const saved = new Map();
+  export async function requireReaderHistorySaved(snapshot) {
+    const rows = buildMarketLineHistoryRows(snapshot);
+    let inserted = 0;
+    for (const row of rows) {
+      const key = [row.league, row.board_date, row.game_key, row.observed_at].join('|');
+      const exact = saved.get(key);
+      if (exact && exact.state_hash !== row.state_hash) throw Error('synthetic history observation conflict');
+      const previous = [...saved.values()].filter(value => value.league === row.league
+        && value.board_date === row.board_date && value.game_key === row.game_key
+        && value.observed_at < row.observed_at).sort((a, b) => b.observed_at.localeCompare(a.observed_at))[0];
+      if (!exact && previous?.state_hash !== row.state_hash) { saved.set(key, row); inserted++; }
+    }
+    return { configured: true, checked: rows.length, inserted, unchanged: rows.length - inserted, failed: 0 };
+  }
+`);
+register('data:text/javascript,' + encodeURIComponent(`
+  export async function resolve(specifier, context, nextResolve) {
+    if (context.parentURL?.endsWith('/app/api/reader/ingest/route.js')
+      && specifier.endsWith('/lib/reader-history-receipt.js')) {
+      return { url: ${JSON.stringify(readerHistoryFixture)}, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  }
+`), import.meta.url);
 
 const originalEnv = {
   APP_PASSWORD: process.env.APP_PASSWORD,
@@ -342,6 +373,11 @@ try {
   assert.equal(ingestResponse.status, 200, ingestPayload.error || 'Reader full-slate ingest must pass');
   assert.equal(ingestPayload.heartbeat, false);
   assert.equal(ingestPayload.matchedGameCount, 2);
+  assert.equal(ingestPayload.allRequiredWritesSucceeded, true);
+  assert.equal(ingestPayload.historyTracking.configured, true);
+  assert.equal(ingestPayload.historyTracking.checked, 2);
+  assert.equal(ingestPayload.historyTracking.inserted, 2);
+  assert.equal(ingestPayload.historyTracking.failed, 0);
   assert.notEqual(ingestPayload.payloadHash, readerPayload.payloadHash, 'server hash must replace spoofed client hash');
   const creditRoute = await import('../app/api/credit-lines/route.js');
   const signedCreditResponse = await creditRoute.POST(request('/api/credit-lines', token, {

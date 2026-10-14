@@ -5140,6 +5140,7 @@ export default function Home() {
       <button type="button" className={nbaSelected ? 'active' : ''} onClick={selectNba} aria-pressed={nbaSelected}><span className={`leagueDot batch-${nbaIndicator.status}`}/><b>NBA</b><small>籃球{nbaIndicator.label ? `｜${nbaIndicator.label}` : ''}</small></button>
       <Link prefetch={false} className="sportModuleLink" href="/nhl"><b>NHL</b><small>冰球分析</small></Link>
       <Link prefetch={false} className="sportModuleLink" href="/external-audit"><b>外部來源</b><small>獨立稽核，不改評分</small></Link>
+      <Link prefetch={false} className="sportModuleLink" href="/market-line-history"><b>歷史盤口</b><small>原盤口與變盤紀錄</small></Link>
     </nav>
 
     <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress} onJobChange={setNbaIndicatorJob}/>
