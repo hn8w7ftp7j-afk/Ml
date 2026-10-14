@@ -112,6 +112,7 @@ import {
   cloudLedgerRetryDelay,
 } from '../lib/cloud-ledger-sync-policy.js';
 import { loadCompactCloudLedger, mergeKnownLedgerRecords } from '../lib/compact-cloud-ledger-client.js';
+import { PERFORMANCE_LEAGUE_IDS, performanceLeagueId, performanceLeagueConfig, isNbaPerformanceBet, loadNbaPerformanceLedger } from '../lib/performance-ledger-client.js';
 import {
   allLeagueBoardDate,
   allLeagueAnalysisProgress,
@@ -1072,16 +1073,80 @@ function BreakdownButton({ label, summary, active = false, onClick }) {
 }
 
 function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCloudLedgerFailure, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, onCancel }) {
+  const [nbaLedger, setNbaLedger] = useState({ bets: [], state: 'loading', error: '', invalidRecords: 0 });
+  const [nbaLedgerBusy, setNbaLedgerBusy] = useState(false);
+  const [nbaSettlementNotice, setNbaSettlementNotice] = useState('');
+  const nbaLedgerBusyRef = useRef(false);
+  const nbaLedgerMountedRef = useRef(false);
+  const loadNbaLedger = useCallback(async ({ settle = false } = {}) => {
+    if (nbaLedgerBusyRef.current) return;
+    nbaLedgerBusyRef.current = true;
+    setNbaLedgerBusy(true);
+    try {
+      if (settle) {
+        const result = await requestJSON('/api/nba/performance', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settle' }),
+        }, 60000);
+        if (nbaLedgerMountedRef.current) setNbaSettlementNotice(`NBA：本次核對 ${result.summary.checked} 筆，新增結算 ${result.summary.settled} 筆，待確認 ${result.summary.pending} 筆${result.summary.deferred ? `，另 ${result.summary.deferred} 筆待下次核對` : ''}。`);
+      }
+      const result = await loadNbaPerformanceLedger(requestJSON);
+      if (nbaLedgerMountedRef.current) setNbaLedger({ bets: result.bets, state: 'ready', error: '', invalidRecords: result.pagination.invalidRecords });
+      return result;
+    } catch (cause) {
+      if (nbaLedgerMountedRef.current) setNbaLedger(old => ({ ...old, state: 'unavailable', error: cause?.message || 'NBA 永久帳本暫時無法讀取。' }));
+    } finally {
+      nbaLedgerBusyRef.current = false;
+      if (nbaLedgerMountedRef.current) setNbaLedgerBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    nbaLedgerMountedRef.current = true;
+    void loadNbaLedger();
+    const refresh = () => { if (document.visibilityState === 'visible') void loadNbaLedger(); };
+    const timer = window.setInterval(refresh, CLOUD_LEDGER_VISIBLE_REFRESH_MS);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { nbaLedgerMountedRef.current = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, [loadNbaLedger]);
+  const allBets = useMemo(() => [...bets, ...nbaLedger.bets]
+    .sort((left, right) => Date.parse(right.placedAt || 0) - Date.parse(left.placedAt || 0)), [bets, nbaLedger.bets]);
+  const needsNbaLedger = selectedLeague === 'ALL' || selectedLeague === 'NBA';
+  const statsReady = (!needsNbaLedger || nbaLedger.state === 'ready')
+    && (selectedLeague === 'NBA' || cloudLedgerStatus?.state === 'ready');
+  const ledgerBusy = cloudLedgerBusy || nbaLedgerBusy;
+  async function refreshAllSettlements() {
+    await Promise.allSettled([refreshSettlements('', { force: true }), loadNbaLedger({ settle: true })]);
+  }
+  async function cancelLedgerBet(bet) {
+    if (!isNbaPerformanceBet(bet)) return onCancel(bet);
+    if (nbaLedgerBusyRef.current || nbaLedger.state !== 'ready' || bet.status !== 'OPEN') return;
+    if (!window.confirm(`確定取消這筆 NBA 網站紀錄？\n${bet.pick}｜${waterText(bet.water)}`)) return;
+    nbaLedgerBusyRef.current = true; setNbaLedgerBusy(true);
+    try {
+      const receipt = await requestJSON('/api/nba/bet-records', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel', id: bet.nativeRecordId }),
+      }, 30000);
+      if (receipt.persistence !== 'durable_database' || receipt.record?.id !== bet.nativeRecordId || receipt.record?.status !== 'CANCELLED') throw new Error('NBA 取消狀態尚未確認。');
+      const result = await loadNbaPerformanceLedger(requestJSON);
+      if (!result.bets.some(row => row.id === bet.id && row.status === 'CANCELLED')) throw new Error('NBA 永久帳本尚未讀回取消狀態。');
+      if (nbaLedgerMountedRef.current) setNbaLedger({ bets: result.bets, state: 'ready', error: '', invalidRecords: result.pagination.invalidRecords });
+    } catch (cause) {
+      if (nbaLedgerMountedRef.current) setNbaLedger(old => ({ ...old, state: 'unavailable', error: cause.message }));
+    } finally {
+      nbaLedgerBusyRef.current = false;
+      if (nbaLedgerMountedRef.current) setNbaLedgerBusy(false);
+    }
+  }
   const [detailPage, setDetailPage] = useState(0);
   const [priceFeed, setPriceFeed] = useState({});
   const [priceFeedChecked, setPriceFeedChecked] = useState(false);
   const [originalPriceSummaryState, setOriginalPriceSummaryState] = useState(null);
   const priceFeedBusyRef = useRef(false);
   const priceFeedRetryAtRef = useRef(0);
-  const periodBets = useMemo(() => filterBetLedgerByPeriod(bets, period), [bets, period]);
+  const periodBets = useMemo(() => filterBetLedgerByPeriod(allBets, period), [allBets, period]);
   const leagueBets = useMemo(() => selectedLeague === 'ALL'
     ? periodBets
-    : periodBets.filter(bet => normalizeLeagueId(bet?.league) === selectedLeague), [periodBets, selectedLeague]);
+    : periodBets.filter(bet => performanceLeagueId(bet?.league) === selectedLeague), [periodBets, selectedLeague]);
   const filteredBets = useMemo(() => leagueBets.filter(bet => matchesBetStatMarket(bet, selectedMarket)), [leagueBets, selectedMarket]);
   const detailPageSize = 50;
   const detailPageCount = Math.max(1, Math.ceil(filteredBets.length / detailPageSize));
@@ -1104,12 +1169,12 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
     return () => { disposed = true; };
   }, [filteredBets, priceFeed]);
   const priceBetIds = useMemo(() => filteredBets
-    .filter(bet => bet?.status === 'OPEN' && bet?.id)
+    .filter(bet => !isNbaPerformanceBet(bet) && bet?.status === 'OPEN' && bet?.id)
     .slice(0, 300)
     .map(bet => bet.id), [filteredBets]);
   const priceRequestKey = priceBetIds.join('|');
   const periodLabel = BET_PERIODS.find(item => item.id === period)?.label || '全部';
-  const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : leagueConfig(selectedLeague).label;
+  const leagueLabel = selectedLeague === 'ALL' ? '全部聯盟' : performanceLeagueConfig(selectedLeague).label;
   const marketLabel = betStatMarketLabel(selectedMarket);
   const chooseLeague = value => {
     setSelectedLeague(value);
@@ -1164,21 +1229,25 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
     return () => { disposed = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [priceRequestKey, cloudLedgerStatus?.state]);
   return <section className="panel ledgerPanel">
-    <div className="panelHead"><div><span className="kicker">四聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" disabled={cloudLedgerBusy || cloudLedgerStatus?.state !== 'ready'} onClick={() => refreshSettlements('', { force: true })}>{cloudLedgerBusy ? '帳本同步中…' : '更新全部賽果'}</button></div>
+    <div className="panelHead"><div><span className="kicker">五聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" disabled={ledgerBusy || cloudLedgerStatus?.state !== 'ready' || nbaLedger.state !== 'ready'} onClick={refreshAllSettlements}>{ledgerBusy ? '帳本同步中…' : '更新全部賽果'}</button></div>
     {cloudLedgerStatus?.state === 'unavailable' && <div className="errorBox" role="alert"><strong>永久雲端帳本目前無法讀取</strong><br/>{cloudLedgerStatus.message}<br/>下方若顯示 0 注，只代表這台裝置沒有可用暫存，不代表資料庫內沒有紀錄；系統不會把失敗回應冒充空帳本。</div>}
+    {nbaLedger.state === 'unavailable' && <div className="errorBox" role="alert">{nbaLedger.error} NBA 與全部聯盟統計尚未確認完整；保留先前明細。<button className="mini secondary" disabled={nbaLedgerBusy} onClick={() => loadNbaLedger()}>重新讀取 NBA</button></div>}
+    {nbaSettlementNotice && <p role="status">{nbaSettlementNotice}</p>}
+    {nbaLedger.invalidRecords > 0 && <p role="alert">NBA 有 {nbaLedger.invalidRecords} 筆原始紀錄無法驗證，已隔離，未納入績效。</p>}
     <div className="periodTabs" aria-label="下注期間">
       {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => choosePeriod(item.id)}>{item.label}</button>)}
     </div>
     <div className="ledgerPath">{periodLabel}｜{leagueLabel}｜{marketLabel}</div>
-    <SummaryCards summary={summary} originalPriceSummary={originalPriceSummary}/>
+    {statsReady ? <SummaryCards summary={summary} originalPriceSummary={originalPriceSummary}/> : <p role="status">{ledgerBusy || nbaLedger.state === 'loading' ? '帳本同步中，完成後顯示完整績效。' : '帳本尚未完整讀取，暫不顯示合計。'}</p>}
 
     <div className="ledgerSectionHead"><h3>1. 選擇聯盟範圍</h3></div>
     <div className="leagueScopeTabs" aria-label="聯盟統計範圍">
       <button className={selectedLeague === 'ALL' ? 'active' : ''} onClick={() => chooseLeague('ALL')}>全部聯盟</button>
-      {LEAGUE_IDS.map(id => <button key={id} className={selectedLeague === id ? 'active' : ''} onClick={() => chooseLeague(id)}>{id}<small>{leagueConfig(id).shortLabel}</small></button>)}
+      {PERFORMANCE_LEAGUE_IDS.map(id => <button key={id} aria-pressed={selectedLeague === id} className={selectedLeague === id ? 'active' : ''} onClick={() => chooseLeague(id)}>{id}<small>{performanceLeagueConfig(id).shortLabel}</small></button>)}
     </div>
 
     <div className="ledgerSectionHead"><h3>2. {leagueLabel}｜四種市場輸贏</h3>{selectedMarket !== 'ALL' && <button className="textButton" onClick={() => setSelectedMarket('ALL')}>回全部市場</button>}</div>
+    {statsReady && <>
     <div className="breakdownGrid marketBreakdown">
       {MARKET_ORDER.map(market => {
         const rows = leagueBets.filter(bet => bet?.market === market);
@@ -1220,13 +1289,14 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
       })}
     </div>
     {unclassifiedFirst5 > 0 && <p className="muted">{unclassifiedFirst5} 筆上半大小紀錄的方向缺失或衝突：保留在合計與原明細，不擅自歸入大分或小分。</p>}
+    </>}
 
     <div className="ledgerSectionHead"><h3>3. 下注明細</h3><span>{filteredBets.length} 注｜不可變帳本</span></div>
     {detailPageCount > 1 && <nav className="periodTabs" aria-label="下注明細分頁"><button disabled={activeDetailPage === 0} onClick={() => setDetailPage(activeDetailPage - 1)}>上一頁</button><span role="status">第 {activeDetailPage + 1}／{detailPageCount} 頁｜每頁 {detailPageSize} 筆｜總計含全部紀錄</span><button disabled={activeDetailPage === detailPageCount - 1} onClick={() => setDetailPage(activeDetailPage + 1)}>下一頁</button></nav>}
     {filteredBets.length ? detailBets.map(bet => <div className="betRow" key={bet.id}>
-      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : statusText(bet.status)}{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) && bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜下注時 {compactModelMetrics(bet)}｜{hasUnverifiedFirst5Settlement(bet) ? '原始下注保留；缺少正式上半比分，暫不納入結算績效' : String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : '實際下注績效已收錄｜S分數僅作影子分組'}</small><BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/></div>
-      <div className="betRowResult"><strong>{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : bet.status === 'CANCELLED' ? '已取消' : bet.status === 'MANUAL_REVIEW' ? '需確認賽果' : '待結算'}</strong>{bet.status !== 'SETTLED' && (bet.settlementError || bet.lastResultError) && <small className="settlementPendingReason">{bet.settlementError || bet.lastResultError}</small>}{bet.status === 'OPEN' && Number.isFinite(Date.parse(bet.gameDate || '')) && Date.now() < Date.parse(bet.gameDate) && <button className="mini cancel" disabled={cloudLedgerBusy || cloudLedgerStatus?.state !== 'ready'} onClick={() => onCancel(bet)}>取消下注</button>}<small>下注證據永久保留；取消只變更狀態，不會刪除</small></div>
-    </div>) : <div className="emptySmall">這個篩選範圍目前沒有下注紀錄。</div>}
+      <div><strong><span className="leagueBadge inline">{bet.league}</span>{translateTeamText(bet.pick)}｜{waterText(bet.water)}</strong><span>{translateTeamText(bet.matchup)}｜{bet.market}｜{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : statusText(bet.status)}{bet.status === 'SETTLED' && !hasUnverifiedFirst5Settlement(bet) && bet.settlement?.outcome ? `｜${outcomeText(bet.settlement.outcome)}` : ''}</span><small>下注：{localTime(bet.placedAt)}｜{Number(bet.stake || 0).toLocaleString()}元｜{isNbaPerformanceBet(bet) ? '本人申報原始紀錄' : `下注時 ${compactModelMetrics(bet)}`}｜{hasUnverifiedFirst5Settlement(bet) ? '原始下注保留；缺少正式上半比分，暫不納入結算績效' : String(bet.performanceEligibility || '').startsWith('EXCLUDED_') ? '不可驗證舊紀錄：不納入績效' : isNbaPerformanceBet(bet) ? '實際紀錄績效｜未納入模型驗證' : '實際下注績效已收錄｜S分數僅作影子分組'}</small>{!isNbaPerformanceBet(bet) && <BetPriceComparison bet={bet} currentRow={priceFeed[bet.id]?.current || null} closingRow={priceFeed[bet.id]?.closing || null} readerChecked={priceFeedChecked} showExactLabel/>}</div>
+      <div className="betRowResult"><strong>{hasUnverifiedFirst5Settlement(bet) ? '舊賽果待核驗' : bet.status === 'SETTLED' ? moneyText(bet.settlement?.netProfit) : bet.status === 'CANCELLED' ? '已取消' : bet.status === 'MANUAL_REVIEW' ? '需確認賽果' : '待結算'}</strong>{bet.status !== 'SETTLED' && (bet.settlementError || bet.lastResultError) && <small className="settlementPendingReason">{bet.settlementError || bet.lastResultError}</small>}{bet.status === 'OPEN' && Number.isFinite(Date.parse(bet.gameDate || '')) && Date.now() < Date.parse(bet.gameDate) && <button className="mini cancel" disabled={isNbaPerformanceBet(bet) ? nbaLedgerBusy || nbaLedger.state !== 'ready' : cloudLedgerBusy || cloudLedgerStatus?.state !== 'ready'} onClick={() => cancelLedgerBet(bet)}>取消下注</button>}<small>下注證據永久保留；取消只變更狀態，不會刪除</small></div>
+    </div>) : <div className="emptySmall">{statsReady ? '這個篩選範圍目前沒有下注紀錄。' : '帳本尚未完整同步。'}</div>}
   </section>;
 }
 
