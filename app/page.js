@@ -578,6 +578,7 @@ function saveBackgroundJob(job) {
         // Source evidence and market arrays are fetched again by the Reader;
         // they are neither workflow handles nor completed analysis results.
         game: item.game, mode: item.mode || 'actual', readerPayloadHash: null,
+        pendingReaderEvidenceHash: item.pendingReaderEvidenceHash || null,
         customMarkets: [],
         status: item.status || 'queued', statusLabel: item.statusLabel || '等待伺服器背景分析', error: item.error || '',
       }]) };
@@ -2716,7 +2717,10 @@ export default function Home() {
     requestedRecoveryScopeRef.current = null;
     if (Array.isArray(saved.preparedBoard)) {
       setSchedule(saved.preparedBoard.map(item => item?.game).filter(Boolean));
-      setBoard(current => mergePreparedLeagueBoard(current, saved.preparedBoard));
+      const current = boardRef.current;
+      const prepared = mergePreparedLeagueBoard(current, saved.preparedBoard);
+      boardRef.current = prepared;
+      setBoard(prepared);
     }
     const generation = analysisGenerationRef.current;
     if (locksForeground) {
@@ -3095,6 +3099,7 @@ export default function Home() {
           latestMarketCoverage: task?.marketCoverage || null,
           latestReaderSource: task?.actualSource || null,
           readerPayloadHash: null,
+          pendingReaderEvidenceHash: null,
           status: preserve ? 'done' : 'unopened',
           statusLabel: task?.unavailableReason === 'reader-identity-unresolved'
             ? '場次待核對｜暫停使用此場盤口'
@@ -3182,6 +3187,7 @@ export default function Home() {
         ...previous,
         game,
         readerPayloadHash: null,
+        pendingReaderEvidenceHash: null,
         latestMarketCoverage: terminalGame ? null : previous.latestMarketCoverage || null,
         latestReaderSource: terminalGame ? null : previous.latestReaderSource || null,
         pendingReaderAnalysis: terminalGame ? false : previous.pendingReaderAnalysis === true,
@@ -3532,7 +3538,39 @@ export default function Home() {
                 };
               }
             }
-            applicableRows.forEach(row => row?.ok ? commitAnalysisPayload(row.task, row.payload) : commitAnalysisFailure(row?.task, row));
+            // Legacy/quota-reduced reconnect handles can omit prepared task
+            // metadata. Only a task just re-attested against the live Reader
+            // may fill a missing revision; never replace an explicit newer one.
+            const reattestedTasks = new Map(applicableRows
+              .filter(row => row?.task?.readerPayloadHash)
+              .map(row => [Number(row.task.game.gamePk), row.task]));
+            const rebound = boardRef.current.map(item => {
+              const task = reattestedTasks.get(Number(item?.game?.gamePk));
+              if (!task || item.pendingReaderEvidenceHash
+                || !['queued', 'running'].includes(item.status)
+                || !sameAnalysisGame(item.game, task.game)) return item;
+              return { ...item, pendingReaderEvidenceHash: readerGameEvidenceHash(task) || null };
+            });
+            boardRef.current = rebound;
+            setBoard(rebound);
+            const rejectedRows = [];
+            applicableRows.forEach(row => {
+              const committed = row?.ok ? commitAnalysisPayload(row.task, row.payload) : commitAnalysisFailure(row?.task, row);
+              if (!committed) rejectedRows.push(row);
+            });
+            if (rejectedRows.length) {
+              // A server success is not a loaded client result. Keep its
+              // recovery handle/receipt until the exact result is accepted.
+              const ownedRejectedPks = rejectedRows.filter(row => {
+                const item = boardRef.current.find(item => Number(item?.game?.gamePk) === Number(row?.task?.game?.gamePk));
+                return !item?.pendingReaderEvidenceHash
+                  || item.pendingReaderEvidenceHash === readerGameEvidenceHash(row?.task);
+              }).map(row => row?.task?.game?.gamePk);
+              if (ownedRejectedPks.length) releaseTerminalBackgroundCards(ownedRejectedPks, 'failed');
+              setProgress(value => ({ ...value, active: false, running: 0,
+                label: '分析結果尚未載入｜原始結果已保留，可重新複核' }));
+              throw Object.assign(new Error('伺服器分析結果與目前場次或盤口版本不符，尚未載入；原始結果已保留，請重新複核此場。'), { backgroundCommitRejected: true });
+            }
             clearCompletedJobAfterReceipt();
             const total = Number(result.total) || rows.length;
             const succeeded = applicableRows.filter(row => row?.ok).length;
@@ -3594,6 +3632,7 @@ export default function Home() {
           if (generation !== analysisGenerationRef.current || currentDateRef.current !== targetDate) {
             return { detached: true, total: 0, completed: 0, results: [] };
           }
+          if (cause?.backgroundCommitRejected) throw cause;
           if (completedReceipt && !cause?.backgroundFatal && ![401, 403, 404].includes(Number(cause?.status))) {
             // A finished job cannot make progress by retrying forever. Keep its
             // receipt intact for a later explicit retry and release the controls.
@@ -3643,6 +3682,7 @@ export default function Home() {
       gamePks: tasks.map(task => Number(task?.game?.gamePk)).filter(Number.isFinite),
       preparedBoard: tasks.map(task => ({
         game: task.game, mode: 'actual', readerPayloadHash: null,
+        pendingReaderEvidenceHash: readerGameEvidenceHash(task) || null,
         customMarkets: [], status: 'queued',
         statusLabel: '等待伺服器背景分析', error: '',
       })),
@@ -3759,6 +3799,7 @@ export default function Home() {
         marketCoverage: readerGame?.marketCoverage || null,
         readerProvenance: readerGame?.readerProvenance || null,
         readerPayloadHash: null,
+        pendingReaderEvidenceHash: hasOpenMarkets ? readerGameEvidenceHash(readerGame) || null : null,
         customMarkets: [],
         verificationMarkets: referenceByPk.get(Number(game.gamePk))?.markets || [],
         referenceEvidence: referenceByPk.get(Number(game.gamePk))?.referenceEvidence || null,
@@ -4010,7 +4051,7 @@ export default function Home() {
         statusLabel: item.statusLabel.replaceAll('四聯盟', '伺服器'),
       }));
       const selectedPks = new Set(batch.tasks.map(task => Number(task.game.gamePk)));
-      const prepared = mergePreparedLeagueBoard(previous, batch.preparedBoard).map(item => selectedPks.has(Number(item.game.gamePk))
+      const prepared = mergePreparedLeagueBoard(previous, batch.preparedBoard, { replacePendingRevision: true }).map(item => selectedPks.has(Number(item.game.gamePk))
         ? { ...item, readerPayloadHash: null, pendingReaderAnalysis: true, status: 'queued', statusLabel: '等待伺服器背景分析｜保留目前分數' }
         : item);
       allLeagueBoardsRef.current.set(scope, prepared);
@@ -4222,6 +4263,7 @@ export default function Home() {
           latestReaderMarkets: waitingForReader || pendingReaderAnalysis ? foundCredit?.markets || [] : null,
           readerProvenance: capturedHistoricalPit ? foundCredit.readerProvenance : retainingPreviousRevision ? previous?.readerProvenance || null : foundCredit?.readerProvenance || previous?.readerProvenance || null,
           readerPayloadHash: resumed?.readerPayloadHash || (capturedHistoricalPit ? credit.payloadHash : null),
+          pendingReaderEvidenceHash: hasOpenRows && !resumed ? readerGameEvidenceHash(foundCredit) || null : null,
           customMarkets: resumed?.customMarkets || (capturedHistoricalPit ? foundCredit.markets : retainingPreviousRevision ? previous?.customMarkets || [] : represented ? foundCredit.markets || [] : previous?.customMarkets || []),
           verificationMarkets: retainingPreviousRevision ? previous?.verificationMarkets || [] : foundReference?.markets || [],
           referenceEvidence: retainingPreviousRevision ? previous?.referenceEvidence || null : foundReference?.referenceEvidence || null,

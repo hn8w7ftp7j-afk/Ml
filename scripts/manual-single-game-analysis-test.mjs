@@ -41,6 +41,7 @@ async function exercise(selected, options = {}) {
     runDurableAnalysisTasks: async tasks => { batches.push(tasks); throw new Error('TEST_STOP_AFTER_SUBMISSION'); },
   };
   vm.createContext(context);
+  vm.runInContext(page.slice(page.indexOf('function readerGameEvidenceHash('), page.indexOf('\nfunction coreDataBlockKey(')), context);
   await vm.runInContext(`(${source.trim()})`, context)('reader-revalidation', selected);
   return { games, original, board, requests, batches, errors, context };
 }

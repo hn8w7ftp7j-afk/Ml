@@ -78,7 +78,7 @@ function sandbox(storage = new MemoryStorage()) {
     safeParse: value => { try { return JSON.parse(value); } catch { return null; } },
     ANALYSIS_BOARD_CACHE_STORAGE: BOARD_KEY, ANALYSIS_JOB_STORAGE: JOB_KEY, ALL_LEAGUE_ANALYSIS_STORAGE: RUN_KEY,
   });
-  for (const name of ['backgroundJobKey', 'loadAnalysisBoardCache', 'loadBackgroundJob', 'saveBackgroundJob', 'clearBackgroundJob']) {
+  for (const name of ['backgroundJobKey', 'loadAnalysisBoardCache', 'loadBackgroundJob', 'saveBackgroundJob', 'clearBackgroundJob', 'readerGameEvidenceHash']) {
     vm.runInContext(functionSource(name), context);
   }
   return context;

@@ -70,7 +70,7 @@ function sandbox(storage = new MemoryStorage()) {
     ANALYSIS_BOARD_CACHE_STORAGE: BOARD_KEY, ANALYSIS_JOB_STORAGE: JOB_KEY, ALL_LEAGUE_ANALYSIS_STORAGE: RUN_KEY,
   });
   for (const name of ['loadAnalysisBoardCache', 'saveAnalysisBoardCache', 'backgroundJobKey', 'saveBackgroundJob',
-    'clearBackgroundJob', 'saveCompletedAnalysisReceipt', 'clearCompletedAnalysisReceipt', 'markBackgroundResultUnavailable', 'loadBackgroundJob']) {
+    'clearBackgroundJob', 'saveCompletedAnalysisReceipt', 'clearCompletedAnalysisReceipt', 'markBackgroundResultUnavailable', 'loadBackgroundJob', 'readerGameEvidenceHash']) {
     vm.runInContext(functionSource(name), context);
   }
   return context;
