@@ -2,7 +2,7 @@ const byId = id => document.getElementById(id);
 const pairPanel = byId('pairPanel'), statusPanel = byId('statusPanel'), password = byId('password'), deviceName = byId('deviceName');
 const pairButton = byId('pair'), syncButton = byId('sync'), unpairButton = byId('unpair'), autoToggle = byId('auto');
 const message = byId('message'), state = byId('state'), dot = byId('dot'), leagueGrid = byId('leagueGrid');
-const LEAGUES = [['MLB', '美棒'], ['NPB', '日棒'], ['KBO', '韓棒'], ['CPBL', '中職'], ['NBA', '美籃'], ['NHL', '冰球'], ['EPL','英超'], ['UCL','歐冠']];
+const LEAGUES = [['MLB', '美棒'], ['NPB', '日棒'], ['KBO', '韓棒'], ['CPBL', '中職'], ['NBA', '美籃'], ['EPL', '英超'], ['UCL', '歐冠']];
 const STALE_MS = 180000;
 async function send(payload) {
   let timer;
