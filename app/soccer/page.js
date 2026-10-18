@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { APP_VERSION } from '../../lib/app-version.js';
+import { soccerTeamLabel } from '../../lib/soccer/team-labels.js';
 
 const SOCCER_LEAGUES = { EPL: { name: '英超', fullName: '英格蘭超級聯賽' }, UCL: { name: '歐冠 UCL', fullName: '歐洲冠軍聯賽' } };
 const VIEW_NAMES = { schedule: '當日賽程', upcoming: '近期賽程', standings: '積分榜' };
@@ -37,7 +38,7 @@ function workspaceUrl(location) {
   return `/soccer?${query}`;
 }
 function boardKey(location) { return `soccer:${location.league}:${location.date}:${location.view}`; }
-function teamName(team) { return team?.nameZh || team?.displayNameZh || team?.name || team?.shortName || '隊名尚未提供'; }
+function teamName(team) { return soccerTeamLabel(team); }
 function scoreValue(value) { return Number.isInteger(value) && value >= 0 ? value : null; }
 function verifiedScore(game) {
   if (!['live', 'final'].includes(game.status)) return null;
@@ -124,7 +125,7 @@ export default function SoccerPage() {
     let timedOut = false;
     setLoadingKey(key);
     setFailure(null);
-    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 30_000);
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 45_000);
     requestBoard(location, controller.signal).then(body => {
       if (token !== generation.current || controller.signal.aborted) return;
       setResponses(previous => ({ ...previous, [key]: body }));

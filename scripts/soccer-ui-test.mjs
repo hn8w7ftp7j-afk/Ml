@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 
 const source = await readFile(new URL('../app/soccer/page.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../app/soccer/soccer.css', import.meta.url), 'utf8');
@@ -28,10 +29,10 @@ function declaration(name) {
   const start = source.indexOf('{', source.indexOf(') {', match.index));
   return source.slice(match.index, start) + blockAt(start);
 }
-const helpers = ['taipeiDate', 'validDate', 'shiftDate', 'readLocation', 'workspaceUrl', 'boardKey', 'scoreValue', 'verifiedScore', 'safeSourceUrl', 'validateBoard', 'requestBoard', 'navigate'];
+const helpers = ['taipeiDate', 'validDate', 'shiftDate', 'readLocation', 'workspaceUrl', 'boardKey', 'teamName', 'scoreValue', 'verifiedScore', 'safeSourceUrl', 'validateBoard', 'requestBoard', 'navigate'];
 function context(extra = {}) {
   const ctx = {
-    URLSearchParams, URL, Date, Intl, AbortController, setTimeout, clearTimeout,
+    URLSearchParams, URL, Date, Intl, AbortController, setTimeout, clearTimeout, soccerTeamLabel,
     SOCCER_LEAGUES: { EPL: {}, UCL: {} }, VIEW_NAMES: { schedule: '', upcoming: '', standings: '' },
     ...extra,
   };
@@ -60,6 +61,23 @@ await test('direct UCL links retain league, real date and view; invalid inputs f
   assert.deepEqual(plain(api.readLocation('?league=NBA&date=2026-02-30&view=unknown', new Date('2026-10-17T16:00:00Z'))), location);
   assert.equal(api.workspaceUrl({ league: 'UCL', date: '2026-10-22', view: 'upcoming' }), '/soccer?league=UCL&date=2026-10-22&view=upcoming');
   assert.notEqual(api.boardKey(location), api.boardKey({ ...location, league: 'UCL' }));
+});
+await test('club names translate without changing provider identities or league membership', () => {
+  const { api } = context();
+  const labels = { Arsenal: '兵工廠', 'Manchester City': '曼城', 'Manchester United': '曼聯', 'Tottenham Hotspur': '熱刺', Liverpool: '利物浦', Chelsea: '切爾西', 'Real Madrid': '皇家馬德里', Barcelona: '巴塞隆納', 'Paris Saint-Germain': '巴黎聖日耳曼', 'Bayern München': '拜仁慕尼黑', 'Borussia Dortmund': '多特蒙德', Internazionale: '國際米蘭', Juventus: '尤文圖斯' };
+  for (const [name, expected] of Object.entries(labels)) {
+    const team = { id: 'soccer:ucl:team:123', sourceId: '123', name };
+    const before = { ...team };
+    assert.equal(api.teamName(team), expected);
+    assert.equal(api.teamName({ ...team, id: 'soccer:epl:team:123' }), expected);
+    assert.deepEqual(team, before);
+  }
+  assert.equal(api.teamName({ name: 'Inter Miami CF' }), 'Inter Miami CF');
+  assert.equal(api.teamName({ name: 'Arsenal de Sarandi', shortName: 'Arsenal' }), 'Arsenal de Sarandi');
+  assert.equal(api.teamName({ shortName: 'Arsenal' }), '兵工廠');
+  assert.equal(api.teamName({ name: 'Unknown Official Club', shortName: 'Unknown' }), 'Unknown Official Club');
+  assert.equal(api.teamName({ name: 'Arsenal', nameZh: '兵工廠' }), '兵工廠');
+  assert.equal(api.teamName(null), '隊名尚未提供');
 });
 await test('scores require active/final status and two actual nonnegative integers', () => {
   const { api } = context();
@@ -167,7 +185,8 @@ await test('failed refresh preserves prior data and makes retry available', asyn
   assert.equal(h.state.failure.message, 'network unavailable');
   assert.equal(h.state.loadingKey, '');
 });
-await test('timeout aborts the actual request, reports failure and releases loading', async () => {
+await test('timeout exceeds the bounded 32 second source window and releases loading', async () => {
+  assert.match(source, /\}, 45_000\);/);
   const h = harness(); h.start(); h.timers[0]();
   assert.equal(h.calls[0].signal.aborted, true);
   h.calls[0].reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); await flush();
