@@ -122,3 +122,4 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .leagueTabs button .leagueBetBadge.bet-all_bet,.leagueBetBadge.bet-all_bet{color:#71e7b8}
 .leagueTabs button .leagueBetBadge.bet-pending,.leagueBetBadge.bet-pending{color:#b7c9db}
 .leagueTabs button .leagueBetBadge.bet-analysis_pending,.leagueBetBadge.bet-analysis_pending{color:#b7c9db}
+.allLeaguePills .batch-research{background:#173d5b;color:#a8dcff}.allLeaguePills .batch-insufficient_data{background:#493718;color:#ffd27e}.allLeaguePills a{display:inline-block;margin-left:6px;text-decoration:underline;color:inherit}

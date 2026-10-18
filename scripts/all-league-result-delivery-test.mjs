@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
 import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
-import { ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun } from '../lib/analysis-leagues.js';
+import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 
 const ids = ['MLB', 'NPB', 'KBO', 'CPBL'];
 const date = '2026-09-10';
@@ -34,7 +34,7 @@ async function runSummary({ fresh = true, failLeague = '', switchLeague = false,
     submittedAllLeagueRunRef: { current: fresh ? run.runId : null },
     allLeagueBoardsRef: { current: new Map() }, currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date }, boardRef: { current: [] },
     analysisGenerationRef: { current: 1 }, verifyCompletedBoard: async (board, league) => { verifications.push(league); return board; },
-    LEAGUE_IDS: ids, analysisLeagueIdsForRun, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, materializeAllLeagueResult,
+    LEAGUE_IDS: ids, analysisLeagueIdsForRun, isSoccerAnalysisLeague, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, materializeAllLeagueResult,
     requestJSON: async url => {
       requests.push(url);
       if (url.includes('summary=1')) {
@@ -97,7 +97,7 @@ const savedJobs = [], submittedJobs = [];
 let publishedRun;
 const noop = () => {};
 const clickContext = {
-  date, league: 'MLB', LEAGUE_IDS: ids, ANALYSIS_LEAGUE_IDS, nbaRunning: false, nbaDate: date,
+  date, league: 'MLB', LEAGUE_IDS: ids, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, nbaRunning: false, nbaDate: date,
   readerPollBusyRef: { current: false }, independentRunsRef: { current: new Map() },
   allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false,
   leagueDatesRef: { current: Object.fromEntries(ids.map(id => [id, date])) }, allLeagueRun: null,
@@ -106,6 +106,7 @@ const clickContext = {
   markAppOperationBusy: noop, setAllLeaguePreparing: noop, setError: noop, setNotice: noop,
   createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, publishAllLeagueRun: run => { publishedRun = run; },
   allLeagueTargetDate: async (_id, date) => date, clearBackgroundJob: noop,
+  prepareSoccerBatch: async (id, date) => ({ league: id, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareNbaBatch: async date => ({ league: 'NBA', date, tasks: [], preparedBoard: [], emptyReason: 'no_open_markets' }),
   prepareAllLeagueBatch: async id => {
@@ -119,9 +120,12 @@ const clickContext = {
   setBackgroundJobRevision: noop,
 };
 vm.createContext(clickContext);
-vm.runInContext(page.slice(page.indexOf('  async function oneClickAnalyzeAll('), page.indexOf('  function recheckReaderItem(')), clickContext);
+const clickStart = page.indexOf('  async function oneClickAnalyzeAll(');
+const clickEnd = page.indexOf('\n  }\n', clickStart);
+assert.ok(clickStart >= 0 && clickEnd > clickStart);
+vm.runInContext(page.slice(clickStart, clickEnd + 4), clickContext);
 assert.equal(await clickContext.oneClickAnalyzeAll(), true);
-assert.equal(submittedJobs[0].batches.length, 5);
+assert.equal(submittedJobs[0].batches.length, 6);
 assert.equal(savedJobs.length, 3);
 assert.equal(clickContext.requestedRecoveryScopeRef.current, `MLB:${date}`, 'visible league must attach to incremental progress immediately');
 assert.equal(publishedRun.leagues.NPB.message, '盤口已過期');
