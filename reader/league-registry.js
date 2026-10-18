@@ -11,7 +11,7 @@
   });
   const ids = Object.freeze(Object.keys(leagues));
   const special = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
-  const soccerExcluded = /(?:角球|CORNERS?|球員|球员|PLAYERS?|PROPS?|主隊|主队|客隊|客队|單隊|单队|TEAM[ -]?TOTALS?|黃牌|黄牌|紅牌|红牌|卡牌|BOOKINGS?|青年|女子|U\s*\d{2}|WOMEN|YOUTH|下半|第\s*[二2]\s*半|SECOND\s+HALF|2ND\s+HALF|\b2H\b|加時|加时|延長|延长|OVERTIME|EXTRA\s+TIME|第\s*[一二三四\d]+\s*[節节局]|走地|滾球|滚球|即時|即时|\bLIVE\b|IN[ -]?PLAY)/i;
+  const soccerExcluded = /(?:角球|罰牌|罚牌|CORNERS?|球員|球员|PLAYERS?|PROPS?|主隊|主队|客隊|客队|單隊|单队|TEAM[ -]?TOTALS?|黃牌|黄牌|紅牌|红牌|卡牌|BOOKINGS?|青年|女子|U\s*\d{2}|WOMEN|YOUTH|下半|第\s*[二2]\s*半|SECOND\s+HALF|2ND\s+HALF|\b2H\b|加時|加时|延長|延长|OVERTIME|EXTRA\s+TIME|第\s*[一二三四\d]+\s*[節节局]|走地|滾球|滚球|即時|即时|\bLIVE\b|IN[ -]?PLAY)/i;
   const soccerFirstHalf = /(?:上半(?:場|场)?|第\s*[一1]\s*半(?:場|场)?|前\s*45\s*(?:分鐘|分钟)|FIRST\s+HALF|1ST\s+HALF|\b1H\b|\bHT\b)/i;
   const soccerFullTime = /(?:全(?:場|场)|正規時間|正规时间|常規時間|常规时间|90\s*(?:分鐘|分钟|MIN(?:UTES?)?)|FULL[ -]?TIME|\bFT\b)/i;
   const bounded = (value,maximum=240) => String(value || '').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,maximum);

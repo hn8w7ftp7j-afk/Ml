@@ -43,7 +43,7 @@
         if(new Set(heading.columns.map(p=>`${p.key}:${scopeFor(p).period}`)).size!==heading.columns.length){issues.push('SOCCER_CARD_HEADERS_AMBIGUOUS');continue;}
         const cols=heading.columns.sort((a,b)=>a.left-b.left), edge=cols[0].left-(cols[1].left-cols[0].left)/2;
         const teamRows=bands(content.filter(p=>p.left<edge));
-        if (teamRows.some(p=>/角球|CORNER|卡牌|黃牌|黄牌|紅牌|红牌|BOOKING/i.test(p.text))) { excluded++;continue; }
+        if (teamRows.some(p=>/角球|罰牌|罚牌|CORNER|卡牌|黃牌|黄牌|紅牌|红牌|BOOKING/i.test(p.text))) { excluded++;continue; }
         const teams=teamRows.map(p=>({...p,team:globalThis.Tai888SoccerTeams?.resolve(p.text)})).filter(p=>p.team);
         if (teams.length!==2 || teams[0].team.key===teams[1].team.key || teams.filter(p=>homeMarker.test(p.text)).length!==1) { issues.push('SOCCER_CARD_TEAM_IDENTITY_INVALID');continue; }
         const home=homeMarker.test(teams[0].text)?0:1, away=1-home;

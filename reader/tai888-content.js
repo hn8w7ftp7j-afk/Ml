@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.35';
+  const READER_VERSION = '2.1.36';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -209,13 +209,13 @@
     }
   }
 
-  function rowRecord(element, order) {
+  function rowRecord(element, order, { preserveSoccerCells = false } = {}) {
     if (!visible(element)) return null;
     let cells = rowCellElements(element).map(cellRecord)
       .filter(cell => cell.text && cell.right > cell.left);
     let text = clean(cells.map(cell => cell.text).join(' '));
     if (!text) text = clean(element.innerText || element.textContent || '');
-    if (!policy.shouldKeepRecord(cells.length, text)) return null;
+    if (!policy.shouldKeepRecord(cells.length, text) && !(preserveSoccerCells && cells.length && text)) return null;
 
     // League markers and some SPA headers are rendered as one colspan cell or a text-only div.
     // Preserve them because they delimit standard MLB markets from team-total/special sections.
@@ -346,9 +346,23 @@
     return globalThis.Tai888SoccerCardNormalizer?.normalize(sections,league)||{tables:[],diagnostics:{}};
   }
 
+  function collectSoccerTableRecords(elements) {
+    const groups = new Map();
+    for (const element of elements) {
+      if (element.tagName !== 'TR' && element.getAttribute?.('role') !== 'row') continue;
+      const record = rowRecord(element, 0, { preserveSoccerCells: true });
+      if (!record) continue;
+      const table = element.closest?.('table') || element.closest?.('[role="table"]') || element.parentElement;
+      if (!groups.has(table)) groups.set(table, []);
+      groups.get(table).push(record);
+    }
+    return [...groups.values()];
+  }
+
   function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
     const { elements, records } = collectRecords();
     const nhlCards = captureNhlCards();
+    const soccerTableRecords = collectSoccerTableRecords(elements);
     // Only bounded league-heading evidence, never document/body/account text.
     sectionDiagnostics = records.filter(record => /^(?:聯盟|联盟)\s*[:：]?/.test(clean(record.text)))
       .map(record => {
@@ -360,7 +374,12 @@
     const verifiedRefreshAt = Math.max(Number(verifiedBoardRefreshAt) || 0, verifiedNetworkRefreshAt);
     const captures = [];
     for (const league of globalThis.Tai888LeagueRegistry.ids) {
-      const normalized = ['EPL','UCL'].includes(league) ? captureSoccerCards(league) : league === 'NHL' && nhlCards.tables.length ? nhlCards
+      let normalized;
+      if (['EPL', 'UCL'].includes(league)) {
+        const desktop = globalThis.Tai888SoccerTableNormalizer?.normalize(soccerTableRecords, league) || { tables: [], diagnostics: {} };
+        const cards = desktop.tables.length ? null : captureSoccerCards(league);
+        normalized = desktop.tables.length ? desktop : cards.tables.length ? cards : desktop.diagnostics.sawLeagueMarker ? desktop : cards;
+      } else normalized = league === 'NHL' && nhlCards.tables.length ? nhlCards
         : normalizer.normalizeRowRecords(records, { expectedLeague: league });
       if (!normalized.tables.length && !normalized.diagnostics?.sawLeagueMarker) continue;
       const fingerprint = stableMarketFingerprint(normalized, { soccer: ['EPL','UCL'].includes(league) });

@@ -129,8 +129,8 @@ function buildArchive(workRoot, outputFile) {
 
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.35');
-assert.equal(manifest.version_name, '2.1.35 FOOTBALL');
+assert.equal(manifest.version, '2.1.36');
+assert.equal(manifest.version_name, '2.1.36 EPL-UCL');
 assert.deepEqual([...manifest.permissions].sort(), ['alarms', 'storage', 'webNavigation'].sort());
 assert.deepEqual([...manifest.host_permissions].sort(), [
   'https://*.tai888.in/*',
@@ -142,7 +142,7 @@ assert.deepEqual([...manifest.content_scripts[0].matches].sort(), [
   'https://*.tai888.in/*',
   'https://tai888.in/*',
 ].sort());
-assert.deepEqual(manifest.content_scripts[0].js, ['capture-policy.js', 'league-registry.js', 'nhl-teams.js', 'nhl-card-normalizer.js', 'soccer-teams.js', 'soccer-card-normalizer.js', 'row-normalizer.js', 'tai888-content.js']);
+assert.deepEqual(manifest.content_scripts[0].js, ['capture-policy.js', 'league-registry.js', 'nhl-teams.js', 'nhl-card-normalizer.js', 'soccer-teams.js', 'soccer-card-normalizer.js', 'soccer-table-normalizer.js', 'row-normalizer.js', 'tai888-content.js']);
 assert.equal(manifest.content_scripts[0].run_at, 'document_idle');
 assert.equal(manifest.content_scripts[0].all_frames, true);
 assert.equal(manifest.content_scripts[0].match_about_blank, true);
