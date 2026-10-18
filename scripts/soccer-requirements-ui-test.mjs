@@ -1,3 +1,4 @@
+import * as soccerBackgroundClient from '../lib/soccer/background-client.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -22,7 +23,7 @@ const {code}=await transform(raw,{filename:'soccer-requirements-ui.jsx',jsc:{par
 const games=Array.from({length:8},(_,i)=>({id:`soccer:epl:${i+1}`,sourceId:String(i+1),league:'epl',date:'2026-10-20',startTime:'2099-10-20T13:00:00Z',status:'scheduled',home:{name:'Home'},away:{name:'Away'}}));
 const current={analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',publishedCurrent:true,qaFlag:'WARN'};
 const plain=v=>JSON.parse(JSON.stringify(v));
-const context=vm.createContext({React,createContext:()=>({Provider:'provider'})});
+const context=vm.createContext({...soccerBackgroundClient,React,createContext:()=>({Provider:'provider'})});
 vm.runInContext(realComponentCode,context);
 vm.runInContext(code,context);
 const presentation=state=>plain(context.soccerAnalysisPresentation(state));
@@ -61,7 +62,7 @@ assert.match(renderToStaticMarkup(context.SoccerRequirementDetails({})),/歷史�
 
 function harness(fetch){
   const state=[],refs=[];let si=0,ri=0;
-  const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
+  const ctx=vm.createContext({...soccerBackgroundClient,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
     createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
     useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
     useRef:initial=>refs[ri++]||(refs[ri-1]={current:initial}),useEffect:()=>{}});
@@ -146,7 +147,7 @@ const {SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS
 const specification=fs.readFileSync('app/soccer/specification/page.js','utf8').replace(/^import .*?;\n/gm,'').replace('export const metadata','const metadata').replace('export default function','function');
 const compiled=await transform(specification,{filename:'soccer-specification.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const {soccerProviderPolicy}=await import('../lib/soccer/provider-policy.js');
-const specificationContext=vm.createContext({React,SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS_GATES,soccerProviderPolicy});
+const specificationContext=vm.createContext({...soccerBackgroundClient,React,SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS_GATES,soccerProviderPolicy});
 vm.runInContext(compiled.code,specificationContext);
 const specificationMarkup=renderToStaticMarkup(specificationContext.SoccerSpecificationPage());
 assert.equal(SOCCER_REQUIREMENT_LAYERS.length,6);for(const layer of SOCCER_REQUIREMENT_LAYERS)assert.ok(specificationMarkup.includes(layer.title));

@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { loadNbaUpcomingBoard } from '../lib/nba/analysis-ui-policy.js';
 import { buildNbaAnalysisBoard } from '../lib/nba/analysis-board.js';
 import { LEAGUE_IDS } from '../lib/leagues.js';
-import { ANALYSIS_LEAGUE_IDS } from '../lib/analysis-leagues.js';
+import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 import { createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
 
 const now = Date.parse('2026-10-08T06:30:00Z'); // Taipei afternoon, UTC still October 8.
@@ -95,7 +95,7 @@ assert.equal(prepared.date, tomorrow); assert.equal(prepared.tasks[0].nbaQuery.d
 assert.equal(scopes.at(-1).date, tomorrow, 'all-league preflight updates the NBA screen even with no analyzable prices');
 const allSubmissions = [];
 Object.assign(batch, {
-  LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
+  LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
   nbaDate: today, nbaRunning: false, league: 'MLB', date: today, allLeagueRun: null, allLeagueRunning: false,
   independentRunsRef: { current: new Map() }, manualDateSelectionRef: { current: new Set() },
   leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, today])) },
@@ -107,6 +107,7 @@ Object.assign(batch, {
   clearAllLeagueBackgroundJobs: () => {}, clearBackgroundJob: () => {}, markAppOperationBusy: () => {},
   setAllLeaguePreparing: () => {}, setNotice: () => {}, setBackgroundJobRevision: () => {},
   publishAllLeagueRun: value => { batch.allLeagueRun = value; },
+  prepareSoccerBatch: async (id, date) => ({ league: id, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareAllLeagueBatch: async (league, date) => ({ league, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   startBackgroundAnalysisJob: async payload => { allSubmissions.push(payload); return { runId: 'test-all-date' }; },

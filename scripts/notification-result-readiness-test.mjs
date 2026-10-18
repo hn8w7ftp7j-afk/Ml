@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { isAnalysisLeagueId, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const strip = source => source.replace(/^import[\s\S]*?;\n/gm, '').replace(/export /g, '');
@@ -11,7 +12,7 @@ let authorized = true;
 const route = vm.createContext({
   Request, Response, URL, NextResponse: Response,
   requireApiAuth: async () => authorized ? null : Response.json({}, { status: 401 }),
-  cleanText: v => String(v || ''), isAnalysisLeagueId: v => ['NPB', 'CPBL', 'MLB', 'KBO', 'NBA', 'NHL'].includes(v),
+  cleanText: v => String(v || ''), isAnalysisLeagueId,
   getRun: () => ({ exists: true, status, get returnValue() { assert.equal(status, 'completed'); return returned; } }),
   getNotificationResult: async id => results.get(id),
 });
@@ -82,7 +83,7 @@ function restore({ newer = false, unrelated = false, empty = false, all = false 
   const pending = new Map([[scope, { runId: session.runId }]]);
   const context = vm.createContext({
     state: { result: { ...batch, total: empty ? 0 : 1, completed: empty ? 0 : 1, ok: true } }, runId: id,
-    LEAGUE_IDS: ['NPB', 'CPBL'], compactAnalysisData: x => x,
+    LEAGUE_IDS: ['NPB', 'CPBL'], isSoccerAnalysisLeague, compactAnalysisData: x => x,
     materializeAllLeagueResult: () => empty ? [] : [{ game: { gamePk: 1 } }], analysisItemMatchesScope: () => true,
     independentRunsRef: { current: new Map([[scope, session], ['CPBL:2026-09-23', other]]) },
     currentLeagueRef: { current: unrelated ? 'CPBL' : 'NPB' }, currentDateRef: { current: batch.date },

@@ -77,7 +77,8 @@ for (const status of ['cancelled', 404, 503]) {
 
 // Execute the current all-league entry guard: finished inactive jobs stop
 // blocking a new explicit all-league action, without starting any analysis here.
-const start = page.indexOf('  async function oneClickAnalyzeAll()');
+const start = page.indexOf('  async function oneClickAnalyzeAll(');
+assert.ok(start >= 0, 'actual all-league guard must be extracted');
 const guard = page.slice(start, page.indexOf('    const targetDate = ', start));
 const run = job('NPB');
 const runMap = new Map([[scope('NPB'), run]]);
