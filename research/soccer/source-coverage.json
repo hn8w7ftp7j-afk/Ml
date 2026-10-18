@@ -1,0 +1,145 @@
+{
+  "checkedAt": "2026-10-18T14:51:17.428251+00:00",
+  "sources": [
+    {
+      "provider": "StatsBomb Open Data",
+      "url": "https://raw.githubusercontent.com/statsbomb/open-data/master/data/competitions.json",
+      "contentHash": "32c33e64225491f0d4e0c4ba7a4d621e16bacaad3fd5ceeb93a60ae2d9c3c7a4",
+      "targetSeasons": [
+        {
+          "competition": "Champions League",
+          "season": "2018/2019",
+          "competitionId": 16,
+          "seasonId": 4
+        },
+        {
+          "competition": "Champions League",
+          "season": "2017/2018",
+          "competitionId": 16,
+          "seasonId": 1
+        },
+        {
+          "competition": "Champions League",
+          "season": "2016/2017",
+          "competitionId": 16,
+          "seasonId": 2
+        },
+        {
+          "competition": "Champions League",
+          "season": "2015/2016",
+          "competitionId": 16,
+          "seasonId": 27
+        },
+        {
+          "competition": "Champions League",
+          "season": "2014/2015",
+          "competitionId": 16,
+          "seasonId": 26
+        },
+        {
+          "competition": "Champions League",
+          "season": "2013/2014",
+          "competitionId": 16,
+          "seasonId": 25
+        },
+        {
+          "competition": "Champions League",
+          "season": "2012/2013",
+          "competitionId": 16,
+          "seasonId": 24
+        },
+        {
+          "competition": "Champions League",
+          "season": "2011/2012",
+          "competitionId": 16,
+          "seasonId": 23
+        },
+        {
+          "competition": "Champions League",
+          "season": "2010/2011",
+          "competitionId": 16,
+          "seasonId": 22
+        },
+        {
+          "competition": "Champions League",
+          "season": "2009/2010",
+          "competitionId": 16,
+          "seasonId": 21
+        },
+        {
+          "competition": "Champions League",
+          "season": "2008/2009",
+          "competitionId": 16,
+          "seasonId": 41
+        },
+        {
+          "competition": "Champions League",
+          "season": "2006/2007",
+          "competitionId": 16,
+          "seasonId": 39
+        },
+        {
+          "competition": "Champions League",
+          "season": "2004/2005",
+          "competitionId": 16,
+          "seasonId": 37
+        },
+        {
+          "competition": "Champions League",
+          "season": "2003/2004",
+          "competitionId": 16,
+          "seasonId": 44
+        },
+        {
+          "competition": "Champions League",
+          "season": "1999/2000",
+          "competitionId": 16,
+          "seasonId": 76
+        },
+        {
+          "competition": "Champions League",
+          "season": "1972/1973",
+          "competitionId": 16,
+          "seasonId": 277
+        },
+        {
+          "competition": "Champions League",
+          "season": "1971/1972",
+          "competitionId": 16,
+          "seasonId": 71
+        },
+        {
+          "competition": "Champions League",
+          "season": "1970/1971",
+          "competitionId": 16,
+          "seasonId": 276
+        },
+        {
+          "competition": "Premier League",
+          "season": "2015/2016",
+          "competitionId": 2,
+          "seasonId": 27
+        },
+        {
+          "competition": "Premier League",
+          "season": "2003/2004",
+          "competitionId": 2,
+          "seasonId": 44
+        }
+      ],
+      "current2026SeasonListed": false
+    },
+    {
+      "provider": "ESPN summary",
+      "scope": "Three inspected EPL summaries; not a global ESPN capability claim",
+      "events": [
+        "401878769",
+        "704467",
+        "401879261"
+      ],
+      "observedExpectedGoalsField": false
+    }
+  ],
+  "conclusion": "CURRENT_CONSISTENT_XG_COVERAGE_NOT_ESTABLISHED",
+  "modelEffectApplied": false
+}

@@ -28,7 +28,8 @@ export async function POST(request){
     const game=board.games.find(g=>g.sourceId===eventId);if(!game)return response({ok:false,error:'找不到同聯盟同日期的場次'},404);
     const evidence=await fetchSoccerPrematch(game);if(!evidence.ok)return response({ok:false,error:'賽前資料身分或來源核對未通過',code:evidence.code},503);
     let reader=null,readerUnavailable=false;try{reader=await loadSoccerReaderSnapshot(league.id,date);}catch{readerUnavailable=true;}
-    const result=buildSoccerAnalysis({evidence,reader});
+    let previous;try{previous=(await listSoccerAnalysis(league.id,game.id,date))[0]||null;}catch{}
+    const result=buildSoccerAnalysis({evidence,reader,previous});
     try{const saved=await saveSoccerAnalysis(result);return response({...result,...saved,readerUnavailable});}
     catch{return response({...result,persisted:false,readerUnavailable,persistenceError:'本次資料未保存，請稍後重新核對。'});}
   }catch{return response({ok:false,error:'足球資料核對暫時無法完成'},503);}
