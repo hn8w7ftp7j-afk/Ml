@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
 
-const VERSION = '2.1.31';
+const VERSION = '2.1.32';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL'];
@@ -89,6 +89,7 @@ function wait(milliseconds) { return new Promise(resolve => setTimeout(resolve, 
 async function collectCandidates(tabs) {
   const candidates = [];
   const silentTabIds = [];
+  const sections = [], emptyCaptures = [];
   for (const tab of tabs) {
     let responded = false;
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0, url: tab.url }]);
@@ -96,15 +97,21 @@ async function collectCandidates(tabs) {
       const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, { frameId: frame.frameId });
       if (answer?.capture?.readerVersion !== VERSION) continue;
       responded = responded || answer?.ok === true;
+      for (const item of (Array.isArray(answer?.capture?.sectionDiagnostics) ? answer.capture.sectionDiagnostics : []).slice(0, 24)) {
+        if (!LEAGUES.includes(item?.league) || typeof item.label !== 'string' || !/^(?:聯盟|联盟)\s*[:：]?/.test(item.label)
+          || item.label.length > 100 || /[<>\u0000-\u001f]/.test(item.label)) continue;
+        sections.push({ tabId: tab.id, frameId: frame.frameId, league: item.league, label: item.label, accepted: item.accepted === true });
+      }
       const rawCaptures = Array.isArray(answer?.capture?.captures) ? answer.capture.captures : answer?.capture ? [answer.capture] : [];
       for (const rawCapture of rawCaptures) {
         const capture = sanitizeCapture(rawCapture);
+        if (answer?.ok && capture.league && !capture.tables.length) emptyCaptures.push({ tabId: tab.id, frameId: frame.frameId, league: capture.league, diagnostics: capture.diagnostics });
         if (answer?.ok && capture.league && capture.tables.length) candidates.push({ tabId: tab.id, frameId: frame.frameId, active: Boolean(tab.active), lastAccessed: Number(tab.lastAccessed || 0), capture, parsed: parseTai888Capture(capture, new Date()) });
       }
     } catch {}
     if (!responded) silentTabIds.push(tab.id);
   }
-  return { candidates, silentTabIds };
+  return { candidates, silentTabIds, sections, emptyCaptures };
 }
 
 async function readerDiagnostics() {
@@ -124,7 +131,7 @@ async function readerDiagnostics() {
       })),
     };
   });
-  return { ok: true, report: { readerVersion: VERSION, createdAt: new Date().toISOString(), silentTabIds: scan.silentTabIds, boards } };
+  return { ok: true, report: { readerVersion: VERSION, createdAt: new Date().toISOString(), silentTabIds: scan.silentTabIds, sections: scan.sections, emptyCaptures: scan.emptyCaptures, boards } };
 }
 
 async function recoverTabs(tabs, tabIds, { force = false } = {}) {
@@ -203,7 +210,13 @@ async function performSync(reason, preferredTabId) {
     const own = candidates.filter(item => item.parsed.league === league);
     if (!own.length) {
       const disconnected = scan.silentTabIds.length > 0;
-      statuses[league] = { ok: false, state: disconnected ? 'disconnected' : 'missing', league, message: disconnected ? `${LABELS[league]} Reader 未連線，無法連上頁面讀取程式；請按「修復讀取」或在該分頁按 F5` : `找不到${LABELS[league]}標準盤分頁（可能尚未開盤）`, readerVersion: VERSION };
+      const empty = scan.emptyCaptures.some(item => item.league === league);
+      const rejected = scan.sections.find(item => item.league === league && !item.accepted);
+      statuses[league] = { ok: false, state: empty || rejected ? 'error' : disconnected ? 'disconnected' : 'missing', league,
+        message: empty ? `${LABELS[league]}已偵測到聯盟標題，但無法組成賽事列；請下載診斷，不代表未開盤`
+          : rejected ? `${LABELS[league]}已看到盤面，但區段未通過辨識：${rejected.label}；請下載診斷`
+          : disconnected ? `${LABELS[league]} Reader 未連線，無法連上頁面讀取程式；請按「修復讀取」或在該分頁按 F5`
+          : `未偵測到${LABELS[league]}標準盤；請確認該聯盟分頁已開啟（不能據此判定未開盤）`, readerVersion: VERSION };
       continue;
     }
     const selection = selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });

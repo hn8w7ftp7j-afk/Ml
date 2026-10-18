@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.1.31",
-  "version_name": "2.1.31 NHL-READ",
+  "version": "2.1.32",
+  "version_name": "2.1.32 NHL-READ",
   "description": "獨立讀取 Tai888 美棒、日棒、韓棒、中職、NBA 與 NHL 原始盤面證據，各聯盟隔離同步。",
   "permissions": ["storage", "alarms", "webNavigation"],
   "host_permissions": [
