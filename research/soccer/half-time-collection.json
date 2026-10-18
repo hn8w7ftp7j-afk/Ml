@@ -1,0 +1,129 @@
+{
+  "version": "SOCCER-HT-COLLECTION-v1",
+  "startedAt": "2026-10-18T21:01:05.676Z",
+  "completedAt": "2026-10-18T21:03:22.247Z",
+  "protocolHash": "9ea636b6cc218edbfa9a8790fa9d72e54f64b5149386d97fae554016bf6fa943",
+  "total": 2995,
+  "networkRequests": 2995,
+  "averageRequestMs": 177.60534223706176,
+  "cacheReplay": {
+    "replayedAt": "2026-10-18T21:05:20.599Z",
+    "rows": 2995,
+    "initialCollectionProtocolHash": "44ef5962aa36b9e339c36f8da0b15b9dee8d4bd42eed63832b8e77efa0799520"
+  },
+  "rawCache": "research/soccer/sources/half-time (ignored raw public responses)",
+  "leagues": {
+    "epl": {
+      "sample": 2190,
+      "used": 2187,
+      "excluded": 3,
+      "coverage": 0.9986301369863013,
+      "reasons": {
+        "HALF_TIME_SCORING_TIMELINE_MISMATCH": 3
+      },
+      "corroborationCases": [
+        {
+          "eventId": "704467",
+          "league": "epl",
+          "fullTime": {
+            "home": 1,
+            "away": 3
+          },
+          "halfTime": {
+            "home": 1,
+            "away": 1,
+            "verified": true,
+            "source": {
+              "provider": "ESPN",
+              "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=704467",
+              "fetchedAt": "2026-10-18T21:02:13.008Z",
+              "confidence": "provider_reported",
+              "fallbackSource": null,
+              "requestedAt": "2026-10-18T21:02:12.867Z",
+              "contentHash": "19eca26d934019b9af4f19f8b0a2fdbe3564bec7976e2c42e540c07b2d836409"
+            },
+            "evidence": {
+              "method": "ORDERED_PERIOD_TOTALS_WITH_SCORING_TIMELINE",
+              "periodTotals": {
+                "home": [
+                  1,
+                  0
+                ],
+                "away": [
+                  1,
+                  2
+                ]
+              },
+              "firstHalfScoringEventIds": [
+                "44476201",
+                "44476250"
+              ],
+              "halftimeEventId": "44476320",
+              "endRegularEventId": "44476494",
+              "scoringEventCount": 4
+            }
+          },
+          "interpretation": "Two ordered period totals sum to FT and match period-specific scoring events; not cumulative scores"
+        }
+      ],
+      "rowsHash": "1d027a44b403d32ecbd017e549fb5e8f86fc67d98dd45ec288d1fbe2f40842dc",
+      "sourcesHash": "7ae7b568e037f515f1098d7d2484ea6617a083221eab151e6e22636872c649c2"
+    },
+    "ucl": {
+      "sample": 805,
+      "used": 800,
+      "excluded": 5,
+      "coverage": 0.9937888198757764,
+      "reasons": {
+        "HALF_TIME_SCORING_TIMELINE_MISMATCH": 1,
+        "HALF_TIME_TIMELINE_INCOMPLETE": 4
+      },
+      "corroborationCases": [
+        {
+          "eventId": "720330",
+          "league": "ucl",
+          "fullTime": {
+            "home": 1,
+            "away": 0
+          },
+          "halfTime": {
+            "home": 1,
+            "away": 0,
+            "verified": true,
+            "source": {
+              "provider": "ESPN",
+              "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/summary?event=720330",
+              "fetchedAt": "2026-10-18T21:03:06.850Z",
+              "confidence": "provider_reported",
+              "fallbackSource": null,
+              "requestedAt": "2026-10-18T21:03:06.738Z",
+              "contentHash": "938ab93646f105226a3755ad8488782305a64a00e498d90c557107aa108774e6"
+            },
+            "evidence": {
+              "method": "ORDERED_PERIOD_TOTALS_WITH_SCORING_TIMELINE",
+              "periodTotals": {
+                "home": [
+                  1,
+                  0
+                ],
+                "away": [
+                  0,
+                  0
+                ]
+              },
+              "firstHalfScoringEventIds": [
+                "44547050"
+              ],
+              "halftimeEventId": "44547211",
+              "endRegularEventId": "44547432",
+              "scoringEventCount": 1
+            }
+          },
+          "interpretation": "Two ordered period totals sum to FT and match period-specific scoring events; not cumulative scores"
+        }
+      ],
+      "rowsHash": "7018c9dac8c8d5d39668945cca877c40cea3bb80650ee90cd116098732409f14",
+      "sourcesHash": "4968aa11e077adb376cc8a8826001297c733bb0651192c69cb469c00f75c5d6a"
+    }
+  }
+}

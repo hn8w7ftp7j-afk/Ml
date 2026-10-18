@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import '../reader/soccer-card-normalizer.js';
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from '../reader/parser.js';
 import { soccerMarket, canonicalSoccerPayload } from '../reader/soccer-parser.js';
-import { readerPayloadsByDate, selectAuthoritativeBoard, shouldSkipSuccessfulPayload } from '../reader/board-selector.js';
+import { readerPayloadsByDate, selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSuccessfulPayload } from '../reader/board-selector.js';
 import { validateSoccerCapture, matchSoccerReaderGames } from '../lib/soccer/reader.js';
 const now=Date.parse('2026-10-18T12:54Z');
 const at=new Date(now).toISOString();
@@ -30,7 +30,7 @@ assert.deepEqual(markets.filter(m=>m.kind==='HANDICAP').map(m=>[m.line,m.lineSid
 assert.ok(markets.every(m=>m.unit==='GOALS'));assert.equal(payload.executable,false);
 assert.equal(parseTai888Capture({...capture,pageLeagueLabel:'NHL國家冰球聯盟--包括加時與點球'},new Date(now)).games.length,0);
 assert.equal(globalThis.Tai888LeagueRegistry.standardMarker('歐洲冠軍聯賽','UCL'),true);
-assert.equal(globalThis.Tai888LeagueRegistry.standardMarker('歐洲冠軍聯賽 上半場','UCL'),false);
+assert.equal(globalThis.Tai888LeagueRegistry.standardMarker('歐洲冠軍聯賽 上半場','UCL'),true);
 assert.equal(globalThis.Tai888LeagueRegistry.identify('歐洲聯賽'),null);
 const candidate={tabId:1,frameId:0,active:true,capture,parsed:payload};
 const selected=selectAuthoritativeBoard([candidate],{now,league:'EPL'});assert.equal(selected.ok,true,JSON.stringify(selected.assessed));
@@ -88,11 +88,11 @@ if(process.argv.includes('--api')){
 {
  const {default:fs}=await import('node:fs'),{default:vm}=await import('node:vm'),{webcrypto}=await import('node:crypto');
  const version=JSON.parse(fs.readFileSync('reader/manifest.json')).version;
- const captures=[capture,{...capture,league:'UCL',pageLeagueLabel:'歐洲冠軍聯賽'}],uploads=[];
+ const captures=[capture,{...capture,league:'UCL',pageLeagueLabel:'歐洲冠軍聯賽',tables:capture.tables.map(table=>({...table,sectionTitle:String(table.sectionTitle||'').replaceAll('英格蘭超級聯賽','歐洲冠軍聯賽')}))}],uploads=[];
  const event={addListener(){}},state={deviceId:'soccer-worker-fixture',readerToken:'fixture-token'};
  class Clock extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
  const chrome={runtime:{onInstalled:event,onStartup:event,onMessage:event},alarms:{onAlarm:event},tabs:{onUpdated:event,query:async()=>[{id:7,active:true}],sendMessage:async()=>({ok:true,capture:{readerVersion:version,captures}})},webNavigation:{getAllFrames:async()=>[{frameId:0}]},storage:{local:{get:async()=>structuredClone(state),set:async v=>Object.assign(state,v),remove:async()=>{}}}};
- const worker={chrome,Date:Clock,URL,setTimeout,clearTimeout,queueMicrotask,TextEncoder,AbortController,crypto:webcrypto,parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,readerPayloadsByDate,shouldSkipSuccessfulPayload,fetch:async(url,options)=>{
+ const worker={chrome,Date:Clock,URL,setTimeout,clearTimeout,queueMicrotask,TextEncoder,AbortController,crypto:webcrypto,parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,selectAuthoritativeSoccerBoards,readerPayloadsByDate,shouldSkipSuccessfulPayload,fetch:async(url,options)=>{
   assert.equal(url,'https://mlb-positive-ev.vercel.app/api/soccer/reader');assert.equal(options.headers['X-Reader-Version'],version);
   const body=JSON.parse(options.body),checked=validateSoccerCapture(body,{now,headerVersion:version});assert.equal(checked.ok,true,JSON.stringify(checked));uploads.push(body.league);
   return{ok:true,status:200,text:async()=>JSON.stringify({ok:true,rawGameCount:1,marketCount:4,executable:false})};

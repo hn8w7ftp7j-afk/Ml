@@ -11,6 +11,33 @@
   });
   const ids = Object.freeze(Object.keys(leagues));
   const special = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
+  const soccerExcluded = /(?:角球|CORNERS?|球員|球员|PLAYERS?|PROPS?|主隊|主队|客隊|客队|單隊|单队|TEAM[ -]?TOTALS?|黃牌|黄牌|紅牌|红牌|卡牌|BOOKINGS?|青年|女子|U\s*\d{2}|WOMEN|YOUTH|下半|第\s*[二2]\s*半|SECOND\s+HALF|2ND\s+HALF|\b2H\b|加時|加时|延長|延长|OVERTIME|EXTRA\s+TIME|第\s*[一二三四\d]+\s*[節节局]|走地|滾球|滚球|即時|即时|\bLIVE\b|IN[ -]?PLAY)/i;
+  const soccerFirstHalf = /(?:上半(?:場|场)?|第\s*[一1]\s*半(?:場|场)?|前\s*45\s*(?:分鐘|分钟)|FIRST\s+HALF|1ST\s+HALF|\b1H\b|\bHT\b)/i;
+  const soccerFullTime = /(?:全(?:場|场)|正規時間|正规时间|常規時間|常规时间|90\s*(?:分鐘|分钟|MIN(?:UTES?)?)|FULL[ -]?TIME|\bFT\b)/i;
+  const bounded = (value,maximum=240) => String(value || '').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,maximum);
+
+  // Period is an observation of a scoped heading, never a verified settlement rule.
+  function soccerPeriodEvidence({sectionTitle='',headers=[],marketHeader='',truncated=false}={}) {
+    const title=bounded(sectionTitle),tableHeaders=Array.isArray(headers)?headers.slice(0,12).map(v=>bounded(v,160)):[],column=bounded(marketHeader,160);
+    const incomplete=truncated===true||String(sectionTitle).length>240||String(marketHeader).length>160||Array.isArray(headers)&&(headers.length>12||headers.some(value=>String(value).length>160));
+    const evidence={sectionTitle:title,tableHeaders,marketHeader:column||null,...(incomplete?{truncated:true}:{})};
+    // Only standalone scope qualifiers apply to the entire table. Do not
+    // borrow a sibling corner/prop market or match the normal team column.
+    const excludedScope=/^(?:LIVE|IN[ -]?PLAY|走地(?:中)?|滾球|滚球|即時|即时|(?:全場|全场)?角球(?:數|数|盤|盘)?|CORNERS?|下半(?:場|场)?|第\s*[二2]\s*半(?:場|场)?|SECOND\s+HALF|2ND\s+HALF|2H|加時|加时|延長|延长|OVERTIME|EXTRA\s+TIME|黃牌|黄牌|紅牌|红牌|卡牌|BOOKINGS?|PROPS?)$/i;
+    if(soccerExcluded.test(title)||soccerExcluded.test(column)||tableHeaders.some(value=>excludedScope.test(value)))return{...evidence,period:'UNKNOWN',status:'EXCLUDED'};
+    if(incomplete)return{...evidence,period:'UNKNOWN',status:'TRUNCATED'};
+    const periods=text=>[...(soccerFullTime.test(text)?['FT']:[]),...(soccerFirstHalf.test(text)?['HT']:[])];
+    // A dedicated header cell is table-wide evidence. A sibling market's
+    // "HT handicap" label is not borrowed to classify an unlabelled total.
+    const standalone=/^[（(]?\s*(?:全場|全场|上半場|上半场|上半|第[一1]半場|第[一1]半场|正規時間|正规时间|常規時間|常规时间|90\s*(?:分鐘|分钟|MIN(?:UTES?)?)|FULL[ -]?TIME|FIRST\s+HALF|1ST\s+HALF|FT|HT|1H)\s*[）)]?$/i;
+    const headerPeriods=[...new Set(tableHeaders.filter(value=>standalone.test(value)).flatMap(periods))];
+    const titlePeriods=periods(title),columnPeriods=periods(column);
+    if(columnPeriods.length>1||(!columnPeriods.length&&titlePeriods.length>1)||columnPeriods.length===1&&titlePeriods.length===1&&columnPeriods[0]!==titlePeriods[0])return{...evidence,period:'UNKNOWN',status:'CONFLICT'};
+    const specific=columnPeriods[0]||titlePeriods[0];
+    if(specific&&headerPeriods.length===1&&specific!==headerPeriods[0]||!specific&&headerPeriods.length>1)return{...evidence,period:'UNKNOWN',status:'CONFLICT'};
+    const period=specific||headerPeriods[0]||'UNKNOWN';
+    return{...evidence,period,status:period==='UNKNOWN'?'UNKNOWN':'EXPLICIT'};
+  }
 
   function identifyAll(text) {
     const value = String(text || '').replace(/\s+/g, ' ').trim();
@@ -33,7 +60,7 @@
     const match = value.match(leagues[league].marker);
     if (!match || match.index !== 0) return false;
     const suffix = value.slice(match[0].length);
-    if (['EPL','UCL'].includes(league)) return !/(?:角球|CORNER|上半|下半|半場|半场|加時|加时|延長|延长|球員|球员|黃牌|黄牌|紅牌|红牌|卡牌|青年|女子|U\s*\d{2}|HALF|OVERTIME|WOMEN|YOUTH)/i.test(suffix);
+    if (['EPL','UCL'].includes(league)) return !soccerExcluded.test(suffix);
     // The normal full-game heading explicitly says "包括加時與點球".
     // Accept that display qualifier for raw evidence capture only; it neither
     // verifies settlement rules nor enables execution. Standalone OT, period,
@@ -49,5 +76,5 @@
     return /^\s*(?:[（(]\s*\d{1,2}\s*[）)])?\s*$/.test(suffix);
   }
 
-  globalThis.Tai888LeagueRegistry = Object.freeze({ ids, leagues, identify, identifyAll, standardMarker, version: 'TAI888-LEAGUES-v2.2.0' });
+  globalThis.Tai888LeagueRegistry = Object.freeze({ ids, leagues, identify, identifyAll, standardMarker, soccerPeriodEvidence, version: 'TAI888-LEAGUES-v2.2.0' });
 })();

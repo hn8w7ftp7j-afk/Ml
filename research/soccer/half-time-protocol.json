@@ -1,0 +1,33 @@
+{
+  "version": "SOCCER-HT-RETROSPECTIVE-PROTOCOL-v1",
+  "recordedBeforeAcquisitionAndFit": "2026-10-18T20:53:09.800Z",
+  "protocolTimestampMeaning": "Protocol fixed before bulk collection and fitting, after two schema-only source probes; this is not a historical preregistration.",
+  "trainingBefore": "2024-01-01T00:00:00.000Z",
+  "validationBefore": "2025-01-01T00:00:00.000Z",
+  "diagnosticBefore": "2026-01-01T00:00:00.000Z",
+  "liveTrainingBefore": "2026-10-18T00:00:00.000Z",
+  "assumedResultLagHours": 24,
+  "halfLives": [
+    180,
+    365,
+    730
+  ],
+  "selectionMetric": "2024 exact halftime score negative log probability, common evaluable games",
+  "fullTimeModelPolicy": "Reuse existing FT selected hyperparameters; refit only on the corresponding earlier FT rows. Never change existing FT frozen artifacts.",
+  "model": "P(FT_H,FT_A) times independent Binomial(HT_H;FT_H,q_H) and Binomial(HT_A;FT_A,q_A)",
+  "estimator": "Separate league/home-away time-weighted ratio of halftime goals to fulltime goals; no arbitrary fixed 0.5 prediction",
+  "assumptions": [
+    "Conditional on the FT pair, each team's goals are independently assigned to the first half with a constant league/side probability",
+    "No score-state, substitution, stoppage-time or player effect is estimated"
+  ],
+  "sourcePopulation": "Existing accepted REGULATION_FT histories, 2190 EPL and 805 UCL rows; all remain in collection coverage denominators",
+  "sourceExtraction": "Explicit period-1 values or exactly two ordered period totals, corroborated against a complete two-half scoring-event timeline; period sums must equal FT",
+  "maximumConcurrency": 4,
+  "requestTimeoutMs": 15000,
+  "maximumAttempts": 2,
+  "diagnosticInterpretation": "2025 is a retrospective diagnostic already used in FT development, not an untouched final test",
+  "postProcessingCalibration": "No unconstrained independent HT/FT post-processing. Empirical binomial shares estimated on training; report outcome calibration diagnostics without claiming verified calibration.",
+  "formalEnabled": false,
+  "pointInTimeAvailabilityVerified": false,
+  "promotion": "No betting, profitability, final acceptance, confidence bound or PIT certification follows from these diagnostics"
+}

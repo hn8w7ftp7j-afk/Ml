@@ -1,0 +1,2682 @@
+{
+  "status": "success",
+  "season": {
+    "year": 2026,
+    "type": 14308,
+    "name": "2026-27 English Premier League",
+    "displayName": "2026-27 English Premier League",
+    "half": 1
+  },
+  "requestedSeason": {
+    "year": 2026,
+    "type": 14534,
+    "name": "League Phase",
+    "displayName": "2026-27 UEFA Champions League"
+  },
+  "team": {
+    "id": "359",
+    "displayName": "Arsenal"
+  },
+  "events": [
+    {
+      "id": "401915312",
+      "date": "2026-10-21T19:00Z",
+      "name": "Arsenal at Bayern Munich",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915312",
+          "date": "2026-10-21T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Allianz Arena",
+            "address": {
+              "city": "München",
+              "country": "Germany"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, October 21st at 3:00 PM EDT",
+              "shortDetail": "10/21 - 3:00 PM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "132",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "132",
+                "displayName": "Bayern Munich"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878768",
+      "date": "2026-10-24T14:00Z",
+      "name": "Everton at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878768",
+          "date": "2026-10-24T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, October 24th at 10:00 AM EDT",
+              "shortDetail": "10/24 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "368",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "368",
+                "displayName": "Everton"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401921835",
+      "date": "2026-10-27T20:00Z",
+      "name": "Arsenal at Fleetwood Town",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Carabao Cup"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "3920",
+        "alternateId": "41",
+        "name": "English Carabao Cup",
+        "abbreviation": "Carabao Cup",
+        "shortName": "Carabao Cup",
+        "midsizeName": "ENG.LEAGUE_CUP",
+        "slug": "eng.league_cup",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401921835",
+          "date": "2026-10-27T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Highbury Stadium",
+            "address": {
+              "city": "Fleetwood",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Tue, October 27th at 4:00 PM EDT",
+              "shortDetail": "10/27 - 4:00 PM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "3891",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "3891",
+                "displayName": "Fleetwood Town"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879246",
+      "date": "2026-11-01T16:30Z",
+      "name": "Arsenal at Liverpool",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879246",
+          "date": "2026-11-01T16:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Anfield",
+            "address": {
+              "city": "Liverpool",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sun, November 1st at 11:30 AM EST",
+              "shortDetail": "11/1 - 11:30 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "364",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "364",
+                "displayName": "Liverpool"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401915381",
+      "date": "2026-11-04T20:00Z",
+      "name": "Arsenal at Slavia Prague",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915381",
+          "date": "2026-11-04T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Fortuna Arena",
+            "address": {
+              "city": "Prague",
+              "country": "Czechia"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, November 4th at 3:00 PM EST",
+              "shortDetail": "11/4 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "494",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "494",
+                "displayName": "Slavia Prague"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878760",
+      "date": "2026-11-07T15:00Z",
+      "name": "Hull City at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878760",
+          "date": "2026-11-07T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, November 7th at 10:00 AM EST",
+              "shortDetail": "11/7 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "306",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "306",
+                "displayName": "Hull City"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879232",
+      "date": "2026-11-21T17:30Z",
+      "name": "Arsenal at Newcastle United",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879232",
+          "date": "2026-11-21T17:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "St. James' Park",
+            "address": {
+              "city": "Newcastle-upon-Tyne",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, November 21st at 12:30 PM EST",
+              "shortDetail": "11/21 - 12:30 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "361",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "361",
+                "displayName": "Newcastle United"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401915295",
+      "date": "2026-11-24T20:00Z",
+      "name": "Borussia Dortmund at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915295",
+          "date": "2026-11-24T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Tue, November 24th at 3:00 PM EST",
+              "shortDetail": "11/24 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "124",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "124",
+                "displayName": "Borussia Dortmund"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878753",
+      "date": "2026-11-29T16:30Z",
+      "name": "Manchester City at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878753",
+          "date": "2026-11-29T16:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sun, November 29th at 11:30 AM EST",
+              "shortDetail": "11/29 - 11:30 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "382",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "382",
+                "displayName": "Manchester City"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878750",
+      "date": "2026-12-02T20:00Z",
+      "name": "Arsenal at Brentford",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878750",
+          "date": "2026-12-02T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Gtech Community Stadium",
+            "address": {
+              "city": "Brentford",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, December 2nd at 3:00 PM EST",
+              "shortDetail": "12/2 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "337",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "337",
+                "displayName": "Brentford"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879209",
+      "date": "2026-12-05T15:00Z",
+      "name": "Arsenal at Tottenham Hotspur",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879209",
+          "date": "2026-12-05T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Tottenham Hotspur Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, December 5th at 10:00 AM EST",
+              "shortDetail": "12/5 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "367",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "367",
+                "displayName": "Tottenham Hotspur"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401915367",
+      "date": "2026-12-09T20:00Z",
+      "name": "Real Madrid at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915367",
+          "date": "2026-12-09T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, December 9th at 3:00 PM EST",
+              "shortDetail": "12/9 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "86",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "86",
+                "displayName": "Real Madrid"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878746",
+      "date": "2026-12-12T15:00Z",
+      "name": "AFC Bournemouth at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878746",
+          "date": "2026-12-12T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, December 12th at 10:00 AM EST",
+              "shortDetail": "12/12 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "349",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "349",
+                "displayName": "AFC Bournemouth"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879204",
+      "date": "2026-12-19T15:00Z",
+      "name": "Manchester United at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879204",
+          "date": "2026-12-19T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, December 19th at 10:00 AM EST",
+              "shortDetail": "12/19 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "360",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "360",
+                "displayName": "Manchester United"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878735",
+      "date": "2026-12-27T19:00Z",
+      "name": "Arsenal at Crystal Palace",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878735",
+          "date": "2026-12-27T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Selhurst Park",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sun, December 27th at 2:00 PM EST",
+              "shortDetail": "12/27 - 2:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "384",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "384",
+                "displayName": "Crystal Palace"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879191",
+      "date": "2026-12-30T19:30Z",
+      "name": "Arsenal at Fulham",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879191",
+          "date": "2026-12-30T19:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Craven Cottage",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, December 30th at 2:30 PM EST",
+              "shortDetail": "12/30 - 2:30 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "370",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "370",
+                "displayName": "Fulham"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879185",
+      "date": "2027-01-02T15:00Z",
+      "name": "Ipswich Town at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879185",
+          "date": "2027-01-02T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, January 2nd at 10:00 AM EST",
+              "shortDetail": "1/2 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "373",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "373",
+                "displayName": "Ipswich Town"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879177",
+      "date": "2027-01-05T19:30Z",
+      "name": "Brentford at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879177",
+          "date": "2027-01-05T19:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Tue, January 5th at 2:30 PM EST",
+              "shortDetail": "1/5 - 2:30 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "337",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "337",
+                "displayName": "Brentford"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878723",
+      "date": "2027-01-16T15:00Z",
+      "name": "Arsenal at Hull City",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878723",
+          "date": "2027-01-16T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "The MKM Stadium",
+            "address": {
+              "city": "Hull",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, January 16th at 10:00 AM EST",
+              "shortDetail": "1/16 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "306",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "306",
+                "displayName": "Hull City"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401915275",
+      "date": "2027-01-20T20:00Z",
+      "name": "Arsenal at Real Betis",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915275",
+          "date": "2027-01-20T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Estadio La Cartuja",
+            "address": {
+              "city": "Sevilla",
+              "country": "Spain"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, January 20th at 3:00 PM EST",
+              "shortDetail": "1/20 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "244",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "244",
+                "displayName": "Real Betis"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878720",
+      "date": "2027-01-23T15:00Z",
+      "name": "Newcastle United at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878720",
+          "date": "2027-01-23T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, January 23rd at 10:00 AM EST",
+              "shortDetail": "1/23 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "361",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "361",
+                "displayName": "Newcastle United"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401915346",
+      "date": "2027-01-27T20:00Z",
+      "name": "Sabah FK at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915346",
+          "date": "2027-01-27T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, January 27th at 3:00 PM EST",
+              "shortDetail": "1/27 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "21922",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "21922",
+                "displayName": "Sabah FK"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879154",
+      "date": "2027-01-30T15:00Z",
+      "name": "Arsenal at Manchester City",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879154",
+          "date": "2027-01-30T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Etihad Stadium",
+            "address": {
+              "city": "Manchester",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, January 30th at 10:00 AM EST",
+              "shortDetail": "1/30 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "382",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "382",
+                "displayName": "Manchester City"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878712",
+      "date": "2027-02-06T15:00Z",
+      "name": "Liverpool at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878712",
+          "date": "2027-02-06T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, February 6th at 10:00 AM EST",
+              "shortDetail": "2/6 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "364",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "364",
+                "displayName": "Liverpool"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878706",
+      "date": "2027-02-10T20:00Z",
+      "name": "Arsenal at Ipswich Town",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878706",
+          "date": "2027-02-10T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Portman Road",
+            "address": {
+              "city": "Ipswich",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, February 10th at 3:00 PM EST",
+              "shortDetail": "2/10 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "373",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "373",
+                "displayName": "Ipswich Town"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878705",
+      "date": "2027-02-20T15:00Z",
+      "name": "Fulham at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878705",
+          "date": "2027-02-20T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, February 20th at 10:00 AM EST",
+              "shortDetail": "2/20 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "370",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "370",
+                "displayName": "Fulham"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878697",
+      "date": "2027-02-27T15:00Z",
+      "name": "Arsenal at Manchester United",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878697",
+          "date": "2027-02-27T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Old Trafford",
+            "address": {
+              "city": "Manchester",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, February 27th at 10:00 AM EST",
+              "shortDetail": "2/27 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "360",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "360",
+                "displayName": "Manchester United"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878696",
+      "date": "2027-03-03T20:00Z",
+      "name": "Crystal Palace at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878696",
+          "date": "2027-03-03T20:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Wed, March 3rd at 3:00 PM EST",
+              "shortDetail": "3/3 - 3:00 PM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "384",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "384",
+                "displayName": "Crystal Palace"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878693",
+      "date": "2027-03-13T15:00Z",
+      "name": "Arsenal at Chelsea",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878693",
+          "date": "2027-03-13T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Stamford Bridge",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, March 13th at 10:00 AM EST",
+              "shortDetail": "3/13 - 10:00 AM EST"
+            }
+          },
+          "competitors": [
+            {
+              "id": "363",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "363",
+                "displayName": "Chelsea"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879115",
+      "date": "2027-03-20T15:00Z",
+      "name": "Sunderland at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879115",
+          "date": "2027-03-20T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, March 20th at 11:00 AM EDT",
+              "shortDetail": "3/20 - 11:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "366",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "366",
+                "displayName": "Sunderland"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879103",
+      "date": "2027-04-10T14:00Z",
+      "name": "Arsenal at Coventry City",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879103",
+          "date": "2027-04-10T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Coventry Building Society Arena",
+            "address": {
+              "city": "Coventry",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, April 10th at 10:00 AM EDT",
+              "shortDetail": "4/10 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "388",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "388",
+                "displayName": "Coventry City"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878686",
+      "date": "2027-04-17T14:00Z",
+      "name": "Aston Villa at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878686",
+          "date": "2027-04-17T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, April 17th at 10:00 AM EDT",
+              "shortDetail": "4/17 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "362",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "362",
+                "displayName": "Aston Villa"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878680",
+      "date": "2027-04-24T14:00Z",
+      "name": "Arsenal at AFC Bournemouth",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878680",
+          "date": "2027-04-24T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Vitality Stadium",
+            "address": {
+              "city": "Bournemouth",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, April 24th at 10:00 AM EDT",
+              "shortDetail": "4/24 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "349",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "349",
+                "displayName": "AFC Bournemouth"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878676",
+      "date": "2027-05-01T14:00Z",
+      "name": "Tottenham Hotspur at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878676",
+          "date": "2027-05-01T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, May 1st at 10:00 AM EDT",
+              "shortDetail": "5/1 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "367",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "367",
+                "displayName": "Tottenham Hotspur"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879081",
+      "date": "2027-05-08T14:00Z",
+      "name": "Arsenal at Leeds United",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879081",
+          "date": "2027-05-08T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Elland Road",
+            "address": {
+              "city": "Leeds",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, May 8th at 10:00 AM EDT",
+              "shortDetail": "5/8 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "357",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "357",
+                "displayName": "Leeds United"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879079",
+      "date": "2027-05-15T14:00Z",
+      "name": "Nottingham Forest at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879079",
+          "date": "2027-05-15T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sat, May 15th at 10:00 AM EDT",
+              "shortDetail": "5/15 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "393",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "393",
+                "displayName": "Nottingham Forest"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879070",
+      "date": "2027-05-23T14:00Z",
+      "name": "Arsenal at Everton",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879070",
+          "date": "2027-05-23T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Hill Dickinson Stadium",
+            "address": {
+              "city": "Liverpool",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sun, May 23rd at 10:00 AM EDT",
+              "shortDetail": "5/23 - 10:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "368",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "368",
+                "displayName": "Everton"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878660",
+      "date": "2027-05-30T15:00Z",
+      "name": "Brighton & Hove Albion at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878660",
+          "date": "2027-05-30T15:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 0.0,
+            "addedClock": 0.0,
+            "displayClock": "0'",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sun, May 30th at 11:00 AM EDT",
+              "shortDetail": "5/30 - 11:00 AM EDT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "331",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "331",
+                "displayName": "Brighton & Hove Albion"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

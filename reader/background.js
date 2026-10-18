@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from './parser.js';
-import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
+import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
 
-const VERSION = '2.1.34';
+const VERSION = '2.1.35';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -59,6 +59,12 @@ function iso(value) { const time = Date.parse(String(value || '')); return Numbe
 function integer(value, max = 10000) { const number = Number(value); return Number.isInteger(number) && number >= 0 && number <= max ? number : 0; }
 function localBoardDiagnostic(payload, capture) {
   const games = Array.isArray(payload?.games) ? payload.games : [];
+  if (['EPL', 'UCL'].includes(payload?.league)) {
+    const openCount = games.filter(game => game.marketStatus !== 'locked' && game.markets?.length).length;
+    return { openCount, lockedCount: games.filter(game => game.marketStatus === 'locked').length,
+      marketCount: games.reduce((count, game) => count + (game.markets?.length || 0), 0),
+      sample: games.flatMap(game => game.markets || []).flatMap(market => market.rawRows || []).join('｜').slice(0, 280) };
+  }
   const properties = readerMarketProperties(payload?.league);
   const marketCount = games.reduce((count, game) => count + properties.filter(property => game?.[property]).length, 0);
   const openCount = games.filter(game => game?.marketStatus !== 'locked' && properties.some(property => game?.[property])).length;
@@ -219,7 +225,9 @@ async function performSync(reason, preferredTabId) {
           : `未偵測到${LABELS[league]}標準盤；請確認該聯盟分頁已開啟（不能據此判定未開盤）`, readerVersion: VERSION };
       continue;
     }
-    const selection = selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
+    const soccer = ['EPL', 'UCL'].includes(league);
+    const selection = soccer ? selectAuthoritativeSoccerBoards(own, { now: Date.now(), preferredTabId, league })
+      : selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
     if (!selection.ok) {
       const detail = selection.error === 'conflicting-duplicate-rows'
         ? '同場盤口重複且數字不一致，已停止上傳；請重新整理 Tai888 分頁後再同步'
@@ -231,39 +239,50 @@ async function performSync(reason, preferredTabId) {
       statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
-    const selected = selection.selected; const sourcePayload = selected.candidate.parsed;
-    Object.assign(sourcePayload, { league, readerVersion: VERSION, deviceId: stored.deviceId, pageActivityAt: selected.pageActivityAt, expectedGameCount: selected.expectedGameCount, detectedGameCount: selected.detectedGameCount });
-    const payloads = readerPayloadsByDate(sourcePayload);
+    const sources = (soccer ? selection.selections.map(item => item.selected) : [selection.selected]).map(selected => {
+      // Comparison projections must never replace the captured evidence sent to
+      // the server. Each chosen original frame is uploaded intact, once.
+      const sourcePayload = soccer ? { ...selected.candidate.parsed } : selected.candidate.parsed;
+      Object.assign(sourcePayload, { league, readerVersion: VERSION, deviceId: stored.deviceId, pageActivityAt: selected.pageActivityAt, expectedGameCount: selected.expectedGameCount, detectedGameCount: selected.detectedGameCount });
+      return { selected, sourcePayload };
+    });
+    const { selected, sourcePayload } = sources[0];
+    const payloads = sources.flatMap(source => readerPayloadsByDate(source.sourcePayload));
     const accepted = [], failures = [];
     for (const payload of payloads) {
-      const syncKey = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? `${league}:${payload.boardDate}` : league;
+      const periodsCovered = soccer ? (payload.periodsCovered?.length ? payload.periodsCovered : ['UNKNOWN']) : null;
+      const periodKey = soccer ? periodsCovered.join('+') : '';
+      const baseSyncKey = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? `${league}:${payload.boardDate}` : league;
+      const syncKey = soccer && periodKey !== 'UNKNOWN' ? `${baseSyncKey}:${periodKey}` : baseSyncKey;
       try {
         const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
         if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[syncKey], lastSuccessfulSyncAt: times[syncKey], now: Date.now() })) {
           // A skipped day still contributes to the aggregate only if its
           // previously acknowledged receipt is available.
           const receipt = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league)
-            ? stored.readerStatuses?.[league]?.dateStatuses?.find(item => item.boardDate === payload.boardDate)
+            ? stored.readerStatuses?.[league]?.dateStatuses?.find(item => item.boardDate === payload.boardDate
+              && (!soccer || (item.periodsCovered?.length ? item.periodsCovered.join('+') : 'UNKNOWN') === periodKey))
             : stored.readerStatuses?.[league];
-          if (receipt) { accepted.push(receipt); results.push({ league, boardDate: payload.boardDate, ok: true, skipped: true }); continue; }
+          if (receipt) { accepted.push(receipt); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, skipped: true }); continue; }
         }
         const endpoint = ['EPL','UCL'].includes(league) ? '/api/soccer/reader' : league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
         const wirePayload = league === 'NHL' ? nhlReaderEvidencePayload(payload) : payload;
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
         const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
         const now = Date.now(); hashes[syncKey] = payloadHash; times[syncKey] = now;
-        accepted.push({ boardDate: payload.boardDate, lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: data.executable === true });
-        results.push({ league, boardDate: payload.boardDate, ok: true, message: data.message });
-      } catch (error) { failures.push({ boardDate: payload.boardDate, error: error.message }); results.push({ league, boardDate: payload.boardDate, ok: false, error: error.message }); }
+        accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
+        results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, message: data.message });
+      } catch (error) { failures.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), error: error.message }); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: false, error: error.message }); }
     }
     const sum = key => accepted.reduce((count, item) => count + Number(item[key] || 0), 0);
     statuses[league] = { ok: failures.length === 0, state: failures.length ? 'error' : 'synced', league,
       executable: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? accepted.some(item => item.executable) : sum('matchedGameCount') > 0,
-      captureOnly: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league), message: failures.length ? failures.map(item => `${item.boardDate}：${item.error}`).join('；') : `已同步 ${accepted.length} 個日期`,
+      captureOnly: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league), message: failures.length ? failures.map(item => `${item.boardDate}${soccer ? `（${item.periodsCovered.join('/')}）` : ''}：${item.error}`).join('；') : soccer ? `已同步 ${accepted.length} 筆盤面紀錄（${new Set(accepted.map(item => item.boardDate)).size} 個日期）` : `已同步 ${accepted.length} 個日期`,
+      ...(soccer ? { gameCountBasis: 'BOARD_RECORDS_NOT_UNIQUE_GAMES', uniqueGameCount: new Set(payloads.flatMap(payload => payload.games).map(game => [game.boardDate,game.boardTime,game.awayCode,game.homeCode].join('|'))).size, periodsCovered: [...new Set(accepted.flatMap(item => item.periodsCovered || []))] } : {}),
       lastSyncAt: accepted.length ? Math.min(...accepted.map(item => item.lastSyncAt)) : 0, lastAttemptAt: Date.now(),
       rawGameCount: sum('rawGameCount'), matchedGameCount: sum('matchedGameCount'), unopenedGameCount: sum('unopenedGameCount'), marketCount: sum('marketCount'), directionCount: sum('directionCount'), partialGameCount: sum('partialGameCount'),
-      localDiagnostic: localBoardDiagnostic(sourcePayload, selected.candidate.capture), boardDate: sourcePayload.boardDate,
-      boardDates: payloads.map(item => item.boardDate), dateStatuses: accepted, dateErrors: failures, readerVersion: VERSION };
+      localDiagnostic: soccer ? sources.map(source => localBoardDiagnostic(source.sourcePayload, source.selected.candidate.capture)).reduce((total,item)=>({openCount:total.openCount+item.openCount,lockedCount:total.lockedCount+item.lockedCount,marketCount:total.marketCount+item.marketCount,sample:[total.sample,item.sample].filter(Boolean).join('｜').slice(0,280)}),{openCount:0,lockedCount:0,marketCount:0,sample:''}) : localBoardDiagnostic(sourcePayload, selected.candidate.capture), boardDate: sourcePayload.boardDate,
+      boardDates: soccer ? [...new Set(payloads.map(item => item.boardDate))] : payloads.map(item => item.boardDate), dateStatuses: accepted, dateErrors: failures, readerVersion: VERSION };
 
   }
   await chrome.storage.local.set({ readerStatuses: statuses, lastSuccessfulPayloadHashes: hashes, lastSuccessfulSyncAts: times, pairError: '' });

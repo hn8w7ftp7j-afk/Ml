@@ -5,6 +5,17 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 
+// Compile the shipped child components in isolated lexical scopes. Rendering
+// the parent must execute the real JSX, including legacy/missing-data paths.
+const realComponentCode=(await Promise.all([
+  ['app/soccer/market-panel.js',['SoccerMarketDirections','SoccerHalfTimeResearch']],
+  ['app/soccer/workload-panel.js',['SoccerWorkloadPanel']],
+].map(async([file,exports])=>{
+  const source=fs.readFileSync(file,'utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
+  const compiled=await transform(source,{filename:file.replace(/\.js$/,'.jsx'),jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+  return `Object.assign(globalThis,(()=>{${compiled.code};return {${exports.join(',')}};})());`;
+}))).join('\n');
+
 const source=fs.readFileSync('app/soccer/analysis-panel.js','utf8');
 const raw=source.replace(/^import .*?;\n/gm,'').replace(/export default function/g,'function').replace(/export function/g,'function');
 const {code}=await transform(raw,{filename:'soccer-requirements-ui.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
@@ -12,6 +23,7 @@ const games=Array.from({length:8},(_,i)=>({id:`soccer:epl:${i+1}`,sourceId:Strin
 const current={analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',publishedCurrent:true,qaFlag:'WARN'};
 const plain=v=>JSON.parse(JSON.stringify(v));
 const context=vm.createContext({React,createContext:()=>({Provider:'provider'})});
+vm.runInContext(realComponentCode,context);
 vm.runInContext(code,context);
 const presentation=state=>plain(context.soccerAnalysisPresentation(state));
 assert.equal(presentation().analysisStatus,'NOT_STARTED');
@@ -53,7 +65,8 @@ function harness(fetch){
     createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
     useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
     useRef:initial=>refs[ri++]||(refs[ri-1]={current:initial}),useEffect:()=>{}});
-  vm.runInContext(code,ctx);ctx.provider=()=>{si=0;ri=0;return ctx.SoccerAnalysisProvider({games,children:[]});};
+  vm.runInContext(realComponentCode,ctx);
+ vm.runInContext(code,ctx);ctx.provider=()=>{si=0;ri=0;return ctx.SoccerAnalysisProvider({games,children:[]});};
   return{state,provider:ctx.provider,panel:game=>{si=2;return ctx.SoccerAnalysisPanel({game});}};
 }
 for(const analysisStatus of ['FAILED','INSUFFICIENT_DATA']){
@@ -81,6 +94,15 @@ const sourceInfo={provider:'ESPN',fetchedAt:at,url:'https://fixture.invalid',con
 const realGame=normalizeSoccerSchedule({leagues:[payload.header.league],events:[{...payload.header,date:competition.date,status:competition.status}]},'epl',sourceInfo).games[0];
 const evidence=normalizeSoccerPrematch(payload,realGame,sourceInfo,Date.parse(at));
 const saved={...buildSoccerAnalysis({evidence,now:Date.parse(at)}),...current,persisted:true};
+assert.notEqual(saved.providerPolicy.rebateRateStatus,'USER_CONFIRMED','a historical snapshot cannot learn the later football rate confirmation');
+const rateAt='2026-10-19T00:00:00Z';
+const rateSnapshot={...buildSoccerAnalysis({evidence:{...evidence,source:{...evidence.source,fetchedAt:rateAt}},now:Date.parse(rateAt)}),...current,persisted:true};
+assert.equal(rateSnapshot.providerPolicy.rebateRate,.01,'a post-confirmation snapshot uses the football rate, not the NBA/baseball credit default');
+const rateHarness=harness(async()=>Response.json(rateSnapshot));
+await rateHarness.provider().props.value.run(realGame);
+const rateMarkup=renderToStaticMarkup(rateHarness.panel(realGame));
+assert.match(rateMarkup,/足球退水：1%（0.01）/);assert.doesNotMatch(rateMarkup,/足球退水：1\.5|足球退水：2%|undefined|NaN/);
+
 const insufficientResult={...saved,analysisStatus:'INSUFFICIENT_DATA',selectionResult:null,qaFlag:'BLOCKED',prediction:null,publishedCurrent:false,analysisRunId:'insufficient-run'};
 const insufficient=harness(async()=>Response.json(insufficientResult));
 await insufficient.provider().props.value.run(realGame);
@@ -121,7 +143,8 @@ for(const includeRuns of [true,false]){
 const {SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS_GATES}=await import('../lib/soccer/requirements.js');
 const specification=fs.readFileSync('app/soccer/specification/page.js','utf8').replace(/^import .*?;\n/gm,'').replace('export const metadata','const metadata').replace('export default function','function');
 const compiled=await transform(specification,{filename:'soccer-specification.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const specificationContext=vm.createContext({React,SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS_GATES});
+const {soccerProviderPolicy}=await import('../lib/soccer/provider-policy.js');
+const specificationContext=vm.createContext({React,SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS_GATES,soccerProviderPolicy});
 vm.runInContext(compiled.code,specificationContext);
 const specificationMarkup=renderToStaticMarkup(specificationContext.SoccerSpecificationPage());
 assert.equal(SOCCER_REQUIREMENT_LAYERS.length,6);for(const layer of SOCCER_REQUIREMENT_LAYERS)assert.ok(specificationMarkup.includes(layer.title));

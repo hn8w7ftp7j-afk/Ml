@@ -79,7 +79,10 @@ function validateLockedReaderGame(game, league = '') {
   if (!DATE_TOKEN.test(String(game?.boardDate || ''))) issues.push('invalid-date');
   if (!TIME_TOKEN.test(String(game?.boardTime || ''))) issues.push('invalid-time');
   if (game?.marketStatus !== 'locked') issues.push('missing-explicit-lock');
-  if (readerMarketProperties(league).some(property => game?.[property])) {
+  if (['EPL', 'UCL'].includes(league)) {
+    if (game?.league !== league || game?.executable !== false || !Array.isArray(game?.markets) || game.markets.length) issues.push('locked-game-has-market');
+    if (!Array.isArray(game?.periodsCovered) || !game.periodsCovered.length || game.periodsCovered.some(period => !['FT', 'HT', 'UNKNOWN'].includes(period))) issues.push('locked-game-period-evidence-missing');
+  } else if (readerMarketProperties(league).some(property => game?.[property])) {
     issues.push('locked-game-has-market');
   }
   return { ok: issues.length === 0, issues, directionCount: 0 };
@@ -349,6 +352,81 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
   };
 }
 
+
+// Soccer periods are contracts with separate authority. A full-time frame and
+// a first-half frame cannot disagree solely because their prices differ.
+// This derives scopes from parsed identity rows, never a caller-only label.
+function soccerGamePeriods(game) {
+  const scopes = new Set();
+  for (const period of Array.isArray(game?.periodsCovered) ? game.periodsCovered : []) {
+    if (['FT', 'HT', 'UNKNOWN'].includes(period)) scopes.add(period);
+  }
+  for (const market of Array.isArray(game?.markets) ? game.markets : []) {
+    scopes.add(['FT', 'HT'].includes(market?.period) ? market.period : 'UNKNOWN');
+  }
+  if (!scopes.size) scopes.add('UNKNOWN');
+  return ['FT', 'HT', 'UNKNOWN'].filter(period => scopes.has(period));
+}
+
+function soccerAuthorityProjection(candidate, period) {
+  const games = (candidate.parsed.games || []).flatMap(game => {
+    if (!soccerGamePeriods(game).includes(period)) return [];
+    const markets = (game.markets || []).filter(market =>
+      (['FT', 'HT'].includes(market.period) ? market.period : 'UNKNOWN') === period)
+      .map(market => Object.fromEntries(['period', 'kind', 'unit', 'line', 'lineSide',
+        'awayWater', 'homeWater', 'overWater', 'underWater', 'drawWater']
+        .filter(key => market[key] !== undefined).map(key => [key, market[key]])));
+    // A period may be locked while another period of the same match is open.
+    // Only the parser's row-backed state can establish that scoped tombstone.
+    const marketStatus = game.periodStates?.[period] || (markets.length ? 'open' : game.marketStatus);
+    if (!markets.length && marketStatus !== 'locked') return [];
+    return [{ league: game.league, boardDate: game.boardDate, boardTime: game.boardTime,
+      awayCode: game.awayCode, homeCode: game.homeCode, marketStatus,
+      markets, periodsCovered: [period], periodStates: { [period]: marketStatus }, executable: false }];
+  });
+  const dates = [...new Set(games.map(game => game.boardDate))].sort();
+  return { ...candidate, parsed: { ...candidate.parsed, games,
+    boardDate: dates.includes(candidate.parsed.boardDate) ? candidate.parsed.boardDate : dates[0] || '',
+    pageLeagueLabel: candidate.parsed.league, periodsCovered: [period] } };
+}
+
+/**
+ * Validate each soccer period independently, then return the original complete
+ * source captures. Projections are comparison-only; they are never uploaded.
+ * A conflict in any covered scope rejects the whole league, preserving the
+ * existing fail-closed policy. The same selected frame is returned only once.
+ */
+export function selectAuthoritativeSoccerBoards(candidates, { now = Date.now(), preferredTabId = null, league = '' } = {}) {
+  if (!['EPL', 'UCL'].includes(league)) return { ok: false, error: 'unknown-league', assessed: [], selections: [] };
+  const sources = (Array.isArray(candidates) ? candidates : []).filter(candidate =>
+    candidate?.parsed?.league === league && Array.isArray(candidate?.capture?.tables) && candidate.capture.tables.length > 0);
+  const assessed = sources.map(candidate => assessBoardCandidate(candidate, now));
+  if (!sources.length) return { ok: false, error: 'no-board-candidates', assessed, selections: [] };
+  if (assessed.some(row => row.issues.some(issue => /conflict/i.test(issue)))) {
+    return { ok: false, error: 'conflicting-duplicate-rows', assessed, selections: [] };
+  }
+  const valid = assessed.filter(row => row.ok), scopes = ['FT', 'HT', 'UNKNOWN'].filter(period =>
+    valid.some(row => row.candidate.parsed.games.some(game => soccerGamePeriods(game).includes(period))));
+  const selectedSources = new Map(), scopeSelections = [];
+  for (const period of scopes) {
+    const projections = valid.map(row => ({ original: row, projection: soccerAuthorityProjection(row.candidate, period) }))
+      .filter(row => row.projection.parsed.games.length);
+    if (!projections.length) continue;
+    const selection = selectAuthoritativeBoard(projections.map(row => row.projection), { now, preferredTabId, league });
+    if (!selection.ok) return { ...selection, ok: false, period, assessed, selections: [], scopeSelections };
+    const original = projections.find(row => row.projection === selection.selected.candidate)?.original;
+    if (!original) return { ok: false, error: 'soccer-authority-source-missing', period, assessed, selections: [] };
+    scopeSelections.push({ period, authorityTabId: selection.authorityTabId });
+    if (!selectedSources.has(original.candidate)) selectedSources.set(original.candidate, {
+      selected: original, authorityTabId: original.candidate.tabId,
+      periodsCovered: ['FT', 'HT', 'UNKNOWN'].filter(value => original.candidate.parsed.games.some(game => soccerGamePeriods(game).includes(value))),
+    });
+  }
+  const selections = [...selectedSources.values()];
+  return selections.length ? { ok: true, selections, scopeSelections, assessed }
+    : { ok: false, error: 'no-complete-tab', assessed, selections: [] };
+}
+
 export function shouldSkipSuccessfulPayload({
   reason,
   payloadHash,
@@ -372,6 +450,9 @@ export function readerPayloadsByDate(payload) {
   const dates = [...new Set(payload.games.map(game => game.boardDate))].sort();
   return dates.map(boardDate => {
     const games = payload.games.filter(game => game.boardDate === boardDate);
-    return { ...payload, boardDate, games, expectedGameCount: games.length, detectedGameCount: games.length };
+    return { ...payload, boardDate, games,
+      ...(['EPL', 'UCL'].includes(payload.league) ? { periodsCovered: ['FT', 'HT', 'UNKNOWN']
+        .filter(period => games.some(game => soccerGamePeriods(game).includes(period))) } : {}),
+      expectedGameCount: games.length, detectedGameCount: games.length };
   });
 }
