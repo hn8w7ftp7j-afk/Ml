@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-const DOWNLOAD='/downloads/Tai888-Reader-v2.1.35-FOOTBALL.zip';
+const DOWNLOAD='/downloads/Tai888-Reader-v2.1.36-EPL-UCL.zip';
 const time=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}):'—';
 const name=value=>String(value||'').replace(/[\[［【(（]\s*主\s*[\]］】)）]/gu,'');
 const periodName={FT:'全場',HT:'上半場',UNKNOWN:'期間待確認'};

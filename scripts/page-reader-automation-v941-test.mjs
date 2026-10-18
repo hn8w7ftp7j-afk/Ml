@@ -60,6 +60,9 @@ mustMatch(/sports-positive-ev-bets-backup-v2/, 'bet backup storage must remain e
 assert.ok(page.includes(`const READER_DOWNLOAD_PATH = '/downloads/${readerArtifact.archiveName}'`), 'Reader download must point at the current manifest production artifact');
 mustMatch(/href=\{READER_DOWNLOAD_PATH\}/, 'Reader download link must use the packaged production path');
 assert.ok(fs.existsSync(`public/downloads/${readerArtifact.archiveName}`), 'Reader production zip must exist');
+for (const file of ['app/nba/main-workspace.js', 'app/nba/reader-panel.js', 'app/soccer/reader-panel.js']) {
+  assert.ok(fs.readFileSync(file, 'utf8').includes(`/downloads/${readerArtifact.archiveName}`), `${file}: Reader download must match the current artifact`);
+}
 assert.ok(fs.existsSync(`public/downloads/${readerArtifact.shaName}`), 'Reader checksum must exist');
 mustMatch(/sports-positive-ev-v9-6-0/, 'legacy migration chain must remain available');
 mustMatch(/mlb-positive-ev-v9-4-4/, 'legacy MLB migration chain must remain available');
