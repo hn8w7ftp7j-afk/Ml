@@ -17,6 +17,9 @@ for(const [name,league]of [['epl-summary','epl'],['ucl-summary','ucl'],['histori
  const foreign=structuredClone(p);foreign.header.league.slug=league==='epl'?'uefa.champions':'eng.1';assert.equal(normalizeSoccerPrematch(foreign,game,source,now).ok,false);
 }
 const p=fixture('epl-summary'),game=gameFrom(p),evidence=normalizeSoccerPrematch(p,game,source,now),analysis=buildSoccerAnalysis({evidence,now});
+const rawReader={league:'EPL',boardDate:game.date,observedAt:at,revision:'synthetic-goal-quote',games:[{league:'EPL',boardDate:game.date,boardTime:'23:30',homeKey:globalThis.Tai888SoccerTeams.key(game.home.name),awayKey:globalThis.Tai888SoccerTeams.key(game.away.name),markets:[{unit:'GOALS',kind:'TOTAL',line:'3+50',overWater:.64,underWater:1.28,rawRows:['大3+50 0.64','小 1.28']}]}]};
+const reviewed=buildSoccerAnalysis({evidence,reader:rawReader,now});assert.equal(reviewed.settlementReviews.length,1);assert.equal(reviewed.settlementReviews[0].rawLine,'3+50');assert.equal(reviewed.settlementReviews[0].period,null);assert.ok(reviewed.directions.every(d=>d.W===null&&d.R===null&&d.score===null&&d.executable===false));
+const foreignReader={...rawReader,league:'UCL'};assert.equal(buildSoccerAnalysis({evidence,reader:foreignReader,now}).settlementReviews.length,0);
 assert.throws(()=>buildSoccerAnalysis({evidence,now:now+180001}),/EVIDENCE_INVALID/);
 const bad=fixture('historic-summary');bad.rosters[0].roster[1].athlete.id=bad.rosters[0].roster[0].athlete.id;assert.equal(normalizeSoccerPrematch(bad,gameFrom(bad),source,now).code,'SOCCER_ROSTER_PLAYER_CONFLICT');
 console.log('PASS real provider extraction: EPL/UCL summaries, separate pre/post phases, complete XI audit, unknown minutes/injury/referee, side/league/player identity, stale snapshots and eight blocked directions');

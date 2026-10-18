@@ -30,3 +30,11 @@ const bad=harness(async()=>Response.json({ok:true,gameId:'soccer:ucl:1',league:'
 await bad.provider().props.value.run(games[0]);assert.equal(bad.state[0][games[0].id].status,'error');assert.match(bad.state[0][games[0].id].error,/身分/);
 const failed=harness(async()=>Response.json({ok:false,error:'temporary source error'},{status:503}));await failed.provider().props.value.run(games[0]);assert.equal(failed.state[0][games[0].id].status,'error');assert.equal(nodes(failed.renderPanel(games[0])).find(x=>x.type==='button').props.disabled,false,'failure releases the retry button');
 console.log('PASS shipped soccer JSX: manual-only entry, bounded two-request queue, duplicate-click suppression, independent game receipts, wrong-league rejection and retry unlock');
+
+// Render the shipped result JSX with real provider evidence and both legacy/new snapshots.
+const {normalizeSoccerPrematch}=await import('../lib/soccer/prematch.js'),{normalizeSoccerSchedule}=await import('../lib/soccer/data.js'),{buildSoccerAnalysis}=await import('../lib/soccer/analysis.js');
+const payload=JSON.parse(fs.readFileSync('scripts/fixtures/soccer/minutes-past.json')),comp=payload.header.competitions[0],at='2026-10-18T14:50:00Z',source={provider:'ESPN',fetchedAt:at,url:'https://fixture.invalid',contentHash:'fixture'};
+const realGame=normalizeSoccerSchedule({leagues:[payload.header.league],events:[{...payload.header,date:comp.date,status:comp.status}]},'epl',source).games[0],evidence=normalizeSoccerPrematch(payload,realGame,source,Date.parse(at)),result=buildSoccerAnalysis({evidence,now:Date.parse(at)});
+h.state[0][realGame.id]={status:'done',data:{...result,persisted:true}};const rendered=h.renderPanel(realGame),text=label(rendered);
+assert.match(text,/正規時鐘上場分鐘/);assert.match(text,/補時登場/);assert.match(text,/逐年滾動研究檢查/);assert.match(text,/原盤結算核對表/);assert.match(text,/尚無已配對原盤/);assert.doesNotMatch(text,/undefined|NaN/);
+console.log('PASS actual result JSX: postgame normalized minutes, stoppage-only player, rolling evidence, missing quotes and legacy optional fields render without invented values');
