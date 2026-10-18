@@ -101,6 +101,8 @@ assert.equal(rateSnapshot.providerPolicy.rebateRate,.01,'a post-confirmation sna
 const rateHarness=harness(async()=>Response.json(rateSnapshot));
 await rateHarness.provider().props.value.run(realGame);
 const rateMarkup=renderToStaticMarkup(rateHarness.panel(realGame));
+assert.equal(rateSnapshot.providerPolicy.rebateBasis,'TOTAL_PRINCIPAL');
+assert.match(rateMarkup,/按投注金額計算/);
 assert.match(rateMarkup,/足球退水：1%（0.01）/);assert.doesNotMatch(rateMarkup,/足球退水：1\.5|足球退水：2%|undefined|NaN/);
 
 const insufficientResult={...saved,analysisStatus:'INSUFFICIENT_DATA',selectionResult:null,qaFlag:'BLOCKED',prediction:null,publishedCurrent:false,analysisRunId:'insufficient-run'};

@@ -5,7 +5,7 @@ const pct=v=>finite(v)&&v>=0&&v<=1?`${(v*100).toFixed(1)}%`:'—';
 const clock=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):null;
 const periods={FT:'全場',HT:'上半場'};
 const directionNames={HANDICAP_HOME:'主隊讓／受讓',HANDICAP_AWAY:'客隊讓／受讓',TOTAL_OVER:'大球',TOTAL_UNDER:'小球'};
-const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'期間、結算及退水待核對',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
+const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'期間、派彩及退水適用條件待核對',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
 const textValue=v=>typeof v==='string'||finite(v)?String(v):null;
 const rowText=row=>{
   const direct=textValue(row);if(direct!==null)return direct;

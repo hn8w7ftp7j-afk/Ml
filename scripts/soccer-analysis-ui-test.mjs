@@ -65,6 +65,12 @@ const liveSnapshot={...result,persisted:true,publishedCurrent:true,analysisStatu
 h.state[0][realGame.id]={status:'done',data:liveSnapshot};
 const liveMarkup=renderToStaticMarkup(h.renderPanel(realGame));
 assert.match(liveMarkup,/足球退水：1%（0.01）/);assert.doesNotMatch(liveMarkup,/足球退水：1\.5|足球退水：2%/);
+assert.match(liveMarkup,/按投注金額計算；適用條件與結算條款待核對/);
+const rateOnlySnapshot={...liveSnapshot,providerPolicy:soccerProviderPolicy({asOf:'2026-10-18T22:15:30.999Z'})};
+h.state[0][realGame.id]={status:'done',data:rateOnlySnapshot};
+const rateOnlyMarkup=renderToStaticMarkup(h.renderPanel(realGame));
+assert.match(rateOnlyMarkup,/計算基數與結算條款待核對/);assert.doesNotMatch(rateOnlyMarkup,/按投注金額計算/);
+h.state[0][realGame.id]={status:'done',data:liveSnapshot};
 assert.match(liveMarkup,/八方向與實際原盤/);assert.match(liveMarkup,/球頭 <strong>2-50/);assert.match(liveMarkup,/42.0%/);
 assert.match(liveMarkup,/期間待確認，暫不計算/);assert.match(liveMarkup,/上半場比分研究/);assert.match(liveMarkup,/40.0%/);
 assert.match(liveMarkup,/跨賽事賽程與近期負荷/);assert.match(liveMarkup,/近7日已知完賽 2 場/);assert.match(liveMarkup,/74.5 小時/);assert.match(liveMarkup,/跨賽事資料暫時不足/);

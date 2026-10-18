@@ -87,3 +87,14 @@ const moduleText = fs.readFileSync(new URL('../lib/soccer/requirements.js', impo
 assert.doesNotMatch(moduleText, /(?:from\s*['"]node:|process\.env|@neondatabase|\bfetch\s*\()/);
 assert.equal(new Set(audit.layers.flatMap(layer => layer.items.map(item => item.key))).size, audit.layers.flatMap(layer => layer.items).length);
 console.log('PASS soccer 2.2 requirements: six layers, both teams, observations distinct from model usage, contract/PIT/half-time fail-closed, immutable inputs and client-safe exports');
+
+// Confirmed rate/basis describe observations, never a complete provider contract.
+const { soccerProviderPolicy } = await import('../lib/soccer/provider-policy.js');
+for (const [asOf,confirmedBasis] of [['2026-10-18T22:15:30.999Z',false],['2026-10-18T22:15:31Z',true]]) {
+  const basisAudit=buildSoccerRequirementAudit({providerPolicy:soccerProviderPolicy({asOf})});
+  const rebate=basisAudit.layers.flatMap(layer=>layer.items).find(item=>item.key==='rebate');
+  assert.equal(rebate.status,'PARTIAL');
+  if(confirmedBasis) assert.match(rebate.reason,/投注金額 × 0.01/);
+  else { assert.match(rebate.reason,/計算基數/); assert.doesNotMatch(rebate.reason,/投注金額 ×/); }
+  assert.equal(basisAudit.formalReady,false);
+}
