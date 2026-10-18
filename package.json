@@ -1,12 +1,14 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.10.5",
+  "version": "11.10.6",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
+    "pretest:soccer": "npm run test:soccer-workspace",
+    "test:soccer-workspace": "node scripts/soccer-workspace-test.mjs && node scripts/soccer-workspace-ui-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-workspace-api-test.mjs",
     "test:reader-recovery": "node scripts/reader-nhl-card-test.mjs && node scripts/reader-six-league-recovery-test.mjs && node scripts/reader-nhl-test.mjs && node scripts/reader-nba-test.mjs && node scripts/reader-multi-date-test.mjs && node scripts/reader-static-security-v202-test.mjs && node scripts/reader-artifact-delivery-test.mjs",
     "test:market-history": "node scripts/market-line-history-v1-test.mjs && node scripts/market-line-history-ingest-test.mjs && node scripts/market-line-history-query-test.mjs && node scripts/market-line-history-ui-test.mjs",
     "test:reliability": "node scripts/performance-ledger-client-test.mjs && node scripts/nba-performance-ledger-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-performance-api-test.mjs && node scripts/operational-readiness-test.mjs && node scripts/compact-cloud-ledger-client-test.mjs && node scripts/pit-feature-time-evidence-test.mjs && node scripts/pit-publication-integrity-test.mjs && node scripts/pit-snapshot-time-integrity-test.mjs && node scripts/cloud-ledger-read-performance-test.mjs && node scripts/money-display-test.mjs && node scripts/client-json-response-retry-test.mjs && node scripts/inactive-analysis-status-test.mjs && node scripts/background-start-request-journal-test.mjs",

@@ -24,7 +24,7 @@ export async function soccerSqlFixture(){
     }
   `);
   register('data:text/javascript,'+encodeURIComponent(`export async function resolve(s,c,n){
-    if(s==='@neondatabase/serverless'&&/\\/lib\\/soccer\\/(?:analysis-store|reader-store|journal)\\.js$/.test(c.parentURL||''))return {url:${JSON.stringify(adapter)},shortCircuit:true};
+    if(s==='@neondatabase/serverless'&&/\\/lib\\/soccer\\/(?:analysis-store|reader-store|journal|manual-record-store)\\.js$/.test(c.parentURL||''))return {url:${JSON.stringify(adapter)},shortCircuit:true};
     return n(s,c);
   }`),import.meta.url);
   return {db,async close(){globalThis.__SOCCER_TEST_SQL=before;await db.close();}};
