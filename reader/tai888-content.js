@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.36';
+  const READER_VERSION = '2.1.37';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -19,6 +19,7 @@
   const activityByLeague = Object.fromEntries((globalThis.Tai888LeagueRegistry?.ids || []).map(league => [league, 0]));
   const fingerprintByLeague = {};
   let sectionDiagnostics = [];
+  let soccerLayouts = [];
 
   // Never read or forward the full document URL.  The Reader only needs a
   // route hint, so retain the Tai888 origin/pathname and one fixed board marker.
@@ -359,12 +360,67 @@
     return [...groups.values()];
   }
 
+  function collectSoccerGeometryRecords(elements) {
+    const adapter = globalThis.Tai888SoccerTableNormalizer;
+    if (!adapter?.columns || !adapter?.geometryGroups) return [];
+    const records = [], seen = new Set(), owners = new Map();
+    function add(element) {
+      const record = rowRecord(element, 0, { preserveSoccerCells: true });
+      if (!record) return;
+      const signature = `${record.top}|${record.left}|${record.right}|${JSON.stringify(record.cells.map(cell => [cell.left, cell.right, cell.lines]))}`;
+      if (!seen.has(signature)) { seen.add(signature); records.push(record); owners.set(record, element); }
+    }
+    for (const element of elements) add(element);
+    const headers = records.map(record => adapter.columns(record)).filter(Boolean);
+    if (!headers.length) return records;
+    // Collect continuation/draw rows only inside an observed sports header's
+    // horizontal span. Generic baseball record policy is deliberately unchanged.
+    for (const element of queryAcrossRoots(openRoots(), 'div,li').slice(0, 7000)) {
+      if (!visible(element)) continue;
+      const box = element.getBoundingClientRect();
+      const cells = rowCellElements(element);
+      const boxes = cells.map(cell => cell.getBoundingClientRect());
+      const left = boxes.length ? Math.min(...boxes.map(box => box.left)) : box.left;
+      const right = boxes.length ? Math.max(...boxes.map(box => box.right)) : box.right;
+      const text = clean(element.innerText || element.textContent || '');
+      if (!text || text.length > 1600 || element.children.length > 24) continue;
+      const plainHeading = cells.length === 1 && text.length <= 240
+        && !/[\[［【(（]\s*主\s*[\]］】)）]|\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d/.test(text);
+      if (!headers.some(header => left >= header[0].left - 2 && right <= header.at(-1).right + 2
+        || plainHeading && Math.abs(left - header[0].left) <= 8 && right - left >= (header.at(-1).right - header[0].left) * 0.7)) continue;
+      if (element.querySelector?.('tr,[role="row"]')) continue;
+      add(element);
+    }
+    // A desktop event is itself one complete row of nested DIV columns. Its
+    // date/time and price children contain the same rendered text. Keeping
+    // those descendants as extra records would start false partial matches.
+    const completeRows = records.filter(record => headers.some(header => {
+      const inColumn = key => record.cells.filter(cell => header.some(column => column.key === key
+        && cell.left >= column.left - 2 && cell.right <= column.right + 2));
+      const times = inColumn('time').flatMap(cell => cell.lines || []);
+      return times.some(text => /^\d{1,2}[/-]\d{1,2}$/.test(text))
+        && times.some(text => /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(text))
+        && inColumn('teams').some(cell => /[\[［【(（]\s*主\s*[\]］】)）]/u.test(cell.text))
+        && inColumn('runline').length && inColumn('total').length;
+    }));
+    return records.filter(record => !completeRows.some(parent => parent !== record
+      && owners.get(parent)?.contains(owners.get(record))))
+      .sort((a, b) => a.top - b.top || a.left - b.left || b.right - a.right);
+  }
+
   function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
     const { elements, records } = collectRecords();
     const nhlCards = captureNhlCards();
     const soccerTableRecords = collectSoccerTableRecords(elements);
+    const soccerGeometryRecords = collectSoccerGeometryRecords(elements);
+    const geometryGroups = globalThis.Tai888SoccerTableNormalizer?.geometryGroups(soccerGeometryRecords) || [];
+    soccerLayouts = [];
     // Only bounded league-heading evidence, never document/body/account text.
-    sectionDiagnostics = records.filter(record => /^(?:聯盟|联盟)\s*[:：]?/.test(clean(record.text)))
+    sectionDiagnostics = records.filter(record => {
+      const text = clean(record.text);
+      return text.length <= 100 && /^(?:聯盟|联盟)\s*[:：]?/.test(text)
+        && !/\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d/.test(text);
+    })
       .map(record => {
         const label = clean(record.text).slice(0, 100);
         const league = globalThis.Tai888LeagueRegistry.identify(label);
@@ -377,8 +433,24 @@
       let normalized;
       if (['EPL', 'UCL'].includes(league)) {
         const desktop = globalThis.Tai888SoccerTableNormalizer?.normalize(soccerTableRecords, league) || { tables: [], diagnostics: {} };
-        const cards = desktop.tables.length ? null : captureSoccerCards(league);
-        normalized = desktop.tables.length ? desktop : cards.tables.length ? cards : desktop.diagnostics.sawLeagueMarker ? desktop : cards;
+        const geometry = globalThis.Tai888SoccerTableNormalizer?.normalize(geometryGroups, league) || { tables: [], diagnostics: {} };
+        const cards = captureSoccerCards(league);
+        normalized = geometry.tables.length || geometry.diagnostics.sawLeagueMarker && geometry.diagnostics.headerCount
+          ? geometry : desktop.tables.length ? desktop : cards.tables.length ? cards : desktop.diagnostics.sawLeagueMarker ? desktop : cards;
+        const marker = sectionDiagnostics.find(item => item.league === league && item.accepted);
+        if (!normalized.diagnostics.sawLeagueMarker && marker) {
+          normalized = { tables: [], diagnostics: { ...normalized.diagnostics, league, pageLeagueLabel: marker.label,
+            sawLeagueMarker: true, tableIssues: ['SOCCER_HEADING_FOUND_NO_LAYOUT'] } };
+        }
+        if (marker || normalized.diagnostics.sawLeagueMarker) {
+          const path = value => ({ tableCount: value.tables.length, sawLeagueMarker: value.diagnostics.sawLeagueMarker === true,
+            issues: value.diagnostics.tableIssues || value.diagnostics.cardIssues || [] });
+          soccerLayouts.push({ league, label: marker?.label || normalized.diagnostics.pageLeagueLabel || '',
+            modules: { registry: Boolean(globalThis.Tai888LeagueRegistry), table: Boolean(globalThis.Tai888SoccerTableNormalizer), card: Boolean(globalThis.Tai888SoccerCardNormalizer) },
+            counts: { records: soccerGeometryRecords.length, headers: geometry.diagnostics.headerCount || 0, markers: geometry.diagnostics.markerCount || 0,
+              physicalGroups: soccerTableRecords.length, geometryGroups: geometryGroups.length },
+            paths: { physical: path(desktop), geometry: path(geometry), cards: path(cards) }, samples: geometry.diagnostics.samples || [] });
+        }
       } else normalized = league === 'NHL' && nhlCards.tables.length ? nhlCards
         : normalizer.normalizeRowRecords(records, { expectedLeague: league });
       if (!normalized.tables.length && !normalized.diagnostics?.sawLeagueMarker) continue;
@@ -427,6 +499,7 @@
       readerVersion: READER_VERSION,
       captures,
       sectionDiagnostics,
+      soccerLayouts,
     };
   }
 
