@@ -1,6 +1,7 @@
 'use client';
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { nbaManualRecordStats } from '../../lib/nba/manual-bet-stats.js';
+import { summarizeHighScoreBets } from '../../lib/league-bet-status.js';
 const Ledger = createContext(null);
 const marketNames = { fullTotal: '全場大小', fullRunline: '全場讓分', firstHalfTotal: '上半大小', firstHalfRunline: '上半讓分' };
 const key = value => [value.date, value.gameId, value.marketKey, value.side].join('|');
@@ -13,19 +14,53 @@ async function request(url, options = {}) {
   if (!response.ok || result.ok !== true) throw new Error(result.error || '永久紀錄讀寫失敗。');
   return result;
 }
-export function NbaBetRecordProvider({ date, active, children }) {
+export function NbaBetRecordProvider({ date, active, candidates = [], onHighScoreStatusChange, children }) {
   const [records, setRecords] = useState([]), [status, setStatus] = useState('loading');
+  const [recordsDate, setRecordsDate] = useState('');
   const [error, setError] = useState(''), [pending, setPending] = useState(new Set()), [failed, setFailed] = useState(new Set());
   const [settling, setSettling] = useState(false), [settlementNotice, setSettlementNotice] = useState('');
-  const revision = useRef(0), inFlight = useRef(new Set());
-  async function load() {
-    const current = ++revision.current; setStatus('loading'); setError('');
+  const revision = useRef(0), writeRevision = useRef(0), inFlight = useRef(new Set());
+  const dateRef = useRef(date); dateRef.current = date;
+  const settlingDate = useRef('');
+  const ledgerStatus = recordsDate === date ? status : 'loading';
+  const statusRef = useRef(ledgerStatus); statusRef.current = ledgerStatus;
+  const load = useCallback(async ({ background = false } = {}) => {
+    // A refresh must not invalidate an in-flight durable save or settlement.
+    if ([...inFlight.current].some(identity => identity.startsWith(`${date}|`)) || settlingDate.current === date) return;
+    const current = ++revision.current, writes = writeRevision.current;
+    const matches = () => current === revision.current && writes === writeRevision.current && dateRef.current === date;
+    if (!background || statusRef.current !== 'ready') setStatus('loading');
+    setError('');
     try {
       const result = await request(`/api/nba/bet-records?date=${encodeURIComponent(date)}`);
-      if (current === revision.current) { setRecords(result.records); setStatus('ready'); }
-    } catch (cause) { if (current === revision.current) { setError(cause.message); setStatus('failed'); } }
-  }
-  useEffect(() => { setRecords([]); setFailed(new Set()); setSettlementNotice(''); if (active) void load(); return () => { revision.current++; }; }, [date, active]);
+      if (!Array.isArray(result.records)) throw new Error('下注帳本回傳格式不完整，請重新同步。');
+      if (matches()) { setRecords(result.records); setRecordsDate(date); setStatus('ready'); }
+    } catch (cause) { if (matches()) { setError(cause.message); setStatus('failed'); } }
+  }, [date]);
+  useEffect(() => {
+    setRecords([]); setRecordsDate(''); setStatus('loading'); setFailed(new Set()); setSettlementNotice('');
+    void load();
+    return () => { revision.current++; };
+  }, [date, load]);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState !== 'hidden') void load({ background: true }); };
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [load]);
+  const confirmedKeys = new Set(records.filter(record => record.date === date && record.status !== 'CANCELLED').map(key));
+  const summary = summarizeHighScoreBets(candidates, {
+    ledgerReady: ledgerStatus === 'ready',
+    isRecorded: candidate => confirmedKeys.has(key({ date, gameId: candidate.game.id, marketKey: candidate.marketKey, side: candidate.side })),
+  });
+  const callback = useRef(onHighScoreStatusChange); callback.current = onHighScoreStatusChange;
+  const published = useRef('');
+  useEffect(() => {
+    const next = { league: 'NBA', date, ...summary };
+    const signature = JSON.stringify(next);
+    if (!callback.current || published.current === signature) return;
+    published.current = signature; callback.current(next);
+  }, [date, summary.state, summary.label, summary.total, summary.unbet, summary.recorded]);
   async function save(entry) {
     const payload = { date, gameId: entry.game.id, marketKey: entry.marketKey, side: entry.side,
       away: entry.away, home: entry.home, startTime: entry.game.startTime,
@@ -35,32 +70,33 @@ export function NbaBetRecordProvider({ date, active, children }) {
   }
   async function changeStatus(record, action) { return mutate({ action, id: record.id }, key(record)); }
   async function settle() {
-    if (settling || status !== 'ready') return;
-    const current = revision.current; setSettling(true); setError(''); setSettlementNotice('');
+    if (settling || ledgerStatus !== 'ready') return;
+    const current = revision.current; writeRevision.current++; settlingDate.current = date;
+    setSettling(true); setError(''); setSettlementNotice('');
     try {
       const result = await request('/api/nba/bet-records', { method: 'POST', signal: AbortSignal.timeout(60000), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settle', date }) });
-      if (current === revision.current) {
+      if (current === revision.current && dateRef.current === date) {
         setRecords(result.records);
         setSettlementNotice(`本次處理 ${result.summary.checked} 筆，已結算 ${result.summary.settled} 筆；未完賽或尚待官方確認的紀錄仍保留待結算${result.summary.deferred ? `，另 ${result.summary.deferred} 筆將於下次核對` : ''}。`);
       }
-    } catch (cause) { if (current === revision.current) setError(cause.message); }
-    finally { setSettling(false); }
+    } catch (cause) { if (current === revision.current && dateRef.current === date) setError(cause.message); }
+    finally { settlingDate.current = ''; setSettling(false); }
   }
   async function mutate(payload, identity) {
-    if (status !== 'ready' || inFlight.current.has(identity)) return;
-    const current = revision.current; inFlight.current.add(identity);
+    if (ledgerStatus !== 'ready' || inFlight.current.has(identity)) return;
+    const current = revision.current; writeRevision.current++; inFlight.current.add(identity);
     setPending(new Set(inFlight.current)); setError('');
     try {
       const result = await request('/api/nba/bet-records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!result.record?.id || result.persistence !== 'durable_database') throw new Error('未取得永久保存確認，請重新讀取紀錄。');
-      if (current === revision.current) {
+      if (current === revision.current && dateRef.current === date) {
         setRecords(old => [result.record, ...old.filter(row => key(row) !== identity)]);
         setFailed(old => new Set([...old].filter(value => value !== identity)));
       }
-    } catch (cause) { if (current === revision.current) { setError(cause.message); setFailed(old => new Set([...old, identity])); } }
+    } catch (cause) { if (current === revision.current && dateRef.current === date) { setError(cause.message); setFailed(old => new Set([...old, identity])); } }
     finally { inFlight.current.delete(identity); setPending(new Set(inFlight.current)); }
   }
-  return <Ledger.Provider value={{ date, records, status, error, load, save, changeStatus, pending, failed, settle, settling, settlementNotice }}>
+  return <Ledger.Provider value={{ date, records: recordsDate === date ? records : [], status: ledgerStatus, error, load, save, changeStatus, pending, failed, settle, settling, settlementNotice }}>
     {error && active && <div className="errorBox" role="alert">{error}</div>}{children}
   </Ledger.Provider>;
 }
