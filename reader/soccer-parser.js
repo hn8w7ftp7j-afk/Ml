@@ -47,7 +47,7 @@ export function parseSoccerCapture(capture, now=new Date()) {
   if(!issues.length)for(const table of (capture.tables||[]).slice(0,12))for(const row of (table.rows||[]).slice(0,100)) {
     if(globalThis.Tai888LeagueRegistry.identifyAll(table.sectionTitle).some(id=>id!==league)){issues.push('SOCCER_SECTION_LEAGUE_MISMATCH');continue;}
     const cells=row.cells||[],team=cells[1]?.pair;
-    if(!Array.isArray(team)||team.length!==2||team.some(x=>/角球|CORNER|黃牌|黄牌|紅牌|红牌/i.test(x)))continue;
+    if(!Array.isArray(team)||team.length!==2||team.some(x=>/角球|罰牌|罚牌|CORNER|黃牌|黄牌|紅牌|红牌/i.test(x)))continue;
     const away=globalThis.Tai888SoccerTeams.resolve(team[0]),home=globalThis.Tai888SoccerTeams.resolve(team[1]);
     const time=timing(cells[0]?.pair,now);
     if(!away||!home||away.key===home.key||homeMarker.test(team[0])||!homeMarker.test(team[1])||!time){issues.push('SOCCER_GAME_IDENTITY_INVALID');continue;}

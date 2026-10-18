@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-const DOWNLOAD='/downloads/Tai888-Reader-v2.1.35-FOOTBALL.zip';
+const READER_VERSION='2.1.36';
+const DOWNLOAD='/downloads/Tai888-Reader-v2.1.36-EPL-UCL.zip';
 const time=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}):'—';
 const name=value=>String(value||'').replace(/[\[［【(（]\s*主\s*[\]］】)）]/gu,'');
 const periodName={FT:'全場',HT:'上半場',UNKNOWN:'期間待確認'};
@@ -27,9 +28,9 @@ export default function SoccerReaderPanel({league,date}) {
   const periodSources=soccerReaderPeriods(data),fresh=observedIsFresh(data?.observedAt),openMarketCount=games.reduce((count,game)=>count+game.markets.length,0);
   return <section className="panel soccerReader" aria-label="足球Tai888原盤">
     <div className="soccerBoardHeading"><h2>Tai888 足球原盤</h2><button type="button" className="secondary" disabled={!date||current?.loading} onClick={()=>setRevision(n=>n+1)}>{current?.loading?'讀取原盤中…':'更新原盤'}</button></div>
-    <p className="soccerAvailability">{current?.error?`原盤更新失敗：${current.error}`:games.length?`${games.length} 場${openMarketCount?'':'｜此版本沒有開放盤口'}${periodSources.length?'｜按期間分開保存':`｜同步 ${time(data.observedAt)}${fresh?'':'｜原盤已逾期，請重新同步'}`}`:periodSources.length?'原盤來源已保存，此版本沒有開放盤口。':'等待 Reader 2.1.35 同步英超／歐冠分頁。'}</p>
+    <p className="soccerAvailability">{current?.error?`原盤更新失敗：${current.error}`:games.length?`${games.length} 場${openMarketCount?'':'｜此版本沒有開放盤口'}${periodSources.length?'｜按期間分開保存':`｜同步 ${time(data.observedAt)}${fresh?'':'｜原盤已逾期，請重新同步'}`}`:periodSources.length?'原盤來源已保存，此版本沒有開放盤口。':`等待 Reader ${READER_VERSION} 同步英超／歐冠分頁。`}</p>
     {periodSources.length>0&&<p className="soccerAvailability">{periodSources.map(source=>`${source.label} ${time(source.observedAt||source.sourceObservedAt)}${source.fresh?'':'（待更新）'}`).join('｜')}</p>}
-    <a className="secondary readerDownload" href={DOWNLOAD} download>下載 Reader 2.1.35 足球版</a>
+    <a className="secondary readerDownload" href={DOWNLOAD} download>下載 Reader {READER_VERSION} 足球版</a>
     {games.length>0&&<p className="soccerAvailability">原始盤口；足球結算規格與模型仍在驗證。</p>}
     {games.map((game,index)=><div className="soccerQuoteGame" key={`${game.boardTime}:${game.homeCode}:${game.awayCode}:${index}`}><h3>{name(game.homeRaw)}（主）對 {name(game.awayRaw)}（客）</h3><p className="soccerAvailability">{game.boardTime}｜{game.matchStatus==='MATCHED'?'官方場次已配對':'場次待核對'}{game.prestart?'':'｜非已確認賽前盤'}</p>
       {game.markets.length===0&&<p className="soccerAvailability">此版本沒有開放盤口；已保留來源場次紀錄。</p>}

@@ -4,6 +4,11 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
+import { readerArtifactNames } from '../lib/reader-artifact-names.js';
+
+const manifest=JSON.parse(fs.readFileSync(new URL('../reader/manifest.json',import.meta.url),'utf8'));
+const downloadHref=`/downloads/${readerArtifactNames(manifest).archiveName}`;
+const escapePattern=value=>String(value).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
 const now=Date.parse('2026-10-19T00:00:00Z'),date='2026-10-19',league='EPL';
 class Clock extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
@@ -34,12 +39,12 @@ function harness(){
   return{state,render,async load(value,props={league,date}){response=value;render(props);const cleanup=effects.at(-1)();await new Promise(resolve=>setImmediate(resolve));return cleanup;}};
 }
 const ui=harness();
-let markup=renderToStaticMarkup(ui.render());assert.match(markup,/等待 Reader 2\.1\.35/);assert.doesNotMatch(markup,/白禮頓|0\.84/);
+let markup=renderToStaticMarkup(ui.render());assert.match(markup,new RegExp(`等待 Reader ${escapePattern(manifest.version)}`));assert.doesNotMatch(markup,/白禮頓|0\.84/);
 const cleanup=await ui.load(body);markup=renderToStaticMarkup(ui.render());cleanup();
 assert.match(markup,/全場 [\d:]+（待更新）/);assert.match(markup,/上半場 [\d:]+(?:｜|<\/p>)/);assert.doesNotMatch(markup,/上半場 [\d:]+（待更新）/,'a fresh HT quote is not called stale because the FT aggregate timestamp is older');
 assert.match(markup,/按期間分開保存/);assert.match(markup,/白禮頓（主）對 水晶宮（客）/);assert.match(markup,/大 0\.84/);assert.match(markup,/大 0\.92/);assert.match(markup,/官方場次已配對/);
 assert.doesNotMatch(markup,/原盤已逾期，請重新同步|undefined|NaN|已通過正式驗收|可直接下注/);
-assert.match(markup,/下載 Reader 2\.1\.35 足球版/);assert.match(markup,/href="\/downloads\/Tai888-Reader-v2\.1\.35-FOOTBALL\.zip"/);
+assert.match(markup,new RegExp(`下載 Reader ${escapePattern(manifest.version)} 足球版`));assert.match(markup,new RegExp(`href="${escapePattern(downloadHref)}"`));
 const closed={...body,games:[{...game,marketStatus:'locked',markets:[],periodStates:{FT:'locked',HT:'locked'}}]};
 await ui.load(closed);markup=renderToStaticMarkup(ui.render());
 assert.match(markup,/沒有開放盤口|目前無開放原盤|目前無開放盤口/,'a saved identity-backed all-locked board is distinguishable from waiting for Reader');

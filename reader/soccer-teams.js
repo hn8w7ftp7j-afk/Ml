@@ -71,9 +71,15 @@
   const extras = { '白禮頓': '布萊頓', '白礼顿': '布萊頓', '白禮頓及賀夫': '布萊頓', '阿仙奴': '兵工廠', '車路士': '切爾西', '紐卡素': '紐卡索聯', '韋斯咸': '西漢姆聯', '高雲地利': 'Coventry City', '侯城': 'Hull City', '赫爾城': 'Hull City', '樸茨茅夫': 'Portsmouth' };
   const clean = v => String(v || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[\[［【(（]\s*主\s*[\]］】)）]/gu, '').replace(/[\s.\-'’&]+/g, '').toLowerCase();
   const names = new Map(clubs.flatMap(([label, ...aliases]) => [label, ...aliases].map(name => [clean(name), label])));
-  for (const [alias, label] of Object.entries(extras)) names.set(clean(alias), label);
+  for (const [alias, label] of Object.entries(extras)) {
+    names.set(clean(alias), label);
+    // Some promoted clubs live only in the supplementary aliases. Register
+    // their English target too so raw Chinese and official English names use
+    // the same identity without changing already-captured Chinese keys.
+    if (!names.has(clean(label))) names.set(clean(label), label);
+  }
   function resolve(value) {
-    if (typeof value !== 'string' || value.length > 100 || /[<>\u0000-\u001f]|角球|角球數|角球数|CORNER|卡牌|黃牌|黄牌|紅牌|红牌|BOOKING/i.test(value)) return null;
+    if (typeof value !== 'string' || value.length > 100 || /[<>\u0000-\u001f]|角球|罰牌|罚牌|角球數|角球数|CORNER|卡牌|黃牌|黄牌|紅牌|红牌|BOOKING/i.test(value)) return null;
     const name = value.replace(/[\[［【(（]\s*主\s*[\]］】)）]/gu, '').trim();
     if (!/[a-z\u3400-\u9fff]/i.test(name) || name.length < 2) return null;
     const key = names.get(clean(name)) || clean(name);
