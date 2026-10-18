@@ -25,6 +25,7 @@ await test('league registries and game/team/cache identity are isolated', () => 
   assert.notEqual(a.games[0].home.id, b.games[0].home.id);
   assert.notEqual(soccerCacheKey('epl', 'schedule', '2026-10-18'), soccerCacheKey('ucl', 'schedule', '2026-10-18'));
   assert.equal(normalizeSoccerSchedule(board(), 'ucl', source).code, 'SOCCER_LEAGUE_IDENTITY_MISMATCH');
+  assert.equal(normalizeSoccerSchedule({ ...board(), leagues: [competition('epl'), competition('ucl')] }, 'epl', source).code, 'SOCCER_LEAGUE_IDENTITY_MISMATCH');
   assert.deepEqual(publicSoccerLeagues().map(item => item.id), ['EPL', 'UCL']);
   for (const field of ['model', 'ranking', 'betting']) assert.equal(SOCCER_CAPABILITIES[field], false);
 });
@@ -60,17 +61,29 @@ await test('malformed or conflicting identity blocks the whole board instead of 
   assert.equal(normalizeSoccerEvent(sameTeam, 'epl', source).code, 'SOCCER_TEAM_IDENTITY_INVALID');
 });
 await test('schedule covers UTC boundary then filters exactly by Taipei date and discovers upcoming dates', async () => {
-  let requested;
-  const fetchImpl = async url => { requested = url; return json(board([event({ id: '1', date: '2026-10-17T15:59Z' }), event({ id: '2' }), event({ id: '3', date: '2026-10-18T16:00Z' })])); };
+  const requested = [];
+  const fetchImpl = async url => { requested.push(url); return json(board([event({ id: '1', date: '2026-10-17T15:59Z' }), event({ id: '2' }), event({ id: '3', date: '2026-10-18T16:00Z' })])); };
   const result = await fetchSoccerSchedule('epl', '2026-10-18', { fetchImpl });
   assert.equal(result.ok, true); assert.equal(result.games.length, 1); assert.equal(result.games[0].sourceId, '2');
-  assert.match(requested, /dates=20261017-20261018/);
+  assert.equal(requested.length, 2); assert.ok(requested.some(url => /dates=20261017$/.test(url))); assert.ok(requested.some(url => /dates=20261018$/.test(url))); assert.equal(requested.some(url => /dates=.*-/.test(url)), false);
   const upcoming = await fetchSoccerSchedule('epl', '2026-10-18', { fetchImpl, windowDays: 14 });
   assert.deepEqual(upcoming.availableDates, ['2026-10-18', '2026-10-19']);
   assert.equal(upcoming.until, '2026-10-31');
   const empty = await fetchSoccerSchedule('epl', '2026-10-18', { fetchImpl: async () => json(board([])) });
   assert.equal(empty.ok, true); assert.deepEqual(empty.games, []);
   assert.equal(empty.missing[0].reason, 'NO_SCHEDULED_EVENTS_IN_CONFIRMED_SOURCE_WINDOW');
+});
+await test('upcoming reads use at most four concurrent single days and require complete source coverage', async () => {
+  let active = 0, maximum = 0, calls = 0;
+  const result = await fetchSoccerSchedule('epl', '2026-10-18', { windowDays: 14, fetchImpl: async () => {
+    active++; calls++; maximum = Math.max(maximum, active);
+    await new Promise(resolve => setTimeout(resolve, 1)); active--; return json(board([]));
+  } });
+  assert.equal(result.ok, true); assert.equal(calls, 15); assert.equal(maximum, 4);
+  assert.equal(result.coverage.complete, true); assert.equal(result.sources.length, 15);
+  let failures = 0;
+  const partial = await fetchSoccerSchedule('epl', '2026-10-18', { windowDays: 14, fetchImpl: async () => ++failures === 1 ? new Response('', { status: 503 }) : json(board([])) });
+  assert.equal(partial.ok, false); assert.equal(partial.coverage.complete, false); assert.equal(Object.hasOwn(partial, 'games'), false); assert.ok(failures <= 4);
 });
 await test('HTTP source failure and timeout stay errors without a fabricated empty board', async () => {
   const unavailable = await fetchSoccerSchedule('ucl', '2026-10-18', { fetchImpl: async () => new Response('', { status: 429 }) });
@@ -101,11 +114,15 @@ await test('cache coalesces independent consumers and never leaks mutations or s
   assert.equal((await fetchSoccerJson(source.url, options)).ok, false);
 });
 await test('standings preserve missing values and reject another league or duplicate team', async () => {
-  const fixture = { id: '700', name: 'English Premier League', children: [{ name: 'Table', standings: { entries: [{ team: { id: '1', displayName: 'Home fixture' }, stats: [{ name: 'rank', value: 1 }, { name: 'points', value: 12 }, { name: 'gamesPlayed', value: 5 }] }] } }] };
+  const fixture = { id: '23', uid: 's:600~l:700', name: 'English Premier League', children: [{ name: 'Table', standings: { entries: [{ team: { id: '1', displayName: 'Home fixture' }, stats: [{ name: 'rank', value: 1 }, { name: 'points', value: 12 }, { name: 'gamesPlayed', value: 5 }] }] } }] };
   const result = normalizeSoccerStandings(fixture, 'epl', source);
   assert.equal(result.ok, true); assert.equal(result.standings[0].rows[0].points, 12);
   assert.equal(result.standings[0].rows[0].drawn, null);
   assert.equal(normalizeSoccerStandings(fixture, 'ucl', source).ok, false);
+  assert.equal(normalizeSoccerStandings({ ...fixture, id: '700', uid: 's:600~l:775' }, 'epl', source).ok, false);
+  const ucl = { ...structuredClone(fixture), id: '2', uid: 's:600~l:775', name: 'UEFA Champions League' };
+  assert.equal(normalizeSoccerStandings(ucl, 'ucl', source).ok, true);
+  ucl.children[0].uid = 's:600~l:700~g:1'; assert.equal(normalizeSoccerStandings(ucl, 'ucl', source).ok, false);
   const fetched = await fetchSoccerStandings('epl', { fetchImpl: async () => json(fixture) }); assert.equal(fetched.ok, true);
   fixture.children[0].standings.entries.push(fixture.children[0].standings.entries[0]);
   assert.equal(normalizeSoccerStandings(fixture, 'epl', source).ok, false);
@@ -136,7 +153,7 @@ if (process.argv.includes('--api')) {
       const empty = await good.json(); assert.equal(empty.ok, true); assert.deepEqual(empty.games, []); assert.equal(good.headers.get('Cache-Control'), 'no-store');
     });
     await test('API standings retain navigation date while declaring current snapshot scope', async () => {
-      globalThis.fetch = async () => json({ id: '700', name: 'English Premier League', children: [{ standings: { entries: [{ team: { id: '1', displayName: 'Contract fixture' }, stats: [] }] } }] });
+      globalThis.fetch = async () => json({ id: '23', uid: 's:600~l:700', name: 'English Premier League', children: [{ standings: { entries: [{ team: { id: '1', displayName: 'Contract fixture' }, stats: [] }] } }] });
       const response = await GET(request('league=epl&view=standings&date=2025-10-18'));
       const body = await response.json(); assert.equal(response.status, 200); assert.equal(body.date, '2025-10-18');
       assert.equal(body.historicalAsOfVerified, false); assert.equal(body.requestedDateIsNavigationOnly, true); assert.equal(body.standingsScope, 'CURRENT_PROVIDER_TABLE');

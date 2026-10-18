@@ -5,7 +5,7 @@ import { fetchSoccerSchedule, fetchSoccerStandings } from '../../../lib/soccer/d
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+export const maxDuration = 60;
 const response = (payload, status = 200) => NextResponse.json(payload, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function GET(request) {
   const denied = await requireApiAuth(request); if (denied) return denied;
