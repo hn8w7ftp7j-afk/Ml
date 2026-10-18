@@ -131,7 +131,8 @@ try {
     assert.equal(state.context.boardRef.current.filter(row => !isHistoricalIdentityConflict(row)).length, 5);
     assert.deepEqual(history[0].customData, originalBoard[0].customData);
     assert.equal(history[0].readerPayloadHash, null);
-    assert.match(page, /const shadowRanking = useMemo\(\(\) => activeBoard\.flatMap/);
+    assert.match(page, /const shadowRanking = useMemo\(\(\) => buildShadowRanking\(activeBoard, league, clockNow, liveReaderAuthority\)/);
+    assert.match(page, /function buildShadowRanking\(activeBoard, league, clockNow, liveReaderAuthority\)\s*\{\s*return activeBoard\.flatMap/);
     assert.match(page, /activeBoard\.map\(item => <GameCard/);
     assert.match(page, /historicalIdentityBoard\.length > 0 && <details/);
     assert.match(page, /歷史識別衝突/);

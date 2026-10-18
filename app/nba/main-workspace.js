@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 import { taipeiDate, validDate } from '../../lib/nba/identity.js';
 import { NBA_JOB_STORAGE, validNbaJob, mergeNbaAnalysisResults, nbaResultQuoteCurrent } from '../../lib/nba/analysis-job-display.js';
 import { nbaMarketScore } from '../../lib/nba/market-score.js';
+import { buildNbaShadowRanking, buildNbaShadowOrder } from '../../lib/nba/shadow-ranking.js';
 import NbaShadowRanking from './shadow-ranking.js';
 import { NbaBetRecordProvider, NbaBetRecordButton, NbaBetRecords } from './bet-records.js';
 import AnalysisNotificationControl from '../analysis-notification-control.js';
@@ -82,7 +83,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   </section>;
 }
 
-export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress, onJobChange }) {
+export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress, onJobChange, onHighScoreStatusChange, allLeagueBetStatuses }) {
   const [date, setDate] = useState(() => taipeiDate(Date.now()));
   const [rows, setRows] = useState([]);
   const [view, setView] = useState('board');
@@ -105,6 +106,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const explicitDate = useRef(false);
   const running = starting || ['starting', 'running'].includes(job?.status);
   const busy = running || otherBusy;
+  const trackBoard = active || validNbaJob(job) || Number(allRun?.leagues?.NBA?.total) > 0;
   useEffect(() => { onBusyChange(running); }, [running, onBusyChange]);
   useEffect(() => { onJobChange?.(job); }, [job, onJobChange]);
   useEffect(() => { onDateChange(date, explicitDate.current); }, [date, onDateChange]);
@@ -120,7 +122,8 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       || !notificationJob && allRun?.state === 'completed' && incoming.date !== dateRef.current) return;
     const next = { ...incoming, status: 'running' }; store(next); setJob(next); setDate(next.date);
   }, [allRun?.runId, allRun?.leagues?.NBA?.total, notificationJob]);
-  useEffect(() => { if (!active) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [active]);
+  // Keep the outer league summary current when NBA is hidden, including expiry/start time.
+  useEffect(() => { setNow(Date.now()); const timer = setInterval(() => setNow(Date.now()), active ? 1000 : 15000); return () => clearInterval(timer); }, [active]);
 
   async function load(target = dateRef.current, { followLatest = true } = {}) {
     const revision = ++requestRevision.current; setLoading(true); setError('');
@@ -145,8 +148,8 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
     } catch (cause) { if (revision === requestRevision.current && target === dateRef.current) setError(cause.message); return null; }
     finally { if (revision === requestRevision.current) setLoading(false); }
   }
-  useEffect(() => { if (active && !operation.current) void load(date); }, [active, date]);
-  useEffect(() => { if (!active || busy) return; const timer = setInterval(() => { if (!operation.current) void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [active, busy]);
+  useEffect(() => { if (trackBoard && !operation.current) void load(date); }, [trackBoard, date]);
+  useEffect(() => { if (!trackBoard || busy) return; const timer = setInterval(() => { if (!operation.current) void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [trackBoard, busy]);
   useEffect(() => {
     const resume = () => { if (document.visibilityState !== 'hidden' && validNbaJob(jobRef.current)) setReconnectRevision(value => value + 1); };
     window.addEventListener('focus', resume); document.addEventListener('visibilitychange', resume);
@@ -215,7 +218,9 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
     finally { operation.current = false; setStarting(false); }
   }
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
-  return <NbaBetRecordProvider date={date} active={active}><div hidden={!active} aria-label="NBA 主站分析">
+  // Match the existing candidate-order policy; the badge does not add a scoring rule.
+  const highScoreCandidates = useMemo(() => buildNbaShadowOrder(buildNbaShadowRanking(rows, date, now).entries).flatMap(group => group.entries), [rows, date, now]);
+  return <NbaBetRecordProvider date={date} active={active} candidates={highScoreCandidates} onHighScoreStatusChange={onHighScoreStatusChange}><div hidden={!active} aria-label="NBA 主站分析">
     <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'records' ? 'active' : ''} onClick={() => setView('records')}>下注紀錄</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button><button className={view === 'validation' ? 'active' : ''} onClick={() => setView('validation')}>模型驗證</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
     {message && <div className="noticeBox" role="status">{message}</div>}
@@ -234,7 +239,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.37-EPL-UCL.zip" download>下載 Reader v2.1.37</a>
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
-      </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun}/></section>
+      </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses}/></section>
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
       {(view === 'ranking' || view === 'records' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}

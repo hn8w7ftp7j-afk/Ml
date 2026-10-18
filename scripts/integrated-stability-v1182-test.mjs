@@ -8,7 +8,12 @@ assert.match(page, /const manualDateSelectionRef = useRef\(new Set\(\)\)/, 'manu
 assert.match(page, /function selectAnalysisDate\(value\)[\s\S]*setLeagueBoardDate\(league, value, \{ manual: true \}\)/, 'manual date selection must update the active league immediately');
 assert.match(page, /function selectLeague\(value\)[\s\S]*allLeagueBoardDate\(allLeagueRun, nextLeague,[\s\S]*setDate\(nextDate\)/, 'switching leagues must restore that league board date');
 assert.match(page, /\.filter\(row => item\.actualSource\?\.provider === 'TAI888_READER_AUTO'[\s\S]*modelEvValue\(row\) != null/, 'pending Reader validation must retain the previously calculated ranking rows');
-const rankingDerivation = page.slice(page.indexOf('const shadowRanking = useMemo'), page.indexOf('const shadowBetOrder = useMemo'));
+assert.match(page, /const shadowRanking = useMemo\(\(\) => buildShadowRanking\(activeBoard, league, clockNow, liveReaderAuthority\)/, 'the displayed ranking must call the shared ranking helper with the active board');
+const rankingStart = page.indexOf('function buildShadowRanking(');
+const rankingEnd = page.indexOf('export default function Home(', rankingStart);
+assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'shared ranking derivation missing');
+const rankingDerivation = page.slice(rankingStart, rankingEnd);
+assert.ok(rankingDerivation.indexOf('.filter(row') >= 0 && rankingDerivation.indexOf('.map(row') > rankingDerivation.indexOf('.filter(row'), 'shared ranking row filter missing');
 const rankingFilter = rankingDerivation.slice(rankingDerivation.indexOf('.filter(row'), rankingDerivation.indexOf('.map(row'));
 assert.doesNotMatch(rankingFilter, /preservedReaderAnalysis/, 'background refresh must not remove previously calculated ranking rows');
 assert.match(rankingDerivation, /currentAnalysisExecutable[\s\S]*!preservedReaderAnalysis/, 'preserved rows must remain visible without regaining current ranking authority');
