@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { BET_ORDER_MIN_SCORE, buildBetOrderEntries } from '../lib/bet-order.js';
 import { betIdentity } from '../lib/bet-ledger.js';
-import { summarizeBaseballHighScoreBets, summarizeHighScoreBets } from '../lib/league-bet-status.js';
+import { leagueAnalysisReminderReady, summarizeBaseballHighScoreBets, summarizeHighScoreBets } from '../lib/league-bet-status.js';
 
 const date = '2099-10-18';
 const league = 'MLB';
@@ -92,3 +92,28 @@ assert.doesNotMatch(reminders, /id === league \? shadowBetOrder/,
 assert.match(page, /<LeagueBetBadge summary=\{leagueBetStatuses\[id\]\}/,
   'outer league cards must display the derived status');
 console.log('High-score league badges: existing candidates, durable ticket state, cancel/rebet, price changes and scope isolation PASS');
+
+const oldTime = '2099-10-18T01:00:00Z', newTime = '2099-10-18T02:00:00Z';
+const earlierComplete = { status: 'completed', startedAt: oldTime, needsRecovery: false, resultLoaded: true };
+const newerRunning = { status: 'running', startedAt: newTime };
+const readyBatch = { status: 'done', resultLoaded: true };
+for (const status of ['preparing', 'queued', 'running', 'result_pending', 'failed']) {
+  const ready = leagueAnalysisReminderReady(null, { status, resultLoaded: false }, newTime);
+  assert.equal(ready, false, status);
+  const label = summarizeHighScoreBets([over], { ledgerReady: true, isRecorded: () => true, analysisReady: ready });
+  assert.equal(label.state, 'analysis_pending', 'earlier all-bet must not survive unfinished current results');
+  assert.notEqual(label.label, '高分已全下注');
+}
+assert.equal(leagueAnalysisReminderReady(earlierComplete, { status: 'running' }, newTime), false,
+  'newer all-league run wins over an old independent run');
+assert.equal(leagueAnalysisReminderReady(newerRunning, readyBatch, oldTime), false,
+  'newer independent run wins over an old all-league run');
+assert.equal(leagueAnalysisReminderReady({ ...earlierComplete, startedAt: newTime, resultLoaded: false, needsRecovery: true }, readyBatch, oldTime), false,
+  'completed server summary is not a loaded analysis result');
+assert.equal(leagueAnalysisReminderReady({ ...earlierComplete, startedAt: newTime, needsRecovery: true }, readyBatch, oldTime), true,
+  'loaded immutable display results may summarize bets without granting Reader authority');
+assert.equal(leagueAnalysisReminderReady(earlierComplete, readyBatch, newTime), true);
+assert.equal(leagueAnalysisReminderReady(null, null), true);
+assert.equal(summarizeHighScoreBets([], { analysisReady: false }).state, 'analysis_pending',
+  'unknown current results must not be confused with a confirmed empty candidate set');
+console.log('High-score reminders fence older all-bet state during newer runs and pending result loading PASS');
