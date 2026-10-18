@@ -137,6 +137,10 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: `無法取得完整 ${config.shortLabel} 官方賽程，Reader 本次未寫入` }, { status: 502, headers });
     }
     if (!schedule.length) {
+      if (!fullSchedule.length) {
+        console.warn('[READER_INGEST_REJECTED]', { code: 'READER_OFFICIAL_SCHEDULE_EMPTY', status: 503, league, boardDate });
+        return NextResponse.json({ ok: false, code: 'READER_OFFICIAL_SCHEDULE_EMPTY', error: `${config.shortLabel} 盤口已讀取，但官方賽程未取得可配對場次，請稍後重試` }, { status: 503, headers });
+      }
       console.warn('[READER_INGEST_REJECTED]', { code: 'READER_NO_PRESTART_GAMES', status: 409, league, boardDate });
       return NextResponse.json({ ok: false, code: 'READER_NO_PRESTART_GAMES', error: `${config.shortLabel} 官方台北盤日已無未開賽場次，Reader 本次未寫入` }, { status: 409, headers });
     }
