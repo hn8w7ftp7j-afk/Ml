@@ -5,8 +5,8 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.32');
-assert.equal(manifest.version_name, '2.1.32 NHL-READ');
+assert.equal(manifest.version, '2.1.33');
+assert.equal(manifest.version_name, '2.1.33 NHL-READ');
 assert.deepEqual(
   [...manifest.permissions].sort(),
   ['alarms', 'storage', 'webNavigation'].sort(),
@@ -21,14 +21,14 @@ assert.deepEqual(
 );
 assert.deepEqual(
   manifest.content_scripts[0].js,
-  ['capture-policy.js', 'league-registry.js', 'nhl-teams.js', 'row-normalizer.js', 'tai888-content.js'],
+  ['capture-policy.js', 'league-registry.js', 'nhl-teams.js', 'nhl-card-normalizer.js', 'row-normalizer.js', 'tai888-content.js'],
 );
 assert.equal(manifest.content_scripts[0].all_frames, true);
 assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const VERSION = '2\.1\.32'/);
+assert.match(background, /const VERSION = '2\.1\.33'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.match(background, /TAI888_READER_RECOVER/);
 assert.match(background, /RECOVERY_COOLDOWN_MS = 90_000/);
@@ -112,4 +112,4 @@ assert.match(status, /requestIsAuthenticated\(request\)/, 'Reader status must ac
 assert.match(auth, /60 \* 60 \* 24 \* 30/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
 
-console.log('Reader 2.1.32 static security audit: minimal permissions, verified live rescan, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');
+console.log('Reader 2.1.33 static security audit: minimal permissions, verified live rescan, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');

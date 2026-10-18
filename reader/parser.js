@@ -183,6 +183,16 @@ export function parseReaderMarketRows(key, rawRows) {
   return key.endsWith('Total') ? parseTotal(cell) : parseRunline(cell);
 }
 
+// NHL responsive cards render 0.93/0.75 next to three-decimal quotes. Only
+// canonicalize the trailing quote, never a handicap (1.5) or the raw evidence.
+export function parseNhlReaderMarketRows(key, rawRows, awayIndex = 0) {
+  if (!Array.isArray(rawRows) || rawRows.length !== 2 || ![0, 1].includes(awayIndex)
+    || rawRows.some(row => typeof row !== 'string' || row.length > 500)) return null;
+  const normalized = rawRows.map(row => clean(row).replace(/(^|\s)([0-3]\.\d{2,3})$/, (_, space, quote) => `${space}${Number(quote).toFixed(3)}`));
+  const parsed = key.endsWith('Total') ? parseTotal({ pair: normalized }) : parseRunline({ pair: normalized }, awayIndex);
+  return parsed ? { ...parsed, rawRows: key.endsWith('Total') ? [...rawRows] : [rawRows[awayIndex], rawRows[1 - awayIndex]] } : null;
+}
+
 function headerIndex(headers, patterns) {
   return headers.findIndex(value => patterns.some(pattern => pattern.test(clean(value))));
 }
@@ -367,7 +377,8 @@ export function parseTai888Capture(capture, now = new Date()) {
         if (league === 'NHL' && property.startsWith('first5')) continue;
         const index = map[headerKey];
         const cell = index >= 0 ? cells[index] : null;
-        const parsed = index >= 0 ? parser(cell, awayIndex) : null;
+        const parsed = index >= 0 ? league === 'NHL'
+          ? parseNhlReaderMarketRows(property, pairLines(cell), awayIndex) : parser(cell, awayIndex) : null;
         const outputProperty = league === 'NBA' ? property.replace('first5', 'firstHalf') : property;
         parsedMarkets[outputProperty] = parsed;
         marketStates[league === 'NBA' ? outputProperty : marketName] = marketCellState(cell, parsed, row?.marketLocked === true);
