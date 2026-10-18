@@ -5,7 +5,7 @@ import { buildNhlAnalysisBoard, loadNhlAnalysisBoard } from '../lib/nhl/analysis
 import { normalizeNhlAnalysisTasks, analyzeNhlJobTask } from '../lib/nhl/analysis-job.js';
 import { normalizeNhlSchedule } from '../lib/nhl/data.js';
 import { validNhlDate } from '../lib/nhl/identity.js';
-import { ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun, isAnalysisLeagueId } from '../lib/analysis-leagues.js';
+import { ACTIVE_ANALYSIS_LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, analysisBatchScope, analysisLeagueIdsForRun, isAnalysisLeagueId } from '../lib/analysis-leagues.js';
 import { LEAGUE_IDS, requestedLeagueId, leagueCanAnalyze } from '../lib/leagues.js';
 import { cloudBetLeagueCanWrite } from '../lib/cloud-bet-store.js';
 import { createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult } from '../lib/all-league-analysis-v117.js';
@@ -115,7 +115,7 @@ assert.equal(publications.at(-1).league, 'CPBL');
 // workflow adapters, retaining both NHL identity and honest shadow/save flags.
 const submissions = []; let authorized = true;
 const route = vm.createContext({ Request, Response, URL, NextResponse: Response, crypto: globalThis.crypto, Date,
-  cleanText: (value, max = 1000) => String(value || '').slice(0, max), ANALYSIS_LEAGUE_IDS, isAnalysisLeagueId,
+  cleanText: (value, max = 1000) => String(value || '').slice(0, max), ANALYSIS_LEAGUE_IDS, analysisBatchScope, isAnalysisLeagueId,
   normalizeNhlAnalysisTasks, normalizeNbaAnalysisTasks: tasks => tasks,
   requireApiAuth: async () => authorized ? null : Response.json({}, { status: 401 }), validateSameOrigin: () => true,
   checkRateLimit: () => ({ allowed: true }), validAnalysisJobRequestKey: () => false,

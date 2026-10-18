@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun, isAnalysisLeagueId } from '../lib/analysis-leagues.js';
+import { ACTIVE_ANALYSIS_LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, analysisBatchScope, analysisLeagueIdsForRun, isAnalysisLeagueId } from '../lib/analysis-leagues.js';
 import { LEAGUE_IDS, requestedLeagueId, leagueCanAnalyze } from '../lib/leagues.js';
 import { cloudBetLeagueCanWrite } from '../lib/cloud-bet-store.js';
 import { buildNbaAnalysisBoard } from '../lib/nba/analysis-board.js';
@@ -64,7 +64,7 @@ assert.equal(requestedLeagueId('NBA'), null); assert.equal(leagueCanAnalyze('NBA
 const submitted = []; let authorized = true;
 const route = vm.createContext({ Request, Response, URL, NextResponse: Response, crypto: globalThis.crypto, Date,
   cleanText: (v, max = 1000) => String(v || '').slice(0, max), isLeagueId: v => LEAGUE_IDS.includes(v),
-  isAnalysisLeagueId, ANALYSIS_LEAGUE_IDS, normalizeNbaAnalysisTasks, normalizeNhlAnalysisTasks,
+  isAnalysisLeagueId, ANALYSIS_LEAGUE_IDS, analysisBatchScope, normalizeNbaAnalysisTasks, normalizeNhlAnalysisTasks,
   requireApiAuth: async () => authorized ? null : Response.json({}, { status: 401 }), validateSameOrigin: () => true,
   checkRateLimit: () => ({ allowed: true }), validAnalysisJobRequestKey: () => false,
   readJsonBody: request => request.json(), deviceHash: () => null, readCookie: () => '', PUSH_COOKIE: 'unused',
@@ -80,6 +80,14 @@ assert.equal(submitted[0].input.batches.length, 6); assert.equal(submitted[0].in
 assert.equal((await post({ league: 'NBA', date, tasks: [task] })).status, 202);
 assert.equal(submitted[1].input.league, 'NBA');
 assert.equal((await post({ mode: 'all-leagues', date, batches: [...batches, batches[0]] })).status, 400);
+const activeBatches = batches.filter(batch => ACTIVE_ANALYSIS_LEAGUE_IDS.includes(batch.league));
+assert.equal((await post({ mode: 'all-leagues', date, requestedLeagues: ACTIVE_ANALYSIS_LEAGUE_IDS, batches: activeBatches })).status, 202);
+assert.equal(submitted.at(-1).input.preflightFailures, 0, 'five active batches must not invent a retired NHL failure');
+assert.equal((await post({ mode: 'all-leagues', date, requestedLeagues: ACTIVE_ANALYSIS_LEAGUE_IDS, batches: activeBatches.slice(1) })).status, 202);
+assert.equal(submitted.at(-1).input.preflightFailures, 1, 'one failed active preflight is counted once');
+assert.equal((await post({ mode: 'all-leagues', date, requestedLeagues: ['EPL'], batches: activeBatches })).status, 400);
+assert.equal((await post({ mode: 'all-leagues', date, requestedLeagues: ['NBA', 'NBA'], batches: activeBatches })).status, 400);
+assert.equal((await post({ mode: 'all-leagues', date, requestedLeagues: ACTIVE_ANALYSIS_LEAGUE_IDS, batches })).status, 400, 'submitted leagues must stay within the declared scope');
 assert.equal((await post({ league: 'NBA', date, tasks: [{ ...task, nbaQuery: { ...task.nbaQuery, date: '2026-10-06' } }] })).status, 400);
 authorized = false; assert.equal((await post({ league: 'NBA', date, tasks: [task] })).status, 401);
 

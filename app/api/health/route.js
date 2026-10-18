@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { APP_VERSION } from '../../../lib/app-version.js';
+import { publicSoccerLeagues, SOCCER_DATA_VERSION } from '../../../lib/soccer/contracts.js';
 import { appPasswordConfigured, requestIsAuthenticated, sessionSecretConfigured, siteAuthConfigured } from '../../../lib/security.js';
 import { MARKET_INTEGRITY_VERSION, marketIntegrityConfigured, SNAPSHOT_INTEGRITY_VERSION } from '../../../lib/market-integrity-v1.js';
 import { OFFICIAL_SCHEDULE_VERSION } from '../../../lib/official-schedule-v1.js';
@@ -84,6 +85,8 @@ export async function GET(request) {
     version,
     leagueRegistryVersion: LEAGUE_REGISTRY_VERSION,
     leagues,
+    soccerVersion: SOCCER_DATA_VERSION,
+    soccerLeagues: publicSoccerLeagues(),
     modelVersion: MODEL_VERSION,
     modelEvFormulaVersion: MODEL_EV_FORMULA_VERSION,
     robustEvVersion: ROBUST_EV_VERSION,

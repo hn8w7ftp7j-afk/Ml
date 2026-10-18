@@ -11,7 +11,7 @@ import {
   requireApiAuth,
   validateSameOrigin,
 } from '../../../lib/security.js';
-import { ANALYSIS_LEAGUE_IDS, isAnalysisLeagueId } from '../../../lib/analysis-leagues.js';
+import { ANALYSIS_LEAGUE_IDS, analysisBatchScope, isAnalysisLeagueId } from '../../../lib/analysis-leagues.js';
 import { normalizeNbaAnalysisTasks } from '../../../lib/nba/analysis-job.js';
 import { normalizeNhlAnalysisTasks } from '../../../lib/nhl/analysis-job.js';
 import { readCookie } from '../../../lib/security.js';
@@ -102,7 +102,9 @@ export async function POST(request) {
         };
       });
       const leagues = normalizedBatches.map(batch => batch.league);
+      const scope = analysisBatchScope(leagues, body.requestedLeagues);
       const valid = /^\d{4}-\d{2}-\d{2}$/.test(date)
+        && scope != null
         && normalizedBatches.length > 0
         && normalizedBatches.length <= ANALYSIS_LEAGUE_IDS.length
         && normalizedBatches.every(batch => isAnalysisLeagueId(batch.league)
@@ -117,7 +119,7 @@ export async function POST(request) {
       const priority = league => league === 'NBA' ? 2 : league === 'NHL' ? 1 : 0;
       normalizedBatches.sort((left, right) => priority(right.league) - priority(left.league));
       const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
-      const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches, pushDevice, preflightFailures: ANALYSIS_LEAGUE_IDS.length - normalizedBatches.length }]);
+      const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches, pushDevice, preflightFailures: scope.preflightFailures }]);
       if (requestClaim?.claimed) {
         try { await completeAnalysisJobRequest(requestKey, run.runId); }
         catch {}
