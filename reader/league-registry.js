@@ -6,6 +6,8 @@
     CPBL: Object.freeze({ id: 'CPBL', label: '中職', marker: /(?:聯盟|联盟)\s*[:：]?\s*CPBL\s*(?:中華職棒|中华职棒|台灣職棒|台湾职棒)/i }),
     NBA: Object.freeze({ id: 'NBA', label: '美籃', marker: /(?:聯盟|联盟)\s*[:：]?\s*NBA(?=\s|[-－–—:：（(]|美國職業籃球|美国职业篮球|美國職籃|美国职篮|$)/i }),
     NHL: Object.freeze({ id: 'NHL', label: '冰球', marker: /(?:^(?=NHL(?:國家冰球聯盟|国家冰球联盟|美式冰球))|(?:聯盟|联盟)\s*[:：]?\s*)NHL(?=\s|[-－–—:：（(]|美式冰球|國家冰球|国家冰球|美國職業冰球|美国职业冰球|$)/i }),
+    EPL: Object.freeze({ id: 'EPL', label: '英超', marker: /^(?:(?:聯盟|联盟)\s*[:：]?\s*)?(?:(?:EPL\s*[-:：]?\s*)?(?:英格蘭|英格兰|英國|英国)(?:足球)?(?:超級|超级)(?:足球)?(?:聯賽|联赛)|英超(?:聯賽|联赛)?|English Premier League|EPL(?=\s|[-:：（(]|$))/i }),
+    UCL: Object.freeze({ id: 'UCL', label: '歐冠', marker: /^(?:(?:聯盟|联盟)\s*[:：]?\s*)?(?:(?:UCL\s*[-:：]?\s*)?歐洲(?:冠軍聯賽|冠军联赛|聯賽冠軍盃)|歐冠(?:聯賽|联赛)?|UEFA Champions League|UCL(?=\s|[-:：（(]|$))/i }),
   });
   const ids = Object.freeze(Object.keys(leagues));
   const special = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
@@ -31,6 +33,7 @@
     const match = value.match(leagues[league].marker);
     if (!match || match.index !== 0) return false;
     const suffix = value.slice(match[0].length);
+    if (['EPL','UCL'].includes(league)) return !/(?:角球|CORNER|上半|下半|半場|半场|加時|加时|延長|延长|球員|球员|黃牌|黄牌|紅牌|红牌|卡牌|青年|女子|U\s*\d{2}|HALF|OVERTIME|WOMEN|YOUTH)/i.test(suffix);
     // The normal full-game heading explicitly says "包括加時與點球".
     // Accept that display qualifier for raw evidence capture only; it neither
     // verifies settlement rules nor enables execution. Standalone OT, period,

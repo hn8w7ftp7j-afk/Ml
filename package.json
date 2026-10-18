@@ -1,6 +1,6 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.9.99",
+  "version": "11.10.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -39,7 +39,7 @@
     "test:over-diagnostics": "node scripts/market-research-policy-test.mjs && node scripts/over-diagnostic-view-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/over-diagnostic-api-test.mjs",
     "test:over-http": "node scripts/over-diagnostic-http-test.mjs",
     "test:bet-recovery": "node scripts/bet-attempt-journal-test.mjs && node scripts/bet-reanalysis-recovery-test.mjs",
-    "test:soccer": "node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-data-test.mjs --api && node scripts/soccer-ui-test.mjs && node scripts/soccer-integration-test.mjs",
+    "test:soccer": "node scripts/soccer-reader-test.mjs --api && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-data-test.mjs --api && node scripts/soccer-ui-test.mjs && node scripts/soccer-integration-test.mjs",
     "test:soccer:live": "node scripts/soccer-source-smoke.mjs"
   },
   "dependencies": {

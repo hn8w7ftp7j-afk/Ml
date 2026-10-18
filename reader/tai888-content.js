@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.33';
+  const READER_VERSION = '2.1.34';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -326,6 +326,24 @@
     return latest;
   }
 
+  function captureSoccerCards(league) {
+    const sections=[], seen=new Set();
+    for (const heading of queryAcrossRoots(openRoots(), 'div,span,h1,h2,h3,h4,p,strong,button').slice(0,7000)) {
+      if (!visible(heading)) continue;
+      const label=clean(heading.innerText||heading.textContent||'');
+      if(label.length>140||!globalThis.Tai888LeagueRegistry.standardMarker(label,league))continue;
+      let section=heading;
+      for(let depth=0;section&&depth<8;depth++,section=section.parentElement){
+        if(/^(BODY|HTML)$/i.test(section.tagName))break;
+        const value=clean(section.innerText||section.textContent||'');
+        if(value.length>24000)break;
+        if(!/\d{1,2}[/-]\d{1,2}\s+\d{1,2}:[0-5]\d/.test(value)||!/(?:讓分|让分|讓球|让球)/.test(value)||!/大小/.test(value))continue;
+        if(!seen.has(section)){seen.add(section);sections.push({label,fragments:textRows(section,{fragmentsOnly:true,limit:2401})});}break;
+      }
+    }
+    return globalThis.Tai888SoccerCardNormalizer?.normalize(sections,league)||{tables:[],diagnostics:{}};
+  }
+
   function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
     const { elements, records } = collectRecords();
     const nhlCards = captureNhlCards();
@@ -340,7 +358,7 @@
     const verifiedRefreshAt = Math.max(Number(verifiedBoardRefreshAt) || 0, verifiedNetworkRefreshAt);
     const captures = [];
     for (const league of globalThis.Tai888LeagueRegistry.ids) {
-      const normalized = league === 'NHL' && nhlCards.tables.length ? nhlCards
+      const normalized = ['EPL','UCL'].includes(league) ? captureSoccerCards(league) : league === 'NHL' && nhlCards.tables.length ? nhlCards
         : normalizer.normalizeRowRecords(records, { expectedLeague: league });
       if (!normalized.tables.length && !normalized.diagnostics?.sawLeagueMarker) continue;
       const fingerprint = stableMarketFingerprint(normalized);
@@ -356,7 +374,7 @@
       captures.push({
         version: 'TAI888-DOM-CAPTURE-v2.2.0',
         league,
-        ...(league === 'NHL' ? { pageLeagueLabel: normalized.diagnostics.pageLeagueLabel } : {}),
+        ...(['NHL','EPL','UCL'].includes(league) ? { pageLeagueLabel: normalized.diagnostics.pageLeagueLabel } : {}),
         sourceHost: tai888SourceHost(),
         pageUrl: currentTai888PageUrl(),
         observedAt: new Date().toISOString(),

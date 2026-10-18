@@ -1,4 +1,5 @@
 import './nhl-teams.js';
+import { parseSoccerCapture, canonicalSoccerPayload } from './soccer-parser.js';
 
 const LINE_TOKEN = /^(?:\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(?:平|[+-]\d{1,3})?$/;
 const WATER_TOKEN = /^\d(?:\.\d{3})$/;
@@ -11,6 +12,7 @@ const NHL_MARKET_PROPERTIES = Object.freeze(['fullRunline', 'fullTotal']);
 
 // NBA halves use basketball periods; never expose them as baseball first-five markets.
 export function readerMarketProperties(league) {
+  if (['EPL', 'UCL'].includes(league)) return ['markets'];
   return league === 'NHL' ? NHL_MARKET_PROPERTIES : league === 'NBA' ? NBA_MARKET_PROPERTIES : BASEBALL_MARKET_PROPERTIES;
 }
 
@@ -345,6 +347,7 @@ function marketCellState(cell, parsed, explicitLock = false) {
 }
 
 export function parseTai888Capture(capture, now = new Date()) {
+  if (['EPL','UCL'].includes(capture?.league)) return parseSoccerCapture(capture, now);
   const league = LEAGUES.includes(capture?.league) ? capture.league : '';
   const tables = Array.isArray(capture?.tables) ? capture.tables : [];
   const games = [];
@@ -473,6 +476,7 @@ export function parseTai888Capture(capture, now = new Date()) {
 }
 
 export function canonicalReaderPayload(payload) {
+  if (['EPL','UCL'].includes(payload?.league)) return canonicalSoccerPayload(payload);
   const orderedGames = [...(payload?.games || [])].sort((left, right) => {
     const leftKey = `${left?.boardDate || ''}|${left?.boardTime || ''}|${left?.awayCode || ''}|${left?.homeCode || ''}`;
     const rightKey = `${right?.boardDate || ''}|${right?.boardTime || ''}|${right?.awayCode || ''}|${right?.homeCode || ''}`;

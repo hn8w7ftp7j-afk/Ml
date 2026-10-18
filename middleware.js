@@ -3,6 +3,8 @@ import { renewAuthenticatedSession, requestIsAuthenticated, siteAuthConfigured }
 
 const PUBLIC_PATHS = new Set(['/login', '/api/auth', '/api/health', '/api/reader/pair', '/api/reader/ingest', '/api/reader/capture', '/api/reader/status', '/api/nhl/reader', '/api/nba/reader', '/api/cron/mlb-advanced-snapshots', '/api/cron/analysis-direction-settlements', '/api/cron/bet-settlements']);
 const PUBLIC_PWA_PATHS = new Set(['/manifest.webmanifest', '/sw.js']);
+// Paired extension POST still requires its Reader token and allowed origin.
+PUBLIC_PATHS.add('/api/soccer/reader');
 // Native cron has no browser session. Its route requires CRON_SECRET; only
 // this exact maintenance endpoint skips the unrelated session middleware.
 PUBLIC_PATHS.add('/api/cron/nba-maintenance');

@@ -1,10 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.1.33",
-  "version_name": "2.1.33 NHL-READ",
-  "description": "獨立讀取 Tai888 美棒、日棒、韓棒、中職、NBA 與 NHL 原始盤面證據，各聯盟隔離同步。",
-  "permissions": ["storage", "alarms", "webNavigation"],
+  "version": "2.1.34",
+  "version_name": "2.1.34 FOOTBALL",
+  "description": "各聯盟隔離同步，新增英超及歐冠足球原始盤口；足球結算規格與模型驗證中。",
+  "permissions": [
+    "storage",
+    "alarms",
+    "webNavigation"
+  ],
   "host_permissions": [
     "https://*.tai888.in/*",
     "https://tai888.in/*",
@@ -25,6 +29,8 @@
         "league-registry.js",
         "nhl-teams.js",
         "nhl-card-normalizer.js",
+        "soccer-teams.js",
+        "soccer-card-normalizer.js",
         "row-normalizer.js",
         "tai888-content.js"
       ],

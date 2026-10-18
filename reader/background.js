@@ -1,11 +1,11 @@
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from './parser.js';
 import { selectAuthoritativeBoard, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
 
-const VERSION = '2.1.33';
+const VERSION = '2.1.34';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
-const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL'];
-const LABELS = { MLB: '美棒', NPB: '日棒', KBO: '韓棒', CPBL: '中職', NBA: '美籃', NHL: '冰球' };
+const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
+const LABELS = { MLB: '美棒', NPB: '日棒', KBO: '韓棒', CPBL: '中職', NBA: '美籃', NHL: '冰球', EPL:'英超', UCL:'歐冠' };
 const ALARM = 'tai888-reader-auto-sync';
 let running;
 let pendingRerun = false;
@@ -75,7 +75,7 @@ function sanitizeCapture(raw) {
   const league = LEAGUES.includes(input.league) ? input.league : null;
   return {
     version: /^TAI888-DOM-CAPTURE-v2\.[12]\.0$/.test(input.version || '') ? input.version : '', league,
-    ...(league === 'NHL' ? { pageLeagueLabel: String(input.pageLeagueLabel || '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 100) } : {}),
+    ...(['NHL','EPL','UCL'].includes(league) ? { pageLeagueLabel: String(input.pageLeagueLabel || '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 100) } : {}),
     sourceHost: safeHost(`https://${input.sourceHost || ''}`) || safeHost(input.pageUrl), pageUrl: safeUrl(input.pageUrl), frameUrl: safeUrl(input.frameUrl), observedAt: iso(input.observedAt),
     tables: Array.isArray(input.tables) ? input.tables.slice(0, 12) : [],
     diagnostics: { recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, wrongPeriodHeader: input.diagnostics?.wrongPeriodHeader === true, conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
@@ -236,18 +236,18 @@ async function performSync(reason, preferredTabId) {
     const payloads = readerPayloadsByDate(sourcePayload);
     const accepted = [], failures = [];
     for (const payload of payloads) {
-      const syncKey = ['NBA', 'NHL'].includes(league) ? `${league}:${payload.boardDate}` : league;
+      const syncKey = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? `${league}:${payload.boardDate}` : league;
       try {
         const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
         if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[syncKey], lastSuccessfulSyncAt: times[syncKey], now: Date.now() })) {
           // A skipped day still contributes to the aggregate only if its
           // previously acknowledged receipt is available.
-          const receipt = ['NBA', 'NHL'].includes(league)
+          const receipt = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league)
             ? stored.readerStatuses?.[league]?.dateStatuses?.find(item => item.boardDate === payload.boardDate)
             : stored.readerStatuses?.[league];
           if (receipt) { accepted.push(receipt); results.push({ league, boardDate: payload.boardDate, ok: true, skipped: true }); continue; }
         }
-        const endpoint = league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
+        const endpoint = ['EPL','UCL'].includes(league) ? '/api/soccer/reader' : league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
         const wirePayload = league === 'NHL' ? nhlReaderEvidencePayload(payload) : payload;
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
         const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
@@ -258,8 +258,8 @@ async function performSync(reason, preferredTabId) {
     }
     const sum = key => accepted.reduce((count, item) => count + Number(item[key] || 0), 0);
     statuses[league] = { ok: failures.length === 0, state: failures.length ? 'error' : 'synced', league,
-      executable: ['NBA', 'NHL'].includes(league) ? accepted.some(item => item.executable) : sum('matchedGameCount') > 0,
-      captureOnly: ['NBA', 'NHL'].includes(league), message: failures.length ? failures.map(item => `${item.boardDate}：${item.error}`).join('；') : `已同步 ${accepted.length} 個日期`,
+      executable: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? accepted.some(item => item.executable) : sum('matchedGameCount') > 0,
+      captureOnly: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league), message: failures.length ? failures.map(item => `${item.boardDate}：${item.error}`).join('；') : `已同步 ${accepted.length} 個日期`,
       lastSyncAt: accepted.length ? Math.min(...accepted.map(item => item.lastSyncAt)) : 0, lastAttemptAt: Date.now(),
       rawGameCount: sum('rawGameCount'), matchedGameCount: sum('matchedGameCount'), unopenedGameCount: sum('unopenedGameCount'), marketCount: sum('marketCount'), directionCount: sum('directionCount'), partialGameCount: sum('partialGameCount'),
       localDiagnostic: localBoardDiagnostic(sourcePayload, selected.candidate.capture), boardDate: sourcePayload.boardDate,
@@ -268,7 +268,7 @@ async function performSync(reason, preferredTabId) {
   }
   await chrome.storage.local.set({ readerStatuses: statuses, lastSuccessfulPayloadHashes: hashes, lastSuccessfulSyncAts: times, pairError: '' });
   const successes = LEAGUES.filter(league => statuses[league]?.ok === true && statuses[league]?.state === 'synced').length;
-  return { ok: successes > 0, results, message: `六聯盟檢查完成｜${successes} 個分頁同步成功` };
+  return { ok: successes > 0, results, message: `各聯盟檢查完成｜${successes} 個分頁同步成功` };
 }
 async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, error: stored.pairError || '', readerVersion: VERSION }; }
 

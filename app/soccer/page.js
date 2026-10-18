@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { APP_VERSION } from '../../lib/app-version.js';
+import SoccerReaderPanel from './reader-panel.js';
 import { soccerTeamLabel } from '../../lib/soccer/team-labels.js';
 
 const SOCCER_LEAGUES = { EPL: { name: '英超', fullName: '英格蘭超級聯賽' }, UCL: { name: '歐冠 UCL', fullName: '歐洲冠軍聯賽' } };
@@ -164,6 +165,7 @@ export default function SoccerPage() {
       <div className="soccerViewNav" aria-label="足球資料檢視">{Object.entries(VIEW_NAMES).map(([view, name]) => <button key={view} type="button" className={location.view === view ? 'active' : ''} aria-pressed={location.view === view} disabled={!location.date} onClick={() => navigate({ ...location, view })}>{name}</button>)}</div>
       <p className="soccerAvailability">盤口與評分建置中</p>
     </section>
+    <SoccerReaderPanel league={location.league} date={location.date}/>
     {error && <div className="errorBox soccerError" role="alert"><div><strong>{board ? '更新失敗，保留上次資料' : '資料載入失敗'}</strong><p>{error}</p></div><button type="button" className="secondary" disabled={busy} onClick={retry}>重試</button></div>}
     <section aria-label={`${league.name}${VIEW_NAMES[location.view]}`} aria-busy={busy}>
       <div className="soccerBoardHeading"><h2>{location.view === 'upcoming' ? '近期賽程' : location.view === 'standings' ? '目前積分榜' : dateLabel}</h2><span role="status" aria-live="polite">{busy ? board ? '更新中…' : '載入中…' : board ? displayCount : ''}</span></div>
