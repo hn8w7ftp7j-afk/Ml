@@ -1,0 +1,901 @@
+{
+  "version": "SOCCER-HT-EXTRACTION-EXAMPLES-v1",
+  "meaning": "Selected fields projected from actual raw responses. source.contentHash hashes the full raw parsed response; projectionHash hashes only this projection. Raw originals retained separately.",
+  "examples": [
+    {
+      "name": "epl-704467",
+      "source": {
+        "provider": "ESPN",
+        "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=704467",
+        "fetchedAt": "2026-10-18T21:02:13.008Z",
+        "confidence": "provider_reported",
+        "fallbackSource": null,
+        "requestedAt": "2026-10-18T21:02:12.867Z",
+        "contentHash": "19eca26d934019b9af4f19f8b0a2fdbe3564bec7976e2c42e540c07b2d836409"
+      },
+      "projectionHash": "19661c1bd599602d783517d2522f1f96233897c43cad5394a5887219b5536ca2",
+      "payload": {
+        "header": {
+          "id": "704467",
+          "competitions": [
+            {
+              "date": "2025-01-01T17:30Z",
+              "status": {
+                "type": {
+                  "id": "28",
+                  "name": "STATUS_FULL_TIME",
+                  "state": "post",
+                  "completed": true,
+                  "description": "Full Time",
+                  "detail": "FT",
+                  "shortDetail": "FT"
+                }
+              },
+              "competitors": [
+                {
+                  "homeAway": "home",
+                  "score": "1",
+                  "team": {
+                    "id": "337"
+                  },
+                  "linescores": [
+                    {
+                      "displayValue": "1"
+                    },
+                    {
+                      "displayValue": "0"
+                    }
+                  ]
+                },
+                {
+                  "homeAway": "away",
+                  "score": "3",
+                  "team": {
+                    "id": "359"
+                  },
+                  "linescores": [
+                    {
+                      "displayValue": "1"
+                    },
+                    {
+                      "displayValue": "2"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "format": {
+          "regulation": {
+            "periods": 2,
+            "displayName": "Half",
+            "slug": "half",
+            "clock": 2700
+          }
+        },
+        "keyEvents": [
+          {
+            "id": "44476163",
+            "type": {
+              "id": "80",
+              "text": "Kickoff",
+              "type": "kickoff"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 0,
+              "displayValue": ""
+            },
+            "scoringPlay": false
+          },
+          {
+            "id": "44476201",
+            "type": {
+              "id": "70",
+              "text": "Goal",
+              "type": "goal"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 728,
+              "displayValue": "13'"
+            },
+            "scoringPlay": true,
+            "team": {
+              "id": "337",
+              "displayName": "Brentford"
+            },
+            "text": "Goal! Brentford 1, Arsenal 0. Bryan Mbeumo (Brentford) left footed shot from the right side of the box to the bottom right corner. Assisted by Mikkel Damsgaard following a fast break."
+          },
+          {
+            "id": "44476213",
+            "type": {
+              "id": "94",
+              "text": "Yellow Card",
+              "type": "yellow-card"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 1007,
+              "displayValue": "17'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Jurriën Timber (Arsenal) is shown the yellow card for a bad foul."
+          },
+          {
+            "id": "44476236",
+            "type": {
+              "id": "94",
+              "text": "Yellow Card",
+              "type": "yellow-card"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 1519,
+              "displayValue": "26'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "337",
+              "displayName": "Brentford"
+            },
+            "text": "Christian Nørgaard (Brentford) is shown the yellow card for a bad foul."
+          },
+          {
+            "id": "44476250",
+            "type": {
+              "id": "137",
+              "text": "Goal - Header",
+              "type": "goal---header"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 1703,
+              "displayValue": "29'"
+            },
+            "scoringPlay": true,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Goal! Brentford 1, Arsenal 1. Gabriel Jesus (Arsenal) header from very close range to the high centre of the goal."
+          },
+          {
+            "id": "44476320",
+            "type": {
+              "id": "81",
+              "text": "Halftime",
+              "type": "halftime"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 2700,
+              "displayValue": "45'+4'"
+            },
+            "scoringPlay": false,
+            "text": "First Half ends, Brentford 1, Arsenal 1."
+          },
+          {
+            "id": "44476324",
+            "type": {
+              "id": "82",
+              "text": "Start 2nd Half",
+              "type": "start-2nd-half"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 2700,
+              "displayValue": "45'"
+            },
+            "scoringPlay": false,
+            "text": "Second Half begins Brentford 1, Arsenal 1."
+          },
+          {
+            "id": "44476336",
+            "type": {
+              "id": "70",
+              "text": "Goal",
+              "type": "goal"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 2958,
+              "displayValue": "50'"
+            },
+            "scoringPlay": true,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Goal! Brentford 1, Arsenal 2. Mikel Merino (Arsenal) left footed shot from very close range to the bottom left corner following a corner."
+          },
+          {
+            "id": "44476346",
+            "type": {
+              "id": "173",
+              "text": "Goal - Volley",
+              "type": "goal---volley"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 3146,
+              "displayValue": "53'"
+            },
+            "scoringPlay": true,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Goal! Brentford 1, Arsenal 3. Gabriel Martinelli (Arsenal) right footed shot from the centre of the box to the bottom right corner."
+          },
+          {
+            "id": "44476352",
+            "type": {
+              "id": "94",
+              "text": "Yellow Card",
+              "type": "yellow-card"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 3416,
+              "displayValue": "57'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Riccardo Calafiori (Arsenal) is shown the yellow card for a bad foul."
+          },
+          {
+            "id": "44476422",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4460,
+              "displayValue": "75'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "337",
+              "displayName": "Brentford"
+            },
+            "text": "Substitution, Brentford. Paris Maghoma replaces Mikkel Damsgaard."
+          },
+          {
+            "id": "44476424",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4475,
+              "displayValue": "75'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "337",
+              "displayName": "Brentford"
+            },
+            "text": "Substitution, Brentford. Kevin Schade replaces Yoane Wissa."
+          },
+          {
+            "id": "44476423",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4475,
+              "displayValue": "75'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "337",
+              "displayName": "Brentford"
+            },
+            "text": "Substitution, Brentford. Kim Ji-Soo replaces Sepp van den Berg."
+          },
+          {
+            "id": "44476425",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4484,
+              "displayValue": "75'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "337",
+              "displayName": "Brentford"
+            },
+            "text": "Substitution, Brentford. Mathias Jensen replaces Christian Nørgaard."
+          },
+          {
+            "id": "44476430",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4638,
+              "displayValue": "78'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Substitution, Arsenal. Myles Lewis-Skelly replaces Riccardo Calafiori."
+          },
+          {
+            "id": "44476431",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4639,
+              "displayValue": "78'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Substitution, Arsenal. Leandro Trossard replaces Ethan Nwaneri."
+          },
+          {
+            "id": "44476432",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4656,
+              "displayValue": "78'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Substitution, Arsenal. Declan Rice replaces Mikel Merino."
+          },
+          {
+            "id": "44476471",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5239,
+              "displayValue": "88'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Substitution, Arsenal. Jorginho replaces Martin Ødegaard."
+          },
+          {
+            "id": "44476488",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5400,
+              "displayValue": "90'+1'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "359",
+              "displayName": "Arsenal"
+            },
+            "text": "Substitution, Arsenal. Oleksandr Zinchenko replaces Gabriel Jesus."
+          },
+          {
+            "id": "44476494",
+            "type": {
+              "id": "83",
+              "text": "End Regular Time",
+              "type": "end-regular-time"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5400,
+              "displayValue": "90'+5'"
+            },
+            "scoringPlay": false,
+            "text": "Second Half ends, Brentford 1, Arsenal 3."
+          }
+        ]
+      }
+    },
+    {
+      "name": "ucl-720330",
+      "source": {
+        "provider": "ESPN",
+        "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/summary?event=720330",
+        "fetchedAt": "2026-10-18T21:03:06.850Z",
+        "confidence": "provider_reported",
+        "fallbackSource": null,
+        "requestedAt": "2026-10-18T21:03:06.738Z",
+        "contentHash": "938ab93646f105226a3755ad8488782305a64a00e498d90c557107aa108774e6"
+      },
+      "projectionHash": "5a109f67d9d86dfcd68eb75b44b4660825fc9a59baa8bc69bbf2006512ff80a6",
+      "payload": {
+        "header": {
+          "id": "720330",
+          "competitions": [
+            {
+              "date": "2025-01-21T17:45Z",
+              "status": {
+                "type": {
+                  "id": "28",
+                  "name": "STATUS_FULL_TIME",
+                  "state": "post",
+                  "completed": true,
+                  "description": "Full Time",
+                  "detail": "FT",
+                  "shortDetail": "FT"
+                }
+              },
+              "competitors": [
+                {
+                  "homeAway": "home",
+                  "score": "1",
+                  "team": {
+                    "id": "174"
+                  },
+                  "linescores": [
+                    {
+                      "displayValue": "1"
+                    },
+                    {
+                      "displayValue": "0"
+                    }
+                  ]
+                },
+                {
+                  "homeAway": "away",
+                  "score": "0",
+                  "team": {
+                    "id": "362"
+                  },
+                  "linescores": [
+                    {
+                      "displayValue": "0"
+                    },
+                    {
+                      "displayValue": "0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "format": {
+          "regulation": {
+            "periods": 2,
+            "displayName": "Half",
+            "slug": "half",
+            "clock": 2700
+          }
+        },
+        "keyEvents": [
+          {
+            "id": "44547026",
+            "type": {
+              "id": "80",
+              "text": "Kickoff",
+              "type": "kickoff"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 0,
+              "displayValue": ""
+            },
+            "scoringPlay": false,
+            "text": "First Half begins."
+          },
+          {
+            "id": "44547050",
+            "type": {
+              "id": "137",
+              "text": "Goal - Header",
+              "type": "goal---header"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 463,
+              "displayValue": "8'"
+            },
+            "scoringPlay": true,
+            "team": {
+              "id": "174",
+              "displayName": "AS Monaco"
+            },
+            "text": "Goal! Monaco 1, Aston Villa 0. Wilfried Singo (Monaco) header from very close range to the top left corner following a corner."
+          },
+          {
+            "id": "44547211",
+            "type": {
+              "id": "81",
+              "text": "Halftime",
+              "type": "halftime"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "value": 2700,
+              "displayValue": "45'+4'"
+            },
+            "scoringPlay": false
+          },
+          {
+            "id": "44547237",
+            "type": {
+              "id": "82",
+              "text": "Start 2nd Half",
+              "type": "start-2nd-half"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 2700,
+              "displayValue": "45'"
+            },
+            "scoringPlay": false,
+            "text": "Second Half begins Monaco 1, Aston Villa 0."
+          },
+          {
+            "id": "44547294",
+            "type": {
+              "id": "94",
+              "text": "Yellow Card",
+              "type": "yellow-card"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 2884,
+              "displayValue": "49'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "362",
+              "displayName": "Aston Villa"
+            },
+            "text": "Lucas Digne (Aston Villa) is shown the yellow card for a bad foul."
+          },
+          {
+            "id": "44547280",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 3364,
+              "displayValue": "57'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "362",
+              "displayName": "Aston Villa"
+            },
+            "text": "Substitution, Aston Villa. Jhon Durán replaces Leon Bailey."
+          },
+          {
+            "id": "44547304",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 3880,
+              "displayValue": "65'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "174",
+              "displayName": "AS Monaco"
+            },
+            "text": "Substitution, Monaco. Soungoutou Magassa replaces Lamine Camara."
+          },
+          {
+            "id": "44547305",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 3917,
+              "displayValue": "66'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "174",
+              "displayName": "AS Monaco"
+            },
+            "text": "Substitution, Monaco. Aleksandr Golovin replaces Eliesse Ben Seghir."
+          },
+          {
+            "id": "44547308",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 3984,
+              "displayValue": "67'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "362",
+              "displayName": "Aston Villa"
+            },
+            "text": "Substitution, Aston Villa. Ian Maatsen replaces Lucas Digne."
+          },
+          {
+            "id": "44547365",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4666,
+              "displayValue": "78'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "174",
+              "displayName": "AS Monaco"
+            },
+            "text": "Substitution, Monaco. Lucas Michal replaces Takumi Minamino."
+          },
+          {
+            "id": "44547366",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4682,
+              "displayValue": "79'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "174",
+              "displayName": "AS Monaco"
+            },
+            "text": "Substitution, Monaco. Jordan Teze replaces Denis Zakaria."
+          },
+          {
+            "id": "44547379",
+            "type": {
+              "id": "94",
+              "text": "Yellow Card",
+              "type": "yellow-card"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 4896,
+              "displayValue": "82'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "362",
+              "displayName": "Aston Villa"
+            },
+            "text": "Morgan Rogers (Aston Villa) is shown the yellow card for a bad foul."
+          },
+          {
+            "id": "44547392",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5129,
+              "displayValue": "86'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "362",
+              "displayName": "Aston Villa"
+            },
+            "text": "Substitution, Aston Villa. Jacob Ramsey replaces Morgan Rogers."
+          },
+          {
+            "id": "44547393",
+            "type": {
+              "id": "76",
+              "text": "Substitution",
+              "type": "substitution"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5142,
+              "displayValue": "86'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "362",
+              "displayName": "Aston Villa"
+            },
+            "text": "Substitution, Aston Villa. Lamare Bogarde replaces Emiliano Buendía."
+          },
+          {
+            "id": "44547424",
+            "type": {
+              "id": "94",
+              "text": "Yellow Card",
+              "type": "yellow-card"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5400,
+              "displayValue": "90'+2'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "362",
+              "displayName": "Aston Villa"
+            },
+            "text": "Boubacar Kamara (Aston Villa) is shown the yellow card."
+          },
+          {
+            "id": "44547427",
+            "type": {
+              "id": "94",
+              "text": "Yellow Card",
+              "type": "yellow-card"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5400,
+              "displayValue": "90'+2'"
+            },
+            "scoringPlay": false,
+            "team": {
+              "id": "174",
+              "displayName": "AS Monaco"
+            },
+            "text": "Aleksandr Golovin (Monaco) is shown the yellow card."
+          },
+          {
+            "id": "44547432",
+            "type": {
+              "id": "83",
+              "text": "End Regular Time",
+              "type": "end-regular-time"
+            },
+            "period": {
+              "number": 2
+            },
+            "clock": {
+              "value": 5400,
+              "displayValue": "90'+6'"
+            },
+            "scoringPlay": false,
+            "text": "Second Half ends, Monaco 1, Aston Villa 0."
+          }
+        ]
+      }
+    }
+  ]
+}

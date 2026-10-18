@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { transform } from 'next/dist/build/swc/index.js';
+
+const source=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/export function/g,'function');
+const {code}=await transform(source,{filename:'soccer-market-ui.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+const ctx=vm.createContext({React,Date});
+vm.runInContext(code,ctx);
+const threshold={axis:'TOTAL_GOALS',boundary:2,above:.421,equal:.271,below:.307,retainedMass:.999,tailMass:.001};
+const quote=(key,line,water,overrides={})=>({key,period:'FT',line,side:'over',water,rawRows:[`大 ${line} ${water}`,'小 0.81'],provenance:{periodEvidence:'全場',observedAt:'2026-10-18T15:50:00Z',revision:'not-for-users'},thresholdProbabilities:threshold,...overrides});
+const directions=['FT','HT'].flatMap(period=>['HANDICAP_HOME','HANDICAP_AWAY','TOTAL_OVER','TOTAL_UNDER'].map(direction=>({period,direction,quotes:[],selectedQuoteKey:null,S:null,W:null,R:null,eligible:false,executable:false,reasons:[]})));
+directions[2].quotes=[quote('over-alt-a','2-50','0.90'),quote('over-alt-b','3+25','0.85')];
+directions[0].quotes=[quote('home-handicap','1+25',0,{side:'home',lineSide:'away',rawRows:['客隊 1+25 0.84','主隊 0.00'],thresholdProbabilities:{axis:'GIVING_TEAM_MARGIN',boundary:1,above:.25,equal:.30,below:.449,retainedMass:.999,tailMass:.001}})];
+directions[4].reasons=['HALF_TIME_MODEL_UNVERIFIED','MATCHED_READER_QUOTE_MISSING','SOME_INTERNAL_CODE'];
+const unknown=quote('unknown-period','2+10','0.88',{period:null,rawRows:[{cells:[{pair:['大2+10','0.88']},{pair:['小','0.82']}]}],thresholdProbabilities:{...threshold,above:.999}});
+const markup=renderToStaticMarkup(ctx.SoccerMarketDirections({directions,unassignedQuotes:[unknown]}));
+assert.equal((markup.match(/class="soccerMarketDirection"/g)||[]).length,8,'all eight directions remain independently visible');
+assert.equal((markup.match(/class="soccerMarketQuote"/g)||[]).length,4,'all alternative and unassigned source quotes are retained');
+for(const raw of ['2-50','3+25','1+25','2+10'])assert.ok(markup.includes(raw),`source line ${raw} is shown verbatim`);
+assert.match(markup,/水位 <strong>0<\/strong>/,'zero water is present, not mistaken for missing');
+assert.match(markup,/共 2 筆原盤.*未指定主盤/);
+assert.match(markup,/總進球門檻 2 球/);assert.match(markup,/讓球方淨勝球門檻 1 球/);
+for(const value of ['42.1%','27.1%','30.7%','0.1%'])assert.ok(markup.includes(value));
+assert.match(markup,/不是過盤率或獲利勝率/);
+assert.match(markup,/主隊讓／受讓/);assert.match(markup,/客隊讓／受讓/);
+assert.match(markup,/期間待確認，暫不計算/);assert.match(markup,/大2\+10 ／ 0.88 ／ 小 ／ 0.82/);
+assert.doesNotMatch(markup,/99.9%/,'an unassigned quote cannot display even an accidentally attached distribution');
+assert.match(markup,/上半場研究模型待驗收/);
+assert.doesNotMatch(markup,/SOME_INTERNAL_CODE|not-for-users|undefined|NaN|\bCANDIDATE\b|data-selected|class="[^\"]*(?:success|green)/);
+const unsafe=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:[{period:'FT',direction:'TOTAL_OVER',S:10,W:1,R:1,eligible:true,quotes:[quote('wrong-period','2-50','0.9',{period:'HT',thresholdProbabilities:{...threshold,above:.999}})]}]}));
+assert.match(unsafe,/期間待確認，暫不計算/);assert.doesNotMatch(unsafe,/99.9%|data-selected|候選資格|正式評分通過/,'a mismatched period and positive input scores cannot create an executable-looking quote');
+const empty=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:directions.map(d=>({...d,quotes:[]}))}));
+assert.equal((empty.match(/缺少此方向可確認期間的原盤/g)||[]).length,8,'missing quotes never create fabricated lines or prices');
+assert.doesNotMatch(empty,/class="soccerMarketQuote"/);
+const escaped=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:[{period:'FT',direction:'TOTAL_OVER',quotes:[quote('escaped','2-50','0.9',{rawRows:['<script>alert(1)</script>']})]}]}));
+assert.match(escaped,/&lt;script&gt;/);assert.doesNotMatch(escaped,/<script>/);
+for(const input of [{}, {directions:null,unassignedQuotes:null},{directions:[{}],unassignedQuotes:[{}]}])assert.doesNotThrow(()=>renderToStaticMarkup(ctx.SoccerMarketDirections(input)));
+
+assert.equal(renderToStaticMarkup(ctx.SoccerHalfTimeResearch({})),'');
+const half=renderToStaticMarkup(ctx.SoccerHalfTimeResearch({halfTimePrediction:{homeRate:.7,awayRate:.4,outcomes:{home:.4,draw:.45,away:.15}},halfTimeResearch:{status:'UNVERIFIED',reasons:['HALF_TIME_MODEL_UNVERIFIED']}}));
+assert.match(half,/上半場比分研究/);assert.match(half,/40.0%/);assert.match(half,/45.0%/);assert.match(half,/15.0%/);assert.match(half,/主 0.70／客 0.40/);
+assert.match(half,/不列入候選排名/);assert.doesNotMatch(half,/class="soccerResearchOutcomes"|#6ce0bd|UNVERIFIED/);
+const missingHalf=renderToStaticMarkup(ctx.SoccerHalfTimeResearch({halfTimeResearch:{reasons:['SCORE_MODEL_UNAVAILABLE']}}));
+assert.match(missingHalf,/尚無適用的上半場研究分布/);assert.match(missingHalf,/缺少適用比分分布/);assert.doesNotMatch(missingHalf,/undefined|NaN/);
+console.log('PASS soccer market UI: eight markets, all source alternatives, unchanged raw price/water, unassigned-period isolation, threshold-only probabilities, research half-time and safe missing-data rendering');
+
+// Consume the real adapter output, so field-name compatibility is exercised
+// independently of the hand-authored presentation edge cases above.
+const {buildSoccerMarketDirections,collectUnassignedSoccerQuotes}=await import('../lib/soccer/market-directions.js');
+const cutoff=Date.parse('2026-10-19T00:00:00Z');
+const game={id:'soccer:epl:ui-real-adapter',league:'epl',date:'2026-10-19',status:'scheduled',startTime:'2026-10-19T19:00:00Z'};
+const periodEvidence={period:'FT',status:'EXPLICIT',sectionTitle:'英格蘭超級聯賽',tableHeaders:['全場讓球'],marketHeader:'全場讓球'};
+const input={game,now:cutoff,reader:{observedAt:new Date(cutoff).toISOString(),receivedAt:new Date(cutoff).toISOString()},matchedGames:[{officialGameId:game.id,league:'EPL',boardDate:game.date,matchStatus:'MATCHED',prestart:true,markets:[{kind:'HANDICAP',unit:'GOALS',period:'FT',periodEvidence,line:'1+25',lineSide:'away',homeWater:.9,awayWater:.95,rawRows:['1+25 0.95','0.90']},{kind:'TOTAL',unit:'GOALS',period:'UNKNOWN',line:'2+10',overWater:.88,underWater:.92,rawRows:['大2+10 0.88','小0.92']}]}],distributions:{FT:{period:'REGULATION_FT',cells:[{home:0,away:0,probability:.3},{home:2,away:1,probability:.7}],retainedMass:1,tailMass:0}}};
+const realMarkup=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:buildSoccerMarketDirections(input),unassignedQuotes:collectUnassignedSoccerQuotes(input)}));
+assert.match(realMarkup,/主隊受讓 1\+25/);assert.match(realMarkup,/客隊讓 1\+25/);assert.match(realMarkup,/期間待確認的原盤/);assert.match(realMarkup,/期間待確認，暫不計算/);assert.doesNotMatch(realMarkup,/undefined|NaN/);
+console.log('PASS real market adapter → shipped JSX: exact quote labels/line/water, scoped threshold fields and unassigned raw evidence remain compatible');

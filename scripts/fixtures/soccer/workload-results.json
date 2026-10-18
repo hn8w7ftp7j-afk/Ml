@@ -1,0 +1,1071 @@
+{
+  "status": "success",
+  "season": {
+    "year": 2026,
+    "type": 14308,
+    "name": "2026-27 English Premier League",
+    "displayName": "2026-27 English Premier League",
+    "half": 1
+  },
+  "requestedSeason": {
+    "year": 2026,
+    "type": 14308,
+    "name": "2026-27 English Premier League",
+    "displayName": "2026-27 English Premier League"
+  },
+  "team": {
+    "id": "359",
+    "displayName": "Arsenal"
+  },
+  "events": [
+    {
+      "id": "401878769",
+      "date": "2026-10-18T15:30Z",
+      "name": "Arsenal at Nottingham Forest",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878769",
+          "date": "2026-10-18T15:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "The City Ground",
+            "address": {
+              "city": "Nottingham",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 240.0,
+            "displayClock": "90'+4'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "393",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "393",
+                "displayName": "Nottingham Forest"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401915417",
+      "date": "2026-10-13T19:00Z",
+      "name": "Lille at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915417",
+          "date": "2026-10-13T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 180.0,
+            "displayClock": "90'+3'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "166",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "166",
+                "displayName": "Lille"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879268",
+      "date": "2026-10-10T11:30Z",
+      "name": "Leeds United at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879268",
+          "date": "2026-10-10T11:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 360.0,
+            "displayClock": "90'+6'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "357",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "357",
+                "displayName": "Leeds United"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879274",
+      "date": "2026-09-19T14:00Z",
+      "name": "Arsenal at Brighton & Hove Albion",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879274",
+          "date": "2026-09-19T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "American Express Stadium",
+            "address": {
+              "city": "Falmer",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 360.0,
+            "displayClock": "90'+6'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "331",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "331",
+                "displayName": "Brighton & Hove Albion"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401914268",
+      "date": "2026-09-15T19:00Z",
+      "name": "Arsenal at Ipswich Town",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Carabao Cup"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "3920",
+        "alternateId": "41",
+        "name": "English Carabao Cup",
+        "abbreviation": "Carabao Cup",
+        "shortName": "Carabao Cup",
+        "midsizeName": "ENG.LEAGUE_CUP",
+        "slug": "eng.league_cup",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401914268",
+          "date": "2026-09-15T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Portman Road",
+            "address": {
+              "city": "Ipswich",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 120.0,
+            "displayClock": "90'+2'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "373",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "373",
+                "displayName": "Ipswich Town"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401878779",
+      "date": "2026-09-12T19:00Z",
+      "name": "Arsenal at Sunderland",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401878779",
+          "date": "2026-09-12T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Stadium of Light",
+            "address": {
+              "city": "Sunderland",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 480.0,
+            "displayClock": "90'+8'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "366",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "366",
+                "displayName": "Sunderland"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401915423",
+      "date": "2026-09-09T19:00Z",
+      "name": "Arsenal at Napoli",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 UEFA Champions League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "775",
+        "alternateId": "2",
+        "name": "UEFA Champions League",
+        "abbreviation": "UEFA Champions League",
+        "shortName": "UEFA Champions League",
+        "midsizeName": "UEFA.CHAMPIONS",
+        "slug": "uefa.champions",
+        "isTournament": true
+      },
+      "competitions": [
+        {
+          "id": "401915423",
+          "date": "2026-09-09T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Stadio Diego Armando Maradona",
+            "address": {
+              "city": "Napoli",
+              "country": "Italy"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 300.0,
+            "displayClock": "90'+5'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "114",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "114",
+                "displayName": "Napoli"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879292",
+      "date": "2026-09-06T15:30Z",
+      "name": "Chelsea at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879292",
+          "date": "2026-09-06T15:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 300.0,
+            "displayClock": "90'+5'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "363",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "363",
+                "displayName": "Chelsea"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879295",
+      "date": "2026-08-31T19:00Z",
+      "name": "Arsenal at Aston Villa",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879295",
+          "date": "2026-08-31T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Villa Park",
+            "address": {
+              "city": "Birmingham",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 600.0,
+            "displayClock": "90'+10'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "362",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "362",
+                "displayName": "Aston Villa"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401879301",
+      "date": "2026-08-21T19:00Z",
+      "name": "Coventry City at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026-27 English Premier League"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "700",
+        "alternateId": "23",
+        "name": "English Premier League",
+        "abbreviation": "Premier League",
+        "shortName": "Premier League",
+        "midsizeName": "ENG.1",
+        "slug": "eng.1",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401879301",
+          "date": "2026-08-21T19:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 300.0,
+            "displayClock": "90'+5'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "388",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "388",
+                "displayName": "Coventry City"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401875219",
+      "date": "2026-08-16T14:00Z",
+      "name": "Manchester City at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026 English FA Community Shield"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "5329",
+        "alternateId": "43",
+        "name": "English FA Community Shield",
+        "abbreviation": "Community Shield",
+        "shortName": "Community Shield",
+        "midsizeName": "ENG.CHARITY",
+        "slug": "eng.charity",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401875219",
+          "date": "2026-08-16T14:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Principality Stadium",
+            "address": {
+              "city": "Cardiff",
+              "country": "Wales"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 180.0,
+            "displayClock": "90'+3'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "382",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "382",
+                "displayName": "Manchester City"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401886555",
+      "date": "2026-08-12T18:30Z",
+      "name": "Como at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026 Club Friendly"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "19834",
+        "alternateId": "68",
+        "name": "Club Friendly",
+        "abbreviation": "Club Friendly",
+        "shortName": "Club Friendly",
+        "midsizeName": "CLUB.FRIENDLY",
+        "slug": "club.friendly",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401886555",
+          "date": "2026-08-12T18:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5460.0,
+            "addedClock": 0.0,
+            "displayClock": "91'",
+            "period": 5,
+            "type": {
+              "id": "47",
+              "name": "STATUS_FINAL_PEN",
+              "state": "post",
+              "completed": true,
+              "description": "Final Score - After Penalties",
+              "detail": "FT-Pens",
+              "shortDetail": "FT-Pens"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "2572",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "2572",
+                "displayName": "Como"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401881706",
+      "date": "2026-08-09T13:00Z",
+      "name": "Borussia Dortmund at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026 Emirates Cup"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "11108",
+        "alternateId": "2362",
+        "name": "Emirates Cup",
+        "abbreviation": "Emirates Cup",
+        "shortName": "Emirates Cup",
+        "midsizeName": "FRIENDLY.EMIRATES_CUP",
+        "slug": "friendly.emirates_cup",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401881706",
+          "date": "2026-08-09T13:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Emirates Stadium",
+            "address": {
+              "city": "London",
+              "country": "England"
+            }
+          },
+          "status": {
+            "clock": 5640.0,
+            "addedClock": 0.0,
+            "displayClock": "94'",
+            "period": 5,
+            "type": {
+              "id": "47",
+              "name": "STATUS_FINAL_PEN",
+              "state": "post",
+              "completed": true,
+              "description": "Final Score - After Penalties",
+              "detail": "FT-Pens",
+              "shortDetail": "FT-Pens"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "124",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "124",
+                "displayName": "Borussia Dortmund"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401867142",
+      "date": "2026-08-05T18:30Z",
+      "name": "Real Betis at Arsenal",
+      "season": {
+        "year": 2026,
+        "displayName": "2026 Club Friendly"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "19834",
+        "alternateId": "68",
+        "name": "Club Friendly",
+        "abbreviation": "Club Friendly",
+        "shortName": "Club Friendly",
+        "midsizeName": "CLUB.FRIENDLY",
+        "slug": "club.friendly",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401867142",
+          "date": "2026-08-05T18:30Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Aviva Stadium",
+            "address": {
+              "city": "Dublin"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 240.0,
+            "displayClock": "90'+4'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            },
+            {
+              "id": "244",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "244",
+                "displayName": "Real Betis"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401886553",
+      "date": "2026-08-01T18:00Z",
+      "name": "Arsenal at Girona",
+      "season": {
+        "year": 2026,
+        "displayName": "2026 Club Friendly"
+      },
+      "timeValid": true,
+      "league": {
+        "id": "19834",
+        "alternateId": "68",
+        "name": "Club Friendly",
+        "abbreviation": "Club Friendly",
+        "shortName": "Club Friendly",
+        "midsizeName": "CLUB.FRIENDLY",
+        "slug": "club.friendly",
+        "isTournament": false
+      },
+      "competitions": [
+        {
+          "id": "401886553",
+          "date": "2026-08-01T18:00Z",
+          "timeValid": true,
+          "neutralSite": false,
+          "venue": {
+            "fullName": "Estadi Montilivi",
+            "address": {
+              "city": "Girona",
+              "country": "Spain"
+            }
+          },
+          "status": {
+            "clock": 5400.0,
+            "addedClock": 60.0,
+            "displayClock": "90'+1'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "competitors": [
+            {
+              "id": "9812",
+              "type": "team",
+              "homeAway": "home",
+              "team": {
+                "id": "9812",
+                "displayName": "Girona"
+              }
+            },
+            {
+              "id": "359",
+              "type": "team",
+              "homeAway": "away",
+              "team": {
+                "id": "359",
+                "displayName": "Arsenal"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

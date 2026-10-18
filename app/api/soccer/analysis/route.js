@@ -3,6 +3,7 @@ import { requireApiAuth,validateSameOrigin,originErrorResponse,checkRateLimit,ra
 import { soccerLeague,validSoccerDate } from '../../../../lib/soccer/contracts.js';
 import { fetchSoccerSchedule } from '../../../../lib/soccer/data.js';
 import { fetchSoccerPrematch } from '../../../../lib/soccer/prematch.js';
+import { fetchSoccerWorkload } from '../../../../lib/soccer/workload.js';
 import { loadSoccerReaderSnapshot } from '../../../../lib/soccer/reader-store.js';
 import { buildSoccerAnalysis,soccerAnalysisHash } from '../../../../lib/soccer/analysis.js';
 import { saveSoccerAnalysis,listSoccerAnalysis } from '../../../../lib/soccer/analysis-store.js';
@@ -40,7 +41,12 @@ export async function POST(request){
     const board=await fetchSoccerSchedule(league.id,date);if(!board.ok)return failure('賽程資料暫時無法核對',503,'INSUFFICIENT_DATA',board.code);
     await recordSoccerCohort(board.games);
     const game=board.games.find(g=>g.sourceId===eventId);if(!game)return failure('找不到同聯盟同日期的場次',404,'INSUFFICIENT_DATA','SOCCER_GAME_NOT_FOUND');
-    const evidence=await fetchSoccerPrematch(game);if(!evidence.ok)return failure('賽前資料身分或來源核對未通過',503,'INSUFFICIENT_DATA',evidence.code);
+    const [evidence,workload]=await Promise.all([
+      fetchSoccerPrematch(game),
+      fetchSoccerWorkload(game,{timeoutMs:8000}).catch(()=>({ok:false,status:'INCOMPLETE',teams:{},sources:[],modelEffectApplied:false,executable:false})),
+    ]);
+    if(!evidence.ok)return failure('賽前資料身分或來源核對未通過',503,'INSUFFICIENT_DATA',evidence.code);
+    evidence.workload=workload;
     let reader=null,readerUnavailable=false;try{reader=await loadSoccerReaderSnapshot(league.id,date);}catch{readerUnavailable=true;}
     let previous;try{previous=(await listSoccerAnalysis(league.id,game.id,date))[0]||null;}catch{}
     const built=buildSoccerAnalysis({evidence,reader,previous});

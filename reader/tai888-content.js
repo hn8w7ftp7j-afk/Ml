@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.34';
+  const READER_VERSION = '2.1.35';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -282,9 +282,11 @@
     return { elements, records };
   }
 
-  function stableMarketFingerprint(normalized) {
-    return JSON.stringify((normalized?.tables || []).map(table => (table.rows || []).map(row =>
-      (row.cells || []).map(cell => Array.isArray(cell?.pair) ? cell.pair : cell?.lines || []))));
+  function stableMarketFingerprint(normalized, { soccer = false } = {}) {
+    return JSON.stringify((normalized?.tables || []).map(table => {
+      const rows=(table.rows || []).map(row => (row.cells || []).map(cell => Array.isArray(cell?.pair) ? cell.pair : cell?.lines || []));
+      return soccer?{sectionTitle:table.sectionTitle||null,headers:table.headers||[],periodEvidenceTruncated:table.periodEvidenceTruncated===true,rows}:rows;
+    }));
   }
 
   function captureNhlCards() {
@@ -361,7 +363,7 @@
       const normalized = ['EPL','UCL'].includes(league) ? captureSoccerCards(league) : league === 'NHL' && nhlCards.tables.length ? nhlCards
         : normalizer.normalizeRowRecords(records, { expectedLeague: league });
       if (!normalized.tables.length && !normalized.diagnostics?.sawLeagueMarker) continue;
-      const fingerprint = stableMarketFingerprint(normalized);
+      const fingerprint = stableMarketFingerprint(normalized, { soccer: ['EPL','UCL'].includes(league) });
       if (updateActivity && fingerprint && fingerprint !== fingerprintByLeague[league]) {
         fingerprintByLeague[league] = fingerprint;
         activityByLeague[league] = Date.now();

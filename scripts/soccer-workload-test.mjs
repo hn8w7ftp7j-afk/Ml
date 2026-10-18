@@ -1,0 +1,104 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { fetchSoccerWorkload, normalizeSoccerTeamWorkload } from '../lib/soccer/workload.js';
+
+const fixture = name => JSON.parse(fs.readFileSync(new URL(`./fixtures/soccer/${name}.json`, import.meta.url)));
+const results = fixture('workload-results'), fixtures = fixture('workload-fixtures');
+const at = Date.parse('2026-10-19T00:00:00Z');
+const game = { id: 'soccer:epl:401878768', sourceId: '401878768', league: 'epl', startTime: '2026-10-24T14:00:00Z', home: { sourceId: '359' }, away: { sourceId: '368' } };
+const source = kind => ({ provider: 'ESPN', url: `https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams/359/schedule?season=2026${kind === 'fixtures' ? '&fixture=true' : ''}`, fetchedAt: '2026-10-18T23:59:59Z' });
+const observations = () => [{ data: structuredClone(results), source: source('results'), kind: 'results', season: 2026 }, { data: structuredClone(fixtures), source: source('fixtures'), kind: 'fixtures', season: 2026 }];
+const normalize = obs => normalizeSoccerTeamWorkload(obs, game.home, game, at);
+
+const actual = normalize(observations());
+assert.equal(actual.ok, true);
+assert.equal(actual.completedMatchesLast7Days, 2);
+assert.equal(actual.completedMatchesLast14Days, 3);
+assert.equal(actual.lastKnownCompleted.eventId, '401878769');
+assert.equal(actual.kickoffGapHoursFromLastCompleted, 142.5);
+assert.equal(actual.elapsedHoursSinceLastCompletedKickoff, 8.5);
+assert.equal(actual.actualRestHours, null, 'kickoff gap is not actual recovery time');
+assert.deepEqual(actual.scheduledBeforeTarget.map(e => e.eventId), ['401915312']);
+assert.ok(actual.scheduledBeforeTarget.every(e => e.status === 'SCHEDULED'));
+assert.ok(actual.recentCompleted.every(e => e.status === 'COMPLETED'));
+assert.ok(actual.coverage.distinctCompetitions.includes('uefa.champions'));
+assert.ok(actual.coverage.distinctCompetitions.includes('eng.league_cup'));
+assert.equal(actual.coverage.complete, false);
+assert.equal(actual.coverage.playerMinutesComplete, false);
+assert.equal(actual.pointInTimeAvailabilityVerified, false);
+assert.equal(actual.modelEffectApplied, false);
+assert.ok(actual.recentCompleted.every(e => e.playerMinutes === null));
+assert.ok(![...actual.recentCompleted, ...actual.scheduledAhead].some(e => e.eventId === game.sourceId), 'target match must not count as its own workload');
+const plansOnly = normalize(observations().filter(o => o.kind === 'fixtures'));
+assert.equal(plansOnly.completedMatchesLast7Days, null, 'fixture plans alone cannot establish zero completed workload');
+assert.equal(plansOnly.coverage.resultsObserved, false);
+
+const mixed = observations();
+mixed[0].data.events[0].competitions[0].competitors.find(t => t.team.id === '359').team.id = '999';
+assert.equal(normalize(mixed).code, 'SOCCER_WORKLOAD_COMPETITORS_INVALID');
+const foreignTeam = observations(); foreignTeam[0].data.team.id = '999';
+assert.equal(normalize(foreignTeam).code, 'SOCCER_WORKLOAD_TEAM_SCHEMA_INVALID');
+const badLeague = observations(); badLeague[0].data.events[0].league = { id: '700', slug: '../nba' };
+assert.equal(normalize(badLeague).code, 'SOCCER_WORKLOAD_EVENT_SCHEMA_INVALID');
+const badUid = observations(); badUid[0].data.events[0].uid = 's:600~l:775~e:401878769';
+assert.equal(normalize(badUid).code, 'SOCCER_WORKLOAD_EVENT_IDENTITY_INVALID');
+const naive = observations(); naive[0].data.events[0].date = '2026-10-18T15:30';
+assert.equal(normalize(naive).code, 'SOCCER_WORKLOAD_START_INVALID');
+const futureSource = observations(); futureSource[1].source.fetchedAt = '2026-10-19T00:00:01Z';
+assert.equal(normalize(futureSource).code, 'SOCCER_WORKLOAD_SOURCE_AFTER_CUTOFF');
+const conflicting = observations(); conflicting[0].data.events.push(structuredClone(conflicting[0].data.events[0])); conflicting[0].data.events.at(-1).competitions[0].neutralSite = true;
+assert.equal(normalize(conflicting).code, 'SOCCER_WORKLOAD_EVENT_REVISION_CONFLICT');
+const noTime = observations(); noTime[0].data.events[0].timeValid = false;
+assert.equal(normalize(noTime).completedMatchesLast7Days, 1);
+assert.ok(normalize(noTime).excluded.some(e => e.reason === 'START_TIME_UNCONFIRMED'));
+const awarded = observations(); awarded[0].data.events[0].competitions[0].status.type.name = 'STATUS_AWARDED';
+assert.equal(normalize(awarded).completedMatchesLast7Days, 1, 'awarded scores do not establish physical participation');
+const futureFinal = observations(); const e = futureFinal[0].data.events[0]; e.date = e.competitions[0].date = '2026-10-20T15:30Z';
+assert.equal(normalize(futureFinal).completedMatchesLast7Days, 1);
+assert.ok(normalize(futureFinal).excluded.some(e => e.reason === 'COMPLETED_START_NOT_BEFORE_REFERENCE'));
+
+let requests = 0;
+const fetchImpl = async url => {
+  requests++;
+  if (url.includes('/368/')) return { ok: false, status: 503 };
+  const data = structuredClone(url.includes('fixture=true') ? fixtures : results);
+  if (url.includes('season=2025')) { data.requestedSeason.year = 2025; data.events = []; }
+  return { ok: true, url, json: async () => data };
+};
+const fetched = await fetchSoccerWorkload(game, { fetchImpl, now: () => at });
+assert.equal(fetched.ok, true);
+assert.equal(fetched.status, 'INCOMPLETE');
+assert.equal(fetched.teams.home.ok, true);
+assert.equal(fetched.teams.away.code, 'SOCCER_SOURCE_HTTP_ERROR');
+assert.equal(requests, 6);
+await fetchSoccerWorkload(game, { fetchImpl, now: () => at });
+assert.equal(requests, 6, 'per-endpoint positive and short negative caches prevent duplicate refreshes');
+const partial = await fetchSoccerWorkload(game, { now: () => at, fetchImpl: async url => url.includes('season=2025') ? { ok: false, status: 503 } : { ok: true, url, json: async () => url.includes('/359/') ? structuredClone(url.includes('fixture=true') ? fixtures : results) : { status: 'success', team: { id: '368' }, events: [] } } });
+assert.equal(partial.teams.home.ok, true, 'an unavailable extra season does not erase valid acquired observations');
+assert.equal(partial.teams.home.completedMatchesLast14Days, 3);
+assert.equal(partial.teams.home.coverage.missingRequests, 1);
+assert.equal(partial.status, 'INCOMPLETE');
+
+let active = 0, maxActive = 0, count = 0;
+const boundedFetch = async url => {
+  active++; maxActive = Math.max(maxActive, active); count++;
+  await new Promise(resolve => setTimeout(resolve, 3));
+  active--;
+  const parsed = new URL(url), teamId = parsed.pathname.match(/teams\/(\d+)/)[1], year = Number(parsed.searchParams.get('season'));
+  return { ok: true, url, json: async () => ({ status: 'success', team: { id: teamId }, requestedSeason: { year }, events: [] }) };
+};
+const july = { ...game, startTime: '2026-07-05T14:00:00Z' };
+const boundary = await fetchSoccerWorkload(july, { fetchImpl: boundedFetch, now: () => Date.parse('2026-07-02T00:00:00Z') });
+assert.equal(count, 6, 'current and previous year labels cover different league season conventions without assuming every UCL club changes season in July');
+assert.ok(maxActive <= 4);
+assert.equal(boundary.ok, true);
+assert.equal(boundary.teams.home.completedMatchesLast14Days, 0);
+assert.equal(boundary.teams.home.lastKnownCompleted, null);
+assert.equal(boundary.teams.home.coverage.complete, false, 'an empty provider response does not prove no workload');
+assert.equal((await fetchSoccerWorkload(game, { timeoutMs: 0 })).code, 'SOCCER_WORKLOAD_FETCH_OPTIONS_INVALID');
+assert.equal((await fetchSoccerWorkload({ ...game, away: { sourceId: 359 } })).code, 'SOCCER_WORKLOAD_REQUEST_INVALID');
+const timeout = await fetchSoccerWorkload(game, { now: () => at, timeoutMs: 3, fetchImpl: () => new Promise(() => {}) });
+assert.equal(timeout.ok, false);
+assert.equal(timeout.teams.home.code, 'SOCCER_SOURCE_TIMEOUT');
+
+console.log('PASS all-competition workload: actual multi-league source schema, 7/14-day observed results, future plans separated, kickoff-gap/true-rest distinction, source cutoff and identity guards, partial-source failure, cache, season boundary, concurrency and timeout bounds');

@@ -34,6 +34,7 @@ export async function GET(request){
     const games=matchSoccerReaderGames(capture,official.ok?official.games:[]);
     return response({ok:true,league:league.id,date,status:'CAPTURED_RULES_UNVERIFIED',observedAt:capture.observedAt,
       firstFetchedAt:capture.firstFetchedAt,receivedAt:capture.receivedAt||null,observationId:capture.observationId,
+      isPeriodAggregate:capture.isPeriodAggregate===true,sourceObservations:capture.sourceObservations||[],periodsCovered:capture.periodsCovered||[],
       timeEvidence:capture.timeEvidence,historicalAvailabilityVerified:false,revision:capture.revision,games,officialAvailable:official.ok,executable:false});
   }catch{return response({ok:false,error:'足球原盤暫時無法讀取',executable:false},503);}
 }

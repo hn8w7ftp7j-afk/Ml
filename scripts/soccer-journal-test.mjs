@@ -50,15 +50,20 @@ try{
   assert.notEqual(first.receivedAt,second.receivedAt,'verification receipt remains separate from first content receipt');
   const repricedRun=await beginSoccerAnalysisRun(scope);assert.equal((await finish(repricedRun,'before-price-change')).publishedCurrent,true);
   const changed=structuredClone(later);changed.games[0].markets[0].homeWater=.8;changed.observedAt=new Date(Date.parse(capturedAt)+2000).toISOString();changed.contentHash=soccerReaderHash(canonicalSoccerPayload(changed));
-  await saveSoccerReaderSnapshot(changed);
+  const changedReceipt=await saveSoccerReaderSnapshot(changed);
   assert.equal((await db.query('SELECT published_revision FROM sports_soccer_analysis_heads_v2')).rows[0].published_revision,null,'changed quote atomically invalidates already published results');
   assert.equal((await db.query('SELECT count(*)::int AS n FROM sports_soccer_reader_observations_v2')).rows[0].n,3);
   const preserved=(await db.query('SELECT * FROM sports_soccer_reader_observations_v2 WHERE observation_id=$1',[first.revision])).rows[0];
   assert.deepEqual(preserved,original,'later verification cannot overwrite original content or receipt time');
-  assert.equal((await loadSoccerReaderSnapshot('epl','2026-10-20')).contentHash,changed.contentHash);
+  const activeBoard=await loadSoccerReaderSnapshot('epl','2026-10-20');
+  assert.equal(activeBoard.isPeriodAggregate,true);
+  assert.equal(activeBoard.games[0].markets[0].homeWater,.8);
+  assert.ok(activeBoard.sourceObservations.some(o=>o.observationId===changedReceipt.observationId),'active source identity points to the adopted observation, not the bundle hash');
   assert.equal(await loadSoccerReaderSnapshot('ucl','2026-10-20'),null);
   assert.equal(await loadSoccerReaderSnapshot('epl','2026-10-20',{asOf:'2020-01-01T00:00:00Z'}),null);
-  await assert.rejects(()=>saveSoccerReaderSnapshot({...payload,observedAt:'2020-01-01T00:00:00Z'}),/REPLAY/);
+  const delayed=await saveSoccerReaderSnapshot({...payload,observedAt:'2020-01-01T00:00:00Z'});
+  assert.deepEqual(delayed.adoptedPeriods,[],'late old observations remain history and cannot replace the active period');
+  assert.equal((await loadSoccerReaderSnapshot('epl','2026-10-20')).games[0].markets[0].homeWater,.8);
   await assert.rejects(()=>db.query('UPDATE sports_soccer_reader_observations_v2 SET content_hash=content_hash'),/SOCCER_IMMUTABLE_HISTORY/);
   console.log('PASS actual PostgreSQL: immutable observations/cohort/runs, heartbeat history, retry dedup, scope/as-of exclusion, newer-request/quote fencing, atomic publication, expiry and all terminal states; research stays non-executable.');
 }finally{for(const key of envKeys){if(old[key]===undefined)delete process.env[key];else process.env[key]=old[key];}await fixture.close();}
