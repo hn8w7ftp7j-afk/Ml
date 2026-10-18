@@ -21,22 +21,17 @@ const rawReader={league:'EPL',boardDate:game.date,observedAt:at,revision:'synthe
 const reviewed=buildSoccerAnalysis({evidence,reader:rawReader,now});assert.equal(reviewed.settlementReviews.length,1);assert.equal(reviewed.settlementReviews[0].rawLine,'3+50');assert.equal(reviewed.settlementReviews[0].period,null);assert.ok(reviewed.directions.every(d=>d.W===null&&d.R===null&&d.score===null&&d.executable===false));
 const foreignReader={...rawReader,league:'UCL'};assert.equal(buildSoccerAnalysis({evidence,reader:foreignReader,now}).settlementReviews.length,0);
 assert.throws(()=>buildSoccerAnalysis({evidence,now:now+180001}),/EVIDENCE_INVALID/);
+assert.throws(()=>buildSoccerAnalysis({evidence:{...evidence,source:{...evidence.source,fetchedAt:new Date(now+1).toISOString()}},now}),/EVIDENCE_INVALID/);
+assert.throws(()=>buildSoccerAnalysis({evidence,reader:{...rawReader,receivedAt:new Date(now+1).toISOString()},now}),/READER_AFTER_CUTOFF/);
 const bad=fixture('historic-summary');bad.rosters[0].roster[1].athlete.id=bad.rosters[0].roster[0].athlete.id;assert.equal(normalizeSoccerPrematch(bad,gameFrom(bad),source,now).code,'SOCCER_ROSTER_PLAYER_CONFLICT');
 console.log('PASS real provider extraction: EPL/UCL summaries, separate pre/post phases, complete XI audit, unknown minutes/injury/referee, side/league/player identity, stale snapshots and eight blocked directions');
 
-// Real route and immutable store execute with isolated SQL/source transports only.
+// Execute the real API, SQL and constraints in an isolated PostgreSQL engine.
 register('./next-route-test-loader.mjs',import.meta.url);
-const adapter='data:text/javascript,'+encodeURIComponent(`export function neon(){return async function(sql,...values){return globalThis.__SOCCER_ANALYSIS_SQL(sql.join('?'),values);};}`);
-register('data:text/javascript,'+encodeURIComponent(`export async function resolve(s,c,n){if(s==='@neondatabase/serverless'&&/\\/lib\\/soccer\\/(?:analysis-store|reader-store)\\.js$/.test(c.parentURL||''))return {url:${JSON.stringify(adapter)},shortCircuit:true};return n(s,c);}`),import.meta.url);
-const db=[],originalFetch=globalThis.fetch,originalNow=Date.now,keys=['APP_PASSWORD','SESSION_SECRET','DATABASE_URL','DATABASE_V2_URL'],env=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
-const reverse=value=>Array.isArray(value)?value.map(reverse):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).reverse().map(([k,v])=>[k,reverse(v)])):value;
-globalThis.__SOCCER_ANALYSIS_SQL=async(query,values)=>{
- if(query.includes('CREATE TABLE'))return[];
- if(query.includes('sports_soccer_reader_snapshots'))return[];
- if(query.includes('INSERT INTO')){if(!db.some(x=>x.hash===values[2]))db.push({league:values[0],id:values[1],hash:values[2],payload:reverse(JSON.parse(values[4]))});return[];}
- if(query.includes('SELECT analysis_hash'))return db.filter(r=>r.league===values[0]&&r.id===values[1]&&r.payload.date===values[2]).sort((a,b)=>b.payload.observedAt.localeCompare(a.payload.observedAt)).slice(0,5).map(r=>({analysis_hash:r.hash,payload:r.payload}));
- if(query.includes('SELECT payload'))return db.filter(r=>r.league===values[0]&&r.id===values[1]&&r.hash===values[2]);throw Error('Unexpected isolated SQL');
-};
+const {soccerSqlFixture}=await import('./helpers/soccer-sql-fixture.mjs');
+const fixtureDb=await soccerSqlFixture(),{db}=fixtureDb;
+const originalFetch=globalThis.fetch,originalNow=Date.now,keys=['APP_PASSWORD','SESSION_SECRET','DATABASE_URL','DATABASE_V2_URL'],env=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+const count=async()=>(await db.query('SELECT count(*)::int AS n FROM sports_soccer_analysis_v1')).rows[0].n;
 try{
  Date.now=()=>now;delete process.env.DATABASE_V2_URL;process.env.DATABASE_URL='postgres://fixture.invalid/analysis';process.env.APP_PASSWORD='fixture-soccer';process.env.SESSION_SECRET='fixture-soccer-session';
  let calls=0;globalThis.fetch=async url=>{calls++;assert.match(String(url),/^https:\/\/site.api.espn.com\/apis\/site\/v2\/sports\/soccer\/eng.1\/(?:summary\?event=401878769|scoreboard\?dates=202610(?:17|18|19))$/);if(String(url).includes('summary'))return Response.json(p);return Response.json({leagues:[p.header.league],events:[{...p.header,date:p.header.competitions[0].date,status:p.header.competitions[0].status}]});};
@@ -45,13 +40,15 @@ try{
  const request=(b=body,headers={})=>new Request('https://fixture.invalid/api/soccer/analysis',{method:'POST',headers:{cookie:`mlb_session=${token}`,'Content-Type':'application/json',Origin:'https://fixture.invalid',...headers},body:JSON.stringify(b)});
  assert.equal((await POST(request(body,{cookie:''}))).status,401);assert.equal((await POST(request(body,{Origin:'https://evil.invalid'}))).status,403);assert.equal(calls,0);
  assert.equal((await POST(request({...body,eventId:'x/../'}))).status,400);assert.equal(calls,0);
- assert.equal((await POST(request({...body,date:'2026-10-19'}))).status,404);
- const result=await POST(request());assert.equal(result.status,200);const resultBody=await result.json();assert.equal(resultBody.persisted,true);assert.equal(resultBody.gameId,game.id);assert.equal(resultBody.prediction.status,'RESEARCH_ONLY');assert.equal(db.length,1);
- await saveSoccerAnalysis(analysis);const previous=db.length;await saveSoccerAnalysis(analysis);assert.equal(db.length,previous,'identical immutable revisions deduplicate');
- const later=buildSoccerAnalysis({evidence,now:now+1000});await saveSoccerAnalysis(later);assert.equal(db.length,previous+1);assert.equal(db[0].payload.observedAt,at,'a new analysis cannot overwrite an earlier revision');
+ const absent=await POST(request({...body,date:'2026-10-19'}));assert.equal(absent.status,404);assert.equal((await absent.json()).analysisStatus,'INSUFFICIENT_DATA');
+ const result=await POST(request());assert.equal(result.status,200,JSON.stringify(await result.clone().json()));const resultBody=await result.json();assert.equal(resultBody.persisted,true);assert.equal(resultBody.journalPersisted,true);assert.equal(resultBody.analysisStatus,'COMPLETED');assert.equal(resultBody.selectionResult,'RESEARCH_SHADOW');assert.equal(resultBody.gameId,game.id);assert.equal(resultBody.prediction.status,'RESEARCH_ONLY');assert.equal(await count(),1);assert.equal(resultBody.requirements.layers.length,6);
+ await saveSoccerAnalysis(analysis);const previous=await count();await saveSoccerAnalysis(analysis);assert.equal(await count(),previous,'identical immutable revisions deduplicate');
+ const later=buildSoccerAnalysis({evidence,now:now+1000});await saveSoccerAnalysis(later);assert.equal(await count(),previous+1);
+ await assert.rejects(()=>db.query('UPDATE sports_soccer_analysis_v1 SET payload=payload'),/SOCCER_IMMUTABLE_HISTORY/);
  const historyRequest=(query='league=epl&date=2026-10-18&eventId=401878769',auth=true)=>new Request('https://fixture.invalid/api/soccer/analysis?'+query,{headers:auth?{cookie:`mlb_session=${token}`}:{}});
  assert.equal((await GET(historyRequest(undefined,false))).status,401);assert.equal((await GET(historyRequest('league=NHL&date=2026-10-18&eventId=1'))).status,400);
- const saved=await (await GET(historyRequest())).json();assert.equal(saved.versions.length,db.length);assert.ok(saved.versions.every(v=>v.persisted));assert.equal((await (await GET(historyRequest('league=ucl&date=2026-10-18&eventId=401878769'))).json()).versions.length,0);
- const cleanPayload=structuredClone(db[0].payload);db[0].payload.prediction.homeRate+=1;assert.equal((await GET(historyRequest())).status,503,'corrupted saved output cannot be presented as valid history');db[0].payload=cleanPayload;
- console.log('PASS actual soccer analysis API/store: session/origin/input rejection before fetch, exact date/game, real source reparse, research prediction, immutable JSONB readback/dedup/new revision; no Production writes');
-}finally{Date.now=originalNow;globalThis.fetch=originalFetch;delete globalThis.__SOCCER_ANALYSIS_SQL;for(const k of keys){if(env[k]===undefined)delete process.env[k];else process.env[k]=env[k];}}
+ const saved=await (await GET(historyRequest())).json();assert.equal(saved.versions.length,await count());assert.ok(saved.versions.every(v=>v.persisted));assert.equal(saved.runs[0].analysisStatus,'COMPLETED');assert.equal((await (await GET(historyRequest('league=ucl&date=2026-10-18&eventId=401878769'))).json()).versions.length,0);
+ const failedRuns=(await db.query("SELECT analysis_status,selection_result FROM sports_soccer_analysis_events_v2 WHERE analysis_status='INSUFFICIENT_DATA'")).rows;assert.equal(failedRuns.length,1);assert.equal(failedRuns[0].selection_result,null);
+ assert.ok((await db.query('SELECT * FROM sports_soccer_cohort_v2')).rows.length>0,'entire observed schedule is retained, including unselected games');
+ console.log('PASS real soccer API + PostgreSQL: auth/origin/scope, six-layer research states, immutable snapshots/dedup, failed attempts, cohort retention and separate historical versions; no Production writes');
+}finally{Date.now=originalNow;globalThis.fetch=originalFetch;for(const k of keys){if(env[k]===undefined)delete process.env[k];else process.env[k]=env[k];}await fixtureDb.close();}

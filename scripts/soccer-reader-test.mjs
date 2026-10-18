@@ -56,17 +56,11 @@ console.log('PASS soccer screenshot reconstruction: 2 alternate goal cards, corn
 if(process.argv.includes('--api')){
   const {register}=await import('node:module');
   register('./next-route-test-loader.mjs',import.meta.url);
-  const adapter='data:text/javascript,'+encodeURIComponent(`export function neon(){return async function(sql,...values){return globalThis.__SOCCER_READER_SQL_FIXTURE(sql.join('?'),values);};}`);
-  register('data:text/javascript,'+encodeURIComponent(`export async function resolve(s,c,n){if(s==='@neondatabase/serverless'&&c.parentURL?.endsWith('/lib/soccer/reader-store.js'))return {url:${JSON.stringify(adapter)},shortCircuit:true};return n(s,c);}`),import.meta.url);
+  const {soccerSqlFixture}=await import('./helpers/soccer-sql-fixture.mjs');
+  const fixture=await soccerSqlFixture(),{db}=fixture;
   const envKeys=['DATABASE_URL','DATABASE_V2_URL','APP_PASSWORD','SESSION_SECRET','READER_PAIR_SECRET'];
   const before=Object.fromEntries(envKeys.map(k=>[k,process.env[k]])),oldFetch=globalThis.fetch,oldNow=Date.now;
-  const db=[];
-  globalThis.__SOCCER_READER_SQL_FIXTURE=async(query,values)=>{
-    if(query.includes('CREATE TABLE'))return [];
-    if(query.includes('SELECT revision,payload'))return db.filter(r=>r.payload.league===values[0]&&r.payload.boardDate===values[1]).sort((a,b)=>Date.parse(b.payload.observedAt)-Date.parse(a.payload.observedAt)).slice(0,1).map(r=>structuredClone(r));
-    if(query.includes('INSERT INTO')){const revision=values[2],payload=JSON.parse(values[6]),old=db.find(r=>r.revision===revision);if(old){if(Date.parse(payload.observedAt)>=Date.parse(old.payload.observedAt))old.payload=payload;}else db.push({revision,payload});return [];}
-    throw Error('Unexpected fixture database query');
-  };
+  const rowCount=async()=>(await db.query('SELECT count(*)::int AS n FROM sports_soccer_reader_observations_v2')).rows[0].n;
   try{
     Date.now=()=>now;delete process.env.DATABASE_V2_URL;process.env.DATABASE_URL='postgres://fixture.invalid/soccer';process.env.APP_PASSWORD='soccer-fixture';process.env.SESSION_SECRET='soccer-fixture-session';process.env.READER_PAIR_SECRET='soccer-fixture-reader';
     globalThis.fetch=async(url)=>{assert.match(String(url),/^https:\/\/site.api.espn.com\/apis\/site\/v2\/sports\/soccer\/eng.1\/scoreboard\?dates=202610(?:17|18)$/);return Response.json({leagues:[{id:'700',slug:'eng.1'}],events:[{id:'123',date:official.startTime,status:{type:{state:'pre'}},competitions:[{competitors:[{homeAway:'home',team:{id:'376',displayName:'Brighton & Hove Albion'}},{homeAway:'away',team:{id:'384',displayName:'Crystal Palace'}}]}]}]});};
@@ -78,16 +72,16 @@ if(process.argv.includes('--api')){
     assert.equal((await post(wire,{Authorization:''})).status,401);
     assert.equal((await post(wire,{Origin:'https://evil.invalid'})).status,403);
     assert.equal((await post(wire,{'x-device-id':'another-device'})).status,403);
-    assert.equal((await post(corrupted)).status,422);assert.equal(db.length,0);
-    const saved=await post();assert.equal(saved.status,200,JSON.stringify(await saved.clone().json()));assert.equal((await saved.json()).persisted,true);assert.equal(db.length,1);
-    assert.equal((await post()).status,200);assert.equal(db.length,1,'identical rescans do not duplicate stored contracts');
+    assert.equal((await post(corrupted)).status,422);assert.equal((await db.query("SELECT count(*)::int AS n FROM pg_tables WHERE tablename='sports_soccer_reader_observations_v2'")).rows[0].n,0);
+    const saved=await post();assert.equal(saved.status,200,JSON.stringify(await saved.clone().json()));assert.equal((await saved.json()).persisted,true);assert.equal(await rowCount(),1);
+    assert.equal((await post()).status,200);assert.equal(await rowCount(),1,'exact transport retries do not duplicate observations');
     const get=(query='league=EPL&date=2026-10-18',auth=true)=>GET(new Request(`https://fixture.invalid/api/soccer/reader?${query}`,{headers:auth?{cookie:`mlb_session=${session}`}:{}}));
     assert.equal((await get(undefined,false)).status,401);assert.equal((await get('league=NHL&date=2026-10-18')).status,400);
     const read=await get();assert.equal(read.status,200);assert.equal(read.headers.get('Cache-Control'),'no-store');const body=await read.json();assert.equal(body.games.length,1);assert.equal(body.games[0].officialGameId,'soccer:epl:123');assert.equal(body.executable,false);
     assert.equal((await get('league=UCL&date=2026-10-18')).status,200);assert.equal((await(await get('league=UCL&date=2026-10-18')).json()).games.length,0);
     assert.equal((await OPTIONS(new Request('https://fixture.invalid/api/soccer/reader',{headers:{Origin:'https://evil.invalid'}}))).status,403);
     console.log('PASS real soccer Reader API/store with isolated SQL transport: origin/token/device, server reparse, durable readback/dedup, private GET, official join and league isolation; no Production writes.');
-  }finally{Date.now=oldNow;globalThis.fetch=oldFetch;delete globalThis.__SOCCER_READER_SQL_FIXTURE;for(const k of envKeys){if(before[k]===undefined)delete process.env[k];else process.env[k]=before[k];}}
+  }finally{Date.now=oldNow;globalThis.fetch=oldFetch;await fixture.close();for(const k of envKeys){if(before[k]===undefined)delete process.env[k];else process.env[k]=before[k];}}
 }
 
 // Execute the packaged worker against both football envelopes, not a copied upload helper.

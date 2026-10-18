@@ -21,7 +21,7 @@ function harness(fetch){
  return{ctx,state,provider,renderPanel,cleanup:()=>effects[0]?.()};
 }
 const pending=[];let requests=0,active=0,maxActive=0;
-const h=harness(async(_url,options)=>{requests++;active++;maxActive=Math.max(maxActive,active);const input=JSON.parse(options.body);return await new Promise(resolve=>pending.push(()=>{active--;resolve(Response.json({ok:true,gameId:`soccer:epl:${input.eventId}`,league:'epl',date:input.date,formalScoringEnabled:false,executable:false,directions:Array.from({length:8},()=>({executable:false,eligible:false})),persisted:true,evidence:{teams:{}},status:'RESEARCH_ONLY'}));}));});
+const h=harness(async(_url,options)=>{requests++;active++;maxActive=Math.max(maxActive,active);const input=JSON.parse(options.body);return await new Promise(resolve=>pending.push(()=>{active--;resolve(Response.json({ok:true,gameId:`soccer:epl:${input.eventId}`,league:'epl',date:input.date,formalScoringEnabled:false,executable:false,directions:Array.from({length:8},()=>({executable:false,eligible:false})),persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',qaFlag:'WARN',evidence:{teams:{}},status:'RESEARCH_ONLY'}));}));});
 let tree=h.provider();assert.equal(requests,0,'Opening a board cannot automatically run analysis');
 const value=tree.props.value,a=value.run(games[0]),b=value.run(games[1]),c=value.run(games[2]);
 assert.equal(value.run(games[0]),a,'Repeated clicks cannot duplicate a queued/inflight request');assert.equal(requests,2);assert.equal(h.state[0][games[2].id].status,'queued');

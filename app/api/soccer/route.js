@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { checkRateLimit, rateLimitResponse, requireApiAuth } from '../../../lib/security.js';
 import { SOCCER_CAPABILITIES, SOCCER_DATA_VERSION, SOCCER_LEAGUES, soccerDate, soccerLeague, validSoccerDate } from '../../../lib/soccer/contracts.js';
 import { fetchSoccerSchedule, fetchSoccerStandings } from '../../../lib/soccer/data.js';
+import { recordSoccerCohort,soccerJournalConfigured } from '../../../lib/soccer/journal.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,11 @@ export async function GET(request) {
   if (!validSoccerDate(date)) return response({ ok: false, code: 'SOCCER_INVALID_DATE', error: '請輸入有效的台灣日期' }, 400);
   try {
     const result = view === 'standings' ? await fetchSoccerStandings(league.id) : await fetchSoccerSchedule(league.id, date, { windowDays: view === 'upcoming' ? 14 : 1 });
-    return response({ ...result, date, view, ...(view === 'standings' ? { standingsScope: 'CURRENT_PROVIDER_TABLE', historicalAsOfVerified: false, requestedDateIsNavigationOnly: true } : {}), ...(!result.ok ? { error: result.code?.includes('IDENTITY') || result.code?.includes('INVALID') || result.code?.includes('CONFLICT') ? '資料身分或格式核對未通過，請稍後重試' : '足球資料來源暫時無法更新，請稍後重試' } : {}) }, result.ok ? 200 : 503);
+    let cohortPersistence=null;
+    if(result.ok&&view!=='standings'){
+      if(soccerJournalConfigured()){try{cohortPersistence=await recordSoccerCohort(result.games);}catch{cohortPersistence={persisted:false,reason:'COHORT_STORAGE_UNAVAILABLE'};}}
+      else cohortPersistence={persisted:false,reason:'COHORT_STORAGE_NOT_CONFIGURED'};
+    }
+    return response({ ...result, date, view, cohortPersistence, ...(view === 'standings' ? { standingsScope: 'CURRENT_PROVIDER_TABLE', historicalAsOfVerified: false, requestedDateIsNavigationOnly: true } : {}), ...(!result.ok ? { error: result.code?.includes('IDENTITY') || result.code?.includes('INVALID') || result.code?.includes('CONFLICT') ? '資料身分或格式核對未通過，請稍後重試' : '足球資料來源暫時無法更新，請稍後重試' } : {}) }, result.ok ? 200 : 503);
   } catch { return response({ ok: false, league, code: 'SOCCER_DATA_UNAVAILABLE', error: '足球資料暫時無法更新，請稍後重試' }, 503); }
 }
