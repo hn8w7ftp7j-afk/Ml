@@ -7,7 +7,7 @@ import * as receipts from '../lib/analysis-completed-receipt-v1.js';
 import { analysisHasCalculatedDirections } from '../lib/analysis-display-state-v116.js';
 import { allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
 import { LEAGUE_IDS, normalizeLeagueId } from '../lib/leagues.js';
-import { ANALYSIS_LEAGUE_IDS } from '../lib/analysis-leagues.js';
+import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 import { prepareLeagueReaderPreflight } from '../lib/all-league-reader-preflight.js';
 
 // Execute the real page's preparation, submission, storage and reconnect code.
@@ -90,7 +90,7 @@ function submissionHarness(storage = new MemoryStorage()) {
   const submitted = [];
   const notices = [];
   Object.assign(context, {
-    league: 'CPBL', date: DATE, allLeagueRun: null, allLeagueRunning: false, nbaRunning: false, nbaDate: DATE, ANALYSIS_LEAGUE_IDS,
+    league: 'CPBL', date: DATE, allLeagueRun: null, allLeagueRunning: false, nbaRunning: false, nbaDate: DATE, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague,
     currentLeagueRef: { current: 'CPBL' }, currentDateRef: { current: DATE }, requestedRecoveryScopeRef: {},
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, id === 'MLB' ? NEXT_DATE : DATE])) },
     independentRunsRef: { current: new Map() },
@@ -98,7 +98,8 @@ function submissionHarness(storage = new MemoryStorage()) {
     analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: { current: false }, manualAnalysisScopesRef: { current: new Set() },
     submittedAllLeagueRunRef: { current: null },
     allLeagueTargetDate: async (league, date) => date,
-    prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
+    prepareSoccerBatch: async (id, date) => ({ league: id, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
+  prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
     prepareNbaBatch: async date => ({ league: 'NBA', date, tasks: [], preparedBoard: [], emptyReason: 'no_open_markets' }),
     leagueConfig: () => ({ label: 'isolated league', capabilities: { analysis: true, reader: true } }),
     fetchScheduleForLeague: async league => Array.from({ length: COUNTS[league] }, (_, index) => game(league, index)),

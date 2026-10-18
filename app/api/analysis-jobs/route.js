@@ -14,6 +14,7 @@ import {
 import { ANALYSIS_LEAGUE_IDS, analysisBatchScope, isAnalysisLeagueId } from '../../../lib/analysis-leagues.js';
 import { normalizeNbaAnalysisTasks } from '../../../lib/nba/analysis-job.js';
 import { normalizeNhlAnalysisTasks } from '../../../lib/nhl/analysis-job.js';
+import { normalizeSoccerAnalysisTasks } from '../../../lib/soccer/analysis-job.js';
 import { readCookie } from '../../../lib/security.js';
 import { deviceHash, getNotificationResult, PUSH_COOKIE } from '../../../lib/analysis-push.js';
 import {
@@ -35,6 +36,7 @@ const EMPTY_REASONS = new Set(['no_games', 'no_open_markets']);
 function normalizeTasks(tasks, league, prefix = '') {
   if (league === 'NBA') return normalizeNbaAnalysisTasks(tasks, tasks[0]?.nbaQuery?.date);
   if (league === 'NHL') return normalizeNhlAnalysisTasks(tasks, tasks[0]?.nhlQuery?.date);
+  if (['EPL', 'UCL'].includes(league)) return normalizeSoccerAnalysisTasks(tasks, tasks[0]?.soccerQuery?.date, league);
   return tasks.map((task, index) => {
     const requestId = REQUEST_ID.test(String(task?.requestId || ''))
       ? String(task.requestId)
@@ -98,6 +100,7 @@ export async function POST(request) {
           emptyReason: EMPTY_REASONS.has(batch?.emptyReason) ? batch.emptyReason : null,
           tasks: league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, batchDate)
             : league === 'NHL' ? normalizeNhlAnalysisTasks(tasks, batchDate)
+              : ['EPL', 'UCL'].includes(league) ? normalizeSoccerAnalysisTasks(tasks, batchDate, league)
               : normalizeTasks(tasks, league, `${league}-${batchIndex}-`),
         };
       });
@@ -116,7 +119,7 @@ export async function POST(request) {
       }
       // Short sport-specific passes run before slower baseball requests so NHL
       // can save its forecast before faceoff. Preserve baseball group order.
-      const priority = league => league === 'NBA' ? 2 : league === 'NHL' ? 1 : 0;
+      const priority = league => league === 'NBA' ? 3 : ['EPL', 'UCL'].includes(league) ? 2 : league === 'NHL' ? 1 : 0;
       normalizedBatches.sort((left, right) => priority(right.league) - priority(left.league));
       const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
       const run = await start(analyzeAllLeaguesWorkflow, [{ date, batches: normalizedBatches, pushDevice, preflightFailures: scope.preflightFailures }]);
@@ -139,7 +142,8 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, code: 'INVALID_BACKGROUND_JOB', error: '背景分析工作內容無效' }, { status: 400 });
     }
     const normalizedTasks = league === 'NBA' ? normalizeNbaAnalysisTasks(tasks, date)
-      : league === 'NHL' ? normalizeNhlAnalysisTasks(tasks, date) : normalizeTasks(tasks, league);
+      : league === 'NHL' ? normalizeNhlAnalysisTasks(tasks, date)
+        : ['EPL', 'UCL'].includes(league) ? normalizeSoccerAnalysisTasks(tasks, date, league) : normalizeTasks(tasks, league);
     const pushDevice = deviceHash(readCookie(request, PUSH_COOKIE));
     const run = await start(analyzeBoardWorkflow, [{ league, date, tasks: normalizedTasks, pushDevice }]);
     if (requestClaim?.claimed) {
@@ -154,7 +158,8 @@ export async function POST(request) {
     }
     const invalidNhl = String(error?.message || '').startsWith('NHL 分析身分') || String(error?.message || '').startsWith('NHL 工作場次');
     const invalidNba = String(error?.message || '').startsWith('NBA 分析身分') || String(error?.message || '').startsWith('NBA 工作場次');
-    return NextResponse.json({ ok: false, code: invalidNhl ? 'INVALID_NHL_BACKGROUND_JOB' : invalidNba ? 'INVALID_NBA_BACKGROUND_JOB' : 'BACKGROUND_JOB_START_FAILED', error: String(error?.message || error) }, { status: invalidNhl || invalidNba ? 400 : 500 });
+    const invalidSoccer = String(error?.message || '').startsWith('足球 分析身分') || String(error?.message || '').startsWith('足球 工作場次');
+    return NextResponse.json({ ok: false, code: invalidNhl ? 'INVALID_NHL_BACKGROUND_JOB' : invalidNba ? 'INVALID_NBA_BACKGROUND_JOB' : invalidSoccer ? 'INVALID_SOCCER_BACKGROUND_JOB' : 'BACKGROUND_JOB_START_FAILED', error: String(error?.message || error) }, { status: invalidNhl || invalidNba || invalidSoccer ? 400 : 500 });
   }
 }
 
@@ -230,6 +235,9 @@ export async function GET(request) {
                 blocked: row?.blocked === true,
                 shadow: row?.shadow === true,
                 saved: row?.saved === true,
+                research: row?.research === true,
+                analysisStatus: row?.analysisStatus || null,
+                publishedCurrent: row?.publishedCurrent === true,
               })),
             })),
           },
@@ -243,6 +251,7 @@ export async function GET(request) {
             total: result.total, completed: result.completed,
             results: (result.results || []).map(row => ({
               ok: row?.ok === true, status: row?.status, code: row?.code, blocked: row?.blocked === true, shadow: row?.shadow === true, saved: row?.saved === true,
+              research: row?.research === true, analysisStatus: row?.analysisStatus || null, publishedCurrent: row?.publishedCurrent === true,
             })),
           },
         });
