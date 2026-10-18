@@ -2,6 +2,7 @@
 import { createContext,useContext,useEffect,useRef,useState } from 'react';
 import { SoccerMarketDirections, SoccerHalfTimeResearch } from './market-panel.js';
 import { SoccerWorkloadPanel } from './workload-panel.js';
+import SoccerWorkspace from './workspace.js';
 
 const Context=createContext(null);
 const clock=v=>v?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
@@ -36,10 +37,22 @@ export function SoccerRunHistory({runs=[]}){
   const messages={SOCCER_SOURCE_UNAVAILABLE:'資料來源暫時無法讀取',SOCCER_SOURCE_TIMEOUT:'資料來源讀取逾時',SOCCER_SCHEDULE_UNAVAILABLE:'賽程資料暫時無法核對',SOCCER_GAME_NOT_FOUND:'無法核對同場賽事',NOT_A_PREMATCH_SNAPSHOT:'並非賽前資料，不補算賽前機率'};
   return runs.length?<div className="soccerRunHistory"><h4>最近分析嘗試</h4>{runs.map(run=><div className="soccerSavedVersion" key={run.analysisRunId}><p>{clock(run.startedAt)}｜分析：{analysisLabels[run.analysisStatus]||'狀態待確認'}｜篩選：{run.analysisStatus==='COMPLETED'&&run.selectionResult==='RESEARCH_SHADOW'?'研究中':'尚無結果'}</p>{run.qaFlag&&<p className="soccerAvailability">{qaLabels[run.qaFlag]||'檢核狀態待確認'}</p>}{run.reasons?.length>0&&<p className="soccerAvailability">{[...new Set(run.reasons.map(code=>reasons[code]||messages[code]||(/[\u3400-\u9fff]/.test(code)?code:'來源或資料條件仍待核對')))].join('；')}</p>}</div>)}</div>:null;
 }
-export function SoccerAnalysisProvider({games,children}){
+export function SoccerAnalysisProvider({games,children,league=games[0]?.league,date=games[0]?.date}){
   const [states,setStates]=useState({}),[batch,setBatch]=useState(false);
   const queue=useRef([]),active=useRef(0),pending=useRef(new Map()),controllers=useRef(new Set()),alive=useRef(true);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;for(const c of controllers.current)c.abort();for(const q of queue.current.splice(0))q.resolve(null);};},[]);
+  useEffect(()=>{
+    if(!league||!date)return;let mounted=true;const controller=new AbortController();
+    const dates=[date,...games.map(g=>g.date)].sort(),first=dates[0],last=dates.at(-1);
+    async function restore(){try{
+      const r=await fetch(`/api/soccer/analysis-board?${new URLSearchParams({league,date:first,through:last})}`,{cache:'no-store',signal:controller.signal}),d=await r.json();
+      if(!mounted||!r.ok||!d.ok||d.league!==league||d.date!==first||d.through!==last||!Array.isArray(d.results))return;
+      setStates(old=>{const next={...old};for(const result of d.results){const game=games.find(g=>g.id===result.gameId&&g.league===result.league&&g.date===result.date);if(!game||result.executable!==false||result.formalScoringEnabled!==false||!Array.isArray(result.directions)||result.directions.some(d=>d.eligible!==false||d.executable!==false))continue;
+        const previous=old[game.id];if(['loading','queued','error'].includes(previous?.status)||previous?.data&&Date.parse(previous.data.observedAt)>Date.parse(result.observedAt))continue;
+        next[game.id]={status:'done',data:result,error:''};}return next;});
+    }catch{}}
+    void restore();const timer=setInterval(restore,30000);return()=>{mounted=false;controller.abort();clearInterval(timer);};
+  },[league,date,games]);
   const patch=(id,value)=>{if(alive.current)setStates(old=>({...old,[id]:{...old[id],...value}}));};
   function pump(){
     while(alive.current&&active.current<2&&queue.current.length){const task=queue.current.shift(),game=task.game;active.current++;const controller=new AbortController();controllers.current.add(controller);let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},50000);patch(game.id,{status:'loading',error:''});
@@ -54,7 +67,7 @@ export function SoccerAnalysisProvider({games,children}){
   function run(game){if(pending.current.has(game.id))return pending.current.get(game.id);patch(game.id,{status:'queued',error:''});const promise=new Promise(resolve=>queue.current.push({game,resolve}));pending.current.set(game.id,promise);pump();return promise;}
   async function runAll(){if(batch)return;setBatch(true);try{await Promise.all(games.filter(g=>g.status==='scheduled'&&Date.parse(g.startTime)>Date.now()).map(run));}finally{if(alive.current)setBatch(false);}}
   const available=games.some(g=>g.status==='scheduled'&&Date.parse(g.startTime)>Date.now()),counts=soccerAnalysisCounts(games,states);
-  return <Context.Provider value={{states,run}}><div className="soccerAnalysisToolbar"><button type="button" className="secondary" disabled={batch||!available} onClick={runAll}>{batch?'正在核對賽前資料…':'一鍵核對賽前資料'}</button><span>研究模式・正式評分尚未啟用</span><a href="/soccer/specification">分析規格 2.2</a></div><div className="soccerAnalysisSummary" role="status" aria-live="polite"><strong>目前候選 {counts.candidates} 場</strong><span>本頁範圍 {counts.total} 場</span><span>待分析／重核 {counts.waiting}</span><span>處理中 {counts.processing}</span><span>完成 {counts.completed}</span><span>資料不足 {counts.insufficient}</span><span>失敗 {counts.failed}</span><span>研究中 {counts.research}</span></div>{children}</Context.Provider>;
+  return <Context.Provider value={{states,run}}><div className="soccerAnalysisToolbar"><button type="button" className="secondary" disabled={batch||!available} onClick={runAll}>{batch?'正在核對賽前資料…':'一鍵核對賽前資料'}</button><span>研究模式・正式評分尚未啟用</span><a href="/soccer/specification">分析規格 2.2</a></div><div className="soccerAnalysisSummary" role="status" aria-live="polite"><strong>目前候選 {counts.candidates} 場</strong><span>本頁範圍 {counts.total} 場</span><span>待分析／重核 {counts.waiting}</span><span>處理中 {counts.processing}</span><span>完成 {counts.completed}</span><span>資料不足 {counts.insufficient}</span><span>失敗 {counts.failed}</span><span>研究中 {counts.research}</span></div><SoccerWorkspace games={games} states={states} run={run} league={league} date={date}>{children}</SoccerWorkspace></Context.Provider>;
 }
 export default function SoccerAnalysisPanel({game}){
   const [history,setHistory]=useState({versions:[],runs:[],loading:false,error:'',loaded:false});
@@ -75,7 +88,7 @@ export default function SoccerAnalysisPanel({game}){
       {data.providerPolicy?.rebateRateStatus==='USER_CONFIRMED'&&<p className="soccerAvailability">足球退水：{(data.providerPolicy.rebateRate*100).toFixed(0)}%（{data.providerPolicy.rebateRate}）；{data.providerPolicy.rebateBasis==='TOTAL_PRINCIPAL'&&data.providerPolicy.rebateBasisStatus==='USER_CONFIRMED'?'按投注金額計算；適用條件與結算條款待核對。':'計算基數與結算條款待核對。'}</p>}
       <SoccerWorkloadPanel workload={e.workload}/>
       <SoccerRequirementDetails audit={data.requirements}/>
-      <SoccerMarketDirections directions={data.directions} unassignedQuotes={data.unassignedQuotes}/>
+      <SoccerMarketDirections directions={data.directions} unassignedQuotes={data.unassignedQuotes} game={game} result={data}/>
       <details className="soccerDetails"><summary>名單變動與上場核對</summary>
         {data.personnelComparison?.teams?.length>0?<><p>對照版本：{clock(data.personnelComparison.previousObservedAt)}。{data.personnelComparison.status==='PREMATCH_TO_ACTUAL_AUDIT'?'目前為賽後實際名單核對。':''}</p>{data.personnelComparison.teams.map(t=><div key={t.side}><strong>{t.side==='home'?'主隊':'客隊'}：{lineupChanges[t.status]}</strong>{t.added.length>0&&<p>新增先發：{t.added.map(p=>p.name).join('、')}</p>}{t.removed.length>0&&<p>不在目前先發：{t.removed.map(p=>p.name).join('、')}</p>}{t.formationBefore!==t.formationAfter&&<p>陣型：{t.formationBefore||'未提供'} → {t.formationAfter||'未提供'}</p>}</div>)}</>:<p>尚無可對照的先前完整資料；不把缺少名單當成預估錯誤。</p>}
         {e.minutesAudit?.status==='REGULATION_CLOCK_RECONSTRUCTED'?<><p>正規時鐘上場分鐘，不含補時；不等於實際經過時間，也不作為本場賽前輸入。</p>{['home','away'].map(side=><div key={side}><h4>{side==='home'?'主隊':'客隊'}上場紀錄</h4><div className="soccerTableWrap"><table className="soccerAuditTable"><thead><tr><th>球員</th><th>先發</th><th>時鐘分鐘</th></tr></thead><tbody>{e.minutesAudit.teams[side].players.filter(p=>p.appeared).map(p=><tr key={p.id}><td>{p.name}</td><td>{p.starter?'是':'否'}</td><td>{p.regulationClockMinutes.toFixed(1)}{p.addedTimeOnlyAppearance?'（補時登場）':''}</td></tr>)}</tbody></table></div></div>)}</>:<p>完整換人／上場分鐘尚未核對。賽前預估分鐘仍未啟用。</p>}

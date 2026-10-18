@@ -5,9 +5,9 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 
-const source=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/export function/g,'function');
+const source=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const {code}=await transform(source,{filename:'soccer-market-ui.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({React,Date});
+const ctx=vm.createContext({React,Date,SoccerRecordButton:()=>null});
 vm.runInContext(code,ctx);
 const threshold={axis:'TOTAL_GOALS',boundary:2,above:.421,equal:.271,below:.307,retainedMass:.999,tailMass:.001};
 const quote=(key,line,water,overrides={})=>({key,period:'FT',line,side:'over',water,rawRows:[`大 ${line} ${water}`,'小 0.81'],provenance:{periodEvidence:'全場',observedAt:'2026-10-18T15:50:00Z',revision:'not-for-users'},thresholdProbabilities:threshold,...overrides});

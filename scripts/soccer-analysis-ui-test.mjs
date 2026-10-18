@@ -23,7 +23,7 @@ const label=v=>Array.isArray(v)?v.map(label).join(''):v&&typeof v==='object'?lab
 const game=i=>({id:`soccer:epl:${i}`,sourceId:String(i),league:'epl',date:'2026-10-20',startTime:'2099-10-20T13:00:00Z',status:'scheduled',home:{name:'Home'},away:{name:'Away'}}),games=[game(1),game(2),game(3)];
 function harness(fetch){
  const state=[],refs=[],effects=[];let si=0,ri=0,tree;
- const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,
+ const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
   createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
   useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
   useRef:initial=>refs[ri++]|| (refs[ri-1]={current:initial}),useEffect:fn=>effects.push(fn)});

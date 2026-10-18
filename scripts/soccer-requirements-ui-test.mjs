@@ -61,7 +61,7 @@ assert.match(renderToStaticMarkup(context.SoccerRequirementDetails({})),/歷史�
 
 function harness(fetch){
   const state=[],refs=[];let si=0,ri=0;
-  const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,
+  const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
     createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
     useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
     useRef:initial=>refs[ri++]||(refs[ri-1]={current:initial}),useEffect:()=>{}});
