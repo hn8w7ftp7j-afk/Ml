@@ -39,3 +39,33 @@ ledger={...ledger,league:'epl',load:()=>{},mutate:()=>{}};assert.match(renderToS
 ledger.records=[];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/紀錄實際下注/);
 assert.equal(recordCtx.SoccerRecordButton({game,result,quote:{...quote,period:null}}),null);
 console.log('PASS shipped record JSX: original prices, recorded/cancelled/restore states, 1% football policy and unknown-period exclusion');
+
+// Execute the shipped provider hooks. Only React scheduling and HTTP are fixtures.
+let cursor=0,hooks=[],effects=[],dirty=false,tree,props={league:'epl',date:game.date,children:[]};
+const requests=[];
+const hookCtx=vm.createContext({React,Date,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,
+  createContext:()=>({Provider:'provider'}),
+  useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],v=>{hooks[i]=typeof v==='function'?v(hooks[i]):v;dirty=true;}];},
+  useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},
+  useEffect:(fn,deps)=>{const i=cursor++,old=hooks[i];if(old?.deps&&deps.every((d,j)=>Object.is(d,old.deps[j])))return;hooks[i]={deps};effects.push(()=>{old?.cleanup?.();hooks[i].cleanup=fn();});},
+  fetch:(url,options)=>new Promise(resolve=>requests.push({url,options,resolve})),
+});
+vm.runInContext(recordCode.code,hookCtx);
+const rerender=()=>{cursor=0;dirty=false;tree=hookCtx.SoccerRecordProvider(props);const queued=effects;effects=[];queued.forEach(f=>f());};
+const flush=async()=>{for(let i=0;i<20;i++){await Promise.resolve();if(dirty)rerender();}assert.equal(dirty,false);};
+const ledgerNow=()=>tree.props.value;
+const respond=async(req,value)=>{req.resolve({ok:true,json:async()=>value});await flush();};
+rerender();await flush();await respond(requests.shift(),{ok:true,league:'epl',date:game.date,through:game.date,records:[]});
+assert.equal(ledgerNow().status,'ready');
+const saving=ledgerNow().mutate({action:'record',gameId:game.id,alreadyPlaced:true},'position');await flush();
+await ledgerNow().load();await flush();assert.equal(requests.length,1,'manual refresh cannot supersede an in-flight durable write');
+await respond(requests.shift(),{ok:true,record,persistence:'durable_database'});await saving;await flush();
+assert.equal(ledgerNow().records.length,1);
+const cancelling=ledgerNow().mutate({action:'cancel',id:record.id},'position');await flush();const late=requests.shift();
+props={...props,league:'ucl'};rerender();await flush();
+assert.equal(requests.length,1,'switching scope must still load its ledger while an old-scope write is pending');
+await respond(requests.shift(),{ok:true,league:'ucl',date:game.date,through:game.date,records:[]});
+await respond(late,{ok:true,record:{...record,status:'CANCELLED'},persistence:'durable_database'});await cancelling;await flush();
+assert.equal(ledgerNow().league,'ucl');assert.equal(ledgerNow().records.length,0,'late EPL write cannot populate UCL records');
+hooks.forEach(h=>h?.cleanup?.());
+console.log('PASS actual record hooks: durable-write vs refresh fencing, scope switch during a write, late response isolation and stable effects');

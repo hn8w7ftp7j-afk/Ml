@@ -10,8 +10,8 @@ async function request(url,options={}){
 export function SoccerRecordProvider({league,date,through=date,children}){
   const [records,setRecords]=useState([]),[status,setStatus]=useState('loading'),[error,setError]=useState(''),[pending,setPending]=useState(new Set());
   const generation=useRef(0),flights=useRef(new Set());
-  async function load(){const token=++generation.current;setStatus('loading');setError('');try{const d=await request(`/api/soccer/bet-records?${new URLSearchParams({league,date,through})}`);if(token!==generation.current)return;if(d.league!==league||d.date!==date||d.through!==through||!Array.isArray(d.records)||d.records.some(r=>r.league!==league||r.date<date||r.date>through))throw Error('帳本識別不符。');setRecords(d.records);setStatus('ready');}catch(e){if(token===generation.current){setStatus('failed');setError(e.message);}}}
-  useEffect(()=>{setRecords([]);void load();return()=>{generation.current++;};},[league,date,through]);
+  async function load(){if(flights.current.size)return;const token=++generation.current;setStatus('loading');setError('');try{const d=await request(`/api/soccer/bet-records?${new URLSearchParams({league,date,through})}`);if(token!==generation.current)return;if(d.league!==league||d.date!==date||d.through!==through||!Array.isArray(d.records)||d.records.some(r=>r.league!==league||r.date<date||r.date>through))throw Error('帳本識別不符。');setRecords(d.records);setStatus('ready');}catch(e){if(token===generation.current){setStatus('failed');setError(e.message);}}}
+  useEffect(()=>{flights.current.clear();setPending(new Set());setRecords([]);void load();return()=>{generation.current++;};},[league,date,through]);
   async function mutate(body,key){
     if(status!=='ready'||flights.current.has(key))return;const token=generation.current;flights.current.add(key);setPending(new Set(flights.current));setError('');
     try{const d=await request('/api/soccer/bet-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,league,date:body.date||date})});if(token!==generation.current)return;

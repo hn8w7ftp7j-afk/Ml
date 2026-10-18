@@ -39,8 +39,9 @@ assert.match(resultRow, /<ResearchMarketBadge policy=\{researchPolicy\}/, 'resea
 assert.match(resultRow, /const scoreClass = researchPolicy \? 'researchOnlyScore'/, 'research rows must not retain candidate or strongest styling');
 assert.match(resultRow, /action\.kind === 'cancel' \? onCancel\(latest\) : onBet\(row\)/, 'research labeling must retain the original ledger and cancel flow');
 
-const rankingStart = page.indexOf("const shadowRanking = useMemo");
-const rankingEnd = page.indexOf('const shadowBetOrder = useMemo', rankingStart);
+assert.match(page, /const shadowRanking = useMemo\(\(\) => buildShadowRanking\(activeBoard, league, clockNow, liveReaderAuthority\)/, 'all-direction ranking must derive from the active identity-filtered board through the shared helper');
+const rankingStart = page.indexOf('function buildShadowRanking(');
+const rankingEnd = page.indexOf('export default function Home(', rankingStart);
 assert.ok(rankingStart >= 0 && rankingEnd > rankingStart, 'all-direction ranking derivation missing');
 const ranking = page.slice(rankingStart, rankingEnd);
 assert.match(ranking, /modelEvValue\(row\) != null/, 'all-direction list must retain every finite W, including negative values');
