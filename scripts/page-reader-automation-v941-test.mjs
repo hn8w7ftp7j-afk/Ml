@@ -284,7 +284,12 @@ mustMatch(/const currentBlockedMarkets = new Set\(\(item\.latestMarketCoverage \
 mustMatch(/function readerAnalysisRevisionReady\(item\)[\s\S]*item\?\.status === 'done'[\s\S]*restoredFromCache !== true[\s\S]*pendingReaderAnalysis !== true[\s\S]*analysisFailure == null/, 'only a fully committed, validated Reader revision may regain ranking or bet authority');
 mustMatch(/const currentAnalysisExecutable = readerAnalysisRevisionReady\(item\)[\s\S]*Boolean\(item\.readerPayloadHash\)[\s\S]*!preservedReaderAnalysis/, 'preserved analysis must never regain current ranking or bet authority');
 mustMatch(/import \{ capturedReaderContractReady, evaluateBetAction \} from '\.\.\/lib\/bet-action-state-v118\.js'/, 'page must import one shared fail-closed Reader and bet-action gate');
-const rankingDerivation = page.slice(page.indexOf('const shadowRanking = useMemo'), page.indexOf('const shadowBetOrder = useMemo'));
+assert.match(page, /const shadowRanking = useMemo\(\(\) => buildShadowRanking\(activeBoard, league, clockNow, liveReaderAuthority\)/, 'the ranking view must use the shared helper on the active identity-filtered board');
+const rankingHelperStart = page.indexOf('function buildShadowRanking(');
+const rankingHelperEnd = page.indexOf('export default function Home(', rankingHelperStart);
+assert.ok(rankingHelperStart >= 0 && rankingHelperEnd > rankingHelperStart, 'shared ranking derivation missing');
+const rankingDerivation = page.slice(rankingHelperStart, rankingHelperEnd);
+assert.ok(rankingDerivation.indexOf('.filter(row') >= 0 && rankingDerivation.indexOf('.map(row') > rankingDerivation.indexOf('.filter(row'), 'shared ranking row filter missing');
 const rankingFilter = rankingDerivation.slice(rankingDerivation.indexOf('.filter(row'), rankingDerivation.indexOf('.map(row'));
 assert.doesNotMatch(rankingFilter, /preservedReaderAnalysis/, 'partial, missing or pending Reader revisions must remain visible in ranking while staying non-executable');
 const scoreOnlyInvalidation = page.slice(
