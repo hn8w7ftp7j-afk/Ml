@@ -74,7 +74,9 @@
         const away = teams[awayIndex]; const home = teams[homeIndex];
         rows.push({ cells: [pairCell([`${month}-${day}`, `${hour.padStart(2, '0')}:${minute}`]),
           pairCell([`${away.team.code}-${away.text}`, `${home.team.code}-${home.text}`]), cell('runline'), cell('total'), cell('moneyline')],
-          text: clean(`${date.text} ${bands(contents).map(value => value.text).join(' ')}`).slice(0, 2000),
+          // Only the identified event/market evidence can leave the page.
+          // Never forward unrelated text sharing the same vertical card band.
+          text: clean(`${date.text.replace(/\s*[（(]更多玩法[）)]\s*[>›]?$/, '')} ${away.text} ${home.text} ${evidence.map(value => `${value.label} ${value.pair.join(' | ')}`).join(' ')}`).slice(0, 2000),
           teamEvidence: [away.text, home.text], marketEvidence: evidence, marketLocked: false });
       }
     }

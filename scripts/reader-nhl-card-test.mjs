@@ -68,6 +68,10 @@ for (const mutation of [
 }
 const mixed = structuredClone(section); mixed.fragments.push(fragment('聯盟：KHL俄羅斯冰球(1)', 40, 1500));
 assert.equal(normalize([mixed]).tables.length, 0);
+const privateSidebar = structuredClone(section);
+privateSidebar.fragments.push(fragment('PRIVATE_SIDEBAR_BALANCE', 40, 760));
+assert.equal(normalize([privateSidebar]).diagnostics.gameCount, 2);
+assert.equal(JSON.stringify(normalize([privateSidebar])).includes('PRIVATE_SIDEBAR_BALANCE'), false, 'unrelated page text must not be transmitted as raw event evidence');
 
 // Execute the actual content-script message handler with a minimal rendered-DOM
 // fixture. This verifies collector -> adapter -> multi-league capture wiring,
