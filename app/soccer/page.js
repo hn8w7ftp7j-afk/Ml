@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { APP_VERSION } from '../../lib/app-version.js';
 import SoccerReaderPanel from './reader-panel.js';
+import SoccerAnalysisPanel, { SoccerAnalysisProvider } from './analysis-panel.js';
 import { soccerTeamLabel } from '../../lib/soccer/team-labels.js';
 
 const SOCCER_LEAGUES = { EPL: { name: '英超', fullName: '英格蘭超級聯賽' }, UCL: { name: '歐冠 UCL', fullName: '歐洲冠軍聯賽' } };
@@ -89,6 +90,7 @@ function MatchCard({ game, showDate }) {
   return <article className="gameCard soccerGame" data-soccer-game={game.id}>
     <div className="soccerMatchTop"><time dateTime={game.startTime || undefined}>{clock(game.startTime)}</time><span className={`soccerStatus ${game.status}`}>{STATUSES[game.status] || STATUSES.unknown}</span></div>
     <h2 className="soccerMatchup"><span className="soccerTeam"><small>主隊</small><span>{teamName(game.home)}</span></span><span className={`soccerScore ${score ? '' : 'pending'}`} aria-label={score ? `主隊 ${game.home.score}，客隊 ${game.away.score}` : '尚無比分'}>{score || 'VS'}</span><span className="soccerTeam soccerAway"><small>客隊</small><span>{teamName(game.away)}</span></span></h2>
+    <SoccerAnalysisPanel game={game}/>
     {halfTime && <p className="soccerHalfTime">半場 {halfTime}</p>}
     <details className="soccerDetails"><summary>賽事資料</summary><dl className="soccerFacts"><dt>賽事狀態</dt><dd>{game.statusText || STATUSES[game.status] || STATUSES.unknown}</dd><dt>開賽時間</dt><dd>{clock(game.startTime)}（台灣）</dd>{showDate && <><dt>賽事日期</dt><dd>{game.date}</dd></>}{game.round && <><dt>輪次</dt><dd>{game.round}</dd></>}{game.venue && <><dt>球場</dt><dd>{typeof game.venue === 'string' ? game.venue : game.venue.name || '尚未提供'}</dd></>}</dl><Source value={game.source}/></details>
   </article>;
@@ -163,7 +165,7 @@ export default function SoccerPage() {
     <section className="panel soccerControls" aria-label="足球賽程查詢">
       <div className="soccerDateControls"><button type="button" className="secondary" aria-label="前一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, -1), view: 'schedule' })}>前一天</button><label htmlFor="soccer-date">台灣日期<input id="soccer-date" type="date" value={location.date} onChange={event => { if (validDate(event.target.value)) navigate({ ...location, date: event.target.value, view: 'schedule' }); }}/></label><button type="button" className="secondary" aria-label="後一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, 1), view: 'schedule' })}>後一天</button><button type="button" className="secondary" onClick={() => navigate({ ...location, date: taipeiDate(), view: 'schedule' })}>今天</button><button type="button" className="secondary soccerRefresh" disabled={!location.date || busy} onClick={retry}>{busy ? '更新中…' : '重新整理'}</button></div>
       <div className="soccerViewNav" aria-label="足球資料檢視">{Object.entries(VIEW_NAMES).map(([view, name]) => <button key={view} type="button" className={location.view === view ? 'active' : ''} aria-pressed={location.view === view} disabled={!location.date} onClick={() => navigate({ ...location, view })}>{name}</button>)}</div>
-      <p className="soccerAvailability">盤口與評分建置中</p>
+      <p className="soccerAvailability">可核對賽前資料與比分研究；正式評分驗證中</p>
     </section>
     <SoccerReaderPanel league={location.league} date={location.date}/>
     {error && <div className="errorBox soccerError" role="alert"><div><strong>{board ? '更新失敗，保留上次資料' : '資料載入失敗'}</strong><p>{error}</p></div><button type="button" className="secondary" disabled={busy} onClick={retry}>重試</button></div>}
@@ -172,7 +174,7 @@ export default function SoccerPage() {
       {board && <Source value={board.source}/>}
       {busy && !board && <div className="panel soccerLoading" role="status">正在取得{league.name}資料…</div>}
       {board && location.view === 'standings' && <><p className="soccerAvailability">目前賽季積分，不回推所選日期。</p><Standings board={board}/></>}
-      {board && location.view !== 'standings' && (games.length ? <div className="soccerGames">{games.map(game => <MatchCard key={game.id} game={game} showDate={location.view === 'upcoming'}/>)}</div> : <section className="emptyBoard soccerEmpty"><h2>{location.view === 'upcoming' ? '近期查無賽事' : '當日無賽事'}</h2><p>{location.view === 'upcoming' ? '來源在目前查詢範圍沒有列出賽事。' : `${dateLabel}（台灣時間）未安排${league.name}賽事。`}</p>{location.view === 'schedule' && <button type="button" className="primary" onClick={() => navigate({ ...location, view: 'upcoming' })}>查看近期賽程</button>}</section>)}
+      {board && location.view !== 'standings' && (games.length ? <SoccerAnalysisProvider key={key} games={games}><div className="soccerGames">{games.map(game => <MatchCard key={game.id} game={game} showDate={location.view === 'upcoming'}/>)}</div></SoccerAnalysisProvider> : <section className="emptyBoard soccerEmpty"><h2>{location.view === 'upcoming' ? '近期查無賽事' : '當日無賽事'}</h2><p>{location.view === 'upcoming' ? '來源在目前查詢範圍沒有列出賽事。' : `${dateLabel}（台灣時間）未安排${league.name}賽事。`}</p>{location.view === 'schedule' && <button type="button" className="primary" onClick={() => navigate({ ...location, view: 'upcoming' })}>查看近期賽程</button>}</section>)}
     </section>
   </main>;
 }
