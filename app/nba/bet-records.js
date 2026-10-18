@@ -14,7 +14,7 @@ async function request(url, options = {}) {
   if (!response.ok || result.ok !== true) throw new Error(result.error || '永久紀錄讀寫失敗。');
   return result;
 }
-export function NbaBetRecordProvider({ date, active, candidates = [], onHighScoreStatusChange, children }) {
+export function NbaBetRecordProvider({ date, active, candidates = [], analysisReady = true, onHighScoreStatusChange, children }) {
   const [records, setRecords] = useState([]), [status, setStatus] = useState('loading');
   const [recordsDate, setRecordsDate] = useState('');
   const [error, setError] = useState(''), [pending, setPending] = useState(new Set()), [failed, setFailed] = useState(new Set());
@@ -50,6 +50,7 @@ export function NbaBetRecordProvider({ date, active, candidates = [], onHighScor
   }, [load]);
   const confirmedKeys = new Set(records.filter(record => record.date === date && record.status !== 'CANCELLED').map(key));
   const summary = summarizeHighScoreBets(candidates, {
+    analysisReady,
     ledgerReady: ledgerStatus === 'ready',
     isRecorded: candidate => confirmedKeys.has(key({ date, gameId: candidate.game.id, marketKey: candidate.marketKey, side: candidate.side })),
   });

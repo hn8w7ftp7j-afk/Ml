@@ -149,7 +149,9 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
     finally { if (revision === requestRevision.current) setLoading(false); }
   }
   useEffect(() => { if (trackBoard && !operation.current) void load(date); }, [trackBoard, date]);
-  useEffect(() => { if (!trackBoard || busy) return; const timer = setInterval(() => { if (!operation.current) void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [trackBoard, busy]);
+  // Quote reads stay live while model jobs run, so earlier league results do not
+  // lose their current-price badge while another league is still analysing.
+  useEffect(() => { if (!trackBoard) return; const timer = setInterval(() => { if (!operation.current) void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [trackBoard]);
   useEffect(() => {
     const resume = () => { if (document.visibilityState !== 'hidden' && validNbaJob(jobRef.current)) setReconnectRevision(value => value + 1); };
     window.addEventListener('focus', resume); document.addEventListener('visibilitychange', resume);
@@ -220,7 +222,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
   // Match the existing candidate-order policy; the badge does not add a scoring rule.
   const highScoreCandidates = useMemo(() => buildNbaShadowOrder(buildNbaShadowRanking(rows, date, now).entries).flatMap(group => group.entries), [rows, date, now]);
-  return <NbaBetRecordProvider date={date} active={active} candidates={highScoreCandidates} onHighScoreStatusChange={onHighScoreStatusChange}><div hidden={!active} aria-label="NBA 主站分析">
+  return <NbaBetRecordProvider date={date} active={active} candidates={highScoreCandidates} analysisReady={!running} onHighScoreStatusChange={onHighScoreStatusChange}><div hidden={!active} aria-label="NBA 主站分析">
     <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'records' ? 'active' : ''} onClick={() => setView('records')}>下注紀錄</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button><button className={view === 'validation' ? 'active' : ''} onClick={() => setView('validation')}>模型驗證</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
     {message && <div className="noticeBox" role="status">{message}</div>}

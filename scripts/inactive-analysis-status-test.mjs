@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { reconcileInactiveIndependentRuns } from '../lib/independent-analysis-status.js';
+import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
+import { analysisItemMatchesScope } from '../lib/analysis-completed-receipt-v1.js';
 
 const date = '2026-10-01';
 const scope = league => `${league}:${date}`;
@@ -75,6 +77,112 @@ for (const status of ['cancelled', 404, 503]) {
   assert.equal(runs.get(scope('NPB')).status, status === 503 ? 'running' : 'failed');
 }
 
+// A finished inactive job may install immutable display results without ever
+// granting the selected league's Reader execution authority.
+const fullCompleted = league => ({
+  ...completed(league),
+  result: { ...completed(league).result, results: [{ ok: true, payload: { analysis: { marker: 'new-result' } } }] },
+});
+{
+  const owner = job('NPB');
+  const runs = new Map([[scope('NPB'), owner]]);
+  const displayBoards = new Map([[scope('NPB'), [{ marker: 'earlier-board', readerPayloadHash: null }]]]);
+  const calls = [];
+  const count = await reconcileInactiveIndependentRuns(runs, {
+    getVisibleScope: () => scope('MLB'), readStatus: async () => completed('NPB'),
+    readCompletedResult: async (...args) => { calls.push(args); return fullCompleted('NPB'); },
+    onCompleted: value => {
+      assert.equal(value.scope, scope('NPB'));
+      assert.equal(value.runId, owner.runId);
+      assert.equal(value.league, 'NPB');
+      assert.equal(value.date, date);
+      assert.equal(value.owner, owner);
+      assert.deepEqual(value.result, fullCompleted('NPB').result);
+      displayBoards.set(value.scope, value.result.results);
+    },
+  });
+  assert.equal(count, 1);
+  assert.deepEqual(calls, [['run-NPB', 'NPB', date]]);
+  assert.equal(owner.status, 'completed');
+  assert.equal(owner.resultLoaded, true);
+  assert.equal(owner.message, '分析完成');
+  assert.equal(owner.needsRecovery, true, 'display result loading must still require foreground Reader revalidation');
+  assert.equal(displayBoards.get(scope('NPB'))[0].payload.analysis.marker, 'new-result');
+  await reconcileInactiveIndependentRuns(runs, {
+    getVisibleScope: () => scope('MLB'),
+    readStatus: () => { throw Error('already-loaded completion must not be repolled'); },
+    readCompletedResult: () => { throw Error('already-loaded results must not be downloaded twice'); },
+    onCompleted: () => { throw Error('already-loaded display board must not be overwritten'); },
+  });
+}
+
+for (const race of ['newer-owner', 'newer-run', 'became-visible', 'effect-disposed']) {
+  const owner = job('NPB');
+  const runs = new Map([[scope('NPB'), owner]]);
+  const earlierBoard = [{ marker: 'earlier-board' }];
+  let displayBoard = earlierBoard;
+  let visible = scope('MLB'), active = true;
+  const downloaded = deferred();
+  let fullReads = 0, installations = 0;
+  const pending = reconcileInactiveIndependentRuns(runs, {
+    getVisibleScope: () => visible, isActive: () => active,
+    readStatus: async () => completed('NPB'),
+    readCompletedResult: () => { fullReads++; return downloaded.promise; },
+    onCompleted: ({ result }) => { installations++; displayBoard = result.results; },
+  });
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(fullReads, 1, 'completed summary must start immutable result retrieval');
+  assert.equal(owner.status, 'completed');
+  assert.equal(owner.resultLoaded, false);
+  assert.equal(displayBoard, earlierBoard, 'an unresolved result cannot replace the earlier board');
+  if (race === 'newer-owner') runs.set(scope('NPB'), { ...job('NPB'), runId: 'new-owner' });
+  if (race === 'newer-run') owner.runId = 'new-run';
+  if (race === 'became-visible') visible = scope('NPB');
+  if (race === 'effect-disposed') active = false;
+  downloaded.resolve(fullCompleted('NPB'));
+  assert.equal(await pending, 0, race);
+  assert.equal(installations, 0, `${race} must discard a late full-result response`);
+  assert.equal(displayBoard, earlierBoard);
+  assert.notEqual(owner.resultLoaded, true);
+}
+
+for (const failedResult of [
+  null,
+  { ...fullCompleted('NPB'), runId: 'other-run' },
+  { ...fullCompleted('NPB'), status: 'running' },
+  { ...fullCompleted('NPB'), result: { ...fullCompleted('NPB').result, league: 'KBO' } },
+  { ...fullCompleted('NPB'), result: { ...fullCompleted('NPB').result, date: '2026-09-30' } },
+  { ...fullCompleted('NPB'), result: { league: 'NPB', date } },
+]) {
+  const owner = job('NPB');
+  const runs = new Map([[scope('NPB'), owner]]);
+  let installed = false;
+  const options = {
+    getVisibleScope: () => scope('MLB'), readStatus: async () => completed('NPB'),
+    readCompletedResult: async () => {
+      if (failedResult === null) throw Error('temporary download failure');
+      return failedResult;
+    },
+    onCompleted: () => { installed = true; },
+  };
+  assert.equal(await reconcileInactiveIndependentRuns(runs, options), 1);
+  assert.equal(installed, false, 'failed or mismatched result must not replace an earlier board');
+  assert.equal(owner.status, 'completed', 'a result-download failure is not an analysis failure');
+  assert.equal(owner.needsRecovery, true);
+  assert.equal(owner.resultLoaded, false);
+  assert.equal(owner.message, '分析完成｜結果待載入');
+  assert.equal(await reconcileInactiveIndependentRuns(runs, options), 0,
+    'an unchanged pending download failure must wait for the normal timer instead of triggering an immediate revision retry loop');
+  assert.equal(await reconcileInactiveIndependentRuns(runs, {
+    ...options,
+    readStatus: () => { throw Error('a known completed job retries the result without repeating summary discovery'); },
+    readCompletedResult: async () => fullCompleted('NPB'),
+  }), 1);
+  assert.equal(installed, true, 'a later successful immutable result fetch must recover without reanalysis');
+  assert.equal(owner.resultLoaded, true);
+  assert.equal(owner.needsRecovery, true);
+}
+
 // Execute the current all-league entry guard: finished inactive jobs stop
 // blocking a new explicit all-league action, without starting any analysis here.
 const start = page.indexOf('  async function oneClickAnalyzeAll(');
@@ -145,8 +253,17 @@ function effectHarness(visibility = 'visible') {
   const timers = new Map();
   const listeners = new Map();
   const response = deferred();
+  const fullResponse = deferred();
   const owner = job('NPB');
   const calls = [];
+  const cacheWrites = [], receipts = [];
+  const game = { gamePk: 88, league: 'NPB', date, gameDate: `${date}T10:00:00Z`, awayTeamId: 10, homeTeamId: 20 };
+  const earlierBoard = [{ game, customData: { game, analysis: { results: [{ marker: 'earlier' }] } }, readerPayloadHash: null }];
+  const boards = new Map([[scope('NPB'), earlierBoard]]);
+  const full = { ...completed('NPB'), result: { ...completed('NPB').result,
+    results: [{ ok: true, task: { game, readerPayloadHash: 'historical-source' },
+      payload: { game, analysis: { results: [{ marker: 'newest', score: 8 }] } } }],
+  } };
   const document = {
     visibilityState: visibility,
     addEventListener: (name, handler) => listeners.set(name, handler),
@@ -157,14 +274,19 @@ function effectHarness(visibility = 'visible') {
     league: 'MLB', date, independentRunRevision: 0,
     independentRunsRef: { current: new Map([[scope('NPB'), owner]]) },
     currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date },
-    reconcileInactiveIndependentRuns, document,
+    reconcileInactiveIndependentRuns, document, allLeagueBoardsRef: { current: boards },
+    loadAnalysisBoardCache: () => [], materializeAllLeagueResult, compactAnalysisData: value => value,
+    analysisItemMatchesScope,
+    saveCompletedAnalysisReceipt: (...args) => { receipts.push(args); return { completed: 1, stored: true }; },
+    saveAnalysisBoardCache: (...args) => cacheWrites.push(args),
     window: { setTimeout: (callback, ms) => { timers.set(++timerId, { callback, ms }); return timerId; }, clearTimeout: id => timers.delete(id) },
-    requestJSON: (url, options, timeout) => { calls.push({ url, options, timeout }); return response.promise; },
+    requestJSON: (url, options, timeout) => { calls.push({ url, options, timeout }); return url.includes('summary=1') ? response.promise : fullResponse.promise; },
     setIndependentRunRevision: () => renders++,
     setBoard: () => { throw new Error('summary effect must not write boards'); },
   });
   vm.runInContext(effectSource, context);
-  return { cleanup: effect(), response, calls, owner, timers, listeners, document, renders: () => renders };
+  return { cleanup: effect(), response, fullResponse, full, context, boards, earlierBoard,
+    cacheWrites, receipts, calls, owner, timers, listeners, document, renders: () => renders };
 }
 const foreground = effectHarness();
 assert.equal(foreground.calls.length, 1);
@@ -172,6 +294,18 @@ assert.match(foreground.calls[0].url, /runId=run-NPB&summary=1/);
 foreground.response.resolve(completed('NPB'));
 await new Promise(setImmediate);
 assert.equal(foreground.owner.status, 'completed');
+assert.equal(foreground.calls.length, 2, 'the actual inactive effect must download the completed immutable result');
+assert.match(foreground.calls[1].url, /runId=run-NPB&league=NPB$/);
+assert.equal(foreground.boards.get(scope('NPB')), foreground.earlierBoard, 'unfinished result download must retain the earlier board');
+assert.equal(foreground.renders(), 0, 'completion notification waits for the display result installation');
+foreground.fullResponse.resolve(foreground.full);
+await new Promise(setImmediate);
+assert.equal(foreground.owner.resultLoaded, true);
+assert.equal(foreground.owner.needsRecovery, true);
+assert.equal(foreground.boards.get(scope('NPB'))[0].customData.analysis.results[0].marker, 'newest');
+assert.equal(foreground.boards.get(scope('NPB'))[0].readerPayloadHash, null, 'inactive result installation cannot grant live Reader authority');
+assert.equal(foreground.cacheWrites.length, 1);
+assert.equal(foreground.receipts[0][0].runId, 'run-NPB');
 assert.equal(foreground.renders(), 1);
 assert.equal([...foreground.timers.values()][0].ms, 15000);
 foreground.cleanup();
@@ -193,5 +327,36 @@ assert.equal(hidden.calls.length, 1, 'returning to the app checks inactive statu
 hidden.response.resolve(completed('NPB'));
 await new Promise(setImmediate);
 assert.equal(hidden.owner.status, 'completed');
+hidden.fullResponse.resolve(hidden.full);
+await new Promise(setImmediate);
+assert.equal(hidden.owner.resultLoaded, true);
 hidden.cleanup();
-console.log('PASS: inactive job completion/failure, owner and scope races, all-league unlocking, original recovery and compact single-league API summaries');
+
+for (const race of ['newer-owner', 'newer-run', 'became-visible', 'effect-disposed']) {
+  const late = effectHarness();
+  late.response.resolve(completed('NPB'));
+  await new Promise(setImmediate);
+  assert.equal(late.calls.length, 2);
+  if (race === 'newer-owner') late.context.independentRunsRef.current.set(scope('NPB'), { ...job('NPB'), runId: 'new-owner' });
+  if (race === 'newer-run') late.owner.runId = 'new-run';
+  if (race === 'became-visible') late.context.currentLeagueRef.current = 'NPB';
+  if (race === 'effect-disposed') late.cleanup();
+  late.fullResponse.resolve(late.full);
+  await new Promise(setImmediate);
+  assert.equal(late.boards.get(scope('NPB')), late.earlierBoard, `${race} must prevent the actual callback from installing a late board`);
+  assert.equal(late.cacheWrites.length, 0);
+  assert.equal(late.receipts.length, 0);
+  assert.notEqual(late.owner.resultLoaded, true);
+  if (race !== 'effect-disposed') late.cleanup();
+}
+const failedDownload = effectHarness();
+failedDownload.response.resolve(completed('NPB'));
+await new Promise(setImmediate);
+failedDownload.fullResponse.resolve({ ...failedDownload.full, result: { ...failedDownload.full.result, date: '2026-09-30' } });
+await new Promise(setImmediate);
+assert.equal(failedDownload.owner.resultLoaded, false);
+assert.equal(failedDownload.owner.status, 'completed');
+assert.equal(failedDownload.boards.get(scope('NPB')), failedDownload.earlierBoard);
+assert.equal(failedDownload.cacheWrites.length, 0);
+failedDownload.cleanup();
+console.log('PASS: inactive result delivery, immutable board cache/receipt loading, late owner/scope protections, failed-fetch recovery, all-league unlocking and compact summaries');

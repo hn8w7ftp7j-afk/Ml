@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { transform } from 'next/dist/build/swc/index.js';
 import { summarizeHighScoreBets } from '../lib/league-bet-status.js';
+import { loadNbaUpcomingBoard } from '../lib/nba/analysis-ui-policy.js';
+import { analyzeNbaPreseason } from '../lib/nba/preseason-model.js';
+import { buildNbaShadowRanking, buildNbaShadowOrder } from '../lib/nba/shadow-ranking.js';
 
 // Exercise the actual provider and its effects without a DOM or real timers.
 // Only React's scheduling surface, network, and browser events are simulated.
@@ -126,6 +129,13 @@ assert.equal(changes.length, published, 'tab switches and fresh callback identit
 assert.equal(state.requests.length, 0, 'tab switches must retain the confirmed ledger');
 assert.equal(state.ledger().records.length, 1);
 
+await state.update({ analysisReady: false });
+assert.equal(changes.at(-1).state, 'analysis_pending', 'a newer NBA job must fence the previous all-bet result');
+assert.equal(changes.at(-1).label, '高分狀態待確認');
+assert.equal(changes.at(-1).total, null, 'previous candidate totals cannot confirm a newer job');
+await state.update({ analysisReady: true });
+assert.equal(changes.at(-1).state, 'all_bet', 'confirmed candidates must recover when the new NBA job is ready');
+
 const second = { ...candidate, stableKey: 'second-market', marketKey: 'firstHalfTotal' };
 await state.update({ candidates: [candidate, second] });
 assert.equal(changes.at(-1).state, 'unbet', 'a bet on another market cannot satisfy the remaining candidate');
@@ -176,3 +186,96 @@ assert.equal(changes.at(-1).league, 'NBA');
 state.unmount();
 
 console.log('NBA league bet status PASS: hidden ledger, durable save/cancel/restore, no false confirmation, market/date isolation, stale GET/write protection, refresh recovery and stable callback');
+
+// Run the actual board loader and refresh effect with another league still busy.
+// The fixture has a genuine qualifying preseason direction; stale quotes must
+// still expire under the existing ranking rules rather than a badge exception.
+const workspace = fs.readFileSync(new URL('../app/nba/main-workspace.js', import.meta.url), 'utf8');
+assert.match(workspace, /<NbaBetRecordProvider[^>]*analysisReady=\{!running\}/,
+  'NBA readiness fence must track its own analysis job rather than other busy leagues');
+const loadStart = workspace.indexOf('  async function load(');
+const loadEnd = workspace.indexOf('\n  useEffect(', loadStart);
+assert.ok(loadStart >= 0 && loadEnd > loadStart, 'NBA workspace board loader must be present');
+const refreshEffect = workspace.split('\n').find(line => line.includes('useEffect(') && line.includes('setInterval(') && line.includes('30000') && line.includes('trackBoard'));
+assert.ok(refreshEffect, 'NBA workspace must install a tracked-board refresh');
+
+const boardDate = '2026-10-06', initialNow = Date.parse('2026-10-05T19:50:00Z');
+let clock = initialNow;
+const initialObservedAt = new Date(initialNow).toISOString();
+const quotes = {
+  fullTotal: { line: '232.5', overWater: .94, underWater: .94 },
+  fullRunline: { line: '3平', lineSide: 'home', homeWater: .95, awayWater: .95 },
+  firstHalfTotal: { line: '115+50', overWater: .94, underWater: .96 },
+  firstHalfRunline: { line: '2-25', lineSide: 'away', homeWater: .95, awayWater: .95 },
+};
+const boardGame = {
+  league: 'NBA', id: 'nba:espn:game:401999001', sourceId: '401999001', gamePk: 401999001,
+  seasonType: 'preseason', season: { year: 2027 }, taipeiDate: boardDate, startTime: '2026-10-05T23:00:00Z',
+  home: { id: 'nba:espn:team:1' }, away: { id: 'nba:espn:team:29' },
+};
+const initialRow = {
+  game: boardGame, quote: quotes, observedAt: initialObservedAt, pageActivityAt: initialObservedAt, canAnalyze: true,
+  result: { ...analyzeNbaPreseason(boardGame, quotes), league: 'NBA', gameId: boardGame.id, date: boardDate, observedAt: initialObservedAt },
+  jobState: 'ready',
+};
+const qualifying = rows => buildNbaShadowOrder(buildNbaShadowRanking(rows, boardDate, clock).entries).flatMap(group => group.entries);
+assert.ok(qualifying([initialRow]).length, 'test fixture must contain a real qualifying direction');
+clock += 4 * 60_000;
+assert.equal(qualifying([initialRow]).length, 0, 'unchanged stale timestamps must still remove expired candidates');
+clock = initialNow;
+
+let boardRows = [initialRow], readCount = 0, refresh, disposed = false, heldResponse;
+const boardScope = {
+  trackBoard: true, busy: true, operation: { current: false }, requestRevision: { current: 0 },
+  dateRef: { current: boardDate }, explicitDate: { current: false }, jobRef: { current: { status: 'completed' } },
+  setLoading: () => {}, setError: message => assert.equal(message, ''), setReaderStatus: () => {},
+  setDate: () => { throw Error('Read-only quote refresh must not change this board date'); }, onDateChange: () => {},
+  setProgress: () => {}, setSelected: () => {}, setRows: update => { boardRows = typeof update === 'function' ? update(boardRows) : update; },
+  loadNbaUpcomingBoard: options => loadNbaUpcomingBoard({ ...options, now: clock }),
+  async api(url) {
+    assert.ok(url.startsWith('/api/nba/reader') || url.startsWith('/api/nba/analysis-board?'), 'quote refresh must only read Reader/board APIs');
+    const observedAt = new Date(clock).toISOString();
+    if (url === '/api/nba/reader') return { status: 'fresh', boardDate, observedAt, pageActivityAt: observedAt };
+    readCount++;
+    const board = { date: boardDate, readerStatus: 'fresh', rows: [{ game: boardGame, quote: quotes, observedAt, pageActivityAt: observedAt, canAnalyze: true }] };
+    if (heldResponse) return new Promise(resolve => { heldResponse.resolve = () => resolve(board); });
+    return board;
+  },
+  useEffect: effect => effect(),
+  setInterval(callback, milliseconds) { assert.equal(milliseconds, 30000); refresh = callback; return 1; },
+  clearInterval: () => { disposed = true; },
+};
+const disposeRefresh = vm.runInNewContext(`${workspace.slice(loadStart, loadEnd)}\n${refreshEffect.trim().replace(/^useEffect\(/, 'captureEffect(')}`, {
+  ...boardScope, captureEffect: effect => effect(),
+});
+assert.equal(typeof refresh, 'function', 'another league being busy must not suspend read-only NBA quote refresh');
+const settleReads = async () => { for (let turn = 0; turn < 20; turn++) await Promise.resolve(); };
+for (let step = 1; step <= 14; step++) {
+  // NBA is complete, while the global run stays busy for another seven minutes.
+  clock = initialNow + step * 30000;
+  refresh(); await settleReads();
+  assert.equal(boardRows[0].observedAt, new Date(clock).toISOString(), 'Reader quote timestamp must advance during the remaining leagues');
+  assert.equal(boardRows[0].pageActivityAt, new Date(clock).toISOString());
+  assert.equal(boardRows[0].result, initialRow.result, 'refresh must preserve the completed model result');
+  assert.equal(summarizeHighScoreBets(qualifying(boardRows), { ledgerReady: true }).state, 'unbet', 'fresh same-price analysis must retain the high-score reminder');
+}
+assert.equal(readCount, 14);
+boardScope.jobRef.current = { status: 'running' };
+clock += 30000;
+refresh(); await settleReads();
+assert.equal(readCount, 15, 'NBA own model job must not pause read-only quote refresh either');
+assert.equal(boardRows[0].observedAt, new Date(clock).toISOString());
+boardScope.operation.current = true;
+refresh(); await settleReads();
+assert.equal(readCount, 15, 'starting a model operation must retain the preflight/request guard');
+boardScope.operation.current = false;
+heldResponse = {};
+refresh(); await settleReads();
+boardScope.dateRef.current = '2026-10-07';
+const protectedRows = boardRows;
+heldResponse.resolve(); await settleReads();
+assert.equal(boardRows, protectedRows, 'late quote refresh from the previous date must not replace current rows');
+assert.equal(typeof disposeRefresh, 'function');
+disposeRefresh();
+assert.equal(disposed, true);
+console.log('NBA busy quote refresh PASS: delayed all-league completion, advancing Reader timestamps, unchanged model/eligibility and operation/date race guards');

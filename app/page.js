@@ -1,5 +1,5 @@
 'use client';
-import { summarizeBaseballHighScoreBets } from '../lib/league-bet-status.js';
+import { leagueAnalysisReminderReady, summarizeBaseballHighScoreBets } from '../lib/league-bet-status.js';
 import LeagueBetBadge from './league-bet-badge.js';
 import { createJobStatusReader } from '../lib/job-status-reader.js';
 import { reconcileInactiveIndependentRuns } from '../lib/independent-analysis-status.js';
@@ -2142,11 +2142,13 @@ export default function Home() {
       const candidates = buildBetOrderEntries(buildShadowRanking(scope.board, id, clockNow, {}));
       const summary = summarizeBaseballHighScoreBets(candidates, {
         bets, league: id, date: scope.date, ledgerReady: cloudLedgerStatus.state === 'ready',
+        analysisReady: leagueAnalysisReminderReady(independentRunsRef.current.get(`${id}:${scope.date}`),
+          allLeagueBoardDate(allLeagueRun, id) === scope.date ? allLeagueRun?.leagues?.[id] : null, allLeagueRun?.startedAt),
       });
       return [id, { ...summary, league: id, date: scope.date }];
     })),
     NBA: nbaBetStatus?.date === nbaDate ? nbaBetStatus : null,
-  }), [leagueReminderBoards, clockNow, cloudLedgerStatus.state, bets, nbaBetStatus, nbaDate]);
+  }), [leagueReminderBoards, clockNow, cloudLedgerStatus.state, bets, nbaBetStatus, nbaDate, allLeagueRun, independentRunRevision]);
   const rankingLayoutRevision = useMemo(() => shadowRanking
     .map(entry => `${entry.stableKey}:${entry.score ?? ''}:${entry.weightedEV ?? ''}:${entry.robustEV ?? ''}`)
     .join('||'), [shadowRanking]);
@@ -2466,6 +2468,7 @@ export default function Home() {
             session.status = 'completed';
             session.message = batch.ok ? '分析完成' : '分析結束｜部分項目未完成';
             session.needsRecovery = false;
+            session.resultLoaded = true;
           }
           if (requestedRecoveryScopeRef.current === scope) requestedRecoveryScopeRef.current = null;
           if (completedRun) completedRun = updateAllLeagueAnalysisLeague(completedRun, batch.league, {
@@ -2545,13 +2548,14 @@ export default function Home() {
             const summary = summarizeAllLeagueBatchResult(batch);
             let resultLoaded = Number(batch.total) === 0 || id === 'NHL' || isSoccerAnalysisLeague(id);
             let loadError = '';
-            if (LEAGUE_IDS.includes(id) && Number(batch.total) > 0 && submittedAllLeagueRunRef.current === expectedRunId) {
+            if (LEAGUE_IDS.includes(id) && Number(batch.total) > 0) {
               try {
                 const full = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(expectedRunId)}&league=${encodeURIComponent(id)}`, {}, 30000);
                 if (!stillCurrentRun()) return;
                 if (full.status !== 'completed' || full.result?.league !== id || full.result?.date !== batchDate) throw new Error('結果聯盟或日期不符');
                 let next = materializeAllLeagueResult(full.result, loadAnalysisBoardCache(id, batchDate), compactAnalysisData);
-                if (currentLeagueRef.current === id && currentDateRef.current === batchDate) {
+                if (submittedAllLeagueRunRef.current === expectedRunId
+                  && currentLeagueRef.current === id && currentDateRef.current === batchDate) {
                   next = await verifyCompletedBoard(next, id, batchDate, analysisGenerationRef.current);
                   if (!stillCurrentRun()) return;
                 }
@@ -2723,6 +2727,15 @@ export default function Home() {
             getVisibleScope: () => `${currentLeagueRef.current}:${currentDateRef.current}`,
             isActive: () => active,
             readStatus: runId => requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&summary=1&t=${Date.now()}`, {}, 30000),
+            readCompletedResult: (runId, id) => requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(runId)}&league=${encodeURIComponent(id)}`, {}, 30000),
+            onCompleted: ({ scope, runId, league: id, date: batchDate, result }) => {
+              const previous = allLeagueBoardsRef.current.get(scope) || loadAnalysisBoardCache(id, batchDate);
+              const next = materializeAllLeagueResult(result, previous, compactAnalysisData);
+              if (next.some(item => !analysisItemMatchesScope(item, { league: id, date: batchDate }))) throw new Error('背景結果賽事識別不符');
+              saveCompletedAnalysisReceipt({ runId, league: id, date: batchDate }, result);
+              saveAnalysisBoardCache(id, batchDate, next);
+              allLeagueBoardsRef.current.set(scope, next);
+            },
           });
           if (active && changed) setIndependentRunRevision(value => value + 1);
         }
@@ -2785,6 +2798,7 @@ export default function Home() {
         sessionRun.message = result?.discarded ? '完成｜待重新核對盤口'
           : result?.results?.some(row => !row.ok) ? '分析結束｜部分項目未完成' : '分析完成';
         sessionRun.needsRecovery = false;
+        sessionRun.resultLoaded = resultActuallyLoaded;
         setIndependentRunRevision(value => value + 1);
       }
       if (saved.batchMode === 'all-leagues' && resultActuallyLoaded && result?.recoveryPersisted === true) {
