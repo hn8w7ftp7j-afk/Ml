@@ -25,7 +25,7 @@
 - 成功來源保存各自 `fetchedAt`、URL 與 `contentHash`。失敗來源沒有內容 hash，不能冒充已取得資料。這次新取得的過往賽果不是當年已保存的賽前證據。
 - 個別球員的近期已觀察分鐘由下節所述摘要稽核補入；國家隊負荷、預估分鐘、傷病、旅行距離與完整覆蓋仍未建立。`coverage.complete`、`pointInTimeAvailabilityVerified` 及 `modelEffectApplied` 維持 `false`；不直接調整預期進球數。
 
-## 11.10.6：近期個人負荷觀察
+## 11.10.8：近期個人負荷觀察
 
 - 從兩隊 `recentCompleted` 各選最近最多 4 場，按每場已核對賽事 slug 與 event ID 讀取 summary；不是將英超 endpoint 套到全部盃賽。每隊最多 2 個請求同時進行，新增階段預設預算 5 秒，個別請求 2.5 秒。即使加入共用讀取，每個等待者仍有自己的截止時間。
 - `lib/soccer/player-workload.js` 交叉核對球隊、對手、主客、聯賽、event/competition ID、開球、完賽與內容 hash。重用 `soccerMinutesAudit` 重建正規時鐘參與；加時、無法核對事件與缺少名單不填零、不擅自折算。

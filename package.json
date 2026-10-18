@@ -1,12 +1,15 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.10.6",
+  "version": "11.10.8",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
+    "pretest:soccer": "npm run test:soccer-workspace",
+    "test:soccer-workspace": "node scripts/soccer-workspace-test.mjs && node scripts/soccer-workspace-ui-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-workspace-api-test.mjs",
+    "test:league-bet-status": "node scripts/league-bet-status-test.mjs && node scripts/nba-league-bet-status-test.mjs",
     "test:reader-recovery": "node scripts/reader-nhl-card-test.mjs && node scripts/reader-six-league-recovery-test.mjs && node scripts/reader-nhl-test.mjs && node scripts/reader-nba-test.mjs && node scripts/reader-multi-date-test.mjs && node scripts/reader-static-security-v202-test.mjs && node scripts/reader-artifact-delivery-test.mjs",
     "test:market-history": "node scripts/market-line-history-v1-test.mjs && node scripts/market-line-history-ingest-test.mjs && node scripts/market-line-history-query-test.mjs && node scripts/market-line-history-ui-test.mjs",
     "test:reliability": "node scripts/performance-ledger-client-test.mjs && node scripts/nba-performance-ledger-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-performance-api-test.mjs && node scripts/operational-readiness-test.mjs && node scripts/compact-cloud-ledger-client-test.mjs && node scripts/pit-feature-time-evidence-test.mjs && node scripts/pit-publication-integrity-test.mjs && node scripts/pit-snapshot-time-integrity-test.mjs && node scripts/cloud-ledger-read-performance-test.mjs && node scripts/money-display-test.mjs && node scripts/client-json-response-retry-test.mjs && node scripts/inactive-analysis-status-test.mjs && node scripts/background-start-request-journal-test.mjs",
@@ -39,9 +42,8 @@
     "test:over-diagnostics": "node scripts/market-research-policy-test.mjs && node scripts/over-diagnostic-view-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/over-diagnostic-api-test.mjs",
     "test:over-http": "node scripts/over-diagnostic-http-test.mjs",
     "test:bet-recovery": "node scripts/bet-attempt-journal-test.mjs && node scripts/bet-reanalysis-recovery-test.mjs",
-    "test:soccer": "node scripts/soccer-provider-policy-test.mjs && node scripts/soccer-market-payoff-test.mjs && node scripts/soccer-market-ui-test.mjs && node scripts/soccer-reader-period-ui-test.mjs && node scripts/soccer-period-test.mjs && node scripts/soccer-period-worker-test.mjs && node scripts/soccer-period-store-test.mjs && node scripts/soccer-half-time-test.mjs && node scripts/soccer-workload-test.mjs && node scripts/soccer-player-workload-test.mjs && node scripts/soccer-workload-ui-test.mjs && node scripts/soccer-requirements-test.mjs && node scripts/soccer-requirements-ui-test.mjs && node scripts/soccer-journal-test.mjs && node scripts/soccer-current-status-test.mjs && node scripts/soccer-personnel-test.mjs && node scripts/soccer-settlement-review-test.mjs && node scripts/soccer-validation-test.mjs && node scripts/soccer-model-test.mjs && node scripts/soccer-analysis-test.mjs && node scripts/soccer-analysis-ui-test.mjs && node scripts/soccer-reader-test.mjs --api && node scripts/soccer-reader-desktop-test.mjs && node scripts/soccer-reader-team-alias-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-data-test.mjs --api && node scripts/soccer-ui-test.mjs && node scripts/soccer-integration-test.mjs && node scripts/soccer-reader-layout-test.mjs && node scripts/reader-soccer-layout-diagnostics-test.mjs",
-    "test:soccer:live": "node scripts/soccer-source-smoke.mjs",
-    "test:league-bet-status": "node scripts/league-bet-status-test.mjs && node scripts/nba-league-bet-status-test.mjs"
+    "test:soccer": "node scripts/soccer-provider-policy-test.mjs && node scripts/soccer-market-payoff-test.mjs && node scripts/soccer-market-ui-test.mjs && node scripts/soccer-reader-period-ui-test.mjs && node scripts/soccer-period-test.mjs && node scripts/soccer-period-worker-test.mjs && node scripts/soccer-period-store-test.mjs && node scripts/soccer-half-time-test.mjs && node scripts/soccer-workload-test.mjs && node scripts/soccer-player-workload-test.mjs && node scripts/soccer-workload-ui-test.mjs && node scripts/soccer-requirements-test.mjs && node scripts/soccer-requirements-ui-test.mjs && node scripts/soccer-journal-test.mjs && node scripts/soccer-current-status-test.mjs && node scripts/soccer-personnel-test.mjs && node scripts/soccer-settlement-review-test.mjs && node scripts/soccer-validation-test.mjs && node scripts/soccer-model-test.mjs && node scripts/soccer-analysis-test.mjs && node scripts/soccer-analysis-ui-test.mjs && node scripts/soccer-reader-test.mjs --api && node scripts/soccer-reader-desktop-test.mjs && node scripts/soccer-reader-team-alias-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-data-test.mjs --api && node scripts/soccer-ui-test.mjs && node scripts/soccer-integration-test.mjs && node scripts/soccer-reader-layout-test.mjs && node scripts/reader-soccer-layout-diagnostics-test.mjs && node scripts/all-league-soccer-orchestration-test.mjs && node scripts/soccer-analysis-board-test.mjs && node scripts/soccer-analysis-job-test.mjs && node scripts/soccer-analysis-recovery-ui-test.mjs",
+    "test:soccer:live": "node scripts/soccer-source-smoke.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.0.2",

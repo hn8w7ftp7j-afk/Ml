@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { transform } from 'next/dist/build/swc/index.js';
+import { buildSoccerRanking,SOCCER_RANK_MARKETS,soccerMarketName } from '../lib/soccer/ranking.js';
+import { soccerRecordKey,soccerRecordStats } from '../lib/soccer/manual-record.js';
+import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
+import { soccerValidationArtifacts } from '../lib/soccer/validation-frozen.js';
+const source=fs.readFileSync('app/soccer/workspace.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
+const compiled=await transform(source,{filename:'workspace.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+let states=[],si=0;
+const ctx=vm.createContext({React,Date,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerTeamLabel,soccerValidationArtifacts,
+  SoccerRecordProvider:({children})=>children,SoccerRecordButton:()=>null,SoccerBetRecords:()=>React.createElement('p',null,'實際下注帳本'),
+  useEffect:()=>{},useState:initial=>[states[si++]??(typeof initial==='function'?initial():initial),()=>{}]});
+vm.runInContext(compiled.code,ctx);
+const render=(view,league='epl')=>{states=[view];si=0;return renderToStaticMarkup(ctx.SoccerWorkspace({league,date:'2026-10-20',games:[],states:{},run:()=>{},children:[]}));};
+for(const view of ['board','results','ranking','records','data','validation']){
+  const markup=render(view);for(const name of ['今日盤口','分析結果','排名','下注紀錄','賽程與球員','模型驗證'])assert.ok(markup.includes(name));
+  assert.doesNotMatch(markup,/undefined|NaN/);
+}
+assert.match(render('ranking'),/全部排名/);assert.match(render('ranking'),/時間順序排名/);
+states=['order','all'];si=0;assert.match(renderToStaticMarkup(ctx.SoccerRanking({games:[],states:{},run:()=>{},now:Date.now()})),/目前沒有通過 S／W／R/);
+const epl=render('validation'),ucl=render('validation','ucl');assert.match(epl,/393／412/);assert.match(ucl,/143／185/);assert.doesNotMatch(ucl,/393／412/);
+console.log('PASS shipped workspace JSX: six NBA-style tabs, two ranking views, honest empty candidates and separate EPL/UCL validation metrics');
+
+const recordSource=fs.readFileSync('app/soccer/bet-records.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
+const recordCode=await transform(recordSource,{filename:'records.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+let ledger;
+const recordCtx=vm.createContext({React,Date,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName});
+vm.runInContext(recordCode.code,recordCtx);
+const game={id:'soccer:epl:123',league:'epl',date:'2026-10-20'},quote={period:'FT',kind:'TOTAL',side:'over',line:'3+50',lineSide:null,water:.95,key:'q1',unit:'GOALS'},result={persisted:true,revision:'a'.repeat(64)};
+const record={...quote,gameId:game.id,league:'epl',date:game.date,id:'id',status:'OPEN',stake:10000,recordedAt:'2026-10-19T00:00:00Z'};
+ledger={records:[record],status:'ready',date:game.date,pending:new Set()};
+assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/已下注 ✓/);
+ledger.records=[{...record,status:'CANCELLED'}];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/重新紀錄下注/);
+ledger={...ledger,league:'epl',load:()=>{},mutate:()=>{}};assert.match(renderToStaticMarkup(recordCtx.SoccerBetRecords()),/足球退水 0.01/);
+ledger.records=[];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/紀錄實際下注/);
+assert.equal(recordCtx.SoccerRecordButton({game,result,quote:{...quote,period:null}}),null);
+console.log('PASS shipped record JSX: original prices, recorded/cancelled/restore states, 1% football policy and unknown-period exclusion');
+
+// Execute the shipped provider hooks. Only React scheduling and HTTP are fixtures.
+let cursor=0,hooks=[],effects=[],dirty=false,tree,props={league:'epl',date:game.date,children:[]};
+const requests=[];
+const hookCtx=vm.createContext({React,Date,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,
+  createContext:()=>({Provider:'provider'}),
+  useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],v=>{hooks[i]=typeof v==='function'?v(hooks[i]):v;dirty=true;}];},
+  useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},
+  useEffect:(fn,deps)=>{const i=cursor++,old=hooks[i];if(old?.deps&&deps.every((d,j)=>Object.is(d,old.deps[j])))return;hooks[i]={deps};effects.push(()=>{old?.cleanup?.();hooks[i].cleanup=fn();});},
+  fetch:(url,options)=>new Promise(resolve=>requests.push({url,options,resolve})),
+});
+vm.runInContext(recordCode.code,hookCtx);
+const rerender=()=>{cursor=0;dirty=false;tree=hookCtx.SoccerRecordProvider(props);const queued=effects;effects=[];queued.forEach(f=>f());};
+const flush=async()=>{for(let i=0;i<20;i++){await Promise.resolve();if(dirty)rerender();}assert.equal(dirty,false);};
+const ledgerNow=()=>tree.props.value;
+const respond=async(req,value)=>{req.resolve({ok:true,json:async()=>value});await flush();};
+rerender();await flush();await respond(requests.shift(),{ok:true,league:'epl',date:game.date,through:game.date,records:[]});
+assert.equal(ledgerNow().status,'ready');
+const saving=ledgerNow().mutate({action:'record',gameId:game.id,alreadyPlaced:true},'position');await flush();
+await ledgerNow().load();await flush();assert.equal(requests.length,1,'manual refresh cannot supersede an in-flight durable write');
+await respond(requests.shift(),{ok:true,record,persistence:'durable_database'});await saving;await flush();
+assert.equal(ledgerNow().records.length,1);
+const cancelling=ledgerNow().mutate({action:'cancel',id:record.id},'position');await flush();const late=requests.shift();
+props={...props,league:'ucl'};rerender();await flush();
+assert.equal(requests.length,1,'switching scope must still load its ledger while an old-scope write is pending');
+await respond(requests.shift(),{ok:true,league:'ucl',date:game.date,through:game.date,records:[]});
+await respond(late,{ok:true,record:{...record,status:'CANCELLED'},persistence:'durable_database'});await cancelling;await flush();
+assert.equal(ledgerNow().league,'ucl');assert.equal(ledgerNow().records.length,0,'late EPL write cannot populate UCL records');
+hooks.forEach(h=>h?.cleanup?.());
+console.log('PASS actual record hooks: durable-write vs refresh fencing, scope switch during a write, late response isolation and stable effects');

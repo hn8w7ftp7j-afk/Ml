@@ -1,4 +1,5 @@
 'use client';
+import { SoccerRecordButton } from './bet-records.js';
 
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
 const pct=v=>finite(v)&&v>=0&&v<=1?`${(v*100).toFixed(1)}%`:'—';
@@ -22,7 +23,7 @@ function SoccerThresholdProbabilities({probabilities}){
   return <div className="soccerMarketThreshold"><p>{axis}門檻 {p.boundary} 球</p><dl><div><dt>高於門檻</dt><dd>{pct(p.above)}</dd></div><div><dt>等於門檻</dt><dd>{pct(p.equal)}</dd></div><div><dt>低於門檻</dt><dd>{pct(p.below)}</dd></div></dl>{finite(p.tailMass)&&p.tailMass>0&&<p className="soccerMarketNote">未展開尾端機率 {pct(p.tailMass)}，以上保留原分布計算值。</p>}</div>;
 }
 
-function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0}){
+function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result}){
   const q=quote||{},provenance=q.provenance||{},rawRows=(Array.isArray(q.rawRows)?q.rawRows:[]).map(rowText).filter(Boolean);
   const observed=clock(provenance.observedAt||q.observedAt||provenance.receivedAt);
   const periodConfirmed=!unassigned&&Boolean(periods[q.period])&&(!expectedPeriod||q.period===expectedPeriod);
@@ -31,18 +32,20 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
   return <article className="soccerMarketQuote" data-quote-key={q.key||undefined}>
     <div className="soccerMarketQuoteHeading"><strong>{textValue(q.label)||`原盤 ${index+1}`}</strong><span className="soccerMarketResearchTag">{period||'期間待確認'}</span></div>
     <p className="soccerMarketPrice">球頭 <strong>{line||'未提供'}</strong><span>水位 <strong>{water??'未提供'}</strong></span></p>
+    <p className="soccerMarketNote">S —｜W —｜R —｜正式評分待驗證</p>
     {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
     {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
     {!periodConfirmed?<p className="soccerMarketCaution">期間待確認，暫不計算</p>:<><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</>}
+    {periodConfirmed&&<SoccerRecordButton game={game} result={result} quote={q}/>}
   </article>;
 }
 
-export function SoccerMarketDirections({directions=[],unassignedQuotes=[]}){
+export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,result}){
   const items=Array.isArray(directions)?directions:[],unknown=Array.isArray(unassignedQuotes)?unassignedQuotes:[];
   return <details className="soccerDetails soccerMarketDirections"><summary>八方向與實際原盤</summary><p className="soccerMarketCaution">進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。結算、退水與模型仍待驗收，正式 S／W／R 及候選尚未啟用。</p>
     <div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
       const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons);
-      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4><p className="soccerMarketNote">研究・契約待核對</p>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} key={`${quote.key||i}:${i}`}/>):<p className="soccerMarketEmpty">缺少此方向可確認期間的原盤。</p>}{reasons.length>0&&<p className="soccerMarketNote">{reasons.join('；')}。</p>}</section>;
+      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4><p className="soccerMarketNote">研究・契約待核對</p>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} key={`${quote.key||i}:${i}`}/>):<p className="soccerMarketEmpty">缺少此方向可確認期間的原盤。</p>}{reasons.length>0&&<p className="soccerMarketNote">{reasons.join('；')}。</p>}</section>;
     })}</div>
     {!items.length&&<p className="soccerMarketEmpty">尚無八方向分析，請先核對賽前資料。</p>}
     {unknown.length>0&&<section className="soccerMarketUnassigned"><h4>期間待確認的原盤</h4><p className="soccerMarketCaution">以下原盤未能確認屬全場或上半場，暫不配入八方向。</p>{unknown.map((quote,i)=><SoccerRawMarketQuote quote={quote} unassigned index={i} key={`${quote.key||i}:${i}`}/>)}</section>}

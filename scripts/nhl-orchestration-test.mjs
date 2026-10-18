@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { buildNhlAnalysisBoard, loadNhlAnalysisBoard } from '../lib/nhl/analysis-board.js';
+import { normalizeSoccerAnalysisTasks } from '../lib/soccer/analysis-job.js';
 import { normalizeNhlAnalysisTasks, analyzeNhlJobTask } from '../lib/nhl/analysis-job.js';
 import { normalizeNhlSchedule } from '../lib/nhl/data.js';
 import { validNhlDate } from '../lib/nhl/identity.js';
-import { ACTIVE_ANALYSIS_LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, analysisBatchScope, analysisLeagueIdsForRun, isAnalysisLeagueId } from '../lib/analysis-leagues.js';
+import { ACTIVE_ANALYSIS_LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, analysisBatchScope, analysisLeagueIdsForRun, isAnalysisLeagueId, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 import { LEAGUE_IDS, requestedLeagueId, leagueCanAnalyze } from '../lib/leagues.js';
 import { cloudBetLeagueCanWrite } from '../lib/cloud-bet-store.js';
 import { createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult } from '../lib/all-league-analysis-v117.js';
@@ -15,6 +16,7 @@ import { nhlAnalysisResultHref } from '../lib/nhl/analysis-link.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 const strip = source => source.replace(/^import[\s\S]*?;\n/gm, '').replace(/export /g, '');
+const legacyLeagues = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL'];
 const date = '2026-10-12';
 const next = '2026-10-13';
 const now = Date.parse('2026-10-12T08:00:00Z');
@@ -93,7 +95,7 @@ for (const change of [
 // A hockey task must never call the generic baseball API, even on a failure.
 const publications = [];
 let nhlCalls = 0, baseballCalls = 0;
-const workflow = vm.createContext({ Request, Response, FatalError: Error, RetryableError: Error,
+const workflow = vm.createContext({ Request, Response, FatalError: Error, RetryableError: Error, isAnalysisLeagueId, isSoccerAnalysisLeague, ANALYSIS_LEAGUE_IDS,
   getWorkflowMetadata: () => ({ workflowRunId: 'run-nhl-orchestration' }),
   createAnalysisJobProgress, saveAnalysisJobProgress: async (_id, progress) => { publications.push(progress); return true; },
   analyzeNhlJobTask: async value => { nhlCalls++; if (nhlCalls === 2) throw new Error('isolated NHL source failure'); return { ...result, task: value }; },
@@ -115,7 +117,7 @@ assert.equal(publications.at(-1).league, 'CPBL');
 // workflow adapters, retaining both NHL identity and honest shadow/save flags.
 const submissions = []; let authorized = true;
 const route = vm.createContext({ Request, Response, URL, NextResponse: Response, crypto: globalThis.crypto, Date,
-  cleanText: (value, max = 1000) => String(value || '').slice(0, max), ANALYSIS_LEAGUE_IDS, analysisBatchScope, isAnalysisLeagueId,
+  cleanText: (value, max = 1000) => String(value || '').slice(0, max), ANALYSIS_LEAGUE_IDS, analysisBatchScope, isAnalysisLeagueId, isSoccerAnalysisLeague, normalizeSoccerAnalysisTasks,
   normalizeNhlAnalysisTasks, normalizeNbaAnalysisTasks: tasks => tasks,
   requireApiAuth: async () => authorized ? null : Response.json({}, { status: 401 }), validateSameOrigin: () => true,
   checkRateLimit: () => ({ allowed: true }), validAnalysisJobRequestKey: () => false,
@@ -129,7 +131,7 @@ vm.runInContext(strip(read('app/api/analysis-jobs/route.js')) + '\nthis.post=POS
 const post = body => route.post(new Request('https://fixture.test/api/analysis-jobs', { method: 'POST', body: JSON.stringify(body) }));
 assert.equal((await post({ league: 'NHL', date: next, tasks: [original] })).status, 202);
 assert.equal(submissions[0].input.tasks[0].league, 'NHL');
-const allBatches = ANALYSIS_LEAGUE_IDS.map(league => ({ league, date: league === 'NHL' ? next : date,
+const allBatches = legacyLeagues.map(league => ({ league, date: league === 'NHL' ? next : date,
   tasks: league === 'NHL' ? [original] : [], emptyReason: league === 'NHL' ? null : 'no_games' }));
 assert.equal((await post({ mode: 'all-leagues', date, batches: allBatches })).status, 202);
 assert.equal(submissions[1].input.batches.length, 6);
@@ -154,7 +156,7 @@ for (const query of [`date=2026-02-30`, `date=${date}&league=MLB`, `date=${date}
 assert.equal((await getBoard(`date=${date}&upcoming=1`)).status, 200);
 const page = read('app/page.js');
 assert.match(page, /id === 'NHL' \? await prepareNhlBatch\(batchDate\)/);
-assert.match(page, /!\['NBA', 'NHL'\]\.includes\(id\)[\s\S]*materializeAllLeagueResult/);
+assert.match(page, /LEAGUE_IDS\.includes\(id\)[\s\S]*materializeAllLeagueResult/);
 assert.match(page, /href=\{nhlAnalysisResultHref\(state.boardDate/);
 assert.equal(nhlAnalysisResultHref(next, 'run-nhl-route'), '/nhl?date=2026-10-13&analysisRun=run-nhl-route');
 assert.equal(nhlAnalysisResultHref('2026-02-30', 'run-nhl-route'), null);
@@ -163,7 +165,7 @@ const start = page.indexOf('        const batches = state.result?.batches || [st
 const end = page.indexOf('\n      } catch (error)', start);
 let notifiedScope = null;
 const notify = vm.createContext({ state: { result: { league: 'NHL', date: next, total: 1, completed: 1, results: [result] } },
-  runId: 'run-nhl-route', nhlAnalysisResultHref, LEAGUE_IDS,
+  runId: 'run-nhl-route', nhlAnalysisResultHref, LEAGUE_IDS, isSoccerAnalysisLeague,
   setNhlNotificationScope: scope => { notifiedScope = scope; },
   currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date }, boardRef: { current: [] },
   independentRunsRef: { current: new Map() }, allLeagueRunRef: { current: null }, loadBackgroundJob: () => null,

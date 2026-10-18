@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
+import * as soccerBackgroundClient from '../lib/soccer/background-client.js';
 
 // Compile the shipped child components in isolated lexical scopes. Rendering
 // the parent must execute the real JSX, including legacy/missing-data paths.
@@ -21,12 +22,15 @@ const {code}=await transform(raw,{filename:'soccer-analysis.jsx',jsc:{parser:{sy
 const nodes=v=>Array.isArray(v)?v.flatMap(nodes):v&&typeof v==='object'?[v,...nodes(v.props?.children)]:[];
 const label=v=>Array.isArray(v)?v.map(label).join(''):v&&typeof v==='object'?label(v.props?.children):v==null||typeof v==='boolean'?'':String(v);
 const game=i=>({id:`soccer:epl:${i}`,sourceId:String(i),league:'epl',date:'2026-10-20',startTime:'2099-10-20T13:00:00Z',status:'scheduled',home:{name:'Home'},away:{name:'Away'}}),games=[game(1),game(2),game(3)];
-function harness(fetch){
+function harness(fetch,{boardFetch=null}={}){
  const state=[],refs=[],effects=[],intervals=new Map(),cleanups=[],listeners=new Map();let si=0,ri=0,tree,intervalId=0;
  const document={visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
- const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,
-  document,window,setInterval:fn=>{intervals.set(++intervalId,fn);return intervalId;},clearInterval:id=>intervals.delete(id),
+ const ctx=vm.createContext({...soccerBackgroundClient,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
+   if(url.startsWith('/api/soccer/analysis?')&&!new URL(url,'https://fixture.invalid').searchParams.has('view')){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
+   return fetch(url,options);
+  },SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
+  document,window,setInterval:(fn,delay)=>{intervals.set(++intervalId,{fn,delay});return intervalId;},clearInterval:id=>intervals.delete(id),
   createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
   useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
   useRef:initial=>refs[ri++]|| (refs[ri-1]={current:initial}),useEffect:fn=>effects.push(fn)});
@@ -34,7 +38,7 @@ function harness(fetch){
  vm.runInContext(code,ctx);
  ctx.provider=()=>{si=0;ri=0;tree=ctx.SoccerAnalysisProvider({games,children:[]});return tree;};
  const provider=()=>ctx.provider();const renderPanel=g=>{si=3;return ctx.SoccerAnalysisPanel({game:g});};
- return{ctx,state,provider,renderPanel,document,readerChanged:detail=>listeners.get('soccer:reader-content-changed')?.({detail}),runEffects:()=>{for(const effect of effects.splice(0))cleanups.push(effect());},tick:()=>{for(const fn of intervals.values())fn();},visible:()=>listeners.get('visibilitychange')?.(),cleanup:()=>{for(const cleanup of cleanups)cleanup?.();}};
+ return{ctx,state,provider,renderPanel,document,readerChanged:detail=>listeners.get('soccer:reader-content-changed')?.({detail}),runEffects:()=>{for(const effect of effects.splice(0))cleanups.push(effect());},tick:()=>{for(const timer of intervals.values())timer.fn();},metadataTick:()=>{for(const timer of intervals.values())if(timer.delay===1000)timer.fn();},visible:()=>listeners.get('visibilitychange')?.(),cleanup:()=>{for(const cleanup of cleanups)cleanup?.();}};
 }
 const pending=[];let requests=0,active=0,maxActive=0;
 const h=harness(async(_url,options)=>{requests++;active++;maxActive=Math.max(maxActive,active);const input=JSON.parse(options.body);return await new Promise(resolve=>pending.push(()=>{active--;resolve(Response.json({ok:true,gameId:`soccer:epl:${input.eventId}`,league:'epl',date:input.date,formalScoringEnabled:false,executable:false,directions:Array.from({length:8},()=>({executable:false,eligible:false})),persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',qaFlag:'WARN',evidence:{teams:{}},status:'RESEARCH_ONLY'}));}));});
@@ -89,7 +93,7 @@ console.log('PASS integrated shipped components: real market/half-time/workload 
 // An old POST success is historical evidence, not a perpetual current badge.
 const uiStart=Date.now();let uiNow=uiStart;
 const receipt={analysisRunId:'ui-run',revision:'ui-revision',publishedCurrent:true,reason:'ACTIVE',checkedAt:new Date(uiStart).toISOString(),validUntil:new Date(uiStart+60000).toISOString(),formalScoringEnabled:false,executable:false};
-const currentState={status:'done',data:{...liveSnapshot,analysisRunId:receipt.analysisRunId,revision:receipt.revision,currentResearch:receipt},currentResearch:receipt,currentResearchRequestedAt:uiStart,currentResearchReceivedAt:uiStart};
+const currentState={status:'done',data:{...liveSnapshot,observedAt:new Date(uiStart).toISOString(),analysisRunId:receipt.analysisRunId,revision:receipt.revision,currentResearch:receipt},currentResearch:receipt,currentResearchRequestedAt:uiStart,currentResearchReceivedAt:uiStart};
 h.ctx.Date=class extends Date{static now(){return uiNow;}};
 h.state[0][realGame.id]=currentState;
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiStart).current,true);
@@ -104,7 +108,7 @@ assert.equal(h.ctx.soccerAnalysisPresentation({status:'done',data:liveSnapshot},
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiStart+45001).current,false,'a stalled status feed cannot keep a current badge alive indefinitely');
 const nearExpiry={...currentState,currentResearch:{...receipt,validUntil:new Date(uiStart+5000).toISOString()},currentResearchReceivedAt:uiStart+6000};
 assert.equal(h.ctx.soccerAnalysisPresentation(nearExpiry,uiStart+6000).current,false,'a six-second delayed response cannot revive a five-second server lifetime');
-const offsetClock={...currentState,currentResearch:{...receipt,checkedAt:new Date(uiStart-3600000).toISOString(),validUntil:new Date(uiStart-3600000+5000).toISOString()}};
+const offsetClock={...currentState,data:{...currentState.data,observedAt:new Date(uiStart-3600000).toISOString()},currentResearch:{...receipt,checkedAt:new Date(uiStart-3600000).toISOString(),validUntil:new Date(uiStart-3600000+5000).toISOString()}};
 assert.equal(h.ctx.soccerAnalysisPresentation(offsetClock,uiStart+1000).current,true,'absolute client/server clock offset does not invalidate fresh evidence');
 
 const clockOnly=harness(async()=>{throw Error('clock boundary must not launch a full analysis');});clockOnly.ctx.Date=class extends Date{static now(){return uiNow;}};
@@ -154,7 +158,7 @@ assert.equal(scoped.state[0][games[0].id].data,scopedData,'Reader invalidation p
 for(const refresh of [false,true]){
   uiNow=uiStart;let releasePost,postReads=0,lightReads=0;
   const postReceipt={...receipt,analysisRunId:`delayed-post-${refresh}`,revision:`delayed-revision-${refresh}`};
-  const postBody={...liveSnapshot,gameId:games[0].id,league:games[0].league,date:games[0].date,analysisRunId:postReceipt.analysisRunId,revision:postReceipt.revision,currentResearch:postReceipt,publishedCurrent:true};
+  const postBody={...liveSnapshot,evidence:{...liveSnapshot.evidence,game:{...liveSnapshot.evidence.game,id:games[0].id,sourceId:games[0].sourceId,league:games[0].league,date:games[0].date}},gameId:games[0].id,league:games[0].league,date:games[0].date,analysisRunId:postReceipt.analysisRunId,revision:postReceipt.revision,currentResearch:postReceipt,publishedCurrent:true};
   const delayedPost=harness(async(url,options)=>{
     if(options.method==='POST'){postReads++;return new Promise(resolve=>{releasePost=()=>resolve(Response.json(postBody));});}
     lightReads++;assert.match(url,/view=current/);return Response.json({ok:true,gameId:games[0].id,league:games[0].league,date:games[0].date,currentResearch:{...postReceipt,publishedCurrent:false,reason:'QUOTE_CHANGED'}});
@@ -175,3 +179,40 @@ for(const refresh of [false,true]){
   assert.equal(delayedPost.state[0][games[0].id].currentResearch.publishedCurrent,false);delayedPost.cleanup();
 }
 console.log('PASS current research JSX and effects: expiry, quote/run mismatch, unknown legacy status, retained history, bounded read-only polling and hidden-page pause');
+
+// The main workspace restores saved results on refresh. A board receipt is not
+// the lightweight fenced status receipt used by cards or workspace rankings.
+const {buildSoccerRanking}=await import('../lib/soccer/ranking.js');
+uiNow=uiStart;let releaseBoard,currentReads=0,activeSource=true;
+const restoreReceipt={...receipt,analysisRunId:'restored-run',revision:'restored-revision'};
+const rankedQuote={key:'restored-quote',period:'FT',kind:'TOTAL',unit:'GOALS',side:'over',line:'2-50',water:.9,fresh:true,prestart:true,provenance:{gameId:games[0].id,observedAt:new Date(uiStart).toISOString()}};
+const boardResult={...liveSnapshot,evidence:{...liveSnapshot.evidence,game:{...liveSnapshot.evidence.game,id:games[0].id,sourceId:games[0].sourceId,league:games[0].league,date:games[0].date}},gameId:games[0].id,league:'epl',date:games[0].date,observedAt:new Date(uiStart).toISOString(),analysisRunId:restoreReceipt.analysisRunId,revision:restoreReceipt.revision,publishedCurrent:true,directions:liveSnapshot.directions.map((d,i)=>({...d,quotes:i===2?[rankedQuote]:[]}))};
+const boardBody={ok:true,league:'epl',date:games[0].date,gameId:games[0].id,versions:[boardResult],runs:[],currentVersion:null,currentRun:null};
+const emptyHead=url=>{const q=new URL(url,'https://fixture.invalid').searchParams;return{ok:true,gameId:`soccer:${q.get('league')}:${q.get('eventId')}`,league:q.get('league'),date:q.get('date'),versions:[],runs:[],currentVersion:null,currentRun:null};};
+const restoring=harness(async(url,options)=>{assert.equal(options.method,undefined);assert.match(url,/view=current/);currentReads++;return Response.json({ok:true,gameId:games[0].id,league:'epl',date:games[0].date,currentResearch:{...restoreReceipt,publishedCurrent:activeSource,reason:activeSource?'ACTIVE':'QUOTE_CHANGED'}});},{boardFetch:url=>new URL(url,'https://fixture.invalid').searchParams.get('eventId')===games[0].sourceId?new Promise(resolve=>{releaseBoard=value=>resolve(Response.json(value));}):Promise.resolve(Response.json(emptyHead(url)))});
+restoring.ctx.Date=class extends Date{static now(){return uiNow;}};restoring.provider();restoring.runEffects();
+releaseBoard(boardBody);await new Promise(resolve=>setImmediate(resolve));
+assert.equal(restoring.state[0][games[0].id].data.revision,boardResult.revision,'refresh restores the persisted result');
+assert.equal(restoring.state[0][games[0].id].currentResearch,null,'board publishedCurrent does not create a new current receipt');
+const workspaceNode=tree=>nodes(tree).find(node=>node.type===restoring.ctx.SoccerWorkspace);
+let workspace=workspaceNode(restoring.provider());assert.equal(workspace.props.states[games[0].id].data.publishedCurrent,false);
+assert.equal(buildSoccerRanking(games,workspace.props.states,{now:uiNow}).entries.length,0,'workspace ranking cannot bypass missing current evidence');
+restoring.metadataTick();await new Promise(resolve=>setImmediate(resolve));assert.equal(currentReads,1,'restored history schedules a lightweight current read');
+workspace=workspaceNode(restoring.provider());assert.equal(workspace.props.states[games[0].id].data.publishedCurrent,true);
+assert.equal(buildSoccerRanking(games,workspace.props.states,{now:uiNow}).entries.length,1,'a fenced restored research quote remains visible without fabricated scores');
+activeSource=false;restoring.readerChanged({league:'epl',date:games[0].date,contentHash:'d'.repeat(64)});
+workspace=workspaceNode(restoring.provider());assert.equal(workspace.props.states[games[0].id].data.publishedCurrent,false);
+assert.equal(boardResult.publishedCurrent,true,'workspace safety and recovery do not mutate the original saved response');
+assert.equal(restoring.state[0][games[0].id].data.revision,boardResult.revision,'invalidation keeps the restored historical revision');
+await new Promise(resolve=>setImmediate(resolve));restoring.cleanup();
+
+for(const existingStatus of ['loading','queued','error','done']){
+  let releaseLate;
+  const lateBoard=harness(async()=>{throw Error('no analysis or status expected');},{boardFetch:url=>new URL(url,'https://fixture.invalid').searchParams.get('eventId')===games[0].sourceId?new Promise(resolve=>{releaseLate=value=>resolve(Response.json(value));}):Promise.resolve(Response.json(emptyHead(url)))});
+  lateBoard.provider();lateBoard.runEffects();
+  const newer={status:existingStatus,data:{...boardResult,revision:'newer-version',observedAt:new Date(uiStart+1000).toISOString()},currentResearch:null};
+  lateBoard.state[0][games[0].id]=newer;
+  releaseLate(boardBody);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(lateBoard.state[0][games[0].id],newer,`a late board response cannot overwrite ${existingStatus} analysis or its invalidation state`);lateBoard.cleanup();
+}
+console.log('PASS main workspace merge: saved board restoration, fenced status recheck, ranking/card currentness agreement and late-board vs local-analysis isolation');

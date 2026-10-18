@@ -38,29 +38,41 @@ try{
 // Execute the shipped route handlers. Only external/auth/store dependencies are
 // substituted; these assertions exercise the real request and response branches.
 const routeSource=fs.readFileSync('app/api/soccer/analysis/route.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export const /g,'const ').replace(/export async function /g,'async function ');
+const {analyzeSoccerGame:sharedAnalyze,validSoccerAnalysisQuery}=await import('../lib/soccer/analysis-service.js');
 const at=Date.parse('2026-10-20T12:59:30Z'),kickoff='2026-10-20T13:00:00.000Z';
-let historyReads=0,sourceReads=0,savedResult=null,finishInput=null,denied=false,currentActive=true;
+let historyReads=0,sourceReads=0,currentLoads=0,savedResult=null,finishInput=null,denied=false,currentActive=true,currentReadError=false,publicationCurrent=true,receiptPatch={};
 const run={runId:'run-new',requestSeq:'4',quoteGeneration:'2',startedAt:new Date(at).toISOString()};
-const current=()=>({analysisRunId:run.runId,revision:'saved-revision',qualificationVersion:'4',quoteGeneration:'2',checkedAt:new Date(at).toISOString(),validUntil:kickoff,publishedCurrent:currentActive,reason:currentActive?'ACTIVE':'QUOTE_CHANGED',analysisStatus:'COMPLETED',selectionResult:currentActive?'RESEARCH_SHADOW':null,executable:false,formalScoringEnabled:false});
+const current=()=>({analysisRunId:run.runId,revision:'saved-revision',qualificationVersion:'4',quoteGeneration:'2',checkedAt:new Date(at).toISOString(),validUntil:kickoff,publishedCurrent:currentActive,reason:currentActive?'ACTIVE':'QUOTE_CHANGED',analysisStatus:'COMPLETED',selectionResult:currentActive?'RESEARCH_SHADOW':null,executable:false,formalScoringEnabled:false,...receiptPatch});
 const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date:'2026-10-20',startTime:kickoff,status:'scheduled'};
+const readCurrent=async()=>{if(currentReadError)throw Error('controlled current-status outage');return current();};
+const deps={
+  beginSoccerAnalysisRun:async()=>run,recordSoccerCohort:async()=>{},fetchSoccerSchedule:async()=>{sourceReads++;return{ok:true,games:[game]};},
+  fetchSoccerPrematch:async()=>({ok:true,source:{fetchedAt:new Date(at).toISOString()}}),fetchSoccerWorkload:async()=>({ok:false}),loadSoccerReaderSnapshot:async()=>null,
+  listSoccerAnalysis:async()=>[],
+  buildSoccerAnalysis:()=>({analysisHash:'discarded',ok:true,status:'RESEARCH_ONLY',league:'epl',date:game.date,gameId:game.id,analysisStatus:'COMPLETED',qaFlag:'WARN',selectionResult:'RESEARCH_SHADOW',executable:false,formalScoringEnabled:false}),
+  soccerAnalysisHash:value=>{assert.ok(value.validUntil,'the shared service hashes the expiry into the immutable snapshot');return 'snapshot-hash';},
+  saveSoccerAnalysis:async value=>{savedResult=value;return{persisted:true,revision:'saved-revision'};},
+  finishSoccerAnalysisRun:async(_run,value)=>{finishInput=value;return{publishedCurrent:publicationCurrent};},
+  getSoccerCurrentResearchStatus:readCurrent,
+};
 const context=vm.createContext({URL,Date,Number,JSON,Promise,NextResponse:{json:(body,options)=>Response.json(body,options)},
   requireApiAuth:async()=>denied?Response.json({ok:false},{status:401}):null,validateSameOrigin:()=>true,originErrorResponse:()=>Response.json({ok:false},{status:403}),
   checkRateLimit:()=>({allowed:true}),rateLimitResponse:()=>Response.json({ok:false},{status:429}),readJsonBody:request=>request.json(),
   soccerLeague:value=>value==='epl'?{id:'epl'}:value==='ucl'?{id:'ucl'}:null,validSoccerDate:value=>/^\d{4}-\d{2}-\d{2}$/.test(value||''),
-  getSoccerCurrentResearchStatus:async()=>current(),listSoccerAnalysis:async()=>{historyReads++;return[];},listSoccerRunHistory:async()=>{historyReads++;return[];},
-  beginSoccerAnalysisRun:async()=>run,recordSoccerCohort:async()=>{},fetchSoccerSchedule:async()=>{sourceReads++;return{ok:true,games:[game]};},
-  fetchSoccerPrematch:async()=>({ok:true,source:{fetchedAt:new Date(at).toISOString()}}),fetchSoccerWorkload:async()=>({ok:false}),loadSoccerReaderSnapshot:async()=>null,
-  buildSoccerAnalysis:()=>({analysisHash:'discarded',ok:true,status:'RESEARCH_ONLY',league:'epl',date:game.date,gameId:game.id,analysisStatus:'COMPLETED',qaFlag:'WARN',selectionResult:'RESEARCH_SHADOW',executable:false,formalScoringEnabled:false}),
-  soccerAnalysisHash:()=> 'snapshot-hash',saveSoccerAnalysis:async value=>{savedResult=value;return{persisted:true,revision:'saved-revision'};},
-  finishSoccerAnalysisRun:async(_run,value)=>{finishInput=value;return{publishedCurrent:true};},
+  getSoccerCurrentResearchStatus:readCurrent,listSoccerAnalysis:async()=>{historyReads++;return[];},listSoccerRunHistory:async()=>{historyReads++;return[];},
+  validSoccerAnalysisQuery,analyzeSoccerGame:query=>sharedAnalyze(query,deps),
+  loadSoccerCurrentAnalysis:async()=>{currentLoads++;return{currentVersion:{revision:'saved-revision',persisted:true},currentRun:{analysisRunId:run.runId}};},
 });
 vm.runInContext(routeSource+';globalThis.handlers={GET,POST};',context);
 const url='https://fixture.invalid/api/soccer/analysis?league=epl&date=2026-10-20&eventId=123';
 const light=await context.handlers.GET(new Request(url+'&view=current')),lightBody=await light.json();
-assert.equal(light.status,200);assert.equal(historyReads,0);assert.equal(sourceReads,0);assert.equal(lightBody.currentResearch.publishedCurrent,true);assert.equal(lightBody.versions,undefined);
+assert.equal(light.status,200);assert.equal(historyReads,0);assert.equal(sourceReads,0);assert.equal(currentLoads,0);assert.equal(lightBody.currentResearch.publishedCurrent,true);assert.equal(lightBody.versions,undefined);assert.equal(lightBody.currentVersion,undefined);
 assert.equal(light.headers.get('cache-control'),'no-store');
-assert.equal((await context.handlers.GET(new Request(url+'&view=current&view=current'))).status,400);
-assert.equal((await context.handlers.GET(new Request(url+'&view=other'))).status,400);
+for(const suffix of ['&view=current&view=current','&view=other','&unknown=1','&date=2026-10-20'])assert.equal((await context.handlers.GET(new Request(url+suffix))).status,400);
+for(const eventId of ['0','9007199254740992','../123'])assert.equal((await context.handlers.GET(new Request(url.replace('eventId=123',`eventId=${eventId}`)))).status,400,'shared safe event-id validation must remain intact');
+const normal=await context.handlers.GET(new Request(url)),normalBody=await normal.json();
+assert.equal(normal.status,200);assert.equal(historyReads,2);assert.equal(currentLoads,1);assert.equal(sourceReads,0);
+assert.deepEqual(normalBody.versions,[]);assert.deepEqual(normalBody.runs,[]);assert.equal(normalBody.currentVersion.revision,'saved-revision');assert.equal(normalBody.currentRun.analysisRunId,run.runId);assert.equal(normalBody.currentResearch.publishedCurrent,true,'normal history GET keeps main recovery fields and adds a separate current receipt');
 denied=true;assert.equal((await context.handlers.GET(new Request(url+'&view=current'))).status,401);denied=false;
 const request=()=>new Request('https://fixture.invalid/api/soccer/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({league:'epl',date:game.date,eventId:'123'})});
 const post=await context.handlers.POST(request()),postBody=await post.json();assert.equal(post.status,200);
@@ -70,7 +82,20 @@ assert.equal(postBody.currentResearch.executable,false);assert.equal(postBody.fo
 currentActive=false;const superseded=await (await context.handlers.POST(request())).json();
 assert.equal(superseded.publishedCurrent,false,'a quote change between publication and response cannot be advertised as current');
 assert.equal(superseded.persisted,true,'superseded results remain saved');
-console.log('PASS shipped current-status API: authenticated no-store lightweight reads, strict scope parameters, kickoff expiry, saved historical result and response-time invalidation fencing');
+currentActive=true;
+for(const patch of [{revision:'newer-revision'},{analysisRunId:'newer-run'}]){
+  receiptPatch=patch;const mismatched=await sharedAnalyze({league:'epl',date:game.date,eventId:'123'},deps);
+  assert.equal(mismatched.payload.publishedCurrent,false,'an ACTIVE receipt must still match this run and saved revision');assert.equal(mismatched.payload.persisted,true);
+}
+receiptPatch={};currentReadError=true;
+const uncertain=await sharedAnalyze({league:'epl',date:game.date,eventId:'123'},deps);
+assert.equal(uncertain.status,200);assert.equal(uncertain.payload.publishedCurrent,false);assert.equal(uncertain.payload.currentResearch,null);assert.equal(uncertain.payload.persisted,true);assert.equal(uncertain.payload.journalPersisted,true);
+currentReadError=false;publicationCurrent=false;
+const unpublished=await sharedAnalyze({league:'epl',date:game.date,eventId:'123'},deps);assert.equal(unpublished.payload.publishedCurrent,false,'a read cannot override a refused publication');publicationCurrent=true;
+game.startTime='2026-10-20T14:00:00.000Z';
+const sourceExpiry=await sharedAnalyze({league:'epl',date:game.date,eventId:'123'},deps);assert.equal(sourceExpiry.payload.validUntil,new Date(at+180000).toISOString(),'a later kickoff cannot extend the source lifetime');
+game.startTime=kickoff;
+console.log('PASS shipped current-status API/shared service: authenticated no-store lightweight reads, unchanged recovery fields and safe query scope, immutable kickoff/source expiry, response-time run/revision fencing and fail-closed status outages for manual/background callers');
 
 const readerRouteSource=fs.readFileSync('app/api/soccer/reader/route.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export const /g,'const ').replace(/export async function /g,'async function ');
 const aggregateHash='f'.repeat(64),readerContext=vm.createContext({URL,Response,NextResponse:{json:(body,options)=>Response.json(body,options)},
