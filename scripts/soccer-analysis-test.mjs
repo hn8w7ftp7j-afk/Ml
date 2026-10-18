@@ -17,6 +17,11 @@ for(const [name,league]of [['epl-summary','epl'],['ucl-summary','ucl'],['histori
  const foreign=structuredClone(p);foreign.header.league.slug=league==='epl'?'uefa.champions':'eng.1';assert.equal(normalizeSoccerPrematch(foreign,game,source,now).ok,false);
 }
 const p=fixture('epl-summary'),game=gameFrom(p),evidence=normalizeSoccerPrematch(p,game,source,now),analysis=buildSoccerAnalysis({evidence,now});
+for(const side of ['主隊','客隊'])for(const label of ['傷停與復出','停賽與出賽資格','預計分鐘與替補'])assert.ok(analysis.missing.some(value=>value.label===side+label),'each side retains its own missing personnel evidence');
+const oneSided=structuredClone(evidence);oneSided.teams.home.injuries={status:'PROVIDER_REPORTED',value:[]};
+const asymmetric=buildSoccerAnalysis({evidence:oneSided,now});assert.ok(asymmetric.missing.some(value=>value.label==='客隊傷停與復出'));assert.ok(!asymmetric.missing.some(value=>value.label==='主隊傷停與復出'));
+const withWorkload=structuredClone(evidence);withWorkload.workload={sources:[{url:'https://fixture.invalid/summary',fetchedAt:at,contentHash:'a'.repeat(64)}]};
+assert.deepEqual(buildSoccerAnalysis({evidence:withWorkload,now}).inputVersions.workloadSourceVersions,withWorkload.workload.sources);
 const rawReader={league:'EPL',boardDate:game.date,observedAt:at,revision:'synthetic-goal-quote',games:[{league:'EPL',boardDate:game.date,boardTime:'23:30',homeKey:globalThis.Tai888SoccerTeams.key(game.home.name),awayKey:globalThis.Tai888SoccerTeams.key(game.away.name),markets:[{unit:'GOALS',kind:'TOTAL',line:'3+50',overWater:.64,underWater:1.28,rawRows:['大3+50 0.64','小 1.28']}]}]};
 const reviewed=buildSoccerAnalysis({evidence,reader:rawReader,now});assert.equal(reviewed.settlementReviews.length,1);assert.equal(reviewed.settlementReviews[0].rawLine,'3+50');assert.equal(reviewed.settlementReviews[0].period,null);assert.ok(reviewed.directions.every(d=>d.W===null&&d.R===null&&d.score===null&&d.executable===false));
 const foreignReader={...rawReader,league:'UCL'};assert.equal(buildSoccerAnalysis({evidence,reader:foreignReader,now}).settlementReviews.length,0);

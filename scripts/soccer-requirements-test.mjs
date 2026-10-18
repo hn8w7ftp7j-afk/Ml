@@ -45,6 +45,13 @@ partial.teams.home.minutes = { status: 'PROVIDER_REPORTED', value: { expected: 9
 const minutes = find(buildSoccerRequirementAudit({ evidence: partial, prediction }), 'minutes');
 assert.equal(minutes.status, 'PARTIAL');
 assert.equal(minutes.modelUsage, 'OBSERVED_ONLY');
+const observedPlayers=structuredClone(evidence);
+observedPlayers.workload={teams:{home:{ok:true,sources:[source],playerWorkload:{ok:true,sourceId:evidence.game.home.sourceId,players:[{id:'123',regulationClockMinutesLast14Days:90}]}},away:{ok:true,sources:[source]}}};
+const observedRotation=find(buildSoccerRequirementAudit({evidence:observedPlayers,prediction}),'rotation');
+assert.equal(observedRotation.status,'PARTIAL');assert.equal(observedRotation.modelUsage,'OBSERVED_ONLY');assert.match(observedRotation.reason,/主隊.*國家隊.*未知/);
+assert.equal(find(buildSoccerRequirementAudit({evidence:observedPlayers,prediction}),'minutes').status,'UNKNOWN','observed past minutes cannot become a future minutes forecast');
+observedPlayers.workload.teams.home.playerWorkload.sourceId=evidence.game.away.sourceId;
+assert.equal(find(buildSoccerRequirementAudit({evidence:observedPlayers,prediction}),'rotation').status,'UNKNOWN','other-team player workload cannot be counted as this team');
 const foreignPrediction = { ...prediction, modelVersion: 'OTHER-SPORT-v1' };
 assert.equal(find(buildSoccerRequirementAudit({ evidence, prediction: foreignPrediction }), 'strength').modelUsage, 'NOT_AVAILABLE');
 const futureLineup = structuredClone(evidence);

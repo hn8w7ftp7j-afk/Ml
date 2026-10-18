@@ -57,8 +57,9 @@ const futureFinal = observations(); const e = futureFinal[0].data.events[0]; e.d
 assert.equal(normalize(futureFinal).completedMatchesLast7Days, 1);
 assert.ok(normalize(futureFinal).excluded.some(e => e.reason === 'COMPLETED_START_NOT_BEFORE_REFERENCE'));
 
-let requests = 0;
+let requests = 0, summaryRequests = 0;
 const fetchImpl = async url => {
+  if (url.includes('/summary?')) { summaryRequests++; return { ok: false, status: 503 }; }
   requests++;
   if (url.includes('/368/')) return { ok: false, status: 503 };
   const data = structuredClone(url.includes('fixture=true') ? fixtures : results);
@@ -71,6 +72,10 @@ assert.equal(fetched.status, 'INCOMPLETE');
 assert.equal(fetched.teams.home.ok, true);
 assert.equal(fetched.teams.away.code, 'SOCCER_SOURCE_HTTP_ERROR');
 assert.equal(requests, 6);
+assert.equal(summaryRequests, 3, 'recent player summaries are attempted independently of the six team schedule reads');
+assert.equal(fetched.teams.home.playerWorkload.ok, false);
+assert.equal(fetched.teams.home.playerWorkload.players.length, 0, 'failed player data is unknown, not invented zero minutes');
+assert.equal(fetched.teams.home.playerWorkload.omissions.length, 3);
 await fetchSoccerWorkload(game, { fetchImpl, now: () => at });
 assert.equal(requests, 6, 'per-endpoint positive and short negative caches prevent duplicate refreshes');
 const partial = await fetchSoccerWorkload(game, { now: () => at, fetchImpl: async url => url.includes('season=2025') ? { ok: false, status: 503 } : { ok: true, url, json: async () => url.includes('/359/') ? structuredClone(url.includes('fixture=true') ? fixtures : results) : { status: 'success', team: { id: '368' }, events: [] } } });
@@ -100,5 +105,27 @@ assert.equal((await fetchSoccerWorkload({ ...game, away: { sourceId: 359 } })).c
 const timeout = await fetchSoccerWorkload(game, { now: () => at, timeoutMs: 3, fetchImpl: () => new Promise(() => {}) });
 assert.equal(timeout.ok, false);
 assert.equal(timeout.teams.home.code, 'SOCCER_SOURCE_TIMEOUT');
+
+// Exercise the complete schedule -> exact source summary -> observed player path
+// with the repository's genuine Brentford/Arsenal regulation-minute fixture.
+const minutesPast = fixture('minutes-past'), prior = minutesPast.header.competitions[0];
+const minuteAt = Date.parse('2025-01-02T12:00:00Z');
+const nextGame = { id: 'soccer:epl:999001', sourceId: '999001', league: 'epl', startTime: '2025-01-03T17:30:00Z', home: { sourceId: '337' }, away: { sourceId: '359' } };
+let playerSummaryReads = 0;
+const withActualSummary = await fetchSoccerWorkload(nextGame, { now: () => minuteAt, fetchImpl: async url => {
+  if (url.includes('/summary?')) { playerSummaryReads++; assert.ok(url.endsWith('/eng.1/summary?event=704467')); return { ok: true, url, json: async () => structuredClone(minutesPast) }; }
+  const parsed = new URL(url), teamId = parsed.pathname.match(/teams\/(\d+)/)[1], season = Number(parsed.searchParams.get('season'));
+  const events = parsed.searchParams.has('fixture') || season !== 2025 ? [] : [{ id: minutesPast.header.id, uid: minutesPast.header.uid, date: prior.date, league: minutesPast.header.league, competitions: [prior] }];
+  return { ok: true, url, json: async () => ({ status: 'success', team: { id: teamId }, requestedSeason: { year: season }, events }) };
+} });
+assert.equal(playerSummaryReads, 1, 'shared historical event summaries coalesce across the two teams');
+for (const side of ['home', 'away']) {
+  const observed = withActualSummary.teams[side].playerWorkload;
+  assert.equal(observed.ok, true); assert.equal(observed.coverage.verifiedMatches, 1); assert.equal(observed.coverage.complete, false);
+  assert.equal(observed.sourceId, nextGame[side].sourceId); assert.equal(observed.matches[0].teamPlayerMinutes, 990);
+  assert.ok(observed.players.length >= 11); assert.equal(observed.modelEffectApplied, false); assert.equal(observed.executable, false);
+  assert.equal(withActualSummary.teams[side].actualRestHours, null);
+  assert.ok(withActualSummary.sources.some(source => source.url.endsWith('/summary?event=704467') && /^[a-f0-9]{64}$/.test(source.contentHash)));
+}
 
 console.log('PASS all-competition workload: actual multi-league source schema, 7/14-day observed results, future plans separated, kickoff-gap/true-rest distinction, source cutoff and identity guards, partial-source failure, cache, season boundary, concurrency and timeout bounds');

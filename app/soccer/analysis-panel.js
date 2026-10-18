@@ -14,12 +14,25 @@ const analysisLabels={NOT_STARTED:'待分析',PROCESSING:'處理中',COMPLETED:'
 const qaLabels={PASS:'資料核對通過',WARN:'有待核對項目',BLOCKED:'資料檢核阻擋'};
 const observationLabels={AVAILABLE:'資料已取得',PARTIAL:'資料部分取得',UNKNOWN:'資料待補'};
 const usageLabels={USED_BASELINE:'已用於研究基準',OBSERVED_ONLY:'僅供觀測，未納入模型',NOT_AVAILABLE:'尚未納入模型'};
-export function soccerAnalysisPresentation(state){
+// This checks a recent read-time receipt, not the historical publication flag.
+// Conservatively add the entire client request age to the server clock. This
+// includes transport/processing latency, so a delayed receipt cannot extend it.
+export function soccerResearchIsCurrent(state,now=Date.now()){
+  const data=state?.data,status=Object.hasOwn(state||{},'currentResearch')?state.currentResearch:data?.currentResearch;
+  const receivedAt=state?.currentResearchReceivedAt,requestedAt=state?.currentResearchRequestedAt,checkedAt=Date.parse(status?.checkedAt||''),deadline=Date.parse(status?.validUntil||'');
+  const elapsed=now-requestedAt;
+  return Boolean(state?.status==='done'&&data?.analysisStatus==='COMPLETED'&&status?.publishedCurrent===true&&status.reason==='ACTIVE'
+    &&typeof data.revision==='string'&&status.revision===data.revision&&status.analysisRunId===data.analysisRunId
+    &&status.formalScoringEnabled===false&&status.executable===false
+    &&Number.isFinite(receivedAt)&&Number.isFinite(requestedAt)&&requestedAt<=receivedAt&&receivedAt<=now&&Number.isFinite(checkedAt)&&Number.isFinite(deadline)
+    &&elapsed>=0&&elapsed<=45000&&checkedAt+elapsed<deadline);
+}
+export function soccerAnalysisPresentation(state,now=Date.now()){
   let analysisStatus='NOT_STARTED';
   if(['queued','loading'].includes(state?.status))analysisStatus='PROCESSING';
   else if(state?.status==='error')analysisStatus=state.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':'FAILED';
-  else if(state?.status==='done')analysisStatus=state.data?.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':state.data?.publishedCurrent===true&&state.data?.analysisStatus==='COMPLETED'?'COMPLETED':'UNVERIFIED';
-  const current=state?.status==='done'&&state.data?.publishedCurrent===true&&analysisStatus==='COMPLETED';
+  else if(state?.status==='done')analysisStatus=state.data?.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':soccerResearchIsCurrent(state,now)?'COMPLETED':'UNVERIFIED';
+  const current=analysisStatus==='COMPLETED';
   const selectionResult=current&&analysisStatus==='COMPLETED'&&state.data?.selectionResult==='RESEARCH_SHADOW'?'RESEARCH_SHADOW':null;
   return{analysisStatus,analysisLabel:analysisLabels[analysisStatus],selectionResult,selectionLabel:selectionResult?'研究中':'尚無結果',current};
 }
@@ -37,17 +50,63 @@ export function SoccerRunHistory({runs=[]}){
   return runs.length?<div className="soccerRunHistory"><h4>最近分析嘗試</h4>{runs.map(run=><div className="soccerSavedVersion" key={run.analysisRunId}><p>{clock(run.startedAt)}｜分析：{analysisLabels[run.analysisStatus]||'狀態待確認'}｜篩選：{run.analysisStatus==='COMPLETED'&&run.selectionResult==='RESEARCH_SHADOW'?'研究中':'尚無結果'}</p>{run.qaFlag&&<p className="soccerAvailability">{qaLabels[run.qaFlag]||'檢核狀態待確認'}</p>}{run.reasons?.length>0&&<p className="soccerAvailability">{[...new Set(run.reasons.map(code=>reasons[code]||messages[code]||(/[\u3400-\u9fff]/.test(code)?code:'來源或資料條件仍待核對')))].join('；')}</p>}</div>)}</div>:null;
 }
 export function SoccerAnalysisProvider({games,children}){
-  const [states,setStates]=useState({}),[batch,setBatch]=useState(false);
+  const [states,setStates]=useState({}),[batch,setBatch]=useState(false),[,setClockTick]=useState(0);
   const queue=useRef([]),active=useRef(0),pending=useRef(new Map()),controllers=useRef(new Set()),alive=useRef(true);
+  const latestStates=useRef(states);latestStates.current=states;
+  // One scope epoch fences both a delayed POST and its later status GETs.
+  const statusEpoch=useRef(new Map()),needsCurrentCheck=useRef(false);
+  const scopeKey=game=>`${game.league}:${game.date}:${game.id}`;
+  const epochFor=game=>statusEpoch.current.get(scopeKey(game))||0;
+  const displayedCurrent=useRef({});displayedCurrent.current=Object.fromEntries(Object.entries(states).map(([id,state])=>[id,soccerResearchIsCurrent(state)]));
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;for(const c of controllers.current)c.abort();for(const q of queue.current.splice(0))q.resolve(null);};},[]);
   const patch=(id,value)=>{if(alive.current)setStates(old=>({...old,[id]:{...old[id],...value}}));};
+  useEffect(()=>{
+    let polling=false,lastPoll=Date.now(),cancelled=false,recheckNeeded=false;
+    const refreshClockBoundary=()=>{if(Object.entries(latestStates.current).some(([id,state])=>soccerResearchIsCurrent(state)!==Boolean(displayedCurrent.current[id])))setClockTick(value=>value+1);};
+    async function pollCurrent(){
+      if(cancelled||polling||!alive.current||typeof document!=='undefined'&&document.visibilityState!=='visible')return;
+      const targets=games.filter(game=>latestStates.current[game.id]?.status==='done'&&latestStates.current[game.id]?.data?.analysisStatus==='COMPLETED');
+      if(!targets.length)return;
+      polling=true;let index=0;
+      async function worker(){while(!cancelled&&alive.current&&index<targets.length){const game=targets[index++],runId=latestStates.current[game.id]?.data?.analysisRunId,epoch=epochFor(game);
+        const controller=new AbortController(),requestedAt=Date.now();controllers.current.add(controller);const timer=setTimeout(()=>controller.abort(),10000);
+        try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'current'})}`,{cache:'no-store',signal:controller.signal}),d=await r.json(),status=d.currentResearch;
+          if(!r.ok||!d.ok||d.gameId!==game.id||d.league!==game.league||d.date!==game.date||!status||typeof status.publishedCurrent!=='boolean'||status.executable!==false||status.formalScoringEnabled!==false||!Number.isFinite(Date.parse(status.checkedAt)))throw Error('CURRENT_STATUS_UNVERIFIED');
+          if(!cancelled&&epochFor(game)===epoch&&latestStates.current[game.id]?.data?.analysisRunId===runId)patch(game.id,{currentResearch:status,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now()});
+        }catch{if(!cancelled&&epochFor(game)===epoch&&latestStates.current[game.id]?.data?.analysisRunId===runId)patch(game.id,{currentResearch:null,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now()});}
+        finally{clearTimeout(timer);controllers.current.delete(controller);}
+      }}
+      try{await Promise.all([worker(),worker()]);}finally{polling=false;if(recheckNeeded&&!cancelled){recheckNeeded=false;void pollCurrent();}}
+    }
+    const id=setInterval(()=>{if(typeof document!=='undefined'&&document.visibilityState!=='visible')return;
+      // Check cheap metadata each second; redraw the result tree only when its
+      // current/historical classification crosses a deadline or clock boundary.
+      refreshClockBoundary();
+      if(needsCurrentCheck.current&&!polling){needsCurrentCheck.current=false;lastPoll=Date.now();void pollCurrent();}
+      else if(Date.now()-lastPoll>=30000){lastPoll=Date.now();void pollCurrent();}
+    },1000);
+    const onVisible=()=>{if(document.visibilityState==='visible'){refreshClockBoundary();lastPoll=Date.now();void pollCurrent();}};
+    const onReaderChange=event=>{
+      const detail=event?.detail;if(!detail||!['epl','ucl'].includes(detail.league)||!/^[a-f0-9]{64}$/.test(detail.contentHash||''))return;
+      const affected=games.filter(game=>game.league===detail.league&&game.date===detail.date);
+      if(!affected.length)return;
+      for(const game of affected){statusEpoch.current.set(scopeKey(game),epochFor(game)+1);if(latestStates.current[game.id])patch(game.id,{currentResearch:null,currentResearchRequestedAt:Date.now(),currentResearchReceivedAt:Date.now()});}
+      lastPoll=Date.now();if(polling)recheckNeeded=true;else void pollCurrent();
+    };
+    if(typeof document!=='undefined')document.addEventListener('visibilitychange',onVisible);
+    if(typeof window!=='undefined')window.addEventListener('soccer:reader-content-changed',onReaderChange);
+    return()=>{cancelled=true;clearInterval(id);if(typeof document!=='undefined')document.removeEventListener('visibilitychange',onVisible);if(typeof window!=='undefined')window.removeEventListener('soccer:reader-content-changed',onReaderChange);};
+  },[games]);
   function pump(){
-    while(alive.current&&active.current<2&&queue.current.length){const task=queue.current.shift(),game=task.game;active.current++;const controller=new AbortController();controllers.current.add(controller);let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},50000);patch(game.id,{status:'loading',error:''});
+    while(alive.current&&active.current<2&&queue.current.length){const task=queue.current.shift(),game=task.game;active.current++;const controller=new AbortController(),requestedAt=Date.now(),epoch=epochFor(game);controllers.current.add(controller);let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},50000);patch(game.id,{status:'loading',error:''});
       fetch('/api/soccer/analysis',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',signal:controller.signal,body:JSON.stringify({league:game.league,date:game.date,eventId:game.sourceId})}).then(async r=>{
         const d=await r.json();if(!r.ok||!d.ok)throw Object.assign(Error(r.status===401?'登入已過期':d.error||'核對失敗'),{analysisStatus:d.analysisStatus,qaFlag:d.qaFlag,analysisRunId:d.analysisRunId});
         if(d.gameId!==game.id||d.league!==game.league||d.date!==game.date||d.executable!==false||d.formalScoringEnabled!==false||!Array.isArray(d.directions)||d.directions.length!==8||d.directions.some(x=>x.executable!==false||x.eligible!==false))throw Error('分析身分核對未通過');
         if(d.analysisStatus!=null&&!['COMPLETED','INSUFFICIENT_DATA'].includes(d.analysisStatus)||d.selectionResult!=null&&(d.analysisStatus!=='COMPLETED'||d.selectionResult!=='RESEARCH_SHADOW'))throw Error('分析狀態核對未通過');
-        patch(game.id,{status:'done',data:d,error:''});task.resolve(d);
+        const invalidated=epochFor(game)!==epoch;
+        patch(game.id,{status:'done',data:d,currentResearch:invalidated?null:d.currentResearch||null,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now(),error:''});
+        if(invalidated)needsCurrentCheck.current=true;
+        task.resolve(d);
       }).catch(e=>{patch(game.id,{status:'error',analysisStatus:e.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':'FAILED',qaFlag:e.qaFlag||'BLOCKED',analysisRunId:e.analysisRunId||null,error:timedOut?'核對逾時，請重試':e.name==='AbortError'?'核對已停止':e.message});task.resolve(null);}).finally(()=>{clearTimeout(timer);controllers.current.delete(controller);pending.current.delete(game.id);active.current--;pump();});
     }
   }
@@ -67,7 +126,7 @@ export default function SoccerAnalysisPanel({game}){
     <div className="soccerAnalysisStatuses" data-analysis-status={presentation.analysisStatus}><span>分析：<strong>{presentation.analysisLabel}</strong></span><span>篩選：<strong>{presentation.selectionLabel}</strong></span>{qaFlag&&<span>{qaLabels[qaFlag]||'檢核狀態待確認'}</span>}</div>
     {state?.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}{data?'；上次資料僅供歷史查閱，不代表本次完成。':''}</p>}
     {data&&<div className={`soccerAnalysisResult${historical?' soccerHistoricalResult':''}`}><p className="soccerAvailability">{historical?'上次資料・僅供歷史查閱':presentation.analysisStatus==='INSUFFICIENT_DATA'?'本次資料不足・尚無研究分布':data.status==='POSTSTART_AUDIT'?'賽後資料核對':'比分研究・不列入正式排名'}｜{clock(data.observedAt)}{stale?'｜資料待更新':''}{data.persisted?'｜版本已保存':'｜本次未保存'}</p>
-      {data.analysisStatus==='COMPLETED'&&data.publishedCurrent===false&&<p className="soccerAnalysisWarning">此版本已失效或被較新資料取代，請重新核對。</p>}
+      {data.analysisStatus==='COMPLETED'&&!presentation.current&&<p className="soccerAnalysisWarning">目前有效狀態待重新核對；此版本僅供歷史查閱。</p>}
       {!data.persisted&&<p className="soccerAnalysisWarning">{data.persistenceError}</p>}
       {prediction?<><h3>研究比分分布</h3><div className="soccerResearchOutcomes"><span>主勝 <strong>{pct(prediction.outcomes.home)}</strong></span><span>和局 <strong>{pct(prediction.outcomes.draw)}</strong></span><span>客勝 <strong>{pct(prediction.outcomes.away)}</strong></span></div><p className="soccerAvailability">模型平均進球：主 {prediction.homeRate.toFixed(2)}／客 {prediction.awayRate.toFixed(2)}。僅依歷史賽果，尚未加入陣容與 xG。</p></>:<p className="soccerAvailability">{prestart?'此場無適用的已訓練球隊資料。':'比賽開始後不補算賽前機率。'}</p>}
       <details className="soccerDetails"><summary>先發、裁判與待核對資料</summary><div className="soccerLineupGrid">{['home','away'].map(side=>{const t=e.teams[side],l=t.lineup;return <div key={side}><h4>{side==='home'?'主隊':'客隊'}先發</h4><p>{l.starters.length===11?(data.status==='POSTSTART_AUDIT'?'賽後名單':'資料源列出先發 11 人'):'先發尚未完整提供'}{l.formation?`｜${l.formation}`:''}</p>{l.starters.length>0&&<p>{l.starters.map(p=>p.name).join('、')}</p>}<p>替補名單 {l.bench.length} 人；預計分鐘尚未驗證。</p></div>;})}</div><p>裁判：{e.referee.officials?.map(o=>o.name).join('、')||'資料源尚未提供'}。名單公布時間尚無可核對資料。</p><ul>{data.missing.map(x=><li key={x.label}>{x.label}：尚未具備可驗證資料</li>)}</ul><p className="soccerAvailability">{e.source.provider} 取得時間：{clock(e.source.fetchedAt)}。已列出的先發仍需確認公布時點。</p></details>
