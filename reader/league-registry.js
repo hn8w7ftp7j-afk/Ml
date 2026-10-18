@@ -5,7 +5,7 @@
     KBO: Object.freeze({ id: 'KBO', label: '韓棒', marker: /(?:聯盟|联盟)\s*[:：]?\s*KBO\s*(?:韓國職棒|韩国职棒)/i }),
     CPBL: Object.freeze({ id: 'CPBL', label: '中職', marker: /(?:聯盟|联盟)\s*[:：]?\s*CPBL\s*(?:中華職棒|中华职棒|台灣職棒|台湾职棒)/i }),
     NBA: Object.freeze({ id: 'NBA', label: '美籃', marker: /(?:聯盟|联盟)\s*[:：]?\s*NBA(?=\s|[-－–—:：（(]|美國職業籃球|美国职业篮球|美國職籃|美国职篮|$)/i }),
-    NHL: Object.freeze({ id: 'NHL', label: '冰球', marker: /(?:聯盟|联盟)\s*[:：]?\s*NHL(?=\s|[-－–—:：（(]|美式冰球|國家冰球|国家冰球|美國職業冰球|美国职业冰球|$)/i }),
+    NHL: Object.freeze({ id: 'NHL', label: '冰球', marker: /(?:^(?=NHL(?:國家冰球聯盟|国家冰球联盟|美式冰球))|(?:聯盟|联盟)\s*[:：]?\s*)NHL(?=\s|[-－–—:：（(]|美式冰球|國家冰球|国家冰球|美國職業冰球|美国职业冰球|$)/i }),
   });
   const ids = Object.freeze(Object.keys(leagues));
   const special = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;

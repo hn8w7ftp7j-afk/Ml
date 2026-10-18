@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.32';
+  const READER_VERSION = '2.1.33';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -87,7 +87,7 @@
     return result;
   }
 
-  function textRows(element) {
+  function textRows(element, { fragmentsOnly = false, limit = 24 } = {}) {
     const fragments = [];
     const owner = element.ownerDocument || document;
     const walker = owner.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
@@ -119,11 +119,12 @@
         .split(/\r?\n/)
         .map(clean)
         .filter(Boolean)
-        .slice(0, 24)
+        .slice(0, limit)
         .map((text, index) => ({ text, top: rectangle.top + index * 18, left: rectangle.left }));
     }
 
     fragments.sort((left, right) => left.top - right.top || left.left - right.left);
+    if (fragmentsOnly) return fragments.slice(0, limit);
     const rows = [];
     for (const fragment of fragments) {
       let row = rows.find(item => Math.abs(item.top - fragment.top) <= 6);
@@ -286,6 +287,29 @@
       (row.cells || []).map(cell => Array.isArray(cell?.pair) ? cell.pair : cell?.lines || []))));
   }
 
+  function captureNhlCards() {
+    const sections = []; const seen = new Set();
+    const headings = queryAcrossRoots(openRoots(), 'div,span,h1,h2,h3,h4,p,strong,button').slice(0, 7000);
+    for (const heading of headings) {
+      if (!visible(heading)) continue;
+      const label = clean(heading.innerText || heading.textContent || '');
+      if (label.length > 140 || !globalThis.Tai888LeagueRegistry.standardMarker(label, 'NHL')) continue;
+      let section = heading;
+      for (let depth = 0; section && depth < 8; depth += 1, section = section.parentElement) {
+        if (/^(BODY|HTML)$/i.test(section.tagName)) break;
+        const text = clean(section.innerText || section.textContent || '');
+        if (text.length > 14000) break;
+        if (!/\d{1,2}[/-]\d{1,2}\s+\d{1,2}:[0-5]\d/.test(text) || !/(?:讓分|让分|讓球|让球)/.test(text) || !/大小/.test(text)) continue;
+        if (!seen.has(section)) {
+          seen.add(section);
+          sections.push({ label, fragments: textRows(section, { fragmentsOnly: true, limit: 1201 }) });
+        }
+        break;
+      }
+    }
+    return globalThis.Tai888NhlCardNormalizer?.normalize(sections) || { tables: [], diagnostics: {} };
+  }
+
   function latestTai888NetworkRefreshAt() {
     const now = Date.now();
     const timeOrigin = Number(performance.timeOrigin || (now - performance.now()));
@@ -304,6 +328,7 @@
 
   function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
     const { elements, records } = collectRecords();
+    const nhlCards = captureNhlCards();
     // Only bounded league-heading evidence, never document/body/account text.
     sectionDiagnostics = records.filter(record => /^(?:聯盟|联盟)\s*[:：]?/.test(clean(record.text)))
       .map(record => {
@@ -315,7 +340,8 @@
     const verifiedRefreshAt = Math.max(Number(verifiedBoardRefreshAt) || 0, verifiedNetworkRefreshAt);
     const captures = [];
     for (const league of globalThis.Tai888LeagueRegistry.ids) {
-      const normalized = normalizer.normalizeRowRecords(records, { expectedLeague: league });
+      const normalized = league === 'NHL' && nhlCards.tables.length ? nhlCards
+        : normalizer.normalizeRowRecords(records, { expectedLeague: league });
       if (!normalized.tables.length && !normalized.diagnostics?.sawLeagueMarker) continue;
       const fingerprint = stableMarketFingerprint(normalized);
       if (updateActivity && fingerprint && fingerprint !== fingerprintByLeague[league]) {

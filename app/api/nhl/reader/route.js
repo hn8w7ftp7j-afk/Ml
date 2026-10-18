@@ -15,12 +15,12 @@ export async function GET(request) {
   const date = requestedDate || nhlDate(Date.now());
   if (!validNhlDate(date)) return NextResponse.json({ ok: false, league: 'NHL', error: '日期無效' }, { status: 400, headers });
   if (!requestedDate) return NextResponse.json({ ok: true, league: 'NHL', message: NHL_READER_WAITING_MESSAGE,
-    captureSupported: true, minimumReaderVersion: '2.1.31', persistenceConfigured: nhlPersistenceConfigured(), verifiedMarkets: [], executable: false }, { headers });
+    captureSupported: true, minimumReaderVersion: '2.1.33', persistenceConfigured: nhlPersistenceConfigured(), verifiedMarkets: [], executable: false }, { headers });
   if (!nhlPersistenceConfigured()) return NextResponse.json({ ok: false, league: 'NHL', date, status: 'BLOCKED', error: 'NHL 永久快照資料庫尚未設定', executable: false }, { status: 503, headers });
   try {
     const [capture] = await loadNhlObservations('READER', date, 1);
     const games = capture?.games || [];
-    return NextResponse.json({ ok: true, league: 'NHL', date, captureSupported: true, minimumReaderVersion: '2.1.31',
+    return NextResponse.json({ ok: true, league: 'NHL', date, captureSupported: true, minimumReaderVersion: '2.1.33',
       status: capture ? 'CAPTURED_RULES_UNVERIFIED' : 'WAITING_REAL_DATA',
       message: capture ? 'NHL 原盤已保存，結算規則待驗證' : NHL_READER_WAITING_MESSAGE,
       observedAt: capture?.observedAt || null, revision: capture?.revision || null,

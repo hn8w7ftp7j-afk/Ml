@@ -42,7 +42,7 @@ export async function GET(request) {
     const action = params.get('action') || 'status';
     if (action === 'status') return response({ ok: true, version: NHL_DATA_VERSION, sources: NHL_SOURCES,
       reader: { version: NHL_READER_INTERFACE_VERSION, status: 'WAITING_REAL_DATA', message: NHL_READER_WAITING_MESSAGE, verifiedMarketCount: 0,
-        captureSupported: true, minimumReaderVersion: '2.1.31' },
+        captureSupported: true, minimumReaderVersion: '2.1.33' },
       persistenceConfigured: nhlPersistenceConfigured(), scope: 'NHL_PREGAME_SHADOW_AND_DATA',
       pregameAnalysisEnabled: true, historicalReplayRequiresSavedPregameSnapshot: true,
       readyForFormal: false, realBetExecutionEnabled: false,
