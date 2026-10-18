@@ -12,7 +12,7 @@ export const viewport = {
   themeColor: '#06111d',
 };
 export const metadata = {
-  title: '棒球長期正期望值分析｜MLB・NPB・KBO・CPBL',
+  title: '多聯盟賽事分析｜棒球・NBA・英超・UCL',
   description: '私人多聯盟台灣信用盤長期正期望值分析系統：各聯盟獨立資料、模型、排名與下注識別',
   applicationName: '棒球 EV',
   manifest: '/manifest.webmanifest',
