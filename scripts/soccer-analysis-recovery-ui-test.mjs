@@ -18,7 +18,8 @@ const game = (id = '101', date = '2026-10-20', league = 'epl') => ({
   id: `soccer:${league}:${id}`, sourceId: id, league, date, status: 'scheduled',
   startTime: '2099-10-20T13:00:00Z', home: { name: 'Home' }, away: { name: 'Away' },
 });
-const analysis = (row = game(), extra = {}) => ({
+const analysis = (row = game(), extra = {}) => {
+ const value=({
   ok: true, gameId: row.id, league: row.league, date: row.date,
   formalScoringEnabled: false, executable: false,
   directions: Array.from({ length: 8 }, () => ({ executable: false, eligible: false })),
@@ -27,8 +28,12 @@ const analysis = (row = game(), extra = {}) => ({
   qualificationValidUntil: new Date(now + 120000).toISOString(), revision: `saved-${row.sourceId}`,
   evidence: { game: { id: row.id, sourceId: row.sourceId, league: row.league, date: row.date } }, ...extra,
 });
+ value.currentResearch={analysisRunId:value.analysisRunId,revision:value.revision,publishedCurrent:true,reason:'ACTIVE',checkedAt:new Date(now).toISOString(),validUntil:value.qualificationValidUntil||value.validUntil,formalScoringEnabled:false,executable:false};
+ return value;
+};
 const head = (row = game(), value = analysis(row)) => ({
   ok: true, gameId: row.id, league: row.league, date: row.date, versions: value ? [value] : [], runs: [],
+  currentResearch:value?{...value.currentResearch,validUntil:value.qualificationValidUntil||value.validUntil}:null,
   currentVersion: value, currentRun: value ? { analysisRunId: value.analysisRunId, analysisStatus: 'COMPLETED' } : null,
 });
 const clone = value => structuredClone(value);
@@ -52,6 +57,7 @@ function harness({ games = [game()], runId = '', date = games[0]?.date || '', sa
     useEffect: (effect, deps) => { const i = ei++; if (!effects[i]) effects[i] = { effect, deps, cleanup: null }; },
     setTimeout: (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; },
     clearTimeout: id => timers.delete(id),
+    setInterval:(callback,delay)=>{const id=++nextTimer;timers.set(id,{callback,delay,interval:true});return id;},clearInterval:id=>timers.delete(id),
     window: {
       localStorage: { getItem: key => key === recovery.SOCCER_ALL_LEAGUE_STORAGE ? JSON.stringify(saved) : null },
       addEventListener: (event, listener) => { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(listener); },
@@ -78,7 +84,7 @@ function harness({ games = [game()], runId = '', date = games[0]?.date || '', sa
     setNow: value => { clientNow = value; },
     setSaved: value => { saved = value; },
     fire: event => { for (const listener of listeners.get(event) || []) listener(); },
-    tick: async delay => { const entry = [...timers].find(([, timer]) => timer.delay === delay); assert.ok(entry, `Expected ${delay} ms timer`); timers.delete(entry[0]); entry[1].callback(); await flush(); },
+    tick: async delay => { const entry = [...timers].find(([, timer]) => timer.delay === delay); assert.ok(entry, `Expected ${delay} ms timer`); if(!entry[1].interval)timers.delete(entry[0]); entry[1].callback(); await flush(); },
   };
 }
 function workflow(row, runId, payload = analysis(row), status = 'completed') {
@@ -221,7 +227,7 @@ await test('qualification deadline schedules early head refresh and presentation
     try {
       h.mount(); h.reads[0].respond(head(row, value)); await flush();
       assert.equal(h.counts().completed, 1);
-      const delay = [...h.timers.values()].map(timer => timer.delay).find(value => value >= 250 && value < 15000);
+      const delay = [...h.timers.values()].filter(timer=>!timer.interval).map(timer => timer.delay).find(value => value >= 250 && value < 15000);
       assert.ok(delay, 'the qualification deadline should refresh sooner than the normal 60 second interval');
       h.setNow(expiry + 1); assert.equal(h.counts().completed, 0, `${field} expiry removes current completion`); assert.equal(h.counts().waiting, 1);
       await h.tick(delay); assert.equal(h.reads.length, 2);
@@ -247,7 +253,7 @@ await test('an entirely empty head after qualification expiry clears previously 
   try {
     h.mount(); h.reads[0].respond(head(row, analysis(row, { qualificationValidUntil: new Date(expiry).toISOString() }))); await flush();
     assert.equal(h.counts().completed, 1);
-    const delay = [...h.timers.values()].map(timer => timer.delay).find(value => value >= 250 && value < 15000);
+    const delay = [...h.timers.values()].filter(timer=>!timer.interval).map(timer => timer.delay).find(value => value >= 250 && value < 15000);
     h.setNow(expiry + 1); await h.tick(delay); assert.equal(h.reads.length, 2);
     h.reads[1].respond(head(row, null)); await flush();
     assert.equal(h.state[0][row.id].status, 'idle'); assert.equal(h.state[0][row.id].data, undefined);
@@ -339,6 +345,38 @@ await test('unmount resolves queued manual work and aborts active manual work wi
   assert.equal(h.posts.length, 2); assert.equal(h.state[0][games[2].id].status, 'queued');
   h.unmount(); await Promise.all(runs); await flush();
   assert.equal(h.posts.length, 2); assert.ok(h.posts.every(call => call.options.signal.aborted)); assert.equal(h.timers.size, 0);
+});
+
+await test('an older ACTIVE saved head cannot overwrite a newer lightweight invalidation receipt', async () => {
+  const row=game(),h=harness();
+  try{
+    h.mount();h.reads[0].respond(head(row));await flush();h.render();
+    h.fire('focus');assert.equal(h.reads.length,2,'saved head request starts first');
+    h.setNow(now+30000);await h.tick(1000);assert.equal(h.reads.length,3);
+    assert.equal(new URL(h.reads[2].url,'https://fixture.invalid').searchParams.get('view'),'current');
+    const invalid={...analysis(row).currentResearch,publishedCurrent:false,reason:'QUOTE_CHANGED',checkedAt:new Date(now+30000).toISOString()};
+    h.reads[2].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:invalid});await flush();
+    assert.equal(h.counts().completed,0);assert.equal(h.state[0][row.id].currentResearch.reason,'QUOTE_CHANGED');
+    h.reads[1].respond(head(row));await flush();
+    assert.equal(h.state[0][row.id].data.revision,analysis(row).revision,'older head evidence remains readable');
+    assert.equal(h.state[0][row.id].currentResearch.reason,'QUOTE_CHANGED','stale ACTIVE head cannot revive qualification across read channels');
+    assert.equal(h.counts().completed,0);assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('an older ACTIVE lightweight receipt cannot overwrite a newer saved-head invalidation', async () => {
+  const row=game(),h=harness();
+  try{
+    h.mount();h.reads[0].respond(head(row));await flush();h.render();
+    h.setNow(now+30000);await h.tick(1000);assert.equal(h.reads.length,2);
+    h.fire('focus');assert.equal(h.reads.length,3,'saved head starts after the held lightweight read');
+    const invalid={...analysis(row).currentResearch,publishedCurrent:false,reason:'EXPIRED',checkedAt:new Date(now+30000).toISOString()};
+    h.reads[2].respond({...head(row,null),versions:[analysis(row)],currentResearch:invalid});await flush();
+    assert.equal(h.counts().completed,0);assert.equal(h.state[0][row.id].currentResearch.reason,'EXPIRED');
+    h.reads[1].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:analysis(row).currentResearch});await flush();
+    assert.equal(h.state[0][row.id].currentResearch.reason,'EXPIRED','stale lightweight ACTIVE response cannot overwrite a newer head');
+    assert.equal(h.counts().completed,0);assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
 });
 
 console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior groups passed.`);

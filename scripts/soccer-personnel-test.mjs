@@ -7,6 +7,10 @@ const read=name=>JSON.parse(fs.readFileSync(`scripts/fixtures/soccer/${name}.jso
 const game=p=>{const c=p.header.competitions[0];return normalizeSoccerSchedule({leagues:[p.header.league],events:[{...p.header,date:c.date,status:c.status}]},'epl',{}).games[0];};
 const p=read('minutes-past'),g=game(p),audit=soccerMinutesAudit(p,g);
 assert.equal(audit.status,'REGULATION_CLOCK_RECONSTRUCTED');for(const side of ['home','away'])assert.equal(audit.teams[side].teamPlayerMinutes,990);
+assert.equal(audit.teamScope,'BOTH');assert.equal(audit.teamSide,null);
+const ownOnly=soccerMinutesAudit(p,g,{teamSide:'away'});assert.equal(ownOnly.teamScope,'TEAM_ONLY');assert.equal(ownOnly.teamSide,'away');assert.deepEqual(Object.keys(ownOnly.teams),['away']);assert.deepEqual(ownOnly.teams.away,audit.teams.away);
+const opposingText=structuredClone(p);opposingText.keyEvents.find(e=>e.type.type==='substitution'&&e.team.id===g.home.sourceId).text='Unverified provider role text';assert.equal(soccerMinutesAudit(opposingText,g).reason,'SUBSTITUTION_ROLE_UNVERIFIED');assert.equal(soccerMinutesAudit(opposingText,g,{teamSide:'away'}).status,'REGULATION_CLOCK_RECONSTRUCTED');assert.equal(soccerMinutesAudit(opposingText,g,{teamSide:'home'}).reason,'SUBSTITUTION_ROLE_UNVERIFIED');
+const ownText=structuredClone(p);ownText.keyEvents.find(e=>e.type.type==='substitution'&&e.team.id===g.away.sourceId).text='Unverified provider role text';assert.equal(soccerMinutesAudit(ownText,g,{teamSide:'away'}).reason,'SUBSTITUTION_ROLE_UNVERIFIED');assert.equal(soccerMinutesAudit(p,g,{teamSide:'other'}).reason,'AUDIT_TEAM_SCOPE_INVALID');
 const late=audit.teams.away.players.find(p=>p.name==='Oleksandr Zinchenko');assert.equal(late.regulationClockMinutes,0);assert.equal(late.appeared,true);assert.equal(late.addedTimeOnlyAppearance,true,'clock 90 is not evidence that a stoppage-time substitute did not play');
 const merino=audit.teams.away.players.find(p=>p.name==='Mikel Merino');assert.ok(Math.abs(merino.regulationClockMinutes-77.6)<1e-9);
 const swapped=structuredClone(p);for(const e of swapped.keyEvents)if(e.type.type==='substitution')e.participants.reverse();assert.deepEqual(soccerMinutesAudit(swapped,g),audit,'array order alone cannot decide substitution roles');
@@ -14,6 +18,7 @@ const missing=structuredClone(p);missing.keyEvents=missing.keyEvents.filter(e=>e
 const bad=structuredClone(p);bad.keyEvents[0].participants[0].athlete.id='9999999';assert.equal(soccerMinutesAudit(bad,g).reason,'EVENT_PLAYER_IDENTITY_INVALID');
 const conflict=structuredClone(p);conflict.keyEvents.push({...conflict.keyEvents[0],text:'different revision'});assert.equal(soccerMinutesAudit(conflict,g).reason,'EVENT_REVISION_CONFLICT');
 const noEnd=structuredClone(p);noEnd.keyEvents=noEnd.keyEvents.filter(e=>e.type.type!=='end-regular-time');assert.equal(soccerMinutesAudit(noEnd,g).reason,'REGULATION_END_MISSING');
+assert.equal(soccerMinutesAudit(noEnd,g,{teamSide:'away'}).reason,'REGULATION_END_MISSING','team-scoped audits retain global timeline guards');
 const dismissed=structuredClone(p),keeper=dismissed.rosters[0].roster.find(p=>p.starter&&p.position?.abbreviation==='G');keeper.stats=[{name:'redCards',value:1}];dismissed.keyEvents.push({id:'99990001',team:{id:g.home.sourceId},type:{type:'red-card'},period:{number:2},clock:{value:3000,displayValue:"50'"},participants:[{athlete:{id:keeper.athlete.id}}]});assert.equal(soccerMinutesAudit(dismissed,g).teams.home.teamPlayerMinutes,950);
 const extra=structuredClone(p);extra.header.competitions[0].status.type.name='STATUS_FINAL_AFTER_EXTRA_TIME';assert.equal(soccerMinutesAudit(extra,g).reason,'REGULATION_PERIOD_UNVERIFIED');
 assert.equal(soccerMinutesAudit(p,{...g,status:'live'}).reason,'MATCH_NOT_FINAL');

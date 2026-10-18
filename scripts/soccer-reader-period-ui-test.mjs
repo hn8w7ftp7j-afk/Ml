@@ -28,19 +28,29 @@ for(const value of [null,undefined,{},'bad'])assert.deepEqual(plain(inspect.socc
 
 const market=(period,overWater)=>({period,kind:'TOTAL',unit:'GOALS',line:'3+25',overWater,underWater:.9});
 const game={league,boardDate:date,boardTime:'22:00',homeRaw:'白禮頓[主]',awayRaw:'水晶宮',homeCode:'BHA',awayCode:'CRY',officialGameId:'soccer:epl:1',matchStatus:'MATCHED',prestart:true,marketStatus:'open',markets:[market('FT',.84),market('HT',.92)]};
-const body={ok:true,league:'epl',date,isPeriodAggregate:true,observedAt:freshAt(-180001),sourceObservations:sources.slice(0,2),periodsCovered:['FT','HT'],games:[game],executable:false};
+const body={ok:true,league:'epl',date,contentHash:'a'.repeat(64),isPeriodAggregate:true,observedAt:freshAt(-180001),sourceObservations:sources.slice(0,2),periodsCovered:['FT','HT'],games:[game],executable:false};
 function harness(){
-  const state=[],effects=[];let index=0,response=body;
+  const state=[],effects=[],refs=[],events=[];let index=0,refIndex=0,response=body;
   const ctx=vm.createContext({React,Date:Clock,URLSearchParams,AbortController,setTimeout,clearTimeout,
+    window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}},
     useState:initial=>{const slot=index++;if(!(slot in state))state[slot]=initial;return[state[slot],value=>{state[slot]=typeof value==='function'?value(state[slot]):value;}];},
-    useEffect:fn=>effects.push(fn),fetch:async()=>{if(response instanceof Error)throw response;return Response.json(response);}});
+    useRef:value=>refs[refIndex++]||(refs[refIndex-1]={current:value}),useEffect:fn=>effects.push(fn),fetch:async()=>{if(response instanceof Error)throw response;return Response.json(response);}});
   vm.runInContext(code,ctx);
-  function render(props={league,date}){index=0;effects.length=0;return ctx.SoccerReaderPanel(props);}
-  return{state,render,async load(value,props={league,date}){response=value;render(props);const cleanup=effects.at(-1)();await new Promise(resolve=>setImmediate(resolve));return cleanup;}};
+  function render(props={league,date}){index=0;refIndex=0;effects.length=0;return ctx.SoccerReaderPanel(props);}
+  return{state,events,render,async load(value,props={league,date}){response=value;render(props);const cleanup=effects.at(-1)();await new Promise(resolve=>setImmediate(resolve));return cleanup;}};
 }
 const ui=harness();
 let markup=renderToStaticMarkup(ui.render());assert.match(markup,new RegExp(`等待 Reader ${escapePattern(manifest.version)}`));assert.doesNotMatch(markup,/白禮頓|0\.84/);
 const cleanup=await ui.load(body);markup=renderToStaticMarkup(ui.render());cleanup();
+assert.equal(ui.events.length,0,'an initial unknown fingerprint does not invent a previous price');
+await ui.load({...body,revision:'new-heartbeat',observedAt:freshAt(-1)});assert.equal(ui.events.length,0,'same-price verification heartbeats do not invalidate research');
+await ui.load({...body,contentHash:'b'.repeat(64)});assert.equal(ui.events.length,1);
+assert.equal(ui.events[0].type,'soccer:reader-content-changed');assert.deepEqual(JSON.parse(JSON.stringify(ui.events[0].detail)),{league:'epl',date,contentHash:'b'.repeat(64)});
+await ui.load({...body,league:'ucl',contentHash:'c'.repeat(64)});assert.equal(ui.events.length,1,'unvalidated wrong-scope responses cannot dispatch invalidation');
+await ui.load({...body,date:'2026-10-20',games:[]},{league,date:'2026-10-20'});assert.equal(ui.events.length,1,'changing scopes does not compare another date fingerprint');
+await ui.load({...body,contentHash:'b'.repeat(64)});await ui.load(body);
+assert.equal(ui.events.length,2,'a later real content change emits exactly one scoped notification');
+markup=renderToStaticMarkup(ui.render());
 assert.match(markup,/全場 [\d:]+（待更新）/);assert.match(markup,/上半場 [\d:]+(?:｜|<\/p>)/);assert.doesNotMatch(markup,/上半場 [\d:]+（待更新）/,'a fresh HT quote is not called stale because the FT aggregate timestamp is older');
 assert.match(markup,/按期間分開保存/);assert.match(markup,/白禮頓（主）對 水晶宮（客）/);assert.match(markup,/大 0\.84/);assert.match(markup,/大 0\.92/);assert.match(markup,/官方場次已配對/);
 assert.doesNotMatch(markup,/原盤已逾期，請重新同步|undefined|NaN|已通過正式驗收|可直接下注/);

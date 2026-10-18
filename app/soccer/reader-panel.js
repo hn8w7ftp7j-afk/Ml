@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 const READER_VERSION='2.1.37';
 const DOWNLOAD='/downloads/Tai888-Reader-v2.1.37-EPL-UCL.zip';
 const time=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}):'—';
@@ -13,6 +13,7 @@ export function soccerReaderPeriods(data,now=Date.now()){
 export default function SoccerReaderPanel({league,date}) {
   const [revision,setRevision]=useState(0),[state,setState]=useState({key:'',data:null,error:'',loading:false});
   const key=`${league}:${date}`;
+  const lastContent=useRef({key:'',hash:null});
   useEffect(()=>{const id=setInterval(()=>{if(document.visibilityState==='visible')setRevision(n=>n+1);},30000);return()=>clearInterval(id);},[]);
   useEffect(()=>{
     if(!date)return;let active=true;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);
@@ -20,7 +21,14 @@ export default function SoccerReaderPanel({league,date}) {
     fetch(`/api/soccer/reader?${new URLSearchParams({league,date})}`,{cache:'no-store',signal:controller.signal}).then(async r=>{
       const d=await r.json();if(!r.ok||!d.ok)throw Error(r.status===401?'登入已過期':d.error||'原盤讀取失敗');
       if(d.league!==league.toLowerCase()||d.date!==date||!Array.isArray(d.games)||d.games.some(g=>g.league!==league||g.boardDate!==date||!Array.isArray(g.markets)||g.markets.some(m=>m.unit!=='GOALS')||(g.officialGameId&&!g.officialGameId.startsWith(`soccer:${league.toLowerCase()}:`))))throw Error('足球原盤身分核對未通過');
-      if(active)setState({key,data:d,error:'',loading:false});
+      if(active){
+        const contentHash=/^[a-f0-9]{64}$/.test(d.contentHash||'')?d.contentHash:null,previous=lastContent.current;
+        lastContent.current={key,hash:contentHash};
+        // Aggregate content excludes observation/heartbeat timestamps. A new
+        // price/period state revokes local currentness before showing new rows.
+        if(contentHash&&previous.key===key&&previous.hash&&previous.hash!==contentHash&&typeof window!=='undefined')window.dispatchEvent(new CustomEvent('soccer:reader-content-changed',{detail:{league:league.toLowerCase(),date,contentHash}}));
+        setState({key,data:d,error:'',loading:false});
+      }
     }).catch(e=>{if(active)setState(old=>({...old,key,error:e.name==='AbortError'?'原盤讀取逾時':e.message,loading:false}));}).finally(()=>clearTimeout(timer));
     return()=>{active=false;clearTimeout(timer);controller.abort();};
   },[key,revision]);

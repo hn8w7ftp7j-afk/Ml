@@ -21,7 +21,10 @@ const source=fs.readFileSync('app/soccer/analysis-panel.js','utf8');
 const raw=source.replace(/^import .*?;\n/gm,'').replace(/export default function/g,'function').replace(/export function/g,'function');
 const {code}=await transform(raw,{filename:'soccer-requirements-ui.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const games=Array.from({length:8},(_,i)=>({id:`soccer:epl:${i+1}`,sourceId:String(i+1),league:'epl',date:'2026-10-20',startTime:'2099-10-20T13:00:00Z',status:'scheduled',home:{name:'Home'},away:{name:'Away'}}));
-const current={analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',publishedCurrent:true,qaFlag:'WARN'};
+const receiptAt=Date.now();
+const current={analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',publishedCurrent:true,qaFlag:'WARN',revision:'requirements-current',analysisRunId:'requirements-run',observedAt:new Date(receiptAt).toISOString(),
+  currentResearch:{publishedCurrent:true,reason:'ACTIVE',revision:'requirements-current',analysisRunId:'requirements-run',checkedAt:new Date(receiptAt).toISOString(),validUntil:new Date(receiptAt+180000).toISOString(),formalScoringEnabled:false,executable:false}};
+const currentState=data=>({status:'done',data,currentResearchRequestedAt:receiptAt,currentResearchReceivedAt:receiptAt});
 const plain=v=>JSON.parse(JSON.stringify(v));
 const context=vm.createContext({...soccerBackgroundClient,React,createContext:()=>({Provider:'provider'})});
 vm.runInContext(realComponentCode,context);
@@ -32,18 +35,20 @@ assert.equal(presentation({status:'loading',data:current}).selectionResult,null,
 assert.equal(presentation({status:'error',analysisStatus:'FAILED',data:current}).analysisStatus,'FAILED');
 assert.equal(presentation({status:'error',analysisStatus:'FAILED',data:current}).selectionResult,null);
 assert.equal(presentation({status:'error',analysisStatus:'INSUFFICIENT_DATA',data:current}).analysisStatus,'INSUFFICIENT_DATA');
-assert.equal(presentation({status:'done',data:current}).selectionResult,'RESEARCH_SHADOW');
-assert.equal(presentation({status:'done',data:{...current,publishedCurrent:false}}).analysisStatus,'UNVERIFIED');
-assert.equal(presentation({status:'done',data:{...current,publishedCurrent:undefined}}).current,false,'a legacy snapshot is readable but cannot establish current completion');
+assert.equal(presentation(currentState(current)).selectionResult,'RESEARCH_SHADOW');
+assert.equal(presentation(currentState({...current,observedAt:undefined})).current,false,'a current-status receipt cannot supply a missing snapshot observation time');
+assert.equal(presentation(currentState({...current,observedAt:new Date(receiptAt-180000).toISOString()})).current,false,'an old snapshot stays historical even when its status receipt is fresh');
+assert.equal(presentation(currentState({...current,currentResearch:{...current.currentResearch,publishedCurrent:false,reason:'QUOTE_CHANGED'}})).analysisStatus,'UNVERIFIED');
+assert.equal(presentation(currentState({...current,currentResearch:undefined})).current,false,'a legacy snapshot is readable but cannot establish current completion');
 assert.equal(presentation({status:'done',data:{...current,analysisStatus:'INSUFFICIENT_DATA',selectionResult:null}}).selectionResult,null);
 assert.deepEqual(presentation({status:'done',data:{analysisStatus:'INSUFFICIENT_DATA',selectionResult:null,publishedCurrent:false}}),{analysisStatus:'INSUFFICIENT_DATA',analysisLabel:'資料不足',selectionResult:null,selectionLabel:'尚無結果',current:false},'a saved data-shortage response does not need a published research distribution');
 const states={
   [games[1].id]:{status:'queued'},[games[2].id]:{status:'loading'},
   [games[3].id]:{status:'error',analysisStatus:'FAILED',data:current},
   [games[4].id]:{status:'done',data:{...current,analysisStatus:'INSUFFICIENT_DATA',selectionResult:null}},
-  [games[5].id]:{status:'done',data:current},
-  [games[6].id]:{status:'done',data:{...current,publishedCurrent:false}},
-  [games[7].id]:{status:'done',data:{...current,publishedCurrent:undefined}},
+  [games[5].id]:currentState(current),
+  [games[6].id]:currentState({...current,currentResearch:{...current.currentResearch,publishedCurrent:false,reason:'QUOTE_CHANGED'}}),
+  [games[7].id]:currentState({...current,currentResearch:undefined}),
   'soccer:ucl:foreign':{status:'done',data:current},
 };
 assert.deepEqual(plain(context.soccerAnalysisCounts(games,states)),{total:8,candidates:0,waiting:3,processing:2,completed:1,insufficient:1,failed:1,research:1},'the current board, including unstarted and failed games, fixes the summary denominator');
@@ -68,7 +73,7 @@ function harness(fetch){
     useRef:initial=>refs[ri++]||(refs[ri-1]={current:initial}),useEffect:()=>{}});
   vm.runInContext(realComponentCode,ctx);
  vm.runInContext(code,ctx);ctx.provider=()=>{si=0;ri=0;return ctx.SoccerAnalysisProvider({games,children:[]});};
-  return{state,provider:ctx.provider,panel:game=>{si=2;return ctx.SoccerAnalysisPanel({game});}};
+  return{state,provider:ctx.provider,panel:game=>{si=3;return ctx.SoccerAnalysisPanel({game});}};
 }
 for(const analysisStatus of ['FAILED','INSUFFICIENT_DATA']){
   const h=harness(async()=>Response.json({ok:false,error:'資料來源暫時無法核對',analysisStatus,selectionResult:null,qaFlag:'BLOCKED',analysisRunId:'failed-run'},{status:503}));
@@ -80,7 +85,7 @@ for(const analysisStatus of ['FAILED','INSUFFICIENT_DATA']){
   assert.match(markup,/篩選：<strong>尚無結果/);
   assert.doesNotMatch(markup,/篩選：<strong>研究中|分析：<strong>完成/);
 }
-const superseded=harness(async()=>Response.json({ok:true,...current,publishedCurrent:false,gameId:games[0].id,league:'epl',date:games[0].date,formalScoringEnabled:false,executable:false,directions:Array.from({length:8},()=>({executable:false,eligible:false}))}));
+const superseded=harness(async()=>Response.json({ok:true,...current,publishedCurrent:false,currentResearch:{...current.currentResearch,publishedCurrent:false,reason:'QUOTE_CHANGED'},gameId:games[0].id,league:'epl',date:games[0].date,formalScoringEnabled:false,executable:false,directions:Array.from({length:8},()=>({executable:false,eligible:false}))}));
 await superseded.provider().props.value.run(games[0]);
 assert.equal(plain(context.soccerAnalysisCounts(games,superseded.state[0])).completed,0);
 const invalid=harness(async()=>Response.json({ok:true,...current,selectionResult:'CANDIDATE',gameId:games[0].id,league:'epl',date:games[0].date,formalScoringEnabled:false,executable:false,directions:Array.from({length:8},()=>({executable:false,eligible:false}))}));
@@ -138,7 +143,7 @@ for(const includeRuns of [true,false]){
   history.provider();
   const button=children(history.panel(games[0])).find(node=>node.type==='button'&&node.props.children==='讀取最近紀錄');
   await button.props.onClick();
-  assert.equal(history.state[2].error,'');assert.equal(history.state[2].runs.length,includeRuns?3:0);
+  assert.equal(history.state[3].error,'');assert.equal(history.state[3].runs.length,includeRuns?3:0);
   const markup=renderToStaticMarkup(history.panel(games[0]));
   if(includeRuns){assert.match(markup,/最近分析嘗試/);assert.match(markup,/分析：處理中/);assert.match(markup,/分析：失敗/);assert.match(markup,/分析：資料不足/);assert.match(markup,/資料來源讀取逾時/);assert.doesNotMatch(markup,/篩選：研究中/);}
 }
