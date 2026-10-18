@@ -29,6 +29,24 @@ await test('league registries and game/team/cache identity are isolated', () => 
   assert.deepEqual(publicSoccerLeagues().map(item => item.id), ['EPL', 'UCL']);
   for (const field of ['model', 'ranking', 'betting']) assert.equal(SOCCER_CAPABILITIES[field], false);
 });
+await test('supplied provider UIDs cannot contradict the sport, league, event, competition or team identity', () => {
+  const raw = event({ uid: 's:600~l:700~e:401000001' });
+  raw.competitions[0].id = '401000001'; raw.competitions[0].uid = 's:600~l:700~e:401000001~c:401000001';
+  raw.competitions[0].competitors[0].team.uid = 's:600~t:1';
+  const valid = { leagues: [{ ...competition('epl'), uid: 's:600~l:700' }], events: [raw] };
+  assert.equal(normalizeSoccerSchedule(valid, 'epl', source).ok, true);
+  for (const uid of ['s:600~l:775~e:401000001', 's:40~l:700~e:401000001', 's:600~l:700~e:999', 's:600~l:700~l:775~e:401000001', 'broken']) {
+    assert.equal(normalizeSoccerSchedule({ ...valid, events: [{ ...raw, uid }] }, 'epl', source).code, 'SOCCER_GAME_UID_IDENTITY_MISMATCH');
+  }
+  const competitionMismatch = structuredClone(raw); competitionMismatch.competitions[0].uid = 's:600~l:700~e:401000001~c:999';
+  assert.equal(normalizeSoccerEvent(competitionMismatch, 'epl', source).code, 'SOCCER_GAME_UID_IDENTITY_MISMATCH');
+  for (const uid of ['s:600~t:999', 's:40~t:1', 's:600~l:775~t:1']) {
+    const teamMismatch = structuredClone(raw); teamMismatch.competitions[0].competitors[0].team.uid = uid;
+    assert.equal(normalizeSoccerEvent(teamMismatch, 'epl', source).code, 'SOCCER_TEAM_IDENTITY_INVALID');
+  }
+  assert.equal(normalizeSoccerSchedule({ ...valid, leagues: [{ ...valid.leagues[0], uid: 's:600~l:775' }] }, 'epl', source).code, 'SOCCER_LEAGUE_IDENTITY_MISMATCH');
+  assert.equal(normalizeSoccerSchedule(board(), 'epl', source).ok, true, 'absent UIDs are allowed within a verified league envelope');
+});
 await test('scheduled placeholder zeroes never become a scored result', () => {
   const game = normalizeSoccerSchedule(board(), 'epl', source).games[0];
   assert.equal(game.home.score, null); assert.equal(game.away.score, null);
