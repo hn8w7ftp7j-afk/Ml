@@ -1,0 +1,21 @@
+{
+  "version": "SOCCER-RETROSPECTIVE-PROTOCOL-v1",
+  "trainingBefore": "2024-01-01T00:00:00.000Z",
+  "validationBefore": "2025-01-01T00:00:00.000Z",
+  "testBefore": "2026-01-01T00:00:00.000Z",
+  "liveTrainingBefore": "2026-10-18T00:00:00.000Z",
+  "halfLives": [
+    180,
+    365,
+    730
+  ],
+  "penalties": [
+    0.002,
+    0.01
+  ],
+  "period": "REGULATION_FT",
+  "selectionMetric": "validation 1X2 log loss",
+  "formalPromotion": false,
+  "assumedResultLagHours": 24,
+  "pointInTimeAvailabilityVerified": false
+}

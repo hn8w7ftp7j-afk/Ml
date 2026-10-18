@@ -1,0 +1,45 @@
+'use client';
+import { createContext,useContext,useEffect,useRef,useState } from 'react';
+
+const Context=createContext(null);
+const clock=v=>v?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
+const pct=v=>Number.isFinite(v)?`${(v*100).toFixed(1)}%`:'—';
+const reasons={MATCH_ALREADY_STARTED:'比賽已開始',HALF_TIME_MODEL_UNVERIFIED:'上半場模型未驗證',SCORE_MODEL_UNAVAILABLE:'比分模型不適用',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'期間、結算及退水待核對',SOCCER_MODEL_NOT_PROMOTED:'研究模型尚未正式驗收'};
+const names={HANDICAP_HOME:'主隊讓球',HANDICAP_AWAY:'客隊讓球',TOTAL_OVER:'大球',TOTAL_UNDER:'小球'};
+export function SoccerAnalysisProvider({games,children}){
+  const [states,setStates]=useState({}),[batch,setBatch]=useState(false);
+  const queue=useRef([]),active=useRef(0),pending=useRef(new Map()),controllers=useRef(new Set()),alive=useRef(true);
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;for(const c of controllers.current)c.abort();for(const q of queue.current.splice(0))q.resolve(null);};},[]);
+  const patch=(id,value)=>{if(alive.current)setStates(old=>({...old,[id]:{...old[id],...value}}));};
+  function pump(){
+    while(alive.current&&active.current<2&&queue.current.length){const task=queue.current.shift(),game=task.game;active.current++;const controller=new AbortController();controllers.current.add(controller);let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},50000);patch(game.id,{status:'loading',error:''});
+      fetch('/api/soccer/analysis',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',signal:controller.signal,body:JSON.stringify({league:game.league,date:game.date,eventId:game.sourceId})}).then(async r=>{
+        const d=await r.json();if(!r.ok||!d.ok)throw Error(r.status===401?'登入已過期':d.error||'核對失敗');
+        if(d.gameId!==game.id||d.league!==game.league||d.date!==game.date||d.executable!==false||d.formalScoringEnabled!==false||!Array.isArray(d.directions)||d.directions.length!==8||d.directions.some(x=>x.executable!==false||x.eligible!==false))throw Error('分析身分核對未通過');
+        patch(game.id,{status:'done',data:d,error:''});task.resolve(d);
+      }).catch(e=>{patch(game.id,{status:'error',error:timedOut?'核對逾時，請重試':e.name==='AbortError'?'核對已停止':e.message});task.resolve(null);}).finally(()=>{clearTimeout(timer);controllers.current.delete(controller);pending.current.delete(game.id);active.current--;pump();});
+    }
+  }
+  function run(game){if(pending.current.has(game.id))return pending.current.get(game.id);patch(game.id,{status:'queued',error:''});const promise=new Promise(resolve=>queue.current.push({game,resolve}));pending.current.set(game.id,promise);pump();return promise;}
+  async function runAll(){if(batch)return;setBatch(true);try{await Promise.all(games.filter(g=>g.status==='scheduled'&&Date.parse(g.startTime)>Date.now()).map(run));}finally{if(alive.current)setBatch(false);}}
+  const available=games.some(g=>g.status==='scheduled'&&Date.parse(g.startTime)>Date.now()),done=Object.values(states).filter(s=>s.status==='done').length;
+  return <Context.Provider value={{states,run}}><div className="soccerAnalysisToolbar"><button type="button" className="secondary" disabled={batch||!available} onClick={runAll}>{batch?'正在核對賽前資料…':'一鍵核對賽前資料'}</button>{done>0&&<span role="status">已核對 {done} 場</span>}<span>研究模式・正式評分尚未啟用</span></div>{children}</Context.Provider>;
+}
+export default function SoccerAnalysisPanel({game}){
+  const [history,setHistory]=useState({versions:[],loading:false,error:'',loaded:false});
+  const context=useContext(Context);if(!context)return null;
+  const state=context.states[game.id],data=state?.data,e=data?.evidence,prediction=data?.prediction,busy=['queued','loading'].includes(state?.status);
+  const prestart=game.status==='scheduled'&&Date.parse(game.startTime)>Date.now(),stale=data&&Date.now()-Date.parse(data.observedAt)>180000;
+  async function loadHistory(){setHistory(old=>({...old,loading:true,error:''}));try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId})}`,{cache:'no-store',signal:AbortSignal.timeout(15000)}),d=await r.json();if(!r.ok||!d.ok||d.gameId!==game.id||d.date!==game.date||d.league!==game.league||!Array.isArray(d.versions)||d.versions.some(v=>v.gameId!==game.id||v.date!==game.date||v.league!==game.league||v.executable!==false))throw Error('版本讀取未通過核對');setHistory({versions:d.versions,loading:false,error:'',loaded:true});}catch{setHistory(old=>({...old,loading:false,error:'已保存版本暫時無法讀取。'}));}}
+  return <section className="soccerAnalysis" aria-label={`${game.home.name}對${game.away.name}資料核對`}><button type="button" className="secondary" disabled={busy} onClick={()=>context.run(game)}>{state?.status==='queued'?'等待核對…':busy?'核對中…':prestart?data?'重新核對賽前資料':'核對賽前資料':'檢視賽後資料'}</button>
+    {state?.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}{data?'，保留上次資料。':''}</p>}
+    {data&&<div className="soccerAnalysisResult"><p className="soccerAvailability">{data.status==='POSTSTART_AUDIT'?'賽後資料核對':'比分研究・不列入正式排名'}｜{clock(data.observedAt)}{stale?'｜資料待更新':''}{data.persisted?'｜版本已保存':'｜本次未保存'}</p>
+      {!data.persisted&&<p className="soccerAnalysisWarning">{data.persistenceError}</p>}
+      {prediction?<><h3>研究比分分布</h3><div className="soccerResearchOutcomes"><span>主勝 <strong>{pct(prediction.outcomes.home)}</strong></span><span>和局 <strong>{pct(prediction.outcomes.draw)}</strong></span><span>客勝 <strong>{pct(prediction.outcomes.away)}</strong></span></div><p className="soccerAvailability">模型平均進球：主 {prediction.homeRate.toFixed(2)}／客 {prediction.awayRate.toFixed(2)}。僅依歷史賽果，尚未加入陣容與 xG。</p></>:<p className="soccerAvailability">{prestart?'此場無適用的已訓練球隊資料。':'比賽開始後不補算賽前機率。'}</p>}
+      <details className="soccerDetails"><summary>先發、裁判與待核對資料</summary><div className="soccerLineupGrid">{['home','away'].map(side=>{const t=e.teams[side],l=t.lineup;return <div key={side}><h4>{side==='home'?'主隊':'客隊'}先發</h4><p>{l.starters.length===11?(data.status==='POSTSTART_AUDIT'?'賽後名單':'資料源列出先發 11 人'):'先發尚未完整提供'}{l.formation?`｜${l.formation}`:''}</p>{l.starters.length>0&&<p>{l.starters.map(p=>p.name).join('、')}</p>}<p>替補名單 {l.bench.length} 人；預計分鐘尚未驗證。</p></div>;})}</div><p>裁判：{e.referee.officials?.map(o=>o.name).join('、')||'資料源尚未提供'}。名單公布時間尚無可核對資料。</p><ul>{data.missing.map(x=><li key={x.label}>{x.label}：尚未具備可驗證資料</li>)}</ul><p className="soccerAvailability">{e.source.provider} 取得時間：{clock(e.source.fetchedAt)}。已列出的先發仍需確認公布時點。</p></details>
+      <details className="soccerDetails"><summary>八方向核對狀態</summary><div className="soccerDirectionGrid">{data.directions.map(d=><div key={`${d.period}:${d.direction}`}><strong>{d.period==='FT'?'全場':'上半場'} {names[d.direction]}</strong><span>{d.reasons.map(r=>reasons[r]||'待核對').join('・')}</span></div>)}</div></details>
+      <details className="soccerDetails"><summary>歷史研究與限制</summary><p>保留測試期：2025 年。可評估 {data.researchValidation.test.metrics.count}／{data.researchValidation.test.metrics.total} 場，覆蓋 {pct(data.researchValidation.test.metrics.coverage)}。</p><p>1X2 Log Loss {data.researchValidation.test.metrics.logLoss?.toFixed(3)??'—'}；Brier {data.researchValidation.test.metrics.brier?.toFixed(3)??'—'}（越低越好）。不代表投注勝率或獲利。</p><p>資料為事後補抓，未證明歷史賽前可取得性。歐冠尚未加入國內聯賽強度映射；上半場、人員影響與足球信用盤結算仍待驗證。</p></details>
+    </div>}
+    <details className="soccerDetails"><summary>已保存版本</summary><button type="button" className="secondary" disabled={history.loading} onClick={loadHistory}>{history.loading?'讀取中…':'讀取最近版本'}</button>{history.error&&<p role="alert">{history.error}</p>}{history.loaded&&!history.versions.length&&<p>此場尚無已保存版本。</p>}{history.versions.map(v=><div className="soccerSavedVersion" key={v.revision}><p>{clock(v.observedAt)}｜{v.status==='POSTSTART_AUDIT'?'賽後核對':'賽前研究'}</p>{v.prediction&&<p>主 {pct(v.prediction.outcomes.home)}／和 {pct(v.prediction.outcomes.draw)}／客 {pct(v.prediction.outcomes.away)}</p>}<p className="soccerAvailability">當時原盤：{v.readerEvidence.observedAt?clock(v.readerEvidence.observedAt):'無已配對原盤'}；資料與盤口保留原版本。</p></div>)}</details>
+  </section>;
+}
