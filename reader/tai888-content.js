@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
   const clean = policy.clean;
-  const READER_VERSION = '2.1.31';
+  const READER_VERSION = '2.1.32';
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -18,6 +18,7 @@
   // A capture request must not make a frozen page look newly active.
   const activityByLeague = Object.fromEntries((globalThis.Tai888LeagueRegistry?.ids || []).map(league => [league, 0]));
   const fingerprintByLeague = {};
+  let sectionDiagnostics = [];
 
   // Never read or forward the full document URL.  The Reader only needs a
   // route hint, so retain the Tai888 origin/pathname and one fixed board marker.
@@ -303,6 +304,13 @@
 
   function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
     const { elements, records } = collectRecords();
+    // Only bounded league-heading evidence, never document/body/account text.
+    sectionDiagnostics = records.filter(record => /^(?:聯盟|联盟)\s*[:：]?/.test(clean(record.text)))
+      .map(record => {
+        const label = clean(record.text).slice(0, 100);
+        const league = globalThis.Tai888LeagueRegistry.identify(label);
+        return { league, label, accepted: Boolean(league && globalThis.Tai888LeagueRegistry.standardMarker(label, league)) };
+      }).filter(item => item.league).slice(0, 24);
     const verifiedNetworkRefreshAt = latestTai888NetworkRefreshAt();
     const verifiedRefreshAt = Math.max(Number(verifiedBoardRefreshAt) || 0, verifiedNetworkRefreshAt);
     const captures = [];
@@ -353,6 +361,7 @@
       version: 'TAI888-MULTI-LEAGUE-CAPTURE-v2.2.0',
       readerVersion: READER_VERSION,
       captures,
+      sectionDiagnostics,
     };
   }
 
