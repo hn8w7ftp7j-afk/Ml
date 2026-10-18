@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from './parser.js';
 import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
 
-const VERSION = '2.1.36';
+const VERSION = '2.1.37';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -87,6 +87,89 @@ function sanitizeCapture(raw) {
     diagnostics: { recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, wrongPeriodHeader: input.diagnostics?.wrongPeriodHeader === true, conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
   };
 }
+
+// Layout diagnostics are kept in the downloaded report only. Never copy a
+// content-script object wholesale: a malformed page must not turn this into a
+// DOM/account-text export or add arbitrary keys to a saved report.
+const SOCCER_LAYOUT_ISSUES = new Set([
+  'SOCCER_MIXED_LEAGUE_SECTION', 'SOCCER_CARD_HEADERS_MISSING', 'SOCCER_CARD_HEADERS_AMBIGUOUS',
+  'SOCCER_CARD_TEAM_IDENTITY_INVALID', 'SOCCER_CARD_QUOTES_AMBIGUOUS', 'SOCCER_TABLE_IDENTITY_INVALID',
+  'SOCCER_TABLE_QUOTES_AMBIGUOUS', 'SOCCER_TABLE_HEADERS_AMBIGUOUS', 'SOCCER_HEADING_FOUND_NO_LAYOUT',
+  'SOCCER_LAYOUT_UNRECOGNIZED', 'SOCCER_MODULE_MISSING', 'SOCCER_LAYOUT_RECORDS_TRUNCATED',
+]);
+const SOCCER_DIAGNOSTIC_TEAM_KEYS = new Set([
+  '兵工廠', '曼城', '曼聯', '熱刺', '利物浦', '切爾西', '阿斯頓維拉', '伯恩茅斯', '布倫特福德', '布萊頓',
+  '伯恩利', '水晶宮', '艾佛頓', '富勒姆', '里茲聯', '萊斯特城', '紐卡索聯', '諾丁漢森林', '桑德蘭',
+  '西漢姆聯', '狼隊', '南安普敦', '伊普斯維奇', '謝菲爾德聯', '盧頓', '皇家馬德里', '巴塞隆納',
+  '馬德里競技', '畢爾包競技', '比利亞雷亞爾', '皇家社會', '巴黎聖日耳曼', '馬賽', '摩納哥', '里爾',
+  '里昂', '拜仁慕尼黑', '多特蒙德', '勒沃庫森', '法蘭克福', 'RB萊比錫', '斯圖加特', '國際米蘭',
+  '尤文圖斯', 'AC米蘭', '拿坡里', '亞特蘭大', '羅馬', '拉齊奧', '本菲卡', '波爾圖', '里斯本競技',
+  '阿賈克斯', 'PSV恩荷芬', '飛燕諾', '塞爾提克', '格拉斯哥流浪者', '加拉塔薩雷', '費內巴切',
+  '布魯日', '哥本哈根', '薩爾斯堡紅牛', '頓內茨克礦工', '奧林匹亞科斯', '布拉格斯拉維亞',
+  '布拉格斯巴達', '聖吉羅斯聯', 'Coventry City', 'Hull City', 'Portsmouth',
+]);
+const SOCCER_DIAGNOSTIC_PRIVATE = /(?:password|passwd|token|cookie|session|secret|authorization|bearer|account|balance|credit|帳號|账号|帳戶|账户|餘額|余额|額度|额度|登入|登录|密碼|密码|[<>=@\\]|https?:|[A-Za-z0-9_-]{24,})/i;
+function soccerDiagnosticText(value) {
+  if (typeof value !== 'string' || !value || value.length > 100 || /[\u0000-\u001f\u007f]/.test(value) || SOCCER_DIAGNOSTIC_PRIVATE.test(value)) return '';
+  return value.replace(/\s+/g, ' ').trim();
+}
+function soccerDiagnosticHeading(value, league) {
+  const text = soccerDiagnosticText(value), registry = globalThis.Tai888LeagueRegistry;
+  if (!text || registry?.identify(text) !== league || !registry.standardMarker(text, league)) return '';
+  const marker = text.match(registry.leagues?.[league]?.marker);
+  if (!marker || marker.index !== 0) return '';
+  const suffix = text.slice(marker[0].length).replace(/(?:全場|全场|上半場|上半场|上半|第[一1]半場|第[一1]半场|FULL[ -]?TIME|FIRST\s+HALF|1ST\s+HALF|\bFT\b|\bHT\b|\b1H\b)/gi, '').replace(/[\d\s()（）:：—–-]/g, '');
+  return suffix ? '' : text;
+}
+function soccerDiagnosticLine(value, league) {
+  const text = soccerDiagnosticText(value);
+  if (!text) return '';
+  if (soccerDiagnosticHeading(text, league)) return text;
+  const header = text.replace(/(?:全場|全场|上半場|上半场|上半|第[一1]半場|第[一1]半场|FULL[ -]?TIME|FIRST\s+HALF|1ST\s+HALF|\bFT\b|\bHT\b|\b1H\b)/gi, '').replace(/[\s:：()（）-]/g, '');
+  if (['時間', '时间', '主客隊伍', '主客队伍', '隊伍', '队伍', '獨贏', '独赢', '讓球', '让球', '讓分', '让分', '大小', '大小盤', '大小盘', '單雙', '单双'].includes(header)) return text;
+  if (/^\d{1,2}[/-]\d{1,2}(?:\s+(?:[01]?\d|2[0-3]):[0-5]\d)?$/.test(text) || /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(text)) return text;
+  if (/^[-－—]$/.test(text) || /^[\d.＋+\/－–—−\-\s平大小單单双主客勝胜和]+$/u.test(text) && /\d/.test(text)) return text;
+  const team = globalThis.Tai888SoccerTeams?.resolve(text);
+  // Unknown unmarked text is never accepted merely because resolve() can
+  // create a fallback identity for any name. A home label is explicit sport
+  // evidence only when it still has a short human-readable team-name shape.
+  if (team && (SOCCER_DIAGNOSTIC_TEAM_KEYS.has(team.key)
+    || /[\[［【(（]\s*主\s*[\]］】)）]/u.test(text) && text.length <= 64 && /^[\p{L}\p{M}\s.'’&\-\[\]［］【】()（）]+$/u.test(text))) return text;
+  return '';
+}
+function soccerDiagnosticCoordinate(value) { return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1_000_000 ? Math.round(value * 100) / 100 : null; }
+function sanitizeSoccerLayout(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || !['EPL', 'UCL'].includes(input.league)) return null;
+  const league = input.league, label = soccerDiagnosticHeading(input.label, league);
+  if (!label) return null;
+  const modules = {}, counts = {}, paths = {}, samples = [];
+  for (const name of ['registry', 'table', 'card']) modules[name] = input.modules?.[name] === true;
+  for (const name of ['records', 'headers', 'markers', 'physicalGroups', 'geometryGroups']) counts[name] = typeof input.counts?.[name] === 'number' ? integer(input.counts[name], 10000) : 0;
+  for (const name of ['physical', 'geometry', 'cards']) {
+    const path = input.paths?.[name];
+    paths[name] = { tableCount: typeof path?.tableCount === 'number' ? integer(path.tableCount, 1000) : 0,
+      sawLeagueMarker: path?.sawLeagueMarker === true,
+      issues: [...new Set((Array.isArray(path?.issues) ? path.issues : []).filter(issue => SOCCER_LAYOUT_ISSUES.has(issue)))].slice(0, 8) };
+  }
+  for (const sample of (Array.isArray(input.samples) ? input.samples : []).slice(0, 8)) {
+    if (!['TR', 'DIV', 'LI', 'SPAN', 'TABLE', 'TD', 'TH', 'SECTION'].includes(sample?.tag)) continue;
+    const top = soccerDiagnosticCoordinate(sample.top), left = soccerDiagnosticCoordinate(sample.left), right = soccerDiagnosticCoordinate(sample.right);
+    if (top === null || left === null || right === null || right <= left) continue;
+    const cells = [];
+    for (const cell of (Array.isArray(sample.cells) ? sample.cells : []).slice(0, 12)) {
+      const cellLeft = soccerDiagnosticCoordinate(cell?.left), cellRight = soccerDiagnosticCoordinate(cell?.right);
+      if (cellLeft === null || cellRight === null || cellRight <= cellLeft) continue;
+      const lines = (Array.isArray(cell?.lines) ? cell.lines : []).slice(0, 4).map(value => soccerDiagnosticLine(value, league)).filter(Boolean);
+      if (lines.length) cells.push({ left: cellLeft, right: cellRight, lines });
+    }
+    if (cells.length) samples.push({ tag: sample.tag, top, left, right, cells });
+  }
+  return { league, label, modules, counts, paths, samples };
+}
+function extensionManifestVersion() {
+  try { const version = chrome.runtime.getManifest?.()?.version; return typeof version === 'string' && /^\d+(?:\.\d+){1,3}$/.test(version) ? version : null; }
+  catch { return null; }
+}
 async function request(url, options, timeout = 45000) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeout); try { return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' }); } finally { clearTimeout(timer); } }
 async function json(response) { const text = await response.text(); try { return JSON.parse(text); } catch { throw new Error(`主系統回傳格式錯誤（${response.status}）`); } }
 async function sha(value) { const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value))); return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join(''); }
@@ -95,7 +178,7 @@ function wait(milliseconds) { return new Promise(resolve => setTimeout(resolve, 
 async function collectCandidates(tabs) {
   const candidates = [];
   const silentTabIds = [];
-  const sections = [], emptyCaptures = [];
+  const sections = [], emptyCaptures = [], soccerLayouts = [];
   for (const tab of tabs) {
     let responded = false;
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0, url: tab.url }]);
@@ -103,6 +186,10 @@ async function collectCandidates(tabs) {
       const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, { frameId: frame.frameId });
       if (answer?.capture?.readerVersion !== VERSION) continue;
       responded = responded || answer?.ok === true;
+      if (answer?.ok === true) for (const input of (Array.isArray(answer.capture.soccerLayouts) ? answer.capture.soccerLayouts : []).slice(0, 2)) {
+        const layout = sanitizeSoccerLayout(input);
+        if (layout) soccerLayouts.push({ tabId: tab.id, frameId: frame.frameId, ...layout });
+      }
       for (const item of (Array.isArray(answer?.capture?.sectionDiagnostics) ? answer.capture.sectionDiagnostics : []).slice(0, 24)) {
         if (!LEAGUES.includes(item?.league) || typeof item.label !== 'string' || !/^(?:聯盟|联盟)\s*[:：]?/.test(item.label)
           || item.label.length > 100 || /[<>\u0000-\u001f]/.test(item.label)) continue;
@@ -117,7 +204,7 @@ async function collectCandidates(tabs) {
     } catch {}
     if (!responded) silentTabIds.push(tab.id);
   }
-  return { candidates, silentTabIds, sections, emptyCaptures };
+  return { candidates, silentTabIds, sections, emptyCaptures, soccerLayouts };
 }
 
 async function readerDiagnostics() {
@@ -137,7 +224,7 @@ async function readerDiagnostics() {
       })),
     };
   });
-  return { ok: true, report: { readerVersion: VERSION, createdAt: new Date().toISOString(), silentTabIds: scan.silentTabIds, sections: scan.sections, emptyCaptures: scan.emptyCaptures, boards } };
+  return { ok: true, report: { readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(), createdAt: new Date().toISOString(), silentTabIds: scan.silentTabIds, sections: scan.sections, emptyCaptures: scan.emptyCaptures, soccerLayouts: scan.soccerLayouts, boards } };
 }
 
 async function recoverTabs(tabs, tabIds, { force = false } = {}) {

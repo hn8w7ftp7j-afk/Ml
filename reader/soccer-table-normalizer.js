@@ -23,6 +23,29 @@
     return values.sort((a, b) => a.left - b.left);
   }
 
+  // A desktop board can use DIV rows or independent nested TABLEs for its
+  // header, league title and games. Share only explicitly observed horizontal
+  // column boundaries, never a tag name, URL or a neighbouring board's cells.
+  function geometryGroups(records) {
+    const ranges = new Map();
+    for (const record of records) {
+      const header = columns(record);
+      if (!header) continue;
+      const left = header[0].left, right = header.at(-1).right;
+      const key = `${Math.round(left)}:${Math.round(right)}`;
+      if (!ranges.has(key)) ranges.set(key, { left, right });
+    }
+    return [...ranges.values()].slice(0, 32).map(({ left, right }) => records.filter(record => {
+      const cells = record.cells || [];
+      const start = cells.length ? Math.min(...cells.map(cell => cell.left)) : record.left;
+      const end = cells.length ? Math.max(...cells.map(cell => cell.right)) : record.right;
+      const text = clean(record.text);
+      const boundary = cells.length === 1 && Math.abs(start - left) <= 8 && end - start >= (right - left) * 0.7
+        && text.length <= 240 && !homeMarker.test(text) && !/\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d/.test(text);
+      return start >= left - 2 && end <= right + 2 || boundary;
+    }));
+  }
+
   // Use the complete header cell boundaries. A neighbouring odd/even or half
   // market never contributes text to a goal quote, including the final column.
   function bands(records, column) {
@@ -88,16 +111,28 @@
 
   function normalize(groups, league) {
     const registry = globalThis.Tai888LeagueRegistry, tables = new Map(), identities = new Set(), issues = new Set();
-    let label = '', excludedProps = 0, rawTableRowCount = 0;
+    let label = '', excludedProps = 0, rawTableRowCount = 0, headerCount = 0, markerCount = 0;
+    const samples = [];
     for (const records of (Array.isArray(groups) ? groups : []).slice(0, 32)) {
       let header = null, sectionTitle = '', accepted = false, pending = [];
       function flush() {
         if (!pending.length || !accepted || !header) { pending = []; return; }
         const records = pending; pending = []; rawTableRowCount++;
+        for (const record of records) {
+          if (samples.length >= 8) break;
+          const cells = (record.cells || []).filter(cell => header.some(column => cell.left >= column.left - 2 && cell.right <= column.right + 2))
+            .slice(0, 12).map(cell => ({ left: Math.round(cell.left), right: Math.round(cell.right),
+              lines: (cell.rows?.length ? cell.rows.map(row => row.text) : cell.lines || [cell.text]).slice(0, 4).map(value => clean(value).slice(0, 100)) }));
+          if (cells.length) samples.push({ tag: record.tag, top: Math.round(record.top), left: Math.round(record.left), right: Math.round(record.right), cells });
+        }
         const timeColumn = header.find(cell => cell.key === 'time'), teamColumn = header.find(cell => cell.key === 'teams');
         const times = bands(records, timeColumn).map(row => row.text).filter(value => date.test(value) || time.test(value));
         const day = times.filter(value => date.test(value)), clock = times.filter(value => time.test(value));
-        const names = bands(records, teamColumn).filter(row => !/^[★☆*\s]+$/.test(row.text));
+        // The public desktop template renders Material Icons in the third
+        // team row. Their DOM text is literally "grade" / "lock", even when
+        // the screen shows only a star or padlock. Exclude only those exact
+        // icon labels; an arbitrary third team/text still rejects the match.
+        const names = bands(records, teamColumn).filter(row => !/^(?:[★☆*\s]+|grade(?:\s+lock)?|lock(?:\s+grade)?)$/i.test(row.text));
         if (names.some(row => props.test(row.text))) { excludedProps++; return; }
         const teams = names.map(row => ({ ...row, team: globalThis.Tai888SoccerTeams?.resolve(row.text) }));
         if (day.length !== 1 || clock.length !== 1 || teams.length !== 2 || teams.some(row => !row.team)
@@ -132,14 +167,15 @@
       }
       for (const record of records.slice(0, 1200)) {
         const nextHeader = columns(record), text = clean(record.text);
-        if (nextHeader) { flush(); header = nextHeader; continue; }
-        const identified = text.length <= 240 ? registry.identify(text) : null;
+        if (nextHeader) { flush(); header = nextHeader; headerCount++; continue; }
+        const pureHeading = text.length <= 240 && !/\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d/.test(text);
+        const identified = pureHeading ? registry.identify(text) : null;
         const headingRow = header && record.cells?.length === 1 && text.length <= 240
           && record.cells[0].right - record.cells[0].left >= (header.at(-1).right - header[0].left) * 0.7
           && !homeMarker.test(text) && !/\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d/.test(text);
-        if (identified || headingRow || /^(?:聯盟|联盟)\s*[:：]?/.test(text)) {
+        if (identified || headingRow || pureHeading && /^(?:聯盟|联盟)\s*[:：]?/.test(text)) {
           flush(); sectionTitle = text.slice(0, 240); accepted = identified === league && registry.standardMarker(text, league);
-          if (accepted) label ||= sectionTitle;
+          if (accepted) { label ||= sectionTitle; markerCount++; }
           continue;
         }
         if (!accepted || !header) continue;
@@ -151,7 +187,8 @@
     }
     return { tables: [...tables.values()], diagnostics: { league, pageLeagueLabel: label, sawLeagueMarker: Boolean(label),
       gameCount: identities.size, expectedGameCount: issues.size ? null : identities.size || null,
-      gameCountBasis: 'UNIQUE_DATE_TIME_TEAMS', rawTableRowCount, excludedProps, tableIssues: [...issues], conflictingGameKeys: [] } };
+      gameCountBasis: 'UNIQUE_DATE_TIME_TEAMS', rawTableRowCount, headerCount, markerCount, samples,
+      excludedProps, tableIssues: [...issues], conflictingGameKeys: [] } };
   }
-  globalThis.Tai888SoccerTableNormalizer = Object.freeze({ normalize });
+  globalThis.Tai888SoccerTableNormalizer = Object.freeze({ normalize, columns, geometryGroups, version: 'SOCCER-DESKTOP-v2' });
 })();
