@@ -64,7 +64,31 @@ const captures = ['EPL', 'UCL'].map(league => {
 });
 assertFootball(captureDesktop('EPL', { homeFirst: false }));
 assertFootball(captureDesktop('EPL', { separatedRows: true }));
+for (const layout of ['table', 'split-tables', 'nested-tables', 'div-grid']) for (const malformed of [false, true]) {
+  const capture = captureDesktop('UCL', { layout, malformed, malformedAlternative: !malformed, headingCount: 36 });
+  const parsed = parseTai888Capture(capture, new Date(now));
+  assert.deepEqual(capture.diagnostics.tableIssues, []);
+  assert.equal(capture.diagnostics.skippedAlternativeCount, 1);
+  assert.equal(capture.diagnostics.expectedGameCount, 1, 'an excluded alternative cannot remove the already validated match');
+  assert.equal(parsed.games.length, 1);
+  assert.equal(parsed.games[0].markets.length, malformed ? 6 : 7);
+  assert.ok(parsed.games[0].markets.every(market => !market.rawRows.some(value => value.includes('UNKNOWN'))));
+  assert.ok(Object.values(parsed.games[0].periodStates).every(value => value === 'open'), 'unreadable odds never become lock outcomes');
+  const healthy = parseTai888Capture(captureDesktop('UCL', { layout, headingCount: 36 }), new Date(now));
+  for (const market of parsed.games[0].markets) assert.ok(healthy.games[0].markets.some(value => JSON.stringify(value) === JSON.stringify(market)), 'all retained contracts and prices remain exact');
+  assert.equal(selectAuthoritativeSoccerBoards([{ capture, parsed, tabId: 1, frameId: 0 }], { now, league: 'UCL' }).ok, true);
+  assert.equal(validateSoccerCapture({ ...parsed, readerVersion: manifest.version, pageActivityAt: new Date(now).toISOString() }, { now, headerVersion: manifest.version }).ok, true);
+  assert.ok(JSON.stringify(capture.diagnostics.samples[0]).includes('UNKNOWN'), 'diagnostics prioritise the actual rejected alternative rather than the first healthy rows');
+}
 // IMG_3535: the (36) heading counts displayed rows, including card props.
+{
+  const capture = captureDesktop('UCL', { malformed: true, singleRow: true });
+  const parsed = parseTai888Capture(capture, new Date(now));
+  assert.equal(capture.diagnostics.skippedAlternativeCount, 0);
+  assert.ok(capture.diagnostics.tableIssues.includes('SOCCER_TABLE_QUOTES_AMBIGUOUS'));
+  assert.equal(selectAuthoritativeSoccerBoards([{ capture, parsed, tabId: 1, frameId: 0 }], { now, league: 'UCL' }).ok, false,
+    'a sole unreadable match cannot disappear to make a board look complete');
+}
 for (const cardProp of ['副牌數', '副牌数']) {
   const capture = captureDesktop('UCL', { headingCount: 36, cardProp, malformedCard: true });
   assert.equal(capture.diagnostics.expectedGameCount, 1);
@@ -177,9 +201,10 @@ try {
       assert.equal((await verifyReaderToken(options.headers.Authorization.replace(/^Bearer /, '')))?.deviceId, deviceId);
       const body = JSON.parse(options.body), checked = validateSoccerCapture(body, { now, headerVersion: manifest.version });
       assert.equal(checked.ok, true, JSON.stringify(checked));
-      assert.equal(checked.payload.games[0].markets.length, 10);
+      const marketCount = body.games[0].markets.length;
+      assert.equal(checked.payload.games[0].markets.length, marketCount);
       uploaded.push(body.league);
-      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, rawGameCount: 1, marketCount: 10, executable: false }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, rawGameCount: 1, marketCount, executable: false }) };
     },
   });
   vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), worker);
@@ -190,6 +215,13 @@ try {
   uploaded.length = 0;
   await vm.runInContext("performSync('alarm')", worker);
   assert.deepEqual(uploaded, [], 'unchanged desktop football quotes retain existing heartbeat throttling');
+  workerCaptures = [captureDesktop('UCL', { malformedAlternative: true, headingCount: 36 })];
+  assert.equal((await vm.runInContext("performSync('manual')", worker)).ok, true);
+  assert.deepEqual(uploaded, ['UCL']);
+  assert.equal(state.readerStatuses.UCL.marketCount, 7);
+  assert.equal(state.readerStatuses.UCL.skippedAlternativeCount, 1);
+  assert.match(state.readerStatuses.UCL.message, /略過 1 組/);
+  uploaded.length = 0;
   workerCaptures = [captureDesktop('EPL', { omitColumnHeader: true })];
   assert.equal((await vm.runInContext("performSync('manual')", worker)).ok, false);
   assert.equal(state.readerStatuses.EPL.state, 'error');

@@ -111,20 +111,21 @@
 
   function normalize(groups, league) {
     const registry = globalThis.Tai888LeagueRegistry, tables = new Map(), identities = new Set(), issues = new Set();
-    let label = '', excludedProps = 0, rawTableRowCount = 0, headerCount = 0, markerCount = 0;
-    const samples = [];
+    let label = '', excludedProps = 0, rawTableRowCount = 0, headerCount = 0, markerCount = 0, skippedAlternativeCount = 0;
+    const samples = [], rejectedSamples = [], quoteFailures = [];
     for (const records of (Array.isArray(groups) ? groups : []).slice(0, 32)) {
       let header = null, sectionTitle = '', accepted = false, pending = [];
       function flush() {
         if (!pending.length || !accepted || !header) { pending = []; return; }
         const records = pending; pending = []; rawTableRowCount++;
-        for (const record of records) {
-          if (samples.length >= 8) break;
+        const rowSamples = [];
+        for (const record of records.slice(0, 8)) {
           const cells = (record.cells || []).filter(cell => header.some(column => cell.left >= column.left - 2 && cell.right <= column.right + 2))
             .slice(0, 12).map(cell => ({ left: Math.round(cell.left), right: Math.round(cell.right),
               lines: (cell.rows?.length ? cell.rows.map(row => row.text) : cell.lines || [cell.text]).slice(0, 4).map(value => clean(value).slice(0, 100)) }));
-          if (cells.length) samples.push({ tag: record.tag, top: Math.round(record.top), left: Math.round(record.left), right: Math.round(record.right), cells });
+          if (cells.length) rowSamples.push({ tag: record.tag, top: Math.round(record.top), left: Math.round(record.left), right: Math.round(record.right), cells });
         }
+        samples.push(...rowSamples.slice(0, Math.max(0, 8 - samples.length)));
         const timeColumn = header.find(cell => cell.key === 'time'), teamColumn = header.find(cell => cell.key === 'teams');
         const times = bands(records, timeColumn).map(row => row.text).filter(value => date.test(value) || time.test(value));
         const day = times.filter(value => date.test(value)), clock = times.filter(value => time.test(value));
@@ -140,17 +141,28 @@
           issues.add('SOCCER_TABLE_IDENTITY_INVALID'); return;
         }
         const home = homeMarker.test(teams[0].text) ? 0 : 1, evidence = [];
-        for (const column of header.filter(cell => ['runline', 'total', 'moneyline'].includes(cell.key))) {
+        const boardTime = clock[0].padStart(5, '0');
+        const identity = [day[0], boardTime, teams[1 - home].team.key, teams[home].team.key].join('|');
+        const quoteColumns = header.filter(cell => ['runline', 'total', 'moneyline'].includes(cell.key));
+        const quoteBands = quoteColumns.map(column => ({ column, rows: bands(records, column) }));
+        // Resolve unreadable quote rows after scanning every alternative, so
+        // a healthy row may appear before or after the failed row. Never fill
+        // its missing outcomes from another row or mark it locked.
+        const hasLock = quoteBands.some(({ rows }) => rows.some(row => /(?:^|\s)[-－—](?:\s|$)/.test(row.text)));
+        for (const { column, rows } of quoteBands) {
           const period = registry.soccerPeriodEvidence({ sectionTitle, headers: header.map(cell => cell.text), marketHeader: column.text });
           if (period.status === 'EXCLUDED') continue;
-          const raw = quote(column.key, bands(records, column), teams, home);
-          if (!raw) { issues.add('SOCCER_TABLE_QUOTES_AMBIGUOUS'); return; }
+          const raw = quote(column.key, rows, teams, home);
+          if (!raw) {
+            rejectedSamples.push(...rowSamples.slice(0, Math.max(0, 8 - rejectedSamples.length)));
+            quoteFailures.push({ identity, hasLock });
+            return;
+          }
           evidence.push({ key: column.key, header: column.text, period: period.period, ...raw });
         }
         if (!evidence.some(item => item.pair.some(Boolean))) return;
         if (new Set(evidence.map(item => `${item.key}:${item.period}`)).size !== evidence.length) { issues.add('SOCCER_TABLE_HEADERS_AMBIGUOUS'); return; }
-        const boardTime = clock[0].padStart(5, '0');
-        identities.add([day[0], boardTime, teams[1 - home].team.key, teams[home].team.key].join('|'));
+        identities.add(identity);
         for (const period of new Set(evidence.map(item => item.period))) {
           const selected = evidence.filter(item => item.period === period);
           const rawHeaders = [timeColumn.text, teamColumn.text, ...['runline', 'total', 'moneyline'].map(key => selected.find(item => item.key === key)?.header || ''),
@@ -185,9 +197,17 @@
       }
       flush();
     }
+    for (const failure of quoteFailures) {
+      // A complete validated identity elsewhere is required. A sole unreadable
+      // event or incomplete lock still blocks; price conflicts remain parser
+      // errors. Rejected rows never enter the uploaded source evidence.
+      if (!failure.hasLock && identities.has(failure.identity)) skippedAlternativeCount++;
+      else issues.add('SOCCER_TABLE_QUOTES_AMBIGUOUS');
+    }
     return { tables: [...tables.values()], diagnostics: { league, pageLeagueLabel: label, sawLeagueMarker: Boolean(label),
       gameCount: identities.size, expectedGameCount: issues.size ? null : identities.size || null,
-      gameCountBasis: 'UNIQUE_DATE_TIME_TEAMS', rawTableRowCount, headerCount, markerCount, samples,
+      gameCountBasis: 'UNIQUE_DATE_TIME_TEAMS', rawTableRowCount, headerCount, markerCount,
+      samples: [...rejectedSamples, ...samples].slice(0, 8), skippedAlternativeCount,
       excludedProps, tableIssues: [...issues], conflictingGameKeys: [] } };
   }
   globalThis.Tai888SoccerTableNormalizer = Object.freeze({ normalize, columns, geometryGroups, version: 'SOCCER-DESKTOP-v2' });

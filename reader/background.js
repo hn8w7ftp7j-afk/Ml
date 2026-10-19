@@ -1,7 +1,7 @@
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from './parser.js';
 import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
 
-const VERSION = '2.1.38';
+const VERSION = '2.1.39';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -84,7 +84,7 @@ function sanitizeCapture(raw) {
     ...(['NHL','EPL','UCL'].includes(league) ? { pageLeagueLabel: String(input.pageLeagueLabel || '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 100) } : {}),
     sourceHost: safeHost(`https://${input.sourceHost || ''}`) || safeHost(input.pageUrl), pageUrl: safeUrl(input.pageUrl), frameUrl: safeUrl(input.frameUrl), observedAt: iso(input.observedAt),
     tables: Array.isArray(input.tables) ? input.tables.slice(0, 12) : [],
-    diagnostics: { recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, wrongPeriodHeader: input.diagnostics?.wrongPeriodHeader === true, tableIssues: ['EPL', 'UCL'].includes(league) && Array.isArray(input.diagnostics?.tableIssues) ? [...new Set(input.diagnostics.tableIssues.filter(issue => SOCCER_LAYOUT_ISSUES.has(issue)))].slice(0, 8) : [], conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
+    diagnostics: { recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, wrongPeriodHeader: input.diagnostics?.wrongPeriodHeader === true, skippedAlternativeCount: integer(input.diagnostics?.skippedAlternativeCount, 1000), tableIssues: ['EPL', 'UCL'].includes(league) && Array.isArray(input.diagnostics?.tableIssues) ? [...new Set(input.diagnostics.tableIssues.filter(issue => SOCCER_LAYOUT_ISSUES.has(issue)))].slice(0, 8) : [], conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
   };
 }
 
@@ -362,14 +362,17 @@ async function performSync(reason, preferredTabId) {
       } catch (error) { failures.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), error: error.message }); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: false, error: error.message }); }
     }
     const sum = key => accepted.reduce((count, item) => count + Number(item[key] || 0), 0);
+    const skippedAlternativeCount = soccer ? sources.reduce((count, source) => count + integer(source.selected.candidate.capture.diagnostics?.skippedAlternativeCount, 1000), 0) : 0;
     statuses[league] = { ok: failures.length === 0, state: failures.length ? 'error' : 'synced', league,
       executable: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? accepted.some(item => item.executable) : sum('matchedGameCount') > 0,
       captureOnly: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league), message: failures.length ? failures.map(item => `${item.boardDate}${soccer ? `（${item.periodsCovered.join('/')}）` : ''}：${item.error}`).join('；') : soccer ? `已同步 ${accepted.length} 筆盤面紀錄（${new Set(accepted.map(item => item.boardDate)).size} 個日期）` : `已同步 ${accepted.length} 個日期`,
       ...(soccer ? { gameCountBasis: 'BOARD_RECORDS_NOT_UNIQUE_GAMES', uniqueGameCount: new Set(payloads.flatMap(payload => payload.games).map(game => [game.boardDate,game.boardTime,game.awayCode,game.homeCode].join('|'))).size, periodsCovered: [...new Set(accepted.flatMap(item => item.periodsCovered || []))] } : {}),
+      ...(skippedAlternativeCount ? { skippedAlternativeCount } : {}),
       lastSyncAt: accepted.length ? Math.min(...accepted.map(item => item.lastSyncAt)) : 0, lastAttemptAt: Date.now(),
       rawGameCount: sum('rawGameCount'), matchedGameCount: sum('matchedGameCount'), unopenedGameCount: sum('unopenedGameCount'), marketCount: sum('marketCount'), directionCount: sum('directionCount'), partialGameCount: sum('partialGameCount'),
       localDiagnostic: soccer ? sources.map(source => localBoardDiagnostic(source.sourcePayload, source.selected.candidate.capture)).reduce((total,item)=>({openCount:total.openCount+item.openCount,lockedCount:total.lockedCount+item.lockedCount,marketCount:total.marketCount+item.marketCount,sample:[total.sample,item.sample].filter(Boolean).join('｜').slice(0,280)}),{openCount:0,lockedCount:0,marketCount:0,sample:''}) : localBoardDiagnostic(sourcePayload, selected.candidate.capture), boardDate: sourcePayload.boardDate,
       boardDates: soccer ? [...new Set(payloads.map(item => item.boardDate))] : payloads.map(item => item.boardDate), dateStatuses: accepted, dateErrors: failures, readerVersion: VERSION };
+    if (skippedAlternativeCount) statuses[league].message += `；略過 ${skippedAlternativeCount} 組無法核對的盤口，已保留其餘有效盤口`;
 
   }
   await chrome.storage.local.set({ readerStatuses: statuses, lastSuccessfulPayloadHashes: hashes, lastSuccessfulSyncAts: times, pairError: '' });
