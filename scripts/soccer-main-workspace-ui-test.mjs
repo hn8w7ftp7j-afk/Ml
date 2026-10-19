@@ -12,7 +12,7 @@ const compiled = await transform(source, { filename: 'main-workspace.jsx', jsc: 
 const plain = value => JSON.parse(JSON.stringify(value));
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const response = (league, date) => ({ ok: true, league: { id: league.toLowerCase() }, timeZone: 'Asia/Taipei', date,
-  games: [{ id: `soccer:${league.toLowerCase()}:101`, league: league.toLowerCase(), date, status: 'scheduled', home: { name: 'Arsenal' }, away: { name: 'Liverpool' } }] });
+  games: [{ id: `soccer:${league.toLowerCase()}:101`, league: league.toLowerCase(), date, status: 'scheduled', startTime: '2099-10-20T13:00:00Z', home: { name: 'Arsenal' }, away: { name: 'Liverpool' } }] });
 function find(tree, predicate) {
   if (!tree || typeof tree !== 'object') return null;
   if (predicate(tree)) return tree;
@@ -81,6 +81,54 @@ await test('the embedded analyze-all button calls the parent orchestration and r
   button.props.onClick(); assert.equal(calls, 1); assert.equal(requestedDate, '2026-10-19'); assert.equal(h.history.length, 0);
   h.render({ embedded: true, onAnalyzeAll: () => calls++, otherBusy: true }); assert.equal(h.control('allLeagueAnalyzeButton').props.disabled, true);
   h.unmount();
+});
+await test('top league action targets only the loaded EPL/UCL board and never invokes all-league orchestration', async () => {
+  for (const league of ['EPL', 'UCL']) {
+    let allCalls = 0;
+    const props = { embedded: true, selectedLeague: league, onAnalyzeAll: () => allCalls++ };
+    const h = harness(props, `?sport=${league}&date=2026-10-22&view=upcoming`);
+    h.render(); assert.equal(h.control('soccerLeagueAnalyzeButton').props.disabled, true);
+    const board = response(league, '2026-10-22');
+    board.games.push({ ...board.games[0], id: `soccer:${league.toLowerCase()}:102`, date: '2026-10-23' });
+    board.games.push({ ...board.games[0], id: `soccer:${league.toLowerCase()}:103`, status: 'final' });
+    h.requests[0].respond(board); await h.settle();
+    const button = h.control('soccerLeagueAnalyzeButton');
+    assert.equal(button.props.disabled, false);
+    assert.match(h.html(), new RegExp(`一鍵分析${league === 'EPL' ? '英超' : '歐冠'}`));
+    assert.match(h.html(), /目前近期賽程.*未開賽 2 場/);
+    button.props.onClick(); h.render();
+    assert.equal(allCalls, 0); assert.equal(h.history.length, 0);
+    assert.deepEqual(plain(h.provider().props.batchRequest), { id: 1, scope: `soccer:${league}:2026-10-22:upcoming` });
+    assert.equal(h.provider().props.batchScope, `soccer:${league}:2026-10-22:upcoming`);
+    assert.deepEqual(h.provider().props.games.map(game => game.date), ['2026-10-22', '2026-10-23', '2026-10-22']);
+    h.render({ ...props, otherBusy: true });
+    assert.equal(h.control('soccerLeagueAnalyzeButton').props.disabled, true);
+    h.control('soccerLeagueAnalyzeButton').props.onClick(); h.render();
+    assert.equal(h.provider().props.batchRequest.id, 1, 'busy work cannot create another request');
+    h.unmount();
+  }
+});
+await test('league batch clicks never replay after switching a date/view or returning to an old board', async () => {
+  const h = harness({ embedded: true }); h.render();
+  h.requests[0].respond(response('EPL', '2026-10-19')); await h.settle();
+  h.control('soccerLeagueAnalyzeButton').props.onClick(); h.render();
+  assert.equal(h.provider().props.batchRequest.id, 1);
+  const changeDate = date => find(h.tree, element => element.type === 'input' && element.props.type === 'date').props.onChange({ target: { value: date } });
+  changeDate('2026-10-22'); h.render();
+  h.requests.at(-1).respond(response('EPL', '2026-10-22')); await h.settle();
+  assert.equal(h.provider().props.batchRequest, null);
+  changeDate('2026-10-19'); h.render();
+  assert.equal(h.provider().props.batchRequest, null);
+  h.unmount();
+});
+await test('empty league boards expose no-target state without widening scope or starting another league', async () => {
+  let allCalls = 0;
+  const h = harness({ embedded: true, onAnalyzeAll: () => allCalls++ }); h.render();
+  h.requests[0].respond({ ...response('EPL', '2026-10-19'), games: [] }); await h.settle();
+  assert.equal(h.control('soccerLeagueAnalyzeButton').props.disabled, true);
+  h.control('soccerLeagueAnalyzeButton').props.onClick(); h.render();
+  assert.equal(h.provider().props.batchRequest, null); assert.equal(allCalls, 0); assert.equal(h.requests.length, 1);
+  assert.match(h.html(), /目前沒有可分析的未開賽賽事/); h.unmount();
 });
 await test('UCL embedded requests and scope callbacks are isolated; foreign EPL responses are rejected', async () => {
   const h = harness({ embedded: true, selectedLeague: 'UCL' }, '?sport=UCL&date=2026-10-22&view=upcoming&runId=wrun_ucl_fixture_101');
