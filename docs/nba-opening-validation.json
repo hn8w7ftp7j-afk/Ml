@@ -1,0 +1,677 @@
+{
+  "modelVersion": "nba-regular-cross-season-v1",
+  "games": 4922,
+  "features": 3692,
+  "residuals": 2461,
+  "sources": 681,
+  "archiveHash": "c1a758d3f1494cd17df1c0d9d4a75d3a86f2dc4fcf5f6bcd886f0596aba52420",
+  "priorWeight": 20,
+  "ridgePenalty": 1000,
+  "acceptance": {
+    "fullTotal": {
+      "accepted": false,
+      "basis": "2026_holdout_full_and_early_MAE_and_reference_threshold_Brier_LogLoss_not_worse_than_prior_team_baseline"
+    },
+    "fullMargin": {
+      "accepted": true,
+      "basis": "2026_holdout_full_and_early_MAE_and_reference_threshold_Brier_LogLoss_not_worse_than_prior_team_baseline"
+    },
+    "halfTotal": {
+      "accepted": false,
+      "basis": "2026_holdout_full_and_early_MAE_and_reference_threshold_Brier_LogLoss_not_worse_than_prior_team_baseline"
+    },
+    "halfMargin": {
+      "accepted": true,
+      "basis": "2026_holdout_full_and_early_MAE_and_reference_threshold_Brier_LogLoss_not_worse_than_prior_team_baseline"
+    }
+  },
+  "validation": {
+    "developmentYear": 2025,
+    "holdoutYear": 2026,
+    "selection": "minimum_sum_of_four_relative_MAEs_on_2025_only",
+    "candidates": [
+      {
+        "priorWeight": 20,
+        "developmentLoss": 3.955815170423163
+      },
+      {
+        "priorWeight": 40,
+        "developmentLoss": 3.959657527750103
+      },
+      {
+        "priorWeight": 10,
+        "developmentLoss": 3.961309590450581
+      }
+    ],
+    "development": {
+      "seasonYear": 2025,
+      "samples": 1231,
+      "earlyDefinition": "both_teams_fewer_than_ten_prior_regular_games",
+      "metrics": {
+        "fullTotal": {
+          "samples": 1231,
+          "earlySamples": 145,
+          "probabilitySamples": 0,
+          "modelMAE": 15.098576319724671,
+          "baselineMAE": 15.060907604177194,
+          "earlyModelMAE": 14.880928364788979,
+          "earlyBaselineMAE": 14.734203509494176,
+          "modelBrier": null,
+          "baselineBrier": null,
+          "modelLogLoss": null,
+          "baselineLogLoss": null,
+          "ece": null,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 1,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 2,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 3,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 4,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 5,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 6,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 7,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 8,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 9,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            }
+          ]
+        },
+        "fullMargin": {
+          "samples": 1231,
+          "earlySamples": 145,
+          "probabilitySamples": 0,
+          "modelMAE": 11.123976698871745,
+          "baselineMAE": 11.577152456221036,
+          "earlyModelMAE": 10.341575705804503,
+          "earlyBaselineMAE": 10.450270895898178,
+          "modelBrier": null,
+          "baselineBrier": null,
+          "modelLogLoss": null,
+          "baselineLogLoss": null,
+          "ece": null,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 1,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 2,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 3,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 4,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 5,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 6,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 7,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 8,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 9,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            }
+          ]
+        },
+        "halfTotal": {
+          "samples": 1231,
+          "earlySamples": 145,
+          "probabilitySamples": 0,
+          "modelMAE": 9.585036609073896,
+          "baselineMAE": 9.561608923218307,
+          "earlyModelMAE": 9.699678079858764,
+          "earlyBaselineMAE": 9.641197706959344,
+          "modelBrier": null,
+          "baselineBrier": null,
+          "modelLogLoss": null,
+          "baselineLogLoss": null,
+          "ece": null,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 1,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 2,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 3,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 4,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 5,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 6,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 7,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 8,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 9,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            }
+          ]
+        },
+        "halfMargin": {
+          "samples": 1231,
+          "earlySamples": 145,
+          "probabilitySamples": 0,
+          "modelMAE": 8.761480526524638,
+          "baselineMAE": 8.849909975261133,
+          "earlyModelMAE": 8.73122406471344,
+          "earlyBaselineMAE": 8.75324949890696,
+          "modelBrier": null,
+          "baselineBrier": null,
+          "modelLogLoss": null,
+          "baselineLogLoss": null,
+          "ece": null,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 1,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 2,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 3,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 4,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 5,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 6,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 7,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 8,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 9,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            }
+          ]
+        }
+      },
+      "strictlyEarlierDates": true,
+      "historicalBettingWinRate": null,
+      "probabilityValidationBasis": "pregame_reference_thresholds_no_historical_market_quote_claim",
+      "strictPointInTime": false
+    },
+    "holdout": {
+      "seasonYear": 2026,
+      "samples": 1230,
+      "earlyDefinition": "both_teams_fewer_than_ten_prior_regular_games",
+      "metrics": {
+        "fullTotal": {
+          "samples": 1230,
+          "earlySamples": 145,
+          "probabilitySamples": 1230,
+          "modelMAE": 15.22831017400025,
+          "baselineMAE": 15.327673855176066,
+          "earlyModelMAE": 15.574545273761359,
+          "earlyBaselineMAE": 14.709840589639175,
+          "modelBrier": 0.25494700140884285,
+          "baselineBrier": 0.2500491115512573,
+          "modelLogLoss": 0.7032679292754331,
+          "baselineLogLoss": 0.693245623612321,
+          "ece": 0.0937282198543015,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 1,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 2,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 3,
+              "samples": 1,
+              "p": 0.3803526716127425,
+              "observed": 1
+            },
+            {
+              "bin": 4,
+              "samples": 29,
+              "p": 0.4796756722662707,
+              "observed": 0.6896551724137931
+            },
+            {
+              "bin": 5,
+              "samples": 688,
+              "p": 0.5651081309645818,
+              "observed": 0.44622093023255816
+            },
+            {
+              "bin": 6,
+              "samples": 500,
+              "p": 0.6325382773720641,
+              "observed": 0.58
+            },
+            {
+              "bin": 7,
+              "samples": 12,
+              "p": 0.7094270665384244,
+              "observed": 0.6666666666666666
+            },
+            {
+              "bin": 8,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 9,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            }
+          ]
+        },
+        "fullMargin": {
+          "samples": 1230,
+          "earlySamples": 145,
+          "probabilitySamples": 1230,
+          "modelMAE": 11.572541479153855,
+          "baselineMAE": 12.027720074031413,
+          "earlyModelMAE": 11.249330879530568,
+          "earlyBaselineMAE": 11.613414693351974,
+          "modelBrier": 0.20972450957948024,
+          "baselineBrier": 0.21787826618986716,
+          "modelLogLoss": 0.6084072159279166,
+          "baselineLogLoss": 0.6269762008781318,
+          "ece": 0.03863822155675721,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 8,
+              "p": 0.07967943294605322,
+              "observed": 0
+            },
+            {
+              "bin": 1,
+              "samples": 47,
+              "p": 0.1666324456532267,
+              "observed": 0.2553191489361702
+            },
+            {
+              "bin": 2,
+              "samples": 100,
+              "p": 0.2536927828128245,
+              "observed": 0.24
+            },
+            {
+              "bin": 3,
+              "samples": 199,
+              "p": 0.3593910390538303,
+              "observed": 0.34673366834170855
+            },
+            {
+              "bin": 4,
+              "samples": 193,
+              "p": 0.4500589422228173,
+              "observed": 0.46632124352331605
+            },
+            {
+              "bin": 5,
+              "samples": 187,
+              "p": 0.549914891842835,
+              "observed": 0.6310160427807486
+            },
+            {
+              "bin": 6,
+              "samples": 248,
+              "p": 0.6462430046210158,
+              "observed": 0.6935483870967742
+            },
+            {
+              "bin": 7,
+              "samples": 147,
+              "p": 0.7430730244696742,
+              "observed": 0.782312925170068
+            },
+            {
+              "bin": 8,
+              "samples": 89,
+              "p": 0.8320064345088576,
+              "observed": 0.8089887640449438
+            },
+            {
+              "bin": 9,
+              "samples": 12,
+              "p": 0.9148412199441255,
+              "observed": 0.8333333333333334
+            }
+          ]
+        },
+        "halfTotal": {
+          "samples": 1230,
+          "earlySamples": 145,
+          "probabilitySamples": 1230,
+          "modelMAE": 9.89559843835401,
+          "baselineMAE": 9.919836532256001,
+          "earlyModelMAE": 11.008953933079749,
+          "earlyBaselineMAE": 10.722291004909328,
+          "modelBrier": 0.25044191531825166,
+          "baselineBrier": 0.24974340531526684,
+          "modelLogLoss": 0.6941220898137733,
+          "baselineLogLoss": 0.6926338837881549,
+          "ece": 0.049606689798830796,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 1,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 2,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 3,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 4,
+              "samples": 18,
+              "p": 0.4798933999317058,
+              "observed": 0.7777777777777778
+            },
+            {
+              "bin": 5,
+              "samples": 942,
+              "p": 0.5605309248715946,
+              "observed": 0.5148619957537155
+            },
+            {
+              "bin": 6,
+              "samples": 270,
+              "p": 0.6208673274899646,
+              "observed": 0.5740740740740741
+            },
+            {
+              "bin": 7,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 8,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 9,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            }
+          ]
+        },
+        "halfMargin": {
+          "samples": 1230,
+          "earlySamples": 145,
+          "probabilitySamples": 1230,
+          "modelMAE": 9.189101182690752,
+          "baselineMAE": 9.358129269426732,
+          "earlyModelMAE": 8.698785536509613,
+          "earlyBaselineMAE": 8.814075224584133,
+          "modelBrier": 0.23194495448685365,
+          "baselineBrier": 0.23483651037635478,
+          "modelLogLoss": 0.6558132856650462,
+          "baselineLogLoss": 0.6622714357839992,
+          "ece": 0.017449243936761474,
+          "reliability": [
+            {
+              "bin": 0,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            },
+            {
+              "bin": 1,
+              "samples": 5,
+              "p": 0.1803215986750835,
+              "observed": 0.2
+            },
+            {
+              "bin": 2,
+              "samples": 63,
+              "p": 0.2705034697455292,
+              "observed": 0.2698412698412698
+            },
+            {
+              "bin": 3,
+              "samples": 183,
+              "p": 0.3523389787428198,
+              "observed": 0.3442622950819672
+            },
+            {
+              "bin": 4,
+              "samples": 387,
+              "p": 0.4523379166575248,
+              "observed": 0.46511627906976744
+            },
+            {
+              "bin": 5,
+              "samples": 271,
+              "p": 0.5467517931675815,
+              "observed": 0.5756457564575646
+            },
+            {
+              "bin": 6,
+              "samples": 244,
+              "p": 0.6443558751047814,
+              "observed": 0.6680327868852459
+            },
+            {
+              "bin": 7,
+              "samples": 75,
+              "p": 0.734662986831284,
+              "observed": 0.7466666666666667
+            },
+            {
+              "bin": 8,
+              "samples": 2,
+              "p": 0.8042532177613392,
+              "observed": 1
+            },
+            {
+              "bin": 9,
+              "samples": 0,
+              "p": null,
+              "observed": null
+            }
+          ]
+        }
+      },
+      "strictlyEarlierDates": true,
+      "historicalBettingWinRate": null,
+      "probabilityValidationBasis": "pregame_reference_thresholds_no_historical_market_quote_claim",
+      "strictPointInTime": false
+    }
+  }
+}
