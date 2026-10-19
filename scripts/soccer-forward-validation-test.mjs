@@ -9,6 +9,12 @@ const a = fixtureCapture(), b = changed(fixtureCapture({ sequence: 2 }), row => 
 assert.equal(validateSoccerForwardCapture(a, protocol, after).ok, true);
 const wrongSource = changed(a, row => { row.snapshot.evidence.source.url = row.snapshot.evidence.source.url.replace('/eng.1/','/uefa.champions/'); });
 assert.equal(validateSoccerForwardCapture(wrongSource, protocol, after).reason,'FORWARD_INPUT_SOURCE_AVAILABILITY_UNVERIFIED');
+for(const mutate of [
+  row=>{delete row.snapshot.evidence.scheduleSource;delete row.snapshot.inputVersions.scheduleSourceVersion;},
+  row=>{row.snapshot.evidence.scheduleSource={...row.snapshot.evidence.source};row.snapshot.inputVersions.scheduleSourceVersion={...row.snapshot.evidence.source};},
+  row=>{row.snapshot.inputVersions.scheduleSourceVersion.contentHash=sha('different-board');},
+  row=>{row.snapshot.evidence.scheduleSource.fetchedAt=iso(observed+1);row.snapshot.inputVersions.scheduleSourceVersion={...row.snapshot.evidence.scheduleSource};},
+])assert.equal(validateSoccerForwardCapture(changed(a,mutate),protocol,after).reason,'FORWARD_INPUT_SOURCE_AVAILABILITY_UNVERIFIED','only a real pre-cutoff scoreboard receipt bound to its saved version qualifies');
 const tampered = structuredClone(a); tampered.snapshot.prediction.homeRate = 2;
 assert.equal(validateSoccerForwardCapture(tampered, protocol, after).reason,'FORWARD_ORIGINAL_REVISION_MISMATCH');
 assert.equal(validateSoccerForwardCapture(changed(a,row => { row.snapshot.runStartedAt = iso(active - 1); }),protocol,after).reason,'FORWARD_PERSISTENCE_TIME_UNVERIFIED');
@@ -29,6 +35,8 @@ const challenger=changed(absentChallenger,row=>{
 });
 assert.equal(validateSoccerForwardCapture(challenger,protocol,after).ok,true);
 assert.equal(evaluateSoccerForwardCapture(challenger,protocol,resultFor(challenger),after).variant,'PERSONNEL_CHALLENGER');
+const detachedXI=changed(challenger,row=>{row.snapshot.evidence.teams.home.lineup.source={...row.snapshot.evidence.source,url:'https://fixture.invalid/detached-xi'};});
+assert.equal(validateSoccerForwardCapture(detachedXI,protocol,after).reason,'FORWARD_PERSONNEL_PREGAME_XI_UNVERIFIED');
 const backfilledXI=changed(challenger,row=>{row.snapshot.personnelPrediction.mode='RETROSPECTIVE_OBSERVED_XI';row.snapshot.personnelPrediction.personnelObservation.availability='BACKFILLED_POSTMATCH_XI_NOT_PREMATCH_SAVED';});
 assert.equal(validateSoccerForwardCapture(backfilledXI,protocol,after).reason,'FORWARD_PERSONNEL_SOURCE_AVAILABILITY_UNVERIFIED');
 const differentXI=changed(challenger,row=>{row.snapshot.personnelPrediction.personnelObservation.startingXIs.home[0]='999999';});
