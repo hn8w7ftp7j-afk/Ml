@@ -5324,8 +5324,7 @@ export default function Home() {
     </nav>
 
     <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || soccerRunning || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress} onJobChange={setNbaIndicatorJob} onHighScoreStatusChange={setNbaBetStatus} allLeagueBetStatuses={leagueBetStatuses} onSelectSoccer={selectSoccer}/>
-    {soccerSelected && error && <div className="errorBox" role="alert">{error}</div>}
-    {soccerSelected && notice && <div className="noticeBox" role="status">{notice}</div>}
+    {soccerSelected && (allLeaguePreparing || allLeagueRunning) && notice && <div className="noticeBox" role="status">{notice}</div>}
     {soccerSelected && <AllLeagueProgress run={allLeagueRun} betStatuses={leagueBetStatuses} onSelectSoccer={selectSoccer}/>}
     {MAIN_SOCCER_LEAGUES.filter(id => soccerOpened.includes(id) || soccerSelected === id).map(id => <SoccerMainWorkspace key={id} active={soccerSelected === id} embedded selectedLeague={id} requestedScope={soccerEntryScopes[id]} allRun={allLeagueRun} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || nbaRunning || soccerRunning || allLeaguePreparing || allLeagueRunning} onScopeChange={onSoccerScopeChange} onBusyChange={onSoccerBusyChange} onHighScoreStatusChange={onSoccerHighScoreStatusChange} onSelectSoccer={selectSoccer} allLeagueBetStatuses={leagueBetStatuses}/>)}
     <div hidden={nbaSelected || Boolean(soccerSelected)}>
