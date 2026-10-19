@@ -48,6 +48,49 @@ export function SoccerRequirementDetails({audit}){
   const layers=Array.isArray(audit?.layers)?audit.layers:[];
   return <details className="soccerDetails soccerRequirementDetails"><summary>六層分析依據與缺口</summary><p className="soccerAvailability">資料已取得不代表已納入模型；研究基準的計算也不代表正式驗收通過。</p>{layers.length?layers.map(layer=><section className="soccerRequirementLayer" key={layer.key}><h4>{layer.title}</h4><ul>{(layer.items||[]).map(item=><li key={item.key}><div className="soccerRequirementRow"><strong>{item.label}</strong><span className={`soccerEvidenceStatus ${item.status||'UNKNOWN'}`}>{observationLabels[item.status]||observationLabels.UNKNOWN}</span></div><p className="soccerRequirementUsage">{usageLabels[item.modelUsage]||usageLabels.NOT_AVAILABLE}</p>{item.reason&&<p className="soccerRequirementReason">{/^[A-Z][A-Z0-9_]+$/.test(item.reason)?'來源或適用範圍仍待核對。':item.reason}</p>}</li>)}</ul></section>):<p className="soccerAvailability">此歷史版本尚未保存六層核對結果，請重新核對取得目前資料。</p>}<p className="soccerAvailability"><a href="/soccer/specification">查看完整分析規格 2.2</a></p></details>;
 }
+export function SoccerPersonnelResearch({prediction,research,baseline,league,analysisCutoff}){
+  const decimal=(value,digits=3)=>Number.isFinite(value)?value.toFixed(digits):'—';
+  const count=value=>Number.isInteger(value)&&value>=0?value:null;
+  const unavailableAtCutoff=research?.status==='NOT_AVAILABLE_AT_CUTOFF'||research?.reason==='PERSONNEL_ARTIFACT_NOT_AVAILABLE_AT_CUTOFF';
+  const available=Boolean(research&&!unavailableAtCutoff&&/^[a-f0-9]{64}$/.test(research.artifactHash||'')
+    &&research.defaultDistribution==='UNCHANGED_BASELINE'&&research.challengerDisplayOnly===true&&research.formalEnabled===false);
+  const cutoff=Date.parse(analysisCutoff||''),observed=Date.parse(prediction?.personnelObservation?.fetchedAt||''),modelCutoff=Date.parse(prediction?.cutoff||''),trainedThrough=Date.parse(prediction?.trainedThrough||'');
+  const valuesValid=value=>[value?.homeRate,value?.awayRate].every(rate=>Number.isFinite(rate)&&rate>0)
+    &&['home','draw','away'].every(key=>Number.isFinite(value?.outcomes?.[key])&&value.outcomes[key]>=0&&value.outcomes[key]<=1);
+  const current=Boolean(available&&research.status==='RESEARCH_CHALLENGER_AVAILABLE'&&prediction&&prediction.league===league
+    &&prediction.period==='REGULATION_FT'&&prediction.mode==='CURRENT_PREMATCH'&&prediction.status==='RESEARCH_ONLY'
+    &&prediction.formalEnabled===false&&prediction.executable===false&&prediction.personnelObservation?.availability==='OBSERVED_PREMATCH_XI'
+    &&/^[a-f0-9]{64}$/.test(prediction.personnelObservation?.sourceHash||'')&&valuesValid(prediction)
+    &&[cutoff,observed,modelCutoff,trainedThrough].every(Number.isFinite)&&observed<=cutoff&&modelCutoff<=cutoff&&trainedThrough<=cutoff);
+  const messages={PERSONNEL_ARTIFACT_NOT_AVAILABLE_AT_CUTOFF:'此分析時間尚無可用的人員研究版本，不帶入較晚模型或研究數字。',
+    PERSONNEL_XI_INCOMPLETE:'兩隊先發尚未完整核對，本場不計算人員研究進球率。',PERSONNEL_PREMATCH_LINEUP_UNVERIFIED:'兩隊賽前先發尚未完整核對，本場不計算人員研究進球率。',
+    PERSONNEL_PLAYER_NOT_TRAINED:'目前先發含缺少訓練資料的球員，本場不猜測球員影響。',PERSONNEL_CLUB_NOT_TRAINED:'本場球隊不在可用的人員訓練範圍。',SOCCER_TEAM_NOT_TRAINED:'本場球隊不在可用的比分訓練範圍。',
+    PERSONNEL_XI_SOURCE_UNVERIFIED:'先發來源尚未通過核對，暫不計算本場人員機率。',PERSONNEL_XI_IDENTITY_INVALID:'先發球員身分尚未通過核對，暫不計算本場人員機率。',
+    PERSONNEL_PREMATCH_AVAILABILITY_UNVERIFIED:'尚無符合分析時間的有效賽前先發觀察，暫不計算本場人員機率。',NOT_A_PREMATCH_SNAPSHOT:'賽後資料不補算本場賽前人員機率。',
+    SCORE_MODEL_UNAVAILABLE:'本場缺少適用的比分基準，無法計算人員研究。',PERSONNEL_MODEL_NOT_APPLICABLE:'本場尚無適用的人員研究版本。'};
+  const message=unavailableAtCutoff?messages.PERSONNEL_ARTIFACT_NOT_AVAILABLE_AT_CUTOFF:!research?'此歷史版本尚未保存先發人員研究，請重新核對目前資料。'
+    :messages[research.reason]||'本場的人員、模型範圍或分析時間尚未完整核對，暫不顯示人員研究機率。';
+  const validation=available?research.validation:null,diagnostic=available?research.diagnostic:null,collection=available?research.collection:null;
+  const common=count(validation?.commonCount),population=count(validation?.originalPopulation);
+  const paired=common>0&&population>=common&&validation?.reference?.count===common&&validation?.challenger?.count===common;
+  const diagnosticCount=count(diagnostic?.count),diagnosticSample=count(diagnostic?.sample);
+  const diagnosticPaired=diagnosticCount>0&&diagnosticSample>=diagnosticCount&&diagnostic?.baseline?.count===diagnosticCount;
+  const interval=diagnostic?.comparison?.interval;
+  return <details className="soccerDetails soccerPersonnelResearch"><summary>先發人員模型研究</summary>
+    <p className="soccerAvailability">估計先發組合與進球率的關聯；僅供研究比較，尚未估計傷停、預計分鐘、替補差距或因果影響。</p>
+    {current?<div className="soccerTableWrap"><table className="soccerAuditTable"><caption>本場全場比分研究比較</caption><thead><tr><th>模型</th><th>主隊平均進球</th><th>客隊平均進球</th><th>主勝</th><th>和局</th><th>客勝</th></tr></thead><tbody>
+      <tr><th scope="row">原比分基準（目前採用）</th><td>{decimal(baseline?.homeRate,2)}</td><td>{decimal(baseline?.awayRate,2)}</td><td>{pct(baseline?.outcomes?.home)}</td><td>{pct(baseline?.outcomes?.draw)}</td><td>{pct(baseline?.outcomes?.away)}</td></tr>
+      <tr><th scope="row">先發人員研究</th><td>{decimal(prediction.homeRate,2)}</td><td>{decimal(prediction.awayRate,2)}</td><td>{pct(prediction.outcomes.home)}</td><td>{pct(prediction.outcomes.draw)}</td><td>{pct(prediction.outcomes.away)}</td></tr>
+    </tbody></table></div>:<p className="soccerAvailability">{message}</p>}
+    {collection&&count(collection.accepted)!==null&&count(collection.total)!==null&&collection.accepted<=collection.total&&<p>歷史先發可核對 {collection.accepted}／{collection.total} 場；資料為賽後補抓，不證明當時已取得賽前名單。</p>}
+    {available&&<>
+      <h4>2024 年共同樣本選模</h4>{paired?<><p>共同可比較 {common}／原始母體 {population} 場；兩模型只比較相同賽事。</p><div className="soccerTableWrap"><table className="soccerAuditTable"><thead><tr><th>模型</th><th>Log Loss</th><th>Brier</th></tr></thead><tbody><tr><th scope="row">原比分基準</th><td>{decimal(validation.reference.logLoss)}</td><td>{decimal(validation.reference.brier)}</td></tr><tr><th scope="row">先發人員研究</th><td>{decimal(validation.challenger.logLoss)}</td><td>{decimal(validation.challenger.brier)}</td></tr></tbody></table></div><p>{validation.preferredModel==='UNCHANGED_BASELINE'?'2024 年選模保留原比分基準。':validation.preferredModel==='XI_CHALLENGER'?'2024 年共同樣本偏向先發人員研究；網站預設仍保留原比分基準。':'選模結果尚待核對；網站預設維持原比分基準。'}</p></>:<p>2024 年尚無可核對的共同樣本比較。</p>}
+      <h4>2025 年回顧診斷</h4><p className="soccerAvailability">2025 年資料已用於先前開發，這不是新的未用樣本外測試（OOS），也不代表投注勝率或收益。</p>
+      {diagnosticPaired?<><p>共同可評估 {diagnosticCount}／原始母體 {diagnosticSample} 場。Log Loss：原基準 {decimal(diagnostic.baseline.logLoss)}／人員研究 {decimal(diagnostic.logLoss)}；Brier：原基準 {decimal(diagnostic.baseline.brier)}／人員研究 {decimal(diagnostic.brier)}。</p>{Number.isFinite(diagnostic.comparison?.meanDifference)&&<p>Log Loss 差異（人員研究減原基準）：{decimal(diagnostic.comparison.meanDifference,4)}{interval&&[interval.lower,interval.upper].every(Number.isFinite)&&interval.lower<=interval.upper?`；週區塊重抽樣範圍 ${decimal(interval.lower,4)} ～ ${decimal(interval.upper,4)}`:''}。此回顧比較不作正式升級依據。</p>}</>:<p>2025 年尚無可核對的共同樣本診斷。</p>}
+    </>}
+    <p className="soccerAvailability">目前預設比分分布維持原基準；人員研究未啟用正式 W／R／S、候選或下注。</p>
+  </details>;
+}
 export function SoccerRunHistory({runs=[]}){
   const messages={SOCCER_SOURCE_UNAVAILABLE:'資料來源暫時無法讀取',SOCCER_SOURCE_TIMEOUT:'資料來源讀取逾時',SOCCER_SCHEDULE_UNAVAILABLE:'賽程資料暫時無法核對',SOCCER_GAME_NOT_FOUND:'無法核對同場賽事',NOT_A_PREMATCH_SNAPSHOT:'並非賽前資料，不補算賽前機率'};
   return runs.length?<div className="soccerRunHistory"><h4>最近分析嘗試</h4>{runs.map(run=><div className="soccerSavedVersion" key={run.analysisRunId}><p>{clock(run.startedAt)}｜分析：{analysisLabels[run.analysisStatus]||'狀態待確認'}｜篩選：{run.analysisStatus==='COMPLETED'&&run.selectionResult==='RESEARCH_SHADOW'?'研究中':'尚無結果'}</p>{run.qaFlag&&<p className="soccerAvailability">{qaLabels[run.qaFlag]||'檢核狀態待確認'}</p>}{run.reasons?.length>0&&<p className="soccerAvailability">{[...new Set(run.reasons.map(code=>reasons[code]||messages[code]||(/[\u3400-\u9fff]/.test(code)?code:'來源或資料條件仍待核對')))].join('；')}</p>}</div>)}</div>:null;
@@ -242,6 +285,7 @@ export default function SoccerAnalysisPanel({game}){
       {data.analysisStatus==='COMPLETED'&&!presentation.current&&<p className="soccerAnalysisWarning">目前有效狀態待重新核對；此版本僅供歷史查閱。</p>}
       {!data.persisted&&<p className="soccerAnalysisWarning">{data.persistenceError}</p>}
       {prediction?<><h3>研究比分分布</h3><div className="soccerResearchOutcomes"><span>主勝 <strong>{pct(prediction.outcomes.home)}</strong></span><span>和局 <strong>{pct(prediction.outcomes.draw)}</strong></span><span>客勝 <strong>{pct(prediction.outcomes.away)}</strong></span></div><p className="soccerAvailability">模型平均進球：主 {prediction.homeRate.toFixed(2)}／客 {prediction.awayRate.toFixed(2)}。僅依歷史賽果，尚未加入陣容與 xG。</p></>:<p className="soccerAvailability">{prestart?'此場無適用的已訓練球隊資料。':'比賽開始後不補算賽前機率。'}</p>}
+      <SoccerPersonnelResearch prediction={data.personnelPrediction} research={data.personnelResearch} baseline={prediction} league={game.league} analysisCutoff={data.analysisCutoff||data.observedAt}/>
       <details className="soccerDetails"><summary>先發、裁判與待核對資料</summary><div className="soccerLineupGrid">{['home','away'].map(side=>{const t=e.teams[side],l=t.lineup;return <div key={side}><h4>{side==='home'?'主隊':'客隊'}先發</h4><p>{l.starters.length===11?(data.status==='POSTSTART_AUDIT'?'賽後名單':'資料源列出先發 11 人'):'先發尚未完整提供'}{l.formation?`｜${l.formation}`:''}</p>{l.starters.length>0&&<p>{l.starters.map(p=>p.name).join('、')}</p>}<p>替補名單 {l.bench.length} 人；預計分鐘尚未驗證。</p></div>;})}</div><p>裁判：{e.referee.officials?.map(o=>o.name).join('、')||'資料源尚未提供'}。名單公布時間尚無可核對資料。</p><ul>{data.missing.map(x=><li key={x.label}>{x.label}：尚未具備可驗證資料</li>)}</ul><p className="soccerAvailability">{e.source.provider} 取得時間：{clock(e.source.fetchedAt)}。已列出的先發仍需確認公布時點。</p></details>
       <SoccerHalfTimeResearch halfTimePrediction={data.halfTimePrediction} halfTimeResearch={data.halfTimeResearch}/>
       {data.providerPolicy?.rebateRateStatus==='USER_CONFIRMED'&&<p className="soccerAvailability">足球退水：{(data.providerPolicy.rebateRate*100).toFixed(0)}%（{data.providerPolicy.rebateRate}）；{data.providerPolicy.rebateBasis==='TOTAL_PRINCIPAL'&&data.providerPolicy.rebateBasisStatus==='USER_CONFIRMED'?'按投注金額計算；適用條件與結算條款待核對。':'計算基數與結算條款待核對。'}</p>}

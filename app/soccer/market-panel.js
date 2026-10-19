@@ -15,6 +15,16 @@ const rowText=row=>{
   return textValue(row.raw)||textValue(row.text)||(Array.isArray(row.pair)?rowText(row.pair):Array.isArray(row.cells)?rowText(row.cells):null);
 };
 const readableReasons=list=>[...new Set((Array.isArray(list)?list:[]).map(reason=>reasonNames[reason]||(typeof reason==='string'&&/[\u3400-\u9fff]/.test(reason)?reason:null)).filter(Boolean))];
+const scoreStages={READER_QUOTE:'原盤來源與期間',SETTLEMENT_CONTRACT:'實際派彩條款',PER_SCORE_PAYOFF:'逐比分損益',FOOTBALL_UNCERTAINTY:'足球情境與誤差依據',FIXED_S_FORMULA:'固定 S 評分公式',FORMAL_ACCEPTANCE:'正式模型與校準驗收',CURRENT_PUBLICATION:'目前候選資格'};
+const scoreStageStatuses={PASS:'已核對',REGISTERED:'已登錄核對依據',CALCULATED_CONDITIONALLY:'已完成條件試算',CONDITIONAL_ONLY:'僅供條件試算',CONDITIONAL_PROTOCOL_ARITHMETIC:'已完成情境算術核對',DIAGNOSTIC_ONLY:'研究分數',MISSING:'尚缺條款',NOT_CALCULABLE:'尚缺計算依據',BLOCKED:'尚未通過',PENDING:'尚待核對',NOT_AUTHORIZED:'尚未授權'};
+
+function SoccerQuoteScoring({scoring}){
+  if(!scoring||!Array.isArray(scoring.stages))return null;
+  const payoff=scoring.conditionalPayoff;
+  return <details className="soccerDetails"><summary>評分計算依據</summary><ul>{scoring.stages.map(stage=><li key={stage.stage}>{scoreStages[stage.stage]||'計算核對'}：{scoreStageStatuses[stage.status]||'尚待核對'}</li>)}</ul>
+    {payoff?.ok&&<><p className="soccerMarketNote">依所列派彩條款的條件試算；正式資格仍按各項驗收狀態判定。</p><dl>{Object.entries({FULL_WIN:'全贏',PARTIAL_WIN:'部分贏',PUSH:'走盤',PARTIAL_LOSS:'部分輸',FULL_LOSS:'全輸'}).map(([key,label])=><div key={key}><dt>{label}</dt><dd>{pct(payoff.probabilities?.[key])}</dd></div>)}</dl>{payoff.evBounds?.net&&<p>每元本金期望淨損益範圍：{(payoff.evBounds.net.lower*100).toFixed(4)}% ～ {(payoff.evBounds.net.upper*100).toFixed(4)}%</p>}<p className="soccerMarketNote">範圍保留未展開比分的數值誤差；情境與模型誤差另行核對。</p></>}
+    <p className="soccerMarketNote">尚缺派彩、足球誤差或正式驗收依據時，W／R／S 保留待核對。</p></details>;
+}
 
 function SoccerThresholdProbabilities({probabilities}){
   const p=probabilities;
@@ -33,6 +43,7 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
     <div className="soccerMarketQuoteHeading"><strong>{textValue(q.label)||`原盤 ${index+1}`}</strong><span className="soccerMarketResearchTag">{period||'期間待確認'}</span></div>
     <p className="soccerMarketPrice">球頭 <strong>{line||'未提供'}</strong><span>水位 <strong>{water??'未提供'}</strong></span></p>
     <p className="soccerMarketNote">S —｜W —｜R —｜正式評分待驗證</p>
+    <SoccerQuoteScoring scoring={q.scoring}/>
     {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
     {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
     {!periodConfirmed?<p className="soccerMarketCaution">期間待確認，暫不計算</p>:<><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</>}

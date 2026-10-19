@@ -39,6 +39,9 @@ assert.match(markup,/不等於完整 Brier 分解/);
 assert.match(markup,/事後回補的研究診斷/);
 assert.match(markup,/不代表正式驗收通過、下注勝率提高或正收益/);
 assert.doesNotMatch(markup,/可評估 6|undefined|NaN|Infinity|已通過正式驗收/);
+const prospective=render({audit,period:'FT',evidenceMode:'PROSPECTIVE'});
+assert.match(prospective,/開賽前已封存的預測與賽後核對/);
+assert.doesNotMatch(prospective,/資料為事後回補/);
 
 const halfTime=render({audit:{...audit,period:'REGULATION_HT'},period:'HT'});
 assert.match(halfTime,/上半場勝平負校準核對/);

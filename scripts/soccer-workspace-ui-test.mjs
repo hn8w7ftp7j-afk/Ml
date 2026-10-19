@@ -16,6 +16,7 @@ const calibrationCompiled=await transform(calibrationSource,{filename:'calibrati
 let states=[],si=0;
 const ctx=vm.createContext({React,Date,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerTeamLabel,soccerValidationArtifacts,soccerHalfTimeArtifacts,
   SoccerRecordProvider:({children})=>children,SoccerRecordButton:()=>null,SoccerBetRecords:()=>React.createElement('p',null,'實際下注帳本'),
+  SoccerForwardValidationPanel:({league})=>React.createElement('p',null,`${league} 前瞻封存與賽果核對`),
   useEffect:()=>{},useState:initial=>[states[si++]??(typeof initial==='function'?initial():initial),()=>{}]});
 vm.runInContext(`Object.assign(globalThis,(()=>{${calibrationCompiled.code};return {SoccerCalibrationPanel};})());`,ctx);
 vm.runInContext(compiled.code,ctx);
@@ -25,6 +26,8 @@ for(const view of ['board','results','ranking','records','data','validation']){
   assert.doesNotMatch(markup,/undefined|NaN/);
 }
 assert.match(render('ranking'),/全部排名/);assert.match(render('ranking'),/時間順序排名/);
+assert.match(render('validation','epl'),/epl 前瞻封存與賽果核對/);
+assert.match(render('validation','ucl'),/ucl 前瞻封存與賽果核對/);
 const rankingNow=Date.parse('2026-10-20T00:00:00Z');
 for(const league of ['epl','ucl']){
   const fixtures=[
@@ -103,5 +106,24 @@ assert.equal(requests.length,1,'switching scope must still load its ledger while
 await respond(requests.shift(),{ok:true,league:'ucl',date:game.date,through:game.date,records:[]});
 await respond(late,{ok:true,record:{...record,status:'CANCELLED'},persistence:'durable_database'});await cancelling;await flush();
 assert.equal(ledgerNow().league,'ucl');assert.equal(ledgerNow().records.length,0,'late EPL write cannot populate UCL records');
+const checking=ledgerNow().checkSettlement();await flush();
+assert.equal(requests.length,1);
+assert.deepEqual(JSON.parse(requests[0].options.body),{action:'check-settlement',league:'ucl',date:game.date});
+await ledgerNow().checkSettlement();await ledgerNow().mutate({action:'record',gameId:game.id,alreadyPlaced:true},'position');await flush();
+assert.equal(requests.length,1,'duplicate checks and record writes cannot race a result check');
+await respond(requests.shift(),{ok:true,league:'ucl',date:game.date,summary:{checked:1,resultVerified:1,settled:0,pending:1,deferred:0}});
+assert.equal(requests.length,1,'result checks reload durable records instead of inventing settled records');
+await respond(requests.shift(),{ok:true,league:'ucl',date:game.date,through:game.date,records:[],settlementPolicy:{status:'SOURCE_TERMS_UNVERIFIED',missingTerms:[{code:'REBATE',label:'走盤退水適用條款'}]}});
+await checking;await flush();
+assert.equal(ledgerNow().settlementSummary.settled,0);assert.equal(ledgerNow().settlementSummary.resultVerified,1);
+assert.equal(ledgerNow().settlementPolicy.missingTerms[0].code,'REBATE');assert.equal(ledgerNow().records.length,0);
+const oldScopeCheck=ledgerNow().checkSettlement();await flush();const oldScopeRequest=requests.shift();
+props={...props,league:'epl'};rerender();await flush();
+await respond(requests.shift(),{ok:true,league:'epl',date:game.date,through:game.date,records:[]});
+await respond(oldScopeRequest,{ok:true,league:'ucl',date:game.date,summary:{checked:1,resultVerified:1,settled:1,pending:0,deferred:0}});
+await oldScopeCheck;await flush();
+assert.equal(ledgerNow().league,'epl');assert.equal(ledgerNow().settlementSummary,null,'late checks cannot show another league settlement counts');
+assert.equal(requests.length,0,'late checks cannot reload the old league');
 hooks.forEach(h=>h?.cleanup?.());
 console.log('PASS actual record hooks: durable-write vs refresh fencing, scope switch during a write, late response isolation and stable effects');
+console.log('PASS settlement hooks: duplicate/write fencing, result vs payout separation, durable readback, missing policy and late cross-league responses');

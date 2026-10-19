@@ -1,0 +1,62 @@
+import assert from 'node:assert/strict';
+import { scoreDistribution } from '../lib/soccer/score-model.js';
+import { soccerDate } from '../lib/soccer/contracts.js';
+import { SOCCER_FORWARD_VERSION, SOCCER_FORWARD_POLICY, soccerForwardHash, soccerForwardAnalysisRevision,
+  soccerForwardModelDescriptor, validateSoccerForwardCapture, canonicalSoccerForwardCaptures,
+  evaluateSoccerForwardCapture, buildSoccerForwardReport, normalizeSoccerForwardScope } from '../lib/soccer/forward-validation.js';
+import { fixtureCapture, resultFor, changed, protocol, sha, iso, active, run, observed, captured, start, after } from './helpers/soccer-forward-fixture.mjs';
+const a = fixtureCapture(), b = changed(fixtureCapture({ sequence: 2 }), row => { row.capturedAt = iso(captured + 10); row.snapshot.observedAt = iso(observed + 10); });
+assert.equal(validateSoccerForwardCapture(a, protocol, after).ok, true);
+const wrongSource = changed(a, row => { row.snapshot.evidence.source.url = row.snapshot.evidence.source.url.replace('/eng.1/','/uefa.champions/'); });
+assert.equal(validateSoccerForwardCapture(wrongSource, protocol, after).reason,'FORWARD_INPUT_SOURCE_AVAILABILITY_UNVERIFIED');
+const tampered = structuredClone(a); tampered.snapshot.prediction.homeRate = 2;
+assert.equal(validateSoccerForwardCapture(tampered, protocol, after).reason,'FORWARD_ORIGINAL_REVISION_MISMATCH');
+assert.equal(validateSoccerForwardCapture(changed(a,row => { row.snapshot.runStartedAt = iso(active - 1); }),protocol,after).reason,'FORWARD_PERSISTENCE_TIME_UNVERIFIED');
+assert.equal(validateSoccerForwardCapture({ ...a, capturedAt: iso(start) },protocol,after).reason,'FORWARD_FIRST_CAPTURE_NOT_PREGAME','observedAt before kickoff cannot rescue a postgame first DB receipt');
+const futureSource = changed(a,row => { row.snapshot.evidence.source.fetchedAt = iso(observed + 1); });
+assert.equal(validateSoccerForwardCapture(futureSource,protocol,after).reason,'FORWARD_INPUT_SOURCE_AVAILABILITY_UNVERIFIED');
+const invalidPrediction = changed(a,row => { row.snapshot.prediction.outcomes.draw += .01; });
+assert.equal(validateSoccerForwardCapture(invalidPrediction,protocol,after).reason,'FORWARD_OUTCOME_MASS_MISMATCH');
+const absentChallenger = fixtureCapture({variant:'PERSONNEL_CHALLENGER'});
+assert.equal(validateSoccerForwardCapture(absentChallenger,protocol,after).reason,'FORWARD_PERSONNEL_MODEL_UNVERIFIED');
+const challenger=changed(absentChallenger,row=>{
+  const source=row.snapshot.evidence.source,trainingHash=sha('personnel-training'),baselineHash=sha('baseline-model');
+  const startingXIs=Object.fromEntries(['home','away'].map((side,index)=>[side,Array.from({length:11},(_,i)=>String(index*100+i+1))]));
+  row.snapshot.personnelResearch={artifactHash:sha('personnel-artifact'),protocolHash:sha('personnel-policy'),trainingHash,baselineHash};
+  row.snapshot.personnelPrediction={...row.snapshot.prediction,modelVersion:'PERSONNEL-RESEARCH-fixture',trainingHash,baselineHash,mode:'CURRENT_PREMATCH',
+    personnelObservation:{availability:'OBSERVED_PREMATCH_XI',sourceUrl:source.url,sourceHash:source.contentHash,fetchedAt:source.fetchedAt,startingXIs}};
+  row.snapshot.evidence.teams=Object.fromEntries(['home','away'].map(side=>[side,{lineup:{status:'PROVIDER_REPORTED_XI',source,starters:startingXIs[side].map(id=>({id}))}}]));
+});
+assert.equal(validateSoccerForwardCapture(challenger,protocol,after).ok,true);
+assert.equal(evaluateSoccerForwardCapture(challenger,protocol,resultFor(challenger),after).variant,'PERSONNEL_CHALLENGER');
+const backfilledXI=changed(challenger,row=>{row.snapshot.personnelPrediction.mode='RETROSPECTIVE_OBSERVED_XI';row.snapshot.personnelPrediction.personnelObservation.availability='BACKFILLED_POSTMATCH_XI_NOT_PREMATCH_SAVED';});
+assert.equal(validateSoccerForwardCapture(backfilledXI,protocol,after).reason,'FORWARD_PERSONNEL_SOURCE_AVAILABILITY_UNVERIFIED');
+const differentXI=changed(challenger,row=>{row.snapshot.personnelPrediction.personnelObservation.startingXIs.home[0]='999999';});
+assert.equal(validateSoccerForwardCapture(differentXI,protocol,after).reason,'FORWARD_PERSONNEL_PREGAME_XI_UNVERIFIED');
+
+const half = fixtureCapture({period:'REGULATION_HT',sequence:3}), anotherLeague = fixtureCapture({league:'ucl',sequence:4}), anotherModel = fixtureCapture({modelSeed:'changed-coefficients',sequence:5});
+const chosen = canonicalSoccerForwardCaptures([b,half,anotherLeague,a,anotherModel],protocol,after);
+assert.equal(chosen.chosen.length,4); assert.equal(chosen.chosen[0].captureId,a.captureId); assert.equal(chosen.superseded.length,1,'a later more attractive forecast never replaces the first valid game/model/period');
+const result = resultFor(a), evaluation = evaluateSoccerForwardCapture(a,protocol,result,after);
+assert.equal(evaluation.status,'EVALUATED'); assert.equal(evaluation.actualOutcome,'home');
+assert.equal(evaluation.logLoss,-Math.log(a.snapshot.prediction.outcomes.home));
+assert.ok(evaluation.brier>=0&&evaluation.scoreLogLoss>0); assert.equal(evaluation.promotionEligible,false);
+const badResult={...result,teamIds:{...result.teamIds,away:'soccer:ucl:team:2'}};
+assert.equal(evaluateSoccerForwardCapture(a,protocol,badResult,after).reason,'FORWARD_RESULT_SCOPE_MISMATCH');
+assert.equal(evaluateSoccerForwardCapture(half,protocol,{...result,halfTime:null,halfTimeMissingReason:'NO_HT_PROOF'},after).reason,'NO_HT_PROOF');
+assert.equal(evaluateSoccerForwardCapture(half,protocol,{...result,halfTime:{...result.halfTime,home:3}},after).reason,'FORWARD_RESULT_PERIOD_OR_SCORE_INVALID');
+const rare=evaluateSoccerForwardCapture(a,protocol,{...result,fullTime:{home:30,away:0,period:'REGULATION_FT'}},after);
+assert.equal(rare.status,'EVALUATED'); assert.ok(rare.scoreLogLoss>50,'rare score outside the retained numerical grid still contributes its analytic log score');
+const report=buildSoccerForwardReport({captures:[a,b,half,anotherLeague,anotherModel,wrongSource,absentChallenger],evaluations:[evaluation],protocol,now:after});
+assert.equal(report.groups.length,5);assert.equal(report.evaluatedGameModelPeriods,1);assert.equal(report.laterReanalysesNotSelected,1);assert.equal(report.excludedSnapshotPeriods,2);
+assert.equal(report.groups.find(g=>g.league==='epl'&&g.period==='REGULATION_FT'&&g.modelHash===a.modelHash).probabilityAudit.cohort.used,1);
+assert.equal(report.groups.find(g=>g.league==='ucl').properScores.brier,null);
+const conflict=buildSoccerForwardReport({captures:[a],evaluations:[evaluation,{...evaluation,resultHash:sha('corrected-result'),actualScore:{home:0,away:1},actualOutcome:'away'}],protocol,now:after});
+assert.equal(conflict.evaluatedGameModelPeriods,0);assert.equal(conflict.conflictingResultCaptures,1);
+const refreshedSources=buildSoccerForwardReport({captures:[a],evaluations:[evaluation,{...evaluation,resultHash:sha('source-refresh-same-score')}],protocol,now:after});
+assert.equal(refreshedSources.evaluatedGameModelPeriods,1);assert.equal(refreshedSources.conflictingResultCaptures,0,'changed provider document hash alone is not a changed outcome');
+assert.throws(()=>normalizeSoccerForwardScope({date:'2026-02-30'}));
+assert.throws(()=>normalizeSoccerForwardScope({league:'nba'}));
+assert.throws(()=>normalizeSoccerForwardScope({from:'2025-01-01',through:'2026-10-19'}));
+assert.throws(()=>normalizeSoccerForwardScope({date:'2026-10-19',from:'2026-10-19'}));
+console.log('PASS soccer forward selection: true DB pregame boundary, source/hash/cutoff integrity, first snapshot fixed ex ante, league/period/model isolation, rare-score proper scoring, HT missing evidence, conflict quarantine, no historical OOS relabeling or promotion.');
