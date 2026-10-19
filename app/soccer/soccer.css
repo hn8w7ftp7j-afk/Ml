@@ -24,3 +24,13 @@
 .soccerResultsView .soccerGame:not(:has(.soccerAnalysisResult)){display:none}
 .soccerApp [hidden]{display:none!important}
 @media(max-width:600px){.soccerRankRow{grid-template-columns:20px 48px minmax(0,1fr);gap:8px}.soccerRankRow>div:last-child{grid-column:3}.soccerWorkspaceTabs button{flex:1 0 28%;padding:8px 5px}.soccerRanking .rankingViewTabs button{font-size:12px;flex:1 0 28%}.soccerRecordAction small{overflow-wrap:anywhere}}
+
+/* Keep date controls, view tabs and analysis actions in separate layout rows. */
+.soccerControls{display:grid;gap:16px;min-width:0}
+.soccerControls .soccerViewNav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0}
+.soccerControls .soccerAvailability{margin:0;line-height:1.7}
+.soccerDateControls input{box-sizing:border-box;min-inline-size:0;max-inline-size:100%;inline-size:100%;appearance:none;-webkit-appearance:none;overflow:hidden}
+.soccerDateControls input::-webkit-date-and-time-value{min-width:0;text-align:left}
+.soccerAnalyzeActions{display:flex;min-width:0}
+.soccerAnalyzeActions .allLeagueAnalyzeButton{display:flex;align-items:center;justify-content:center;min-width:0;min-height:44px;max-width:100%;line-height:1.5;text-align:center;text-decoration:none;overflow-wrap:anywhere}
+@media(max-width:720px){.soccerAnalyzeActions .allLeagueAnalyzeButton{width:100%}}
