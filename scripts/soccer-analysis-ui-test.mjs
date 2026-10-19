@@ -5,6 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import * as soccerBackgroundClient from '../lib/soccer/background-client.js';
+import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
 
 // Compile the shipped child components in isolated lexical scopes. Rendering
 // the parent must execute the real JSX, including legacy/missing-data paths.
@@ -26,7 +27,7 @@ function harness(fetch,{boardFetch=null}={}){
  const state=[],refs=[],effects=[],intervals=new Map(),cleanups=[],listeners=new Map();let si=0,ri=0,tree,intervalId=0;
  const document={visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
- const ctx=vm.createContext({...soccerBackgroundClient,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
+ const ctx=vm.createContext({...soccerBackgroundClient,soccerQuoteScorePresentation,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
    if(url.startsWith('/api/soccer/analysis?')&&!new URL(url,'https://fixture.invalid').searchParams.has('view')){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
    return fetch(url,options);
   },SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
@@ -79,6 +80,8 @@ const rateOnlyMarkup=renderToStaticMarkup(h.renderPanel(realGame));
 assert.match(rateOnlyMarkup,/計算基數與結算條款待核對/);assert.doesNotMatch(rateOnlyMarkup,/按投注金額計算/);
 h.state[0][realGame.id]={status:'done',data:liveSnapshot};
 assert.match(liveMarkup,/八方向與實際原盤/);assert.match(liveMarkup,/球頭 <strong>2-50/);assert.match(liveMarkup,/42.0%/);
+assert.ok(liveMarkup.indexOf('soccerMarketDirections')<liveMarkup.indexOf('soccerProbabilityResearch'),`S score cards precede research probabilities: ${liveMarkup.indexOf('soccerMarketDirections')} / ${liveMarkup.indexOf('soccerProbabilityResearch')}`);
+assert.match(liveMarkup,/<details class="soccerDetails soccerProbabilityResearch"><summary>比分與勝平負研究（不是 S 分數）/,'research probabilities are separate collapsed details, not the main score');
 assert.match(liveMarkup,/期間待確認，暫不計算/);assert.match(liveMarkup,/上半場比分研究/);assert.match(liveMarkup,/40.0%/);
 assert.match(liveMarkup,/跨賽事賽程與近期負荷/);assert.match(liveMarkup,/近7日已知完賽 2 場/);assert.match(liveMarkup,/74.5 小時/);assert.match(liveMarkup,/跨賽事資料暫時不足/);
 const legacySnapshot={...result,evidence:{...result.evidence}};
@@ -104,6 +107,13 @@ const expiredMarkup=renderToStaticMarkup(h.renderPanel(realGame));assert.match(e
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:{...receipt,revision:'newer-revision'}},uiStart).current,false);
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:{...receipt,analysisRunId:'newer-run'}},uiStart).current,false);
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:null},uiStart).current,false,'a failed read cannot fall back to the old POST flag');
+const cardResult=()=>nodes(h.renderPanel(realGame)).find(node=>node.type===h.ctx.SoccerMarketDirections).props.result;
+uiNow=uiStart;h.state[0][realGame.id]={...currentState,currentResearch:null};
+assert.equal(cardResult().publishedCurrent,false,'score cards inherit the latest failed receipt, not the stale embedded ACTIVE receipt');
+h.state[0][realGame.id]={...currentState,currentResearch:{...receipt,publishedCurrent:false,reason:'QUOTE_CHANGED'}};
+assert.equal(cardResult().publishedCurrent,false,'Reader invalidation revokes a current-looking S card');
+assert.equal(currentState.data.publishedCurrent,true,'presentation overlays cannot mutate the immutable saved result');
+h.state[0][realGame.id]=currentState;
 assert.equal(h.ctx.soccerAnalysisPresentation({status:'done',data:liveSnapshot},uiStart).current,false,'legacy snapshots without current evidence remain readable but unverified');
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiStart+45001).current,false,'a stalled status feed cannot keep a current badge alive indefinitely');
 const nearExpiry={...currentState,currentResearch:{...receipt,validUntil:new Date(uiStart+5000).toISOString()},currentResearchReceivedAt:uiStart+6000};

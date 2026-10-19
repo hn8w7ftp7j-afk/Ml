@@ -1,9 +1,11 @@
 'use client';
 import { SoccerRecordButton } from './bet-records.js';
+import { soccerQuoteScorePresentation } from '../../lib/soccer/score-presentation.js';
 
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
 const pct=v=>finite(v)&&v>=0&&v<=1?`${(v*100).toFixed(1)}%`:'—';
 const clock=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):null;
+const returnPct=v=>finite(v)?`${v>0?'+':''}${(v*100).toFixed(2)}%`:'—';
 const periods={FT:'全場',HT:'上半場'};
 const directionNames={HANDICAP_HOME:'主隊讓／受讓',HANDICAP_AWAY:'客隊讓／受讓',TOTAL_OVER:'大球',TOTAL_UNDER:'小球'};
 const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'期間、派彩及退水適用條件待核對',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
@@ -33,30 +35,34 @@ function SoccerThresholdProbabilities({probabilities}){
   return <div className="soccerMarketThreshold"><p>{axis}門檻 {p.boundary} 球</p><dl><div><dt>高於門檻</dt><dd>{pct(p.above)}</dd></div><div><dt>等於門檻</dt><dd>{pct(p.equal)}</dd></div><div><dt>低於門檻</dt><dd>{pct(p.below)}</dd></div></dl>{finite(p.tailMass)&&p.tailMass>0&&<p className="soccerMarketNote">未展開尾端機率 {pct(p.tailMass)}，以上保留原分布計算值。</p>}</div>;
 }
 
-function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result}){
+function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result,direction,now}){
   const q=quote||{},provenance=q.provenance||{},rawRows=(Array.isArray(q.rawRows)?q.rawRows:[]).map(rowText).filter(Boolean);
   const observed=clock(provenance.observedAt||q.observedAt||provenance.receivedAt);
   const periodConfirmed=!unassigned&&Boolean(periods[q.period])&&(!expectedPeriod||q.period===expectedPeriod);
   const period=periodConfirmed?periods[q.period]:null;
   const line=textValue(q.line),water=textValue(q.water);
+  const presentation=soccerQuoteScorePresentation({result,direction,quote:q,displayGame:game,periodConfirmed,now});
   return <article className="soccerMarketQuote" data-quote-key={q.key||undefined}>
-    <div className="soccerMarketQuoteHeading"><strong>{textValue(q.label)||`原盤 ${index+1}`}</strong><span className="soccerMarketResearchTag">{period||'期間待確認'}</span></div>
-    <p className="soccerMarketPrice">球頭 <strong>{line||'未提供'}</strong><span>水位 <strong>{water??'未提供'}</strong></span></p>
-    <p className="soccerMarketNote">S —｜W —｜R —｜正式評分待驗證</p>
+    <div className="soccerQuoteScoreRow"><div className={`soccerQuoteScore ${presentation.tone}`} aria-label={presentation.score==null?'尚未產生 S 分數':`S 分數 ${presentation.score.toFixed(1)}`}><span>S 分數</span><strong>{presentation.score==null?'—':presentation.score.toFixed(1)}</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody">
+      <div className="soccerMarketQuoteHeading"><strong>{textValue(q.label)||`原盤 ${index+1}`}</strong><span className="soccerMarketResearchTag">{period||'期間待確認'}</span></div>
+      <p className="soccerMarketPrice">球頭 <strong>{line||'未提供'}</strong><span>水位 <strong>{water??'未提供'}</strong></span></p>
+      <p className="soccerMarketNote">W {returnPct(presentation.W)}｜R {returnPct(presentation.R)}</p>
+      <p className="soccerScoreStatus" data-score-status={presentation.status}>{presentation.label}</p>
+    </div></div>
     <SoccerQuoteScoring scoring={q.scoring}/>
     {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
     {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
-    {!periodConfirmed?<p className="soccerMarketCaution">期間待確認，暫不計算</p>:<><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</>}
+    {!periodConfirmed?<p className="soccerMarketCaution">期間待確認，暫不計算</p>:<details className="soccerDetails"><summary>比分門檻研究（不是 S 分數）</summary><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</details>}
     {periodConfirmed&&<SoccerRecordButton game={game} result={result} quote={q}/>}
   </article>;
 }
 
-export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,result}){
+export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,result,now=Date.now()}){
   const items=Array.isArray(directions)?directions:[],unknown=Array.isArray(unassignedQuotes)?unassignedQuotes:[];
-  return <details className="soccerDetails soccerMarketDirections"><summary>八方向與實際原盤</summary><p className="soccerMarketCaution">進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。結算、退水與模型仍待驗收，正式 S／W／R 及候選尚未啟用。</p>
+  return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">每筆原盤獨立顯示 S 分數，沿用 MLB 現有評分公式及上限規則；不是把勝率換成分數。排名另須通過 S ≥ 7.2、W &gt; 0、R &gt; 0 與正式資格核對。</p><p className="soccerMarketCaution">尚無有效計算依據時顯示「待評分」，不補造分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
     <div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
       const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons);
-      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4><p className="soccerMarketNote">研究・契約待核對</p>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} key={`${quote.key||i}:${i}`}/>):<p className="soccerMarketEmpty">缺少此方向可確認期間的原盤。</p>}{reasons.length>0&&<p className="soccerMarketNote">{reasons.join('；')}。</p>}</section>;
+      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>待評分</strong><p className="soccerMarketEmpty">缺少此方向可確認期間的原盤。</p></div></div>}{reasons.length>0&&<p className="soccerMarketNote">{reasons.join('；')}。</p>}</section>;
     })}</div>
     {!items.length&&<p className="soccerMarketEmpty">尚無八方向分析，請先核對賽前資料。</p>}
     {unknown.length>0&&<section className="soccerMarketUnassigned"><h4>期間待確認的原盤</h4><p className="soccerMarketCaution">以下原盤未能確認屬全場或上半場，暫不配入八方向。</p>{unknown.map((quote,i)=><SoccerRawMarketQuote quote={quote} unassigned index={i} key={`${quote.key||i}:${i}`}/>)}</section>}
