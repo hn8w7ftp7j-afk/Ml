@@ -143,6 +143,9 @@ export function assessBoardCandidate(candidate, now = Date.now()) {
   if (!expectedGameCount || expectedGameCount < 1 || expectedGameCount > 30) {
     issues.push('missing-expected-game-count');
   }
+  if (['EPL', 'UCL'].includes(parsed.league) && Array.isArray(diagnostics.tableIssues)) {
+    issues.push(...diagnostics.tableIssues.slice(0, 8).map(issue => `table:${String(issue).slice(0, 100)}`));
+  }
   if (rawDetectedGameCount == null || rawDetectedGameCount < 1) issues.push('missing-detected-game-count');
   if (!games.length) issues.push('no-parsed-games');
   // Tai888 keeps locked events in the league header count, but some rendered

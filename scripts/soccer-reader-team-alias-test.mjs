@@ -23,7 +23,7 @@ for (const [expected, aliases] of [
   }
   assert.equal(codes.size, 1, `${expected}: aliases must share one stable Reader code`);
 }
-for (const value of ['高雲地利-角球數', '高雲地利-罰牌數', '高雲地利-罚牌数', 'Hull City CORNERS', 'Portsmouth BOOKINGS']) {
+for (const value of ['高雲地利-角球數', '高雲地利-副牌數', '高雲地利-副牌数', '高雲地利-罰牌數', '高雲地利-罚牌数', 'Hull City CORNERS', 'Portsmouth BOOKINGS']) {
   assert.equal(teams.resolve(value), null, 'prop names are never match-team aliases');
 }
 console.log('PASS soccer supplementary club aliases: Chinese Reader and official English identities share stable keys/codes; existing aliases remain unchanged and corner/card names are excluded.');

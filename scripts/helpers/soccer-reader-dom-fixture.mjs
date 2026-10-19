@@ -33,8 +33,9 @@ export class RenderedElement {
 }
 
 export function desktopDocument(league, { homeFirst = true, separatedRows = false, malformed = false, foreignHeading = false,
-  lockMarket = '', lockCount = 1, fullyLocked = false, omitColumnHeader = false, layout = 'table', iconText = '★', nestedFragments = false } = {}) {
-  const label = league === 'EPL' ? '聯盟：英格蘭超級聯賽(5)' : '聯盟：歐洲冠軍聯賽(5)';
+  lockMarket = '', lockCount = 1, fullyLocked = false, omitColumnHeader = false, layout = 'table', iconText = '★', nestedFragments = false,
+  cardProp = '罰牌數', headingCount = 5, malformedCard = false } = {}) {
+  const label = `聯盟：${league === 'EPL' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽'}(${headingCount})`;
   const root = new RenderedElement('HTML', { height: 900 }); root.isConnected = true;
   const body = root.append(new RenderedElement('BODY', { height: 900 }));
   const table = body.append(new RenderedElement('TABLE', { left: 455, top: 100, width: 650, height: 450 }));
@@ -55,7 +56,7 @@ export function desktopDocument(league, { homeFirst = true, separatedRows = fals
     { line: '1平', water: ['0.790', '1.100'], total: '3+50', totals: ['0.700', '1.190'], half: ['0-50', '0.660', '1.390'], money: ['', '', ''] },
     { line: '1.5', water: ['1.320', '0.640'], total: '3-50', totals: ['1.190', '0.700'], half: ['1+50', '1.370', '0.610'], money: ['', '', ''] },
     { prop: '角球數', line: '3+50', water: ['0.840', '0.940'], total: '10.5', totals: ['0.940', '0.840'], money: ['0.180', '2.700', '10.900'] },
-    { prop: '罰牌數', line: '0.5', water: ['0.890', '0.910'], total: '3平', totals: ['0.730', '1.050'], money: ['', '', ''] },
+    { prop: cardProp, line: '0.5', water: ['0.890', '0.910'], total: '3平', totals: ['0.730', '1.050'], money: ['', '', ''] },
   ];
   if (fullyLocked) definitions = definitions.slice(0, 1);
   for (const [index, definition] of definitions.entries()) {
@@ -74,6 +75,7 @@ export function desktopDocument(league, { homeFirst = true, separatedRows = fals
     const halfRows = [definition.half?.[0] || '0.5', '', ''], halfWater = [...(definition.half?.slice(1) || ['0.970', '0.910'])];
     if (!homeFirst) { teams.reverse(); waters.reverse(); money.splice(0, 2, money[1], money[0]); lineRows.splice(0, 2, '', definition.line); halfRows.splice(0, 2, '', definition.half?.[0] || '0.5'); halfWater.reverse(); }
     if (malformed && index === 0) waters[0] = 'UNKNOWN';
+    if (malformedCard && definition.prop === cardProp) waters[0] = 'UNKNOWN';
     const values = [
       [455, 45, ['10-20', '03:00', '']], [500, 110, [...teams, iconText]],
       [610, 50, money], [660, 50, lineRows], [710, 70, [...waters, '']],

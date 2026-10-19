@@ -1,7 +1,7 @@
 (() => {
   const clean = value => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
   const homeMarker = /[\[［【(（]\s*主\s*[\]］】)）]/u;
-  const props = /角球|CORNERS?|罰牌|罚牌|卡牌|黃牌|黄牌|紅牌|红牌|BOOKINGS?/i;
+  const props = /角球|副牌|CORNERS?|罰牌|罚牌|卡牌|黃牌|黄牌|紅牌|红牌|BOOKINGS?/i;
   const date = /^\d{1,2}[/-]\d{1,2}$/;
   const time = /^(?:[01]?\d|2[0-3]):[0-5]\d$/;
   const water = /^\d{1,4}\.\d{1,3}$/;
