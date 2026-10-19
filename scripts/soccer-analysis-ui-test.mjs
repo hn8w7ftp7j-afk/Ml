@@ -107,6 +107,13 @@ const expiredMarkup=renderToStaticMarkup(h.renderPanel(realGame));assert.match(e
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:{...receipt,revision:'newer-revision'}},uiStart).current,false);
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:{...receipt,analysisRunId:'newer-run'}},uiStart).current,false);
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:null},uiStart).current,false,'a failed read cannot fall back to the old POST flag');
+const cardResult=()=>nodes(h.renderPanel(realGame)).find(node=>node.type===h.ctx.SoccerMarketDirections).props.result;
+uiNow=uiStart;h.state[0][realGame.id]={...currentState,currentResearch:null};
+assert.equal(cardResult().publishedCurrent,false,'score cards inherit the latest failed receipt, not the stale embedded ACTIVE receipt');
+h.state[0][realGame.id]={...currentState,currentResearch:{...receipt,publishedCurrent:false,reason:'QUOTE_CHANGED'}};
+assert.equal(cardResult().publishedCurrent,false,'Reader invalidation revokes a current-looking S card');
+assert.equal(currentState.data.publishedCurrent,true,'presentation overlays cannot mutate the immutable saved result');
+h.state[0][realGame.id]=currentState;
 assert.equal(h.ctx.soccerAnalysisPresentation({status:'done',data:liveSnapshot},uiStart).current,false,'legacy snapshots without current evidence remain readable but unverified');
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiStart+45001).current,false,'a stalled status feed cannot keep a current badge alive indefinitely');
 const nearExpiry={...currentState,currentResearch:{...receipt,validUntil:new Date(uiStart+5000).toISOString()},currentResearchReceivedAt:uiStart+6000};
