@@ -40,11 +40,11 @@ const truncated=renderReport({...report(),truncated:true,complete:false});assert
 
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):String(value??'');
-function harness({league='epl',throwFirst=false}={}){
+function harness({league='epl',throwFirst=false,deferUpdaters=false}={}){
  let props={league},cursor=0,dirty=false,tree,writes=0,fetchCount=0,timerId=0;
- const hooks=[],effects=[],calls=[],timers=new Map();
+ const hooks=[],effects=[],calls=[],timers=new Map(),queuedUpdates=[];
  const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,SoccerCalibrationPanel:calibrationContext.SoccerCalibrationPanel,
-  useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],update=>{hooks[i]=typeof update==='function'?update(hooks[i]):update;dirty=true;writes++;}];},
+  useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],update=>{const apply=()=>{hooks[i]=typeof update==='function'?update(hooks[i]):update;dirty=true;writes++;};if(deferUpdaters&&typeof update==='function')queuedUpdates.push(apply);else apply();}];},
   useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},
   useEffect:(fn,deps)=>{const i=cursor++,previous=hooks[i];if(previous&&deps.every((v,j)=>Object.is(v,previous.deps[j])))return;hooks[i]={deps};effects.push(()=>{previous?.cleanup?.();hooks[i].cleanup=fn();});},
   setTimeout:(fn,delay)=>{timers.set(++timerId,{fn,delay});return timerId;},clearTimeout:id=>timers.delete(id),
@@ -52,10 +52,10 @@ function harness({league='epl',throwFirst=false}={}){
  });
  vm.runInContext(compiled.code,ctx);
  function render(next=props){props=next;let turns=0;do{cursor=0;dirty=false;tree=ctx.SoccerForwardValidationPanel(props);effects.splice(0).forEach(fn=>fn());assert.ok(turns++<20);}while(dirty);return tree;}
- async function settle(){for(let i=0;i<25;i++){await Promise.resolve();if(dirty)render();}}
+ async function settle(){for(let i=0;i<25;i++){await Promise.resolve();queuedUpdates.splice(0).forEach(apply=>apply());if(dirty)render();}}
  const button=label=>nodes(tree).find(n=>n.type==='button'&&text(n.props.children)===label);
  return{render,settle,calls,timers,button,get tree(){return tree;},get writes(){return writes;},get markup(){return renderToStaticMarkup(tree);},
-  input:(name,value)=>nodes(tree).find(n=>n.type==='input'&&n.props.name===name).props.onChange({target:{value}}),
+  input:(name,value)=>{const event={target:{value}};nodes(tree).find(n=>n.type==='input'&&n.props.name===name).props.onChange(event);return event;},
   apply:()=>nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}}),
   unmount:()=>hooks.forEach(h=>h?.cleanup?.()),
  };
@@ -81,4 +81,15 @@ outstanding.respond({ok:true,report:report('ucl')});await refresh;await late.set
 
 const mismatch=harness();mismatch.render();mismatch.calls[0].respond({ok:true,report:report('ucl',[{...group,league:'ucl'}])});await mismatch.settle();assert.match(mismatch.markup,/聯盟或範圍不符/);assert.doesNotMatch(mismatch.markup,/REAL-UI-FIXTURE/);mismatch.unmount();
 const retry=harness({throwFirst:true});retry.render();await retry.settle();assert.match(retry.markup,/controlled synchronous fetch failure/);const again=retry.button('重新讀取').props.onClick();assert.equal(retry.calls.length,1,'a synchronous failed fetch must release the flight for retry');retry.calls[0].respond({ok:true,report:report()});await again;await retry.settle();retry.unmount();
+
+// React can defer functional state updaters until after the event's live input
+// target changes. Exercise the shipped handlers with that scheduling: each ISO
+// value must be captured during onChange, rather than read in the updater.
+const deferred=harness({deferUpdaters:true});deferred.render();await deferred.settle();deferred.calls[0].respond({ok:true,report:report()});await deferred.settle();
+const fromEvent=deferred.input('from','2026-10-19'),throughEvent=deferred.input('through','2026-10-20');
+fromEvent.target.value='';throughEvent.target.value='';await deferred.settle();
+assert.equal(nodes(deferred.tree).find(n=>n.type==='input'&&n.props.name==='from').props.value,'2026-10-19','the queued updater preserves the captured start date after the live target is cleared');
+assert.equal(nodes(deferred.tree).find(n=>n.type==='input'&&n.props.name==='through').props.value,'2026-10-20','the queued updater preserves the captured end date after the live target is cleared');
+deferred.apply();await deferred.settle();assert.equal(deferred.calls.length,2);assert.equal(deferred.calls[1].url,'/api/soccer/forward-validation?league=epl&from=2026-10-19&through=2026-10-20','submission validates and sends the preserved ISO range');
+deferred.calls[1].respond({ok:true,report:report()});await deferred.settle();deferred.unmount();
 console.log('PASS shipped forward-validation JSX and hooks: actual FT/HT/personnel groups, proper-score zero vs missing denominators, actual classwise audit, prospective limits, pending/excluded reasons, truncation date filters, exact scoped GET/POST, duplicate/race fencing, late league/range replies, abort/unmount and retry');
