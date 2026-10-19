@@ -8,12 +8,16 @@ import { buildSoccerRanking,SOCCER_RANK_MARKETS,soccerMarketName } from '../lib/
 import { soccerRecordKey,soccerRecordStats } from '../lib/soccer/manual-record.js';
 import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 import { soccerValidationArtifacts } from '../lib/soccer/validation-frozen.js';
+import { soccerHalfTimeArtifacts } from '../lib/soccer/half-time-frozen.js';
 const source=fs.readFileSync('app/soccer/workspace.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
 const compiled=await transform(source,{filename:'workspace.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+const calibrationSource=fs.readFileSync('app/soccer/calibration-panel.js','utf8').replace(/export function/g,'function');
+const calibrationCompiled=await transform(calibrationSource,{filename:'calibration-panel.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 let states=[],si=0;
-const ctx=vm.createContext({React,Date,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerTeamLabel,soccerValidationArtifacts,
+const ctx=vm.createContext({React,Date,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerTeamLabel,soccerValidationArtifacts,soccerHalfTimeArtifacts,
   SoccerRecordProvider:({children})=>children,SoccerRecordButton:()=>null,SoccerBetRecords:()=>React.createElement('p',null,'實際下注帳本'),
   useEffect:()=>{},useState:initial=>[states[si++]??(typeof initial==='function'?initial():initial),()=>{}]});
+vm.runInContext(`Object.assign(globalThis,(()=>{${calibrationCompiled.code};return {SoccerCalibrationPanel};})());`,ctx);
 vm.runInContext(compiled.code,ctx);
 const render=(view,league='epl')=>{states=[view];si=0;return renderToStaticMarkup(ctx.SoccerWorkspace({league,date:'2026-10-20',games:[],states:{},run:()=>{},children:[]}));};
 for(const view of ['board','results','ranking','records','data','validation']){
@@ -23,6 +27,7 @@ for(const view of ['board','results','ranking','records','data','validation']){
 assert.match(render('ranking'),/全部排名/);assert.match(render('ranking'),/時間順序排名/);
 states=['order','all'];si=0;assert.match(renderToStaticMarkup(ctx.SoccerRanking({games:[],states:{},run:()=>{},now:Date.now()})),/目前沒有通過 S／W／R/);
 const epl=render('validation'),ucl=render('validation','ucl');assert.match(epl,/393／412/);assert.match(ucl,/143／185/);assert.doesNotMatch(ucl,/393／412/);
+for(const markup of [epl,ucl]){assert.match(markup,/全場｜逐年分事件校準/);assert.match(markup,/上半場｜分事件校準/);assert.match(markup,/全場勝平負校準核對/);assert.match(markup,/上半場勝平負校準核對/);assert.match(markup,/全場分事件校準指標/);assert.match(markup,/上半場分事件校準指標/);for(const name of ['主勝','和局','客勝'])assert.ok(markup.includes(`${name}｜分箱預估與實際比例`));assert.match(markup,/事後回補的研究診斷/);}
 console.log('PASS shipped workspace JSX: six NBA-style tabs, two ranking views, honest empty candidates and separate EPL/UCL validation metrics');
 
 const recordSource=fs.readFileSync('app/soccer/bet-records.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');

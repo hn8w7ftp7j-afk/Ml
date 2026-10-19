@@ -41,3 +41,4 @@
 .soccerEmbedded>.soccerControls{margin-top:16px}
 .soccerEmbedded .soccerAnalyzeActions button{cursor:pointer}
 .soccerEmbedded .soccerAnalyzeActions button:disabled{cursor:wait;opacity:.65}
+.soccerCalibrationGroup{margin-top:24px;min-width:0}.soccerCalibrationGroup>h3{font-size:16px;color:#d7e7f3;margin:0 0 8px}.soccerCalibration p,.soccerCalibration li{font-size:13px;line-height:1.75;overflow-wrap:anywhere}.soccerCalibrationScope{color:#c8deee;font-variant-numeric:tabular-nums}.soccerCalibrationTable{min-width:410px}.soccerCalibrationTable caption{text-align:left;color:#bed4e4;font-size:12px;padding:0 0 8px}.soccerCalibrationTable td{font-variant-numeric:tabular-nums}.soccerCalibrationClass{margin-left:10px}.soccerCalibrationReasonCode{display:block;color:#8fa9c6;font-size:11px;overflow-wrap:anywhere}.soccerCalibrationCaution{color:#dfc69b}
