@@ -1,0 +1,144 @@
+import assert from 'node:assert/strict';
+import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
+import { fixtureCapture } from './helpers/soccer-forward-fixture.mjs';
+import { soccerForwardAnalysisRevision, soccerForwardHash, soccerForwardModelDescriptor, validateSoccerForwardCapture,
+  evaluateSoccerForwardCapture, SOCCER_FORWARD_POLICY } from '../lib/soccer/forward-validation.js';
+import { soccerDate } from '../lib/soccer/contracts.js';
+const fixture=await soccerSqlFixture(),{db}=fixture;
+const oldDatabase=process.env.DATABASE_URL,oldDatabaseV2=process.env.DATABASE_V2_URL;
+process.env.DATABASE_URL='postgres://fixture.invalid/soccer-forward';delete process.env.DATABASE_V2_URL;
+try {
+  const { ensureSoccerForwardProtocol, captureSoccerForwardSnapshot, loadSoccerForwardEvidence, readSoccerForwardValidation,
+    archiveSoccerForwardCheck, runSoccerForwardValidation } = await import('../lib/soccer/forward-validation-service.js');
+  const protocol=await ensureSoccerForwardProtocol(),now=Date.now(),start=now+3600000;
+  const iso=value=>new Date(value).toISOString();
+  const original=fixtureCapture().snapshot;
+  original.runStartedAt=iso(now); original.observedAt=iso(now); original.analysisCutoff=iso(now);
+  original.date=soccerDate(start);original.evidence.game.date=original.date;original.evidence.game.startTime=iso(start);
+  for(const source of [original.evidence.source,original.evidence.game.source])source.fetchedAt=iso(now);
+  original.inputVersions.evidenceFetchedAt=iso(now);
+  const revision=soccerForwardAnalysisRevision(original);
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ($1,$2,$3,$4::timestamptz,$5::jsonb)`,['epl',original.gameId,revision,original.observedAt,JSON.stringify(original)]);
+  const receipt=await captureSoccerForwardSnapshot({league:'epl',gameId:original.gameId,prediction:'client-content-is-ignored'},revision);
+  assert.equal(receipt.captures.length,3);assert.equal(receipt.persisted,true);
+  assert.ok(receipt.captures.every(row=>Date.parse(row.capturedAt)>=now&&Date.parse(row.capturedAt)<start));
+  assert.equal((await captureSoccerForwardSnapshot(original,revision)).captures[0].captureId,receipt.captures[0].captureId,'same original revision has the same immutable first receipt');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM sports_soccer_forward_captures_v1')).rows[0].n,3);
+  const scope={league:'epl',date:original.date};
+  let evidence=await loadSoccerForwardEvidence(scope);
+  assert.equal(evidence.captures.length,3);assert.deepEqual(evidence.captures[0].snapshot,original);
+  const ft=evidence.captures.find(row=>row.period==='REGULATION_FT'&&row.variant==='BASELINE');
+  assert.equal(ft.revision,revision);assert.equal(ft.modelHash,soccerForwardHash(soccerForwardModelDescriptor(original,'REGULATION_FT')));
+  assert.equal(validateSoccerForwardCapture(ft,protocol,Date.now()).ok,true,'DB timestamp receipt, not observed_at, qualifies this pregame snapshot');
+  const report=await readSoccerForwardValidation(scope);
+  assert.equal(report.selectedGameModelPeriods,2);assert.equal(report.excludedSnapshotPeriods,1);assert.equal(report.evaluatedGameModelPeriods,0);
+  assert.equal(report.excludedReasons.FORWARD_PERSONNEL_MODEL_UNVERIFIED,1);
+  assert.equal((await readSoccerForwardValidation({league:'ucl',date:original.date})).capturedSnapshotPeriods,0);
+  for(const table of ['protocol','captures'])await assert.rejects(()=>db.query(`UPDATE sports_soccer_forward_${table}_v1 SET ${table==='protocol'?'policy=policy':'analysis_revision=analysis_revision'}`),/SOCCER_IMMUTABLE_HISTORY/);
+  const after=start+7200000;
+  const result={ok:true,verified:true,status:'NORMAL_FINAL_CROSSCHECKED',league:'epl',gameId:original.gameId,date:original.date,startTime:original.evidence.game.startTime,
+    teamIds:{home:original.evidence.game.home.id,away:original.evidence.game.away.id},fullTime:{home:2,away:1,period:'REGULATION_FT'},
+    halfTime:null,halfTimeMissingReason:'NO_HT_PROOF',observedAt:iso(after),resultHash:soccerForwardHash('synthetic-result'),
+    sources:[original.evidence.source,original.evidence.game.source].map(source=>({...source,fetchedAt:iso(after)})),evidenceScope:SOCCER_FORWARD_POLICY.resultEvidence};
+  const evaluation=evaluateSoccerForwardCapture(ft,protocol,result,after);
+  assert.equal(evaluation.status,'EVALUATED');
+  await archiveSoccerForwardCheck(ft,evaluation,result);await archiveSoccerForwardCheck(ft,evaluation,result);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM sports_soccer_forward_result_checks_v1')).rows[0].n,1,'exact result retries do not double score the cohort');
+  assert.equal((await readSoccerForwardValidation(scope,{now:()=>after})).evaluatedGameModelPeriods,1);
+  await assert.rejects(()=>db.query('DELETE FROM sports_soccer_forward_result_checks_v1'),/SOCCER_IMMUTABLE_HISTORY/);
+  const correctionTime=now+7*3600000;
+  const revisedResult={...result,resultHash:soccerForwardHash('synthetic-corrected-result'),fullTime:{home:0,away:1,period:'REGULATION_FT'},
+    sources:result.sources.map(source=>({...source,fetchedAt:iso(correctionTime)})),observedAt:iso(correctionTime)};
+  let correctionFetches=0;
+  const corrected=await runSoccerForwardValidation(scope,{now:()=>correctionTime,limit:1,timeBudgetMs:1000,
+    fetchResult:async()=>{correctionFetches++;return revisedResult;}});
+  assert.equal(correctionFetches,1,'the actual runner must revisit already-scored games after the predeclared recheck interval');
+  assert.equal(corrected.recheckedGameModelPeriods,1);
+  const conflict=await readSoccerForwardValidation(scope,{now:()=>correctionTime});
+  assert.equal(conflict.evaluatedGameModelPeriods,0);assert.equal(conflict.conflictingResultCaptures,1,'a provider correction discovered by the runner appends evidence and withdraws the old score pending review');
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM sports_soccer_forward_result_checks_v1 WHERE payload->'evaluation'->>'captureId'=$1`,[ft.captureId])).rows[0].n,2,'original evaluated result remains intact beside its changed result');
+  // Real SQL must size uncompressed JSON before projecting payloads. A
+  // highly compressible oversized field reproduces the TOAST-vs-heap hazard.
+  const padded=structuredClone(original);padded.gameId='soccer:epl:150';padded.evidence.game.id=padded.gameId;padded.evidence.game.sourceId='150';
+  padded.evidence.source.url=padded.evidence.source.url.replace('event=100','event=150');padded.readBudgetFixture='x'.repeat(180000);
+  const paddedRevision=soccerForwardAnalysisRevision(padded);
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[padded.gameId,paddedRevision,padded.observedAt,JSON.stringify(padded)]);
+  await captureSoccerForwardSnapshot(padded,paddedRevision);
+  const payloadSize=Number((await db.query('SELECT octet_length(payload::text)::bigint AS bytes FROM sports_soccer_analysis_v1 WHERE analysis_hash=$1',[revision])).rows[0].bytes);
+  const captureBudget=payloadSize*3;
+  let returnedCaptureBytes=0,returnedCheckBytes=0,metadataMeasured=false;
+  const tracedQuery=async(sql,params=[])=>{
+    const rows=(await db.query(sql,params)).rows;
+    if(sql.includes('AS cumulative_payload_bytes')&&sql.includes('WITH candidates')){
+      metadataMeasured=true;assert.ok(sql.includes('octet_length(a.payload::text)'));assert.ok(rows.every(row=>!Object.hasOwn(row,'payload')));
+    }
+    if(sql.startsWith('SELECT c.capture_id,a.payload'))returnedCaptureBytes+=rows.reduce((sum,row)=>sum+Buffer.byteLength(JSON.stringify(row.payload)),0);
+    if(sql.includes('WITH histories'))returnedCheckBytes+=rows.reduce((sum,row)=>sum+(row.payload?Buffer.byteLength(JSON.stringify(row.payload)):0),0);
+    return rows;
+  };
+  const bounded=await loadSoccerForwardEvidence(scope,{query:tracedQuery,capturePayloadBytes:captureBudget});
+  assert.equal(metadataMeasured,true);assert.equal(bounded.captures.length,3,'later large snapshots never cross the cumulative uncompressed byte budget');
+  assert.ok(returnedCaptureBytes<=captureBudget);assert.equal(bounded.readCoverage.loadedCapturePayloadBytes,captureBudget);
+  assert.equal(bounded.truncated,true);assert.ok(bounded.readCoverage.reasons.includes('CAPTURE_PAYLOAD_BYTE_BUDGET'));
+  assert.match(bounded.readCoverage.guidance,/縮小/);assert.equal((await readSoccerForwardValidation(scope,{capturePayloadBytes:captureBudget})).complete,false);
+  const oversizedFirst=await loadSoccerForwardEvidence(scope,{capturePayloadBytes:payloadSize-1});
+  assert.equal(oversizedFirst.captures.length,0,'an oversized first payload is not loaded as a special case');
+  assert.equal(oversizedFirst.truncated,true);assert.equal(oversizedFirst.readCoverage.loadedCapturePayloadBytes,0);
+  const rowBound=await loadSoccerForwardEvidence(scope,{limit:1});
+  assert.equal(rowBound.captures.length,1);assert.ok(rowBound.readCoverage.reasons.includes('CAPTURE_ROW_BUDGET'));
+  returnedCaptureBytes=0;returnedCheckBytes=0;
+  const boundedChecks=await loadSoccerForwardEvidence(scope,{query:tracedQuery,resultCheckPayloadBytes:1});
+  assert.equal(returnedCheckBytes,0,'SQL never projects a result-history payload beyond its byte budget');
+  assert.equal(boundedChecks.evaluations.length,0);assert.equal(boundedChecks.truncated,true);
+  assert.ok(boundedChecks.incompleteResultCaptureIds.includes(ft.captureId));
+  const partialChecks=await readSoccerForwardValidation(scope,{resultCheckPayloadBytes:1,now:()=>correctionTime});
+  assert.equal(partialChecks.complete,false);assert.equal(partialChecks.evaluatedGameModelPeriods,0,'a truncated correction history cannot restore a score');
+  assert.equal(partialChecks.groups.find(group=>group.period==='REGULATION_FT'&&group.variant==='BASELINE').pendingReasons.FORWARD_RESULT_HISTORY_READ_INCOMPLETE,1);
+  const rowBoundChecks=await loadSoccerForwardEvidence(scope,{resultCheckRows:1});
+  assert.ok(rowBoundChecks.readCoverage.reasons.includes('RESULT_CHECK_ROW_BUDGET'));
+  assert.equal(rowBoundChecks.evaluations.length,0,'whole histories are excluded rather than taking a newest-N suffix that hides an older correction');
+  assert.ok(returnedCaptureBytes<=24*1024*1024);
+  await assert.rejects(()=>loadSoccerForwardEvidence(scope,{capturePayloadBytes:24*1024*1024+1}),/READ_BUDGET_INVALID/);
+  const past=structuredClone(original);past.gameId='soccer:epl:200';past.evidence.game.id=past.gameId;past.evidence.game.sourceId='200';
+  past.evidence.source.url=past.evidence.source.url.replace('event=100','event=200');past.evidence.game.startTime=iso(now-1000);
+  const pastRevision=soccerForwardAnalysisRevision(past);
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[past.gameId,pastRevision,past.observedAt,JSON.stringify(past)]);
+  await captureSoccerForwardSnapshot(past,pastRevision);
+  evidence=await loadSoccerForwardEvidence(scope);
+  const pastCapture=evidence.captures.find(row=>row.gameId===past.gameId);
+  assert.equal(validateSoccerForwardCapture(pastCapture,protocol,Date.now()).reason,'FORWARD_FIRST_CAPTURE_NOT_PREGAME','a backdated observed_at cannot manufacture a historical forward sample');
+  await assert.rejects(()=>captureSoccerForwardSnapshot(original,'f'.repeat(64)),/ORIGINAL_SNAPSHOT_MISSING/);
+  const legacy=structuredClone(original);legacy.gameId='soccer:epl:300';legacy.evidence.game.id=legacy.gameId;legacy.evidence.game.sourceId='300';
+  legacy.evidence.source.url=legacy.evidence.source.url.replace('event=100','event=300');
+  const legacyRevision=soccerForwardAnalysisRevision(legacy),legacyId=soccerForwardHash(['SOCCER-PROSPECTIVE-SAVED-PREDICTION-v1','epl',legacy.gameId,'REGULATION_FT','BASELINE',legacyRevision]);
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[legacy.gameId,legacyRevision,legacy.observedAt,JSON.stringify(legacy)]);
+  await db.query(`INSERT INTO sports_soccer_forward_captures_v1(capture_id,protocol_version,league,game_id,board_date,period,variant,model_hash,analysis_revision)
+    VALUES($1,$2,'epl',$3,$4::date,'REGULATION_FT','BASELINE',$5,$6)`,[legacyId,protocol.version,legacy.gameId,legacy.date,soccerForwardHash(soccerForwardModelDescriptor(legacy,'REGULATION_FT')),legacyRevision]);
+  const beforeLegacy=(await db.query('SELECT captured_at FROM sports_soccer_forward_captures_v1 WHERE capture_id=$1',[legacyId])).rows[0].captured_at;
+  const recovery=await runSoccerForwardValidation(scope,{limit:1,timeBudgetMs:1000,fetchResult:async()=>{throw Error('games are still upcoming');}});
+  assert.equal(recovery.capturedRevisions,1,'the real runner selects an incomplete period bundle even when its FT receipt already exists');
+  const recovered=(await db.query('SELECT period,variant,captured_at FROM sports_soccer_forward_captures_v1 WHERE analysis_revision=$1',[legacyRevision])).rows;
+  assert.equal(recovered.length,3);assert.ok(recovered.every(row=>Date.parse(row.captured_at)<start));
+  assert.equal(new Date((await db.query('SELECT captured_at FROM sports_soccer_forward_captures_v1 WHERE capture_id=$1',[legacyId])).rows[0].captured_at).toISOString(),new Date(beforeLegacy).toISOString(),'repair never replaces the original FT receipt');
+  const atomic=structuredClone(legacy);atomic.gameId='soccer:epl:400';atomic.evidence.game.id=atomic.gameId;atomic.evidence.game.sourceId='400';atomic.evidence.source.url=atomic.evidence.source.url.replace('event=300','event=400');
+  const atomicRevision=soccerForwardAnalysisRevision(atomic);
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[atomic.gameId,atomicRevision,atomic.observedAt,JSON.stringify(atomic)]);
+  await assert.rejects(()=>captureSoccerForwardSnapshot(atomic,atomicRevision,{query:async(sql,params=[])=>{
+    if(sql.includes('INSERT INTO sports_soccer_forward_captures_v1')){const rows=JSON.parse(params[1]);rows[2].period='INVALID_PERIOD';params=[...params];params[1]=JSON.stringify(rows);}
+    return (await db.query(sql,params)).rows;
+  }}),/check constraint/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM sports_soccer_forward_captures_v1 WHERE analysis_revision=$1',[atomicRevision])).rows[0].n,0,'a third-period failure rolls back the entire single-statement bundle');
+  assert.equal((await captureSoccerForwardSnapshot(atomic,atomicRevision)).captures.length,3);
+
+  // Time budget holds even when there are many eligible game/model/periods.
+  let clock=after,calls=0,archives=0;
+  const allEvidence=await loadSoccerForwardEvidence(scope),savedEvidence={...allEvidence,captures:allEvidence.captures.filter(row=>row.gameId===original.gameId)};
+  const summary=await runSoccerForwardValidation(scope,{now:()=>clock,limit:1,timeBudgetMs:50,loadEvidence:async()=>({...savedEvidence,evaluations:[]}),query:async()=>[],
+    fetchResult:async()=>{calls++;clock+=100;return result;},archive:async()=>{archives++;}});
+  assert.equal(calls,1);assert.equal(archives,0);assert.equal(summary.budgetExhausted,true);assert.equal(summary.deferred,2);
+  console.log('PASS PostgreSQL soccer forward chain: DB-clock capture after actual immutable analysis, fixed/idempotent receipts, separate absent challenger, source/league isolation, append-only results/protocol, corrections quarantined, historical backfill rejected, bounded result work and uncompressed snapshot/check read budgets without hiding correction history.');
+} finally {
+  if(oldDatabase===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=oldDatabase;
+  if(oldDatabaseV2===undefined)delete process.env.DATABASE_V2_URL;else process.env.DATABASE_V2_URL=oldDatabaseV2;
+  await fixture.close();
+}

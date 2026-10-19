@@ -1,0 +1,37 @@
+{
+  "version": "SOCCER-XI-RETROSPECTIVE-PROTOCOL-v1",
+  "recordedAt": "2026-10-19T17:43:34.062Z",
+  "interpretation": "RETROSPECTIVE_DEVELOPMENT_DIAGNOSTIC_NOT_UNTOUCHED_TEST_OR_HISTORICAL_PIT_PROOF",
+  "population": "All existing accepted REGULATION_FT EPL/UCL rows; unavailable summaries and unknown XIs remain in coverage denominators",
+  "trainingBefore": "2024-01-01T00:00:00.000Z",
+  "validationBefore": "2025-01-01T00:00:00.000Z",
+  "diagnosticBefore": "2026-01-01T00:00:00.000Z",
+  "liveTrainingBefore": "2026-10-18T00:00:00.000Z",
+  "assumedResultLagHours": 24,
+  "baselinePolicy": "Reuse existing FT selected hyperparameters; fit the same baseline on earlier complete score history; do not change frozen FT artifacts",
+  "model": "Ridge Poisson starting-XI associations with team-score-rate offsets; each player's XI indicator centered on that club's training XI frequency; separate attack and defence coefficients per league",
+  "features": "Verified identity and exactly eleven provider-reported starters per side; no actual target-match minutes, goals, shots, substitutions or results are prediction inputs",
+  "penalties": [
+    0.001,
+    0.01,
+    0.1
+  ],
+  "selectionMetric": "2024 paired 1X2 log loss on common evaluable games, including the unchanged baseline as an ablation candidate",
+  "diagnosticYear": 2025,
+  "unknownPlayerPolicy": "FAIL_CLOSED_NOT_ZERO_EFFECT",
+  "unknownLineupPolicy": "FAIL_CLOSED_NO_GUESSED_XI_OR_EXPECTED_MINUTES",
+  "sourceAvailability": "Postmatch backfill; observed historical XIs are not claimed to have been known before kickoff",
+  "minutesPolicy": "Audit regulation-clock participation separately; do not use actual target-match minutes as a forecast",
+  "maximumConcurrency": 4,
+  "requestTimeoutSeconds": 12,
+  "maximumAttempts": 2,
+  "formalEnabled": false,
+  "limitations": [
+    "XI association is predictive research, not a causal absence/replacement or tactical-combination effect",
+    "No expected-minute scenario model, injury/eligibility coverage, physical added time, xG or PSxG effects are estimated",
+    "Player and club effects can be confounded; centering and ridge do not prove causal identification",
+    "2025 was already examined in FT development; results are retrospective diagnostics, not a new untouched OOS test",
+    "No formal model promotion, market-return evidence or betting authorization follows from this experiment"
+  ],
+  "protocolTimestampMeaning": "Initial protocol file creation before bulk XI collection and model fitting; one prior summary schema probe. The original manually rounded timestamp was corrected to the filesystem creation time before any personnel model fit or validation results."
+}

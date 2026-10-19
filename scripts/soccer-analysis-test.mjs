@@ -17,6 +17,19 @@ for(const [name,league]of [['epl-summary','epl'],['ucl-summary','ucl'],['histori
  const foreign=structuredClone(p);foreign.header.league.slug=league==='epl'?'uefa.champions':'eng.1';assert.equal(normalizeSoccerPrematch(foreign,game,source,now).ok,false);
 }
 const p=fixture('epl-summary'),game=gameFrom(p),evidence=normalizeSoccerPrematch(p,game,source,now),analysis=buildSoccerAnalysis({evidence,now});
+assert.equal(analysis.personnelPrediction,null);
+assert.equal(analysis.personnelResearch.status,'NOT_AVAILABLE_AT_CUTOFF');
+assert.equal(analysis.personnelResearch.reason,'PERSONNEL_ARTIFACT_NOT_AVAILABLE_AT_CUTOFF');
+for(const key of ['artifactHash','protocolHash','trainingHash','baselineHash'])assert.equal(analysis.personnelResearch[key],null,'future personnel artifacts must not enter old cutoff snapshots');
+assert.equal(analysis.personnelResearch.validation,undefined);
+assert.equal(analysis.inputVersions.personnelArtifactHash,null);
+const {soccerPersonnelArtifacts}=await import('../lib/soccer/personnel-frozen.js');
+const personnelCreated=Date.parse(soccerPersonnelArtifacts().createdAt),currentEvidence=structuredClone(evidence);
+currentEvidence.source.fetchedAt=new Date(personnelCreated).toISOString();currentEvidence.game.startTime=new Date(personnelCreated+86400000).toISOString();
+const currentPersonnel=buildSoccerAnalysis({evidence:currentEvidence,now:personnelCreated});
+assert.equal(currentPersonnel.personnelResearch.status,'PERSONNEL_INPUTS_INSUFFICIENT');
+assert.match(currentPersonnel.personnelResearch.artifactHash,/^[a-f0-9]{64}$/);
+assert.equal(currentPersonnel.personnelPrediction,null,'unpublished XI cannot be filled from historical rosters');
 for(const side of ['主隊','客隊'])for(const label of ['傷停與復出','停賽與出賽資格','預計分鐘與替補'])assert.ok(analysis.missing.some(value=>value.label===side+label),'each side retains its own missing personnel evidence');
 const oneSided=structuredClone(evidence);oneSided.teams.home.injuries={status:'PROVIDER_REPORTED',value:[]};
 const asymmetric=buildSoccerAnalysis({evidence:oneSided,now});assert.ok(asymmetric.missing.some(value=>value.label==='客隊傷停與復出'));assert.ok(!asymmetric.missing.some(value=>value.label==='主隊傷停與復出'));

@@ -1,0 +1,41 @@
+{
+  "version": "SOCCER-XI-COLLECTION-v1",
+  "protocolHash": "7a9ebe25e467ac64d4c3b270e7afd21a179ecc42317a2e21a79ebdd663f82d5f",
+  "startedAt": "2026-10-19T17:43:38.890Z",
+  "completedAt": "2026-10-19T17:48:58.580Z",
+  "lastExtractionAt": "2026-10-19T17:49:21.420Z",
+  "total": 2995,
+  "networkRequestsThisRun": 0,
+  "pointInTimeAvailabilityVerified": false,
+  "leagues": {
+    "epl": {
+      "total": 2190,
+      "accepted": 2190,
+      "excluded": 0,
+      "reasons": {},
+      "minutesAudited": 1247,
+      "minutesUnverified": 943,
+      "minutesUnverifiedReasons": {
+        "SUBSTITUTION_ROLE_UNVERIFIED": 932,
+        "SUBSTITUTION_STATE_CONFLICT": 5,
+        "DISMISSAL_IDENTITY_CONFLICT": 6
+      },
+      "inputHash": "f3f3d335abddb45b7876817b961a0e8fac4748f6a95625df1d55420a190efb7f",
+      "rowsHash": "bc9a39734a417c523448d38abf5a18c14e0b75dc6bda0e1f1b9f7a4f8d684264"
+    },
+    "ucl": {
+      "total": 805,
+      "accepted": 805,
+      "excluded": 0,
+      "reasons": {},
+      "minutesAudited": 246,
+      "minutesUnverified": 559,
+      "minutesUnverifiedReasons": {
+        "SUBSTITUTION_ROLE_UNVERIFIED": 555,
+        "REGULATION_END_MISSING": 4
+      },
+      "inputHash": "ded764d8ff901d0b2c4b28b97a8c8955dfe22089615cb716c3021e19585111d9",
+      "rowsHash": "9c64087f6a60840e825bcbc91bdc00bccdfb2559f7983fab7164e3aeff076bbe"
+    }
+  }
+}

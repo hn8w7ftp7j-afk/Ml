@@ -1,0 +1,199 @@
+{
+  "version": "TAI888-PUBLIC-RULE-SOURCE-CAPTURE-v1",
+  "recordedAt": "2026-10-19T17:46:39.393368+00:00",
+  "scope": "PUBLIC_SOURCE_EVIDENCE_ONLY_NOT_ACCOUNT_CONTRACT_PROMOTION",
+  "sourceChain": [
+    {
+      "from": "https://www.tai888.in/newapp/",
+      "evidence": "HTML script ../config.js and ./script/index.js"
+    },
+    {
+      "from": "https://www.tai888.in/config.js",
+      "evidence": "st_id=25 (site identifier, not football sport ID)"
+    },
+    {
+      "from": "https://www.tai888.in/newapp/script/index.js",
+      "evidence": "goRule constructs https://globe.hgd0988.com?lang=zh-tw&path=25"
+    },
+    {
+      "from": "https://globe.hgd0988.com/?lang=zh-tw&path=25",
+      "to": "https://globe.hgd0988.com/newRule/index.html?lang=zh-tw&path=25",
+      "evidence": "HTTP redirect observed"
+    },
+    {
+      "from": "https://globe.hgd0988.com/newRule/main.bundle.js",
+      "evidence": "zh-tw lazy module loads chunks 0 and 1; /zh-tw/soccer maps to soccer component, otherSoccer is separate"
+    },
+    {
+      "from": "https://globe.hgd0988.com/newRule/inline.bundle.js",
+      "evidence": "chunk URL generated as <number>.chunk.js"
+    },
+    {
+      "from": "https://globe.hgd0988.com/newRule/1.chunk.js",
+      "evidence": "Traditional-Chinese soccer rules and conversion table are embedded Angular templates"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://www.tai888.in/newapp/",
+      "finalUrl": "https://www.tai888.in/newapp/",
+      "status": 200,
+      "bytes": 2289,
+      "sha256": "5ea8bf86ea21ddcef03c3bec9077be757ec6f8dcdd1430131afeed730f9946a0",
+      "fetchedAt": "2026-10-19T17:44:24.107910+00:00",
+      "file": "newapp-index.html",
+      "archiveSha256": "115ffd519f742f56a443823e96987bb2750bfaa3078833a1c436bac7852a37e8",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/newapp-index.html.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://www.tai888.in/newapp/script/index.js",
+      "finalUrl": "https://www.tai888.in/newapp/script/index.js",
+      "status": 200,
+      "bytes": 273545,
+      "sha256": "0f5b2beba472afbf2fd3f68bd5fd4cb28277789283a4e0737830b0e37d9935fc",
+      "fetchedAt": "2026-10-19T17:44:28.745344+00:00",
+      "file": "tai888-index.js",
+      "archiveSha256": "77bb5332ecea1246c2650a547fe8c0c2b2f594271878145d2ac679ce8b6ec4c6",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/tai888-index.js.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://www.tai888.in/config.js",
+      "finalUrl": "https://www.tai888.in/config.js",
+      "status": 200,
+      "bytes": 1644,
+      "sha256": "8ac22e14968a7af440faf3171617a248b3d0b392e0b78ade6107ff99a5935c0a",
+      "fetchedAt": "2026-10-19T17:44:28.654960+00:00",
+      "file": "tai888-config.js",
+      "archiveSha256": "9cdb3e14ccb4799845b707be2f92f0dac49a9daf22a5f183a4cd7b06e82f3841",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/tai888-config.js.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://globe.hgd0988.com/?lang=zh-tw&path=25",
+      "finalUrl": "https://globe.hgd0988.com/newRule/index.html?lang=zh-tw&path=25",
+      "status": 200,
+      "bytes": 1052,
+      "sha256": "851db4b1fd187d2e652a72ad2b021fedc2522d2463b1640056967cc4186c3b36",
+      "fetchedAt": "2026-10-19T17:44:09.824464+00:00",
+      "file": "rules-path25.html",
+      "archiveSha256": "342607f376bfe22fabd6668afdc4f8ec76ab037e7f3b776d1329cec945493d19",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/rules-path25.html.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://globe.hgd0988.com/newRule/config.bundle.js",
+      "finalUrl": "https://globe.hgd0988.com/newRule/config.bundle.js",
+      "status": 200,
+      "bytes": 50,
+      "sha256": "797885987f71f87046a170ffc66656684a16a7d5abf3be51a517550d6a08141b",
+      "fetchedAt": "2026-10-19T17:44:24.658251+00:00",
+      "file": "config.bundle.js",
+      "archiveSha256": "debfcb0d157d256f90c562393074d0283f1430ad96e0eea86941f71d600876a5",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/config.bundle.js.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://globe.hgd0988.com/newRule/main.bundle.js",
+      "finalUrl": "https://globe.hgd0988.com/newRule/main.bundle.js",
+      "status": 200,
+      "bytes": 484282,
+      "sha256": "f03e58086b37895f535fd508a1820ec90ad58fc21aea9ed2415c898931d8563a",
+      "fetchedAt": "2026-10-19T17:44:25.721289+00:00",
+      "file": "main.bundle.js",
+      "archiveSha256": "a7d1223c82f3026710fea245e51d2b58a4c251ec5ae82d343ed03f872eff2666",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/main.bundle.js.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://globe.hgd0988.com/newRule/inline.bundle.js",
+      "finalUrl": "https://globe.hgd0988.com/newRule/inline.bundle.js",
+      "status": 200,
+      "bytes": 1362,
+      "sha256": "ba163569ea86bdd38d478452c31db5c0da0c76617d1640935bcaceb348c8fe3a",
+      "fetchedAt": "2026-10-19T17:44:52.964794+00:00",
+      "file": "inline.bundle.js",
+      "archiveSha256": "c8a036f80ab28381248b7af65e756fb4a8d01b5237f76b8789919aa2fdf409e0",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/inline.bundle.js.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://globe.hgd0988.com/newRule/0.chunk.js",
+      "finalUrl": "https://globe.hgd0988.com/newRule/0.chunk.js",
+      "status": 200,
+      "bytes": 1396,
+      "sha256": "cd400fa46c45b5d4f7a03c8ba6850674fb1fe84c54a7e0a4d0035206d0db66c5",
+      "fetchedAt": "2026-10-19T17:45:14.431848+00:00",
+      "file": "0.chunk.js",
+      "archiveSha256": "08b29d04526b764a35c06d711d78ba7eebbec9aeb5d054e48be89e45e9e10dd0",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/0.chunk.js.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://globe.hgd0988.com/newRule/1.chunk.js",
+      "finalUrl": "https://globe.hgd0988.com/newRule/1.chunk.js",
+      "status": 200,
+      "bytes": 1320783,
+      "sha256": "8cd7d7b5803844a3fb3b53029f2830cf4415532bd1ffa417ea6508c4ccb14dcd",
+      "fetchedAt": "2026-10-19T17:45:16.172998+00:00",
+      "file": "1.chunk.js",
+      "archiveSha256": "3c4c97371a5726bd4f2e720245e0b90d0d4e1ca79a34ca87e4f6490ab5848c6e",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/1.chunk.js.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    },
+    {
+      "url": "https://globe.hgd0988.com/newRule/file/zh-tw.json",
+      "finalUrl": "https://globe.hgd0988.com/newRule/file/zh-tw.json",
+      "status": 200,
+      "bytes": 4504,
+      "sha256": "3b0deedc3602571c4a3851837c57d38becb7d53d9fcc10950b0c7c2279748593",
+      "fetchedAt": "2026-10-19T17:44:52.987231+00:00",
+      "file": "zh-tw.json",
+      "archiveSha256": "1a2392100cd917024705133cfc17d50ede794d41846dd45818182939fef45892",
+      "publishedAt": null,
+      "availability": "PUBLIC_UNAUTHENTICATED_HTTP_GET",
+      "cookiesOrCredentialsUsed": false,
+      "localEvidenceArchive": "original/zh-tw.json.gz",
+      "archiveAvailability": "LOCAL_AUDIT_EVIDENCE_NOT_COMMITTED"
+    }
+  ],
+  "limitations": [
+    "No public publication/version date was identified; fetchedAt is collection time only.",
+    "No authenticated membership policy or effective-date history was read.",
+    "Raw text extraction includes compiled branches before runtime visibility filtering.",
+    "User-confirmed 1% total-principal rebate is separate evidence; public rules do not establish eligible settlement states.",
+    "No policy registry, scoring, betting or automatic-settlement enablement is authorized by this capture.",
+    "Original vendor assets and full compiled-template text extraction remain local only; the public repository retains URLs, hashes, source chain and paraphrased findings."
+  ],
+  "localEvidenceId": "tai888-rules-evidence-20261020",
+  "originalAssetsIncludedInGit": false,
+  "reproduction": "Fetch each public source URL without credentials, record redirect/fetchedAt, and compare raw SHA-256. Public source may change; an unavailable matching revision must remain NOT_VERIFIED."
+}

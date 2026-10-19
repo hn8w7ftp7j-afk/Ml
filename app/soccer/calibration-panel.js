@@ -21,7 +21,7 @@ function binRange(bin){
 }
 
 /** Display a frozen audit only. This component never calibrates or changes predictions. */
-export function SoccerCalibrationPanel({audit,period='FT',league,label=''}){
+export function SoccerCalibrationPanel({audit,period='FT',league,label='',evidenceMode='RETROSPECTIVE'}){
   const name=periodNames[period]||'期間待核對';
   const compatible=audit&&audit.period===periodCodes[period]&&(!league||audit.league===league)&&audit.classes&&audit.cohort;
   const cohort=compatible?audit.cohort:null;
@@ -45,6 +45,6 @@ export function SoccerCalibrationPanel({audit,period='FT',league,label=''}){
       })}
       <p className="soccerAvailability">ECE 以 0–1 機率的絕對差表示；REL 是該差的平方，兩欄不可當成相同百分比單位。ECE_L1 與 REL_L2 是原始分箱估計，尚未去偏，也不等於完整 Brier 分解；跨入選比例的比較仍須處理樣本與選擇差異。</p>
     </>:<p className="soccerAvailability">此版本尚無可核對的分事件校準資料；不以主勝、和局與客勝混合後的分箱代替。</p>}
-    <p className="soccerCalibrationCaution">資料為事後回補的研究診斷，尚未證明歷史賽前可取得性；不代表正式驗收通過、下注勝率提高或正收益。</p>
+    <p className="soccerCalibrationCaution">{evidenceMode==='PROSPECTIVE'?'資料來自開賽前已封存的預測與賽後核對；樣本有限，尚未完成模型放行。不代表正式驗收通過、下注勝率提高或正收益。':'資料為事後回補的研究診斷，尚未證明歷史賽前可取得性；不代表正式驗收通過、下注勝率提高或正收益。'}</p>
   </details>;
 }

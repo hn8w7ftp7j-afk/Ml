@@ -1,0 +1,248 @@
+{
+  "version": "TAI888-FOOTBALL-PUBLIC-RULES-REVIEW-v1",
+  "reviewedSourceSha256": "8cd7d7b5803844a3fb3b53029f2830cf4415532bd1ffa417ea6508c4ccb14dcd",
+  "captureManifest": "manifest.json",
+  "sourceStatus": "PUBLIC_SOURCE_FOUND",
+  "completeContractVerified": false,
+  "productionPolicyModified": false,
+  "sitePath": 25,
+  "sitePathMeaning": "Tai888 site identifier read from /config.js, not sport identity",
+  "routeMapping": {
+    "soccer": "/zh-tw/soccer",
+    "otherSoccer": "/zh-tw/otherSoccer",
+    "language": "zh-tw"
+  },
+  "findings": [
+    {
+      "field": "FT_PERIOD",
+      "markets": [
+        "FT_HANDICAP",
+        "FT_TOTAL"
+      ],
+      "status": "SOURCE_CONFIRMED",
+      "summary": "90 minutes plus injury/stoppage time; extra time, penalty shootout and later disciplinary result changes excluded.",
+      "offsets": [
+        443611,
+        444685
+      ]
+    },
+    {
+      "field": "HT_PERIOD",
+      "markets": [
+        "HT_HANDICAP",
+        "HT_TOTAL"
+      ],
+      "status": "PARTIAL",
+      "summary": "The ordinary soccer page explicitly uses first 45 minutes legal-time results. Explicit 45-minute injury-time wording occurs on separate otherSoccer/special-market sections and is not silently borrowed.",
+      "offsets": [
+        492609,
+        492993,
+        493051,
+        493412,
+        497084,
+        497238,
+        497296
+      ],
+      "separateScopeOffsets": [
+        1316137
+      ]
+    },
+    {
+      "field": "HANDICAP_SPLIT",
+      "markets": [
+        "FT_HANDICAP",
+        "HT_HANDICAP"
+      ],
+      "status": "SOURCE_CONFIRMED",
+      "summary": "One displayed handicap receives the whole stake; two displayed adjacent handicaps receive half the stake on each leg. Source example is half-ball/one-ball.",
+      "offsets": [
+        450735,
+        450985,
+        451412,
+        451662,
+        451740,
+        451990,
+        452032,
+        452228,
+        494016,
+        494266,
+        494711,
+        494961,
+        495039,
+        495289,
+        495331,
+        495527
+      ]
+    },
+    {
+      "field": "HANDICAP_INTEGER_BOUNDARY",
+      "markets": [
+        "FT_HANDICAP",
+        "HT_HANDICAP"
+      ],
+      "status": "SOURCE_EXAMPLE_CONFIRMED",
+      "summary": "Source FT/HT examples show a one-goal handicap and a one-goal win refund both sides; do not treat this as evidence for arbitrary percentage suffixes.",
+      "offsetRanges": [
+        [
+          472569,
+          474345
+        ],
+        [
+          514016,
+          515621
+        ]
+      ]
+    },
+    {
+      "field": "FT_TOTAL_INTEGER_BOUNDARY",
+      "markets": [
+        "FT_TOTAL"
+      ],
+      "status": "SOURCE_CONFIRMED",
+      "summary": "Total goals exactly equal to the displayed total line refund the stake in full.",
+      "offsets": [
+        453170,
+        453775,
+        454116
+      ]
+    },
+    {
+      "field": "HT_TOTAL_INTEGER_BOUNDARY",
+      "markets": [
+        "HT_TOTAL"
+      ],
+      "status": "SOURCE_CONFIRMED",
+      "summary": "First-half total goals exactly equal to the displayed total line refund the stake in full.",
+      "offsets": [
+        496049,
+        496727,
+        497084,
+        497238,
+        497296
+      ]
+    },
+    {
+      "field": "DISPLAY_CONVERSION_50",
+      "markets": [
+        "FT_HANDICAP",
+        "HT_HANDICAP",
+        "FT_TOTAL",
+        "HT_TOTAL"
+      ],
+      "status": "SOURCE_TABLE_CONFIRMED",
+      "summary": "Column-aligned official conversion table maps the football labels to baseball-style credit display. Numeric quarter-line notation is a derived representation of the source football labels.",
+      "mappings": [
+        {
+          "credit": "0-50",
+          "footballHandicap": "平手/半球",
+          "derivedGoals": 0.25
+        },
+        {
+          "credit": "1+50",
+          "footballHandicap": "半球/1球",
+          "derivedGoals": 0.75
+        },
+        {
+          "credit": "1平",
+          "footballHandicap": "1球",
+          "derivedGoals": 1
+        },
+        {
+          "credit": "1-50",
+          "footballHandicap": "1球/1球半",
+          "derivedGoals": 1.25
+        },
+        {
+          "credit": "1+50",
+          "footballTotal": "0.5/1",
+          "derivedGoals": 0.75
+        },
+        {
+          "credit": "1平",
+          "footballTotal": "1",
+          "derivedGoals": 1
+        },
+        {
+          "credit": "1-50",
+          "footballTotal": "1/1.5",
+          "derivedGoals": 1.25
+        }
+      ],
+      "offsetRanges": [
+        [
+          18081,
+          22103
+        ],
+        [
+          22382,
+          26286
+        ]
+      ],
+      "doesNotEstablishArbitraryPercentageSuffixes": true
+    },
+    {
+      "field": "NORMAL_FT_CANCEL_DELAY_ABANDON",
+      "markets": [
+        "FT_HANDICAP",
+        "FT_TOTAL"
+      ],
+      "status": "SOURCE_TEXT_FOUND",
+      "summary": "Ordinary football text voids/refunds games terminated before legal 90 minutes, postponed more than 12 hours from original scheduled time, or cancelled. Youth 60–80-minute legal-length exception is separate and should not be applied to EPL/UCL. Details of a resumed suspended game, result reversal and a completed HT followed by abandoned FT remain scope-sensitive.",
+      "offsets": [
+        444129,
+        444887
+      ]
+    },
+    {
+      "field": "HT_CANCEL_INTERRUPTION",
+      "markets": [
+        "HT_HANDICAP",
+        "HT_TOTAL"
+      ],
+      "status": "SOURCE_TEXT_FOUND",
+      "summary": "Ordinary HT text cancels all HT trades when that first half is cancelled/interrupted. Does not explicitly resolve finished HT followed by later FT abandonment against general all-football void text.",
+      "offsetRange": [
+        491862,
+        492271
+      ]
+    },
+    {
+      "field": "REBATE_RATE_AND_BASIS",
+      "markets": [
+        "FT_HANDICAP",
+        "HT_HANDICAP",
+        "FT_TOTAL",
+        "HT_TOTAL"
+      ],
+      "status": "USER_CONFIRMED_SEPARATE_EVIDENCE",
+      "summary": "Current app retains user-confirmed 1% of total principal. Public rule source capture does not independently establish the rate/basis for this member account."
+    },
+    {
+      "field": "REBATE_ELIGIBLE_SETTLEMENT_STATES",
+      "markets": [
+        "FT_HANDICAP",
+        "HT_HANDICAP",
+        "FT_TOTAL",
+        "HT_TOTAL"
+      ],
+      "status": "NOT_FOUND",
+      "summary": "No public source evidence identifies eligible win/loss/half-win/half-loss/push/void/cancelled states, or whether partial settled versus returned principal counts. Do not derive this from total-principal basis alone."
+    },
+    {
+      "field": "PARLAY_TEXT_DEFECT",
+      "markets": [
+        "PARLAY_HANDICAP"
+      ],
+      "status": "OUT_OF_SCOPE_DEFECT",
+      "summary": "Football handicap-parlay section incorrectly refers to five innings. This is a parlay-specific source defect; it does not invalidate separately supported ordinary single-bet FT/HT handicap/total clauses.",
+      "offsets": [
+        607748
+      ]
+    }
+  ],
+  "minimalAdditionalEvidence": [
+    "For normal completed-game settlement: a member-account/provider confirmation of whether 1% of total stake applies to full win/loss, half win/loss and pure push, ideally one exact rule statement listing states.",
+    "For abnormal-game automation: applicable cancelled/postponed/abandoned/voided bet rebate rule, and whether a completed HT remains valid when the match is later abandoned.",
+    "To claim HT stoppage-time clause explicitly source-confirmed for the ordinary EPL/UCL market, source/provider confirmation that ordinary HT first-45 legal-time includes injury time."
+  ]
+}

@@ -40,7 +40,7 @@ try{
   const {soccerAnalysisHash,SOCCER_ANALYSIS_VERSION}=await import('../lib/soccer/analysis.js');
   const {beginSoccerAnalysisRun,finishSoccerAnalysisRun}=await import('../lib/soccer/journal.js');
   const run=await beginSoccerAnalysisRun({league:'epl',date,gameId:game.id});
-  const body={...result,version:SOCCER_ANALYSIS_VERSION,executable:false};delete body.publishedCurrent;delete body.persisted;
+  const body={...result,version:SOCCER_ANALYSIS_VERSION,analysisRunId:run.runId,executable:false};delete body.publishedCurrent;delete body.persisted;
   const saved=await saveSoccerAnalysis({...body,analysisHash:soccerAnalysisHash(body)});
   await finishSoccerAnalysisRun(run,{analysisStatus:'COMPLETED',qaFlag:'WARN',selectionResult:'RESEARCH_SHADOW',revision:saved.revision,validUntil:new Date(now+120000).toISOString()});
   assert.equal((await listSoccerAnalysisBoard('epl',date,date))[0].publishedCurrent,true);
