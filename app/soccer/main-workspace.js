@@ -119,6 +119,8 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
   const [loadingKey, setLoadingKey] = useState('');
   const [failure, setFailure] = useState(null);
   const [refresh, setRefresh] = useState(0);
+  const [leagueBatchRequest, setLeagueBatchRequest] = useState(null);
+  const batchSequence = useRef(0);
   const generation = useRef(0);
   const opened = useRef(false), appliedRuns = useRef(new Set()), manualRun = useRef(''), entryRun = useRef(null);
   const latestLocation = useRef(location); latestLocation.current = location;
@@ -219,6 +221,9 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
     scopeCallback.current?.({ ...location, runId: location.runId || '' });
   }, [active, location.league, location.date, location.view, location.runId]);
 
+  // A previous click must not replay when an old date/view is mounted again.
+  useEffect(() => { setLeagueBatchRequest(null); }, [key]);
+
   function navigate(next) {
     if (!validDate(next.date) || boardKey(next) === boardKey(location) && next.runId === location.runId) return;
     next = { ...next };
@@ -240,6 +245,14 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
   }
   function retry() { setRefresh(value => value + 1); }
   const games = board?.games || [];
+  const analysisTargets = [...new Map(games.filter(game => game.league === location.league.toLowerCase()
+    && game.status === 'scheduled' && Date.parse(game.startTime) > Date.now()).map(game => [game.id, game])).values()];
+  const canAnalyzeLeague = active && Boolean(board) && !busy && !error && !otherBusy
+    && location.view !== 'standings' && analysisTargets.length > 0;
+  function analyzeLeague() {
+    if (!canAnalyzeLeague) return;
+    setLeagueBatchRequest({ id: ++batchSequence.current, scope: key });
+  }
   const dateLabel = location.date || '讀取中';
   const displayCount = location.view === 'standings' ? '積分榜' : `${games.length} 場`;
   const dateInputId = `soccer-date-${location.league.toLowerCase()}`;
@@ -253,7 +266,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
     <section className="panel soccerControls" aria-label="足球賽程查詢">
       <div className="soccerDateControls"><button type="button" className="secondary" aria-label="前一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, -1), view: 'schedule' })}>前一天</button><label htmlFor={dateInputId}>台灣日期<input id={dateInputId} type="date" value={location.date} onChange={event => { if (validDate(event.target.value)) navigate({ ...location, date: event.target.value, view: 'schedule' }); }}/></label><button type="button" className="secondary" aria-label="後一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, 1), view: 'schedule' })}>後一天</button><button type="button" className="secondary" onClick={() => navigate({ ...location, date: taipeiDate(), view: 'schedule' })}>今天</button><button type="button" className="secondary soccerRefresh" disabled={!location.date || busy} onClick={retry}>{busy ? '更新中…' : '重新整理'}</button></div>
       <div className="soccerViewNav" aria-label="足球資料檢視">{Object.entries(VIEW_NAMES).map(([view, name]) => <button key={view} type="button" className={location.view === view ? 'active' : ''} aria-pressed={location.view === view} disabled={!location.date} onClick={() => navigate({ ...location, view })}>{name}</button>)}</div>
-      {location.date&&<div className="soccerAnalyzeActions">{embedded ? <button type="button" className="secondary allLeagueAnalyzeButton" disabled={otherBusy || !onAnalyzeAll} onClick={() => onAnalyzeAll?.(location.date)}>一鍵分析全部聯盟</button> : <a className="secondary allLeagueAnalyzeButton" href={`/?analyzeAll=1&date=${encodeURIComponent(location.date)}`}>一鍵分析全部聯盟</a>}</div>}
+      {location.date&&<><div className="soccerAnalyzeActions"><button type="button" className="primary soccerLeagueAnalyzeButton" disabled={!canAnalyzeLeague} onClick={analyzeLeague}>{otherBusy ? '分析工作進行中…' : `一鍵分析${location.league === 'EPL' ? '英超' : '歐冠'}`}</button>{embedded ? <button type="button" className="secondary allLeagueAnalyzeButton" disabled={otherBusy || !onAnalyzeAll} onClick={() => onAnalyzeAll?.(location.date)}>一鍵分析全部聯盟</button> : <a className="secondary allLeagueAnalyzeButton" href={`/?analyzeAll=1&date=${encodeURIComponent(location.date)}`}>一鍵分析全部聯盟</a>}</div><p className="soccerAvailability">{location.view === 'standings' ? '切回當日或近期賽程，即可分析本聯盟。' : busy ? '正在讀取本聯盟賽程…' : error ? '請先重新整理賽程，再分析本聯盟。' : analysisTargets.length ? `${location.view === 'upcoming' ? '目前近期賽程' : `${location.date}（台灣時間）`}｜僅分析${league.name}未開賽 ${analysisTargets.length} 場` : '目前沒有可分析的未開賽賽事。'}</p></>}
       <p className="soccerAvailability">可核對賽前資料與比分研究；正式評分驗證中。<Link prefetch={false} href="/soccer/specification">分析規格 2.2</Link></p>
     </section>
     {active && <SoccerReaderPanel league={location.league} date={location.date}/>}
@@ -264,7 +277,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
       {board?.cohortPersistence?.persisted===false&&<p className="soccerAnalysisWarning" role="status">賽程紀錄暫未保存，統計範圍尚未確認。</p>}
       {busy && !board && <div className="panel soccerLoading" role="status">正在取得{league.name}資料…</div>}
       {board && location.view === 'standings' && <><p className="soccerAvailability">目前賽季積分，不回推所選日期。</p><Standings board={board}/></>}
-      {board && location.view !== 'standings' && <SoccerAnalysisProvider key={key} games={games} runId={location.runId||''} league={location.league.toLowerCase()} date={location.date} onHighScoreStatusChange={onHighScoreStatusChange} onBusyChange={onBusyChange} externalBusy={otherBusy}><div className="soccerGames">{games.map(game => <MatchCard key={game.id} game={game} showDate={location.view === 'upcoming'}/>)}</div>{!games.length&&<section className="emptyBoard soccerEmpty"><h2>{location.view === 'upcoming' ? '近期查無賽事' : '當日無賽事'}</h2><p>{location.view === 'upcoming' ? '來源在目前查詢範圍沒有列出賽事。' : `${dateLabel}（台灣時間）未安排${league.name}賽事。`}</p>{location.view === 'schedule' && <button type="button" className="primary" onClick={() => navigate({ ...location, view: 'upcoming' })}>查看近期賽程</button>}</section>}</SoccerAnalysisProvider>}
+      {board && location.view !== 'standings' && <SoccerAnalysisProvider key={key} games={games} runId={location.runId||''} league={location.league.toLowerCase()} date={location.date} batchScope={key} batchRequest={leagueBatchRequest} onHighScoreStatusChange={onHighScoreStatusChange} onBusyChange={onBusyChange} externalBusy={otherBusy}><div className="soccerGames">{games.map(game => <MatchCard key={game.id} game={game} showDate={location.view === 'upcoming'}/>)}</div>{!games.length&&<section className="emptyBoard soccerEmpty"><h2>{location.view === 'upcoming' ? '近期查無賽事' : '當日無賽事'}</h2><p>{location.view === 'upcoming' ? '來源在目前查詢範圍沒有列出賽事。' : `${dateLabel}（台灣時間）未安排${league.name}賽事。`}</p>{location.view === 'schedule' && <button type="button" className="primary" onClick={() => navigate({ ...location, view: 'upcoming' })}>查看近期賽程</button>}</section>}</SoccerAnalysisProvider>}
     </section>
   </WorkspaceElement>;
 }
