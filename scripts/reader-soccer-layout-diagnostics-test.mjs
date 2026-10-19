@@ -38,6 +38,11 @@ const context = vm.createContext({ chrome, Date, URL, setTimeout, clearTimeout, 
   fetch: async (...args) => { requests.push(args); throw new Error('layout diagnostics must not upload'); } });
 vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), context);
 const plain = value => JSON.parse(JSON.stringify(value));
+context.rawIssueCapture = { league: 'UCL', diagnostics: { tableIssues: [
+  'SOCCER_TABLE_QUOTES_AMBIGUOUS', privateValue, 'SOCCER_TABLE_QUOTES_AMBIGUOUS',
+] } };
+assert.deepEqual(plain(vm.runInContext('sanitizeCapture(rawIssueCapture)', context)).diagnostics.tableIssues,
+  ['SOCCER_TABLE_QUOTES_AMBIGUOUS'], 'worker preserves only allowlisted table failure reasons');
 const scan = plain(await vm.runInContext('collectCandidates([{id:91,active:true}])', context));
 assert.deepEqual(scan.silentTabIds, []);
 assert.equal(scan.soccerLayouts.length, 1, 'only EPL/UCL layouts from the first two entries are considered');
