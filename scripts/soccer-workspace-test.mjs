@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import { soccerManualRecordFromSnapshot,soccerRecordStats } from '../lib/soccer/manual-record.js';
 import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
+import { candidateFixture } from './helpers/soccer-candidate-fixture.mjs';
 const now=Date.now(),at=new Date(now).toISOString(),date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
-const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date,startTime:new Date(now+86400000).toISOString(),status:'scheduled',home:{name:'Home'},away:{name:'Away'}};
+const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date,startTime:new Date(now+86400000).toISOString(),status:'scheduled',home:{name:'Home',sourceId:'359'},away:{name:'Away',sourceId:'364'}};
 const quote={key:'q1',period:'FT',unit:'GOALS',kind:'TOTAL',side:'over',line:'3+50',lineSide:null,water:.95,label:'大 3+50',fresh:true,prestart:true,provenance:{gameId:game.id,observedAt:at}};
 const result={gameId:game.id,league:'epl',date,observedAt:at,persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',formalScoringEnabled:false,qualification:{eligible:false},directions:[{period:'FT',direction:'TOTAL_OVER',quotes:[quote],score:10,W:30,R:20,eligible:true,qaFlag:'WARN'}],evidence:{game}};
 const rank=(r=result,t=now)=>buildSoccerRanking([game],{[game.id]:{status:'done',data:r}},{now:t});
-const formal={...result,formalScoringEnabled:true,qualification:{eligible:true}};
+const formal=candidateFixture({...result,formalScoringEnabled:true,qualification:{eligible:true}},now);
 for(const view of ['entries','order']){
   assert.equal(rank()[view].length,0,'positive injected scores cannot promote research in either ranking');
   assert.equal(rank({...formal,gameId:'soccer:ucl:123'})[view].length,0);
@@ -16,14 +17,14 @@ for(const view of ['entries','order']){
   assert.equal(rank({...formal,directions:[{...formal.directions[0],quotes:[{...quote,period:'HT'}]}]})[view].length,0);
   assert.equal(buildSoccerRanking([game],{[game.id]:{status:'error',data:formal}},{now})[view].length,0);
   assert.equal(rank(formal)[view].length,1);
-  assert.equal(rank({...formal,directions:[{...formal.directions[0],score:7.2}]})[view].length,1,'the inclusive S threshold is unchanged');
+  assert.equal(rank(candidateFixture({...result,formalScoringEnabled:true,qualification:{eligible:true},directions:[{...result.directions[0],score:7.2}]},now))[view].length,1,'the inclusive S threshold is unchanged');
   for(const patch of [{score:7.1},{score:NaN},{W:0},{W:-1},{R:0},{R:-1},{eligible:false},{qaFlag:'BLOCKED'}])
     assert.equal(rank({...formal,directions:[{...formal.directions[0],...patch}]})[view].length,0,`${view} excludes ${JSON.stringify(patch)}`);
   assert.equal(rank({...formal,qualification:{eligible:false}})[view].length,0);
 }
 assert.equal(result.directions[0].quotes[0],quote,'ranking filtering preserves the original research quote for analysis results');
 assert.equal(result.directions[0].score,10,'ranking filtering never rewrites source scores');
-const earlier={...game,id:'soccer:epl:124',startTime:new Date(now+3600000).toISOString()},other={...formal,gameId:earlier.id,directions:[{...formal.directions[0],score:7.5,quotes:[{...quote,key:'q2',provenance:{...quote.provenance,gameId:earlier.id}}]}]};
+const earlier={...game,id:'soccer:epl:124',sourceId:'124',startTime:new Date(now+3600000).toISOString()},other=candidateFixture({...result,formalScoringEnabled:true,qualification:{eligible:true},gameId:earlier.id,evidence:{game:earlier},directions:[{...result.directions[0],score:7.5,quotes:[{...quote,key:'q2',provenance:{...quote.provenance,gameId:earlier.id}}]}]},now);
 const ordered=buildSoccerRanking([game,earlier],{[game.id]:{status:'done',data:formal},[earlier.id]:{status:'done',data:other}},{now});
 assert.equal(ordered.entries[0].game.id,game.id);assert.equal(ordered.order[0].game.id,earlier.id,'time ordering differs from score ordering');
 assert.deepEqual(ordered.entries.map(e=>e.stableKey).sort(),ordered.order.map(e=>e.stableKey).sort(),'both views contain the same eligible candidates');
@@ -40,7 +41,7 @@ try{
   const {soccerAnalysisHash,SOCCER_ANALYSIS_VERSION}=await import('../lib/soccer/analysis.js');
   const {beginSoccerAnalysisRun,finishSoccerAnalysisRun}=await import('../lib/soccer/journal.js');
   const run=await beginSoccerAnalysisRun({league:'epl',date,gameId:game.id});
-  const body={...result,version:SOCCER_ANALYSIS_VERSION,analysisRunId:run.runId,executable:false};delete body.publishedCurrent;delete body.persisted;
+  const body={...result,directions:result.directions.map(d=>({...d,score:null,W:null,R:null,eligible:false,executable:false})),version:SOCCER_ANALYSIS_VERSION,analysisRunId:run.runId,executable:false};delete body.publishedCurrent;delete body.persisted;
   const saved=await saveSoccerAnalysis({...body,analysisHash:soccerAnalysisHash(body)});
   await finishSoccerAnalysisRun(run,{analysisStatus:'COMPLETED',qaFlag:'WARN',selectionResult:'RESEARCH_SHADOW',revision:saved.revision,validUntil:new Date(now+120000).toISOString()});
   assert.equal((await listSoccerAnalysisBoard('epl',date,date))[0].publishedCurrent,true);

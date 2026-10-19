@@ -5,6 +5,9 @@ import { adaptSoccerReaderQuote, evaluateSoccerScenarioReturns, scoreSoccerQuote
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
 import { scoreDistribution } from '../lib/soccer/score-model.js';
 import { deterministicScore, SCORE_FORMULA_VERSION } from '../lib/deterministic-score.js';
+import { publishSoccerAnalysisCandidates } from '../lib/soccer/candidate-publication.js';
+import { soccerCandidatePayloadValid } from '../lib/soccer/candidate-qualification.js';
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 
 const now = Date.parse('2026-10-20T00:00:00Z'), at = new Date(now).toISOString();
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
@@ -147,6 +150,43 @@ assert.ok(acceptedCalculation.reasons.includes('SOCCER_SCORE_ATOMIC_CURRENT_PUBL
 assert.equal(scoreSoccerQuote(acceptedInputs).calculationEligible, false, 'test registration cannot leak into the real production module');
 assert.equal(registeredCalculation({ ...acceptedInputs, evidence: { ...formalEvidence, weather: null } }).calculationEligible, false);
 console.log('PASS actual accepted-calculation branch: registered arithmetic may qualify for publication but cannot authorize a current candidate, even with caller persisted/publishedCurrent flags; missing evidence revokes calculation eligibility');
+
+// Reuse the actual accepted scorer test module in the publication wrapper. Only
+// private test registrations differ; production still ships empty registrations.
+const scorerTestUrl = `data:text/javascript;base64,${Buffer.from(registeredCode).toString('base64')}`;
+const publisherUrl = new URL('../lib/soccer/candidate-publication.js', import.meta.url);
+let publisherCode = fs.readFileSync(publisherUrl, 'utf8').replace("'./soccer-scoring.js'", JSON.stringify(scorerTestUrl));
+publisherCode = publisherCode.replace(/(\bfrom\s*|\bimport\s*)(['"])(\.[^'"]+)\2/g, (_m, prefix, separator, specifier) => `${prefix}${separator}${new URL(specifier, publisherUrl).href}${separator}`);
+const { publishSoccerAnalysisCandidates: testPublish } = await import(`data:text/javascript;base64,${Buffer.from(publisherCode).toString('base64')}`);
+const currentReceipt = { analysisRunId: 'synthetic-run-123', qualificationVersion: '1', quoteGeneration: '1', revision: 'f'.repeat(64),
+  checkedAt: at, validUntil: new Date(now + 180000).toISOString(), publishedCurrent: true, reason: 'ACTIVE',
+  analysisStatus: 'COMPLETED', selectionResult: 'RESEARCH_SHADOW', executable: false };
+const snapshot = { gameId: input.game.id, league: input.game.league, date: input.game.date, observedAt: at,
+  analysisRunId: currentReceipt.analysisRunId, qualificationVersion: '1', quoteGeneration: '1', revision: currentReceipt.revision,
+  validUntil: currentReceipt.validUntil, persisted: true, publishedCurrent: true, analysisStatus: 'COMPLETED', qaFlag: 'WARN',
+  selectionResult: 'RESEARCH_SHADOW', executable: false, formalScoringEnabled: false, evidence: formalEvidence, prediction: input.distribution,
+  directions: [{ period: 'FT', direction: 'TOTAL_OVER', score: null, W: null, R: null, eligible: false, executable: false,
+    qaFlag: 'WARN', quotes: [{ ...input.quote, scoring: acceptedCalculation }] }] };
+const untouchedSnapshot = JSON.stringify(snapshot);
+const published = testPublish(snapshot, { currentStatus: currentReceipt, now });
+assert.equal(published.formalScoringEnabled, true); assert.equal(published.directions[0].quotes[0].eligible, true);
+assert.equal(soccerCandidatePayloadValid(published, now), true);
+assert.equal(buildSoccerRanking([input.game], { [input.game.id]: { status: 'done', data: published } }, { now }).entries.length, 1);
+assert.equal(JSON.stringify(snapshot), untouchedSnapshot, 'publishing cannot mutate the immutable saved snapshot');
+assert.equal(publishSoccerAnalysisCandidates(snapshot, { currentStatus: currentReceipt, now }).formalScoringEnabled, false,
+  'shipped empty registries must reject synthetic accepted flags');
+for (const patch of [{ publishedCurrent: false }, { revision: 'a'.repeat(64) }, { analysisRunId: 'another-run-123' },
+  { qualificationVersion: '2' }, { quoteGeneration: '2' }, { checkedAt: new Date(now + 1).toISOString() },
+  { validUntil: at }, { reason: 'QUOTE_CHANGED' }]) {
+  assert.equal(testPublish(snapshot, { currentStatus: { ...currentReceipt, ...patch }, now }).formalScoringEnabled, false, JSON.stringify(patch));
+}
+for (const alter of [s => { s.directions[0].quotes[0].water = 1.2; }, s => { s.directions[0].quotes[0].scoring.W += .01; },
+  s => { s.prediction.cells[0].probability -= .01; }, s => { s.evidence.weather = null; },
+  s => { s.directions[0].quotes[0].scoring.calculationInputs.acceptance.model.status = 'ASSUMPTION'; }]) {
+  const changed = structuredClone(snapshot); alter(changed);
+  assert.equal(testPublish(changed, { currentStatus: currentReceipt, now }).formalScoringEnabled, false);
+}
+console.log('PASS real scorer → server revalidation → exact-quote current projection → ranking; receipt races, modified price/model/manifest and revoked registries fail closed');
 
 // Omitted numerical mass is an EV interval, never a stress scenario or an R.
 const truncated = { ...input, distribution: input.grid(.52, .02), scenarios: null };
