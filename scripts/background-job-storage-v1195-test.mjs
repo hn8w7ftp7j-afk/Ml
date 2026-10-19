@@ -90,7 +90,7 @@ function submissionHarness(storage = new MemoryStorage()) {
   const submitted = [];
   const notices = [];
   Object.assign(context, {
-    league: 'CPBL', date: DATE, allLeagueRun: null, allLeagueRunning: false, nbaRunning: false, nbaDate: DATE, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague,
+    league: 'CPBL', date: DATE, allLeagueRun: null, allLeagueRunning: false, nbaRunning: false, soccerRunning: false, nbaDate: DATE, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague,
     currentLeagueRef: { current: 'CPBL' }, currentDateRef: { current: DATE }, requestedRecoveryScopeRef: {},
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, id === 'MLB' ? NEXT_DATE : DATE])) },
     independentRunsRef: { current: new Map() },

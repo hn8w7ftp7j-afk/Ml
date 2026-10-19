@@ -97,7 +97,7 @@ const savedJobs = [], submittedJobs = [];
 let publishedRun;
 const noop = () => {};
 const clickContext = {
-  date, league: 'MLB', LEAGUE_IDS: ids, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, nbaRunning: false, nbaDate: date,
+  date, league: 'MLB', LEAGUE_IDS: ids, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, nbaRunning: false, soccerRunning: false, nbaDate: date,
   readerPollBusyRef: { current: false }, independentRunsRef: { current: new Map() },
   allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false,
   leagueDatesRef: { current: Object.fromEntries(ids.map(id => [id, date])) }, allLeagueRun: null,

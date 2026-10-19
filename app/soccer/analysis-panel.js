@@ -52,11 +52,12 @@ export function SoccerRunHistory({runs=[]}){
   const messages={SOCCER_SOURCE_UNAVAILABLE:'資料來源暫時無法讀取',SOCCER_SOURCE_TIMEOUT:'資料來源讀取逾時',SOCCER_SCHEDULE_UNAVAILABLE:'賽程資料暫時無法核對',SOCCER_GAME_NOT_FOUND:'無法核對同場賽事',NOT_A_PREMATCH_SNAPSHOT:'並非賽前資料，不補算賽前機率'};
   return runs.length?<div className="soccerRunHistory"><h4>最近分析嘗試</h4>{runs.map(run=><div className="soccerSavedVersion" key={run.analysisRunId}><p>{clock(run.startedAt)}｜分析：{analysisLabels[run.analysisStatus]||'狀態待確認'}｜篩選：{run.analysisStatus==='COMPLETED'&&run.selectionResult==='RESEARCH_SHADOW'?'研究中':'尚無結果'}</p>{run.qaFlag&&<p className="soccerAvailability">{qaLabels[run.qaFlag]||'檢核狀態待確認'}</p>}{run.reasons?.length>0&&<p className="soccerAvailability">{[...new Set(run.reasons.map(code=>reasons[code]||messages[code]||(/[\u3400-\u9fff]/.test(code)?code:'來源或資料條件仍待核對')))].join('；')}</p>}</div>)}</div>:null;
 }
-export function SoccerAnalysisProvider({games,children,league=games[0]?.league,date=games[0]?.date||'',runId=''}){
+export function SoccerAnalysisProvider({games,children,league=games[0]?.league,date=games[0]?.date||'',runId='',onHighScoreStatusChange,onBusyChange,externalBusy=false}){
   const [states,setStates]=useState({}),[batch,setBatch]=useState(false),[,setClockTick]=useState(0);
   const queue=useRef([]),active=useRef(0),pending=useRef(new Map()),controllers=useRef(new Set()),alive=useRef(true);
   const epochs=useRef(new Map()),refreshSaved=useRef(null),gamesRef=useRef(games);gamesRef.current=games;
   const latestStates=useRef(states);latestStates.current=states;
+  const externalBusyRef=useRef(externalBusy);externalBusyRef.current=externalBusy;
   // One scope epoch fences both a delayed POST and its later status GETs.
   const statusEpoch=useRef(new Map()),needsCurrentCheck=useRef(false);
   const scopeKey=game=>`${game.league}:${game.date}:${game.id}`;
@@ -139,7 +140,16 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
         if(finished)void loadSaved(gamesRef.current.filter(game=>game.date===expected.date).map(game=>game.id));
         else if(changed.length)void loadSaved(changed);
         if(finished){job=null;return;}
-      }catch(error){if(current()){patch('__soccerJob',{status:error.terminal||[401,404].includes(error.status)?'failed':'running',message:'',error:error.message});if(error.terminal||[401,404].includes(error.status))job=null;}}
+      }catch(error){if(current()){
+        const terminal=error.terminal||[401,404].includes(error.status);
+        patch('__soccerJob',{status:terminal?'failed':'running',message:'',error:error.message});
+        if(terminal){
+          // A stopped workflow must release its queued rows before parent busy
+          // guards can permit a deliberate retry. Never alter local POSTs.
+          for(const game of gamesRef.current.filter(row=>row.date===expected.date))patch(game.id,{status:'error',analysisStatus:'FAILED',qaFlag:'BLOCKED',error:'背景工作已停止，可重新核對'},previous=>!pending.current.has(game.id)&&['queued','loading'].includes(previous?.status)&&(epochs.current.get(game.id)||0)===(jobEpochs.get(game.id)||0));
+          job=null;
+        }
+      }}
       finally{polling=false;if(current()&&job)pollTimer=setTimeout(poll,2500);}
     }
     function reconnect(){if(!current())return;clearTimeout(pollTimer);const next=discover();if(next){
@@ -197,12 +207,25 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       }).catch(e=>{patch(game.id,{status:'error',analysisStatus:e.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':'FAILED',qaFlag:e.qaFlag||'BLOCKED',analysisRunId:e.analysisRunId||null,error:timedOut?'核對逾時，請重試':e.name==='AbortError'?'核對已停止':e.message});task.resolve(null);}).finally(()=>{clearTimeout(timer);controllers.current.delete(controller);pending.current.delete(game.id);active.current--;pump();});
     }
   }
-  function run(game){if(pending.current.has(game.id))return pending.current.get(game.id);epochs.current.set(game.id,(epochs.current.get(game.id)||0)+1);patch(game.id,{status:'queued',error:'',recoveryError:''});const promise=new Promise(resolve=>queue.current.push({game,resolve}));pending.current.set(game.id,promise);pump();return promise;}
-  async function runAll(){if(batch)return;setBatch(true);try{await Promise.all(games.filter(g=>g.status==='scheduled'&&Date.parse(g.startTime)>Date.now()).map(run));}finally{if(alive.current)setBatch(false);}}
+  function run(game){if(pending.current.has(game.id))return pending.current.get(game.id);if(externalBusyRef.current)return Promise.resolve(null);epochs.current.set(game.id,(epochs.current.get(game.id)||0)+1);patch(game.id,{status:'queued',error:'',recoveryError:''});const promise=new Promise(resolve=>queue.current.push({game,resolve}));pending.current.set(game.id,promise);pump();return promise;}
+  async function runAll(){if(batch||externalBusyRef.current)return;setBatch(true);try{await Promise.all(games.filter(g=>g.status==='scheduled'&&Date.parse(g.startTime)>Date.now()).map(run));}finally{if(alive.current)setBatch(false);}}
   const available=games.some(g=>g.status==='scheduled'&&Date.parse(g.startTime)>Date.now()),counts=soccerAnalysisCounts(games,states);
   const background=states.__soccerJob;
+  const busy=Boolean(batch||Object.values(states).some(state=>['queued','loading'].includes(state?.status))||background?.status==='running');
+  const busyCallback=useRef(onBusyChange),reportedBusy=useRef(null);busyCallback.current=onBusyChange;
+  const busyLeague=String(league||'').toUpperCase();
+  useEffect(()=>()=>{
+    if(reportedBusy.current?.league===busyLeague&&reportedBusy.current?.date===date&&reportedBusy.current.busy){
+      const value={league:busyLeague,date,busy:false};reportedBusy.current=value;busyCallback.current?.(value);
+    }
+  },[busyLeague,date]);
+  useEffect(()=>{
+    const value={league:busyLeague,date,busy},previous=reportedBusy.current;
+    if(previous?.league===value.league&&previous?.date===value.date&&previous.busy===value.busy)return;
+    reportedBusy.current=value;busyCallback.current?.(value);
+  },[busyLeague,date,busy]);
   const workspaceStates=Object.fromEntries(Object.entries(states).map(([id,state])=>[id,state.data?{...state,data:{...state.data,publishedCurrent:soccerResearchIsCurrent(state)}}:state]));
-  return <Context.Provider value={{states,run}}><div className="soccerAnalysisToolbar"><button type="button" className="secondary" disabled={batch||!available} onClick={runAll}>{batch?'正在核對賽前資料…':'一鍵核對賽前資料'}</button><button type="button" className="secondary" onClick={()=>refreshSaved.current?.()}>載入已保存分析</button><span>研究模式・正式評分尚未啟用</span><a href="/soccer/specification">分析規格 2.2</a></div>{background?.message&&<p className="soccerAvailability" role="status">{background.message}</p>}{background?.error&&<p className="soccerAnalysisWarning" role="alert">{background.error}；可按「載入已保存分析」重試。</p>}<div className="soccerAnalysisSummary" role="status" aria-live="polite"><strong>目前候選 {counts.candidates} 場</strong><span>本頁範圍 {counts.total} 場</span><span>待分析／重核 {counts.waiting}</span><span>處理中 {counts.processing}</span><span>完成 {counts.completed}</span><span>資料不足 {counts.insufficient}</span><span>失敗 {counts.failed}</span><span>研究中 {counts.research}</span></div><SoccerWorkspace games={games} states={workspaceStates} run={run} league={league} date={date}>{children}</SoccerWorkspace></Context.Provider>;
+  return <Context.Provider value={{states,run,externalBusy}}><div className="soccerAnalysisToolbar"><button type="button" className="secondary" disabled={batch||externalBusy||!available} onClick={runAll}>{batch?'正在核對賽前資料…':'一鍵核對賽前資料'}</button><button type="button" className="secondary" onClick={()=>refreshSaved.current?.()}>載入已保存分析</button><span>研究模式・正式評分尚未啟用</span><a href="/soccer/specification">分析規格 2.2</a></div>{background?.message&&<p className="soccerAvailability" role="status">{background.message}</p>}{background?.error&&<p className="soccerAnalysisWarning" role="alert">{background.error}；可按「載入已保存分析」重試。</p>}<div className="soccerAnalysisSummary" role="status" aria-live="polite"><strong>目前候選 {counts.candidates} 場</strong><span>本頁範圍 {counts.total} 場</span><span>待分析／重核 {counts.waiting}</span><span>處理中 {counts.processing}</span><span>完成 {counts.completed}</span><span>資料不足 {counts.insufficient}</span><span>失敗 {counts.failed}</span><span>研究中 {counts.research}</span></div><SoccerWorkspace games={games} states={workspaceStates} run={run} league={league} date={date} analysisReady={!batch&&background?.status!=='running'} onHighScoreStatusChange={onHighScoreStatusChange} externalBusy={externalBusy}>{children}</SoccerWorkspace></Context.Provider>;
 }
 export default function SoccerAnalysisPanel({game}){
   const [history,setHistory]=useState({versions:[],runs:[],loading:false,error:'',loaded:false});
@@ -211,7 +234,7 @@ export default function SoccerAnalysisPanel({game}){
   const presentation=soccerAnalysisPresentation(state),currentAttempt=state?.status==='done'&&(presentation.current||presentation.analysisStatus==='INSUFFICIENT_DATA'),historical=Boolean(data&&!currentAttempt),qaFlag=state?.status==='error'?state.qaFlag:currentAttempt?data?.qaFlag:null;
   const prestart=game.status==='scheduled'&&Date.parse(game.startTime)>Date.now(),stale=data&&Date.now()-Date.parse(data.observedAt)>180000;
   async function loadHistory(){setHistory(old=>({...old,loading:true,error:''}));try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId})}`,{cache:'no-store',signal:AbortSignal.timeout(15000)}),d=await r.json(),runs=d.runs===undefined?[]:d.runs;if(!r.ok||!d.ok||d.gameId!==game.id||d.date!==game.date||d.league!==game.league||!Array.isArray(d.versions)||d.versions.some(v=>v.gameId!==game.id||v.date!==game.date||v.league!==game.league||v.executable!==false)||!Array.isArray(runs)||runs.some(run=>!run||typeof run.analysisRunId!=='string'||!Number.isFinite(Date.parse(run.startedAt))||!['PROCESSING','COMPLETED','FAILED','INSUFFICIENT_DATA'].includes(run.analysisStatus)||run.selectionResult!=null&&(run.analysisStatus!=='COMPLETED'||run.selectionResult!=='RESEARCH_SHADOW')||run.reasons!=null&&(!Array.isArray(run.reasons)||run.reasons.some(reason=>typeof reason!=='string'))))throw Error('版本讀取未通過核對');setHistory({versions:d.versions,runs,loading:false,error:'',loaded:true});}catch{setHistory(old=>({...old,loading:false,error:'已保存版本暫時無法讀取。'}));}}
-  return <section className="soccerAnalysis" aria-label={`${game.home.name}對${game.away.name}資料核對`}><button type="button" className="secondary" disabled={busy} onClick={()=>context.run(game)}>{state?.status==='queued'?'等待核對…':busy?'核對中…':prestart?data?'重新核對賽前資料':'核對賽前資料':'檢視賽後資料'}</button>
+  return <section className="soccerAnalysis" aria-label={`${game.home.name}對${game.away.name}資料核對`}><button type="button" className="secondary" disabled={busy||Boolean(context.externalBusy)} onClick={()=>context.run(game)}>{state?.status==='queued'?'等待核對…':busy?'核對中…':prestart?data?'重新核對賽前資料':'核對賽前資料':'檢視賽後資料'}</button>
     <div className="soccerAnalysisStatuses" data-analysis-status={presentation.analysisStatus}><span>分析：<strong>{presentation.analysisLabel}</strong></span><span>篩選：<strong>{presentation.selectionLabel}</strong></span>{qaFlag&&<span>{qaLabels[qaFlag]||'檢核狀態待確認'}</span>}</div>
     {state?.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}{data?'；上次資料僅供歷史查閱，不代表本次完成。':''}</p>}
     {state?.recoveryError&&<p className="soccerAnalysisWarning" role="alert">已保存分析載入失敗：{state.recoveryError}；可按「載入已保存分析」重試。</p>}
