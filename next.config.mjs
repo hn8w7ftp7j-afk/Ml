@@ -48,14 +48,8 @@ const nextConfig = {
   images: { dangerouslyAllowSVG: false, remotePatterns: [] },
   async redirects() {
     return [
-      { source: '/epl', destination: '/soccer?league=EPL', permanent: false },
-      { source: '/ucl', destination: '/soccer?league=UCL', permanent: false },
-      {
-        source: '/',
-        has: [{ type: 'query', key: 'league', value: '(?<soccerLeague>EPL|UCL|epl|ucl)' }],
-        destination: '/soccer?league=:soccerLeague',
-        permanent: false,
-      },
+      { source: '/epl', destination: '/?sport=EPL', permanent: false },
+      { source: '/ucl', destination: '/?sport=UCL', permanent: false },
     ];
   },
   async headers() {
