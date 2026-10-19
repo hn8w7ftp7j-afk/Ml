@@ -79,7 +79,7 @@
     if (!names.has(clean(label))) names.set(clean(label), label);
   }
   function resolve(value) {
-    if (typeof value !== 'string' || value.length > 100 || /[<>\u0000-\u001f]|角球|罰牌|罚牌|角球數|角球数|CORNER|卡牌|黃牌|黄牌|紅牌|红牌|BOOKING/i.test(value)) return null;
+    if (typeof value !== 'string' || value.length > 100 || /[<>\u0000-\u001f]|角球|副牌|罰牌|罚牌|角球數|角球数|CORNER|卡牌|黃牌|黄牌|紅牌|红牌|BOOKING/i.test(value)) return null;
     const name = value.replace(/[\[［【(（]\s*主\s*[\]］】)）]/gu, '').trim();
     if (!/[a-z\u3400-\u9fff]/i.test(name) || name.length < 2) return null;
     const key = names.get(clean(name)) || clean(name);

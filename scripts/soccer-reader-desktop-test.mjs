@@ -64,6 +64,25 @@ const captures = ['EPL', 'UCL'].map(league => {
 });
 assertFootball(captureDesktop('EPL', { homeFirst: false }));
 assertFootball(captureDesktop('EPL', { separatedRows: true }));
+// IMG_3535: the (36) heading counts displayed rows, including card props.
+for (const cardProp of ['副牌數', '副牌数']) {
+  const capture = captureDesktop('UCL', { headingCount: 36, cardProp, malformedCard: true });
+  assert.equal(capture.diagnostics.expectedGameCount, 1);
+  assert.equal(capture.diagnostics.excludedProps, 2);
+  assertFootball(capture);
+  assert.equal(JSON.stringify(capture.tables).includes(cardProp), false);
+}
+{
+  const file = 'soccer-table-normalizer.js';
+  const previous = fs.readFileSync(`reader/${file}`, 'utf8').replace('角球|副牌|', '角球|');
+  const capture = captureDesktop('UCL', { headingCount: 36, cardProp: '副牌數', malformedCard: true,
+    sourceOverrides: { [file]: previous } });
+  const parsed = parseTai888Capture(capture, new Date(now));
+  assert.equal(capture.diagnostics.expectedGameCount, null);
+  const result = selectAuthoritativeBoard([{ capture, parsed, tabId: 1, frameId: 0 }], { now, league: 'UCL' });
+  assert.equal(result.ok, false, 'a malformed non-goal card row blocked valid goal odds before this fix');
+  assert.ok(result.assessed[0].issues.includes('missing-expected-game-count'));
+}
 // A bad quote may reject the source or the affected match; it may never be
 // repaired by borrowing odds from the adjacent odd/even or first-half columns.
 const malformed = parseTai888Capture(captureDesktop('EPL', { malformed: true }), new Date(now));
