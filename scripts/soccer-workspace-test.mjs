@@ -7,19 +7,27 @@ const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date,startTime:new D
 const quote={key:'q1',period:'FT',unit:'GOALS',kind:'TOTAL',side:'over',line:'3+50',lineSide:null,water:.95,label:'大 3+50',fresh:true,prestart:true,provenance:{gameId:game.id,observedAt:at}};
 const result={gameId:game.id,league:'epl',date,observedAt:at,persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',formalScoringEnabled:false,qualification:{eligible:false},directions:[{period:'FT',direction:'TOTAL_OVER',quotes:[quote],score:10,W:30,R:20,eligible:true,qaFlag:'WARN'}],evidence:{game}};
 const rank=(r=result,t=now)=>buildSoccerRanking([game],{[game.id]:{status:'done',data:r}},{now:t});
-assert.equal(rank().entries.length,1);assert.equal(rank().entries[0].score,null);assert.equal(rank().order.length,0,'positive injected scores cannot promote research');
-assert.equal(rank({...result,gameId:'soccer:ucl:123'}).entries.length,0);
-assert.equal(rank({...result,publishedCurrent:false}).entries.length,0);
-assert.equal(rank(result,now+180000).entries.length,0);
-assert.equal(rank({...result,directions:[{...result.directions[0],quotes:[{...quote,period:'HT'}]}]}).entries.length,0);
-assert.equal(buildSoccerRanking([game],{[game.id]:{status:'error',data:result}},{now}).entries.length,0);
 const formal={...result,formalScoringEnabled:true,qualification:{eligible:true}};
-assert.equal(rank(formal).order.length,1);
-for(const patch of [{score:7.1},{W:0},{R:-1},{qaFlag:'BLOCKED'}])assert.equal(rank({...formal,directions:[{...formal.directions[0],...patch}]}).order.length,0);
+for(const view of ['entries','order']){
+  assert.equal(rank()[view].length,0,'positive injected scores cannot promote research in either ranking');
+  assert.equal(rank({...formal,gameId:'soccer:ucl:123'})[view].length,0);
+  assert.equal(rank({...formal,publishedCurrent:false})[view].length,0);
+  assert.equal(rank(formal,now+180000)[view].length,0);
+  assert.equal(rank({...formal,directions:[{...formal.directions[0],quotes:[{...quote,period:'HT'}]}]})[view].length,0);
+  assert.equal(buildSoccerRanking([game],{[game.id]:{status:'error',data:formal}},{now})[view].length,0);
+  assert.equal(rank(formal)[view].length,1);
+  assert.equal(rank({...formal,directions:[{...formal.directions[0],score:7.2}]})[view].length,1,'the inclusive S threshold is unchanged');
+  for(const patch of [{score:7.1},{score:NaN},{W:0},{W:-1},{R:0},{R:-1},{eligible:false},{qaFlag:'BLOCKED'}])
+    assert.equal(rank({...formal,directions:[{...formal.directions[0],...patch}]})[view].length,0,`${view} excludes ${JSON.stringify(patch)}`);
+  assert.equal(rank({...formal,qualification:{eligible:false}})[view].length,0);
+}
+assert.equal(result.directions[0].quotes[0],quote,'ranking filtering preserves the original research quote for analysis results');
+assert.equal(result.directions[0].score,10,'ranking filtering never rewrites source scores');
 const earlier={...game,id:'soccer:epl:124',startTime:new Date(now+3600000).toISOString()},other={...formal,gameId:earlier.id,directions:[{...formal.directions[0],score:7.5,quotes:[{...quote,key:'q2',provenance:{...quote.provenance,gameId:earlier.id}}]}]};
 const ordered=buildSoccerRanking([game,earlier],{[game.id]:{status:'done',data:formal},[earlier.id]:{status:'done',data:other}},{now});
 assert.equal(ordered.entries[0].game.id,game.id);assert.equal(ordered.order[0].game.id,earlier.id,'time ordering differs from score ordering');
-console.log('PASS football ranking: score vs kickoff order, filters, no invented research S/W/R, expiry, failed refresh, scope and positive candidate gates');
+assert.deepEqual(ordered.entries.map(e=>e.stableKey).sort(),ordered.order.map(e=>e.stableKey).sort(),'both views contain the same eligible candidates');
+console.log('PASS football ranking: both views exclude research, low scores and nonpositive W/R, retain inclusive S threshold, formal QA, currentness, original research quotes and score/time sorting');
 
 const record=soccerManualRecordFromSnapshot({...result,revision:'r1'},'q1');
 assert.equal(record.stake,10000);assert.equal(record.rebateRate,.01);assert.equal(record.calibrationEligible,false);assert.equal(record.executable,false);

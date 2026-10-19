@@ -25,7 +25,38 @@ for(const view of ['board','results','ranking','records','data','validation']){
   assert.doesNotMatch(markup,/undefined|NaN/);
 }
 assert.match(render('ranking'),/全部排名/);assert.match(render('ranking'),/時間順序排名/);
-states=['order','all'];si=0;assert.match(renderToStaticMarkup(ctx.SoccerRanking({games:[],states:{},run:()=>{},now:Date.now()})),/目前沒有通過 S／W／R/);
+const rankingNow=Date.parse('2026-10-20T00:00:00Z');
+for(const league of ['epl','ucl']){
+  const fixtures=[
+    {name:'合格高分',score:9,minutes:120},
+    {name:'合格早場',score:7.2,minutes:60,period:'HT',direction:'HANDICAP_HOME',kind:'HANDICAP'},
+    {name:'研究方向',formalScoringEnabled:false},
+    {name:'低於門檻',score:7.1},
+    {name:'W零值',W:0},{name:'W負值',W:-1},{name:'R零值',R:0},{name:'R負值',R:-1},
+    {name:'分數缺失',score:null},{name:'正式資格未通過',qualified:false},{name:'方向未通過',eligible:false},{name:'QA阻擋',qaFlag:'BLOCKED'},
+  ].map((spec,index)=>{
+    const game={id:`soccer:${league}:${index+1}`,league,date:'2026-10-20',status:'scheduled',startTime:new Date(rankingNow+(spec.minutes??180)*60000).toISOString(),home:{name:spec.name},away:{name:'對手'}};
+    const quote={key:`quote-${index}`,period:spec.period??'FT',kind:spec.kind??'TOTAL',unit:'GOALS',line:'2-50',label:'原盤',water:.95,fresh:true,prestart:true,provenance:{gameId:game.id,observedAt:new Date(rankingNow).toISOString()}};
+    const data={gameId:game.id,league,date:game.date,observedAt:new Date(rankingNow).toISOString(),persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',formalScoringEnabled:spec.formalScoringEnabled??true,qualification:{eligible:spec.qualified??true},directions:[{period:quote.period,direction:spec.direction??'TOTAL_OVER',score:spec.score===undefined?8:spec.score,W:spec.W??2,R:spec.R??1,eligible:spec.eligible??true,qaFlag:spec.qaFlag??'PASS',quotes:[quote]}]};
+    return{game,data};
+  });
+  const games=fixtures.map(f=>f.game),analysisStates=Object.fromEntries(fixtures.map(f=>[f.game.id,{status:'done',data:f.data}]));
+  const original=JSON.stringify(analysisStates);
+  const rankMarkup=(view,market='all',rows=games)=>{states=[view,market];si=0;return renderToStaticMarkup(ctx.SoccerRanking({games:rows,states:analysisStates,run:()=>{},now:rankingNow}));};
+  for(const view of ['ranking','order']){
+    const markup=rankMarkup(view);
+    assert.equal((markup.match(/class="soccerRankRow"/g)||[]).length,2,`${league} ${view} includes only eligible candidate rows`);
+    assert.match(markup,/合格高分/);assert.match(markup,/合格早場/);assert.match(markup,/2 個候選方向/);
+    for(const fixture of fixtures.slice(2))assert.ok(!markup.includes(fixture.game.home.name),`${league} ${view} excludes ${fixture.game.home.name}`);
+    assert.doesNotMatch(markup,/尚無評分者列後方|研究中・正式評分待驗證/);
+    const first=view==='ranking'?'合格高分':'合格早場',second=view==='ranking'?'合格早場':'合格高分';
+    assert.ok(markup.indexOf(first)<markup.indexOf(second),'ranking and kickoff views retain their independent ordering');
+    const halfTime=rankMarkup(view,'HT:HANDICAP');assert.match(halfTime,/合格早場/);assert.doesNotMatch(halfTime,/合格高分/);
+    const empty=rankMarkup(view,'all',games.slice(2));assert.match(empty,/目前沒有通過 S／W／R/);assert.match(empty,/研究原盤仍可在「分析結果」查閱/);assert.doesNotMatch(empty,/class="soccerRankRow"/);
+  }
+  assert.equal(JSON.stringify(analysisStates),original,'rendering either ranking cannot mutate research snapshots or quotes');
+}
+console.log('PASS shipped ranking JSX: EPL/UCL score and time views exclude research, low scores, missing scores, nonpositive W/R and failed formal QA; valid candidates, original quotes, ordering, filters and honest empty states remain');
 const epl=render('validation'),ucl=render('validation','ucl');assert.match(epl,/393／412/);assert.match(ucl,/143／185/);assert.doesNotMatch(ucl,/393／412/);
 for(const markup of [epl,ucl]){assert.match(markup,/全場｜逐年分事件校準/);assert.match(markup,/上半場｜分事件校準/);assert.match(markup,/全場勝平負校準核對/);assert.match(markup,/上半場勝平負校準核對/);assert.match(markup,/全場分事件校準指標/);assert.match(markup,/上半場分事件校準指標/);for(const name of ['主勝','和局','客勝'])assert.ok(markup.includes(`${name}｜分箱預估與實際比例`));assert.match(markup,/事後回補的研究診斷/);}
 console.log('PASS shipped workspace JSX: six NBA-style tabs, two ranking views, honest empty candidates and separate EPL/UCL validation metrics');

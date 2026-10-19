@@ -22,11 +22,11 @@ export function SoccerRanking({games,states,run,now,externalBusy=false}){
   const ranking=buildSoccerRanking(games,states,{now,market:filter}),entries=view==='order'?ranking.order:ranking.entries;
   return <section className="panel soccerRanking" aria-label="足球分析排名"><div className="rankingViewTabs" aria-label="足球排名檢視"><button className={view==='ranking'?'active':''} aria-pressed={view==='ranking'} onClick={()=>setView('ranking')}>全部排名</button><button className={view==='order'?'active':''} aria-pressed={view==='order'} onClick={()=>setView('order')}>時間順序排名</button></div>
     <h2>{view==='order'?'時間順序排名':'全部排名'}</h2><div className="rankingViewTabs" aria-label="足球排名盤口篩選">{SOCCER_RANK_MARKETS.map(([key,label])=><button key={key} className={filter===key?'active':''} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}</div>
-    <p>{ranking.currentGames} 場目前分析｜{entries.length} 個方向｜{view==='order'?'候選依開賽時間排列，同場按盤口分組':'依 S、W、R 由高到低；尚無評分者列後方'}</p>
-    <p className="soccerAvailability">候選門檻 S ≥ 7.2、W &gt; 0、R &gt; 0。足球正式收益與模型仍待驗收，研究資料不會直接成為高分候選。</p>
+    <p>{ranking.currentGames} 場目前分析｜{entries.length} 個候選方向｜{view==='order'?'候選依開賽時間排列，同場按盤口分組':'候選依 S、W、R 由高到低'}</p>
+    <p className="soccerAvailability">兩種排名皆僅顯示通過正式資格核對，且 S ≥ 7.2、W &gt; 0、R &gt; 0 的候選。足球正式收益與模型仍待驗收，研究原盤請至「分析結果」查閱。</p>
     {ranking.outdatedGames>0&&<p>{ranking.outdatedGames} 場資料已過期或已開賽，請重新核對。</p>}{ranking.pendingGames>0&&<p>{ranking.pendingGames} 場待分析或重新核對。</p>}
     {entries.map((e,i)=><article className="soccerRankRow" key={e.stableKey}><b>{i+1}</b><div className="soccerRankScore">{e.score==null?'—':e.score.toFixed(1)}<small>S 分數</small></div><div><h3>{soccerTeamLabel(e.game.home)}（主）對 {soccerTeamLabel(e.game.away)}（客）</h3><p>{e.market}｜{e.quote.label}｜水位 {e.quote.water}</p><p>W {num(e.W)}%｜R {num(e.R)}%{e.score==null?'｜研究中・正式評分待驗證':''}</p><time>{time(e.game.startTime)}（台灣）</time></div><div><SoccerRecordButton game={e.game} result={e.result} quote={e.quote}/><button className="mini secondary" disabled={externalBusy||['queued','loading'].includes(states[e.game.id]?.status)} onClick={()=>run(e.game)}>重新分析</button></div></article>)}
-    {!entries.length&&<p className="emptySmall">{view==='order'?'目前沒有通過 S／W／R 及正式資格核對的候選。':'尚無目前盤口的有效分析方向，請同步原盤並分析。'}</p>}
+    {!entries.length&&<p className="emptySmall">目前沒有通過 S／W／R 及正式資格核對的候選。研究原盤仍可在「分析結果」查閱。</p>}
   </section>;
 }
 export default function SoccerWorkspace({games,states,run,league,date,children,analysisReady=true,onHighScoreStatusChange,externalBusy=false}){

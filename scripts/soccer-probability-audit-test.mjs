@@ -44,6 +44,19 @@ const beforeModel=JSON.stringify(ftModel),beforePrediction=predictScoreModel(ftM
 assert.equal(JSON.stringify(ftModel),beforeModel);assert.deepEqual(predictScoreModel(ftModel,game),beforePrediction);assert.equal(metric.scoreLogLoss,2);near(metric.logLoss,-Math.log(beforePrediction.outcomes.draw));near(metric.brier,Object.entries(beforePrediction.outcomes).reduce((s,[k,p])=>s+(p-(k==='draw'?1:0))**2,0));
 assert.equal(metric.bins.reduce((s,b)=>s+b.count,0),3);assert.equal(metric.probabilityAudit.classes.home.count,1);assert.equal(metric.games[0].fold,'diagnostic-2025');assert.match(metric.games[0].modelHash,/^[a-f0-9]{64}$/);assert.equal(metric.games[0].exactScoreLogProbability,-2);assert.equal(metric.games[0].exactScoreLogProbabilityState,'FINITE');
 const invalidRow=evaluateScoreModel(ftModel,[game,{...game,eventId:'102',homeGoals:-1}],{fold:'diagnostic-2025'});assert.equal(invalidRow.count,1);assert.equal(invalidRow.logLoss,metric.logLoss);assert.equal(invalidRow.brier,metric.brier);assert.equal(invalidRow.probabilityAudit.cohort.sample,2);assert.equal(invalidRow.probabilityAudit.cohort.excluded,1);
+const malformedResults=[
+ {...game,eventId:null},{...game,eventId:'not-an-event'},
+ {...game,period:'REGULATION_HT'},{...game,period:undefined},
+ {...game,source:null},{...game,source:{url:source.url}},
+ {...game,league:'ucl'},{...game,homeId:game.awayId},null,
+];
+const guarded=evaluateScoreModel(ftModel,[game,...malformedResults],{fold:'diagnostic-2025'});
+assert.equal(guarded.total,1+malformedResults.length);assert.equal(guarded.count,1);assert.equal(guarded.probabilityAudit.cohort.used,guarded.count);
+assert.equal(guarded.probabilityAudit.cohort.excluded,malformedResults.length);
+assert.ok(guarded.games.slice(1).every(row=>row.status==='SKIPPED'&&row.reason==='SOCCER_EVALUATION_ROW_INVALID'));
+for(const key of ['logLoss','brier','scoreLogLoss'])assert.equal(guarded[key],metric[key],'invalid result scope cannot change an aggregate numerator or denominator');
+assert.deepEqual(guarded.bins,metric.bins);assert.deepEqual(guarded.probabilityAudit.classes,metric.probabilityAudit.classes);
+console.log('PASS FT evaluation excludes missing identity/provenance and foreign-period/league results before metrics; aggregate and calibration denominators agree');
 const rare={...game,homeGoals:30,awayGoals:0};assert.equal(beforePrediction.cells.some(c=>c.home===30),false);assert.ok(Number.isFinite(evaluateScoreModel(ftModel,[rare]).games[0].exactScoreLogProbability));
 console.log('PASS FT evaluator preserves coefficients, predictions, original numeric metrics/pooled bins and rare-score accounting while adding replayable provenance');
 
