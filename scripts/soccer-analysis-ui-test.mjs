@@ -199,7 +199,9 @@ let workspace=workspaceNode(restoring.provider());assert.equal(workspace.props.s
 assert.equal(buildSoccerRanking(games,workspace.props.states,{now:uiNow}).entries.length,0,'workspace ranking cannot bypass missing current evidence');
 restoring.metadataTick();await new Promise(resolve=>setImmediate(resolve));assert.equal(currentReads,1,'restored history schedules a lightweight current read');
 workspace=workspaceNode(restoring.provider());assert.equal(workspace.props.states[games[0].id].data.publishedCurrent,true);
-assert.equal(buildSoccerRanking(games,workspace.props.states,{now:uiNow}).entries.length,1,'a fenced restored research quote remains visible without fabricated scores');
+assert.equal(buildSoccerRanking(games,workspace.props.states,{now:uiNow}).entries.length,0,'a fenced restored research quote does not enter candidate rankings');
+assert.equal(workspace.props.states[games[0].id].data.directions[2].quotes[0].key,rankedQuote.key,'ranking filtering preserves restored research quotes');
+assert.match(renderToStaticMarkup(restoring.renderPanel(games[0])),/2-50/,'the restored original research market remains readable in analysis results');
 activeSource=false;restoring.readerChanged({league:'epl',date:games[0].date,contentHash:'d'.repeat(64)});
 workspace=workspaceNode(restoring.provider());assert.equal(workspace.props.states[games[0].id].data.publishedCurrent,false);
 assert.equal(boardResult.publishedCurrent,true,'workspace safety and recovery do not mutate the original saved response');
