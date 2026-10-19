@@ -1,6 +1,6 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.10.20",
+  "version": "11.10.21",
   "private": true,
   "type": "module",
   "engines": {

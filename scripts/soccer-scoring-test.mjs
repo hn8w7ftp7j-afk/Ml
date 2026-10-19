@@ -215,8 +215,42 @@ const tailScenarios = scoreSoccerQuote(reseal({ ...input, scenarios: uncertainTa
 assert.equal(tailScenarios.scenarioReturns.code, 'SOCCER_SCORE_SCENARIO_TAIL_UNRESOLVED');
 assert.equal(tailScenarios.scenarioReturns.conditionalWeightedReturn, null); assert.equal(tailScenarios.R, null);
 const poisson = scoreSoccerQuote({ ...input, distribution: scoreDistribution(1.5, 1.1), scenarios: null });
-assert.ok(poisson.conditionalPayoff.tailMass > 0); assert.equal(poisson.conditionalPayoff.netEV, null);
-console.log('PASS omitted-tail retained mass and exact-profit bounds, genuine Poisson nonzero tail, no retained EV renormalization or tail bound masquerading as R');
+assert.ok(poisson.conditionalPayoff.tailMass > 0);
+assert.equal(poisson.conditionalPayoff.unresolvedTailMass, 0);
+assert.ok(Number.isFinite(poisson.conditionalPayoff.netEV));
+assert.equal(poisson.fixedScoreDiagnostic, null, 'resolving numerical tails does not provide uncertainty inputs');
+console.log('PASS arbitrary omitted tails stay bounded; proven Poisson total tails resolve by settlement without renormalization or a fabricated R');
+
+// Exercise real infinite-support Poisson distributions through the scenario
+// arithmetic, including the rebate wrapper which must account for the tail.
+for (const [winRebate, lossRebate] of [[true, false], [false, true], [true, true], [false, false]]) {
+  const contract = { ...input.contract, rebate: { rate: .01, basis: 'TOTAL_PRINCIPAL', appliesTo: {
+    FULL_WIN: winRebate, PARTIAL_WIN: false, PUSH: false, PARTIAL_LOSS: false, FULL_LOSS: lossRebate } } };
+  const scenarios = input.scenarios.map((scenario, index) => ({ ...scenario,
+    distribution: { ...scenario.distribution, ...scoreDistribution(1.8 + .2 * index, 1.4, 0, 1e-7) } }));
+  const actual = scoreSoccerQuote(reseal({ ...input, contract, scenarios, distribution: scenarios[0].distribution }));
+  assert.equal(actual.scenarioReturns.ok, true);
+  const expected = scenarios.map(scenario => {
+    const d = scenario.distribution, lambda = d.homeRate + d.awayRate;
+    const under = Math.exp(-lambda) * (1 + lambda + lambda * lambda / 2), over = 1 - under;
+    return .95 * over - under + .01 * ((winRebate ? over : 0) + (lossRebate ? under : 0));
+  });
+  for (const [index, row] of actual.scenarioReturns.scenarioRows.entries()) {
+    close(row.expectedNet, expected[index]);
+    assert.ok(row.tailMass > 1e-12); assert.equal(row.unresolvedTailMass, 0);
+    close(row.payoff.tailSettlement.rebatePerUnit, winRebate ? .01 : 0);
+    close(row.payoff.tailSettlement.contribution.rebate, row.tailMass * (winRebate ? .01 : 0));
+    close(row.payoff.profitProbabilities.profitable + row.payoff.profitProbabilities.losing + row.payoff.profitProbabilities.breakeven, 1);
+    close(row.payoff.profitProbabilities.bounds.profitable.lower, row.payoff.profitProbabilities.bounds.profitable.upper);
+    close(row.evBounds.lower, row.expectedNet); close(row.evBounds.upper, row.expectedNet);
+  }
+  close(actual.scenarioReturns.conditionalWeightedReturn, (expected[0] + expected[1]) / 2);
+  assert.ok(Number.isFinite(actual.scenarioReturns.conditionalRobustReturn));
+  assert.ok(Number.isFinite(actual.fixedScoreDiagnostic.score));
+  assert.equal(actual.W, null); assert.equal(actual.R, null); assert.equal(actual.score, null);
+  assert.equal(actual.formalScoringEnabled, false); assert.equal(actual.eligible, false);
+}
+console.log('PASS real Poisson total tails → state-specific rebate → weighted/scenario arithmetic; absent registrations still forbid formal S/W/R');
 
 // Source terms may explicitly grant no rebate on pushes or partial outcomes.
 const lineInput = fixture('epl', 'FT', '2平');

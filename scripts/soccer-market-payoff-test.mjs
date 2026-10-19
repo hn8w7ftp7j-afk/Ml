@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { evaluateSoccerQuote } from '../lib/soccer/market-payoff.js';
+import { scoreDistribution } from '../lib/soccer/score-model.js';
+import { predictHalfTimeDistribution, HALF_TIME_MODEL_VERSION, HALF_TIME_PROTOCOL_VERSION } from '../lib/soccer/half-time-model.js';
 
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
 const grid = (cells, tailMass = 0, period = 'REGULATION_FT') => ({ cells, tailMass,
@@ -90,7 +92,112 @@ assert.ok(tinyTail.tailMass > 0);
 assert.equal(calc(quote, grid([{ home: 1, away: 0, probability: 0.5 }, { home: 1, away: 0, probability: 0.5 }])).ok, false);
 assert.equal(calc(quote, grid([{ home: -1, away: 0, probability: 1 }])).ok, false);
 assert.equal(calc(quote, grid([{ home: 1, away: 0, probability: '1' }])).ok, false);
-for (const r of [quarter, truncated, calc(quote, one(1, 0), { ...contract, provenance: { status: 'VERIFIED', evidenceRef: 'fixture-only' } })]) {
+
+// For genuine own DC grids, all omitted TOTAL scores can share one settlement
+// state. Complete that state, without moving probability into a made-up score
+// or dividing the retained grid by its mass. Independent total-goal marginals
+// (Poisson sum plus the four-cell DC correction) provide the numerical oracle.
+const dcTotal = (distribution, n) => {
+  const { homeRate: h, awayRate: a, rho } = distribution;
+  let probability = Math.exp(-h - a);
+  for (let i = 1; i <= n; i++) probability *= (h + a) / i;
+  const correction = Math.exp(-h - a) * h * a * rho;
+  return probability + (n === 0 ? -correction : n === 1 ? 2 * correction : n === 2 ? -correction : 0);
+};
+const totalQuote = { ...total, sourceLine: '2.5', water: .95 };
+const fullRebate = { ...contract, rebate: { rate: .01, basis: 'TOTAL_PRINCIPAL' } };
+const genuine = scoreDistribution(1.5, 1.1, .1), genuineBefore = JSON.stringify(genuine);
+const complete = calc(totalQuote, genuine, fullRebate);
+assert.ok(genuine.tailMass > 0);
+assert.equal(complete.tailMass, genuine.tailMass, 'original omitted score mass stays visible');
+assert.equal(complete.resolvedTailMass, genuine.tailMass); assert.equal(complete.unresolvedTailMass, 0);
+assert.equal(complete.rows.length, genuine.cells.length, 'tail is a settlement state, never an invented score row');
+assert.deepEqual(complete.rows.map(row => [row.home, row.away, row.probability]), genuine.cells.map(row => [row.home, row.away, row.probability]));
+assert.equal(complete.tailSettlement.method, 'SETTLEMENT_INVARIANT_OUTSIDE_RECTANGLE');
+assert.equal(complete.tailSettlement.outcome, 'FULL_WIN');
+assert.equal(complete.tailSettlement.winFraction, 1); assert.equal(complete.tailSettlement.lossFraction, 0);
+assert.equal(complete.tailSettlement.support.verification, 'RECOMPUTED_GENERATOR_PMF_AND_COMPLETE_RECTANGLE');
+close(complete.tailSettlement.contribution.net, genuine.tailMass * .96);
+close(complete.netEV, complete.retainedEV.net + complete.tailSettlement.contribution.net);
+close(complete.probabilities.FULL_WIN, complete.retainedProbabilities.FULL_WIN + genuine.tailMass);
+close(Object.values(complete.probabilities).reduce((sum, mass) => sum + mass, 0), 1);
+close(Object.values(complete.retainedProbabilities).reduce((sum, mass) => sum + mass, 0), genuine.retainedMass);
+for (const state of Object.keys(complete.probabilities)) {
+  assert.equal(complete.probabilityBounds[state].lower, complete.probabilities[state]);
+  assert.equal(complete.probabilityBounds[state].upper, complete.probabilities[state]);
+}
+assert.equal(complete.evBounds.net.lower, complete.netEV); assert.equal(complete.evBounds.net.upper, complete.netEV);
+assert.equal(complete.tailUncertainty.maxAbsoluteNetContribution, 0);
+const cdf2 = [0, 1, 2].reduce((sum, n) => sum + dcTotal(genuine, n), 0);
+close(complete.netEV, .95 * (1 - cdf2) - cdf2 + .01);
+const completeUnder = calc({ ...totalQuote, direction: 'UNDER' }, genuine, fullRebate);
+assert.equal(completeUnder.tailSettlement.outcome, 'FULL_LOSS');
+close(completeUnder.tailSettlement.contribution.net, genuine.tailMass * -.99);
+close(completeUnder.netEV, .95 * cdf2 - (1 - cdf2) + .01);
+const lowOver = calc({ ...totalQuote, sourceLine: '.5' }, genuine, fullRebate);
+assert.equal(lowOver.ok, false, 'raw source syntax remains unchanged');
+const low = calc({ ...totalQuote, sourceLine: '0.5' }, genuine, fullRebate);
+close(low.netEV, .95 * (1 - dcTotal(genuine, 0)) - dcTotal(genuine, 0) + .01);
+const p2 = dcTotal(genuine, 2), cdf1 = dcTotal(genuine, 0) + dcTotal(genuine, 1);
+const exactQuarter = calc({ ...totalQuote, sourceLine: '2.25' }, genuine, fullRebate);
+close(exactQuarter.netEV, .95 * (1 - cdf2) - cdf1 - .5 * p2 + .01);
+const exactCredit = calc({ ...totalQuote, sourceLine: '2+25' }, genuine, { ...fullRebate, type: 'CREDIT_BOUNDARY' });
+close(exactCredit.netEV, .95 * (1 - cdf2 + .25 * p2) - cdf1 + .01);
+for (const [basis, expectedTailRebate] of [['NONE', 0], ['SETTLED_PRINCIPAL', .01], ['LOSS_PRINCIPAL', 0]]) {
+  const resolved = calc(totalQuote, genuine, { ...contract, rebate: { rate: basis === 'NONE' ? 0 : .01, basis } });
+  close(resolved.tailSettlement.rebatePerUnit, expectedTailRebate);
+}
+const differentTruncation = calc(totalQuote, scoreDistribution(1.5, 1.1, .1, 1e-8), fullRebate);
+assert.ok(differentTruncation.tailMass > complete.tailMass);
+assert.equal(differentTruncation.unresolvedTailMass, 0);
+close(differentTruncation.netEV, complete.netEV);
+assert.notEqual(differentTruncation.retainedEV.net, complete.retainedEV.net);
+assert.equal(JSON.stringify(genuine), genuineBefore, 'conditional completion does not mutate the generator output');
+
+// A label, rectangular shape, comparison tolerance or small residual cannot
+// certify a model. Missing low scores and changed PMFs retain unknown tails.
+const metadata = { distributionFamily: genuine.distributionFamily, homeRate: genuine.homeRate,
+  awayRate: genuine.awayRate, rho: genuine.rho, tolerance: genuine.tolerance };
+const missingCell = structuredClone(genuine); missingCell.cells.shift();
+missingCell.retainedMass = missingCell.cells.reduce((sum, row) => sum + row.probability, 0);
+missingCell.tailMass = 1 - missingCell.retainedMass;
+const changedPMF = structuredClone(genuine);
+changedPMF.cells[0].probability += 1e-6; changedPMF.cells[1].probability -= 1e-6;
+const tinyChangedPMF = structuredClone(genuine);
+tinyChangedPMF.cells[0].probability += 1e-14; tinyChangedPMF.cells[1].probability -= 1e-14;
+for (const distribution of [{ ...diverse, ...metadata }, missingCell, changedPMF, tinyChangedPMF,
+  { ...genuine, homeRate: 1.6 }, { ...genuine, distributionFamily: 'CALLER_RECTANGULAR_GRID' }]) {
+  const result = calc(totalQuote, distribution, fullRebate);
+  assert.equal(result.ok, true); assert.equal(result.tailSettlement, null);
+  assert.equal(result.netEV, null); assert.equal(result.resolvedTailMass, 0);
+  assert.equal(result.unresolvedTailMass, result.tailMass);
+}
+const boundary = complete.tailSettlement.support.minimumOmittedTotal;
+const aboveTail = calc({ ...totalQuote, sourceLine: String(boundary) }, genuine, fullRebate);
+assert.equal(aboveTail.tailSettlement, null); assert.equal(aboveTail.netEV, null);
+const genuineHandicap = calc(quote, genuine, contract);
+assert.equal(genuineHandicap.tailSettlement, null); assert.equal(genuineHandicap.netEV, null);
+assert.equal(genuineHandicap.unresolvedTailMass, genuineHandicap.tailMass);
+
+// HT must have its own documented adaptive grid and the matching model/joint
+// metadata. An inherited omitted FT mixture can affect even low HT scores.
+const halfModel = { version: HALF_TIME_MODEL_VERSION, protocolVersion: HALF_TIME_PROTOCOL_VERSION,
+  league: 'epl', period: 'REGULATION_HT', cutoff: '2026-01-01T00:00:00Z', shares: { home: .45, away: .43 } };
+const half = predictHalfTimeDistribution(genuine, halfModel);
+const halfQuote = { ...totalQuote, period: 'HT', sourceLine: '0.5' }, halfContract = { ...fullRebate, period: 'HT' };
+const completeHalf = calc(halfQuote, half, halfContract);
+assert.equal(completeHalf.tailSettlement.support.generator, 'POISSON_DIXON_COLES_THINNED');
+assert.equal(completeHalf.unresolvedTailMass, 0);
+close(completeHalf.netEV, .95 * (1 - dcTotal(half, 0)) - dcTotal(half, 0) + .01);
+for (const distribution of [{ ...half, jointContract: null }, { ...half, modelVersion: 'CALLER_HT_MODEL' },
+  { ...half, tailSemantics: 'INHERITED_OMITTED_FT_MASS_CAN_CONTRIBUTE_TO_ANY_HT_SCORE_NOT_HT_OUTSIDE_GRID_PROBABILITY' },
+  predictHalfTimeDistribution({ ...diverse, period: 'REGULATION_FT' }, halfModel)]) {
+  const result = calc(halfQuote, distribution, halfContract);
+  assert.equal(result.ok, true); assert.equal(result.tailSettlement, null); assert.equal(result.netEV, null);
+}
+console.log('PASS verified FT/HT DC complete-rectangle TOTAL tails: invariant-state integration, analytic total-goal oracle, credit/Asian boundaries and rebates, traceable unchanged omitted mass, no invented cells; altered/unknown/inherited tails and handicaps remain unresolved');
+
+for (const r of [quarter, truncated, complete, completeUnder, completeHalf, calc(quote, one(1, 0), { ...contract, provenance: { status: 'VERIFIED', evidenceRef: 'fixture-only' } })]) {
   assert.equal(r.W, null); assert.equal(r.R, null); assert.equal(r.S, null);
   assert.equal(r.eligible, false); assert.equal(r.executable, false); assert.equal(r.formalScoringEnabled, false);
 }
