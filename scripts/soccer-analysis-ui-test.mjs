@@ -1,3 +1,4 @@
+import * as soccerReadiness from '../lib/soccer/scoring-readiness.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -27,7 +28,7 @@ function harness(fetch,{boardFetch=null}={}){
  const state=[],refs=[],effects=[],intervals=new Map(),cleanups=[],listeners=new Map();let si=0,ri=0,tree,intervalId=0;
  const document={visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
- const ctx=vm.createContext({...soccerBackgroundClient,soccerQuoteScorePresentation,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
+ const ctx=vm.createContext({...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
    if(url.startsWith('/api/soccer/analysis?')&&!new URL(url,'https://fixture.invalid').searchParams.has('view')){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
    return fetch(url,options);
   },SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,

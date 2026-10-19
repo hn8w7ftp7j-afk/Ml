@@ -1,3 +1,4 @@
+import * as soccerReadiness from '../lib/soccer/scoring-readiness.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { adaptSoccerReaderQuote, evaluateSoccerScenarioReturns, scoreSoccerQuote, soccerScoringHash,
@@ -177,7 +178,7 @@ assert.equal(presentation.score,acceptedCalculation.score);assert.equal(presenta
 const React=await import('react'),{renderToStaticMarkup}=await import('react-dom/server'),{transform}=await import('next/dist/build/swc/index.js'),{default:vm}=await import('node:vm');
 const marketSource=fs.readFileSync(new URL('../app/soccer/market-panel.js',import.meta.url),'utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const marketCode=await transform(marketSource,{filename:'soccer-actual-score.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const marketContext=vm.createContext({React,soccerQuoteScorePresentation,SoccerRecordButton:()=>null});vm.runInContext(marketCode.code,marketContext);
+const marketContext=vm.createContext({...soccerReadiness,React,soccerQuoteScorePresentation,SoccerRecordButton:()=>null});vm.runInContext(marketCode.code,marketContext);
 const scoredMarkup=renderToStaticMarkup(marketContext.SoccerMarketDirections({directions:published.directions,result:published,game:input.game,now}));
 assert.ok(scoredMarkup.includes(`<strong>${acceptedCalculation.score.toFixed(1)}</strong>`));
 assert.match(scoredMarkup,/W \+4.35%｜R \+2.40%/);assert.match(scoredMarkup,/通過排名門檻/);
