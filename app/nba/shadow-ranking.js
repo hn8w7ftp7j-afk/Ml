@@ -11,6 +11,7 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
   const [view, setView] = useState('ranking');
   const [filter, setFilter] = useState('all');
   const ranking = buildNbaShadowRanking(rows, date, now, filter);
+  const hasOpening = rows.some(row => row.result?.modelVersion === 'nba-regular-cross-season-v1');
   const groups = buildNbaShadowOrder(ranking.entries);
   const renderEntry = (entry, index) => <div className="rankRow nbaRankRow" key={entry.stableKey} data-nba-rank-key={entry.stableKey}>
       <b>{view === 'order' ? entry.betOrderIndex : index + 1}</b><strong className={`rankScore nbaRankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定 S 分數">{entry.score == null ? '—' : entry.score.toFixed(1)}<small>S 分數</small></strong>
@@ -23,7 +24,8 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
     </div>;
   return <section className="panel nbaShadowRanking" aria-label="NBA 影子排名">
     <div className="rankingViewTabs" aria-label="影子排名檢視"><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>全部方向</button><button className={view === 'order' ? 'active' : ''} onClick={() => setView('order')}>候選順序</button></div>
-    <div className="panelHead"><h2>{view === 'order' ? '候選順序｜7.0 分以上・W/R 為正' : '全部方向'}</h2><span className="state shadow">模型估計</span></div>
+    <div className="panelHead"><h2>{view === 'order' ? hasOpening ? '候選順序｜通過門檻・W/R 為正' : '候選順序｜7.0 分以上・W/R 為正' : '全部方向'}</h2><span className="state shadow">模型估計</span></div>
+    {hasOpening && <p className="muted">開季跨季模型：S ≥ 7.2、W &gt; 0、R &gt; 0 才列入候選順序。大小分尚待驗證。</p>}
     <div className="rankingViewTabs" aria-label="NBA 排名盤口篩選">
       {[['all', '全部方向'], ...NBA_RANK_MARKETS].map(([key, label]) => <button key={key} className={filter === key ? 'active' : ''} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}
     </div>
@@ -34,9 +36,9 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
       <div className="betOrderGameHead"><div><span>第 {index + 1} 場</span><strong>{name(group.entries[0].game.away)}（客）@ {name(group.entries[0].game.home)}（主）</strong></div><time>{time(group.gameDate)}（台灣）</time></div>
       {group.entries.map(renderEntry)}
     </div>)}
-    {view === 'order' && !groups.length && <div className="emptySmall">目前沒有分數達 7.0 且 W、R 都大於 0 的方向。</div>}
+    {view === 'order' && !groups.length && <div className="emptySmall">{hasOpening ? '目前沒有符合候選門檻且 W、R 都大於 0 的方向。' : '目前沒有分數達 7.0 且 W、R 都大於 0 的方向。'}</div>}
     {view === 'order' && <details className="rankingDetails"><summary>順序說明</summary><p>依開賽時間排列；同場依全場讓分、全場大小、上半讓分、上半大小排序，同市場按分數排序。場次編號與方向序號分開顯示。</p></details>}
     {!ranking.entries.length && <div className="emptySmall">{filter === 'all' ? '尚無目前盤口的分析結果。' : '此盤口尚無有效分析結果。'}</div>}
-    <details className="rankingDetails"><summary>排序說明</summary><p>全部方向保留大小分與讓分雙邊，包括淨額為負的方向；候選順序僅列 S ≥ 7.0 且 W、R 均大於 0 的方向；沿用 MLB 的固定 S 公式，按 S、W、R 排序。W 是目前模型淨額；R 取至少兩個歷史季前賽球季（各至少 30 筆誤差）壓力測試與 W 的最小淨額。R 不是統計信賴下限，NBA 評分仍屬影子估計。</p><p>勝率與淨額是模型估計，尚未證實實際下注獲利；每 100 元淨額含 1.5% 退水。</p></details>
+    <details className="rankingDetails"><summary>排序說明</summary>{hasOpening && <p>開季跨季模型的 R 為至少兩個較早例行賽球季的壓力淨額與 W 的最小值；此模型候選門檻為 S ≥ 7.2。既有模型保留各自的原有規則。</p>}<p>全部方向保留大小分與讓分雙邊，包括淨額為負的方向；候選順序僅列 S ≥ 7.0 且 W、R 均大於 0 的方向；沿用 MLB 的固定 S 公式，按 S、W、R 排序。W 是目前模型淨額；R 取至少兩個歷史季前賽球季（各至少 30 筆誤差）壓力測試與 W 的最小淨額。R 不是統計信賴下限，NBA 評分仍屬影子估計。</p><p>勝率與淨額是模型估計，尚未證實實際下注獲利；每 100 元淨額含 1.5% 退水。</p></details>
   </section>;
 }
