@@ -3,6 +3,7 @@ import './security.css';
 import './ledger.css';
 import './nhl/nhl.css';
 import PwaRegister from './pwa-register.js';
+import ScreenAwake from './screen-awake.js';
 
 export const dynamic = 'force-dynamic';
 export const viewport = {
@@ -29,5 +30,5 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  return <html lang="zh-Hant"><body>{children}<PwaRegister/></body></html>;
+  return <html lang="zh-Hant"><body>{children}<ScreenAwake/><PwaRegister/></body></html>;
 }

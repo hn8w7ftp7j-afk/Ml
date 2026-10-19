@@ -126,3 +126,5 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 
 /* Keep the shared main-page heading within narrow phone screens. */
 .appShell>.appHeader h1{overflow-wrap:anywhere;word-break:normal}
+.screen-awake { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 16px; color: #a9bfd3; font-size: 13px; }
+.screen-awake button { padding: 8px 12px; min-height: 44px; border: 1px solid #42617c; border-radius: 10px; background: #10263b; color: #e0efff; cursor: pointer; }
