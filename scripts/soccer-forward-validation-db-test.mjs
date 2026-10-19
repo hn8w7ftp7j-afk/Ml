@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { createHash } from 'node:crypto';
+import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
+import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
+import { soccerPersonnelObservation } from '../lib/soccer/personnel-model.js';
 import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
 import { fixtureCapture } from './helpers/soccer-forward-fixture.mjs';
 import { soccerForwardAnalysisRevision, soccerForwardHash, soccerForwardModelDescriptor, validateSoccerForwardCapture,
-  evaluateSoccerForwardCapture, SOCCER_FORWARD_POLICY } from '../lib/soccer/forward-validation.js';
+  evaluateSoccerForwardCapture, buildSoccerForwardReport, SOCCER_FORWARD_POLICY } from '../lib/soccer/forward-validation.js';
 import { soccerDate } from '../lib/soccer/contracts.js';
 const fixture=await soccerSqlFixture(),{db}=fixture;
 const oldDatabase=process.env.DATABASE_URL,oldDatabaseV2=process.env.DATABASE_V2_URL;
@@ -15,8 +20,9 @@ try {
   const original=fixtureCapture().snapshot;
   original.runStartedAt=iso(now); original.observedAt=iso(now); original.analysisCutoff=iso(now);
   original.date=soccerDate(start);original.evidence.game.date=original.date;original.evidence.game.startTime=iso(start);
-  for(const source of [original.evidence.source,original.evidence.game.source])source.fetchedAt=iso(now);
+  for(const source of [original.evidence.source,original.evidence.game.source,original.evidence.scheduleSource])source.fetchedAt=iso(now);
   original.inputVersions.evidenceFetchedAt=iso(now);
+  original.inputVersions.scheduleSourceVersion={...original.evidence.scheduleSource};
   const revision=soccerForwardAnalysisRevision(original);
   await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ($1,$2,$3,$4::timestamptz,$5::jsonb)`,['epl',original.gameId,revision,original.observedAt,JSON.stringify(original)]);
   const receipt=await captureSoccerForwardSnapshot({league:'epl',gameId:original.gameId,prediction:'client-content-is-ignored'},revision);
@@ -39,7 +45,7 @@ try {
   const result={ok:true,verified:true,status:'NORMAL_FINAL_CROSSCHECKED',league:'epl',gameId:original.gameId,date:original.date,startTime:original.evidence.game.startTime,
     teamIds:{home:original.evidence.game.home.id,away:original.evidence.game.away.id},fullTime:{home:2,away:1,period:'REGULATION_FT'},
     halfTime:null,halfTimeMissingReason:'NO_HT_PROOF',observedAt:iso(after),resultHash:soccerForwardHash('synthetic-result'),
-    sources:[original.evidence.source,original.evidence.game.source].map(source=>({...source,fetchedAt:iso(after)})),evidenceScope:SOCCER_FORWARD_POLICY.resultEvidence};
+    sources:[original.evidence.source,original.evidence.scheduleSource].map(source=>({...source,fetchedAt:iso(after)})),evidenceScope:SOCCER_FORWARD_POLICY.resultEvidence};
   const evaluation=evaluateSoccerForwardCapture(ft,protocol,result,after);
   assert.equal(evaluation.status,'EVALUATED');
   await archiveSoccerForwardCheck(ft,evaluation,result);await archiveSoccerForwardCheck(ft,evaluation,result);
@@ -136,7 +142,71 @@ try {
   const summary=await runSoccerForwardValidation(scope,{now:()=>clock,limit:1,timeBudgetMs:50,loadEvidence:async()=>({...savedEvidence,evaluations:[]}),query:async()=>[],
     fetchResult:async()=>{calls++;clock+=100;return result;},archive:async()=>{archives++;}});
   assert.equal(calls,1);assert.equal(archives,0);assert.equal(summary.budgetExhausted,true);assert.equal(summary.deferred,2);
-  console.log('PASS PostgreSQL soccer forward chain: DB-clock capture after actual immutable analysis, fixed/idempotent receipts, separate absent challenger, source/league isolation, append-only results/protocol, corrections quarantined, historical backfill rejected, bounded result work and uncompressed snapshot/check read budgets without hiding correction history.');
+  // Exercise retained ESPN payloads through the shipped fetchers, prematch
+  // normalizer, model, service, immutable DB save, receipt and report. Only the
+  // fixture kickoff is moved into the future so the real DB clock can admit a
+  // test receipt; these records never leave this isolated fixture database.
+  const {analyzeSoccerGame}=await import('../lib/soccer/analysis-service.js');
+  const oldFetch=globalThis.fetch;
+  const rawHash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const shiftFixture=filename=>{
+    const value=JSON.parse(fs.readFileSync(new URL(`./fixtures/soccer/${filename}.json`,import.meta.url)));
+    value.header.date=iso(Date.now()+3*3600000);
+    const competition=value.header.competitions[0];competition.date=value.header.date;
+    competition.status={...competition.status,type:{id:'1',name:'STATUS_SCHEDULED',state:'pre',completed:false}};
+    return value;
+  };
+  try {
+    for(const league of ['epl','ucl']){
+      const value=shiftFixture(`${league}-summary`),competition=value.header.competitions[0],slug=value.header.league.slug;
+      const scoreboard={leagues:[value.header.league],events:[{...value.header,date:competition.date,status:competition.status}]};
+      const requested=[];
+      globalThis.fetch=async input=>{
+        const url=new URL(String(input));requested.push(url.href);assert.equal(url.origin,'https://site.api.espn.com');
+        assert.equal(url.pathname.includes(`/${slug}/`),true);
+        if(url.pathname.endsWith('/summary')){assert.equal(url.searchParams.get('event'),value.header.id);return Response.json(value);}
+        assert.ok(url.pathname.endsWith('/scoreboard'));return Response.json(scoreboard);
+      };
+      const actual=await analyzeSoccerGame({league,date:soccerDate(competition.date),eventId:value.header.id},{
+        fetchSoccerWorkload:async()=>({ok:false,status:'INCOMPLETE',teams:{},sources:[],modelEffectApplied:false,executable:false}),
+      });
+      assert.equal(actual.status,200,JSON.stringify(actual.payload));
+      assert.equal(actual.payload.forwardCapture.persisted,true);assert.equal(actual.payload.forwardCapture.captures.length,3);
+      assert.equal(actual.payload.evidence.game.source.url,actual.payload.evidence.source.url,'normalized game provenance belongs to the actual summary response');
+      assert.equal(actual.payload.evidence.source.contentHash,rawHash(value));
+      assert.equal(actual.payload.evidence.scheduleSource.contentHash,rawHash(scoreboard),'the original scoreboard response is preserved before the normalizer derives its summary game');
+      assert.ok(actual.payload.evidence.scheduleSource.url.includes('/scoreboard?dates='));
+      assert.ok(requested.includes(actual.payload.evidence.scheduleSource.url));
+      const scheduleVersion=Object.fromEntries(['provider','url','contentHash','fetchedAt'].map(key=>[key,actual.payload.evidence.scheduleSource[key]]));
+      assert.deepEqual(actual.payload.inputVersions.scheduleSourceVersion,scheduleVersion);
+      for(const side of ['home','away']){
+        assert.equal(actual.payload.evidence.teams[side].lineup.status,'NOT_PUBLISHED');
+        assert.deepEqual(actual.payload.evidence.teams[side].lineup.source,actual.payload.evidence.source,'lineup.source is the real normalizer field, including an unpublished XI');
+      }
+      const actualEvidence=await loadSoccerForwardEvidence({league,date:actual.payload.date});
+      const actualCaptures=actualEvidence.captures.filter(row=>row.gameId===actual.payload.gameId);
+      assert.equal(actualCaptures.length,3);
+      assert.ok(actualCaptures.filter(row=>row.variant==='BASELINE').every(row=>validateSoccerForwardCapture(row,actualEvidence.protocol,Date.now()).ok));
+      assert.equal(validateSoccerForwardCapture(actualCaptures.find(row=>row.variant==='PERSONNEL_CHALLENGER'),actualEvidence.protocol,Date.now()).reason,'FORWARD_PERSONNEL_MODEL_UNVERIFIED');
+      const actualReport=buildSoccerForwardReport({...actualEvidence,captures:actualCaptures,now:Date.now()});
+      assert.equal(actualReport.selectedGameModelPeriods,2,'actual service FT and HT baseline forecasts are admitted, not merely stored');
+      assert.equal(actualReport.excludedReasons.FORWARD_PERSONNEL_MODEL_UNVERIFIED,1);
+      assert.equal(actualReport.excludedReasons.FORWARD_INPUT_SOURCE_AVAILABILITY_UNVERIFIED,undefined);
+      assert.equal(actualReport.evaluatedGameModelPeriods,0,'a pregame receipt does not manufacture a postgame outcome');
+    }
+    const xiPayload=shiftFixture('historic-summary'),xiCompetition=xiPayload.header.competitions[0];
+    const xiBoard={leagues:[xiPayload.header.league],events:[{...xiPayload.header,date:xiCompetition.date,status:xiCompetition.status}]};
+    const xiAt=Date.now(),xiSummarySource={provider:'ESPN',url:`https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=${xiPayload.header.id}`,contentHash:rawHash(xiPayload),fetchedAt:iso(xiAt)};
+    const xiGame=normalizeSoccerSchedule(xiBoard,'epl',{...xiSummarySource,url:`https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=${soccerDate(xiCompetition.date).replaceAll('-','')}`,contentHash:rawHash(xiBoard)}).games[0];
+    const xiEvidence=normalizeSoccerPrematch(xiPayload,xiGame,xiSummarySource,xiAt),xiObservation=soccerPersonnelObservation(xiEvidence,{asOf:xiAt});
+    assert.equal(xiObservation.personnel.availability,'OBSERVED_PREMATCH_XI');
+    for(const side of ['home','away']){
+      assert.equal(xiEvidence.teams[side].lineup.status,'PROVIDER_REPORTED_XI');assert.equal(xiEvidence.teams[side].lineup.starters.length,11);
+      assert.deepEqual(xiEvidence.teams[side].lineup.source,xiSummarySource);
+      assert.deepEqual(xiObservation.personnel.teams[side].starters,xiEvidence.teams[side].lineup.starters.map(player=>player.id));
+    }
+  } finally {globalThis.fetch=oldFetch;}
+  console.log('PASS PostgreSQL soccer forward chain: DB-clock capture after actual immutable analysis, fixed/idempotent receipts, separate absent challenger, source/league isolation, append-only results/protocol, corrections quarantined, historical backfill rejected, bounded result work and uncompressed snapshot/check read budgets without hiding correction history; retained EPL/UCL normalizer→actual service→DB→forward report with separately bound summary/scoreboard provenance and real lineup source fields.');
 } finally {
   if(oldDatabase===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=oldDatabase;
   if(oldDatabaseV2===undefined)delete process.env.DATABASE_V2_URL;else process.env.DATABASE_V2_URL=oldDatabaseV2;
