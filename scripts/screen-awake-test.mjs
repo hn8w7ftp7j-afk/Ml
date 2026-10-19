@@ -46,7 +46,10 @@ await flush(); assert.equal(f.requests, 5, 'OS release does not cause retry loop
 f.controller.renew(); await flush(); assert.equal(f.requests, 6);
 f.controller.dispose(); await flush(); assert.equal(f.locks.at(-1).released, true);
 
-const unsupported = fixture({ supported: false }); unsupported.controller.renew(); assert.equal(unsupported.status, 'unsupported'); unsupported.controller.dispose();
+const unsupported = fixture({ supported: false }); unsupported.controller.renew(); assert.equal(unsupported.status, 'unsupported');
+unsupported.doc.visibilityState = 'hidden'; unsupported.controller.visibility(); unsupported.controller.suspend();
+unsupported.doc.visibilityState = 'visible'; unsupported.controller.visibility(); await unsupported.advance(SCREEN_AWAKE_MS);
+assert.equal(unsupported.status, 'unsupported'); unsupported.controller.dispose();
 const denied = fixture({ request: () => Promise.reject(new Error('NotAllowedError')) });
 denied.controller.renew(); await flush(); assert.equal(denied.status, 'blocked'); assert.equal(denied.requests, 1); denied.controller.dispose();
 
