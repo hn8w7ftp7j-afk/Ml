@@ -4,11 +4,17 @@ import { buildSoccerRanking,SOCCER_RANK_MARKETS } from '../../lib/soccer/ranking
 import { soccerTeamLabel } from '../../lib/soccer/team-labels.js';
 import { SoccerRecordProvider,SoccerRecordButton,SoccerBetRecords } from './bet-records.js';
 import { soccerValidationArtifacts } from '../../lib/soccer/validation-frozen.js';
+import { soccerHalfTimeArtifacts } from '../../lib/soccer/half-time-frozen.js';
+import { SoccerCalibrationPanel } from './calibration-panel.js';
 const num=v=>Number.isFinite(v)?v.toFixed(2):'—';
 const time=v=>Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
 export function SoccerValidationPanel({league}){
   const validation=soccerValidationArtifacts(),research=validation.leagues[league];
-  return <section className="panel"><h2>{league==='ucl'?'歐冠':'英超'}｜模型驗證</h2><p>逐年只使用更早的資料選參數；以下為事後取得資料的診斷，並非實際下注績效。</p><div className="soccerTableWrap"><table className="soccerAuditTable"><thead><tr><th>年份</th><th>覆蓋場數</th><th>低比分模型誤差</th><th>獨立模型誤差</th><th>差異區間</th></tr></thead><tbody>{(research?.folds||[]).map(f=><tr key={f.testYear}><td>{f.testYear}</td><td>{f.metrics.count}／{f.metrics.total}</td><td>{num(f.metrics.logLoss)}</td><td>{num(f.referenceMetrics.logLoss)}</td><td>{f.comparison.interval?`${f.comparison.interval.lower.toFixed(4)} ～ ${f.comparison.interval.upper.toFixed(4)}`:'樣本不足'}</td></tr>)}</tbody></table></div><p>誤差採 1X2 Log Loss，越低越好。各年度尚未呈現一致改善；全場與上半場、人員影響及足球結算仍需分別驗收。</p><p>目前正式評分與候選資格維持待驗證。球員、原盤與分析版本的依據可在各場分析結果內查閱。</p><a href="/soccer/specification">完整分析規格 2.2</a></section>;
+  const halfTime=soccerHalfTimeArtifacts()?.leagues?.[league]?.diagnostic;
+  return <section className="panel"><h2>{league==='ucl'?'歐冠':'英超'}｜模型驗證</h2><p>逐年只使用更早的資料選參數；以下為事後取得資料的診斷，並非實際下注績效。</p><div className="soccerTableWrap"><table className="soccerAuditTable"><thead><tr><th>年份</th><th>覆蓋場數</th><th>低比分模型誤差</th><th>獨立模型誤差</th><th>差異區間</th></tr></thead><tbody>{(research?.folds||[]).map(f=><tr key={f.testYear}><td>{f.testYear}</td><td>{f.metrics.count}／{f.metrics.total}</td><td>{num(f.metrics.logLoss)}</td><td>{num(f.referenceMetrics.logLoss)}</td><td>{f.comparison.interval?`${f.comparison.interval.lower.toFixed(4)} ～ ${f.comparison.interval.upper.toFixed(4)}`:'樣本不足'}</td></tr>)}</tbody></table></div><p>誤差採 1X2 Log Loss，越低越好。各年度尚未呈現一致改善；全場與上半場、人員影響及足球結算仍需分別驗收。</p>
+    <div className="soccerCalibrationGroup"><h3>全場｜逐年分事件校準</h3>{(research?.folds||[]).map(f=><SoccerCalibrationPanel key={f.testYear} league={league} period="FT" label={`${f.testYear} 年診斷`} audit={f.metrics?.probabilityAudit}/>)}</div>
+    <div className="soccerCalibrationGroup"><h3>上半場｜分事件校準</h3><SoccerCalibrationPanel league={league} period="HT" label={halfTime?.period?`${halfTime.period} 年診斷`:'研究診斷'} audit={halfTime?.metrics?.probabilityAudit}/></div>
+    <p>目前正式評分與候選資格維持待驗證。球員、原盤與分析版本的依據可在各場分析結果內查閱。</p><a href="/soccer/specification">完整分析規格 2.2</a></section>;
 }
 export function SoccerRanking({games,states,run,now}){
   const [view,setView]=useState('ranking'),[filter,setFilter]=useState('all');

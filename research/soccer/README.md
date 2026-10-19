@@ -36,3 +36,15 @@ Observed substitution events and roster flags now reconstruct regulation-clock p
 `source-coverage.json` records the inspected ESPN summaries and StatsBomb Open Data competition catalog. It does not establish current-season xG coverage or claim that no other provider has it.
 
 Per-score credit settlement review tables reuse the existing site's arithmetic only. They require GOALS units, preserve the original line and water, reject unsupported inputs rather than capping them, and keep the soccer period/rebate/provider-rule approval unset. They are not executable W/R/S evaluations.
+
+## Classwise diagnostics (artifact v2, app 11.10.9)
+
+`probabilityAudit` reports home/draw/away separately for FT and HT. The old `bins` field remains a pooled three-event diagnostic: a perfect pooled curve does not imply classwise calibration. Each class uses its own evaluated-record denominator N, not the pooled 3N event count. Cohort sample/used/excluded counts, unique games, duplicates and exclusion reasons remain separate.
+
+The audit uses ten fixed, left-closed bins (the final bin includes 1), raw plug-in ECE_L1 and REL_L2. Empty bins have null averages; an observed event frequency of zero is retained as zero. No bin fitting, bias correction, full Murphy decomposition, confidence interval, independence assumption or model promotion is asserted. Known omitted probability mass above the fixed 1e-10 numerical tolerance is audit-excluded with its reason; probabilities are never renormalized. This numerical tolerance is not a bound on model error.
+
+The research JSON retains each evaluated record's probabilities, actual class, period, fold, model/training hashes and exact-score log-probability state. A zero retained-grid class probability is not called a true model zero; missing and infinite exact-score evidence have distinct states. Runtime frozen artifacts omit per-game ledgers but retain the descriptive class/bin audits.
+
+Offline reproduction: run the three existing build scripts with `--retained-only`. This route reads retained histories, performs no network acquisition, preserves original source/collection records, and refuses to overwrite artifacts if model objects, selection, protocols or source identities change. Legacy floating metrics are compared using a fixed machine-precision engineering tolerance (16 × Number.EPSILON × max(1, |old|, |new|)); integers and model hashes remain exact. The observed FT score-log-loss differences were at most 8.88e-16; HT and rolling legacy metrics matched exactly.
+
+For the already-used 2025 diagnostic data: EPL FT 360/378, EPL HT 359/378, UCL FT/HT 143/185 were audit-evaluable. Exclusions remain in cohort denominators. These are retrospectively obtained data, not new untouched samples, and do not certify PIT availability, market settlement, selected-subset profitability or improved win rate.
