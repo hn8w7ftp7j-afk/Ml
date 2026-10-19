@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { candidateFixture } from './helpers/soccer-candidate-fixture.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import React from 'react';
@@ -38,10 +39,10 @@ for(const league of ['epl','ucl']){
     {name:'W零值',W:0},{name:'W負值',W:-1},{name:'R零值',R:0},{name:'R負值',R:-1},
     {name:'分數缺失',score:null},{name:'正式資格未通過',qualified:false},{name:'方向未通過',eligible:false},{name:'QA阻擋',qaFlag:'BLOCKED'},
   ].map((spec,index)=>{
-    const game={id:`soccer:${league}:${index+1}`,league,date:'2026-10-20',status:'scheduled',startTime:new Date(rankingNow+(spec.minutes??180)*60000).toISOString(),home:{name:spec.name},away:{name:'對手'}};
+    const game={id:`soccer:${league}:${index+1}`,sourceId:String(index+1),league,date:'2026-10-20',status:'scheduled',startTime:new Date(rankingNow+(spec.minutes??180)*60000).toISOString(),home:{name:spec.name,sourceId:'359'},away:{name:'對手',sourceId:'364'}};
     const quote={key:`quote-${index}`,period:spec.period??'FT',kind:spec.kind??'TOTAL',unit:'GOALS',line:'2-50',label:'原盤',water:.95,fresh:true,prestart:true,provenance:{gameId:game.id,observedAt:new Date(rankingNow).toISOString()}};
     const data={gameId:game.id,league,date:game.date,observedAt:new Date(rankingNow).toISOString(),persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',formalScoringEnabled:spec.formalScoringEnabled??true,qualification:{eligible:spec.qualified??true},directions:[{period:quote.period,direction:spec.direction??'TOTAL_OVER',score:spec.score===undefined?8:spec.score,W:spec.W??2,R:spec.R??1,eligible:spec.eligible??true,qaFlag:spec.qaFlag??'PASS',quotes:[quote]}]};
-    return{game,data};
+    return{game,data:candidateFixture({...data,evidence:{game}},rankingNow)};
   });
   const games=fixtures.map(f=>f.game),analysisStates=Object.fromEntries(fixtures.map(f=>[f.game.id,{status:'done',data:f.data}]));
   const original=JSON.stringify(analysisStates);
@@ -50,6 +51,7 @@ for(const league of ['epl','ucl']){
     const markup=rankMarkup(view);
     assert.equal((markup.match(/class="soccerRankRow"/g)||[]).length,2,`${league} ${view} includes only eligible candidate rows`);
     assert.match(markup,/合格高分/);assert.match(markup,/合格早場/);assert.match(markup,/2 個候選方向/);
+    assert.match(markup,/W 200(?:\.0+)?%/);assert.match(markup,/R 100(?:\.0+)?%/);
     for(const fixture of fixtures.slice(2))assert.ok(!markup.includes(fixture.game.home.name),`${league} ${view} excludes ${fixture.game.home.name}`);
     assert.doesNotMatch(markup,/尚無評分者列後方|研究中・正式評分待驗證/);
     const first=view==='ranking'?'合格高分':'合格早場',second=view==='ranking'?'合格早場':'合格高分';

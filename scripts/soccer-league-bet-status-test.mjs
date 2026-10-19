@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { candidateFixture } from './helpers/soccer-candidate-fixture.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import React from 'react';
@@ -8,9 +9,9 @@ import { soccerRecordKey, soccerRecordStats } from '../lib/soccer/manual-record.
 import { soccerMarketName } from '../lib/soccer/ranking.js';
 
 const now=Date.now(),date='2026-10-20',league='epl';
-const game={id:'soccer:epl:123',sourceId:'123',league,date,status:'scheduled',startTime:new Date(now+86400000).toISOString()};
+const game={id:'soccer:epl:123',sourceId:'123',league,date,status:'scheduled',startTime:new Date(now+86400000).toISOString(),home:{sourceId:'359'},away:{sourceId:'364'}};
 const quote=period=>({key:`${period}-total-over`,period,kind:'TOTAL',side:'over',line:'3+50',lineSide:null,water:.95,unit:'GOALS',fresh:true,prestart:true,provenance:{gameId:game.id,observedAt:new Date(now).toISOString()}});
-const result={gameId:game.id,league,date,publishedCurrent:true,persisted:true,analysisStatus:'COMPLETED',observedAt:new Date(now).toISOString(),formalScoringEnabled:true,qualification:{eligible:true},directions:['FT','HT'].map(period=>({period,direction:'TOTAL_OVER',eligible:true,qaFlag:'PASS',score:8,W:2,R:1,quotes:[quote(period)]}))};
+const result=candidateFixture({gameId:game.id,league,date,publishedCurrent:true,persisted:true,analysisStatus:'COMPLETED',observedAt:new Date(now).toISOString(),evidence:{game},formalScoringEnabled:true,qualification:{eligible:true},directions:['FT','HT'].map(period=>({period,direction:'TOTAL_OVER',eligible:true,qaFlag:'PASS',score:8,W:2,R:1,quotes:[quote(period)]}))},now);
 const states={[game.id]:{status:'done',data:result}};
 const report=soccerHighScoreCandidates([game],states,{league,date,now});
 assert.equal(report.analysisReady,true);assert.equal(report.candidates.length,2);
