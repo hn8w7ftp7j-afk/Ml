@@ -25,7 +25,7 @@ function harness({ manual = [], latest = id => ({ fresh: true, boardDate: id ===
   const saved = [];
   const submitted = [];
   const context = vm.createContext({
-    Date, Number, String, encodeURIComponent, LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, nbaRunning: false, nbaDate: TODAY, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
+    Date, Number, String, encodeURIComponent, LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, nbaRunning: false, soccerRunning: false, nbaDate: TODAY, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
     independentRunsRef: { current: new Map() },
     manualDateSelectionRef: { current: new Set(manual) },
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, TODAY])) },

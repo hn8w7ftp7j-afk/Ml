@@ -2,24 +2,31 @@
 import { createContext,useContext,useEffect,useRef,useState } from 'react';
 import { soccerRecordKey,soccerRecordStats } from '../../lib/soccer/manual-record.js';
 import { soccerMarketName } from '../../lib/soccer/ranking.js';
+import { summarizeSoccerHighScoreBets } from '../../lib/soccer/league-bet-status.js';
 const Ledger=createContext(null);
 async function request(url,options={}){
   const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(20000),...options}),d=await r.json();
   if(!r.ok||!d.ok)throw Error(r.status===401?'登入已過期，請重新登入。':d.error||'帳本暫時無法同步。');return d;
 }
-export function SoccerRecordProvider({league,date,through=date,children}){
+export function SoccerRecordProvider({league,date,through=date,children,summaryDate=date,candidates=[],analysisReady=true,onHighScoreStatusChange}){
   const [records,setRecords]=useState([]),[status,setStatus]=useState('loading'),[error,setError]=useState(''),[pending,setPending]=useState(new Set());
+  const [loadedScope,setLoadedScope]=useState('');
   const generation=useRef(0),flights=useRef(new Set());
-  async function load(){if(flights.current.size)return;const token=++generation.current;setStatus('loading');setError('');try{const d=await request(`/api/soccer/bet-records?${new URLSearchParams({league,date,through})}`);if(token!==generation.current)return;if(d.league!==league||d.date!==date||d.through!==through||!Array.isArray(d.records)||d.records.some(r=>r.league!==league||r.date<date||r.date>through))throw Error('帳本識別不符。');setRecords(d.records);setStatus('ready');}catch(e){if(token===generation.current){setStatus('failed');setError(e.message);}}}
-  useEffect(()=>{flights.current.clear();setPending(new Set());setRecords([]);void load();return()=>{generation.current++;};},[league,date,through]);
+  const scope=`${league}|${date}|${through}`,ledgerStatus=loadedScope===scope?status:'loading';
+  async function load(){if(flights.current.size)return;const token=++generation.current;setStatus('loading');setError('');try{const d=await request(`/api/soccer/bet-records?${new URLSearchParams({league,date,through})}`);if(token!==generation.current)return;if(d.league!==league||d.date!==date||d.through!==through||!Array.isArray(d.records)||d.records.some(r=>r.league!==league||r.date<date||r.date>through))throw Error('帳本識別不符。');setRecords(d.records);setLoadedScope(scope);setStatus('ready');}catch(e){if(token===generation.current){setLoadedScope(scope);setStatus('failed');setError(e.message);}}}
+  useEffect(()=>{flights.current.clear();setPending(new Set());setRecords([]);setLoadedScope('');void load();return()=>{generation.current++;};},[league,date,through]);
+  const summary=onHighScoreStatusChange?summarizeSoccerHighScoreBets(candidates,{records,league,date:summaryDate,ledgerReady:ledgerStatus==='ready',analysisReady}):null;
+  const callback=useRef(onHighScoreStatusChange);callback.current=onHighScoreStatusChange;
+  const published=useRef('');
+  useEffect(()=>{if(!callback.current||!summary)return;const signature=JSON.stringify(summary);if(published.current===signature)return;published.current=signature;callback.current(summary);},[league,summaryDate,summary?.state,summary?.label,summary?.total,summary?.recorded,summary?.unbet]);
   async function mutate(body,key){
-    if(status!=='ready'||flights.current.has(key))return;const token=generation.current;flights.current.add(key);setPending(new Set(flights.current));setError('');
+    if(ledgerStatus!=='ready'||flights.current.has(key))return;const token=generation.current;flights.current.add(key);setPending(new Set(flights.current));setError('');
     try{const d=await request('/api/soccer/bet-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,league,date:body.date||date})});if(token!==generation.current)return;
       if(d.persistence!=='durable_database'||!d.record?.id||d.record.league!==league||d.record.date<date||d.record.date>through)throw Error('未取得永久保存確認。');
       setRecords(old=>[d.record,...old.filter(r=>soccerRecordKey(r)!==soccerRecordKey(d.record))]);
     }catch(e){if(token===generation.current)setError(e.message);}finally{flights.current.delete(key);setPending(new Set(flights.current));}
   }
-  return <Ledger.Provider value={{league,date,records,status,error,pending,load,mutate}}>{error&&<p className="errorBox" role="alert">{error}<button className="mini secondary" onClick={load}>重新同步</button></p>}{children}</Ledger.Provider>;
+  return <Ledger.Provider value={{league,date,records:loadedScope===scope?records:[],status:ledgerStatus,error,pending,load,mutate}}>{error&&<p className="errorBox" role="alert">{error}<button className="mini secondary" onClick={load}>重新同步</button></p>}{children}</Ledger.Provider>;
 }
 export function SoccerRecordButton({game,result,quote}){
   const ledger=useContext(Ledger);if(!ledger||!game||!quote||!result?.persisted||!result.revision||!['FT','HT'].includes(quote.period)||quote.unit!=='GOALS'||!Number.isFinite(quote.water))return null;

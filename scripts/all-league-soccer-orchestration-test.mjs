@@ -27,7 +27,7 @@ function harness({ failure = '', empty = '' } = {}) {
   const ctx = { Date, URLSearchParams, ANALYSIS_LEAGUE_IDS: ids, LEAGUE_IDS, isSoccerAnalysisLeague,
     createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
     readerPollBusyRef: { current: false }, independentRunsRef: { current: new Map() },
-    allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false, nbaRunning: false,
+    allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false, nbaRunning: false, soccerRunning: false,
     leagueDatesRef: { current: { MLB: '2026-10-19', NPB: '2026-10-18', KBO: '2026-10-19', CPBL: '2026-10-19' } },
     date: '2026-10-19', nbaDate: '2026-10-19', allLeagueRun: null,
     analysisGenerationRef: { current: 0 }, restoredBoardNeedsValidationRef: {},
@@ -64,6 +64,11 @@ assert.equal(happy.ctx.run.leagues.UCL.status, 'running');
 happy.ctx.allLeagueBusyRef.current = true;
 assert.equal(await happy.ctx.oneClickAnalyzeAll(), false);
 assert.equal(happy.jobs.length, 1, 'duplicate submission is blocked');
+const manualFootball = harness();
+manualFootball.ctx.soccerRunning = true;
+assert.equal(await manualFootball.ctx.oneClickAnalyzeAll(), false);
+assert.equal(manualFootball.calls.length, 0, 'an active football manual operation blocks another whole-site job');
+assert.equal(manualFootball.jobs.length, 0);
 const partial = harness({ failure: 'EPL' });
 assert.equal(await partial.ctx.oneClickAnalyzeAll(), true);
 assert.equal(partial.ctx.run.leagues.EPL.status, 'failed');
@@ -82,7 +87,7 @@ assert.equal(progress.total, 7); assert.equal(progress.terminal, 7);
 assert.equal(progress.succeeded, 5); assert.equal(progress.research, 2);
 assert.match(allLeagueAnalysisOutcomeText(progress), /成功 5 聯盟｜研究完成 2 聯盟/);
 assert.equal(allLeagueStatusLabel('insufficient_data'), '資料不足');
-assert.equal(soccerAnalysisResultHref('EPL', '2026-10-20', 'workflow-seven-leagues'), '/soccer?league=EPL&date=2026-10-20&runId=workflow-seven-leagues');
+assert.equal(soccerAnalysisResultHref('EPL', '2026-10-20', 'workflow-seven-leagues'), '/?sport=EPL&date=2026-10-20&runId=workflow-seven-leagues');
 assert.equal(soccerAnalysisResultHref('MLB', '2026-10-20'), null);
 assert.equal(soccerAnalysisResultHref('UCL', '2026-02-30'), null);
 // Execute the football-page entry effect before React has rendered a saved

@@ -96,7 +96,7 @@ assert.equal(scopes.at(-1).date, tomorrow, 'all-league preflight updates the NBA
 const allSubmissions = [];
 Object.assign(batch, {
   LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
-  nbaDate: today, nbaRunning: false, league: 'MLB', date: today, allLeagueRun: null, allLeagueRunning: false,
+  nbaDate: today, nbaRunning: false, soccerRunning: false, league: 'MLB', date: today, allLeagueRun: null, allLeagueRunning: false,
   independentRunsRef: { current: new Map() }, manualDateSelectionRef: { current: new Set() },
   leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, today])) },
   currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: today }, requestedRecoveryScopeRef: {},

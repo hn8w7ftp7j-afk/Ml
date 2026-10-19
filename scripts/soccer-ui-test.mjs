@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 
-const source = await readFile(new URL('../app/soccer/page.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../app/soccer/main-workspace.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../app/soccer/soccer.css', import.meta.url), 'utf8');
 function blockAt(start) {
   assert.equal(source[start], '{');
@@ -29,7 +29,7 @@ function declaration(name) {
   const start = source.indexOf('{', source.indexOf(') {', match.index));
   return source.slice(match.index, start) + blockAt(start);
 }
-const helpers = ['taipeiDate', 'validDate', 'shiftDate', 'readLocation', 'workspaceUrl', 'boardKey', 'teamName', 'scoreValue', 'verifiedScore', 'safeSourceUrl', 'validateBoard', 'requestBoard', 'navigate'];
+const helpers = ['taipeiDate', 'validDate', 'shiftDate', 'readLocation', 'workspaceUrl', 'savedAllRun', 'runLocation', 'boardKey', 'teamName', 'scoreValue', 'verifiedScore', 'safeSourceUrl', 'validateBoard', 'requestBoard', 'navigate'];
 function context(extra = {}) {
   const ctx = {
     URLSearchParams, URL, Date, Intl, AbortController, setTimeout, clearTimeout, soccerTeamLabel,
@@ -140,7 +140,7 @@ function harness(initial = {}) {
   const state = { responses: {}, loadingKey: '', failure: null, location, ...initial };
   const calls = []; const history = []; const timers = [];
   const ctx = context({
-    ...state, key: `soccer:${state.location.league}:${state.location.date}:${state.location.view}`, generation: { current: 0 },
+    ...state, active: true, embedded: false, allRun: null, manualRun: { current: '' }, key: `soccer:${state.location.league}:${state.location.date}:${state.location.view}`, generation: { current: 0 },
     setLoadingKey: value => { state.loadingKey = value; },
     setFailure: value => { state.failure = value; },
     setResponses: update => { state.responses = update(state.responses); },

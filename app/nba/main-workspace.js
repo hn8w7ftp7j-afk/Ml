@@ -83,7 +83,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   </section>;
 }
 
-export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress, onJobChange, onHighScoreStatusChange, allLeagueBetStatuses }) {
+export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress, onJobChange, onHighScoreStatusChange, allLeagueBetStatuses, onSelectSoccer }) {
   const [date, setDate] = useState(() => taipeiDate(Date.now()));
   const [rows, setRows] = useState([]);
   const [view, setView] = useState('board');
@@ -241,7 +241,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.37-EPL-UCL.zip" download>下載 Reader v2.1.37</a>
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
-      </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses}/></section>
+      </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
       {(view === 'ranking' || view === 'records' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}

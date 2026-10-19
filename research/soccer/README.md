@@ -37,7 +37,7 @@ Observed substitution events and roster flags now reconstruct regulation-clock p
 
 Per-score credit settlement review tables reuse the existing site's arithmetic only. They require GOALS units, preserve the original line and water, reject unsupported inputs rather than capping them, and keep the soccer period/rebate/provider-rule approval unset. They are not executable W/R/S evaluations.
 
-## Classwise diagnostics (artifact v2, app 11.10.9)
+## Classwise diagnostics (artifact v2, app 11.10.12)
 
 `probabilityAudit` reports home/draw/away separately for FT and HT. The old `bins` field remains a pooled three-event diagnostic: a perfect pooled curve does not imply classwise calibration. Each class uses its own evaluated-record denominator N, not the pooled 3N event count. Cohort sample/used/excluded counts, unique games, duplicates and exclusion reasons remain separate.
 

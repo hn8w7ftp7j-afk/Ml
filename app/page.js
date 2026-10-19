@@ -1,6 +1,7 @@
 'use client';
 import { leagueAnalysisReminderReady, summarizeBaseballHighScoreBets } from '../lib/league-bet-status.js';
 import LeagueBetBadge from './league-bet-badge.js';
+import AllLeagueProgress from './all-league-progress.js';
 import { createJobStatusReader } from '../lib/job-status-reader.js';
 import { reconcileInactiveIndependentRuns } from '../lib/independent-analysis-status.js';
 import { backgroundStartWasDefinitivelyRejected, createBackgroundStartRequestJournal } from '../lib/background-start-request-journal.js';
@@ -28,6 +29,8 @@ import { currentWrWarnings, wrGapExceedsReference } from '../lib/wr-gap-warning.
 import { rankingWarningPresentation, rankingStatusText } from '../lib/ranking-display.js';
 import { nbaLeagueIndicator } from '../lib/nba/league-indicator.js';
 import NbaMainWorkspace from './nba/main-workspace.js';
+import dynamic from 'next/dynamic';
+import { MAIN_SOCCER_LEAGUES, mainSportHref, mainSportSelection } from '../lib/main-sport-navigation.js';
 import { loadNbaUpcomingBoard } from '../lib/nba/analysis-ui-policy.js';
 import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 import { nhlAnalysisResultHref } from '../lib/nhl/analysis-link.js';
@@ -1916,6 +1919,8 @@ function buildShadowRanking(activeBoard, league, clockNow, liveReaderAuthority) 
       || Number(right.robustEV ?? -Infinity) - Number(left.robustEV ?? -Infinity));
 }
 
+const SoccerMainWorkspace = dynamic(() => import('./soccer/main-workspace.js'), { ssr: false });
+
 export default function Home() {
   const notificationControlRef = useRef(null);
   const notificationPreparingRef = useRef(false);
@@ -1934,6 +1939,28 @@ export default function Home() {
   }
   const [league, setLeague] = useState('MLB');
   const [nbaSelected, setNbaSelected] = useState(false);
+  const [soccerSelected, setSoccerSelected] = useState('');
+  const [soccerOpened, setSoccerOpened] = useState([]);
+  const [soccerEntryScopes, setSoccerEntryScopes] = useState({});
+  const soccerScopesRef = useRef({});
+  const [soccerScopes, setSoccerScopes] = useState({});
+  const [soccerBusyScopes, setSoccerBusyScopes] = useState({});
+  const soccerRunning = Object.values(soccerBusyScopes).some(scope => scope?.busy === true);
+  const onSoccerBusyChange = useCallback(scope => {
+    if (!MAIN_SOCCER_LEAGUES.includes(scope?.league)) return;
+    setSoccerBusyScopes(current => current[scope.league]?.date === scope.date && current[scope.league]?.busy === scope.busy ? current : { ...current, [scope.league]: scope });
+  }, []);
+  const [soccerBetStatuses, setSoccerBetStatuses] = useState({});
+  const onSoccerScopeChange = useCallback(scope => {
+    if (!MAIN_SOCCER_LEAGUES.includes(scope?.league) || !validSoccerDate(scope.date)) return;
+    soccerScopesRef.current[scope.league] = scope;
+    setSoccerScopes(current => JSON.stringify(current[scope.league]) === JSON.stringify(scope) ? current : { ...current, [scope.league]: scope });
+    setSoccerBetStatuses(current => !current[scope.league] || current[scope.league].date === scope.date ? current : { ...current, [scope.league]: null });
+  }, []);
+  const onSoccerHighScoreStatusChange = useCallback(summary => {
+    if (!MAIN_SOCCER_LEAGUES.includes(summary?.league) || !validSoccerDate(summary.date)) return;
+    setSoccerBetStatuses(current => JSON.stringify(current[summary.league]) === JSON.stringify(summary) ? current : { ...current, [summary.league]: summary });
+  }, []);
   const [nbaDate, setNbaDate] = useState(taipeiDate());
   const [nbaPreparedScope, setNbaPreparedScope] = useState(null);
   const nbaExplicitDateRef = useRef(false);
@@ -1943,16 +1970,36 @@ export default function Home() {
   const [nbaNotificationJob, setNbaNotificationJob] = useState(null);
   const [nbaBetStatus, setNbaBetStatus] = useState(null);
   useEffect(() => {
-    const sync = () => setNbaSelected(new URLSearchParams(window.location.search).get('sport') === 'NBA');
+    const sync = () => {
+      const sport = mainSportSelection(window.location.search);
+      setNbaSelected(sport === 'NBA');
+      setSoccerSelected(MAIN_SOCCER_LEAGUES.includes(sport) ? sport : '');
+      if (MAIN_SOCCER_LEAGUES.includes(sport)) {
+        setSoccerOpened(current => current.includes(sport) ? current : [...current, sport]);
+        const query = new URLSearchParams(window.location.search);
+        setSoccerEntryScopes(current => ({ ...current, [sport]: { date: query.get('date') || '', view: query.get('view') || 'schedule', runId: query.get('runId') || '' } }));
+      }
+    };
     sync(); window.addEventListener('popstate', sync); return () => window.removeEventListener('popstate', sync);
   }, []);
   function selectNba() {
-    setNbaSelected(true); const url = new URL(window.location.href); url.searchParams.set('sport', 'NBA');
-    window.history.replaceState(null, '', url);
+    setSoccerSelected(''); setNbaSelected(true);
+    window.history.replaceState(null, '', mainSportHref('NBA', { date: nbaDate }));
   }
   function selectBaseball(id) {
-    setNbaSelected(false); const url = new URL(window.location.href); url.searchParams.delete('sport');
-    window.history.replaceState(null, '', url); selectLeague(id);
+    setSoccerSelected(''); setNbaSelected(false);
+    const scopeDate = allLeagueBoardDate(allLeagueRunRef.current, id, leagueDatesRef.current[id] || date);
+    window.history.replaceState(null, '', mainSportHref('BASEBALL', { league: id, date: scopeDate }));
+    selectLeague(id);
+  }
+  function selectSoccer(id, requestedScope = null) {
+    if (!MAIN_SOCCER_LEAGUES.includes(id)) return;
+    const batch = allLeagueRunRef.current?.leagues?.[id];
+    const scope = requestedScope || soccerScopesRef.current[id] || { date: batch?.boardDate || taipeiDate(), runId: allLeagueRunRef.current?.runId || '' };
+    setNbaSelected(false); setSoccerSelected(id);
+    setSoccerOpened(current => current.includes(id) ? current : [...current, id]);
+    if (requestedScope) setSoccerEntryScopes(current => ({ ...current, [id]: { ...requestedScope } }));
+    window.history.replaceState(null, '', mainSportHref(id, scope));
   }
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [bets, setBets] = useState([]);
@@ -2148,7 +2195,8 @@ export default function Home() {
       return [id, { ...summary, league: id, date: scope.date }];
     })),
     NBA: nbaBetStatus?.date === nbaDate ? nbaBetStatus : null,
-  }), [leagueReminderBoards, clockNow, cloudLedgerStatus.state, bets, nbaBetStatus, nbaDate, allLeagueRun, independentRunRevision]);
+    ...soccerBetStatuses,
+  }), [leagueReminderBoards, clockNow, cloudLedgerStatus.state, bets, nbaBetStatus, nbaDate, soccerBetStatuses, allLeagueRun, independentRunRevision]);
   const rankingLayoutRevision = useMemo(() => shadowRanking
     .map(entry => `${entry.stableKey}:${entry.score ?? ''}:${entry.weightedEV ?? ''}:${entry.robustEV ?? ''}`)
     .join('||'), [shadowRanking]);
@@ -3919,7 +3967,7 @@ export default function Home() {
       return false;
     }
     if ([...independentRunsRef.current.values()].some(run => ['preparing', 'running'].includes(run.status))
-      || allLeagueBusyRef.current || operationBusyRef.current || allLeagueRunning || nbaRunning) {
+      || allLeagueBusyRef.current || operationBusyRef.current || allLeagueRunning || nbaRunning || soccerRunning) {
       setNotice('目前已有分析工作進行中；完成後即可重新分析全部聯盟。');
       return false;
     }
@@ -5244,8 +5292,8 @@ export default function Home() {
 
   return <main className="appShell">
     <header className="appHeader">
-      <div><div className="eyebrow">SPORTS DATA & ANALYSIS</div><h1>{nbaSelected ? 'NBA 籃球｜盤口與分析系統' : `${activeLeague.label}｜盤口與實際下注系統`}</h1></div>
-      <div className="headerBadges"><details><summary>系統資訊</summary><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{nbaSelected ? '季前・例行四盤｜模型驗證中' : activeLeague.statusLabel}</span><a href="/model-validation">查看四聯盟驗證結果</a></details><button type="button" className="appRefreshButton" title="重新整理並取得最新版" onClick={() => window.location.reload()}>↻ 更新</button><span className="version">v{VERSION}</span></div>
+      <div><div className="eyebrow">SPORTS DATA & ANALYSIS</div><h1>{soccerSelected ? `${soccerSelected === 'EPL' ? '英超' : '歐冠 UCL'}｜盤口與分析系統` : nbaSelected ? 'NBA 籃球｜盤口與分析系統' : `${activeLeague.label}｜盤口與實際下注系統`}</h1></div>
+      <div className="headerBadges"><details><summary>系統資訊</summary><span className={health?.ready ? 'health ok' : 'health warn'}>{health == null ? '系統檢查中' : health.ready ? '必要設定已提供｜PIT寫入依逐場狀態' : `系統設定未完成｜${(health.readinessReasons || ['設定待確認'])[0]}`}</span><span className={`state ${activeLeague.status}`}>{soccerSelected ? '足球研究｜模型驗證中' : nbaSelected ? '季前・例行四盤｜模型驗證中' : activeLeague.statusLabel}</span><a href="/model-validation">查看四聯盟驗證結果</a></details><button type="button" className="appRefreshButton" title="重新整理並取得最新版" onClick={() => window.location.reload()}>↻ 更新</button><span className="version">v{VERSION}</span></div>
     </header>
     {shadowMode && <p className="muted" role="note">模型尚在驗證；分數與 EV 僅供研究，不是正式投注建議。</p>}
     {notificationResultNotice && <p role="status">{notificationResultNotice}{nhlNotificationScope && <a href={nhlAnalysisResultHref(nhlNotificationScope.date, nhlNotificationScope.runId)}>查看這次 NHL 分析</a>}</p>}
@@ -5258,19 +5306,28 @@ export default function Home() {
         const batchStatus = allLeagueBoardDate(allLeagueRun, id) === scopeDate
           ? allLeagueRun?.leagues?.[id]?.status || 'idle'
           : 'idle';
-        return <button key={id} className={!nbaSelected && league === id ? 'active' : ''} onClick={() => selectBaseball(id)} aria-pressed={!nbaSelected && league === id}>
+        return <button key={id} className={!nbaSelected && !soccerSelected && league === id ? 'active' : ''} onClick={() => selectBaseball(id)} aria-pressed={!nbaSelected && !soccerSelected && league === id}>
           <span className={`leagueDot ${config.status} batch-${batchStatus}`}/><b>{id}</b><small>{config.shortLabel}{independentStatus ? `｜${({ preparing: '準備中', running: '分析中', completed: independentStatus.message || '程序結束', failed: '失敗，可重試' })[independentStatus.status]}` : ''}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small><LeagueBetBadge summary={leagueBetStatuses[id]}/>
         </button>;
       })}
       <button type="button" className={nbaSelected ? 'active' : ''} onClick={selectNba} aria-pressed={nbaSelected}><span className={`leagueDot batch-${nbaIndicator.status}`}/><b>NBA</b><small>籃球{nbaIndicator.label ? `｜${nbaIndicator.label}` : ''}</small><LeagueBetBadge summary={leagueBetStatuses.NBA}/></button>
-      <Link prefetch={false} className="sportModuleLink" href="/soccer?league=EPL"><b>EPL</b><small>英超</small></Link>
-      <Link prefetch={false} className="sportModuleLink" href="/soccer?league=UCL"><b>UCL</b><small>歐洲冠軍聯賽</small></Link>
+      {MAIN_SOCCER_LEAGUES.map(id => {
+        const batch = allLeagueRun?.leagues?.[id];
+        const scopeDate = soccerScopes[id]?.date || batch?.boardDate;
+        const batchStatus = batch?.boardDate === scopeDate ? batch?.status || 'idle' : 'idle';
+        return <button type="button" key={id} className={soccerSelected === id ? 'active' : ''} aria-pressed={soccerSelected === id} onClick={() => selectSoccer(id)}>
+          <span className={`leagueDot batch-${batchStatus}`}/><b>{id}</b><small>{id === 'EPL' ? '英超' : '歐洲冠軍聯賽'}{batchStatus !== 'idle' ? `｜${allLeagueStatusLabel(batchStatus)}` : ''}</small><LeagueBetBadge summary={leagueBetStatuses[id]?.date === scopeDate ? leagueBetStatuses[id] : null}/>
+        </button>;
+      })}
       <Link prefetch={false} className="sportModuleLink" href="/external-audit"><b>外部來源</b><small>獨立稽核，不改評分</small></Link>
       <Link prefetch={false} className="sportModuleLink" href="/market-line-history"><b>歷史盤口</b><small>原盤口與變盤紀錄</small></Link>
     </nav>
 
-    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress} onJobChange={setNbaIndicatorJob} onHighScoreStatusChange={setNbaBetStatus} allLeagueBetStatuses={leagueBetStatuses}/>
-    <div hidden={nbaSelected}>
+    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || soccerRunning || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress} onJobChange={setNbaIndicatorJob} onHighScoreStatusChange={setNbaBetStatus} allLeagueBetStatuses={leagueBetStatuses} onSelectSoccer={selectSoccer}/>
+    {soccerSelected && (allLeaguePreparing || allLeagueRunning) && notice && <div className="noticeBox" role="status">{notice}</div>}
+    {soccerSelected && <AllLeagueProgress run={allLeagueRun} betStatuses={leagueBetStatuses} onSelectSoccer={selectSoccer}/>}
+    {MAIN_SOCCER_LEAGUES.filter(id => soccerOpened.includes(id) || soccerSelected === id).map(id => <SoccerMainWorkspace key={id} active={soccerSelected === id} embedded selectedLeague={id} requestedScope={soccerEntryScopes[id]} allRun={allLeagueRun} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || nbaRunning || soccerRunning || allLeaguePreparing || allLeagueRunning} onScopeChange={onSoccerScopeChange} onBusyChange={onSoccerBusyChange} onHighScoreStatusChange={onSoccerHighScoreStatusChange} onSelectSoccer={selectSoccer} allLeagueBetStatuses={leagueBetStatuses}/>)}
+    <div hidden={nbaSelected || Boolean(soccerSelected)}>
     <nav className="mainTabs">
       <button className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>今日盤口</button>
       <button className={tab === 'ranking' || tab === 'betOrder' ? 'active' : ''} onClick={() => setTab('ranking')}>影子排名</button>
@@ -5310,14 +5367,14 @@ export default function Home() {
         <div className="heroCopy"><span className="kicker">每日主要操作</span><h2>手動分析 {activeLeague.id}｜單場或本日全部</h2></div>
         <AnalysisNotificationControl ref={notificationControlRef}/>
         {notificationPreparing && <p role="status">正在設定分析完成通知，請回應手機的通知提示…</p>}
-        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="secondary" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || (gamePicker.scope === `${league}:${date}` && gamePicker.loading)} onClick={loadGamePicker}>{gamePicker.scope === `${league}:${date}` && gamePicker.loading ? '讀取賽程中…' : '讀取賽程（不分析）'}</button><label>選擇單場比賽<select style={{ width: '100%', minWidth: 0, maxWidth: '100%' }} value={gamePicker.scope === `${league}:${date}` ? gamePicker.selected : ''} disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || gamePicker.scope !== `${league}:${date}` || gamePicker.loading} onChange={event => setGamePicker(current => ({ ...current, selected: event.target.value }))}><option value="">請先讀取賽程並選擇一場</option>{gamePicker.scope === `${league}:${date}` && gamePicker.games.map(game => <option key={game.gamePk} value={game.gamePk}>{translateTeamText((typeof game.away === 'string' ? game.away : game.away?.name) || game.teams?.away?.team?.name || '')} @ {translateTeamText((typeof game.home === 'string' ? game.home : game.home?.name) || game.teams?.home?.team?.name || '')}｜{game.gameDate ? new Date(game.gameDate).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : ''}｜{game.gamePk}</option>)}</select></label><button className="primary" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || gamePicker.scope !== `${league}:${date}` || !gamePicker.selected} onClick={() => startWithCompletionNotification(() => oneClickAnalyze('', gamePicker.selected))}>只分析這一場</button><button className="primary giant" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => startWithCompletionNotification(() => oneClickAnalyze())}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `分析本日全部 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || nbaRunning} onClick={() => startWithCompletionNotification(() => oneClickAnalyzeAll())}>{allLeaguePreparing ? `預查全部聯盟中 ${allLeaguePrechecked}/${allLeagueProgress.total}` : allLeagueRunning ? '全部聯盟伺服器背景處理中…' : allLeagueProgress.terminal === allLeagueProgress.total ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/${allLeagueProgress.total}`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<button className="secondary" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning} onClick={resumeSavedAnalysis}>載入先前分析（不重算）</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載 Reader v2.1.37</a><details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details></div>
+        <div className="heroControls"><label>台灣日期<input type="date" value={date} disabled={busy || readerPolling || allLeaguePreparing || allLeagueRunning} onChange={event => selectAnalysisDate(event.target.value)}/></label><button className="secondary" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || (gamePicker.scope === `${league}:${date}` && gamePicker.loading)} onClick={loadGamePicker}>{gamePicker.scope === `${league}:${date}` && gamePicker.loading ? '讀取賽程中…' : '讀取賽程（不分析）'}</button><label>選擇單場比賽<select style={{ width: '100%', minWidth: 0, maxWidth: '100%' }} value={gamePicker.scope === `${league}:${date}` ? gamePicker.selected : ''} disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || gamePicker.scope !== `${league}:${date}` || gamePicker.loading} onChange={event => setGamePicker(current => ({ ...current, selected: event.target.value }))}><option value="">請先讀取賽程並選擇一場</option>{gamePicker.scope === `${league}:${date}` && gamePicker.games.map(game => <option key={game.gamePk} value={game.gamePk}>{translateTeamText((typeof game.away === 'string' ? game.away : game.away?.name) || game.teams?.away?.team?.name || '')} @ {translateTeamText((typeof game.home === 'string' ? game.home : game.home?.name) || game.teams?.home?.team?.name || '')}｜{game.gameDate ? new Date(game.gameDate).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : ''}｜{game.gamePk}</option>)}</select></label><button className="primary" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled || gamePicker.scope !== `${league}:${date}` || !gamePicker.selected} onClick={() => startWithCompletionNotification(() => oneClickAnalyze('', gamePicker.selected))}>只分析這一場</button><button className="primary giant" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || !analysisEnabled} onClick={() => startWithCompletionNotification(() => oneClickAnalyze())}>{busy ? progress.label || '執行中…' : queuedAnalysis ? '已排隊｜複核後自動分析' : readerPolling ? 'Reader複核中｜按此排隊分析' : analysisEnabled ? `分析本日全部 ${activeLeague.id}` : `${activeLeague.id} 尚未啟用`}</button><button className="secondary allLeagueAnalyzeButton" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning || nbaRunning || soccerRunning} onClick={() => startWithCompletionNotification(() => oneClickAnalyzeAll())}>{allLeaguePreparing ? `預查全部聯盟中 ${allLeaguePrechecked}/${allLeagueProgress.total}` : allLeagueRunning ? '全部聯盟伺服器背景處理中…' : allLeagueProgress.terminal === allLeagueProgress.total ? '重新分析全部聯盟' : `一鍵分析全部聯盟 ${allLeagueProgress.terminal}/${allLeagueProgress.total}`}</button>{(busy || readerPolling || queuedAnalysis) && <div className="heroActionStatus" role="status" aria-live="polite"><strong>{queuedAnalysis ? '分析已排隊' : busy ? progress.label || '分析正在啟動' : 'Reader 正在複核最新盤口'}</strong><span>{queuedAnalysis ? '複核完成後會自動開始，不必再按。' : busy ? progress.total > 0 ? `${progress.done || 0} 完成｜${progress.running || 0} 處理中｜${Math.max(0, progress.total - (progress.done || 0) - (progress.running || 0))} 排隊` : '請稍候，工作已開始。' : '可按上方按鈕先排隊，完成後自動分析。'}</span></div>}<button className="secondary" disabled={notificationPreparing || busy || allLeaguePreparing || allLeagueRunning} onClick={resumeSavedAnalysis}>載入先前分析（不重算）</button><a className="secondary readerDownload" href={READER_DOWNLOAD_PATH} download>下載 Reader v2.1.37</a><details className="details"><summary>Reader更新紀錄（本分頁）</summary><pre>{JSON.stringify(readerTrace.filter(row => row.league === league && row.date === date), null, 2)}</pre></details></div>
         <div className={`providerState ${analysisEnabled && readerExecutable ? 'ready' : 'missing'}`}>
           <strong>{!analysisEnabled ? `${activeLeague.label}獨立模型核心尚未發布` : readerExecutable ? '盤口已同步' : readerStatus?.fresh ? '盤口已同步｜待驗證' : readerStatus?.stale ? 'Tai888 Reader盤口已過期' : 'Tai888 Reader等待同步'}</strong>
           <span>{!analysisEnabled ? '官方賽程、Reader與實際下注帳本保留；核心先發、打線、純牛棚與球場資料未完整前不建立假分布或假EV。' : readerStatus?.fresh ? `最後同步：${localTime(readerStatus?.receivedAt)}｜Reader已讀取${readerCoverage.captured}/${readerCoverage.total}場｜已開盤${readerCoverage.open}場｜${readerPendingText}` : readerStatus?.message || `保持唯一一台讀盤電腦、Chrome與Tai888 ${activeLeague.shortLabel}頁面開啟。`}</span>
         </div>
         {allLeagueRunContainsDate(allLeagueRun, date) && <div className="allLeagueState" aria-live="polite"><div><strong>全部聯盟工作｜已結束 {allLeagueProgress.terminal}/{allLeagueProgress.total}</strong><span>{allLeagueAnalysisOutcomeText(allLeagueProgress)}</span><span>{allLeagueRunning ? '目前工作' : '保存的工作結果'}｜{localTime(allLeagueRun?.completedAt || allLeagueRun?.startedAt)}｜不代表 Reader 即時狀態</span><span>目前聯盟：{activeLeague.id}｜盤日 {date}｜{allLeagueStatusLabel(activeLeagueBatchStatus)}</span></div><div className="allLeaguePills">{analysisLeagueIdsForRun(allLeagueRun).map(id => {
           const state = allLeagueRun?.leagues?.[id] || {};
-          return <span className={`batch-${state.status || 'idle'}`} title={state.message || ''} key={id}>{id} {state.boardDate || '—'}｜{allLeagueStatusLabel(state.status)}<LeagueBetBadge summary={leagueBetStatuses[id]?.date === state.boardDate ? leagueBetStatuses[id] : null}/>{id === 'NHL' && state.boardDate && <a href={nhlAnalysisResultHref(state.boardDate, allLeagueRun?.runId || '')}>查看 NHL</a>}{isSoccerAnalysisLeague(id) && state.boardDate && <a href={soccerAnalysisResultHref(id, state.boardDate, allLeagueRun?.runId || '')}>查看{id === 'EPL' ? '英超' : '歐冠'}</a>}{state.status === 'preparing' && state.message?.startsWith('等待Reader') && <small>{state.message}</small>}</span>;
+          return <span className={`batch-${state.status || 'idle'}`} title={state.message || ''} key={id}>{id} {state.boardDate || '—'}｜{allLeagueStatusLabel(state.status)}<LeagueBetBadge summary={leagueBetStatuses[id]?.date === state.boardDate ? leagueBetStatuses[id] : null}/>{id === 'NHL' && state.boardDate && <a href={nhlAnalysisResultHref(state.boardDate, allLeagueRun?.runId || '')}>查看 NHL</a>}{isSoccerAnalysisLeague(id) && state.boardDate && <a href={soccerAnalysisResultHref(id, state.boardDate, allLeagueRun?.runId || '')} onClick={event => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); selectSoccer(id, { date: state.boardDate, runId: allLeagueRun?.runId || '' }); }}>查看{id === 'EPL' ? '英超' : '歐冠'}</a>}{state.status === 'preparing' && state.message?.startsWith('等待Reader') && <small>{state.message}</small>}</span>;
         })}</div>{analysisLeagueIdsForRun(allLeagueRun).some(id => allLeagueRun?.leagues?.[id]?.status === 'failed') && <div className="allLeagueErrors">{analysisLeagueIdsForRun(allLeagueRun).filter(id => allLeagueRun?.leagues?.[id]?.status === 'failed').map(id => <small key={id}>{id} {allLeagueRun.leagues[id].boardDate || '—'}：{allLeagueRun.leagues[id].message || '分析失敗'}</small>)}</div>}</div>}
       </section>
       {allLeagueRunContainsDate(allLeagueRun, date) && LEAGUE_IDS.filter(id => allLeagueRun?.leagues?.[id]?.status === 'result_pending').map(id => <div className="noticeBox" role="status" key={`pending-${id}`}>{id}：{allLeagueRun.leagues[id].message || '結果待載入，請切至此聯盟按「載入先前分析（不重算）」。'}</div>)}
