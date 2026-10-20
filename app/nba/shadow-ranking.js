@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { NbaBetRecordButton } from './bet-records.js';
-import { buildNbaShadowRanking, buildNbaShadowOrder, NBA_RANK_MARKETS } from '../../lib/nba/shadow-ranking.js';
+import { buildNbaShadowRanking, buildNbaPreviousRanking, buildNbaShadowOrder, NBA_RANK_MARKETS } from '../../lib/nba/shadow-ranking.js';
 import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球隊待核對';
 const num = value => Number.isFinite(value) ? value.toFixed(2) : '—';
@@ -11,12 +11,15 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
   const [view, setView] = useState('ranking');
   const [filter, setFilter] = useState('all');
   const ranking = buildNbaShadowRanking(rows, date, now, filter);
+  const previous = buildNbaPreviousRanking(rows, date, now, filter);
   const hasOpening = rows.some(row => row.result?.modelVersion === 'nba-regular-cross-season-v1');
   const groups = buildNbaShadowOrder(ranking.entries);
+  const previousGroups = buildNbaShadowOrder(previous.entries);
   const renderEntry = (entry, index) => <div className="rankRow nbaRankRow" key={entry.stableKey} data-nba-rank-key={entry.stableKey}>
       <b>{view === 'order' ? entry.betOrderIndex : index + 1}</b><strong className={`rankScore nbaRankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定 S 分數">{entry.score == null ? '—' : entry.score.toFixed(1)}<small>S 分數</small></strong>
       <div><span>{name(entry.game.away)}（客）@ {name(entry.game.home)}（主）</span><div className="scorePick">{entry.market}｜{entry.side === 'home' || entry.side === 'away' ? `${name(entry.game[entry.side])} ${entry.role}` : entry.role}｜{entry.line}</div>
         <div className="scoreMeta">W {num(entry.expectedNet)}%｜R {num(entry.robustExpectedNet)}%</div>
+        {entry.previousAnalysis && <div className="scoreMeta">上次分析盤口｜待更新並重新分析</div>}
         {entry.score == null && <div className="scoreMeta">需重新分析以產生 W／R 評分</div>}
         <div className="scoreMeta">估計勝率 {pct(entry.winProbability)}｜水位 {num(entry.water)}</div>
         <small>{time(entry.game.startTime)}（台灣）</small><details className="rankingDetails"><summary>估計明細</summary><p>盤口 {time(entry.observedAt)}｜走水 {pct(entry.pushProbability)}｜誤差樣本 {entry.samples ?? '—'} 筆。W／R 為每 100 元含退水淨額。</p></details>
@@ -36,9 +39,17 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
       <div className="betOrderGameHead"><div><span>第 {index + 1} 場</span><strong>{name(group.entries[0].game.away)}（客）@ {name(group.entries[0].game.home)}（主）</strong></div><time>{time(group.gameDate)}（台灣）</time></div>
       {group.entries.map(renderEntry)}
     </div>)}
-    {view === 'order' && !groups.length && <div className="emptySmall">{hasOpening ? '目前沒有符合候選門檻且 W、R 都大於 0 的方向。' : '目前沒有分數達 7.0 且 W、R 都大於 0 的方向。'}</div>}
+    {previous.entries.length > 0 && <section aria-label="NBA 上次分析排名">
+      <h3>上次分析｜盤口待更新</h3>
+      <p className="muted">{previous.gameCount} 場保留上次分析。以下分數、W／R、盤口與水位均屬當時快照；請更新盤口並重新分析後確認目前候選。投注狀態依已儲存紀錄顯示。</p>
+      {view === 'ranking' ? previous.entries.map(renderEntry) : previousGroups.map((group, index) => <div className="betOrderGame" key={group.key}>
+        <div className="betOrderGameHead"><div><span>上次分析第 {index + 1} 場</span><strong>{name(group.entries[0].game.away)}（客）@ {name(group.entries[0].game.home)}（主）</strong></div><time>{time(group.gameDate)}（台灣）</time></div>
+        {group.entries.map(renderEntry)}
+      </div>)}
+    </section>}
+    {view === 'order' && !groups.length && !previousGroups.length && <div className="emptySmall">{hasOpening ? '目前沒有符合候選門檻且 W、R 都大於 0 的方向。' : '目前沒有分數達 7.0 且 W、R 都大於 0 的方向。'}</div>}
     {view === 'order' && <details className="rankingDetails"><summary>順序說明</summary><p>依開賽時間排列；同場依全場讓分、全場大小、上半讓分、上半大小排序，同市場按分數排序。場次編號與方向序號分開顯示。</p></details>}
-    {!ranking.entries.length && <div className="emptySmall">{filter === 'all' ? '尚無目前盤口的分析結果。' : '此盤口尚無有效分析結果。'}</div>}
+    {!ranking.entries.length && !previous.entries.length && <div className="emptySmall">{filter === 'all' ? '尚無目前盤口的分析結果。' : '此盤口尚無有效分析結果。'}</div>}
     <details className="rankingDetails"><summary>排序說明</summary>{hasOpening && <p>開季跨季模型的 R 為至少兩個較早例行賽球季的壓力淨額與 W 的最小值；此模型候選門檻為 S ≥ 7.2。既有模型保留各自的原有規則。</p>}<p>全部方向保留大小分與讓分雙邊，包括淨額為負的方向；候選順序僅列 S ≥ 7.0 且 W、R 均大於 0 的方向；沿用 MLB 的固定 S 公式，按 S、W、R 排序。W 是目前模型淨額；R 取至少兩個歷史季前賽球季（各至少 30 筆誤差）壓力測試與 W 的最小淨額。R 不是統計信賴下限，NBA 評分仍屬影子估計。</p><p>勝率與淨額是模型估計，尚未證實實際下注獲利；每 100 元淨額含 1.5% 退水。</p></details>
   </section>;
 }

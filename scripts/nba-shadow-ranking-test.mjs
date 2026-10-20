@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { analyzeNbaPreseason } from '../lib/nba/preseason-model.js';
-import { buildNbaShadowRanking, buildNbaShadowOrder } from '../lib/nba/shadow-ranking.js';
+import { buildNbaShadowRanking, buildNbaPreviousRanking, buildNbaShadowOrder } from '../lib/nba/shadow-ranking.js';
 const date='2026-10-06', now=Date.parse('2026-10-05T19:50:00Z'), observedAt=new Date(now).toISOString();
 const quotes={ fullTotal:{line:'232.5',overWater:.94,underWater:.94},fullRunline:{line:'3平',lineSide:'home',homeWater:.95,awayWater:.95},firstHalfTotal:{line:'115+50',overWater:.94,underWater:.96},firstHalfRunline:{line:'2-25',lineSide:'away',homeWater:.95,awayWater:.95} };
 const make=(id,marketQuotes=quotes)=>{
@@ -19,6 +19,20 @@ for (const key of Object.keys(quotes)) {
 assert.equal(all.entries.find(x=>x.marketKey==='fullRunline'&&x.side==='home').role,'讓分');assert.equal(all.entries.find(x=>x.marketKey==='fullRunline'&&x.side==='away').role,'受讓');
 assert.equal(all.entries.find(x=>x.marketKey==='firstHalfRunline'&&x.side==='away').role,'讓分');
 const expired=buildNbaShadowRanking([row],date,now+180001);assert.equal(expired.entries.length,0);assert.equal(expired.outdatedGames,1);
+const previous=buildNbaPreviousRanking([row],date,now+180001);
+assert.equal(previous.entries.length,8);assert.equal(previous.gameCount,1);
+assert.ok(previous.entries.every(entry=>entry.previousAnalysis&&entry.observedAt===observedAt));
+assert.deepEqual(buildNbaPreviousRanking([row],date,now).entries,[]);
+const changed={...row,quote:{...quotes,fullTotal:{...quotes.fullTotal,line:'240.5'}}};
+assert.equal(buildNbaShadowRanking([changed],date,now).entries.length,0);
+assert.equal(buildNbaPreviousRanking([changed],date,now,'fullTotal').entries[0].line,'232.5');
+assert.equal(buildNbaPreviousRanking([row],date,Date.parse(row.game.startTime)).entries.length,0);
+assert.equal(buildNbaPreviousRanking([row],'2026-10-07',now).entries.length,0);
+assert.equal(buildNbaPreviousRanking([{...row,result:{...row.result,gameId:'nba:espn:game:123'}}],date,now).entries.length,0);
+const mixed=[row,{...make(401999002),canAnalyze:false}];
+assert.equal(buildNbaShadowRanking(mixed,date,now).entries.length,8);
+assert.equal(buildNbaPreviousRanking(mixed,date,now).entries.length,8);
+assert.ok(buildNbaPreviousRanking(mixed,date,now).entries.every(entry=>entry.game.id==='nba:espn:game:401999002'));
 assert.equal(buildNbaShadowRanking([{...row,quote:{...quotes,fullRunline:{...quotes.fullRunline,lineSide:'away'}}}],date,now).entries.length,0);
 assert.equal(buildNbaShadowRanking([{...row,game:{...row.game,startTime:observedAt}}],date,now).entries.length,0);
 assert.equal(buildNbaShadowRanking([{...row,observedAt:new Date(now+1000).toISOString()}],date,now+1000).entries.length,8);
@@ -55,3 +69,39 @@ buildNbaShadowOrder(all.entries);
 assert.deepEqual(all.entries, original, '全部方向含負EV的原始資料必須保留');
 assert.ok(all.entries.some(x => x.expectedNet < 0));
 console.log('NBA order PASS: positive W/R gates, screenshot regression, all-direction preservation');
+
+// Render the real ranking component; expired quotes must remain visibly labelled.
+const { readFileSync } = await import('node:fs');
+const { default: vm } = await import('node:vm');
+const { transform } = await import('next/dist/build/swc/index.js');
+const rankingModule = await import('../lib/nba/shadow-ranking.js');
+const compiled = await transform(readFileSync(new URL('../app/nba/shadow-ranking.js', import.meta.url),'utf8'), {
+ filename:'app/nba/shadow-ranking.js', module:{type:'commonjs'},
+ jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'automatic'}},target:'es2022'},
+});
+let uiView='ranking',uiFilter='all',uiHook=0;
+const sandbox={exports:{},Intl,Date,require(id){
+ if(id==='react') return {useState:()=>[uiHook++===0?uiView:uiFilter,()=>{}]};
+ if(id==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
+ if(id.endsWith('/shadow-ranking.js'))return rankingModule;
+ if(id.endsWith('/labels.js'))return {NBA_TEAM_LABELS:{}};
+ if(id.endsWith('/bet-records.js'))return {NbaBetRecordButton:'BetRecordButton'};
+ throw Error(id);
+}};
+vm.runInNewContext(compiled.code,sandbox);
+function nodes(value){
+ if(Array.isArray(value))return value.flatMap(nodes);
+ if(value&&typeof value==='object')return [value,...nodes(value.props?.children)];
+ return value==null||value===false?[]:[value];
+}
+const render=(input,at)=>{uiHook=0;return nodes(sandbox.exports.default({rows:input,date,now:at,onAnalyze:()=>{},busy:false}));};
+const staleUi=render([row],now+180001);
+assert.equal(staleUi.filter(n=>n?.props?.['data-nba-rank-key']).length,8);
+assert.ok(staleUi.includes('上次分析｜盤口待更新'));
+assert.ok(!staleUi.includes('尚無目前盤口的分析結果。'));
+assert.equal(staleUi.filter(n=>n?.type==='BetRecordButton').length,8);
+assert.ok(!render([row],now).includes('上次分析｜盤口待更新'));
+uiView='order';
+const staleOrderUi=render([row],now+180001);
+assert.equal(staleOrderUi.filter(n=>n?.props?.['data-nba-rank-key']).length,buildNbaShadowOrder(previous.entries).flatMap(group=>group.entries).length);
+console.log('NBA ranking UI PASS: accepted stale results and record controls stay visible with original-price warning; fresh results are not duplicated and candidate gates remain intact');
