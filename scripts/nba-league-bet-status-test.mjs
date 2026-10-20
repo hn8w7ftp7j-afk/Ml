@@ -5,7 +5,7 @@ import { transform } from 'next/dist/build/swc/index.js';
 import { summarizeHighScoreBets } from '../lib/league-bet-status.js';
 import { loadNbaUpcomingBoard } from '../lib/nba/analysis-ui-policy.js';
 import { analyzeNbaPreseason } from '../lib/nba/preseason-model.js';
-import { buildNbaShadowRanking, buildNbaShadowOrder } from '../lib/nba/shadow-ranking.js';
+import { buildNbaShadowRanking, buildNbaShadowOrder, buildNbaBetReminder } from '../lib/nba/shadow-ranking.js';
 
 // Exercise the actual provider and its effects without a DOM or real timers.
 // Only React's scheduling surface, network, and browser events are simulated.
@@ -102,6 +102,10 @@ assert.match(state.requests[0].url, /date=2026-10-19$/);
 await state.respond(state.requests.shift(), { ok: true, records: [] });
 assert.equal(changes.at(-1).state, 'unbet');
 assert.equal(changes.at(-1).label, '有高分未下注');
+await state.update({ quotesCurrent: false });
+assert.equal(changes.at(-1).state, 'unbet');
+assert.equal(changes.at(-1).label, '有高分未下注｜盤口待更新');
+await state.update({ quotesCurrent: true });
 
 let action = state.ledger().save(entry);
 await state.flush();
@@ -113,6 +117,10 @@ await state.respond(state.requests.shift(), { ok: true, record, persistence: 'du
 await action; await state.flush();
 assert.equal(changes.at(-1).state, 'all_bet');
 assert.equal(changes.at(-1).label, '高分已全下注');
+await state.update({ quotesCurrent: false });
+assert.equal(changes.at(-1).state, 'all_bet');
+assert.equal(changes.at(-1).label, '高分已全下注｜盤口待更新');
+await state.update({ quotesCurrent: true });
 
 for (const [operation, status, expected] of [['cancel', 'CANCELLED', 'unbet'], ['restore', 'OPEN', 'all_bet']]) {
   action = state.ledger().changeStatus(record, operation);
@@ -220,8 +228,24 @@ const initialRow = {
 };
 const qualifying = rows => buildNbaShadowOrder(buildNbaShadowRanking(rows, boardDate, clock).entries).flatMap(group => group.entries);
 assert.ok(qualifying([initialRow]).length, 'test fixture must contain a real qualifying direction');
+const freshReminder = buildNbaBetReminder([initialRow], boardDate, clock);
+assert.equal(freshReminder.quotesCurrent, true);
+const metrics = entries => entries.map(({ stableKey, score, expectedNet, robustExpectedNet }) => ({ stableKey, score, expectedNet, robustExpectedNet }));
+assert.deepEqual(metrics(freshReminder.candidates), metrics(qualifying([initialRow])), 'fresh reminders use the exact existing candidate thresholds and W/R');
 clock += 4 * 60_000;
 assert.equal(qualifying([initialRow]).length, 0, 'unchanged stale timestamps must still remove expired candidates');
+const expiredReminder = buildNbaBetReminder([initialRow], boardDate, clock);
+assert.deepEqual(metrics(expiredReminder.candidates), metrics(freshReminder.candidates), 'Reader expiry must not erase the last accepted analysis/bet reminder');
+assert.equal(expiredReminder.quotesCurrent, false);
+assert.equal(expiredReminder.analysisGameCount, 1);
+const repricedReminder = buildNbaBetReminder([{ ...initialRow, quote: { ...quotes, fullRunline: { ...quotes.fullRunline, line: '9平' } } }], boardDate, initialNow);
+assert.equal(repricedReminder.quotesCurrent, false, 'a changed quote must label the reminder as awaiting an update');
+assert.deepEqual(metrics(repricedReminder.candidates), metrics(freshReminder.candidates), 'old analysis metrics are never reassigned to a new quote');
+assert.ok(repricedReminder.candidates.every(entry => entry.line !== '9平'));
+assert.equal(buildNbaBetReminder([initialRow], '2026-10-07', clock).candidates.length, 0, 'another date cannot inherit this reminder');
+assert.equal(buildNbaBetReminder([initialRow], boardDate, Date.parse(boardGame.startTime)).candidates.length, 0, 'started games leave the prestart reminder');
+assert.equal(buildNbaBetReminder([{ ...initialRow, game: { ...boardGame, status: 'postponed' } }], boardDate, clock).candidates.length, 0);
+assert.equal(buildNbaBetReminder([{ ...initialRow, result: null }], boardDate, clock).candidates.length, 0, 'ledger records alone cannot invent high-score candidates');
 clock = initialNow;
 
 let boardRows = [initialRow], readCount = 0, refresh, disposed = false, heldResponse;

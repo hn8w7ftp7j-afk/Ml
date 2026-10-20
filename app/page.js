@@ -1967,6 +1967,7 @@ export default function Home() {
   const onNbaDateChange = useCallback((value, explicit) => { nbaExplicitDateRef.current = Boolean(explicit); setNbaDate(value); }, []);
   const [nbaRunning, setNbaRunning] = useState(false);
   const [nbaIndicatorJob, setNbaIndicatorJob] = useState(null);
+  const [nbaBoardState, setNbaBoardState] = useState(null);
   const [nbaNotificationJob, setNbaNotificationJob] = useState(null);
   const [nbaBetStatus, setNbaBetStatus] = useState(null);
   useEffect(() => {
@@ -2036,7 +2037,7 @@ export default function Home() {
   allLeagueRunRef.current = allLeagueRun;
   const nbaIndicator = nbaLeagueIndicator(nbaDate, nbaIndicatorJob, allLeagueRun?.leagues?.NBA ? {
     ...allLeagueRun.leagues.NBA, runId: allLeagueRun.runId, startedAt: allLeagueRun.startedAt,
-  } : null, nbaRunning);
+  } : null, nbaRunning, nbaBoardState);
   const onNbaBatchProgress = useCallback(batch => {
     const current = allLeagueRunRef.current;
     if (current?.runId !== batch.runId || current.leagues?.NBA?.boardDate !== batch.date) return;
@@ -5325,7 +5326,7 @@ export default function Home() {
       <Link prefetch={false} className="sportModuleLink" href="/market-line-history"><b>歷史盤口</b><small>原盤口與變盤紀錄</small></Link>
     </nav>
 
-    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || soccerRunning || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress} onJobChange={setNbaIndicatorJob} onHighScoreStatusChange={setNbaBetStatus} allLeagueBetStatuses={leagueBetStatuses} onSelectSoccer={selectSoccer}/>
+    <NbaMainWorkspace active={nbaSelected} allRun={allLeagueRun} preparedScope={nbaPreparedScope} notificationJob={nbaNotificationJob} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || soccerRunning || allLeaguePreparing || allLeagueRunning} onBusyChange={setNbaRunning} onDateChange={onNbaDateChange} onBatchProgress={onNbaBatchProgress} onJobChange={setNbaIndicatorJob} onBoardStateChange={setNbaBoardState} onHighScoreStatusChange={setNbaBetStatus} allLeagueBetStatuses={leagueBetStatuses} onSelectSoccer={selectSoccer}/>
     {soccerSelected && (allLeaguePreparing || allLeagueRunning) && notice && <div className="noticeBox" role="status">{notice}</div>}
     {soccerSelected && <AllLeagueProgress run={allLeagueRun} betStatuses={leagueBetStatuses} onSelectSoccer={selectSoccer}/>}
     {MAIN_SOCCER_LEAGUES.filter(id => soccerOpened.includes(id) || soccerSelected === id).map(id => <SoccerMainWorkspace key={id} active={soccerSelected === id} embedded selectedLeague={id} requestedScope={soccerEntryScopes[id]} allRun={allLeagueRun} onAnalyzeAll={oneClickAnalyzeAll} otherBusy={busy || nbaRunning || soccerRunning || allLeaguePreparing || allLeagueRunning} onScopeChange={onSoccerScopeChange} onBusyChange={onSoccerBusyChange} onHighScoreStatusChange={onSoccerHighScoreStatusChange} onSelectSoccer={selectSoccer} allLeagueBetStatuses={leagueBetStatuses}/>)}
