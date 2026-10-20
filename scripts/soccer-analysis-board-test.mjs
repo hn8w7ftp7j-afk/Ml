@@ -11,6 +11,8 @@ const reader = (official, { league = 'EPL', offset = 0, reverse = false } = {}) 
   observedAt: new Date(now + offset).toISOString(), games: [{ boardDate: official.date, boardTime: '21:00',
     homeKey: globalThis.Tai888SoccerTeams.key(reverse ? official.away.name : official.home.name),
     awayKey: globalThis.Tai888SoccerTeams.key(reverse ? official.home.name : official.away.name),
+    markets: [{kind:'TOTAL',unit:'GOALS',period:'FT',line:'3平',overWater:.9,underWater:.9,
+      periodEvidence:{sectionTitle:'英格蘭超級聯賽 全場',tableHeaders:['時間','主客隊伍','讓球','大小','獨贏'],marketHeader:'大小'}}],
   }] });
 
 const selected = game(date);

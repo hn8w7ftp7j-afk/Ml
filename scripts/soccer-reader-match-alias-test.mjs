@@ -51,6 +51,7 @@ for(const [index,[boardName,officialName]] of aliases.entries()){
   assert.equal(matchSoccerReaderGames(checked.payload,[official,{...official,id:`${official.id}-duplicate`}],now)[0].matchStatus,'AMBIGUOUS');
   for(const patch of [
     {homeKey:key('Chelsea')},{homeRaw:'Chelsea[主]'},{awayRaw:'Chelsea'},
+    {homeKey:key(officialName)},{homeRaw:`${officialName}[主]`},
     {homeKey:null},{homeKey:123},{homeRaw:null},{league:'EPL'},
     {homeRaw:`${boardName}-角球數[主]`},{boardDate:'2026-02-30'},{boardTime:'25:00'},
   ]){

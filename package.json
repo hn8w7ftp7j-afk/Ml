@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test:screen-awake": "node scripts/screen-awake-test.mjs",
-    "pretest:soccer": "npm run test:soccer-workspace",
+    "pretest:soccer": "npm run test:soccer-reader-diagnostics && npm run test:soccer-workspace",
+    "test:soccer-reader-diagnostics": "node scripts/soccer-reader-fresh-board-test.mjs && node scripts/soccer-reader-diagnostics-test.mjs",
     "test:soccer-workspace": "node scripts/main-sport-navigation-test.mjs && node scripts/soccer-main-workspace-ui-test.mjs && node scripts/soccer-workspace-test.mjs && node scripts/soccer-workspace-ui-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-workspace-api-test.mjs",
     "test:league-bet-status": "node scripts/soccer-league-bet-status-test.mjs && node scripts/league-bet-status-test.mjs && node scripts/nba-league-bet-status-test.mjs",
     "test:reader-recovery": "node scripts/reader-nhl-card-test.mjs && node scripts/reader-six-league-recovery-test.mjs && node scripts/reader-nhl-test.mjs && node scripts/reader-nba-test.mjs && node scripts/reader-multi-date-test.mjs && node scripts/reader-static-security-v202-test.mjs && node scripts/reader-artifact-delivery-test.mjs",

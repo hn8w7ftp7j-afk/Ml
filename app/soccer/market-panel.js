@@ -20,6 +20,14 @@ const rowText=row=>{
 const readableReasons=list=>[...new Set((Array.isArray(list)?list:[]).map(reason=>reasonNames[reason]||(typeof reason==='string'&&/[\u3400-\u9fff]/.test(reason)?reason:null)).filter(Boolean))];
 const scoreStages={READER_QUOTE:'原盤來源與期間',SETTLEMENT_CONTRACT:'實際派彩條款',PER_SCORE_PAYOFF:'逐比分損益',FOOTBALL_UNCERTAINTY:'足球情境與誤差依據',FIXED_S_FORMULA:'固定 S 評分公式',FORMAL_ACCEPTANCE:'正式模型與校準驗收',CURRENT_PUBLICATION:'目前候選資格'};
 const scoreStageStatuses={PASS:'已核對',REGISTERED:'已登錄核對依據',CALCULATED_CONDITIONALLY:'已完成條件試算',CONDITIONAL_ONLY:'僅供條件試算',CONDITIONAL_PROTOCOL_ARITHMETIC:'已完成情境算術核對',DIAGNOSTIC_ONLY:'研究分數',MISSING:'尚缺條款',NOT_CALCULABLE:'尚缺計算依據',BLOCKED:'尚未通過',PENDING:'尚待核對',NOT_AUTHORIZED:'尚未授權'};
+const readerDiagnosticNames={SOCCER_READER_STORAGE_UNAVAILABLE:'原盤暫時讀取失敗，無法確認是否缺盤。',SOCCER_READER_CAPTURE_MISSING:'此比賽日期尚未收到 Reader 原盤。',SOCCER_READER_CAPTURE_SCOPE_MISMATCH:'原盤的聯盟或日期與本場不符。',SOCCER_READER_GAME_UNMATCHED:'已收到原盤，但本場隊名或開賽時間尚未配對。',SOCCER_READER_NO_OPEN_GOAL_MARKET:'本場已配對，目前沒有開放的讓球或大小盤。',SOCCER_READER_PERIOD_UNCONFIRMED:'本場原盤已配對，但全場／上半場標示尚未確認。',SOCCER_READER_CAPTURE_UNUSABLE_AT_CUTOFF:'本場原盤尚未通過分析時間核對。',SOCCER_READER_MATCH_STARTED:'比賽已開始；原盤僅供歷史核對。',SOCCER_READER_QUOTES_STALE:'本場原盤已配對，但已逾期，請更新原盤。',SOCCER_READER_CAPTURE_READY:'本場已有配對成功的賽前原盤。'};
+const readerDiagnosticStatuses={SOCCER_READER_STORAGE_UNAVAILABLE:'UNAVAILABLE',SOCCER_READER_CAPTURE_MISSING:'MISSING',SOCCER_READER_CAPTURE_SCOPE_MISMATCH:'SCOPE_MISMATCH',SOCCER_READER_GAME_UNMATCHED:'UNMATCHED',SOCCER_READER_NO_OPEN_GOAL_MARKET:'NO_OPEN_GOALS',SOCCER_READER_PERIOD_UNCONFIRMED:'PERIOD_UNCONFIRMED',SOCCER_READER_CAPTURE_UNUSABLE_AT_CUTOFF:'UNUSABLE_CAPTURE',SOCCER_READER_MATCH_STARTED:'POSTSTART',SOCCER_READER_QUOTES_STALE:'STALE',SOCCER_READER_CAPTURE_READY:'READY'};
+function readerDiagnostic(result,game){
+  const d=result?.readerDiagnostics;
+  return d?.version==='SOCCER-READER-DIAGNOSTICS-v1'&&d.executable===false&&d.gameId===result?.gameId&&d.league===result?.league&&d.date===result?.date
+    &&(!game||game.id===d.gameId&&game.league===d.league&&game.date===d.date)
+    &&readerDiagnosticNames[d.code]&&readerDiagnosticStatuses[d.code]===d.status&&d.counts&&typeof d.counts==='object'?d:null;
+}
 
 function SoccerQuoteScoring({scoring}){
   if(!scoring||!Array.isArray(scoring.stages))return null;
@@ -74,11 +82,15 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
 
 export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,result,now=Date.now()}){
   const items=Array.isArray(directions)?directions:[],unknown=Array.isArray(unassignedQuotes)?unassignedQuotes:[];
+  const diagnostic=readerDiagnostic(result,game);
   return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">每筆原盤獨立顯示 S 分數，沿用 MLB 現有評分公式及上限規則；不是把勝率換成分數。排名另須通過 S ≥ 7.2、W &gt; 0、R &gt; 0 與正式資格核對。</p><p className="soccerMarketCaution">尚無有效計算依據時顯示「待評分」，不補造分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
     <SoccerScoringReadiness result={result} game={game} now={now}/>
+    {diagnostic&&<p className="soccerMarketNote" role="status" data-reader-status={diagnostic.status}>{readerDiagnosticNames[diagnostic.code]}{Number.isInteger(diagnostic.counts?.assignedQuotes)&&diagnostic.counts.assignedQuotes>0?` 已配入 ${diagnostic.counts.assignedQuotes} 筆方向原盤。`:''}</p>}
     <div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
       const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons);
-      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>待評分</strong><p className="soccerMarketEmpty">缺少此方向可確認期間的原盤。</p></div></div>}{reasons.length>0&&<p className="soccerMarketNote">{reasons.join('；')}。</p>}</section>;
+      const emptyReason=Array.isArray(d.unknownPeriodQuotes)&&d.unknownPeriodQuotes.length?'已有原盤，但尚未確認屬全場或上半場。':diagnostic&&diagnostic.status!=='READY'?readerDiagnosticNames[diagnostic.code]:'缺少此方向可確認期間的原盤。';
+      const shownReasons=diagnostic&&diagnostic.status!=='READY'?reasons.filter(reason=>reason!==reasonNames.MATCHED_READER_QUOTE_MISSING):reasons;
+      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>待評分</strong><p className="soccerMarketEmpty">{emptyReason}</p></div></div>}{shownReasons.length>0&&<p className="soccerMarketNote">{shownReasons.join('；')}。</p>}</section>;
     })}</div>
     {!items.length&&<p className="soccerMarketEmpty">尚無八方向分析，請先核對賽前資料。</p>}
     {unknown.length>0&&<section className="soccerMarketUnassigned"><h4>期間待確認的原盤</h4><p className="soccerMarketCaution">以下原盤未能確認屬全場或上半場，暫不配入八方向。</p>{unknown.map((quote,i)=><SoccerRawMarketQuote quote={quote} unassigned index={i} key={`${quote.key||i}:${i}`}/>)}</section>}
