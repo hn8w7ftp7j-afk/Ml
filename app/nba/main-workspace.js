@@ -5,7 +5,7 @@ import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 import { taipeiDate, validDate } from '../../lib/nba/identity.js';
 import { NBA_JOB_STORAGE, validNbaJob, mergeNbaAnalysisResults, nbaResultQuoteCurrent } from '../../lib/nba/analysis-job-display.js';
 import { nbaMarketScore } from '../../lib/nba/market-score.js';
-import { buildNbaShadowRanking, buildNbaShadowOrder } from '../../lib/nba/shadow-ranking.js';
+import { buildNbaBetReminder } from '../../lib/nba/shadow-ranking.js';
 import NbaShadowRanking from './shadow-ranking.js';
 import { NbaBetRecordProvider, NbaBetRecordButton, NbaBetRecords } from './bet-records.js';
 import AnalysisNotificationControl from '../analysis-notification-control.js';
@@ -88,7 +88,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   </section>;
 }
 
-export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress, onJobChange, onHighScoreStatusChange, allLeagueBetStatuses, onSelectSoccer }) {
+export default function NbaMainWorkspace({ active, allRun, preparedScope, notificationJob, onAnalyzeAll, otherBusy, onBusyChange, onDateChange, onBatchProgress, onJobChange, onBoardStateChange, onHighScoreStatusChange, allLeagueBetStatuses, onSelectSoccer }) {
   const [date, setDate] = useState(() => taipeiDate(Date.now()));
   const [rows, setRows] = useState([]);
   const [view, setView] = useState('board');
@@ -225,9 +225,11 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
     finally { operation.current = false; setStarting(false); }
   }
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
-  // Match the existing candidate-order policy; the badge does not add a scoring rule.
-  const highScoreCandidates = useMemo(() => buildNbaShadowOrder(buildNbaShadowRanking(rows, date, now).entries).flatMap(group => group.entries), [rows, date, now]);
-  return <NbaBetRecordProvider date={date} active={active} candidates={highScoreCandidates} analysisReady={!running} onHighScoreStatusChange={onHighScoreStatusChange}><div hidden={!active} aria-label="NBA 主站分析">
+  const betReminder = useMemo(() => buildNbaBetReminder(rows, date, now), [rows, date, now]);
+  useEffect(() => {
+    onBoardStateChange?.({ date, readerStatus, analysisGameCount: betReminder.analysisGameCount });
+  }, [date, readerStatus, betReminder.analysisGameCount, onBoardStateChange]);
+  return <NbaBetRecordProvider date={date} active={active} candidates={betReminder.candidates} quotesCurrent={betReminder.quotesCurrent} analysisReady={!running} onHighScoreStatusChange={onHighScoreStatusChange}><div hidden={!active} aria-label="NBA 主站分析">
     <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'records' ? 'active' : ''} onClick={() => setView('records')}>下注紀錄</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button><button className={view === 'validation' ? 'active' : ''} onClick={() => setView('validation')}>模型驗證</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
     {message && <div className="noticeBox" role="status">{message}</div>}

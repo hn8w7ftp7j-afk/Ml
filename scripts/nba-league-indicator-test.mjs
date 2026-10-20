@@ -50,6 +50,15 @@ for (const status of ['preparing', 'queued', 'running', 'failed', 'no_open_marke
   assert.equal(nbaLeagueIndicator(date, { ...oldJob, status: 'running' }, newerBatch, true).status, status, 'late old running callbacks cannot replace the newer batch');
 }
 const olderBatch = { boardDate: date, runId: 'older-run', startedAt: '2026-10-13T23:00:00Z', status: 'running' };
+const emptyQuoteBatch = { boardDate: date, runId: 'new-empty-run', startedAt: '2026-10-14T01:00:00Z', status: 'no_open_markets' };
+const recoveredBoard = { date, readerStatus: 'stale', analysisGameCount: 2 };
+assert.deepEqual(nbaLeagueIndicator(date, oldJob, emptyQuoteBatch, false, recoveredBoard), { status: 'done', label: '分析完成｜盤口待更新' },
+  'an empty quote preflight cannot hide recovered valid analyses still shown in NBA');
+assert.deepEqual(nbaLeagueIndicator(date, oldJob, emptyQuoteBatch, false, { ...recoveredBoard, analysisGameCount: 0 }), { status: 'no_open_markets', label: '盤口待更新' },
+  'without recovered results an old completed job cannot manufacture completion');
+assert.equal(nbaLeagueIndicator(date, oldJob, { ...emptyQuoteBatch, status: 'running' }, false, recoveredBoard).status, 'running');
+assert.equal(nbaLeagueIndicator(date, oldJob, emptyQuoteBatch, false, { ...recoveredBoard, date: '2026-10-15' }).status, 'no_open_markets');
+assert.deepEqual(nbaLeagueIndicator(date, null, null, false, recoveredBoard), { status: 'no_open_markets', label: '盤口待更新' });
 assert.equal(nbaLeagueIndicator(date, oldJob, olderBatch).status, 'done', 'a delayed old batch must not reset a newer independent analysis');
 assert.equal(nbaLeagueIndicator(date, oldJob, { ...olderBatch, runId: oldJob.runId, status: 'running' }).status, 'done', 'NBA can finish before the other leagues in the same run');
 assert.equal(nbaLeagueIndicator('2026-10-15', oldJob, olderBatch, true).status, 'idle');

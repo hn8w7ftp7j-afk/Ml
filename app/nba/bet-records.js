@@ -14,7 +14,7 @@ async function request(url, options = {}) {
   if (!response.ok || result.ok !== true) throw new Error(result.error || '永久紀錄讀寫失敗。');
   return result;
 }
-export function NbaBetRecordProvider({ date, active, candidates = [], analysisReady = true, onHighScoreStatusChange, children }) {
+export function NbaBetRecordProvider({ date, active, candidates = [], analysisReady = true, quotesCurrent = true, onHighScoreStatusChange, children }) {
   const [records, setRecords] = useState([]), [status, setStatus] = useState('loading');
   const [recordsDate, setRecordsDate] = useState('');
   const [error, setError] = useState(''), [pending, setPending] = useState(new Set()), [failed, setFailed] = useState(new Set());
@@ -54,6 +54,7 @@ export function NbaBetRecordProvider({ date, active, candidates = [], analysisRe
     ledgerReady: ledgerStatus === 'ready',
     isRecorded: candidate => confirmedKeys.has(key({ date, gameId: candidate.game.id, marketKey: candidate.marketKey, side: candidate.side })),
   });
+  if (summary.total > 0 && !quotesCurrent && ['unbet', 'all_bet'].includes(summary.state)) summary.label += '｜盤口待更新';
   const callback = useRef(onHighScoreStatusChange); callback.current = onHighScoreStatusChange;
   const published = useRef('');
   useEffect(() => {
