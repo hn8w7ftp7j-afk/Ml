@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { soccerProviderPolicy, SOCCER_PROVIDER_POLICY_VERSION } from '../lib/soccer/provider-policy.js';
 import { evaluateSoccerQuote } from '../lib/soccer/market-payoff.js';
 import { NBA_FORWARD_RULE } from '../lib/nba/forward-validation.js';
+import { soccerSettlementMissingTerms } from '../lib/soccer/settlement-contract.js';
 
 const policy = soccerProviderPolicy({ asOf: '2026-10-18T22:15:31Z' });
 assert.equal(policy.version, SOCCER_PROVIDER_POLICY_VERSION);
@@ -103,3 +104,23 @@ assert.ok(Math.abs(scenario.retainedEV.rebate - 0.01) < 1e-12);
 assert.ok(Math.abs(scenario.netEV - 0.91) < 1e-12);
 assert.equal(scenario.executable, false); assert.equal(scenario.W, null);
 console.log('PASS soccer provider policy: user-confirmed 1% of stake, independent rate/basis time boundaries, NBA 1.5% isolated, immutable snapshots and incomplete contract cannot enable formal scoring');
+
+const confirmation='2026-10-20T09:11:48Z';
+const fractional=soccerProviderPolicy({asOf:confirmation});
+assert.equal(fractional.rebateBasis,'SETTLED_PRINCIPAL');
+assert.equal(fractional.rebateApplicability,'WIN_AND_LOSS_FRACTIONS_EXCLUDING_PUSH');
+assert.equal(fractional.rebateApplicabilityStatus,'USER_CONFIRMED');
+assert.equal(fractional.settlementConfirmation.confirmedAt,confirmation);
+assert.equal(fractional.rebateFormula,'stake * (winFraction + lossFraction) * 0.01');
+for(const example of fractional.settlementConfirmation.examples){
+  assert.ok(Math.abs((example.winFraction+example.lossFraction)*fractional.rebateRate-example.rate)<1e-12);
+}
+const beforeFractional=soccerProviderPolicy({asOf:Date.parse(confirmation)-1});
+assert.equal(beforeFractional.rebateBasis,'TOTAL_PRINCIPAL');
+assert.equal(beforeFractional.rebateApplicability,'UNKNOWN');
+assert.equal(beforeFractional.rebateFormula,null);
+assert.equal(fractional.formalContractVerified,false);
+assert.equal(NBA_FORWARD_RULE.rebateRate,.015);
+assert.equal(soccerSettlementMissingTerms(confirmation).some(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES'),false);
+assert.equal(soccerSettlementMissingTerms(Date.parse(confirmation)-1).find(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES').status,'UNKNOWN');
+console.log('PASS confirmed football fractional principal: full/half/20% wins/losses and no push rebate, exact confirmation cutoff and unchanged NBA policy');

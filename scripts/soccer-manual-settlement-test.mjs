@@ -79,6 +79,21 @@ assert.equal(settleSoccerManualRecord(base.record,{...base.result,league:'ucl'},
 assert.equal(settleSoccerManualRecord({...base.record,status:'CANCELLED'},base.result,c,now).reason,'RECORD_CANCELLED');
 assert.equal(settleSoccerManualRecord(base.record,base.result,{...c,rebate:{rate:.015,basis:'TOTAL_PRINCIPAL'}},now).status,'PENDING');
 
+const total=base.result.fullTime.home+base.result.fullTime.away;
+for(const [line,side,expected] of [
+  [`${total+1}平`,'under',100],[`${total+1}平`,'over',100],
+  [`${total}+50`,'over',50],[`${total}-50`,'over',50],
+  [`${total}+20`,'over',20],[`${total}-20`,'over',20],[`${total}平`,'over',0],
+]){
+  const record={...base.record,line,side},terms=contractFor(record);
+  terms.rebate={rate:.01,basis:'SETTLED_PRINCIPAL',appliesTo:{FULL_WIN:true,PARTIAL_WIN:true,PUSH:false,PARTIAL_LOSS:true,FULL_LOSS:true}};
+  const result=settleSoccerManualRecord(record,base.result,terms,now);
+  assert.equal(result.status,'SETTLED');assert.equal(result.rebate,expected);
+  assert.equal(result.rebateBasis,'SETTLED_PRINCIPAL');
+  assert.equal(result.profit,result.grossProfit+expected);
+}
+assert.equal(settleSoccerManualRecord(base.record,base.result,c,now).rebate,100,'legacy explicit historical contract is not silently reinterpreted');
+
 const fixtureDb=await soccerSqlFixture();process.env.DATABASE_URL='postgres://fixture.invalid/settlement';delete process.env.DATABASE_V2_URL;
 const {settleOpenSoccerManualRecords,hydrateSoccerSettlementIdentity}=await import('../lib/soccer/manual-settlement-service.js');
 const legacy={...base.record};delete legacy.teamIds;
