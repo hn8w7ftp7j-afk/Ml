@@ -40,6 +40,42 @@ assert.match(unsafe,/期間待確認，暫不計算/);assert.doesNotMatch(unsafe
 const empty=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:directions.map(d=>({...d,quotes:[]}))}));
 assert.equal((empty.match(/缺少此方向可確認期間的原盤/g)||[]).length,8,'missing quotes never create fabricated lines or prices');
 assert.doesNotMatch(empty,/class="soccerMarketQuote"/);
+const diagnosticGame={id:'soccer:ucl:401915403',league:'ucl',date:'2026-10-21'};
+const diagnosticResult=(code,status)=>({gameId:diagnosticGame.id,league:'ucl',date:diagnosticGame.date,
+  readerDiagnostics:{version:'SOCCER-READER-DIAGNOSTICS-v1',gameId:diagnosticGame.id,league:'ucl',date:diagnosticGame.date,
+    executable:false,code,status,counts:{assignedQuotes:0}}});
+const diagnosticDirections=directions.map(d=>({...d,quotes:[],unknownPeriodQuotes:[],reasons:['MATCHED_READER_QUOTE_MISSING']}));
+for(const [suffix,status,label] of [
+  ['STORAGE_UNAVAILABLE','UNAVAILABLE','原盤暫時讀取失敗'],
+  ['CAPTURE_MISSING','MISSING','此比賽日期尚未收到 Reader 原盤'],
+  ['CAPTURE_SCOPE_MISMATCH','SCOPE_MISMATCH','原盤的聯盟或日期與本場不符'],
+  ['GAME_UNMATCHED','UNMATCHED','已收到原盤，但本場隊名或開賽時間尚未配對'],
+  ['NO_OPEN_GOAL_MARKET','NO_OPEN_GOALS','本場已配對，目前沒有開放的讓球或大小盤'],
+  ['PERIOD_UNCONFIRMED','PERIOD_UNCONFIRMED','本場原盤已配對，但全場／上半場標示尚未確認'],
+  ['CAPTURE_UNUSABLE_AT_CUTOFF','UNUSABLE_CAPTURE','本場原盤尚未通過分析時間核對'],
+  ['MATCH_STARTED','POSTSTART','比賽已開始；原盤僅供歷史核對'],
+  ['QUOTES_STALE','STALE','本場原盤已配對，但已逾期'],
+]){
+  const result=diagnosticResult(`SOCCER_READER_${suffix}`,status),before=JSON.stringify(result);
+  const output=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:diagnosticDirections,game:diagnosticGame,result}));
+  assert.ok(output.includes(label),suffix);
+  assert.doesNotMatch(output,/缺少已配對原盤|缺少此方向可確認期間的原盤/,'known failure must not be masked as absent prices');
+  assert.doesNotMatch(output,/class="soccerMarketQuote"|aria-label="S 分數 [0-9]/,'diagnostics cannot create a quote or a numeric S score');
+  assert.equal(JSON.stringify(result),before,'diagnostic presentation cannot rewrite the analysis');
+}
+const readyDiagnostic=diagnosticResult('SOCCER_READER_CAPTURE_READY','READY');readyDiagnostic.readerDiagnostics.counts.assignedQuotes=2;
+const readyMarkup=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:diagnosticDirections,game:diagnosticGame,result:readyDiagnostic}));
+assert.match(readyMarkup,/本場已有配對成功的賽前原盤/);assert.match(readyMarkup,/已配入 2 筆方向原盤/);
+assert.match(readyMarkup,/缺少此方向可確認期間的原盤/,'a ready board does not claim that every direction has a quote');
+assert.doesNotMatch(readyMarkup,/class="soccerMarketQuote"|aria-label="S 分數 [0-9]/);
+for(const patch of [{gameId:'soccer:ucl:999'},{league:'epl'},{date:'2026-10-22'},{executable:true},{version:'invalid'},{status:'READY'},{code:'SOCCER_READER_UNKNOWN'},{counts:null}]){
+  const mismatched=diagnosticResult('SOCCER_READER_STORAGE_UNAVAILABLE','UNAVAILABLE');Object.assign(mismatched.readerDiagnostics,patch);
+  assert.doesNotMatch(renderToStaticMarkup(ctx.SoccerMarketDirections({directions:[],game:diagnosticGame,result:mismatched})),/原盤暫時讀取失敗/,'an unverified or differently scoped diagnostic cannot enter this display');
+}
+const mismatchedDisplay={...diagnosticGame,id:'soccer:ucl:999'};
+assert.doesNotMatch(renderToStaticMarkup(ctx.SoccerMarketDirections({directions:[],game:mismatchedDisplay,result:diagnosticResult('SOCCER_READER_STORAGE_UNAVAILABLE','UNAVAILABLE')})),/原盤暫時讀取失敗/);
+const knownUnknown=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:[{period:'FT',direction:'TOTAL_OVER',quotes:[],unknownPeriodQuotes:[unknown]}]}));
+assert.match(knownUnknown,/已有原盤，但尚未確認屬全場或上半場/);assert.doesNotMatch(knownUnknown,/缺少此方向/);
 const escaped=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:[{period:'FT',direction:'TOTAL_OVER',quotes:[quote('escaped','2-50','0.9',{rawRows:['<script>alert(1)</script>']})]}]}));
 assert.match(escaped,/&lt;script&gt;/);assert.doesNotMatch(escaped,/<script>/);
 for(const input of [{}, {directions:null,unassignedQuotes:null},{directions:[{}],unassignedQuotes:[{}]}])assert.doesNotThrow(()=>renderToStaticMarkup(ctx.SoccerMarketDirections(input)));
