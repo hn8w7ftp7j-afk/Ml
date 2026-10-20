@@ -2034,7 +2034,9 @@ export default function Home() {
   const [allLeagueRun, setAllLeagueRun] = useState(null);
   const allLeagueRunRef = useRef(allLeagueRun);
   allLeagueRunRef.current = allLeagueRun;
-  const nbaIndicator = nbaLeagueIndicator(nbaDate, nbaIndicatorJob, allLeagueRun?.leagues?.NBA, nbaRunning);
+  const nbaIndicator = nbaLeagueIndicator(nbaDate, nbaIndicatorJob, allLeagueRun?.leagues?.NBA ? {
+    ...allLeagueRun.leagues.NBA, runId: allLeagueRun.runId, startedAt: allLeagueRun.startedAt,
+  } : null, nbaRunning);
   const onNbaBatchProgress = useCallback(batch => {
     const current = allLeagueRunRef.current;
     if (current?.runId !== batch.runId || current.leagues?.NBA?.boardDate !== batch.date) return;

@@ -13,6 +13,7 @@ import AllLeagueProgress from '../all-league-progress.js';
 import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-start-request-journal.js';
 import { loadNbaUpcomingBoard, nbaCompletionSummary } from '../../lib/nba/analysis-ui-policy.js';
 import { prepareNbaNotification } from '../../lib/nba/analysis-notification-start.js';
+import { nbaBatchFinished, summarizeNbaBatchOutcome } from '../../lib/nba/analysis-outcome.js';
 
 const NbaDataWorkspace = dynamic(() => import('./workspace.js'), { ssr: false });
 const NbaForwardValidationPanel = dynamic(() => import('./forward-validation-panel.js'), { ssr: false });
@@ -183,8 +184,8 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
             setProgress({ summary: nbaCompletionSummary(batch) });
             onBatchProgress?.({ ...batch, runId: job.runId });
           }
-          const nbaFinished = batch && Array.isArray(batch.results) && batch.results.length === batch.total && !(batch.runningGamePks?.length);
-          if (state.status === 'completed' || nbaFinished) { const next = { ...job, status: 'completed' }; store(next); setJob(next); setMessage(nbaCompletionSummary(batch)); return; }
+          const nbaFinished = nbaBatchFinished(batch);
+          if (state.status === 'completed' || nbaFinished) { const next = { ...job, status: 'completed', outcome: summarizeNbaBatchOutcome(batch) }; store(next); setJob(next); setMessage(nbaCompletionSummary(batch)); return; }
           if (['failed', 'cancelled'].includes(state.status)) throw new Error('NBA 背景工作未完成，可重新分析。');
         }
       } catch (cause) {

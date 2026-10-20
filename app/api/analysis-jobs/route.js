@@ -236,7 +236,7 @@ export async function GET(request) {
                 shadow: row?.shadow === true,
                 saved: row?.saved === true,
                 research: row?.research === true,
-                analysisStatus: row?.analysisStatus || null,
+                analysisStatus: row?.analysisStatus || (batch.league === 'NBA' ? row?.payload?.status : null) || null,
                 publishedCurrent: row?.publishedCurrent === true,
               })),
             })),
@@ -251,7 +251,7 @@ export async function GET(request) {
             total: result.total, completed: result.completed,
             results: (result.results || []).map(row => ({
               ok: row?.ok === true, status: row?.status, code: row?.code, blocked: row?.blocked === true, shadow: row?.shadow === true, saved: row?.saved === true,
-              research: row?.research === true, analysisStatus: row?.analysisStatus || null, publishedCurrent: row?.publishedCurrent === true,
+              research: row?.research === true, analysisStatus: row?.analysisStatus || (result.league === 'NBA' ? row?.payload?.status : null) || null, publishedCurrent: row?.publishedCurrent === true,
             })),
           },
         });
