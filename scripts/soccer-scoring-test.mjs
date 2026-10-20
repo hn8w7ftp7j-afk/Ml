@@ -273,3 +273,23 @@ for (const [line, expected, outcome] of [['2+50', .475, 'PARTIAL_WIN'], ['2-50',
 assert.equal(JSON.stringify(input), before, 'all inputs remain immutable');
 for (const malformed of [{}, { quote: {} }, { now: NaN }, { game: input.game }]) assert.doesNotThrow(() => scoreSoccerQuote(malformed));
 console.log('PASS explicit per-settlement rebate applicability, push profitability distinct from win probability, traceable numerical ranges, immutable inputs and safe missing data');
+
+for(const league of ['epl','ucl'])for(const period of ['FT','HT']){
+  for(const [line,total,win,loss,expected] of [
+    ['2.5',3,1,0,.01],['2.5',2,0,1,.01],['2+50',2,.5,0,.005],
+    ['2-50',2,0,.5,.005],['2+20',2,.2,0,.002],['2-20',2,0,.2,.002],['2平',2,0,0,0],
+  ]){
+    const f=fixture(league,period,line),contract={...f.contract,rebate:{rate:.01,basis:'SETTLED_PRINCIPAL',
+      appliesTo:{FULL_WIN:true,PARTIAL_WIN:true,PUSH:false,PARTIAL_LOSS:true,FULL_LOSS:true}}};
+    const result=scoreSoccerQuote({...f,contract,scenarios:null,distribution:{...f.distribution,
+      cells:[{home:total,away:0,probability:1}],retainedMass:1,tailMass:0}});
+    assert.equal(result.conditionalPayoff.ok,true);
+    const row=result.conditionalPayoff.rows[0];
+    close(row.winFraction,win);close(row.lossFraction,loss);close(row.rebatePerUnit,expected);
+    close(result.conditionalPayoff.netEV,win*.95-loss+expected);
+    close(result.conditionalPayoff.evBounds.rebate.lower,expected);
+    close(result.conditionalPayoff.evBounds.rebate.upper,expected);
+    assert.equal(result.score,null,'confirmed rebate arithmetic cannot invent model error or formal score');
+  }
+}
+console.log('PASS EPL/UCL FT/HT original quote → fractional rebate → exact net EV; full/half/20% wins and losses plus zero-push remain non-promoted');
