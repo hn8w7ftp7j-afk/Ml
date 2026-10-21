@@ -1,0 +1,92 @@
+{
+  "version": "nba-opening-totals-current-location-v5",
+  "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+  "developmentReportHash": "079a9e6760d2a6a16d59308cb5b487228349b7906eda109ce68cb1ede67251e5",
+  "developmentHistoryHash": "9a57ff85ce3f93e8aae8ddf2ce00dab77f4b7b4e052b6a7aae821f124e1894c6",
+  "selected": {
+    "fullTotal": {
+      "candidate": {
+        "target": "fullTotal",
+        "modelVersion": "nba-opening-totals-current-location-v5",
+        "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+        "candidateId": "d7082453c15e098752111dde18db23e00d7978aa8863155f6e15888cc7ac0c59"
+      },
+      "developmentMetrics": {
+        "2021": {
+          "samples": 1080,
+          "earlySamples": 144,
+          "probabilitySamples": 1080,
+          "modelMAE": 14.857806751627859,
+          "baselineMAE": 15.033985344599904,
+          "earlyModelMAE": 15.432172006481787,
+          "earlyBaselineMAE": 15.5340938592896,
+          "modelBias": -0.4009408868256935,
+          "earlyModelBias": 0.9643202651218883,
+          "modelBrier": 0.2468036033450382,
+          "baselineBrier": 0.2510129722552818,
+          "modelLogLoss": 0.6866887445929324,
+          "baselineLogLoss": 0.6951835146273145
+        },
+        "2022": {
+          "samples": 1230,
+          "earlySamples": 143,
+          "probabilitySamples": 1230,
+          "modelMAE": 15.187586201250998,
+          "baselineMAE": 15.352523599587292,
+          "earlyModelMAE": 16.81127884640379,
+          "earlyBaselineMAE": 17.466607454098494,
+          "modelBias": -3.602989997678087,
+          "earlyModelBias": 5.905779986999456,
+          "modelBrier": 0.23849921297019094,
+          "baselineBrier": 0.2497021601354912,
+          "modelLogLoss": 0.6700050838279945,
+          "baselineLogLoss": 0.6925510655381989
+        }
+      }
+    },
+    "halfTotal": {
+      "candidate": {
+        "target": "halfTotal",
+        "modelVersion": "nba-opening-totals-current-location-v5",
+        "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+        "candidateId": "997f171c38b905f5a69e5200fa78473401aceb08a926a631e21cf7148787af57"
+      },
+      "developmentMetrics": {
+        "2021": {
+          "samples": 1080,
+          "earlySamples": 144,
+          "probabilitySamples": 1080,
+          "modelMAE": 9.683795097533334,
+          "baselineMAE": 9.75757759685829,
+          "earlyModelMAE": 9.6157641336207,
+          "earlyBaselineMAE": 9.672482691615953,
+          "modelBias": -0.39645923291357416,
+          "earlyModelBias": 0.681941680320848,
+          "modelBrier": 0.24865039758465388,
+          "baselineBrier": 0.25235657233702785,
+          "modelLogLoss": 0.6904802230830255,
+          "baselineLogLoss": 0.6978919473425701
+        },
+        "2022": {
+          "samples": 1230,
+          "earlySamples": 143,
+          "probabilitySamples": 1230,
+          "modelMAE": 10.212487284891276,
+          "baselineMAE": 10.27680268497869,
+          "earlyModelMAE": 10.457626895189506,
+          "earlyBaselineMAE": 10.594371047604115,
+          "modelBias": -1.9644771273486126,
+          "earlyModelBias": 2.872672371001558,
+          "modelBrier": 0.2453426256484236,
+          "baselineBrier": 0.24925288752579683,
+          "modelLogLoss": 0.6840241376827338,
+          "baselineLogLoss": 0.6916529314479779
+        }
+      }
+    }
+  },
+  "independentHoldoutYear": 2017,
+  "frozenBeforeRealHoldoutEvaluation": true,
+  "executable": false,
+  "promotionEligible": false
+}

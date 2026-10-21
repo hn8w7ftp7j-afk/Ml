@@ -1,0 +1,220 @@
+{
+  "version": "nba-opening-totals-current-location-v5",
+  "protocol": {
+    "version": "nba-opening-totals-current-location-v5",
+    "pointModelProtocolHash": "0e95ea0df2b35bb02917e2e905e267418dd6a58ae40dc361e35cd38f455737fe",
+    "point": "unchanged_v4_season_reset_point_prediction_and_MAE",
+    "shape": "same_target_candidate_version_phase_closed_prior_three_seasons_v4_point_errors_minus_weighted_mean",
+    "location": "strictly_earlier_date_current_season_all_phase_v4_point_error_sum_over_120_plus_count",
+    "distributionCenter": "v4_point_prediction_plus_current_season_location",
+    "update": "all_games_on_date_predicted_before_any_of_that_date_results",
+    "correctionPriorSamples": 120,
+    "trainingSeasons": 3,
+    "residualHalfLifeDays": 365,
+    "minimumResidualSamples": 50,
+    "earlyGames": 10,
+    "developmentYears": [
+      2021,
+      2022
+    ],
+    "viewedRegressionYears": [
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "independentHoldoutYear": 2017,
+    "independentTrainingYears": [
+      2013,
+      2014,
+      2015,
+      2016
+    ],
+    "holdoutRole": "new_external_backward_era_retrospective_validation_not_prospective_or_historical_pregame_capture",
+    "selection": "one_fixed_candidate_per_target_all_development_years_must_pass_no_parameter_search",
+    "holdoutPolicy": "freeze_protocol_implementation_and_development_selection_before_any_real_2017_predictive_metrics_no_reselection",
+    "baseline": "canonical_prior20_phase_independent_v1",
+    "gates": {
+      "samples": 1000,
+      "earlySamples": 100,
+      "probabilitySamples": 1000,
+      "modelMAE": "at_most_baseline",
+      "earlyModelMAE": "at_most_baseline",
+      "modelBrier": "at_most_baseline",
+      "modelLogLoss": "at_most_baseline"
+    },
+    "probabilityEvent": "rounded_predictive_score_exceeds_arbitrary_reference_threshold",
+    "production": "no_activation_without_verified_independent_evidence_and_exact_runtime_parity"
+  },
+  "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+  "historyHash": "9a57ff85ce3f93e8aae8ddf2ce00dab77f4b7b4e052b6a7aae821f124e1894c6",
+  "sourceAudit": [
+    {
+      "year": 2018,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2019,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2020,
+      "observedGames": 1059,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2021,
+      "observedGames": 1080,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2022,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    }
+  ],
+  "targets": {
+    "fullTotal": {
+      "candidate": {
+        "target": "fullTotal",
+        "modelVersion": "nba-opening-totals-current-location-v5",
+        "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+        "candidateId": "d7082453c15e098752111dde18db23e00d7978aa8863155f6e15888cc7ac0c59"
+      },
+      "years": {
+        "2021": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.857806751627859,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.432172006481787,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": -0.4009408868256935,
+            "earlyModelBias": 0.9643202651218883,
+            "modelBrier": 0.2468036033450382,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6866887445929324,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2022": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 15.187586201250998,
+            "baselineMAE": 15.352523599587292,
+            "earlyModelMAE": 16.81127884640379,
+            "earlyBaselineMAE": 17.466607454098494,
+            "modelBias": -3.602989997678087,
+            "earlyModelBias": 5.905779986999456,
+            "modelBrier": 0.23849921297019094,
+            "baselineBrier": 0.2497021601354912,
+            "modelLogLoss": 0.6700050838279945,
+            "baselineLogLoss": 0.6925510655381989
+          },
+          "passed": true,
+          "reasons": []
+        }
+      },
+      "selectedForIndependentValidation": true
+    },
+    "halfTotal": {
+      "candidate": {
+        "target": "halfTotal",
+        "modelVersion": "nba-opening-totals-current-location-v5",
+        "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+        "candidateId": "997f171c38b905f5a69e5200fa78473401aceb08a926a631e21cf7148787af57"
+      },
+      "years": {
+        "2021": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.683795097533334,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.6157641336207,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": -0.39645923291357416,
+            "earlyModelBias": 0.681941680320848,
+            "modelBrier": 0.24865039758465388,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6904802230830255,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2022": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 10.212487284891276,
+            "baselineMAE": 10.27680268497869,
+            "earlyModelMAE": 10.457626895189506,
+            "earlyBaselineMAE": 10.594371047604115,
+            "modelBias": -1.9644771273486126,
+            "earlyModelBias": 2.872672371001558,
+            "modelBrier": 0.2453426256484236,
+            "baselineBrier": 0.24925288752579683,
+            "modelLogLoss": 0.6840241376827338,
+            "baselineLogLoss": 0.6916529314479779
+          },
+          "passed": true,
+          "reasons": []
+        }
+      },
+      "selectedForIndependentValidation": true
+    }
+  },
+  "status": "DEVELOPMENT_PASSED_PENDING_FROZEN_EXTERNAL_HOLDOUT",
+  "independentValidation": {
+    "year": 2017,
+    "status": "NOT_EVALUATED_SELECTION_NOT_FROZEN",
+    "metrics": null
+  },
+  "executable": false,
+  "promotionEligible": false
+}
