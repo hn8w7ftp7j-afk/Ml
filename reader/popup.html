@@ -10,7 +10,7 @@
 <body>
   <main>
     <div class="eyebrow">SPORTS DATA</div>
-    <div class="titleRow"><h1>Tai888 Reader</h1><span>v2.1.41 EPL-UCL</span></div>
+    <div class="titleRow"><h1>Tai888 Reader</h1><span>v2.1.42 EPL-UCL</span></div>
     <p class="intro">支援英超與歐冠桌面表格及卡片盤，保留同場不同盤口。足球規格及模型驗證中。</p>
 
     <section id="pairPanel" class="panel hidden">
@@ -24,10 +24,12 @@
     <section id="statusPanel" class="panel hidden">
       <div class="statusHead"><div><span class="label">各聯盟</span><strong id="state">檢查中…</strong></div><i id="dot"></i></div>
       <div id="leagueGrid" class="leagueGrid"></div>
+      <p id="diagnosticDelivery" role="status">診斷狀態讀取中…</p>
       <label class="toggle"><span><b>自動同步</b><small>頁面變動＋每60秒心跳</small></span><input id="auto" type="checkbox"><i></i></label>
       <button id="sync" class="primary">立即同步一次</button>
       <button id="repair" class="secondary">修復讀取（重新整理未連線分頁）</button>
       <button id="diagnostics" class="secondary">下載讀取診斷</button>
+      <a href="https://mlb-positive-ev.vercel.app/reader-diagnostics" target="_blank" rel="noopener">查看後台診斷</a>
       <button id="unpair" class="secondary">重新配對</button>
     </section>
 

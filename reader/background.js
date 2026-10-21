@@ -1,12 +1,31 @@
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from './parser.js';
 import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
+import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
+import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 
-const VERSION = '2.1.41';
+const VERSION = '2.1.42';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
 const LABELS = { MLB: '美棒', NPB: '日棒', KBO: '韓棒', CPBL: '中職', NBA: '美籃', NHL: '冰球', EPL:'英超', UCL:'歐冠' };
 const ALARM = 'tai888-reader-auto-sync';
+let diagnosticOutbox;
+function getDiagnosticOutbox() { return diagnosticOutbox ||= createDiagnosticOutbox({ storage: chrome.storage.local, upload: async (report, stored) => {
+  const response = await request(`${ORIGIN}/api/reader/diagnostics`, { method: 'POST', headers: {
+    Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json',
+    'X-Device-Id': stored.deviceId, 'X-Reader-Version': VERSION,
+  }, body: JSON.stringify(report) }, 8000);
+  const receipt = await json(response);
+  if (!response.ok) throw Object.assign(new Error('DIAGNOSTIC_UPLOAD_FAILED'), { status: response.status });
+  return receipt;
+} }); }
+async function ensureDiagnosticAlarm() {
+  await chrome.alarms.create(DIAGNOSTIC_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
+}
+function syncExceptionCode(error) {
+  return error?.status ? `HTTP_${error.status}` : error?.name === 'AbortError' ? 'TIMEOUT'
+    : error?.name === 'TypeError' ? 'NETWORK_ERROR' : 'SYNC_EXCEPTION';
+}
 let running;
 let pendingRerun = false;
 let pendingReason = 'mutation';
@@ -26,11 +45,14 @@ chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set(values);
   await chrome.storage.local.remove(['readerStatus', 'pairError']);
   await ensureAlarm();
+  await ensureDiagnosticAlarm();
   // Existing tabs retain their old content scripts after an extension update.
   const tabs = await chrome.tabs.query({ url: PATTERNS });
   await Promise.all(tabs.map(tab => chrome.tabs.reload(tab.id).catch(() => {})));
 });
 chrome.runtime.onStartup.addListener(ensureAlarm);
+chrome.runtime.onStartup.addListener(ensureDiagnosticAlarm);
+chrome.alarms.onAlarm.addListener(event => { if (event.name === DIAGNOSTIC_ALARM) getDiagnosticOutbox().flush().catch(() => {}); });
 chrome.alarms.onAlarm.addListener(event => { if (event.name === ALARM) syncNow('alarm').catch(() => {}); });
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   if (change.status !== 'complete' || !safeUrl(tab.url)) return;
@@ -275,10 +297,39 @@ async function syncNow(reason, preferredTabId = null) {
 }
 
 async function performSync(reason, preferredTabId) {
+  const context = { tabCount: 0, silentTabCount: 0, leagues: {} };
+  let exceptionCode = '';
+  try { return await performSyncAttempt(reason, preferredTabId, context); }
+  catch (error) { exceptionCode = syncExceptionCode(error); throw error; }
+  finally {
+    // Diagnostics use an independent endpoint and never authorize a failed
+    // board. Do not let diagnostic/storage/network failure break market sync.
+    try {
+      const stored = await chrome.storage.local.get(['readerToken', 'readerStatuses', 'deviceId', 'pairedAt']);
+      if (stored.deviceId && stored.pairedAt && !(reason !== 'manual' && context.skipped)) {
+        const leagues = {};
+        for (const league of LEAGUES) {
+          const status = stored.readerStatuses?.[league];
+          if (status) leagues[league] = { state: status.state, errorCode: status.diagnosticCode || '',
+            issues: status.diagnosticIssues || [], rawGameCount: status.rawGameCount || 0,
+            marketCount: status.marketCount || 0, boards: context.leagues[league] || [] };
+        }
+        await getDiagnosticOutbox().enqueue({ schema: DIAGNOSTIC_SCHEMA, reportId: crypto.randomUUID(),
+          readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(),
+          createdAt: new Date().toISOString(), tabCount: context.tabCount,
+          silentTabCount: context.silentTabCount, exceptionCode, leagues });
+        await getDiagnosticOutbox().flush();
+      }
+    } catch {}
+  }
+}
+
+async function performSyncAttempt(reason, preferredTabId, context) {
   const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'lastSuccessfulPayloadHashes', 'lastSuccessfulSyncAts']);
   if (!stored.readerToken) throw new Error('尚未配對，請先輸入一次 Reader 配對密碼。');
-  if (reason !== 'manual' && stored.autoEnabled === false) return { ok: true, skipped: true, message: '自動同步已關閉' };
+  if (reason !== 'manual' && stored.autoEnabled === false) { context.skipped = true; return { ok: true, skipped: true, message: '自動同步已關閉' }; }
   const tabs = [...new Map((await chrome.tabs.query({ url: PATTERNS })).map(tab => [tab.id, tab])).values()];
+  context.tabCount = tabs.length;
   if (!tabs.length) {
     const message = '找不到 Tai888 分頁，請確認網站存取權限，並開啟 tai888.in 的「讓分＆大小」頁。';
     await chrome.storage.local.set({ readerStatuses: Object.fromEntries(LEAGUES.map(league => [league, { ok: false, state: 'missing', league, message, readerVersion: VERSION }])) });
@@ -286,6 +337,7 @@ async function performSync(reason, preferredTabId) {
   }
   let scan = await collectCandidates(tabs);
   if (scan.silentTabIds.length && await recoverTabs(tabs, scan.silentTabIds, { force: reason === 'manual' })) scan = await collectCandidates(tabs);
+  context.silentTabCount = scan.silentTabIds.length;
   if (reason === 'manual' && scan.silentTabIds.length) {
     let reloaded = 0;
     for (const tabId of scan.silentTabIds) {
@@ -306,15 +358,19 @@ async function performSync(reason, preferredTabId) {
       const empty = scan.emptyCaptures.some(item => item.league === league);
       const rejected = scan.sections.find(item => item.league === league && !item.accepted);
       statuses[league] = { ok: false, state: empty || rejected ? 'error' : disconnected ? 'disconnected' : 'missing', league,
-        message: empty ? `${LABELS[league]}已偵測到聯盟標題，但無法組成賽事列；請下載診斷，不代表未開盤`
-          : rejected ? `${LABELS[league]}已看到盤面，但區段未通過辨識：${rejected.label}；請下載診斷`
+        diagnosticCode: empty ? 'no-parsed-games' : rejected ? 'no-board-table' : '',
+        message: empty ? `${LABELS[league]}已偵測到聯盟標題，但無法組成賽事列；診斷將自動回傳，不代表未開盤`
+          : rejected ? `${LABELS[league]}已看到盤面，但區段未通過辨識；診斷將自動回傳`
           : disconnected ? `${LABELS[league]} Reader 未連線，無法連上頁面讀取程式；請按「修復讀取」或在該分頁按 F5`
           : `未偵測到${LABELS[league]}標準盤；請確認該聯盟分頁已開啟（不能據此判定未開盤）`, readerVersion: VERSION };
+      context.leagues[league] = scan.emptyCaptures.filter(item => item.league === league).map(item => ({ diagnostics: item.diagnostics, parsedGameCount: 0, issues: ['no-parsed-games'] }));
       continue;
     }
     const soccer = ['EPL', 'UCL'].includes(league);
     const selection = soccer ? selectAuthoritativeSoccerBoards(own, { now: Date.now(), preferredTabId, league })
       : selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
+    context.leagues[league] = (selection.assessed || []).map(item => ({ diagnostics: item.candidate?.capture?.diagnostics,
+      parsedGameCount: item.candidate?.parsed?.games?.length || 0, issues: item.issues || [] }));
     if (!selection.ok) {
       const detail = selection.error === 'conflicting-duplicate-rows'
         ? '同場盤口重複且數字不一致，已停止上傳；請重新整理 Tai888 分頁後再同步'
@@ -323,7 +379,9 @@ async function performSync(reason, preferredTabId) {
         : selection.error === 'conflicting-duplicate-tabs'
           ? '同聯盟分頁盤口不一致，已停止同步；請只保留正確盤日的分頁後再同步'
           : selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
-      statuses[league] = { ok: false, state: 'error', league, message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
+      statuses[league] = { ok: false, state: 'error', league, diagnosticCode: selection.error,
+        diagnosticIssues: selection.assessed?.flatMap(item => item.issues || []),
+        message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
     const sources = (soccer ? selection.selections.map(item => item.selected) : [selection.selected]).map(selected => {
@@ -355,15 +413,16 @@ async function performSync(reason, preferredTabId) {
         const endpoint = ['EPL','UCL'].includes(league) ? '/api/soccer/reader' : league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
         const wirePayload = league === 'NHL' ? nhlReaderEvidencePayload(payload) : payload;
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
-        const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw new Error('Reader 配對已過期'); } if (!response.ok || !data.ok) throw new Error(data.error || `同步失敗（${response.status}）`);
+        const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw Object.assign(new Error('Reader 配對已過期，請重新配對'), { status: 401 }); } if (!response.ok || !data.ok) throw Object.assign(new Error(data.error || `同步失敗（${response.status}）`), { status: response.status });
         const now = Date.now(); hashes[syncKey] = payloadHash; times[syncKey] = now;
         accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
         results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, message: data.message });
-      } catch (error) { failures.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), error: error.message }); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: false, error: error.message }); }
+      } catch (error) { failures.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), error: error.message, diagnosticCode: syncExceptionCode(error) }); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: false, error: error.message }); }
     }
     const sum = key => accepted.reduce((count, item) => count + Number(item[key] || 0), 0);
     const skippedAlternativeCount = soccer ? sources.reduce((count, source) => count + integer(source.selected.candidate.capture.diagnostics?.skippedAlternativeCount, 1000), 0) : 0;
     statuses[league] = { ok: failures.length === 0, state: failures.length ? 'error' : 'synced', league,
+      diagnosticCode: failures[0]?.diagnosticCode || '', diagnosticIssues: failures.map(item => item.diagnosticCode),
       executable: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? accepted.some(item => item.executable) : sum('matchedGameCount') > 0,
       captureOnly: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league), message: failures.length ? failures.map(item => `${item.boardDate}${soccer ? `（${item.periodsCovered.join('/')}）` : ''}：${item.error}`).join('；') : soccer ? `已同步 ${accepted.length} 筆盤面紀錄（${new Set(accepted.map(item => item.boardDate)).size} 個日期）` : `已同步 ${accepted.length} 個日期`,
       ...(soccer ? { gameCountBasis: 'BOARD_RECORDS_NOT_UNIQUE_GAMES', uniqueGameCount: new Set(payloads.flatMap(payload => payload.games).map(game => [game.boardDate,game.boardTime,game.awayCode,game.homeCode].join('|'))).size, periodsCovered: [...new Set(accepted.flatMap(item => item.periodsCovered || []))] } : {}),
@@ -379,7 +438,7 @@ async function performSync(reason, preferredTabId) {
   const successes = LEAGUES.filter(league => statuses[league]?.ok === true && statuses[league]?.state === 'synced').length;
   return { ok: successes > 0, results, message: `各聯盟檢查完成｜${successes} 個分頁同步成功` };
 }
-async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, error: stored.pairError || '', readerVersion: VERSION }; }
+async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt', 'diagnosticDelivery']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, diagnosticDelivery: stored.diagnosticDelivery || null, error: stored.pairError || '', readerVersion: VERSION }; }
 
 // A missing content script cannot receive RECOVER. Reload only after the user
 // explicitly clicks repair, only on allowlisted tabs that did not respond.

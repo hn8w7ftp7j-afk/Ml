@@ -52,7 +52,7 @@ assert.equal(normalized.diagnostics.pageLeagueLabel, '聯盟：NHL 國家冰球�
 assert.equal(normalizer.normalizeRowRecords(records, { expectedLeague: 'NBA' }).tables.length, 0);
 const capture = { league: 'NHL', sourceHost: 'www1.tai888.in', pageUrl: 'https://www1.tai888.in/newapp/?account=private#/BS?session=private', observedAt: now.toISOString(), pageLeagueLabel: normalized.diagnostics.pageLeagueLabel, tables: normalized.tables, diagnostics: normalized.diagnostics };
 const parsed = parseTai888Capture(capture, now);
-Object.assign(parsed, { readerVersion: '2.1.41', expectedGameCount: 2, detectedGameCount: 2, pageActivityAt: now.toISOString() });
+Object.assign(parsed, { readerVersion: '2.1.42', expectedGameCount: 2, detectedGameCount: 2, pageActivityAt: now.toISOString() });
 assert.equal(parsed.pageUrl.includes('private'), false);
 assert.deepEqual(parsed.games.map(game => [game.awayAbbrev, game.awayTeamId, game.homeAbbrev, game.homeTeamId]), [['BOS', 6, 'TOR', 10], ['UTA', 68, 'SEA', 55]]);
 assert.equal(parsed.games[0].fullRunline.line, '1+50');
@@ -65,7 +65,7 @@ assert.equal(selectAuthoritativeBoard([{ tabId: 1, frameId: 0, active: true, cap
 const dates = readerPayloadsByDate(parsed);
 assert.deepEqual(dates.map(payload => payload.boardDate), ['2026-10-13', '2026-10-14']);
 const wire = nhlReaderEvidencePayload(dates[0]);
-const result = validateNhlCapture(wire, { now: +now, headerVersion: '2.1.41' });
+const result = validateNhlCapture(wire, { now: +now, headerVersion: '2.1.42' });
 assert.equal(result.ok, true, JSON.stringify(result.errors));
 assert.equal(result.payload.games[0].parsedMarkets.fullTotal.line, '6-50');
 assert.equal(result.payload.games[0].rawRowText.includes('單'), true);
@@ -75,9 +75,9 @@ assert.equal(result.payload.games[0].voidRuleId, null);
 assert.equal(result.payload.executable, false);
 const screenshotCapture = { ...capture, pageLeagueLabel: screenshotHeading, tables: mixedNormalized.tables, diagnostics: mixedNormalized.diagnostics };
 const screenshotParsed = parseTai888Capture(screenshotCapture, now);
-screenshotParsed.readerVersion = '2.1.41';
+screenshotParsed.readerVersion = '2.1.42';
 const screenshotWire = nhlReaderEvidencePayload(readerPayloadsByDate(screenshotParsed)[0]);
-const screenshotResult = validateNhlCapture(screenshotWire, { now: +now, headerVersion: '2.1.41' });
+const screenshotResult = validateNhlCapture(screenshotWire, { now: +now, headerVersion: '2.1.42' });
 assert.equal(screenshotResult.ok, true, JSON.stringify(screenshotResult.errors));
 assert.equal(screenshotResult.payload.games[0].parsedMarkets.fullRunline.line, '1+50', 'no other-league quote leakage');
 assert.equal(screenshotResult.payload.games[0].includesOvertime, null, 'heading alone does not verify settlement');
@@ -89,7 +89,7 @@ const swapped = { ...capture, tables: [{ headers: names.slice(0, 4), rows: [{ ce
   { pair: ['10-13', '07:00'] }, { pair: ['TOR-楓葉[主]', 'BOS-棕熊'] },
   { pair: ['0.930', '1+50 0.950'] }, { pair: ['6-50 大 0.970', '小 0.910'] },
 ] }] }] };
-const swappedParsed = parseTai888Capture(swapped, now); swappedParsed.readerVersion = '2.1.41';
+const swappedParsed = parseTai888Capture(swapped, now); swappedParsed.readerVersion = '2.1.42';
 const swappedResult = validateNhlCapture(nhlReaderEvidencePayload(swappedParsed), { now: +now });
 assert.equal(swappedResult.ok, true);
 assert.equal(swappedResult.payload.games[0].parsedMarkets.fullRunline.lineSide, 'away');
@@ -134,7 +134,7 @@ const state = { deviceId: 'synthetic-reader-device', readerToken: 'synthetic-rea
 const event = { addListener() {} }; const uploaded = [];
 const chrome = {
   runtime: { onInstalled: event, onStartup: event, onMessage: event }, alarms: { onAlarm: event },
-  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion: '2.1.41', captures: [liveCapture, nbaCapture] } }) },
+  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion: '2.1.42', captures: [liveCapture, nbaCapture] } }) },
   webNavigation: { getAllFrames: async () => [{ frameId: 0 }] },
   storage: { local: { get: async () => state, set: async values => Object.assign(state, values), remove: async () => {} } },
 };
@@ -146,7 +146,7 @@ const worker = { chrome, Date, URL, setTimeout, clearTimeout, queueMicrotask, Te
     assert.equal(options.headers.Authorization, `Bearer ${state.readerToken}`);
     if (input.league === 'NHL') {
       assert.match(url, /\/api\/nhl\/reader$/);
-      assert.equal(validateNhlCapture(input, { headerVersion: '2.1.41' }).ok, true);
+      assert.equal(validateNhlCapture(input, { headerVersion: '2.1.42' }).ok, true);
     } else { assert.equal(input.league, 'NBA'); assert.match(url, /\/api\/nba\/reader$/); }
     return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, rawGameCount: input.games.length, marketCount: input.league === 'NHL' ? 2 : 1, executable: false }) };
   },

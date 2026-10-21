@@ -47,7 +47,16 @@ syncButton.addEventListener('click', async () => {
   catch (error) { show(error.message, 'error'); } finally { syncButton.disabled = false; syncButton.textContent = '立即同步'; }
 });
 autoToggle.addEventListener('change', async () => { const result = await send({ type: 'SET_AUTO_ENABLED', enabled: autoToggle.checked }); show(result.enabled ? '自動同步已開啟。' : '自動同步已暫停。', result.enabled ? 'ok' : ''); });
-unpairButton.addEventListener('click', async () => { await chrome.storage.local.remove(['readerToken', 'pairedAt', 'readerStatuses', 'pairError', 'lastSuccessfulPayloadHashes', 'lastSuccessfulSyncAts']); await refresh(); show('已移除裝置配對。'); });
+unpairButton.addEventListener('click', async () => { await chrome.storage.local.remove(['readerToken', 'pairedAt', 'readerStatuses', 'pairError', 'lastSuccessfulPayloadHashes', 'lastSuccessfulSyncAts', 'diagnosticOutbox', 'diagnosticDelivery', 'diagnosticLastSignature', 'diagnosticLastQueuedAt']); await refresh(); show('已移除裝置配對。'); });
+
+function renderDiagnosticDelivery(delivery) {
+  const element = byId('diagnosticDelivery');
+  if (!element) return;
+  element.textContent = delivery?.state === 'sent'
+    ? `診斷已回傳｜${delivery.lastReceivedAt ? new Date(delivery.lastReceivedAt).toLocaleString('zh-TW') : ''}`
+    : delivery?.state === 'pending' ? `診斷等待補傳（${delivery.pendingCount || 0} 筆）${delivery.code === 'PAIR_REQUIRED' ? '，請重新配對' : ''}`
+    : '診斷將隨讀取自動回傳';
+}
 
 function render(statuses) {
   leagueGrid.replaceChildren(); let healthy = 0;
@@ -74,6 +83,7 @@ async function refresh() {
   pairPanel.classList.toggle('hidden', paired); statusPanel.classList.toggle('hidden', !paired);
   if (!paired) { show(result?.error || '第一次使用請輸入一次配對密碼。'); return; }
   autoToggle.checked = result.autoEnabled !== false; render(result.statuses || {});
+  renderDiagnosticDelivery(result.diagnosticDelivery);
 }
 function age(value) { if (!value) return '尚未同步'; const seconds = Math.floor((Date.now() - value) / 1000); return seconds < 60 ? `${seconds}秒前` : `${Math.floor(seconds / 60)}分鐘前`; }
 function show(value, type = '') { message.textContent = value; message.className = `message ${type}`.trim(); }
@@ -88,5 +98,6 @@ async function initialize() {
 }
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.readerStatuses) render(changes.readerStatuses.newValue || {});
+  if (area === 'local' && changes.diagnosticDelivery) renderDiagnosticDelivery(changes.diagnosticDelivery.newValue);
 });
 initialize().catch(error => show(error.message, 'error'));
