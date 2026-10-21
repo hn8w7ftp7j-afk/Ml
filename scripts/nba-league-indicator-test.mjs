@@ -117,7 +117,11 @@ for (const status of ['insufficient', 'blocked']) {
   run.cleanup();
 }
 const invalid = await polling([{ status: 'completed', result: { ...fullBatch, date: '2026-10-15' } }]);
-assert.equal(invalid.jobs.length, 0, 'mismatched results must never publish completion');
+assert.equal(invalid.jobs.length, 1);
+assert.equal(invalid.jobs[0].status, 'failed', 'mismatched results must stop polling without publishing completion');
+assert.equal(invalid.jobs[0].outcome, undefined);
+assert.equal(invalid.publications.length, 0);
+assert.equal(invalid.timers.length, 0);
 assert.match(invalid.errors[0], /聯盟或日期/);
 invalid.cleanup();
 const incomplete = await polling([{ status: 'completed', result: partialBatch }]);
@@ -207,7 +211,11 @@ for (const mutate of [
   assert.equal(nbaLeagueIndicator(date, openingJob, null, false, board).label, '分析完成');
 }
 const wrongRunFlow = await polling([{ status: 'completed', result: { ...batch([openingEntry(openingQuotes)]), runId: 'different-transport-run' } }]);
-assert.equal(wrongRunFlow.jobs.length, 0, 'a conflicting explicit transport run cannot acquire current-run provenance');
+assert.equal(wrongRunFlow.jobs.length, 1);
+assert.equal(wrongRunFlow.jobs[0].status, 'failed', 'a conflicting explicit transport run cannot acquire current-run provenance');
+assert.equal(wrongRunFlow.jobs[0].outcome, undefined);
+assert.equal(wrongRunFlow.publications.length, 0);
+assert.equal(wrongRunFlow.timers.length, 0);
 assert.match(wrongRunFlow.errors[0], /工作編號/);
 wrongRunFlow.cleanup();
 // Exercise both real GET summary transports so NBA outcome information cannot
