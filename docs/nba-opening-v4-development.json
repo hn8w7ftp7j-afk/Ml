@@ -1,0 +1,204 @@
+{
+  "version": "nba-opening-totals-season-reset-v4",
+  "protocol": {
+    "version": "nba-opening-totals-season-reset-v4",
+    "priorWeight": 10,
+    "trainingSeasons": 3,
+    "ridgePenalty": 1000,
+    "leaguePriorGames": 120,
+    "correctionPriorSamples": 120,
+    "residualHalfLifeDays": 365,
+    "minimumResidualSamples": 50,
+    "earlyGames": 10,
+    "diagnosticYears": [
+      2021,
+      2022
+    ],
+    "point": "league_center_plus_closed_season_slope_times_team_deviation_plus_prior_current_season_raw_error_sum_over_120_plus_count",
+    "reset": "zero_intercept_and_zero_correction_at_each_new_season",
+    "update": "all_targets_on_a_date_predicted_before_any_of_that_date_results_update_state",
+    "calibration": "candidate_matched_same_phase_closed_prior_three_seasons_centered_innovations",
+    "selection": "one_fixed_candidate_per_target_no_parameter_search",
+    "baseline": "canonical_prior20_phase_independent_v1",
+    "evidence": "2021_and_2022_are_viewed_development_only_never_fresh_holdouts",
+    "independentValidation": "pending_new_frozen_pregame_capture_not_supplied_by_this_retrospective_runner",
+    "acceptance": "unchanged_raw_MAE_earlyMAE_Brier_LogLoss_and_sample_gates"
+  },
+  "protocolHash": "0e95ea0df2b35bb02917e2e905e267418dd6a58ae40dc361e35cd38f455737fe",
+  "historyHash": "9a57ff85ce3f93e8aae8ddf2ce00dab77f4b7b4e052b6a7aae821f124e1894c6",
+  "sourceAudit": [
+    {
+      "year": 2018,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2019,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2020,
+      "observedGames": 1059,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2021,
+      "observedGames": 1080,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2022,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    }
+  ],
+  "targets": {
+    "fullTotal": {
+      "candidate": {
+        "target": "fullTotal",
+        "version": "nba-opening-totals-season-reset-v4",
+        "protocolHash": "0e95ea0df2b35bb02917e2e905e267418dd6a58ae40dc361e35cd38f455737fe",
+        "candidateId": "4e880b9079b36e0f74cd86e7676da0c452bb6a79d829ff50acde86a6104dd8f3"
+      },
+      "years": {
+        "2021": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.857806751627859,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.432172006481787,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": -0.4009408868256935,
+            "earlyModelBias": 0.9643202651218883,
+            "modelBrier": 0.24682109740537692,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6867165752830215,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "historicalGatesPassed": true,
+          "reasons": []
+        },
+        "2022": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 15.187586201250998,
+            "baselineMAE": 15.352523599587292,
+            "earlyModelMAE": 16.81127884640379,
+            "earlyBaselineMAE": 17.466607454098494,
+            "modelBias": -3.602989997678087,
+            "earlyModelBias": 5.905779986999456,
+            "modelBrier": 0.24428981395191696,
+            "baselineBrier": 0.2497021601354912,
+            "modelLogLoss": 0.6816123354895387,
+            "baselineLogLoss": 0.6925510655381989
+          },
+          "historicalGatesPassed": true,
+          "reasons": []
+        }
+      }
+    },
+    "halfTotal": {
+      "candidate": {
+        "target": "halfTotal",
+        "version": "nba-opening-totals-season-reset-v4",
+        "protocolHash": "0e95ea0df2b35bb02917e2e905e267418dd6a58ae40dc361e35cd38f455737fe",
+        "candidateId": "3e4ed3e479eef2a4fe606007f476d0c1623ea4f391127fd6518f262f3bb69b90"
+      },
+      "years": {
+        "2021": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.683795097533334,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.6157641336207,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": -0.39645923291357416,
+            "earlyModelBias": 0.681941680320848,
+            "modelBrier": 0.24818699212256834,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6895309180534439,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "historicalGatesPassed": true,
+          "reasons": []
+        },
+        "2022": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 10.212487284891276,
+            "baselineMAE": 10.27680268497869,
+            "earlyModelMAE": 10.457626895189506,
+            "earlyBaselineMAE": 10.594371047604115,
+            "modelBias": -1.9644771273486126,
+            "earlyModelBias": 2.872672371001558,
+            "modelBrier": 0.24965294997869944,
+            "baselineBrier": 0.24925288752579683,
+            "modelLogLoss": 0.6925504490522169,
+            "baselineLogLoss": 0.6916529314479779
+          },
+          "historicalGatesPassed": false,
+          "reasons": [
+            "modelBrier_worse_than_baseline",
+            "modelLogLoss_worse_than_baseline"
+          ]
+        }
+      }
+    }
+  },
+  "status": "BLOCKED_DEVELOPMENT_AND_INDEPENDENT_VALIDATION",
+  "independentValidation": {
+    "status": "NOT_STARTED",
+    "samples": 0
+  },
+  "executable": false,
+  "promotionEligible": false,
+  "limitations": [
+    "Viewed historical improvement cannot authorize production scores.",
+    "No future pregame capture is performed by this runner.",
+    "Retrospective source records do not prove historical pregame availability.",
+    "Reference thresholds are not historical bookmaker quotes or betting win rates."
+  ]
+}
