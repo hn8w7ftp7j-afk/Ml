@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { nbaLeagueIndicator } from '../lib/nba/league-indicator.js';
+import { nbaLeagueIndicator, nbaOpeningMarketCoverage } from '../lib/nba/league-indicator.js';
+import { analyzeNbaOpening } from '../lib/nba/opening-model.js';
 import { nbaBatchFinished, summarizeNbaBatchOutcome } from '../lib/nba/analysis-outcome.js';
 import { validNbaJob, mergeNbaAnalysisResults } from '../lib/nba/analysis-job-display.js';
 import { summarizeAllLeagueBatchResult } from '../lib/all-league-analysis-v117.js';
@@ -98,7 +99,7 @@ async function polling(states) {
   vm.runInNewContext(child.slice(effectStart, effectEnd), scope);
   const flush = async () => { for (let turn = 0; turn < 12; turn++) await Promise.resolve(); };
   await flush();
-  return { jobs, errors, publications, timers, async tick() { timers.shift()?.(); await flush(); }, cleanup };
+  return { jobs, errors, publications, timers, get rows() { return rowsRef.current; }, async tick() { timers.shift()?.(); await flush(); }, cleanup };
 }
 const first = entry('401999001'), second = entry('401999002');
 const partialBatch = { league: 'NBA', date, total: 2, results: [first], runningGamePks: [401999002] };
@@ -122,6 +123,93 @@ invalid.cleanup();
 const incomplete = await polling([{ status: 'completed', result: partialBatch }]);
 assert.equal(incomplete.jobs.at(-1).outcome.status, 'result_pending');
 incomplete.cleanup();
+
+// A completed workflow may only have scored spreads. Exercise the real model,
+// polling merge, shipped board-state callback and top badge together so failed
+// totals cannot disappear behind a green game-level completion count.
+const openingGame = { ...game('401999003'), sourceId: '401999003', taipeiDate: date,
+  season: { year: 2027, type: 'regular' }, seasonType: 'regular', neutralSite: false,
+  home: { id: 'nba:espn:team:19' }, away: { id: 'nba:espn:team:1' } };
+const openingQuotes = { fullTotal: { line: '235.5', overWater: .94, underWater: .94 },
+  fullRunline: { line: '3-50', lineSide: 'home', homeWater: .95, awayWater: .95 } };
+const openingEntry = quotes => {
+  const payload = { ...analyzeNbaOpening(openingGame, quotes), league: 'NBA', date, gameId: openingGame.id, observedAt };
+  return { ok: payload.status === 'ready', task: { game: openingGame, nbaQuery: { id: openingGame.sourceId, date, observedAt } }, payload };
+};
+const coverageStart = child.indexOf('  const openingMarketCoverage = useMemo(');
+const coverageEnd = child.indexOf('\n  return <NbaBetRecordProvider', coverageStart);
+assert.ok(coverageStart >= 0 && coverageEnd > coverageStart);
+const publishBoard = (rows, job, readerStatus = 'fresh') => {
+  let published;
+  vm.runInNewContext(child.slice(coverageStart, coverageEnd), { rows, date, job, readerStatus,
+    nbaOpeningMarketCoverage, betReminder: { analysisGameCount: rows.filter(row => row.result?.status === 'ready').length },
+    useMemo: callback => callback(), useEffect: callback => callback(), onBoardStateChange: value => { published = value; } });
+  return published;
+};
+const partialMarketFlow = await polling([{ status: 'completed', result: batch([openingEntry(openingQuotes)]) }]);
+const openingJob = partialMarketFlow.jobs.at(-1), openingRows = partialMarketFlow.rows;
+assert.equal(openingJob.outcome.status, 'done', 'workflow completion is still independent of per-market scoring');
+assert.equal(openingRows[0].resultRunId, openingJob.runId, 'poll results must bind to the requested run even when the transport omits runId');
+const openingBoard = publishBoard(openingRows, openingJob);
+assert.equal(openingBoard.openingMarketCoverage.date, date);
+assert.equal(openingBoard.openingMarketCoverage.runId, openingJob.runId);
+assert.equal(openingBoard.openingMarketCoverage.games, 1);
+assert.equal(openingBoard.openingMarketCoverage.quoted, 2);
+assert.equal(openingBoard.openingMarketCoverage.ready, 1);
+assert.equal(openingBoard.openingMarketCoverage.validationFailed, 1);
+assert.deepEqual(nbaLeagueIndicator(date, openingJob, null, false, openingBoard), { status: 'partial', label: '部分市場已分析' });
+assert.deepEqual(nbaLeagueIndicator(date, openingJob, null, false, { ...openingBoard, readerStatus: 'stale' }), { status: 'partial', label: '部分市場已分析｜盤口待更新' });
+assert.match(child, /resultRunId: previous\.resultRunId/, 'quote reloads must preserve the recovered result run binding');
+partialMarketFlow.cleanup();
+
+const failedTotalFlow = await polling([{ status: 'completed', result: batch([openingEntry({ fullTotal: openingQuotes.fullTotal })]) }]);
+const failedTotalJob = failedTotalFlow.jobs.at(-1), failedTotalBoard = publishBoard(failedTotalFlow.rows, failedTotalJob);
+assert.equal(failedTotalBoard.analysisGameCount, 0);
+assert.equal(failedTotalBoard.openingMarketCoverage.quoted, 1);
+assert.equal(failedTotalBoard.openingMarketCoverage.validationFailed, 1);
+assert.deepEqual(nbaLeagueIndicator(date, failedTotalJob, null, false, failedTotalBoard), { status: 'insufficient_data', label: '市場驗證未通過' });
+failedTotalFlow.cleanup();
+
+for (const rows of [
+  openingRows.map(row => ({ ...row, resultRunId: 'older-result-run' })),
+  openingRows.map(row => ({ ...row, result: { ...row.result, date: '2026-10-13' } })),
+  openingRows.map(row => ({ ...row, result: { ...row.result, league: 'MLB' } })),
+]) {
+  assert.equal(nbaOpeningMarketCoverage(rows, date, openingJob).validationFailed, 0);
+}
+assert.equal(nbaOpeningMarketCoverage(openingRows, date, { ...openingJob, status: 'running' }), null);
+assert.equal(nbaOpeningMarketCoverage(openingRows, '2026-10-15', openingJob), null);
+for (const change of [{ date: '2026-10-13' }, { runId: 'other-run' }, { version: 'other-version' },
+  { ready: -1 }, { validationFailed: 3 }, { startedAt: '2026-10-14T02:00:00Z' }]) {
+  const isolatedBoard = { ...openingBoard, openingMarketCoverage: { ...openingBoard.openingMarketCoverage, ...change } };
+  assert.equal(nbaLeagueIndicator(date, { ...openingJob, startedAt: '2026-10-14T01:00:00Z' }, null, false, isolatedBoard).label, '分析完成');
+}
+for (const status of ['preparing', 'running', 'failed', 'no_open_markets']) {
+  const newBatch = { boardDate: date, runId: 'newer-opening-run', startedAt: '2026-10-14T03:00:00Z', status };
+  if (status === 'no_open_markets') {
+    assert.equal(nbaLeagueIndicator(date, openingJob, newBatch, false, openingBoard).label, '部分市場已分析', 'empty preflight may preserve visible old analyses, scoped to the old job');
+  } else assert.equal(nbaLeagueIndicator(date, openingJob, newBatch, false, openingBoard).status, status, 'old market failures cannot relabel a newer workflow');
+}
+const sameRunBatch = { boardDate: date, runId: openingJob.runId, ...openingJob.outcome };
+assert.equal(nbaLeagueIndicator(date, null, sameRunBatch, false, openingBoard).label, '部分市場已分析');
+assert.equal(nbaLeagueIndicator(date, { ...openingJob, status: 'running' }, null, true, openingBoard).label, '分析中');
+for (const mutate of [
+  result => { result.quotes.fullTotal = null; result.marketAnalyses.fullTotal.status = 'unavailable'; },
+  result => { result.quotes.fullTotal.line = 'invalid'; },
+  result => { result.quotes.fullTotal.overWater = null; },
+  result => { result.marketAnalyses.fullTotal.status = 'blocked'; },
+  result => { result.marketAnalyses.fullTotal.validationDiagnostics.market = 'firstHalfTotal'; },
+]) {
+  const rows = structuredClone(openingRows);
+  mutate(rows[0].result);
+  const board = publishBoard(rows, openingJob);
+  assert.equal(board.openingMarketCoverage.validationFailed, 0, 'unopened, invalid, blocked or foreign-market data is not a validation failure');
+  assert.equal(nbaLeagueIndicator(date, openingJob, null, false, board).label, '分析完成');
+}
+const wrongRunFlow = await polling([{ status: 'completed', result: { ...batch([openingEntry(openingQuotes)]), runId: 'different-transport-run' } }]);
+assert.equal(wrongRunFlow.jobs.length, 0, 'a conflicting explicit transport run cannot acquire current-run provenance');
+assert.match(wrongRunFlow.errors[0], /工作編號/);
+wrongRunFlow.cleanup();
 // Exercise both real GET summary transports so NBA outcome information cannot
 // disappear between full payloads and the all-league progress card.
 let storedResult;
@@ -146,4 +234,4 @@ for (const multi of [false, true]) {
     assert.equal(summarizeAllLeagueBatchResult(result.batches[1]).status, 'research');
   }
 }
-console.log('NBA indicator PASS: real poll/merge, independent completion, outcome/compact parity, missing results, reference/data failures and newer-run/date isolation');
+console.log('NBA indicator PASS: real poll/merge, opening-market board callback and badge coverage, independent completion, outcome/compact parity, missing results, reference/data failures and newer-run/date isolation');

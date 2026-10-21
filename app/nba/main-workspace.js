@@ -14,6 +14,7 @@ import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-sta
 import { loadNbaUpcomingBoard, nbaCompletionSummary } from '../../lib/nba/analysis-ui-policy.js';
 import { prepareNbaNotification } from '../../lib/nba/analysis-notification-start.js';
 import { nbaBatchFinished, summarizeNbaBatchOutcome } from '../../lib/nba/analysis-outcome.js';
+import { nbaOpeningMarketCoverage } from '../../lib/nba/league-indicator.js';
 
 const NbaDataWorkspace = dynamic(() => import('./workspace.js'), { ssr: false });
 const NbaForwardValidationPanel = dynamic(() => import('./forward-validation-panel.js'), { ssr: false });
@@ -21,6 +22,46 @@ const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球�
 const num = value => Number.isFinite(value) ? value.toFixed(2) : '—';
 const localTime = value => Number.isFinite(Date.parse(value || '')) ? new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—';
 const statusText = value => ({ queued: '排隊中', running: '分析中', ready: '已分析', reference: '跨季基準', insufficient: '資料不足', blocked: '核對未通過', failed: '分析失敗' }[value] || '尚未分析');
+const openingMarketLabels = { fullTotal: '全場大小', fullRunline: '全場讓分', firstHalfTotal: '上半大小', firstHalfRunline: '上半讓分' };
+const openingCheckLabels = { samples: '驗證場數', earlySamples: '開季驗證場數', modelMAE: '全季平均誤差（MAE）', earlyModelMAE: '開季平均誤差（MAE）', modelBrier: '機率誤差（Brier）', modelLogLoss: '機率誤差（Log Loss）', acceptanceFlag: '市場驗證狀態' };
+function openingValidationView(value, market) {
+  const variable = ({ fullTotal: 'fullTotal', fullRunline: 'fullMargin', firstHalfTotal: 'halfTotal', firstHalfRunline: 'halfMargin' })[market];
+  if (!variable || value?.version !== 'nba-opening-validation-diagnostics-v1' || value.league !== 'NBA'
+    || value.market !== market || value.variable !== variable || value.modelVersion !== 'nba-regular-cross-season-v1'
+    || !['PASS', 'FAIL'].includes(value.status) || !Array.isArray(value.checks)) return null;
+  const checks = value.checks.filter(check => openingCheckLabels[check?.id] && ['PASS', 'FAIL'].includes(check.status));
+  if (!checks.length || new Set(checks.map(check => check.id)).size !== checks.length) return null;
+  const number = (n, digits = 0) => typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n.toFixed(digits) : '未提供';
+  return {
+    status: value.status,
+    year: Number.isInteger(value.validationYear) ? value.validationYear : null,
+    samples: number(value.samples), earlySamples: number(value.earlySamples), probabilitySamples: number(value.probabilitySamples),
+    failed: checks.filter(check => check.status === 'FAIL').map(check => openingCheckLabels[check.id]),
+    checks: checks.map(check => {
+      const digits = ['modelBrier', 'modelLogLoss'].includes(check.id) ? 5 : ['modelMAE', 'earlyModelMAE'].includes(check.id) ? 2 : 0;
+      const format = n => check.id === 'acceptanceFlag' ? typeof n === 'boolean' ? n ? '通過' : '未通過' : '未提供' : number(n, digits);
+      return { id: check.id, label: openingCheckLabels[check.id], actual: format(check.actual), baseline: format(check.baseline), status: check.status,
+        comparison: check.comparison === 'at_least' ? '不得少於基準' : check.comparison === 'at_most' ? '不得高於基準' : '需符合基準' };
+    }),
+  };
+}
+function NbaMarketValidation({ diagnostics, market }) {
+  const view = openingValidationView(diagnostics, market);
+  if (!view || view.status !== 'FAIL') return null;
+  const failures = view.failed.filter(label => label !== openingCheckLabels.acceptanceFlag);
+  return <div className="nbaMarketValidation">
+    <p className="muted">{failures.length ? `${failures.join('、')}未通過` : '此市場歷史驗證未通過'}；暫不產生 W／R／S。</p>
+    <details className="rankingDetails"><summary>未通過原因與驗證數據</summary>
+      <p>{view.year ? `${view.year} 驗證球季｜` : ''}驗證 {view.samples} 場，開季 {view.earlySamples} 場；機率驗證 {view.probabilitySamples} 場。</p>
+      <p>場數須達基準；誤差不得高於基準。</p>
+      <div style={{ maxWidth: '100%', overflowX: 'auto' }}><table style={{ minWidth: '380px', width: '100%' }} aria-label={`${openingMarketLabels[market]}歷史驗證數據`}>
+        <thead><tr><th scope="col">檢查</th><th scope="col">模型／現況</th><th scope="col">基準／要求</th><th scope="col">結果</th></tr></thead>
+        <tbody>{view.checks.map(check => <tr key={check.id}><th scope="row">{check.label}</th><td>{check.actual}</td><td>{check.baseline}</td><td title={check.comparison}>{check.status === 'PASS' ? '通過' : '未通過'}</td></tr>)}</tbody>
+      </table></div>
+      <p>以上核對比分與參考門檻機率，不代表實際歷史盤口下注勝率。</p>
+    </details>
+  </div>;
+}
 const store = job => { try { localStorage.setItem(NBA_JOB_STORAGE, JSON.stringify(job)); return true; } catch { return false; } };
 async function api(url, options = {}, timeout = 30000) {
   const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...options, signal: AbortSignal.timeout(timeout) });
@@ -36,15 +77,18 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   const preseason = result?.preseasonAnalysis;
   const regular = result?.regularAnalysis;
   const opening = result?.openingAnalysis;
+  const validationPending = opening ? Object.entries(result?.marketAnalyses || {}).filter(([key, market]) => market?.status === 'insufficient' && openingValidationView(market?.validationDiagnostics, key)?.status === 'FAIL').map(([key]) => openingMarketLabels[key]) : [];
+  const estimatedMarkets = opening ? Object.entries(result?.marketAnalyses || {}).filter(([key, market]) => openingMarketLabels[key] && market?.status === 'ready').map(([key]) => openingMarketLabels[key]) : [];
+  const noOpeningMarket = opening && result.status === 'insufficient' && !validationPending.length;
   const reference = result?.status === 'reference' ? result.referencePrediction : null;
   const current = nbaResultQuoteCurrent(row, now);
   const canAnalyze = row.canAnalyze && now - Date.parse(row.observedAt) < 180000
     && now - Date.parse(row.pageActivityAt || row.observedAt) < 180000 && Date.parse(row.game.startTime) > now;
   return <section className="gameCard" data-nba-game={row.game.id}>
     <div className="gameHead"><div><h2>{name(row.game.away)}（客）@ {name(row.game.home)}（主）</h2><p>{localTime(row.game.startTime)}（台灣）｜{row.game.season?.label}｜{({ preseason: '季前賽', regular: '例行賽', postseason: '季後賽' })[row.game.seasonType] || '賽事類型待核對'}</p></div>
-      <span className={`state ${row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{statusText(row.jobState)}</span></div>
+      <span className={`state ${validationPending.length ? 'unopened' : row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{validationPending.length ? estimatedMarkets.length ? '部分市場已分析' : '市場驗證未通過' : noOpeningMarket ? '尚無可分析市場' : statusText(row.jobState)}</span></div>
     <p className="nbaQuoteTime">{row.observedAt ? `盤口 ${localTime(row.observedAt)}` : '盤口待同步'}</p>
-    {opening && <p className="muted">開季分析｜上一季基準＋本季表現。未通過驗證的市場暫不計分。</p>}
+    {opening && <p className="muted">開季分析｜上一季基準＋本季表現。{estimatedMarkets.length > 0 && `${estimatedMarkets.join('、')}已產生估計。`}{validationPending.length > 0 ? `${validationPending.join('、')}待驗證，暫不計分。` : '未開盤或核對未完成的市場不產生估計。'}</p>}
     {reference && <p className="muted">跨季基準，尚未校正。</p>}
     {(prediction || reference) && <details className="rankingDetails"><summary>比分預估與樣本</summary>
     {prediction && !preseason && !opening && <div className="detailGrid"><div><span>原比分總分</span><b>{num(prediction.baseTotal)}</b></div><div><span>校正後總分</span><b>{num(prediction.total)}</b></div><div><span>總分修正</span><b>{prediction.correction > 0 ? '+' : ''}{num(prediction.correction)}</b></div><div><span>參考方向</span><b>{assessment?.direction === 'over' ? '大分' : assessment?.direction === 'under' ? '小分' : '未定'}</b></div></div>}
@@ -54,7 +98,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     {reference && <><div className="noticeBox">跨季基準，尚未校正。</div><div className="detailGrid"><div><span>主隊基準得分</span><b>{num(reference.homePoints)}</b></div><div><span>客隊基準得分</span><b>{num(reference.awayPoints)}</b></div><div><span>基準總分</span><b>{num(reference.total)}</b></div><div><span>來源球季</span><b>{reference.sourceSeasonYear - 1}–{String(reference.sourceSeasonYear).slice(-2)} 例行賽</b></div></div></>}
     </details>}
     {['ready', 'reference'].includes(result?.status) && !current && <p className="muted">舊分析｜盤口已更新、過期或已開賽。</p>}
-    {result?.status === 'insufficient' && <div className="noticeBox">資料不足｜{result.training?.availableGames ?? 0}／{result.training?.minimumResiduals ?? 50} 筆同季樣本。</div>}
+    {result?.status === 'insufficient' && <div className="noticeBox">{opening ? validationPending.length ? '開季市場驗證未通過｜原盤口已保留，請查看各市場的驗證原因。' : '目前沒有可分析的開季市場｜請查看各市場狀態與原因。' : <>資料不足｜{result.training?.availableGames ?? 0}／{result.training?.minimumResiduals ?? 50} 筆同季樣本。</>}</div>}
     {(row.reason || row.jobError) && <p className="muted">{row.jobError || row.reason}</p>}
     <div className="nbaMarketList">{[['fullTotal', '全場大小'], ['fullRunline', '全場讓分'], ['firstHalfTotal', '上半大小'], ['firstHalfRunline', '上半讓分']].map(([key, label]) => {
       const modelMarket = result?.marketAnalyses?.[key];
@@ -63,7 +107,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
       const choices = total ? [['over', '大分', market?.overWater, assessment?.positiveExpectedNet], ['under', '小分', market?.underWater, assessment?.negativeExpectedNet]] : [['away', `${name(row.game.away)}（客）${market?.lineSide === 'away' ? '讓分' : '受讓'}`, market?.awayWater], ['home', `${name(row.game.home)}（主）${market?.lineSide === 'home' ? '讓分' : '受讓'}`, market?.homeWater]];
       return <div className={`marketBlock actualMarket ${market ? '' : 'nbaUnavailableMarket'}`} key={key}><h3>{label}｜{market?.line || '—'}{market && !total ? `｜${market.lineSide === 'home' ? '主隊' : '客隊'}讓分` : ''}</h3>
         {analyzed && !current && <p className="muted">目前 Reader 盤口：{row.quote?.[key]?.line || '等待開盤'}；以下估計對應上次分析的盤口與水位。</p>}
-        {modelMarket && !['ready','unavailable'].includes(modelMarket.status) && <p className="muted">{modelMarket.reason}</p>}
+        {modelMarket && !['ready','unavailable'].includes(modelMarket.status) && (modelMarket.status === 'insufficient' && openingValidationView(modelMarket.validationDiagnostics, key)?.status === 'FAIL' ? <NbaMarketValidation diagnostics={modelMarket.validationDiagnostics} market={key}/> : <p className="muted">{modelMarket.reason}</p>)}
         {market && choices.map(([side, pick, water, legacyEstimate]) => {
           const estimate = modelMarket?.status === 'ready' ? modelMarket.sides[side] : null;
           const scoring = nbaMarketScore(estimate);
@@ -75,7 +119,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     })}</div>
     <button className="secondary" disabled={busy || !canAnalyze} onClick={() => onAnalyze(row.game.sourceId)}>{row.result ? '重新分析這一場' : '分析這一場'}</button>
     <details className="details"><summary>分析明細</summary>
-      {opening && <><p>開季使用上一季已核對的例行賽作基準，以本季較早比賽逐步更新；同日及未來賽果不納入。本季樣本足夠後，會接回原本的本季模型；S 仍需完整壓力樣本。</p><p>獨立時間切分驗證球季 {opening.validationYear}；跨季誤差 {opening.distributionSamples} 筆。全場／上半讓分通過本次比分與參考門檻機率驗證；大小分的開季誤差未通過，暫不計分。這不是實際歷史盤口下注勝率。</p>{opening.limitations.map(text=><p key={text}>{text}</p>)}</>}
+      {opening && <><p>開季使用上一季已核對的例行賽作基準，以本季較早比賽逐步更新；同日及未來賽果不納入。本季樣本足夠後，會接回原本的本季模型；S 仍需完整壓力樣本。</p><p>獨立時間切分驗證球季 {opening.validationYear}；跨季誤差 {opening.distributionSamples} 筆。各市場分別核對比分誤差與參考門檻機率；未通過者保留原盤口，不產生 W／R／S。這不是實際歷史盤口下注勝率。</p>{opening.limitations.map(text=><p key={text}>{text}</p>)}</>}
       {regular ? <><p>全場大小保留節奏與休息校正；全場讓分採主客比分差。上半場由已核對前兩節比分另行擬合，排除延長賽。</p><p>資料截止 {regular.through}；全場誤差 {regular.fullSamples} 筆，上半場 {regular.halfSamples} 筆。只使用同球季、同賽制且日期較早的結果。</p><p>W 使用最近資料權重（半衰期 30 天）；R 取前三個互不重疊的 30 天區塊與 W 的最低值，每區需 30 筆，不足不產生 R／S。</p>{regular.limitations.map(text => <p key={text}>{text}</p>)}</> : preseason ? <><p>以上一季兩隊得分與失分作為輸入，用較早季前賽擬合總分和分差；全場及上半場分開校正。固定 ridge 縮減係數，沒有直接將大分改選小分。</p><p>訓練球季 {preseason.sourceSeasonYears.join('、')}，資料截止 {preseason.through}。誤差按逐場較早日期產生，同日與未來結果不納入。</p><p>各盤口依當前讓分方、信用盤部分輸贏與雙邊水位，計算勝／負／走水及每 100 元淨額。估計不代表實際歷史下注勝率。</p>{preseason.validation?.map(record => <p key={record.seasonYear}>歷史時間切分 {record.seasonYear} 球季 {record.samples} 場：全場總分平均誤差 {num(record.metrics.fullTotal.modelMAE)}（上季基準 {num(record.metrics.fullTotal.previousRegularBaselineMAE)}）；全場分差 {num(record.metrics.fullMargin.modelMAE)}（基準 {num(record.metrics.fullMargin.previousRegularBaselineMAE)}）。</p>)}{preseason.limitations.map(text => <p key={text}>{text}</p>)}</> : reference ? <><p>主隊預估＝（主隊上季平均得分 {num(reference.home.pointsFor)}＋客隊上季平均失分 {num(reference.away.pointsAgainst)}）÷2；客隊同樣計算。</p><p>主隊 {reference.home.games} 場、客隊 {reference.away.games} 場；資料截止 {reference.through}，全部早於本場。</p>{reference.limitations.map(text => <p key={text}>{text}</p>)}</> : assessment && !opening ? <><p>歷史節奏 {num(assessment.paceProxy?.estimatedPace)}；以兩隊賽前最近五場節奏與前場日期間隔修正總分，不是直接將大分改選小分。</p>
         {['away', 'home'].map(side => <p key={side}>{name(row.game[side])}：節奏樣本 {assessment.paceProxy?.[side]?.count ?? 0} 場；前場 {assessment.restProxy?.[side]?.priorDate || '—'}，日期間隔 {assessment.restProxy?.[side]?.gapDays ?? '—'} 天。</p>)}
         <p>校正 {assessment.calibrationSamples} 筆，截止 {assessment.calibrationThrough}；誤差分布 {assessment.distributionSamples} 筆，截止 {assessment.distributionThrough}。分析盤口 {result.quote?.line}｜{localTime(result.observedAt)}。</p></> : <p>尚無可核對的分析原因。</p>}
@@ -147,7 +191,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       setReaderStatus(board.readerStatus);
       setRows(current => board.rows.map(row => {
         const previous = current.find(old => old.game.id === row.game.id);
-        return previous ? { ...row, result: previous.result, jobState: previous.jobState, jobError: previous.jobError } : row;
+        return previous ? { ...row, result: previous.result, resultRunId: previous.resultRunId, jobState: previous.jobState, jobError: previous.jobError } : row;
       }));
       return board;
     } catch (cause) { if (revision === requestRevision.current && target === dateRef.current) setError(cause.message); return null; }
@@ -179,7 +223,8 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
           if (!current()) return;
           const batch = state.status === 'completed' ? state.result : state.progress;
           if (batch && job.date === dateRef.current) {
-            const next = mergeNbaAnalysisResults(batch, rowsRef.current, job.date);
+            if (batch.runId && batch.runId !== job.runId) throw new Error('NBA 工作編號與分析結果不符');
+            const next = mergeNbaAnalysisResults({ ...batch, runId: job.runId }, rowsRef.current, job.date);
             setRows(next); rowsRef.current = next;
             setProgress({ summary: nbaCompletionSummary(batch) });
             onBatchProgress?.({ ...batch, runId: job.runId });
@@ -226,9 +271,10 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   }
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
   const betReminder = useMemo(() => buildNbaBetReminder(rows, date, now), [rows, date, now]);
+  const openingMarketCoverage = useMemo(() => nbaOpeningMarketCoverage(rows, date, job), [rows, date, job]);
   useEffect(() => {
-    onBoardStateChange?.({ date, readerStatus, analysisGameCount: betReminder.analysisGameCount });
-  }, [date, readerStatus, betReminder.analysisGameCount, onBoardStateChange]);
+    onBoardStateChange?.({ date, readerStatus, analysisGameCount: betReminder.analysisGameCount, openingMarketCoverage });
+  }, [date, readerStatus, betReminder.analysisGameCount, openingMarketCoverage, onBoardStateChange]);
   return <NbaBetRecordProvider date={date} active={active} candidates={betReminder.candidates} quotesCurrent={betReminder.quotesCurrent} analysisReady={!running} onHighScoreStatusChange={onHighScoreStatusChange}><div hidden={!active} aria-label="NBA 主站分析">
     <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'records' ? 'active' : ''} onClick={() => setView('records')}>下注紀錄</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button><button className={view === 'validation' ? 'active' : ''} onClick={() => setView('validation')}>模型驗證</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
