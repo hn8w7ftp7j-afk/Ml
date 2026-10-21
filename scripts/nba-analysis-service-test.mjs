@@ -84,7 +84,9 @@ await blocked('NBA_ANALYSIS_QUOTE_CHANGED', schedule, { ...heartbeat, games: [{ 
 assert.equal(validNbaAnalysisQuery({...query,quoteFingerprint:'bad'}),false);
 console.log('NBA heartbeat race PASS: same contract and other-game updates allowed; real price/water/lock/identity changes blocked');
 
-const halfOnlyDefault = await loadNbaAnalysis(query, options({...schedule,data:{games:[{...game,seasonType:'regular',neutralSite:false}]}},{...snapshot,games:[{...row,fullTotal:null,firstHalfTotal:row.fullTotal}]},{analyzeModel:undefined}));
+// Explicit server-only opt-out retains this legacy failed-validation fixture;
+// the production default is exercised with the real V6 release integration test.
+const halfOnlyDefault = await loadNbaAnalysis(query, options({...schedule,data:{games:[{...game,seasonType:'regular',neutralSite:false}]}},{...snapshot,games:[{...row,fullTotal:null,firstHalfTotal:row.fullTotal}]},{analyzeModel:undefined,analyzeOpeningTotals:null}));
 assert.equal(halfOnlyDefault.status,'insufficient');assert.equal(halfOnlyDefault.modelVersion,'nba-regular-cross-season-v1');assert.notEqual(halfOnlyDefault.issues[0]?.code,'NBA_ANALYSIS_TOTAL_UNAVAILABLE');
 assert.equal(halfOnlyDefault.scope,'NBA_regular_cross_season_market_diagnostics');assert.deepEqual(halfOnlyDefault.unsupportedMarkets,[]);
 assert.equal(halfOnlyDefault.marketAnalyses.firstHalfTotal.status,'insufficient');

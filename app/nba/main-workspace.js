@@ -26,14 +26,16 @@ const openingMarketLabels = { fullTotal: '全場大小', fullRunline: '全場讓
 const openingCheckLabels = { samples: '驗證場數', earlySamples: '開季驗證場數', modelMAE: '全季平均誤差（MAE）', earlyModelMAE: '開季平均誤差（MAE）', modelBrier: '機率誤差（Brier）', modelLogLoss: '機率誤差（Log Loss）', acceptanceFlag: '市場驗證狀態' };
 function openingValidationView(value, market) {
   const variable = ({ fullTotal: 'fullTotal', fullRunline: 'fullMargin', firstHalfTotal: 'halfTotal', firstHalfRunline: 'halfMargin' })[market];
+  const v6Total=['fullTotal','firstHalfTotal'].includes(market)&&value?.modelVersion==='nba-opening-totals-early-baseline-hybrid-v6';
   if (!variable || value?.version !== 'nba-opening-validation-diagnostics-v1' || value.league !== 'NBA'
-    || value.market !== market || value.variable !== variable || value.modelVersion !== 'nba-regular-cross-season-v1'
+    || value.market !== market || value.variable !== variable || value.modelVersion !== 'nba-regular-cross-season-v1'&&!v6Total
     || !['PASS', 'FAIL'].includes(value.status) || !Array.isArray(value.checks)) return null;
   const checks = value.checks.filter(check => openingCheckLabels[check?.id] && ['PASS', 'FAIL'].includes(check.status));
   if (!checks.length || new Set(checks.map(check => check.id)).size !== checks.length) return null;
   const number = (n, digits = 0) => typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n.toFixed(digits) : '未提供';
   return {
     status: value.status,
+    validationBasis:v6Total?'earlier_era_external_retrospective':'temporal_holdout',
     year: Number.isInteger(value.validationYear) ? value.validationYear : null,
     samples: number(value.samples), earlySamples: number(value.earlySamples), probabilitySamples: number(value.probabilitySamples),
     failed: checks.filter(check => check.status === 'FAIL').map(check => openingCheckLabels[check.id]),
@@ -52,7 +54,7 @@ function NbaMarketValidation({ diagnostics, market }) {
   return <div className="nbaMarketValidation">
     <p className="muted">{failures.length ? `${failures.join('、')}未通過` : '此市場歷史驗證未通過'}；暫不產生 W／R／S。</p>
     <details className="rankingDetails"><summary>未通過原因與驗證數據</summary>
-      <p>{view.year ? `${view.year} 驗證球季｜` : ''}驗證 {view.samples} 場，開季 {view.earlySamples} 場；機率驗證 {view.probabilitySamples} 場。</p>
+      <p>{view.year ? `${view.year} ${view.validationBasis==='earlier_era_external_retrospective'?'跨時代回溯外部驗證':'驗證'}球季｜` : ''}驗證 {view.samples} 場，開季 {view.earlySamples} 場；機率驗證 {view.probabilitySamples} 場。</p>
       <p>場數須達基準；誤差不得高於基準。</p>
       <div style={{ maxWidth: '100%', overflowX: 'auto' }}><table style={{ minWidth: '380px', width: '100%' }} aria-label={`${openingMarketLabels[market]}歷史驗證數據`}>
         <thead><tr><th scope="col">檢查</th><th scope="col">模型／現況</th><th scope="col">基準／要求</th><th scope="col">結果</th></tr></thead>
@@ -119,7 +121,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     })}</div>
     <button className="secondary" disabled={busy || !canAnalyze} onClick={() => onAnalyze(row.game.sourceId)}>{row.result ? '重新分析這一場' : '分析這一場'}</button>
     <details className="details"><summary>分析明細</summary>
-      {opening && <><p>開季使用上一季已核對的例行賽作基準，以本季較早比賽逐步更新；同日及未來賽果不納入。本季樣本足夠後，會接回原本的本季模型；S 仍需完整壓力樣本。</p><p>獨立時間切分驗證球季 {opening.validationYear}；跨季誤差 {opening.distributionSamples} 筆。各市場分別核對比分誤差與參考門檻機率；未通過者保留原盤口，不產生 W／R／S。這不是實際歷史盤口下注勝率。</p>{opening.limitations.map(text=><p key={text}>{text}</p>)}</>}
+      {opening && <><p>開季使用上一季已核對的例行賽作基準，以本季較早比賽逐步更新；同日及未來賽果不納入。本季樣本足夠後，會接回原本的本季模型；S 仍需完整壓力樣本。</p>{opening.totalsValidation ? <><p>大小分：兩隊本季皆未滿 10 場時，比分預估維持既有基準；之後使用逐步校正。大小分機率以各自的較早比賽誤差估計，上半場另用前兩節實際比分。</p><p>大小分驗證：{opening.totalsValidation.validationYear} 球季跨時代回溯外部驗證，另核對 2021–2026 既有資料；不是前瞻驗證。讓分維持原 {opening.validationYear} 球季時間切分驗證。各市場分別檢查比分誤差與參考門檻機率；未通過者不產生 W／R／S。</p></> : <p>獨立時間切分驗證球季 {opening.validationYear}；跨季誤差 {opening.distributionSamples} 筆。各市場分別核對比分誤差與參考門檻機率；未通過者保留原盤口，不產生 W／R／S。這不是實際歷史盤口下注勝率。</p>}{opening.limitations.map(text=><p key={text}>{text}</p>)}</>}
       {regular ? <><p>全場大小保留節奏與休息校正；全場讓分採主客比分差。上半場由已核對前兩節比分另行擬合，排除延長賽。</p><p>資料截止 {regular.through}；全場誤差 {regular.fullSamples} 筆，上半場 {regular.halfSamples} 筆。只使用同球季、同賽制且日期較早的結果。</p><p>W 使用最近資料權重（半衰期 30 天）；R 取前三個互不重疊的 30 天區塊與 W 的最低值，每區需 30 筆，不足不產生 R／S。</p>{regular.limitations.map(text => <p key={text}>{text}</p>)}</> : preseason ? <><p>以上一季兩隊得分與失分作為輸入，用較早季前賽擬合總分和分差；全場及上半場分開校正。固定 ridge 縮減係數，沒有直接將大分改選小分。</p><p>訓練球季 {preseason.sourceSeasonYears.join('、')}，資料截止 {preseason.through}。誤差按逐場較早日期產生，同日與未來結果不納入。</p><p>各盤口依當前讓分方、信用盤部分輸贏與雙邊水位，計算勝／負／走水及每 100 元淨額。估計不代表實際歷史下注勝率。</p>{preseason.validation?.map(record => <p key={record.seasonYear}>歷史時間切分 {record.seasonYear} 球季 {record.samples} 場：全場總分平均誤差 {num(record.metrics.fullTotal.modelMAE)}（上季基準 {num(record.metrics.fullTotal.previousRegularBaselineMAE)}）；全場分差 {num(record.metrics.fullMargin.modelMAE)}（基準 {num(record.metrics.fullMargin.previousRegularBaselineMAE)}）。</p>)}{preseason.limitations.map(text => <p key={text}>{text}</p>)}</> : reference ? <><p>主隊預估＝（主隊上季平均得分 {num(reference.home.pointsFor)}＋客隊上季平均失分 {num(reference.away.pointsAgainst)}）÷2；客隊同樣計算。</p><p>主隊 {reference.home.games} 場、客隊 {reference.away.games} 場；資料截止 {reference.through}，全部早於本場。</p>{reference.limitations.map(text => <p key={text}>{text}</p>)}</> : assessment && !opening ? <><p>歷史節奏 {num(assessment.paceProxy?.estimatedPace)}；以兩隊賽前最近五場節奏與前場日期間隔修正總分，不是直接將大分改選小分。</p>
         {['away', 'home'].map(side => <p key={side}>{name(row.game[side])}：節奏樣本 {assessment.paceProxy?.[side]?.count ?? 0} 場；前場 {assessment.restProxy?.[side]?.priorDate || '—'}，日期間隔 {assessment.restProxy?.[side]?.gapDays ?? '—'} 天。</p>)}
         <p>校正 {assessment.calibrationSamples} 筆，截止 {assessment.calibrationThrough}；誤差分布 {assessment.distributionSamples} 筆，截止 {assessment.distributionThrough}。分析盤口 {result.quote?.line}｜{localTime(result.observedAt)}。</p></> : <p>尚無可核對的分析原因。</p>}
