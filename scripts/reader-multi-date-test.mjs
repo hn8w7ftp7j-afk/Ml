@@ -15,7 +15,7 @@ const parsed = parseTai888Capture(capture, now);
 const candidate = { capture, parsed, tabId: 1, frameId: 0, active: true };
 assert.equal(assessBoardCandidate(candidate, +now).ok, true);
 assert.equal(selectAuthoritativeBoard([candidate], { now: +now, league: 'NBA' }).ok, true);
-const payload = { ...parsed, readerVersion: '2.1.40', deviceId: 'device-multi-date-test', pageActivityAt: now.toISOString(), expectedGameCount: 2, detectedGameCount: 2 };
+const payload = { ...parsed, readerVersion: '2.1.41', deviceId: 'device-multi-date-test', pageActivityAt: now.toISOString(), expectedGameCount: 2, detectedGameCount: 2 };
 const daily = readerPayloadsByDate(payload);
 assert.deepEqual(daily.map(p => p.boardDate), ['2026-10-09', '2026-10-10']);
 assert.deepEqual(daily.flatMap(p => p.games), parsed.games);
@@ -54,7 +54,7 @@ const uploads = []; let failTomorrow = true;
 const fakeChrome = {
   runtime: { onInstalled: event, onStartup: event, onMessage: event }, alarms: { onAlarm: event },
   storage: { local: { get: async () => structuredClone(state), set: async value => Object.assign(state, value), remove: async key => { delete state[key]; } } },
-  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion: '2.1.40', captures: [capture] } }) },
+  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion: '2.1.41', captures: [capture] } }) },
   webNavigation: { getAllFrames: async () => [{ frameId: 0 }] },
 };
 const ctx = { chrome: fakeChrome, parseTai888Capture, canonicalReaderPayload, readerMarketProperties, selectAuthoritativeBoard, shouldSkipSuccessfulPayload, readerPayloadsByDate,
@@ -62,7 +62,7 @@ const ctx = { chrome: fakeChrome, parseTai888Capture, canonicalReaderPayload, re
   fetch: async (url, options) => {
     const body = JSON.parse(options.body); uploads.push(body.boardDate);
     assert.equal(url, 'https://mlb-positive-ev.vercel.app/api/nba/reader');
-    const normalized = normalizeNbaReaderPayload(body, { deviceId: state.deviceId, headerVersion: '2.1.40', now: +now });
+    const normalized = normalizeNbaReaderPayload(body, { deviceId: state.deviceId, headerVersion: '2.1.41', now: +now });
     if (body.boardDate === '2026-10-10' && failTomorrow) return { status: 503, ok: false, text: async () => JSON.stringify({ ok: false, error: 'synthetic temporary failure' }) };
     return { status: 200, ok: true, text: async () => JSON.stringify({ ok: true, boardDate: body.boardDate, rawGameCount: normalized.gameCount, marketCount: normalized.marketCount }) };
   } };

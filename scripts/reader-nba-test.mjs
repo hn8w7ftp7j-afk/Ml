@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { canonicalReaderPayload, parseTai888Capture, readerMarketProperties } from '../reader/parser.js';
 import { assessBoardCandidate, selectAuthoritativeBoard } from '../reader/board-selector.js';
+import { normalizeNbaReaderPayload } from '../lib/nba/reader.js';
 
 const context = { globalThis: {} };
 vm.createContext(context);
@@ -169,6 +170,50 @@ for (const label of ['聯盟：NBA 美國職業籃球-主推過關(11)', '联盟
 const realDesktopConflict = desktopCapture([standardDesktop, desktopSection('聯盟：NBA 美國職業籃球(11)', { alternative: true })]);
 assert.equal(selectAuthoritativeBoard([candidate(realDesktopConflict)], { league: 'NBA', now: +now }).error, 'conflicting-duplicate-rows', 'conflicting standard quotes still stop upload');
 
+// Actual v2.1.40 diagnostic retained 66 rows: 22 standard rows (including
+// empty display clones), then 22 last-score and 22 first-score rows. Rebuild
+// scoped records from only the sanitized quote cells; never store tab/account IDs.
+const specialFixture = JSON.parse(fs.readFileSync(new URL('../fixtures/reader-nba-special-sections-v2141.json', import.meta.url), 'utf8'));
+function diagnosticCapture(sections) {
+  let order = 0;
+  const records = sections.flatMap(section => {
+    const output = [record(order++, order * 24, normalizerHeaders), record(order++, order * 24, [section.label])];
+    for (const pairs of section.rows) {
+      const top = order * 24;
+      const cells = pairs.map((pair, index) => ({ text: pair.filter(Boolean).join(' '), lines: pair,
+        rows: pair.map((text, line) => ({ text, top: top + line * 8, left: spans[index][0] })), left: spans[index][0], right: spans[index][1] }));
+      output.push({ order: order++, top, bottom: top + 20, text: cells.map(c => c.text).join(' '), cells });
+    }
+    return output;
+  });
+  const normalized = normalizer.normalizeRowRecords(records, { expectedLeague: 'NBA' });
+  return { ...capture(), tables: normalized.tables, diagnostics: { ...normalized.diagnostics, lastMutationAt: now.toISOString() } };
+}
+const standardDiagnostic = diagnosticCapture(specialFixture.sections.slice(0, 1));
+const expectedDiagnostic = parseTai888Capture(standardDiagnostic, now);
+assert.equal(expectedDiagnostic.games.length, 11);
+assert.ok(expectedDiagnostic.games.every(g => readerMarketProperties('NBA').every(key => g[key])), 'all 44 standard markets exist in the diagnostic');
+for (const sections of [specialFixture.sections, [...specialFixture.sections].reverse()]) {
+  const input = diagnosticCapture(sections), parsed = parseTai888Capture(input, now);
+  assert.equal(input.diagnostics.sectionCount, 1, 'first/last score sections must be excluded before row aggregation');
+  assert.equal(input.diagnostics.gameCount, standardDiagnostic.diagnostics.gameCount, 'only standard rows and their empty display clones remain');
+  assert.equal(input.diagnostics.expectedGameCount, 11);
+  assert.deepEqual(parsed.games, expectedDiagnostic.games, 'preserve every original standard quote and water');
+  assert.deepEqual(parsed.parseIssues, []);
+  const selection = selectAuthoritativeBoard([candidate(input)], { league: 'NBA', now: +now });
+  assert.equal(selection.ok, true);
+  assert.equal(selection.selected.detectedGameCount, 11, 'upload count uses deduplicated parsed event identities');
+  const payload = { ...parsed, readerVersion: '2.1.41', deviceId: 'nba-diagnostic-fixture', pageActivityAt: now.toISOString(), expectedGameCount: 11, detectedGameCount: 11 };
+  payload.payloadHash = createHash('sha256').update(canonicalReaderPayload(payload)).digest('hex');
+  const received = normalizeNbaReaderPayload(payload, { deviceId: payload.deviceId, headerVersion: payload.readerVersion, now: +now });
+  assert.equal(received.gameCount, 11);
+  assert.equal(received.marketCount, 44, 'all original standard markets pass independent server intake');
+}
+assert.equal(diagnosticCapture(specialFixture.sections.slice(1)).tables.length, 0);
+for (const suffix of ['全場搶首分', '全場搶尾分', '全场抢首分', '全场抢尾分', '搶先得分', '抢先得分', '搶分', '抢分']) {
+  assert.equal(registry.standardMarker(`聯盟：NBA 美國職業籃球-${suffix}(11)`, 'NBA'), false);
+}
+
 for (const heading of ['聯盟：NBA 美國職業籃球－熱身賽（2）', '聯盟：NBA 美國職業籃球-热身赛(2)', '聯盟：NBA 美國職業籃球 - 季前賽 (2)']) assert.equal(registry.standardMarker(heading, 'NBA'), true);
 for (const suffix of ['-熱身賽 第一節(2)', '-熱身賽 主隊總得分(2)', '-熱身賽 LIVE(2)', '-熱身賽 新合約(2)']) assert.equal(registry.standardMarker(`聯盟：NBA 美國職業籃球${suffix}`, 'NBA'), false);
 for (const [away, home, awayCode, homeCode] of [
@@ -205,7 +250,7 @@ assert.equal(createHash('sha256').update(canonicalReaderPayload(baseball)).diges
 assert.deepEqual(readerMarketProperties('NBA'), ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
 const background = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(background, /league === 'NHL' \? '\/api\/nhl\/reader' : league === 'NBA' \? '\/api\/nba\/reader' : '\/api\/reader\/ingest'/);
-assert.match(background, /const VERSION = '2\.1\.40'/);
+assert.match(background, /const VERSION = '2\.1\.41'/);
 // Execute v2.1.26 recovery behaviors against a stale and then current tab.
 let contentVersion = '2.1.26';
 const reloaded = [];
@@ -222,11 +267,11 @@ vm.runInContext(background.replace(/^import .*?;\n/gm, ''), backgroundContext);
 let scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 0, 'stale content scripts cannot masquerade as the new installed Reader');
 assert.deepEqual([...scanned.silentTabIds], [7]);
-contentVersion = '2.1.40';
+contentVersion = '2.1.41';
 scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 1);
 const report = await vm.runInContext('readerDiagnostics()', backgroundContext);
-assert.equal(report.report.readerVersion, '2.1.40');
+assert.equal(report.report.readerVersion, '2.1.41');
 assert.equal(report.report.boards[0].league, 'NBA');
 assert.equal(Object.hasOwn(report.report, 'readerToken'), false);
 assert.equal(Object.hasOwn(report.report.boards[0], 'pageUrl'), false);
