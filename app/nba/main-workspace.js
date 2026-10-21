@@ -225,8 +225,11 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
           if (!current()) return;
           const batch = state.status === 'completed' ? state.result : state.progress;
           if (batch && job.date === dateRef.current) {
-            if (batch.runId && batch.runId !== job.runId) throw new Error('NBA 工作編號與分析結果不符');
-            const next = mergeNbaAnalysisResults({ ...batch, runId: job.runId }, rowsRef.current, job.date);
+            let next;
+            try {
+              if (batch.runId && batch.runId !== job.runId) throw new Error('NBA 工作編號與分析結果不符');
+              next = mergeNbaAnalysisResults({ ...batch, runId: job.runId }, rowsRef.current, job.date);
+            } catch (cause) { throw Object.assign(cause, { jobStatus: 'failed' }); }
             setRows(next); rowsRef.current = next;
             setProgress({ summary: nbaCompletionSummary(batch) });
             onBatchProgress?.({ ...batch, runId: job.runId });
@@ -238,7 +241,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       } catch (cause) {
         if (!current()) return; setError(cause.message);
         if (cause.jobStatus === 'failed' || cause.status === 401 || job.runId && cause.status === 404 || cause.message.includes('未完成') || cause.message.includes('未送出') || job.runId && cause.message.includes('找不到') || cause.message.includes('登入')) {
-          const next = { ...job, status: 'failed' }; store(next); setJob(next); return;
+          const next = { ...job, status: 'failed' }; store(next); setJob(next); setMessage('分析結果未通過核對，可重新分析。'); return;
         }
       }
       if (current()) timer = setTimeout(poll, 2500);
