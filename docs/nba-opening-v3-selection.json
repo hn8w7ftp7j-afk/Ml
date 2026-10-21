@@ -1,0 +1,63 @@
+{
+  "version": "nba-opening-totals-phase-research-v3",
+  "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+  "developmentYear": 2021,
+  "holdoutYear": 2022,
+  "developmentHistoryHash": "7713c06270a9193e31619824f564f1f5b531eecd6cb107367ac6548e9e7c4f4d",
+  "developmentReportHash": "f39137b8eb8359f1f1185b6d9547c93ba1c2181e08d9d828543ee1a9393c3f77",
+  "selected": {
+    "fullTotal": {
+      "candidate": {
+        "target": "fullTotal",
+        "priorWeight": 10,
+        "kernel": "phase_bias_centered",
+        "modelVersion": "nba-opening-totals-phase-research-v3",
+        "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+        "candidateId": "b5e5911f5d6a3bfa1c77f1120a96ac35d95bbc6f0125812d849a235f391361b7"
+      },
+      "developmentMetrics": {
+        "samples": 1080,
+        "earlySamples": 144,
+        "probabilitySamples": 1080,
+        "modelMAE": 14.849767853401989,
+        "baselineMAE": 15.033985344599904,
+        "earlyModelMAE": 15.4170770106249,
+        "earlyBaselineMAE": 15.5340938592896,
+        "modelBias": 1.0170004714336653,
+        "earlyModelBias": 1.9144143768718418,
+        "modelBrier": 0.24656075350296228,
+        "baselineBrier": 0.2510129722552818,
+        "modelLogLoss": 0.6861774586188303,
+        "baselineLogLoss": 0.6951835146273145
+      }
+    },
+    "halfTotal": {
+      "candidate": {
+        "target": "halfTotal",
+        "priorWeight": 10,
+        "kernel": "phase_bias_centered",
+        "modelVersion": "nba-opening-totals-phase-research-v3",
+        "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+        "candidateId": "c519171fc158bab4e978b469d405d1a1e954d30cf5a91087bcd9bfe85a469b58"
+      },
+      "developmentMetrics": {
+        "samples": 1080,
+        "earlySamples": 144,
+        "probabilitySamples": 1080,
+        "modelMAE": 9.688874756980523,
+        "baselineMAE": 9.75757759685829,
+        "earlyModelMAE": 9.596949947113105,
+        "earlyBaselineMAE": 9.672482691615953,
+        "modelBias": 0.5020512439446173,
+        "earlyModelBias": 0.5599426633458382,
+        "modelBrier": 0.24827342762465415,
+        "baselineBrier": 0.25235657233702785,
+        "modelLogLoss": 0.6897094906004481,
+        "baselineLogLoss": 0.6978919473425701
+      }
+    }
+  },
+  "frozenBeforeRealHoldoutEvaluation": true,
+  "executable": false,
+  "promotionEligible": false
+}
