@@ -4,7 +4,8 @@ import { openingResearchHistory } from '../lib/nba/opening-research-history.js';
 import { openingBaseline, openingVariableAccepted } from '../lib/nba/opening-core.js';
 import { buildOpeningResearchBaselineObservations, openingResearchReadiness } from '../lib/nba/opening-research.js';
 import { TOTALS_V3_PROTOCOL, TOTALS_V3_PROTOCOL_HASH, TOTALS_V3_EXPECTED_PROTOCOL_HASH,
-  totalsV3Candidate, buildTotalsV3Observations, totalsV3Probability, totalsV3Metrics, totalsV3Hash } from '../lib/nba/opening-research-v3.js';
+  totalsV3Candidate, buildTotalsV3Observations, totalsV3Probability, totalsV3Metrics, totalsV3Hash,
+  createTotalsV3Selection, TOTALS_V3_FROZEN_SELECTION_HASH, TOTALS_V3_RECORDED_HOLDOUT_HASH, evaluateTotalsV3Holdout } from '../lib/nba/opening-research-v3.js';
 
 const history=openingResearchHistory.history.filter(r=>r.year<=2021);
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-10,`${a} != ${b}`);
@@ -75,6 +76,13 @@ const report=JSON.parse(fs.readFileSync('docs/nba-opening-v3-development.json','
 assert.equal(report.protocolHash,TOTALS_V3_PROTOCOL_HASH);
 assert.equal(report.developmentHistoryHash,totalsV3Hash(history));
 assert.equal(report.holdout.metrics,null);assert.equal(report.promotionEligible,false);assert.equal(report.executable,false);
+const selection=JSON.parse(fs.readFileSync('docs/nba-opening-v3-selection.json','utf8'));
+assert.equal(totalsV3Hash(selection),TOTALS_V3_FROZEN_SELECTION_HASH);
+assert.deepEqual(createTotalsV3Selection(report),selection);
+assert.throws(()=>evaluateTotalsV3Holdout(openingResearchHistory.history,{...selection,holdoutYear:2023},{archiveEvidence:openingResearchHistory}),/FROZEN_SELECTION/);
+assert.throws(()=>evaluateTotalsV3Holdout(openingResearchHistory.history,selection,{archiveEvidence:{}}),/SOURCE_UNVERIFIED/);
+const alteredReport=structuredClone(report);alteredReport.targets.fullTotal.selected=alteredReport.targets.fullTotal.candidates[0].candidate;
+assert.throws(()=>createTotalsV3Selection(alteredReport),/SELECTION_MISMATCH/);
 for(const target of ['fullTotal','halfTotal']) {
   assert.equal(report.targets[target].candidates.length,9);
   assert.equal(report.targets[target].selected.kernel,'phase_bias_centered');
@@ -83,4 +91,18 @@ for(const target of ['fullTotal','halfTotal']) {
 for(const file of ['lib/nba/opening-model.js','lib/nba/analysis-service.js','lib/nba/opening-training.js']) {
   assert.doesNotMatch(fs.readFileSync(file,'utf8'),/opening-research-v3/,'unapproved research cannot enter production');
 }
-console.log('PASS v3 bounded per-target research: canonical baseline parity, closed-season phase correction, centered candidate residuals, own-label/same-day/future exclusion, source isolation, unchanged gates and no real holdout evaluation');
+const recordedHoldout=JSON.parse(fs.readFileSync('docs/nba-opening-v3-holdout.json','utf8'));
+assert.equal(totalsV3Hash(recordedHoldout),TOTALS_V3_RECORDED_HOLDOUT_HASH);
+assert.equal(recordedHoldout.status,'BLOCKED_HOLDOUT_FAILED');assert.equal(recordedHoldout.holdoutConsumed,true);assert.equal(recordedHoldout.reselectionAllowed,false);
+assert.equal(recordedHoldout.promotionEligible,false);assert.equal(recordedHoldout.executable,false);
+for(const target of ['fullTotal','halfTotal']) {
+  const value=recordedHoldout.targets[target];
+  assert.deepEqual(value.candidate,selection.selected[target].candidate);
+  assert.equal(value.passed,false);assert.deepEqual(value.reasons,['earlyModelMAE_worse_than_baseline']);
+  assert.equal(openingVariableAccepted(value.metrics),false);
+  assert.ok(value.metrics.modelMAE<value.metrics.baselineMAE&&value.metrics.modelBrier<value.metrics.baselineBrier&&value.metrics.modelLogLoss<value.metrics.baselineLogLoss);
+}
+// Reproduce only the already-consumed, frozen selection. Never score alternate
+// holdout candidates or adapt the implementation to improve these metrics.
+assert.deepEqual(evaluateTotalsV3Holdout(openingResearchHistory.history,selection,{archiveEvidence:openingResearchHistory}),recordedHoldout);
+console.log('PASS v3 bounded per-target research: prior-only math/leakage/scope tests, exact frozen development and consumed-holdout replay, unchanged gates, failed early checks preserved and no production activation');

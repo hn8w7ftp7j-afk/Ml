@@ -1,0 +1,136 @@
+{
+  "version": "nba-opening-totals-phase-research-v3",
+  "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+  "selectionHash": "9983c154d42c243aa7c247fb52ec3530e0ec169c86cfc5b4c27ef49eee2c27c0",
+  "selectionFrozenCommit": "a3afa83b1871cfbf5a358c2ceb5bdd61c96aae9e",
+  "holdoutYear": 2022,
+  "role": "EXTERNAL_RETROSPECTIVE_TEMPORAL_HOLDOUT_NOT_HISTORICAL_PREGAME_CAPTURE",
+  "sourceHistoryHash": "9a57ff85ce3f93e8aae8ddf2ce00dab77f4b7b4e052b6a7aae821f124e1894c6",
+  "sourceAudit": [
+    {
+      "year": 2018,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2019,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2020,
+      "observedGames": 1059,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2021,
+      "observedGames": 1080,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2022,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    }
+  ],
+  "targets": {
+    "fullTotal": {
+      "candidate": {
+        "target": "fullTotal",
+        "priorWeight": 10,
+        "kernel": "phase_bias_centered",
+        "modelVersion": "nba-opening-totals-phase-research-v3",
+        "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+        "candidateId": "b5e5911f5d6a3bfa1c77f1120a96ac35d95bbc6f0125812d849a235f391361b7"
+      },
+      "metrics": {
+        "samples": 1230,
+        "earlySamples": 143,
+        "probabilitySamples": 1230,
+        "modelMAE": 15.146661357750926,
+        "baselineMAE": 15.352523599587292,
+        "earlyModelMAE": 17.55071538011992,
+        "earlyBaselineMAE": 17.466607454098494,
+        "modelBias": -1.3707947984613007,
+        "earlyModelBias": 8.171553554667025,
+        "modelBrier": 0.24588602256616324,
+        "baselineBrier": 0.2497021601354912,
+        "modelLogLoss": 0.6849297868435914,
+        "baselineLogLoss": 0.6925510655381989
+      },
+      "passed": false,
+      "reasons": [
+        "earlyModelMAE_worse_than_baseline"
+      ]
+    },
+    "halfTotal": {
+      "candidate": {
+        "target": "halfTotal",
+        "priorWeight": 10,
+        "kernel": "phase_bias_centered",
+        "modelVersion": "nba-opening-totals-phase-research-v3",
+        "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+        "candidateId": "c519171fc158bab4e978b469d405d1a1e954d30cf5a91087bcd9bfe85a469b58"
+      },
+      "metrics": {
+        "samples": 1230,
+        "earlySamples": 143,
+        "probabilitySamples": 1230,
+        "modelMAE": 10.164998846159731,
+        "baselineMAE": 10.27680268497869,
+        "earlyModelMAE": 10.696470654978372,
+        "earlyBaselineMAE": 10.594371047604115,
+        "modelBias": -0.4231141144759778,
+        "earlyModelBias": 3.9276037922139753,
+        "modelBrier": 0.24676609768939642,
+        "baselineBrier": 0.24925288752579683,
+        "modelLogLoss": 0.6866732966296517,
+        "baselineLogLoss": 0.6916529314479779
+      },
+      "passed": false,
+      "reasons": [
+        "earlyModelMAE_worse_than_baseline"
+      ]
+    }
+  },
+  "status": "BLOCKED_HOLDOUT_FAILED",
+  "holdoutConsumed": true,
+  "reselectionAllowed": false,
+  "executable": false,
+  "promotionEligible": false,
+  "limitations": [
+    "Reference thresholds are not recovered bookmaker quotes or actual betting win rates.",
+    "Retrospective source archives do not establish contemporaneous pregame access.",
+    "No total score may be activated from development results alone or by choosing a different candidate after holdout failure."
+  ]
+}

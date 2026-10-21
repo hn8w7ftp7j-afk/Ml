@@ -7,7 +7,9 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "test:nba-opening-diagnostics": "node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-opening-diagnostics-test.mjs && node scripts/nba-opening-diagnostics-ui-test.mjs && node scripts/nba-opening-history-acquisition-test.mjs && node scripts/nba-opening-history-evidence-test.mjs && node scripts/nba-opening-research-test.mjs",
+    "test:nba-opening-v3": "node scripts/nba-opening-v3-test.mjs",
+    "nba:opening-v3": "node scripts/nba-opening-v3.mjs",
+    "test:nba-opening-diagnostics": "node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-opening-diagnostics-test.mjs && node scripts/nba-opening-diagnostics-ui-test.mjs && node scripts/nba-opening-history-acquisition-test.mjs && node scripts/nba-opening-history-evidence-test.mjs && node scripts/nba-opening-research-test.mjs && npm run test:nba-opening-v3",
     "nba:opening-research": "node scripts/nba-opening-research.mjs",
     "test:screen-awake": "node scripts/screen-awake-test.mjs",
     "pretest:soccer": "npm run test:soccer-reader-diagnostics && npm run test:soccer-workspace",
