@@ -120,6 +120,55 @@ assert.deepEqual(warmupParsed.games.map(game => [game.awayCode, game.homeCode, g
 ]);
 assert.ok(warmupParsed.games.every(game => !game.firstHalfRunline && !game.firstHalfTotal));
 assert.equal(normalizer.normalizeRowRecords(warmupRecords, { expectedLeague: 'MLB' }).diagnostics.gameCount, 0);
+
+// The 10/22 desktop NBA page contains an 11-game standard board followed by
+// another 11-game 「主推過關」 board. They share event identities but are
+// different contracts. Synthetic prices make any cross-section leak visible.
+// The alternate section must not enter the standard
+// board's count, prices, half markets or duplicate-conflict checks.
+const desktopSlate = [
+  ['ATL 老鷹', 'ORL 魔術[主]'], ['MIL 公鹿', 'WAS 巫師[主]'],
+  ['CHA 黃蜂', 'BKN 籃網[主]'], ['MIN 灰狼', 'MIA 熱火[主]'],
+  ['CHI 公牛', 'TOR 暴龍[主]'], ['UTA 爵士', 'MEM 灰熊[主]'],
+  ['IND 溜馬', 'NO 鵜鶘[主]'], ['DAL 獨行俠', 'HOU 火箭[主]'],
+  ['GSW 勇士', 'LAL 湖人[主]'], ['PHO 太陽', 'POR 拓荒者[主]'],
+  ['SAC 國王', 'LAC 快艇[主]'],
+];
+function desktopSection(label, { alternative = false, missingHalf = false } = {}) {
+  return [normalizerHeaders, [label], ...desktopSlate.flatMap(([away, home], index) => [
+    ['10-22', away, '0.950', `${234 + index + (alternative ? 10 : 0)}平 大 0.940`, '', '', missingHalf ? '' : '0.940', missingHalf ? '' : `${110 + index}平 大 0.930`],
+    ['07:05', home, `${alternative ? '5+50' : '2-50'} 0.950`, '小 0.940', '', '', missingHalf ? '' : '1平 0.940', missingHalf ? '' : '小 0.930'],
+  ])];
+}
+function desktopCapture(sections) {
+  const records = sections.flat().map((values, order) => record(order, order * 24, values));
+  const normalized = normalizer.normalizeRowRecords(records, { expectedLeague: 'NBA' });
+  return { ...capture(), tables: normalized.tables, diagnostics: { ...normalized.diagnostics, lastMutationAt: now.toISOString() } };
+}
+const standardDesktop = desktopSection('聯盟：NBA 美國職業籃球(11)');
+const standardDesktopParsed = parseTai888Capture(desktopCapture([standardDesktop]), now);
+for (const label of ['聯盟：NBA 美國職業籃球-主推過關(11)', '联盟：NBA 美国职业篮球－主推过关（11）']) {
+  const alternateDesktop = desktopSection(label, { alternative: true });
+  assert.equal(registry.identify(label), 'NBA', 'keep the NBA section diagnostic identity');
+  for (const sections of [[standardDesktop, alternateDesktop], [alternateDesktop, standardDesktop]]) {
+    const mixed = desktopCapture(sections);
+    const parsed = parseTai888Capture(mixed, now);
+    assert.equal(mixed.diagnostics.sectionCount, 1, 'only the standard NBA section is admitted');
+    assert.equal(mixed.diagnostics.expectedGameCount, 11);
+    assert.equal(mixed.diagnostics.gameCount, 11);
+    assert.deepEqual(parsed.games, standardDesktopParsed.games, 'all four standard markets survive either section order');
+    assert.deepEqual(parsed.parseIssues, []);
+    assert.equal(selectAuthoritativeBoard([candidate(mixed)], { league: 'NBA', now: +now }).ok, true);
+  }
+  const alternateOnly = desktopCapture([alternateDesktop]);
+  assert.equal(alternateOnly.tables.length, 0, 'an alternate-only page cannot supply standard quotes');
+  assert.equal(parseTai888Capture(alternateOnly, now).games.length, 0);
+  const partial = desktopCapture([desktopSection('聯盟：NBA 美國職業籃球(11)', { missingHalf: true }), alternateDesktop]);
+  assert.ok(parseTai888Capture(partial, now).games.every(game => !game.firstHalfRunline && !game.firstHalfTotal), 'never fill missing standard halves from the parlay section');
+}
+const realDesktopConflict = desktopCapture([standardDesktop, desktopSection('聯盟：NBA 美國職業籃球(11)', { alternative: true })]);
+assert.equal(selectAuthoritativeBoard([candidate(realDesktopConflict)], { league: 'NBA', now: +now }).error, 'conflicting-duplicate-rows', 'conflicting standard quotes still stop upload');
+
 for (const heading of ['聯盟：NBA 美國職業籃球－熱身賽（2）', '聯盟：NBA 美國職業籃球-热身赛(2)', '聯盟：NBA 美國職業籃球 - 季前賽 (2)']) assert.equal(registry.standardMarker(heading, 'NBA'), true);
 for (const suffix of ['-熱身賽 第一節(2)', '-熱身賽 主隊總得分(2)', '-熱身賽 LIVE(2)', '-熱身賽 新合約(2)']) assert.equal(registry.standardMarker(`聯盟：NBA 美國職業籃球${suffix}`, 'NBA'), false);
 for (const [away, home, awayCode, homeCode] of [
@@ -156,7 +205,7 @@ assert.equal(createHash('sha256').update(canonicalReaderPayload(baseball)).diges
 assert.deepEqual(readerMarketProperties('NBA'), ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
 const background = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(background, /league === 'NHL' \? '\/api\/nhl\/reader' : league === 'NBA' \? '\/api\/nba\/reader' : '\/api\/reader\/ingest'/);
-assert.match(background, /const VERSION = '2\.1\.39'/);
+assert.match(background, /const VERSION = '2\.1\.40'/);
 // Execute v2.1.26 recovery behaviors against a stale and then current tab.
 let contentVersion = '2.1.26';
 const reloaded = [];
@@ -173,11 +222,11 @@ vm.runInContext(background.replace(/^import .*?;\n/gm, ''), backgroundContext);
 let scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 0, 'stale content scripts cannot masquerade as the new installed Reader');
 assert.deepEqual([...scanned.silentTabIds], [7]);
-contentVersion = '2.1.39';
+contentVersion = '2.1.40';
 scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 1);
 const report = await vm.runInContext('readerDiagnostics()', backgroundContext);
-assert.equal(report.report.readerVersion, '2.1.39');
+assert.equal(report.report.readerVersion, '2.1.40');
 assert.equal(report.report.boards[0].league, 'NBA');
 assert.equal(Object.hasOwn(report.report, 'readerToken'), false);
 assert.equal(Object.hasOwn(report.report.boards[0], 'pageUrl'), false);
@@ -192,4 +241,4 @@ invalidated.chrome.runtime.sendMessage = async () => { throw new Error('Disconne
 vm.runInContext("notifyBackground({ type: 'TAI888_FRAME_READY' })", invalidated);
 await Promise.resolve();
 await Promise.resolve();
-process.stdout.write('NBA Reader: scoped preseason markers, name-only rows, explicit basketball halves, high lines, partial boards, conflict checks and baseball hash isolation PASS\n');
+process.stdout.write('NBA Reader: standard/parlay section isolation, scoped preseason markers, name-only rows, explicit basketball halves, high lines, partial boards, conflict checks and baseball hash isolation PASS\n');

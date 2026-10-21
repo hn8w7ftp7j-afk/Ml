@@ -72,7 +72,13 @@
     // NBA identity is the scoped league token, never its changing display name
     // or season description. Market columns still determine full-game/half odds.
     // Reject separate period/prop contracts rather than allow-listing seasons.
-    if (league === 'NBA') return !/(?:第\s*[一二三四五六七八九十\d]+\s*(?:節|节|局)|單節|单节|節盤|节盘|上半|下半|半場|半场|前\s*(?:五|5)|分數|分数|合約|合约|勝分差|胜分差|加時|加时|延長|延长|\b(?:QUARTER|HALF|OVERTIME|PROPS?|Q[1-4]|[1-4]Q)\b)/i.test(suffix);
+    if (league === 'NBA') {
+      // Tai888 repeats the same events under 「主推過關」 with different
+      // contracts. Bound those rows to their own section instead of mixing
+      // their prices into the standard board and triggering false conflicts.
+      if (/(?:過|过)\s*(?:關|关)|串\s*(?:關|关)|\b(?:PARLAYS?|ACCUMULATORS?)\b/i.test(suffix)) return false;
+      return !/(?:第\s*[一二三四五六七八九十\d]+\s*(?:節|节|局)|單節|单节|節盤|节盘|上半|下半|半場|半场|前\s*(?:五|5)|分數|分数|合約|合约|勝分差|胜分差|加時|加时|延長|延长|\b(?:QUARTER|HALF|OVERTIME|PROPS?|Q[1-4]|[1-4]Q)\b)/i.test(suffix);
+    }
     return /^\s*(?:[（(]\s*\d{1,2}\s*[）)])?\s*$/.test(suffix);
   }
 
