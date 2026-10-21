@@ -1,0 +1,455 @@
+{
+  "version": "nba-opening-totals-research-v2",
+  "league": "NBA",
+  "scope": "regular_season_full_and_half_totals_research",
+  "protocol": {
+    "version": "nba-opening-totals-research-v2",
+    "developmentYear": 2021,
+    "viewedRegressionYears": [
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "independentHoldoutYear": 2022,
+    "selection": "per_target_common_cohort_brier_then_logloss_then_early_mae",
+    "minimumSamples": 1000,
+    "minimumEarlySamples": 100,
+    "minimumProbabilitySamples": 1000,
+    "minimumFitSamples": 30,
+    "minimumResidualSamples": 50,
+    "trainingSeasons": 3,
+    "residualHalfLifeDays": 365,
+    "earlyPriorGames": 10,
+    "leaguePriorGames": 120,
+    "requiredSourceYears": [
+      2018,
+      2019,
+      2020,
+      2021,
+      2022
+    ],
+    "probabilityBaseline": "canonical_prior20_all_phase_previous_3_closed_seasons_no_candidate_fit_requirement",
+    "revision": "v1_comparator_bug_corrected_before_any_real_2022_prediction_metrics; candidates_and_selection_unchanged",
+    "candidateDefinitions": {
+      "fullTotal": [
+        {
+          "name": "legacy_linear",
+          "priorWeight": 20,
+          "ridgePenalty": 1000,
+          "centered": false,
+          "phaseAware": false
+        },
+        {
+          "name": "league_centered",
+          "priorWeight": 10,
+          "ridgePenalty": 1000,
+          "centered": true,
+          "phaseAware": false
+        },
+        {
+          "name": "phase_league_centered",
+          "priorWeight": 20,
+          "ridgePenalty": 1000,
+          "centered": true,
+          "phaseAware": true
+        }
+      ],
+      "halfTotal": [
+        {
+          "name": "legacy_linear",
+          "priorWeight": 20,
+          "ridgePenalty": 1000,
+          "centered": false,
+          "phaseAware": false
+        },
+        {
+          "name": "league_centered",
+          "priorWeight": 10,
+          "ridgePenalty": 1000,
+          "centered": true,
+          "phaseAware": false
+        },
+        {
+          "name": "phase_league_centered",
+          "priorWeight": 20,
+          "ridgePenalty": 1000,
+          "centered": true,
+          "phaseAware": true
+        }
+      ]
+    }
+  },
+  "protocolHash": "e05fedb0d480e057d89df085918ba9894c8f2d579c74c52e238a9fabed7a57a4",
+  "historyHash": "9a57ff85ce3f93e8aae8ddf2ce00dab77f4b7b4e052b6a7aae821f124e1894c6",
+  "sourceGames": 5829,
+  "targets": {
+    "fullTotal": {
+      "developmentYear": 2021,
+      "commonPointSamples": 1080,
+      "commonProbabilitySamples": 1080,
+      "selectedForIndependentValidation": null,
+      "candidates": [
+        {
+          "candidate": {
+            "name": "legacy_linear",
+            "priorWeight": 20,
+            "ridgePenalty": 1000,
+            "centered": false,
+            "phaseAware": false,
+            "target": "fullTotal",
+            "modelVersion": "nba-opening-totals-research-v2",
+            "candidateId": "fullTotal:legacy_linear:d040ee8f7eaba673afde29a217d57a11f78455ed61d07028dc772e7e7e4cbf4f"
+          },
+          "development": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 15.257064157693158,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 16.090083878082478,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 3.836700124873821,
+            "earlyModelBias": 5.15727610920906,
+            "modelBrier": 0.24876008709715247,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.690660572929186,
+            "baselineLogLoss": 0.6951835146273145,
+            "meanProbability": 0.4817436922695276,
+            "observedRate": 0.5092592592592593
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "name": "league_centered",
+            "priorWeight": 10,
+            "ridgePenalty": 1000,
+            "centered": true,
+            "phaseAware": false,
+            "target": "fullTotal",
+            "modelVersion": "nba-opening-totals-research-v2",
+            "candidateId": "fullTotal:league_centered:8f06ed1070ec13b6705fc669f457b6fe97cb7005e8f5b2ec2dde88337b927d29"
+          },
+          "development": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.92112207011365,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.605547806796134,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 2.1651005621275976,
+            "earlyModelBias": 3.576462219587439,
+            "modelBrier": 0.24668802505709833,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.686441150510916,
+            "baselineLogLoss": 0.6951835146273145,
+            "meanProbability": 0.507552333668712,
+            "observedRate": 0.5092592592592593
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "name": "phase_league_centered",
+            "priorWeight": 20,
+            "ridgePenalty": 1000,
+            "centered": true,
+            "phaseAware": true,
+            "target": "fullTotal",
+            "modelVersion": "nba-opening-totals-research-v2",
+            "candidateId": "fullTotal:phase_league_centered:5293da212878dde3e25e2cedd58dc12d841e0b1672c03a60cc0335409f8eb73c"
+          },
+          "development": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.908691245111365,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.607821704047918,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 1.169575659808506,
+            "earlyModelBias": 2.6205361454189795,
+            "modelBrier": 0.2480345590711155,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6891611352412538,
+            "baselineLogLoss": 0.6951835146273145,
+            "meanProbability": 0.5393320152987074,
+            "observedRate": 0.5092592592592593
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        }
+      ],
+      "viewedRegression": {
+        "2023": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        },
+        "2024": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        },
+        "2025": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        },
+        "2026": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        }
+      },
+      "independentHoldout": {
+        "year": 2022,
+        "role": "NEW_EXTERNAL_RETROSPECTIVE_HOLDOUT_NOT_CONTEMPORANEOUS_PIT",
+        "evaluationStatus": "NOT_EVALUATED_DEVELOPMENT_FAILED",
+        "evaluatedCandidateId": null,
+        "metrics": null,
+        "passed": false,
+        "reasons": [
+          "DEVELOPMENT_MUST_PASS_BEFORE_HOLDOUT_EVALUATION"
+        ]
+      }
+    },
+    "halfTotal": {
+      "developmentYear": 2021,
+      "commonPointSamples": 1080,
+      "commonProbabilitySamples": 1080,
+      "selectedForIndependentValidation": null,
+      "candidates": [
+        {
+          "candidate": {
+            "name": "legacy_linear",
+            "priorWeight": 20,
+            "ridgePenalty": 1000,
+            "centered": false,
+            "phaseAware": false,
+            "target": "halfTotal",
+            "modelVersion": "nba-opening-totals-research-v2",
+            "candidateId": "halfTotal:legacy_linear:da2367b5f8b3d58656911a183285b93fdec3a19aab1ee0711a652cd89b8ac821"
+          },
+          "development": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.844267291259976,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.889150652158392,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 1.754888047685604,
+            "earlyModelBias": 2.6222550723142724,
+            "modelBrier": 0.24887141979395958,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6908929068452635,
+            "baselineLogLoss": 0.6978919473425701,
+            "meanProbability": 0.512864659717952,
+            "observedRate": 0.5037037037037037
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "name": "league_centered",
+            "priorWeight": 10,
+            "ridgePenalty": 1000,
+            "centered": true,
+            "phaseAware": false,
+            "target": "halfTotal",
+            "modelVersion": "nba-opening-totals-research-v2",
+            "candidateId": "halfTotal:league_centered:6cf2fbd20585c79973154dd3a5a9f45889db10af285d3941c530bc4aba857254"
+          },
+          "development": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.711525234193564,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.694431306984367,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 0.8268734731633817,
+            "earlyModelBias": 1.8087576006298904,
+            "modelBrier": 0.2480545984164497,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.689266513821598,
+            "baselineLogLoss": 0.6978919473425701,
+            "meanProbability": 0.5218666503125825,
+            "observedRate": 0.5037037037037037
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "name": "phase_league_centered",
+            "priorWeight": 20,
+            "ridgePenalty": 1000,
+            "centered": true,
+            "phaseAware": true,
+            "target": "halfTotal",
+            "modelVersion": "nba-opening-totals-research-v2",
+            "candidateId": "halfTotal:phase_league_centered:09d31d2c29e1a5838443100c796f4c025b6a27e62418c1fd0c8c64b2c9f99ef1"
+          },
+          "development": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.731133084024668,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.710311880822385,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 0.5466431617511597,
+            "earlyModelBias": 1.6687490726678702,
+            "modelBrier": 0.2508434300157767,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6949502510601143,
+            "baselineLogLoss": 0.6978919473425701,
+            "meanProbability": 0.5533629336849245,
+            "observedRate": 0.5037037037037037
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        }
+      ],
+      "viewedRegression": {
+        "2023": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        },
+        "2024": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        },
+        "2025": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        },
+        "2026": {
+          "role": "VIEWED_REGRESSION_ONLY_NOT_NEW_OOS",
+          "evaluatedCandidateId": null,
+          "metrics": null
+        }
+      },
+      "independentHoldout": {
+        "year": 2022,
+        "role": "NEW_EXTERNAL_RETROSPECTIVE_HOLDOUT_NOT_CONTEMPORANEOUS_PIT",
+        "evaluationStatus": "NOT_EVALUATED_DEVELOPMENT_FAILED",
+        "evaluatedCandidateId": null,
+        "metrics": null,
+        "passed": false,
+        "reasons": [
+          "DEVELOPMENT_MUST_PASS_BEFORE_HOLDOUT_EVALUATION"
+        ]
+      }
+    }
+  },
+  "sourceAudit": [
+    {
+      "year": 2018,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2019,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2020,
+      "observedGames": 1059,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2021,
+      "observedGames": 1080,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2022,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    }
+  ],
+  "promotion": {
+    "status": "BLOCKED",
+    "executable": false,
+    "promotionEligible": false,
+    "reasons": [
+      "DEVELOPMENT_VALIDATION_INCOMPLETE_OR_FAILED",
+      "INDEPENDENT_HOLDOUT_INCOMPLETE_OR_FAILED",
+      "PRODUCTION_PROMOTION_REQUIRES_EXPLICIT_REVIEW_AND_NO_REGRESSION"
+    ],
+    "viewed2026MayAuthorizePromotion": false
+  },
+  "limitations": [
+    "Reference thresholds are not recovered market quotes or betting win rates.",
+    "Candidate/protocol-matched prequential errors retain distinct historical fit windows; coefficient identity is not claimed.",
+    "Historical score archives do not prove a contemporaneous point-in-time source snapshot."
+  ]
+}

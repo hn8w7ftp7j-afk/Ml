@@ -85,5 +85,13 @@ assert.equal(validNbaAnalysisQuery({...query,quoteFingerprint:'bad'}),false);
 console.log('NBA heartbeat race PASS: same contract and other-game updates allowed; real price/water/lock/identity changes blocked');
 
 const halfOnlyDefault = await loadNbaAnalysis(query, options({...schedule,data:{games:[{...game,seasonType:'regular',neutralSite:false}]}},{...snapshot,games:[{...row,fullTotal:null,firstHalfTotal:row.fullTotal}]},{analyzeModel:undefined}));
-assert.equal(halfOnlyDefault.status,'insufficient');assert.equal(halfOnlyDefault.modelVersion,'nba-regular-four-market-v1');assert.notEqual(halfOnlyDefault.issues[0]?.code,'NBA_ANALYSIS_TOTAL_UNAVAILABLE');
-assert.equal(halfOnlyDefault.scope,'NBA_same_season_full_and_half_markets');assert.deepEqual(halfOnlyDefault.unsupportedMarkets,[]);
+assert.equal(halfOnlyDefault.status,'insufficient');assert.equal(halfOnlyDefault.modelVersion,'nba-regular-cross-season-v1');assert.notEqual(halfOnlyDefault.issues[0]?.code,'NBA_ANALYSIS_TOTAL_UNAVAILABLE');
+assert.equal(halfOnlyDefault.scope,'NBA_regular_cross_season_market_diagnostics');assert.deepEqual(halfOnlyDefault.unsupportedMarkets,[]);
+assert.equal(halfOnlyDefault.marketAnalyses.firstHalfTotal.status,'insufficient');
+assert.equal(halfOnlyDefault.marketAnalyses.firstHalfTotal.validationDiagnostics.status,'FAIL');
+assert.ok(halfOnlyDefault.marketAnalyses.firstHalfTotal.validationDiagnostics.failedChecks.includes('earlyModelMAE'));
+assert.equal(halfOnlyDefault.marketAnalyses.fullTotal.status,'unavailable');
+assert.equal(halfOnlyDefault.marketAnalyses.firstHalfTotal.sides,undefined);
+assert.equal(halfOnlyDefault.assessment,null);
+assert.equal(halfOnlyDefault.persistence,undefined,'diagnostic-only halves must not create forward captures');
+assert.ok(halfOnlyDefault.issues.some(issue=>issue.code==='NBA_OPENING_NO_VALIDATED_QUOTE'));
