@@ -81,3 +81,18 @@ node scripts/nba-opening-v5.mjs
 
 The runner never evaluates the 2017 holdout. `--write-development` can create
 new development evidence once, but refuses to overwrite existing files.
+
+## Recorded frozen external result
+
+Protocol and development selection were pushed before the first 2017 predictive
+evaluation in commit `9da9bd40f32be4705ad44e01cbac7f45d7fa97c7`.
+Full totals improve whole MAE, Brier and Log Loss, but early MAE is
+13.753046633 versus baseline 13.731360428 and fails the raw gate. Half totals
+pass all four comparisons (early MAE 8.946273468 versus 9.170958895).
+The full report is retained unchanged in `nba-opening-v5-independent.json`.
+The 2017 holdout is consumed; this experiment cannot select or retune afterward.
+
+Viewed 2023–2026 regressions also expose remaining early-point weaknesses:
+full totals fail early MAE in 2023, 2025 and 2026; half totals fail in 2023 and
+2025. These failures are recorded in `nba-opening-v5-regression.json`.
+V5 remains unpromoted, with its production adapter's validation pin unset.

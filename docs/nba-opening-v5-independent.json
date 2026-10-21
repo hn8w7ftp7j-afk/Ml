@@ -1,0 +1,133 @@
+{
+  "version": "nba-opening-v5-independent-evaluation-v1",
+  "modelVersion": "nba-opening-totals-current-location-v5",
+  "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+  "selectionHash": "00ce57501c9da5c2e4ced47571a7437c8a577c9074172139a3f85f27a5ba8269",
+  "selectionFrozenCommit": "9da9bd40f32be4705ad44e01cbac7f45d7fa97c7",
+  "developmentReportHash": "079a9e6760d2a6a16d59308cb5b487228349b7906eda109ce68cb1ede67251e5",
+  "sourceHistoryHash": "7281aab38f4fd01f71d21e690e7db5b94f09b06eb0c2b9a66d378cdfdfa59522",
+  "reviewedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+  "holdoutYear": 2017,
+  "role": "EARLIER_ERA_EXTERNAL_RETROSPECTIVE_NOT_PROSPECTIVE_OOS",
+  "sourceAudit": [
+    {
+      "year": 2013,
+      "observedGames": 1229,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "suppliedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation_or_prospective_OOS"
+    },
+    {
+      "year": 2014,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "suppliedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation_or_prospective_OOS"
+    },
+    {
+      "year": 2015,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "suppliedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation_or_prospective_OOS"
+    },
+    {
+      "year": 2016,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "suppliedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation_or_prospective_OOS"
+    },
+    {
+      "year": 2017,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "suppliedArchiveSha256": "b387b11e4127df1d953821b37575b035d91b63cdd6d6125f8321fab52720578c",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation_or_prospective_OOS"
+    }
+  ],
+  "targets": {
+    "fullTotal": {
+      "candidate": {
+        "target": "fullTotal",
+        "modelVersion": "nba-opening-totals-current-location-v5",
+        "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+        "candidateId": "d7082453c15e098752111dde18db23e00d7978aa8863155f6e15888cc7ac0c59"
+      },
+      "metrics": {
+        "samples": 1230,
+        "earlySamples": 144,
+        "probabilitySamples": 1230,
+        "modelMAE": 14.314039601253475,
+        "baselineMAE": 14.893389599338988,
+        "earlyModelMAE": 13.753046632677421,
+        "earlyBaselineMAE": 13.731360428183166,
+        "modelBias": -0.7327682344240084,
+        "earlyModelBias": -0.9255616841848366,
+        "modelBrier": 0.23778290541118563,
+        "baselineBrier": 0.24652906281877085,
+        "modelLogLoss": 0.6680417691669813,
+        "baselineLogLoss": 0.6861925913289624
+      },
+      "passed": false,
+      "reasons": [
+        "earlyModelMAE_worse_than_baseline"
+      ]
+    },
+    "halfTotal": {
+      "candidate": {
+        "target": "halfTotal",
+        "modelVersion": "nba-opening-totals-current-location-v5",
+        "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+        "candidateId": "997f171c38b905f5a69e5200fa78473401aceb08a926a631e21cf7148787af57"
+      },
+      "metrics": {
+        "samples": 1230,
+        "earlySamples": 144,
+        "probabilitySamples": 1230,
+        "modelMAE": 9.222914377028902,
+        "baselineMAE": 9.452631604174748,
+        "earlyModelMAE": 8.946273468362394,
+        "earlyBaselineMAE": 9.170958895493897,
+        "modelBias": -0.12114476811022058,
+        "earlyModelBias": -1.4284804160665852,
+        "modelBrier": 0.24240747124150305,
+        "baselineBrier": 0.24731547135391452,
+        "modelLogLoss": 0.6777449957819714,
+        "baselineLogLoss": 0.6877755457360878
+      },
+      "passed": true,
+      "reasons": []
+    }
+  },
+  "status": "BLOCKED_HOLDOUT_FAILED",
+  "holdoutConsumed": true,
+  "reselectionAllowed": false,
+  "executable": false,
+  "promotionEligible": false,
+  "limitations": [
+    "Earlier-era validation is independent of viewed development outcomes but is not prospective OOS.",
+    "Historical final-score sources do not certify contemporaneous pregame availability.",
+    "Reference-threshold losses do not establish betting win rates or profit."
+  ]
+}

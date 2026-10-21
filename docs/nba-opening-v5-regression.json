@@ -1,0 +1,189 @@
+{
+  "version": "nba-opening-v5-current-regression-v1",
+  "modelVersion": "nba-opening-totals-current-location-v5",
+  "protocolHash": "6ca134f6db97ade0d45a4029255307743eb7f094875baf053fb5e75112caeb50",
+  "historyHash": "7c6dd23633e6a3d606691145848066204952cdb64c7e406a96dd8b05e8f4ac3e",
+  "sourceArchiveHashes": {
+    "research": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+    "training": "7eed24fa68a50dcbb5b7fd462a847fcd35eebebb4d45450724b0f707619c5d47"
+  },
+  "targets": {
+    "fullTotal": {
+      "2023": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1230,
+          "earlySamples": 143,
+          "probabilitySamples": 1230,
+          "modelMAE": 14.611415342464424,
+          "baselineMAE": 15.006634835874387,
+          "earlyModelMAE": 14.369965882187664,
+          "earlyBaselineMAE": 14.218269632717327,
+          "modelBias": -0.935206333721922,
+          "earlyModelBias": -1.2600841248650656,
+          "modelBrier": 0.24109028182781805,
+          "baselineBrier": 0.24688267381190646,
+          "modelLogLoss": 0.6752381928492863,
+          "baselineLogLoss": 0.6869083437160911
+        },
+        "passed": false,
+        "reasons": [
+          "earlyModelMAE_worse_than_baseline"
+        ]
+      },
+      "2024": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1231,
+          "earlySamples": 144,
+          "probabilitySamples": 1231,
+          "modelMAE": 14.980281924275154,
+          "baselineMAE": 15.301515658169492,
+          "earlyModelMAE": 14.369943331943098,
+          "earlyBaselineMAE": 14.95358991314445,
+          "modelBias": 1.5209513409197113,
+          "earlyModelBias": 0.3098572612561432,
+          "modelBrier": 0.24274943043456954,
+          "baselineBrier": 0.257957278454627,
+          "modelLogLoss": 0.6785793460520215,
+          "baselineLogLoss": 0.7091610355232789
+        },
+        "passed": true,
+        "reasons": []
+      },
+      "2025": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1231,
+          "earlySamples": 145,
+          "probabilitySamples": 1231,
+          "modelMAE": 14.780283276924683,
+          "baselineMAE": 15.0609076041772,
+          "earlyModelMAE": 14.785947833085658,
+          "earlyBaselineMAE": 14.734203509494172,
+          "modelBias": -0.9936824059725013,
+          "earlyModelBias": 0.8560507512605392,
+          "modelBrier": 0.24481701030786507,
+          "baselineBrier": 0.24967226633839937,
+          "modelLogLoss": 0.6825955840770167,
+          "baselineLogLoss": 0.6924915595276858
+        },
+        "passed": false,
+        "reasons": [
+          "earlyModelMAE_worse_than_baseline"
+        ]
+      },
+      "2026": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1230,
+          "earlySamples": 145,
+          "probabilitySamples": 1230,
+          "modelMAE": 15.218321998415734,
+          "baselineMAE": 15.327673855176066,
+          "earlyModelMAE": 15.249996167318725,
+          "earlyBaselineMAE": 14.70984058963917,
+          "modelBias": 0.6326708475163096,
+          "earlyModelBias": -2.2526475710965346,
+          "modelBrier": 0.24689778646022803,
+          "baselineBrier": 0.24997914040120414,
+          "modelLogLoss": 0.6870183438138885,
+          "baselineLogLoss": 0.6931054404308983
+        },
+        "passed": false,
+        "reasons": [
+          "earlyModelMAE_worse_than_baseline"
+        ]
+      }
+    },
+    "halfTotal": {
+      "2023": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1230,
+          "earlySamples": 143,
+          "probabilitySamples": 1230,
+          "modelMAE": 9.507073107303272,
+          "baselineMAE": 9.574193505394057,
+          "earlyModelMAE": 8.960794975030376,
+          "earlyBaselineMAE": 8.849511261682196,
+          "modelBias": -0.377258895464915,
+          "earlyModelBias": -0.8759036933732589,
+          "modelBrier": 0.24760226894305118,
+          "baselineBrier": 0.24790663424929238,
+          "modelLogLoss": 0.6883698245513402,
+          "baselineLogLoss": 0.6889548556356375
+        },
+        "passed": false,
+        "reasons": [
+          "earlyModelMAE_worse_than_baseline"
+        ]
+      },
+      "2024": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1231,
+          "earlySamples": 144,
+          "probabilitySamples": 1231,
+          "modelMAE": 9.91309683832649,
+          "baselineMAE": 10.06044456320182,
+          "earlyModelMAE": 9.692644548864678,
+          "earlyBaselineMAE": 9.81595141843416,
+          "modelBias": 0.4415956865302517,
+          "earlyModelBias": 1.1475792994801606,
+          "modelBrier": 0.24661954740872133,
+          "baselineBrier": 0.25284489932671683,
+          "modelLogLoss": 0.6864415317385026,
+          "baselineLogLoss": 0.6988550751399539
+        },
+        "passed": true,
+        "reasons": []
+      },
+      "2025": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1231,
+          "earlySamples": 145,
+          "probabilitySamples": 1231,
+          "modelMAE": 9.486343233302952,
+          "baselineMAE": 9.561608923218307,
+          "earlyModelMAE": 9.689797320095225,
+          "earlyBaselineMAE": 9.641197706959346,
+          "modelBias": -0.4990084225202702,
+          "earlyModelBias": 0.7461215486761126,
+          "modelBrier": 0.24866776220206258,
+          "baselineBrier": 0.25010662719756727,
+          "modelLogLoss": 0.6905252417880883,
+          "baselineLogLoss": 0.693360651272625
+        },
+        "passed": false,
+        "reasons": [
+          "earlyModelMAE_worse_than_baseline"
+        ]
+      },
+      "2026": {
+        "role": "VIEWED_CURRENT_ARCHIVE_REGRESSION_NOT_NEW_INDEPENDENT_VALIDATION",
+        "metrics": {
+          "samples": 1230,
+          "earlySamples": 145,
+          "probabilitySamples": 1230,
+          "modelMAE": 9.887453945140676,
+          "baselineMAE": 9.919836532256001,
+          "earlyModelMAE": 10.571248750793831,
+          "earlyBaselineMAE": 10.722291004909332,
+          "modelBias": 0.2839438036135497,
+          "earlyModelBias": -2.2668231260852587,
+          "modelBrier": 0.24911964449614507,
+          "baselineBrier": 0.24977191400771767,
+          "modelLogLoss": 0.6914713302378165,
+          "baselineLogLoss": 0.692690937490795
+        },
+        "passed": true,
+        "reasons": []
+      }
+    }
+  },
+  "status": "BLOCKED_REGRESSION_FAILED",
+  "executable": false,
+  "promotionEligible": false
+}
