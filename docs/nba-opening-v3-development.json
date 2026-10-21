@@ -1,0 +1,715 @@
+{
+  "version": "nba-opening-totals-phase-research-v3",
+  "protocol": {
+    "version": "nba-opening-totals-phase-research-v3",
+    "developmentYear": 2021,
+    "holdoutYear": 2022,
+    "viewedRegressionYears": [
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "priorWeights": [
+      10,
+      20,
+      40
+    ],
+    "kernels": [
+      "league_centered",
+      "phase_bias_centered",
+      "phase_ridge_centered"
+    ],
+    "selection": "separate_target_common_cohort_all_existing_gates_then_brier_logloss_early_mae",
+    "trainingSeasons": 3,
+    "ridgePenalty": 1000,
+    "earlyGames": 10,
+    "leaguePriorGames": 120,
+    "biasPriorSamples": 120,
+    "minFitSamples": 30,
+    "minResidualSamples": 50,
+    "residualHalfLifeDays": 365,
+    "baseline": "canonical_prior20_previous_three_closed_seasons_all_phases",
+    "phaseBias": "weighted_raw_prequential_error_same_phase_previous_closed_seasons_shrunk_toward_zero",
+    "centeredCalibration": "candidate_matched_same_phase_errors_minus_weighted_error_mean",
+    "phaseRidge": "independent_early_mature_ridge_intercepts_and_slopes_previous_closed_seasons",
+    "sourceYears": [
+      2018,
+      2019,
+      2020,
+      2021,
+      2022
+    ],
+    "gates": {
+      "samples": 1000,
+      "earlySamples": 100,
+      "probabilitySamples": 1000,
+      "modelMAE": "at_most_baseline",
+      "earlyModelMAE": "at_most_baseline",
+      "modelBrier": "at_most_baseline",
+      "modelLogLoss": "at_most_baseline"
+    },
+    "rationale": "V2 development shows larger positive prediction bias in early games. Compare bounded prior weights and prior-only phase correction; do not alter gates.",
+    "holdoutPolicy": "Freeze development selection before evaluating 2022. A failed holdout ends this experiment; no re-selection from holdout."
+  },
+  "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+  "developmentHistoryHash": "7713c06270a9193e31619824f564f1f5b531eecd6cb107367ac6548e9e7c4f4d",
+  "targets": {
+    "fullTotal": {
+      "commonPointSamples": 1080,
+      "commonProbabilitySamples": 1080,
+      "candidates": [
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 10,
+            "kernel": "league_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "62413f56d897fe40ef19f2e29fd92fcdb1c5d6a5dcc07b53cd3fd84466442bf3"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.921122070113647,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.605547806796137,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 2.1651005621275923,
+            "earlyModelBias": 3.576462219587438,
+            "modelBrier": 0.24668802505709833,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.686441150510916,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 10,
+            "kernel": "phase_bias_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "b5e5911f5d6a3bfa1c77f1120a96ac35d95bbc6f0125812d849a235f391361b7"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.849767853401989,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.4170770106249,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 1.0170004714336653,
+            "earlyModelBias": 1.9144143768718418,
+            "modelBrier": 0.24656075350296228,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6861774586188303,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": true,
+            "reasons": []
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 10,
+            "kernel": "phase_ridge_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "98f9067c13c19a1a2c10f36bcded3d623c7facf59d95a0ee45ecc08ba7e41c5b"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.933564217723884,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.738102557420497,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 2.1641461379671565,
+            "earlyModelBias": 4.061252099381907,
+            "modelBrier": 0.2478779367792617,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.688839319020017,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 20,
+            "kernel": "league_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "33578e38cd3e52f299d18dca3e21ab3f11dbd82d201f9b1ef1938e98c370aa7f"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 15.075443239259766,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.8479422693678,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 2.97744437645864,
+            "earlyModelBias": 4.2489273924667605,
+            "modelBrier": 0.24776497100552142,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6886474814656771,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 20,
+            "kernel": "phase_bias_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "b03a5c71d4c6fcfe722054a3f42d7b999d987d2d1cc51cb760bf9a3bcc08677a"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.887311225874871,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.453923384436122,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 0.21738994022829777,
+            "earlyModelBias": 1.764959149557719,
+            "modelBrier": 0.24748908946340173,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6880900650943277,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": true,
+            "reasons": []
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 20,
+            "kernel": "phase_ridge_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "24938548737e8ff7ec7cacda037e55a299ffbf4546cbcfb42aa9fcd774717fd8"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 15.080317632257879,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.95483564162754,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 2.9690506617595274,
+            "earlyModelBias": 4.5534204564454,
+            "modelBrier": 0.250238714472534,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6936176868048678,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 40,
+            "kernel": "league_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "37f43c85f16622a5d783fd7ac58f341eeb024a55da8b6b8f3cd1461247005b11"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 15.293206547705271,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 16.058434299230967,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 3.646984893353737,
+            "earlyModelBias": 4.88254654158214,
+            "modelBrier": 0.2517752567548439,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6967492040260231,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline",
+              "modelBrier_worse_than_baseline",
+              "modelLogLoss_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 40,
+            "kernel": "phase_bias_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "269335a641617c94dc111e1c39bb184528733e71cda48dfb9edc5e5f2ba4fd69"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 15.009010112385315,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.538003179723425,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": -0.8906492206277067,
+            "earlyModelBias": 1.5281159592340106,
+            "modelBrier": 0.2494299962567112,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.692010413610284,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "fullTotal",
+            "priorWeight": 40,
+            "kernel": "phase_ridge_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "9545f8590fce4f5738bd04debcf4bec962f93b71c2394d39d1557f03d30f6d60"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 15.293852069079383,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 16.10009824679744,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": 3.6491183432647714,
+            "earlyModelBias": 4.726518848854636,
+            "modelBrier": 0.2529838669384447,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6991994350946512,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline",
+              "modelBrier_worse_than_baseline",
+              "modelLogLoss_worse_than_baseline"
+            ]
+          }
+        }
+      ],
+      "selected": {
+        "target": "fullTotal",
+        "priorWeight": 10,
+        "kernel": "phase_bias_centered",
+        "modelVersion": "nba-opening-totals-phase-research-v3",
+        "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+        "candidateId": "b5e5911f5d6a3bfa1c77f1120a96ac35d95bbc6f0125812d849a235f391361b7"
+      }
+    },
+    "halfTotal": {
+      "commonPointSamples": 1080,
+      "commonProbabilitySamples": 1080,
+      "candidates": [
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 10,
+            "kernel": "league_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "f4bc7d12a2d0f89cf95b630559cb4d607d0a1c4d9ae7a22918b8fde1de4a4796"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.711525234193564,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.694431306984367,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 0.8268734731633817,
+            "earlyModelBias": 1.8087576006298904,
+            "modelBrier": 0.2480545984164497,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.689266513821598,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 10,
+            "kernel": "phase_bias_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "c519171fc158bab4e978b469d405d1a1e954d30cf5a91087bcd9bfe85a469b58"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.688874756980523,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.596949947113105,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 0.5020512439446173,
+            "earlyModelBias": 0.5599426633458382,
+            "modelBrier": 0.24827342762465415,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6897094906004481,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": true,
+            "reasons": []
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 10,
+            "kernel": "phase_ridge_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "eb87b9cfdaf498339330d66bd3b605a1f646ee1e11233e537b6b96d0695972be"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.71956860956571,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.727212820241641,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 0.8242553772938072,
+            "earlyModelBias": 1.401017399756684,
+            "modelBrier": 0.24960492890874725,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6923858382613336,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 20,
+            "kernel": "league_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "c563a3737a3334b9dd0629ef15210f157c4c32a582aa8403b374ea0999eb5821"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.761793116972681,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.757450707429834,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 1.0657121077217586,
+            "earlyModelBias": 1.897773378138532,
+            "modelBrier": 0.24853247814103238,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6902111594048075,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 20,
+            "kernel": "phase_bias_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "358b1719acf27ee3a175a7d6d7e328872bad70dede81ed5bf4573a7c9d445551"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.701321284559558,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.596957189312311,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": -0.02699980718841583,
+            "earlyModelBias": 0.21905090000626024,
+            "modelBrier": 0.24890281249020194,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6909652446147558,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": true,
+            "reasons": []
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 20,
+            "kernel": "phase_ridge_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "d3a73432ea27249f431baeebf124844e9239cec7ba275ce6efff22adf61e3c0a"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.77206949162409,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.800395721795375,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 1.0656706566829985,
+            "earlyModelBias": 1.4226143967678313,
+            "modelBrier": 0.2512583485824734,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.695740367785384,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 40,
+            "kernel": "league_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "df0a87eed0570a6ab2fb0e426d6a707889c4fe999e3e220572eb1912a8c0664b"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.844378231780814,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.85591692739686,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 1.2917786550870511,
+            "earlyModelBias": 2.09830489763296,
+            "modelBrier": 0.25130944013763334,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.695791380258406,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 40,
+            "kernel": "phase_bias_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "d173c33f707cc3e17c0bdcc9f85e26367e3a6b4fb039831086597e51f79cbf8a"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.762061822808167,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.619997002897154,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": -0.6067501387436937,
+            "earlyModelBias": 0.019338498133139776,
+            "modelBrier": 0.25073167033790095,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6946210032212975,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline"
+            ]
+          }
+        },
+        {
+          "candidate": {
+            "target": "halfTotal",
+            "priorWeight": 40,
+            "kernel": "phase_ridge_centered",
+            "modelVersion": "nba-opening-totals-phase-research-v3",
+            "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+            "candidateId": "a99a97a9db5fa07057a9f80a536e118283e33a8ceaa7f9ebc6e268e9cc1fef3f"
+          },
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.851481487082486,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.862574781649137,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": 1.2998520246001106,
+            "earlyModelBias": 1.4344376991746781,
+            "modelBrier": 0.25421846772602125,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.7017251628610157,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "readiness": {
+            "readyForIndependentValidation": false,
+            "reasons": [
+              "modelMAE_worse_than_baseline",
+              "earlyModelMAE_worse_than_baseline",
+              "modelBrier_worse_than_baseline",
+              "modelLogLoss_worse_than_baseline"
+            ]
+          }
+        }
+      ],
+      "selected": {
+        "target": "halfTotal",
+        "priorWeight": 10,
+        "kernel": "phase_bias_centered",
+        "modelVersion": "nba-opening-totals-phase-research-v3",
+        "protocolHash": "241ae48469febe96b667b2175f745a8e6246ad90391a129953c70c0a05aee028",
+        "candidateId": "c519171fc158bab4e978b469d405d1a1e954d30cf5a91087bcd9bfe85a469b58"
+      }
+    }
+  },
+  "sourceAudit": [
+    {
+      "year": 2018,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2019,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2020,
+      "observedGames": 1059,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2021,
+      "observedGames": 1080,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2022,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    }
+  ],
+  "holdout": {
+    "year": 2022,
+    "evaluationStatus": "NOT_EVALUATED_SELECTION_NOT_YET_LOCKED",
+    "metrics": null
+  },
+  "executable": false,
+  "promotionEligible": false
+}

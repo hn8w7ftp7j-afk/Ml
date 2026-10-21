@@ -38,6 +38,7 @@ export default function NbaForwardValidationPanel() {
   useEffect(() => { void refresh(); }, []);
   return <section className="panel" aria-label="NBA 模型前瞻驗證">
     <h2>NBA 模型驗證｜原盤口、賽前固定、賽後核對</h2>
+    <p><a href="/model-validation#nba-opening-totals">查看新版開季大小分的歷史驗證</a></p>
     <p>每場每盤口固定最後一筆完整賽前分析，雙方向都保留。只統計資料庫證明在開賽前保存、並由 NBA 官方與 ESPN 核對完賽比分的預測。</p>
     <p>固定條件 S ≥ 7.2、W &gt; 0、R &gt; 0，含 1.5% 退水。缺少當時固定的 S／R 不列入篩選方向；不拿新模型補算舊選擇。</p>
     <div className="heroControls"><button className="secondary" disabled={!!busy} onClick={() => refresh()}>重新讀取驗證</button><button className="secondary" disabled={!!busy} onClick={() => refresh('evaluate')}>核對已完賽預測</button><button className="secondary" disabled={!!busy} onClick={() => refresh('sync')}>同步近期完賽歷史</button></div>

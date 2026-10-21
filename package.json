@@ -1,13 +1,20 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.10.28",
+  "version": "11.10.29",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
-    "test:nba-opening-diagnostics": "node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-opening-diagnostics-test.mjs && node scripts/nba-opening-diagnostics-ui-test.mjs && node scripts/nba-opening-history-acquisition-test.mjs && node scripts/nba-opening-history-evidence-test.mjs && node scripts/nba-opening-research-test.mjs",
+    "test:nba-opening-v6": "node scripts/nba-opening-v6-historical-alias-test.mjs && node scripts/nba-opening-v6-independent-evidence-test.mjs && node scripts/nba-opening-v6-test.mjs && node scripts/nba-opening-v6-independent-test.mjs && node scripts/nba-opening-totals-v6-runtime-test.mjs && node scripts/prepare-nba-opening-v6-release.mjs && node scripts/nba-opening-totals-v6-client-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-opening-totals-integration-test.mjs",
+    "nba:opening-v6": "node scripts/nba-opening-v6.mjs",
+    "test:nba-opening-v5": "node scripts/nba-opening-independent-evidence-test.mjs && node scripts/nba-opening-v5-test.mjs && node scripts/nba-opening-v5-independent-test.mjs && node scripts/nba-opening-totals-v5-runtime-test.mjs",
+    "test:nba-opening-v4": "node scripts/nba-opening-v4-test.mjs",
+    "nba:opening-v4": "node scripts/nba-opening-v4.mjs",
+    "test:nba-opening-v3": "node scripts/nba-opening-v3-test.mjs",
+    "nba:opening-v3": "node scripts/nba-opening-v3.mjs",
+    "test:nba-opening-diagnostics": "node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-opening-diagnostics-test.mjs && node scripts/nba-opening-diagnostics-ui-test.mjs && node scripts/nba-opening-history-acquisition-test.mjs && node scripts/nba-opening-history-evidence-test.mjs && node scripts/nba-opening-research-test.mjs && npm run test:nba-opening-v3 && npm run test:nba-opening-v4 && npm run test:nba-opening-v5 && npm run test:nba-opening-v6",
     "nba:opening-research": "node scripts/nba-opening-research.mjs",
     "test:screen-awake": "node scripts/screen-awake-test.mjs",
     "pretest:soccer": "npm run test:soccer-reader-diagnostics && npm run test:soccer-workspace",

@@ -77,6 +77,7 @@ const readerRow={...quotes,league:'NBA',boardDate:date,boardTime:'07:00',capture
 const snapshot={league:'NBA',boardDate:date,observedAt:at,pageActivityAt:at,games:[readerRow],gameCount:1};
 let saves=0;
 const service=await loadNbaAnalysis({date,id:game.sourceId,observedAt:at},{now,loadSchedule:async()=>({league:'NBA',status:'ready',qa:{status:'WARNING'},sources:[{status:'ready'}],data:{games:[game]}}),
+  analyzeOpeningTotals:null,
   loadReader:async()=>snapshot,loadTraining:async()=>({status:'ready',trainingData:defaultTraining,halfTraining:quarterTraining}),
   saveCapture:async a=>{saves++;const saved=buildNbaAnalysisCapture(a);assert.equal(validNbaForwardCapture({revision:saved.revision,payload:saved.payload,captured_at:at}),true);return{persisted:true,status:'saved',revision:saved.revision,capturedAt:at};}});
 assert.equal(service.status,'ready');assert.equal(service.modelVersion,'nba-regular-cross-season-v1');assert.equal(saves,1);

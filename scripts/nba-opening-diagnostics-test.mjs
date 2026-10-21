@@ -89,7 +89,7 @@ const reader = { league: 'NBA', boardDate: date, observedAt, pageActivityAt: obs
   games: [{ ...quotes, league: 'NBA', boardDate: date, boardTime: '07:00', captureKey: 'opening-diagnostics-test',
     marketStatus: 'open', away: game.away, home: game.home }] };
 const schedule = { league: 'NBA', status: 'ready', qa: { status: 'WARNING' }, sources: [{ status: 'ready' }], data: { games: [game] } };
-const options = { now, loadSchedule: async () => schedule,
+const options = { now, analyzeOpeningTotals:null, loadSchedule: async () => schedule,
   loadTraining: async () => ({ status: 'ready', trainingData: defaultTraining, halfTraining: quarterTraining }),
   saveCapture: async () => { saves++; return { persisted: true }; } };
 const serviceReader = structuredClone(reader); delete serviceReader.games[0].fullRunline;

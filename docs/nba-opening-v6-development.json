@@ -1,0 +1,390 @@
+{
+  "version": "nba-opening-totals-early-baseline-hybrid-v6",
+  "protocol": {
+    "version": "nba-opening-totals-early-baseline-hybrid-v6",
+    "pointModelProtocolHash": "0e95ea0df2b35bb02917e2e905e267418dd6a58ae40dc361e35cd38f455737fe",
+    "point": "early_both_under10_exact_canonical_prior20_baseline_otherwise_exact_v4_point",
+    "shape": "same_target_candidate_version_phase_closed_prior_three_seasons_hybrid_point_errors_minus_weighted_mean",
+    "location": "strictly_earlier_date_current_season_all_phase_hybrid_point_error_sum_over_120_plus_count",
+    "distributionCenter": "hybrid_point_prediction_plus_current_season_location",
+    "update": "all_games_on_date_predicted_before_any_of_that_date_results",
+    "correctionPriorSamples": 120,
+    "trainingSeasons": 3,
+    "residualHalfLifeDays": 365,
+    "minimumResidualSamples": 50,
+    "earlyGames": 10,
+    "developmentYears": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "independentHoldoutYear": 2011,
+    "independentTrainingYears": [
+      2007,
+      2008,
+      2009,
+      2010
+    ],
+    "holdoutRole": "new_external_backward_era_retrospective_validation_not_prospective_or_historical_pregame_capture",
+    "selection": "one_fixed_candidate_per_target_all_development_years_must_pass_no_parameter_search",
+    "holdoutPolicy": "freeze_protocol_implementation_and_development_selection_before_any_real_2011_predictive_metrics_no_reselection",
+    "baseline": "canonical_prior20_phase_independent_v1",
+    "gates": {
+      "samples": 1000,
+      "earlySamples": 100,
+      "probabilitySamples": 1000,
+      "modelMAE": "at_most_baseline",
+      "earlyModelMAE": "at_most_baseline",
+      "modelBrier": "at_most_baseline",
+      "modelLogLoss": "at_most_baseline"
+    },
+    "probabilityEvent": "rounded_predictive_score_exceeds_arbitrary_reference_threshold",
+    "production": "no_activation_without_verified_independent_evidence_and_exact_runtime_parity",
+    "earlyPointClaim": "equals_benchmark_by_construction_no_claim_of_improved_early_point_accuracy"
+  },
+  "protocolHash": "01bd869099a83f1113e499732ebc6bac10be5f716961ca7ef02aa793f09ce795",
+  "historyHash": "7c6dd23633e6a3d606691145848066204952cdb64c7e406a96dd8b05e8f4ac3e",
+  "sourceAudit": [
+    {
+      "year": 2018,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2019,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2020,
+      "observedGames": 1059,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2021,
+      "observedGames": 1080,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    },
+    {
+      "year": 2022,
+      "observedGames": 1230,
+      "verified": true,
+      "reason": null,
+      "failureCodes": [],
+      "reviewedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "suppliedArchiveSha256": "0885775b75c4901a65a2261330918bbef387e3e623a7d1d3c45e9d4e7f4a1b49",
+      "schedulesChecked": 30,
+      "sourceBasis": "reviewed_raw_source_hash_and_reconstructed_manifest_not_remote_attestation"
+    }
+  ],
+  "regressionSource": {
+    "yearScope": [
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "verified": true,
+    "reviewedArchiveSha256": "7eed24fa68a50dcbb5b7fd462a847fcd35eebebb4d45450724b0f707619c5d47",
+    "historySha256": "dbba448fefb530dcbb967c4858c90212472e8fe80c1dbc5545c48e0c4dbbdcc1"
+  },
+  "targets": {
+    "fullTotal": {
+      "candidate": {
+        "target": "fullTotal",
+        "modelVersion": "nba-opening-totals-early-baseline-hybrid-v6",
+        "protocolHash": "01bd869099a83f1113e499732ebc6bac10be5f716961ca7ef02aa793f09ce795",
+        "candidateId": "d4ab69332c3c6eedd276cb2a43f613b26ef932f371c7816ffdb343d9bb8168d3"
+      },
+      "years": {
+        "2021": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 14.871396332002233,
+            "baselineMAE": 15.033985344599904,
+            "earlyModelMAE": 15.5340938592896,
+            "earlyBaselineMAE": 15.5340938592896,
+            "modelBias": -0.4246789911557738,
+            "earlyModelBias": 0.7862844826462868,
+            "modelBrier": 0.2471450377503243,
+            "baselineBrier": 0.2510129722552818,
+            "modelLogLoss": 0.6873470172240252,
+            "baselineLogLoss": 0.6951835146273145
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2022": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 15.263774811739072,
+            "baselineMAE": 15.352523599587292,
+            "earlyModelMAE": 17.466607454098494,
+            "earlyBaselineMAE": 17.466607454098494,
+            "modelBias": -3.2839757782043715,
+            "earlyModelBias": 8.649748448206939,
+            "modelBrier": 0.24092028892207593,
+            "baselineBrier": 0.2497021601354912,
+            "modelLogLoss": 0.6751864660462862,
+            "baselineLogLoss": 0.6925510655381989
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2023": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 14.593779111834948,
+            "baselineMAE": 15.006634835874387,
+            "earlyModelMAE": 14.218269632717327,
+            "earlyBaselineMAE": 14.218269632717327,
+            "modelBias": -1.1573712892386165,
+            "earlyModelBias": -3.1710134625261372,
+            "modelBrier": 0.24050671795634915,
+            "baselineBrier": 0.24688267381190646,
+            "modelLogLoss": 0.6739804958262516,
+            "baselineLogLoss": 0.6869083437160911
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2024": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1231,
+            "earlySamples": 144,
+            "probabilitySamples": 1231,
+            "modelMAE": 15.048555772929086,
+            "baselineMAE": 15.301515658169492,
+            "earlyModelMAE": 14.95358991314445,
+            "earlyBaselineMAE": 14.95358991314445,
+            "modelBias": 1.676336989131127,
+            "earlyModelBias": 1.6381887400634438,
+            "modelBrier": 0.24393074196045667,
+            "baselineBrier": 0.257957278454627,
+            "modelLogLoss": 0.680980952736291,
+            "baselineLogLoss": 0.7091610355232789
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2025": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1231,
+            "earlySamples": 145,
+            "probabilitySamples": 1231,
+            "modelMAE": 14.774188291611306,
+            "baselineMAE": 15.0609076041772,
+            "earlyModelMAE": 14.734203509494172,
+            "earlyBaselineMAE": 14.734203509494172,
+            "modelBias": -0.9268603140358471,
+            "earlyModelBias": 1.4233472697020668,
+            "modelBrier": 0.24501772262729926,
+            "baselineBrier": 0.24967226633839937,
+            "modelLogLoss": 0.6830026310720541,
+            "baselineLogLoss": 0.6924915595276858
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2026": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 145,
+            "probabilitySamples": 1230,
+            "modelMAE": 15.154645121372212,
+            "baselineMAE": 15.327673855176066,
+            "earlyModelMAE": 14.70984058963917,
+            "earlyBaselineMAE": 14.70984058963917,
+            "modelBias": 0.3100801029719023,
+            "earlyModelBias": -4.989106990335287,
+            "modelBrier": 0.2462051933480894,
+            "baselineBrier": 0.24997914040120414,
+            "modelLogLoss": 0.6855275641741635,
+            "baselineLogLoss": 0.6931054404308983
+          },
+          "passed": true,
+          "reasons": []
+        }
+      },
+      "selectedForIndependentValidation": true
+    },
+    "halfTotal": {
+      "candidate": {
+        "target": "halfTotal",
+        "modelVersion": "nba-opening-totals-early-baseline-hybrid-v6",
+        "protocolHash": "01bd869099a83f1113e499732ebc6bac10be5f716961ca7ef02aa793f09ce795",
+        "candidateId": "9810add719acdbc04c54d0347fc66828ca1e7feef3158df8385654dd63f1ff59"
+      },
+      "years": {
+        "2021": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1080,
+            "earlySamples": 144,
+            "probabilitySamples": 1080,
+            "modelMAE": 9.691357571932702,
+            "baselineMAE": 9.75757759685829,
+            "earlyModelMAE": 9.672482691615953,
+            "earlyBaselineMAE": 9.672482691615953,
+            "modelBias": -0.4514390075443077,
+            "earlyModelBias": 0.26959337059034916,
+            "modelBrier": 0.24911655289288862,
+            "baselineBrier": 0.25235657233702785,
+            "modelLogLoss": 0.6913985514176559,
+            "baselineLogLoss": 0.6978919473425701
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2022": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 10.22838518228582,
+            "baselineMAE": 10.27680268497869,
+            "earlyModelMAE": 10.594371047604115,
+            "earlyBaselineMAE": 10.594371047604115,
+            "modelBias": -1.8067758049251246,
+            "earlyModelBias": 4.229124305133673,
+            "modelBrier": 0.24612019299986293,
+            "baselineBrier": 0.24925288752579683,
+            "modelLogLoss": 0.6855992934883949,
+            "baselineLogLoss": 0.6916529314479779
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2023": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 143,
+            "probabilitySamples": 1230,
+            "modelMAE": 9.4941352446945,
+            "baselineMAE": 9.574193505394057,
+            "earlyModelMAE": 8.849511261682196,
+            "earlyBaselineMAE": 8.849511261682196,
+            "modelBias": -0.4643129161518967,
+            "earlyModelBias": -1.6246900251563876,
+            "modelBrier": 0.24704257618508257,
+            "baselineBrier": 0.24790663424929238,
+            "modelLogLoss": 0.6872504040224736,
+            "baselineLogLoss": 0.6889548556356375
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2024": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1231,
+            "earlySamples": 144,
+            "probabilitySamples": 1231,
+            "modelMAE": 9.92752103752877,
+            "baselineMAE": 10.06044456320182,
+            "earlyModelMAE": 9.81595141843416,
+            "earlyBaselineMAE": 9.81595141843416,
+            "modelBias": 0.5799222908908321,
+            "earlyModelBias": 2.330079646479288,
+            "modelBrier": 0.24672361840511794,
+            "baselineBrier": 0.25284489932671683,
+            "modelLogLoss": 0.6866043491187863,
+            "baselineLogLoss": 0.6988550751399539
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2025": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1231,
+            "earlySamples": 145,
+            "probabilitySamples": 1231,
+            "modelMAE": 9.480618664736989,
+            "baselineMAE": 9.561608923218307,
+            "earlyModelMAE": 9.641197706959346,
+            "earlyBaselineMAE": 9.641197706959346,
+            "modelBias": -0.37222049191614376,
+            "earlyModelBias": 1.8225073595290728,
+            "modelBrier": 0.24844743042009976,
+            "baselineBrier": 0.25010662719756727,
+            "modelLogLoss": 0.6900505933729321,
+            "baselineLogLoss": 0.693360651272625
+          },
+          "passed": true,
+          "reasons": []
+        },
+        "2026": {
+          "role": "VIEWED_DEVELOPMENT_NOT_INDEPENDENT",
+          "metrics": {
+            "samples": 1230,
+            "earlySamples": 145,
+            "probabilitySamples": 1230,
+            "modelMAE": 9.905259739325023,
+            "baselineMAE": 9.919836532256001,
+            "earlyModelMAE": 10.722291004909332,
+            "earlyBaselineMAE": 10.722291004909332,
+            "modelBias": 0.08493103895164873,
+            "earlyModelBias": -3.9550003711482784,
+            "modelBrier": 0.249382645686882,
+            "baselineBrier": 0.24977191400771767,
+            "modelLogLoss": 0.6920850539375243,
+            "baselineLogLoss": 0.692690937490795
+          },
+          "passed": true,
+          "reasons": []
+        }
+      },
+      "selectedForIndependentValidation": true
+    }
+  },
+  "status": "DEVELOPMENT_PASSED_PENDING_FROZEN_EXTERNAL_HOLDOUT",
+  "independentValidation": {
+    "year": 2011,
+    "status": "NOT_EVALUATED_SELECTION_NOT_FROZEN",
+    "metrics": null
+  },
+  "executable": false,
+  "promotionEligible": false
+}
