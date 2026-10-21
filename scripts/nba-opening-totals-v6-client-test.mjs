@@ -39,6 +39,13 @@ for(const key of ['fullTotal','firstHalfTotal']){
 assert.equal(nbaResultQuoteCurrent(row,now),true);
 const batch={league:'NBA',date,runId:row.resultRunId,results:[{ok:true,task:{nbaQuery:{id:game.sourceId,date,observedAt},game},payload:result}]};
 assert.equal(mergeNbaAnalysisResults(batch,[row],date)[0].result.modelVersion,NBA_OPENING_COMPOSITE_VERSION);
+// Durable job progress is JSONB: object key order changes on read. The same
+// evidence must survive that boundary without changing any value or array.
+const reorder = value => Array.isArray(value) ? value.map(reorder)
+  : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key=>[key,reorder(value[key])])) : value;
+const durableBatch=reorder(JSON.parse(JSON.stringify(batch)));
+assert.equal(validOpeningResult(durableBatch.results[0].payload,date),true,'JSONB key order must not reject valid evidence');
+assert.equal(mergeNbaAnalysisResults(durableBatch,[row],date)[0].result.modelVersion,NBA_OPENING_COMPOSITE_VERSION);
 const ranking=buildNbaShadowRanking([row],date,now);
 assert.equal(ranking.entries.length,8);assert.equal(ranking.currentGames,1);
 assert.equal(ranking.entries.filter(r=>r.marketKey.endsWith('Total')).length,4);
@@ -79,6 +86,7 @@ const mutations=[
 for(const mutate of mutations){
   const changed=structuredClone(result);mutate(changed);
   assert.equal(validOpeningResult(changed,date),false);
+  assert.equal(validOpeningResult(reorder(changed),date),false,'key-order independence cannot relax evidence checks');
   assert.equal(buildNbaShadowRanking([{...row,result:changed}],date,now).entries.length,0);
   assert.throws(()=>mergeNbaAnalysisResults({...batch,results:[{...batch.results[0],payload:changed}]},[row],date),/分析無效|缺少有效分析/);
 }
