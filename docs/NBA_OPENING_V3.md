@@ -92,3 +92,21 @@ The experiment stops with `BLOCKED_HOLDOUT_FAILED`; the 2023–2026 archive was 
 used to search for a passing replacement. Existing spread scoring is untouched.
 New research would require a declared new protocol and genuinely independent
 validation evidence, not reusing 2022 as an unseen test after tuning against it.
+
+## Cross-runtime replay, not a model-gate tolerance
+
+The initial full CI run exposed a Node 22 / Node 24 floating-point serialization
+difference in three development diagnostics (maximum absolute delta
+`1.2094492074510299e-14`). Candidate identities, selected candidates, sample
+counts and every acceptance decision were identical. The selected candidates'
+development metrics were unchanged; a raw hash of all diagnostics was too strict
+for portable numerical replay.
+
+The original development, selection and consumed-holdout JSON remain byte-pinned
+and are never overwritten by replay commands. The current calculation is checked
+against that immutable evidence. Only floating metric fields can differ within
+64 machine epsilons, scaled by magnitude. Counts, sources, candidate IDs, hashes,
+selection, PASS/FAIL and reasons must still match exactly. A meaningful metric
+change is rejected. This numerical check is **not** used by model acceptance:
+all gates still evaluate raw values with no tolerance. Tests explicitly reject
+changed sample counts, statuses, reasons, hashes or early-MAE changes.

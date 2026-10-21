@@ -5,7 +5,7 @@ import { openingBaseline, openingVariableAccepted } from '../lib/nba/opening-cor
 import { buildOpeningResearchBaselineObservations, openingResearchReadiness } from '../lib/nba/opening-research.js';
 import { TOTALS_V3_PROTOCOL, TOTALS_V3_PROTOCOL_HASH, TOTALS_V3_EXPECTED_PROTOCOL_HASH,
   totalsV3Candidate, buildTotalsV3Observations, totalsV3Probability, totalsV3Metrics, totalsV3Hash,
-  createTotalsV3Selection, TOTALS_V3_FROZEN_SELECTION_HASH, TOTALS_V3_RECORDED_HOLDOUT_HASH, evaluateTotalsV3Holdout } from '../lib/nba/opening-research-v3.js';
+  createTotalsV3Selection, TOTALS_V3_FROZEN_SELECTION_HASH, TOTALS_V3_RECORDED_HOLDOUT_HASH, evaluateTotalsV3Holdout, assertTotalsV3Replay } from '../lib/nba/opening-research-v3.js';
 
 const history=openingResearchHistory.history.filter(r=>r.year<=2021);
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-10,`${a} != ${b}`);
@@ -104,5 +104,15 @@ for(const target of ['fullTotal','halfTotal']) {
 }
 // Reproduce only the already-consumed, frozen selection. Never score alternate
 // holdout candidates or adapt the implementation to improve these metrics.
-assert.deepEqual(evaluateTotalsV3Holdout(openingResearchHistory.history,selection,{archiveEvidence:openingResearchHistory}),recordedHoldout);
+assert.throws(()=>evaluateTotalsV3Holdout(openingResearchHistory.history,selection,{archiveEvidence:openingResearchHistory,developmentEvidence:report}),/HOLDOUT_EVIDENCE/);
+const tiny=structuredClone(recordedHoldout);tiny.targets.fullTotal.metrics.modelLogLoss+=Number.EPSILON;
+assert.equal(assertTotalsV3Replay(tiny,recordedHoldout).gateTolerance,0);
+for(const mutate of [
+  r=>{r.targets.fullTotal.metrics.earlyModelMAE-=.01;},
+  r=>{r.targets.fullTotal.metrics.samples--;},
+  r=>{r.targets.fullTotal.passed=true;},
+  r=>{r.targets.fullTotal.reasons=[];},
+  r=>{r.selectionHash='other';},
+]) {const changed=structuredClone(recordedHoldout);mutate(changed);assert.throws(()=>assertTotalsV3Replay(changed,recordedHoldout),/REPLAY_MISMATCH/);}
+assert.deepEqual(evaluateTotalsV3Holdout(openingResearchHistory.history,selection,{archiveEvidence:openingResearchHistory,developmentEvidence:report,holdoutEvidence:recordedHoldout}),recordedHoldout);
 console.log('PASS v3 bounded per-target research: prior-only math/leakage/scope tests, exact frozen development and consumed-holdout replay, unchanged gates, failed early checks preserved and no production activation');
