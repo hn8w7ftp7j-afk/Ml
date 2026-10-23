@@ -130,6 +130,6 @@ assert.equal(savedJobs.length, 3);
 assert.equal(clickContext.requestedRecoveryScopeRef.current, `MLB:${date}`, 'visible league must attach to incremental progress immediately');
 assert.equal(publishedRun.leagues.NPB.message, '盤口已過期');
 assert.equal(publishedRun.leagues.NPB.code, 'READER_STALE', 'diagnostic code remains available without prefixing user text');
-assert.equal(publishedRun.leagues.MLB.status, 'running');
+assert.equal(publishedRun.leagues.MLB.status, 'queued', 'submission alone does not establish running status');
 assert.equal(clickContext.allLeagueBusyRef.current, false);
 console.log('PASS actual all-league click: failed Reader isolated, healthy jobs submitted, incremental polling attached and preparation lock released');
