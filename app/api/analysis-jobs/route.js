@@ -1,4 +1,4 @@
-import { getAnalysisJobProgress } from '../../../lib/analysis-job-progress-store.js';
+import { getAnalysisJobProgress, getAnalysisJobProgressSummaries } from '../../../lib/analysis-job-progress-store.js';
 import { NextResponse } from 'next/server';
 import { getRun, start } from 'workflow/api';
 import { analyzeAllLeaguesWorkflow, analyzeBoardWorkflow } from '../../../workflows/analyze-board.js';
@@ -259,7 +259,9 @@ export async function GET(request) {
       return NextResponse.json({ ok: true, runId, status, result });
     }
     const progress = await progressRead;
-    return NextResponse.json({ ok: true, runId, status, progress });
+    const leagueProgress = summaryOnly
+      ? await measure('progress_summary', () => getAnalysisJobProgressSummaries(runId)).catch(() => []) : undefined;
+    return NextResponse.json({ ok: true, runId, status, progress, ...(summaryOnly ? { leagueProgress } : {}) });
   } catch (error) {
     return NextResponse.json({ ok: false, code: 'BACKGROUND_JOB_STATUS_FAILED', error: String(error?.message || error) }, { status: 500 });
   } finally {

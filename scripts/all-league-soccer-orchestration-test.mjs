@@ -60,7 +60,7 @@ assert.equal(happy.jobs[0].batches.length, 7);
 assert.deepEqual(happy.jobs[0].batches.filter(b => isSoccerAnalysisLeague(b.league)).map(b => [b.league, b.date]), [['EPL', '2026-10-20'], ['UCL', '2026-10-21']]);
 assert.deepEqual(happy.saved.map(row => row.league), [...LEAGUE_IDS], 'football results cannot enter baseball caches or ledgers');
 assert.equal(happy.ctx.run.leagues.EPL.boardDate, '2026-10-20');
-assert.equal(happy.ctx.run.leagues.UCL.status, 'running');
+assert.equal(happy.ctx.run.leagues.UCL.status, 'queued', 'accepted work stays queued until server progress confirms execution');
 happy.ctx.allLeagueBusyRef.current = true;
 assert.equal(await happy.ctx.oneClickAnalyzeAll(), false);
 assert.equal(happy.jobs.length, 1, 'duplicate submission is blocked');

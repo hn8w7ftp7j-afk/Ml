@@ -130,6 +130,7 @@ import {
   mergePreparedLeagueBoard,
   preserveCompletedReaderResult,
   summarizeAllLeagueBatchResult,
+  applyAllLeagueLiveProgress,
   updateAllLeagueAnalysisLeague,
 } from '../lib/all-league-analysis-v117.js';
 import { capturedReaderContractReady, evaluateBetAction } from '../lib/bet-action-state-v118.js';
@@ -2582,6 +2583,9 @@ export default function Home() {
       try {
         const state = await requestJSON(`/api/analysis-jobs?runId=${encodeURIComponent(expectedRunId)}&summary=1&t=${Date.now()}`, {}, 30000);
         if (!stillCurrentRun()) return;
+        if (Array.isArray(state.leagueProgress)) {
+          publishAllLeagueRun(applyAllLeagueLiveProgress(allLeagueRunRef.current, state.leagueProgress));
+        }
         if (state.status === 'completed') {
           const saved = loadAllLeagueAnalysisRun(date);
           const latest = saved?.runId === expectedRunId ? saved : allLeagueRunRef.current;
@@ -4078,7 +4082,7 @@ export default function Home() {
       for (const batch of batches) {
         if (batch.tasks.length) {
           run = updateAllLeagueAnalysisLeague(run, batch.league, {
-            status: 'running', message: `伺服器依序分析 ${batch.tasks.length} 場`,
+            status: 'queued', message: `已排入 ${batch.tasks.length} 場｜等待伺服器開始此聯盟`,
           });
         }
         if (!LEAGUE_IDS.includes(batch.league)) continue;
