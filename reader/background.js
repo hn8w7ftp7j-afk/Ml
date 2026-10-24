@@ -3,7 +3,7 @@ import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSu
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 
-const VERSION = '2.1.42';
+const VERSION = '2.1.43';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -297,7 +297,7 @@ async function syncNow(reason, preferredTabId = null) {
 }
 
 async function performSync(reason, preferredTabId) {
-  const context = { tabCount: 0, silentTabCount: 0, leagues: {} };
+  const context = { tabCount: 0, silentTabCount: 0, leagues: {}, authority: {} };
   let exceptionCode = '';
   try { return await performSyncAttempt(reason, preferredTabId, context); }
   catch (error) { exceptionCode = syncExceptionCode(error); throw error; }
@@ -312,7 +312,8 @@ async function performSync(reason, preferredTabId) {
           const status = stored.readerStatuses?.[league];
           if (status) leagues[league] = { state: status.state, errorCode: status.diagnosticCode || '',
             issues: status.diagnosticIssues || [], rawGameCount: status.rawGameCount || 0,
-            marketCount: status.marketCount || 0, boards: context.leagues[league] || [] };
+            marketCount: status.marketCount || 0, boards: context.leagues[league] || [],
+            ...(context.authority[league] ? { authority: context.authority[league] } : {}) };
         }
         await getDiagnosticOutbox().enqueue({ schema: DIAGNOSTIC_SCHEMA, reportId: crypto.randomUUID(),
           readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(),
@@ -372,6 +373,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     context.leagues[league] = (selection.assessed || []).map(item => ({ diagnostics: item.candidate?.capture?.diagnostics,
       parsedGameCount: item.candidate?.parsed?.games?.length || 0, issues: item.issues || [] }));
     if (!selection.ok) {
+      if (soccer && selection.diagnosticEvidence) context.authority[league] = selection.diagnosticEvidence;
       const detail = selection.error === 'conflicting-duplicate-rows'
         ? '同場盤口重複且數字不一致，已停止上傳；請重新整理 Tai888 分頁後再同步'
         : selection.error === 'conflicting-duplicate-frames'

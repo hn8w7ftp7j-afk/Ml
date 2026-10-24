@@ -4,6 +4,8 @@ import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from '../reader/parser.js';
 import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, assessBoardCandidate, readerPayloadsByDate, shouldSkipSuccessfulPayload } from '../reader/board-selector.js';
+import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from '../reader/diagnostic-outbox.js';
+import { DIAGNOSTIC_SCHEMA, sanitizeDiagnosticReport } from '../reader/diagnostic-schema.js';
 import { validateSoccerCapture } from '../lib/soccer/reader.js';
 
 const now=Date.parse('2026-10-19T00:00:00Z'),at=new Date(now).toISOString();
@@ -43,14 +45,15 @@ assert.deepEqual(readerPayloadsByDate({league:'EPL',games:[],periodsCovered:['FT
 
 const event={addListener(){}};
 class Clock extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
-async function execute(captures,{failPeriod=null}={}){
-  const state={readerToken:'synthetic-period-worker-token',deviceId:'synthetic-period-worker-device',autoEnabled:true},uploads=[];
+async function execute(captures,{failPeriod=null,withDiagnostics=false}={}){
+  const state={readerToken:'synthetic-period-worker-token',deviceId:'synthetic-period-worker-device',autoEnabled:true,...(withDiagnostics?{pairedAt:at}:{})},uploads=[],diagnosticReports=[];
   let shouldFail=failPeriod;
   const tabs=captures.map((capture,index)=>({id:index+1,active:index===0,lastAccessed:index+1}));
   const chrome={runtime:{onInstalled:event,onStartup:event,onMessage:event},alarms:{onAlarm:event},tabs:{onUpdated:event,query:async()=>tabs,sendMessage:async(tabId)=>({ok:true,capture:{readerVersion:version,captures:[captures[tabId-1]]}})},webNavigation:{getAllFrames:async()=>[{frameId:0}]},storage:{local:{get:async()=>structuredClone(state),set:async value=>Object.assign(state,value),remove:async key=>{delete state[key];}}}};
   const worker=vm.createContext({chrome,Date:Clock,URL,setTimeout,clearTimeout,queueMicrotask,TextEncoder,AbortController,crypto:webcrypto,
-    parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,selectAuthoritativeSoccerBoards,shouldSkipSuccessfulPayload,readerPayloadsByDate,
+    createDiagnosticOutbox,DIAGNOSTIC_ALARM,DIAGNOSTIC_SCHEMA,parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,selectAuthoritativeSoccerBoards,shouldSkipSuccessfulPayload,readerPayloadsByDate,
     fetch:async(url,options)=>{
+      if(url.endsWith('/api/reader/diagnostics')){const report=JSON.parse(options.body);diagnosticReports.push(report);return{ok:true,status:200,text:async()=>JSON.stringify({ok:true,durable:true,reportId:report.reportId,receivedAt:at})};}
       assert.equal(url,'https://mlb-positive-ev.vercel.app/api/soccer/reader');
       const body=JSON.parse(options.body);uploads.push(body);
       const checked=validateSoccerCapture(body,{now,headerVersion:version});assert.equal(checked.ok,true,JSON.stringify(checked));
@@ -62,7 +65,7 @@ async function execute(captures,{failPeriod=null}={}){
   vm.runInContext(backgroundSource.replace(/^import .*?;\n/gm,''),worker);
   const run=reason=>vm.runInContext(`performSync('${reason}')`,worker);
   const first=await run('manual');
-  return{state,uploads,run,first,clearFailure(){shouldFail=null;}};
+  return{state,uploads,diagnosticReports,run,first,clearFailure(){shouldFail=null;}};
 }
 const separateWorker=await execute([ft,ht]);
 assert.equal(separateWorker.first.ok,true,JSON.stringify(separateWorker.state.readerStatuses.EPL));assert.equal(separateWorker.uploads.length,2);
@@ -97,3 +100,21 @@ const mixedWorker=await execute([mixedCapture]);assert.equal(mixedWorker.first.o
 const noIdentity={...ft,tables:[{...ft.tables[0],rows:[]}],diagnostics:{gameCount:0,expectedGameCount:0,lastMutationAt:at}};
 const emptyWorker=await execute([noIdentity]);assert.equal(emptyWorker.first.ok,false);assert.equal(emptyWorker.uploads.length,0,'a bare FT header is not evidence that all matches are locked');
 console.log('PASS real Reader worker: separate FT/HT authority and uploads, original-capture reparse, same-scope conflicts, source dedup, date-scoped receipts/retries, legacy UNKNOWN heartbeat and identity-backed locked tombstones');
+
+const diagnosticWorker=await execute([ft,changed,ht],{withDiagnostics:true});
+assert.equal(diagnosticWorker.first.ok,false);
+assert.equal(diagnosticWorker.uploads.length,0,'automatic diagnostic evidence cannot authorize conflicting markets');
+assert.equal(diagnosticWorker.diagnosticReports.length,1,'a rejected football scan automatically sends evidence');
+const wireDiagnostic=diagnosticWorker.diagnosticReports[0];
+const authority=wireDiagnostic.leagues.EPL.authority;
+assert.equal(wireDiagnostic.leagues.EPL.errorCode,'conflicting-duplicate-tabs');
+assert.equal(authority.sourceCount,3);
+assert.deepEqual(authority.sources[0].dates,['2026-10-19']);
+assert.equal(authority.differences[0].type,'PRICE');
+assert.equal(authority.differences[0].period,'FT');
+assert.equal(authority.differences[0].line,'1平');
+assert.deepEqual(authority.differences[0].fields,[{field:'awayWater',left:0.9,right:0.91}]);
+assert.deepEqual(sanitizeDiagnosticReport(wireDiagnostic).leagues.EPL.authority,authority,'API sanitization preserves the exact typed evidence');
+assert.equal(diagnosticWorker.state.diagnosticDelivery.state,'sent');
+assert.doesNotMatch(JSON.stringify(authority),/tai888\.in|synthetic-period-worker|rawRows|水晶宮|白禮頓|tabId|frameId/);
+console.log('PASS actual rejected soccer worker → automatic diagnostic outbox → API allow-list: exact date/period/line/price evidence, durable ACK and zero market uploads');

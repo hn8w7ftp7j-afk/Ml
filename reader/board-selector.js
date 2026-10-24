@@ -1,4 +1,5 @@
 import { canonicalReaderPayload, readerMarketProperties } from './parser.js';
+import { buildSoccerAuthorityDiagnostics } from './soccer-authority-diagnostics.js';
 
 export const BOARD_ACTIVITY_TTL_MS = 5 * 60 * 1000;
 // Kept for diagnostic compatibility only. Candidate selection is board-based,
@@ -393,6 +394,13 @@ function soccerAuthorityProjection(candidate, period) {
     pageLeagueLabel: candidate.parsed.league, periodsCovered: [period] } };
 }
 
+function soccerConflictEvidence(sources, league, period) {
+  // Optional observability must not change the rejection or abort other
+  // leagues if a malformed diagnostic input cannot be summarized.
+  try { return buildSoccerAuthorityDiagnostics(sources, { league, period }); }
+  catch { return null; }
+}
+
 /**
  * Validate each soccer period independently, then return the original complete
  * source captures. Projections are comparison-only; they are never uploaded.
@@ -416,7 +424,8 @@ export function selectAuthoritativeSoccerBoards(candidates, { now = Date.now(), 
       .filter(row => row.projection.parsed.games.length);
     if (!projections.length) continue;
     const selection = selectAuthoritativeBoard(projections.map(row => row.projection), { now, preferredTabId, league });
-    if (!selection.ok) return { ...selection, ok: false, period, assessed, selections: [], scopeSelections };
+    if (!selection.ok) return { ...selection, ok: false, period, assessed, selections: [], scopeSelections,
+      diagnosticEvidence: soccerConflictEvidence(sources, league, period) };
     const original = projections.find(row => row.projection === selection.selected.candidate)?.original;
     if (!original) return { ok: false, error: 'soccer-authority-source-missing', period, assessed, selections: [] };
     scopeSelections.push({ period, authorityTabId: selection.authorityTabId });

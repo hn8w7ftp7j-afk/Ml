@@ -7,6 +7,11 @@ const reasons = { 'no-complete-tab': '盤面檢查未通過', 'no-parsed-games':
   'no-board-table': '無法辨識盤面區段', 'conflicting-duplicate-rows': '同場盤口資料衝突',
   'conflicting-duplicate-frames': '同頁框架盤口衝突', 'conflicting-duplicate-tabs': '不同分頁盤口衝突',
   NETWORK_ERROR: '上傳連線失敗', TIMEOUT: '上傳逾時', SYNC_EXCEPTION: '同步程式例外' };
+const periods = { FT: '全場', HT: '上半場', UNKNOWN: '期間待確認' };
+const differenceTypes = { PRICE: '水位不同', STATE: '開盤／鎖盤不同', GAME_ONLY_LEFT: '只有前一盤面有此場', GAME_ONLY_RIGHT: '只有後一盤面有此場', CONTRACT_ONLY_LEFT: '只有前一盤面有此盤', CONTRACT_ONLY_RIGHT: '只有後一盤面有此盤' };
+const fields = { awayWater: '客隊水位', homeWater: '主隊水位', overWater: '大球水位', underWater: '小球水位', drawWater: '和局水位', line: '盤線', lineSide: '讓球方', marketStatus: '盤口狀態' };
+const values = { home: '主隊', away: '客隊', open: '開盤', locked: '鎖盤' };
+const display = value => value === null ? '無此盤' : values[value] || String(value);
 export default function ReaderDiagnosticsPage() {
   const [league, setLeague] = useState('NBA'), [device, setDevice] = useState(''), [deviceQuery, setDeviceQuery] = useState('');
   const [reload, setReload] = useState(0), [reports, setReports] = useState([]), [error, setError] = useState(''), [loading, setLoading] = useState(true);
@@ -39,6 +44,18 @@ export default function ReaderDiagnosticsPage() {
       {Object.entries(record.payload.leagues || {}).filter(([id]) => !league || id === league).map(([id, row]) => <section key={id} style={{ borderTop: '1px solid #33465c', paddingTop: 10, marginTop: 10 }}>
         <strong>{id}｜{states[row.state] || row.state}</strong>
         {row.errorCode && <p>{reasons[row.errorCode] || row.errorCode}</p>}
+        {row.authority && <details>
+          <summary>足球盤面差異明細</summary>
+          {row.authority.sources.map(source => <p key={source.index}>盤面 {source.index}：{source.dates.join('、') || '日期無有效證據'}｜{source.periods.map(period => periods[period]).join('、') || '期間無有效證據'}｜{source.gameCount} 場</p>)}
+          {row.authority.differences.map((difference, index) => <p key={index}>
+            盤面 {difference.leftSource}／{difference.rightSource}：{difference.date} {difference.time}｜{periods[difference.period]}｜{differenceTypes[difference.type]}
+            {difference.line !== undefined && <>｜盤線 {difference.line}</>}
+            {difference.fields.map((field, fieldIndex) => <span key={fieldIndex}>；{fields[field.field]} {display(field.left)} → {display(field.right)}</span>)}
+          </p>)}
+          {!row.authority.differences.length && <p>已保存來源範圍；這份摘要尚未定位到單筆差異。</p>}
+          {(row.authority.sourcesTruncated || row.authority.detailsTruncated || row.authority.differencesTruncated) && <p>僅列部分來源或差異，不能視為完整盤面。</p>}
+        </details>}
+        {['EPL', 'UCL'].includes(id) && row.errorCode === 'conflicting-duplicate-tabs' && !row.authority && <p>此版本尚未回傳盤面差異明細；需更新電腦 Reader 2.1.43 後同步。舊紀錄無法補回未曾回傳的資料。</p>}
         {row.issues?.length > 0 && <p style={{ overflowWrap: 'anywhere' }}>{row.issues.join('、')}</p>}
         {row.boards?.map((board, index) => <div key={index} style={{ fontSize: 13, marginTop: 8, overflowWrap: 'anywhere' }}>
           盤面 {index + 1}：預期 {board.diagnostics.expectedGameCount} 場／偵測 {board.diagnostics.gameCount} 場／解析 {board.parsedGameCount} 場；候選列 {board.diagnostics.candidateRows}／配對列 {board.diagnostics.pairedRows}
