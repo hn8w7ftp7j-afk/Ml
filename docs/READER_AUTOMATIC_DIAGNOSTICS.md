@@ -13,3 +13,9 @@ Included in the NBA 2.1.41 score-race section fix, without changing market valid
 Unattended receipt does not mean unattended source modification. Debugging and changes occur in an active authorized work session. Reader must be installed and running; a completely stopped/offline device cannot send new reports.
 
 Acceptance must separately record local/CI tests, build, deployed API/DB/UI checks and receipt from the user's updated Chrome Reader. Missing live verification must remain NOT VERIFIED.
+
+## Reader 2.1.43 football conflict evidence
+
+Football tab/frame conflicts now retain bounded, typed source dates/periods and market differences in the existing authenticated automatic report. Up to four anonymous source summaries and eight differences are retained; truncation is explicit. Differences distinguish date/slate coverage, quoted line, price and open/locked state. Parser-generated football team codes identify simultaneous fixtures; raw team names, page text, DOM, URLs, browser tab/frame IDs and credentials are excluded. Both the Reader outbox and API apply the same strict allow-list. The authenticated diagnostic page displays available differences and explicitly labels older reports that lack them.
+
+This observes an existing rejected selection. It does not pick a price, change conflict selection, promote UNKNOWN to FT, authorize an upload, change scoring, or alter NBA analysis. The user must install the updated Reader before a new detailed report can arrive; a server deployment cannot retrofit missing evidence into Reader 2.1.42. Live receipt from the updated user Reader remains NOT VERIFIED until that report actually arrives. Football formal scoring remains unfinished and separate from this diagnostic change.

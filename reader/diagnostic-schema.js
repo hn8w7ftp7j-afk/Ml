@@ -47,6 +47,54 @@ function counts(input) {
   return { ...Object.fromEntries(COUNT_KEYS.map(key => [key, diagnosticCount(input?.[key])])),
     sawLeagueMarker: input?.sawLeagueMarker === true, wrongPeriodHeader: input?.wrongPeriodHeader === true };
 }
+const AUTHORITY_VERSION = 'SOCCER-AUTHORITY-DIAGNOSTICS-v1';
+const PERIODS = ['FT', 'HT', 'UNKNOWN'];
+const PAIR_COUNTS = ['sharedGames', 'leftOnlyGames', 'rightOnlyGames', 'sharedContracts', 'changedContracts', 'leftOnlyContracts', 'rightOnlyContracts', 'stateDifferences'];
+const DIFFERENCES = ['PRICE', 'STATE', 'GAME_ONLY_LEFT', 'GAME_ONLY_RIGHT', 'CONTRACT_ONLY_LEFT', 'CONTRACT_ONLY_RIGHT'];
+const dateValid = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+const sourceValid = value => Number.isInteger(value) && value >= 1 && value <= 4;
+const pairValid = value => sourceValid(value?.leftSource) && sourceValid(value?.rightSource)
+  && value.leftSource < value.rightSource && PERIODS.includes(value.period);
+function authorityValue(field, value) {
+  if (!['awayWater', 'homeWater', 'overWater', 'underWater', 'drawWater', 'line', 'lineSide', 'marketStatus'].includes(field)) return false;
+  if (value === null) return true;
+  if (['awayWater', 'homeWater', 'overWater', 'underWater', 'drawWater'].includes(field)) return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1000;
+  if (field === 'line') return typeof value === 'string' && /^(?:\d{1,3}(?:\.\d{1,3})?)(?:平|[+-]\d{1,3})?$/.test(value);
+  if (field === 'lineSide') return ['home', 'away'].includes(value);
+  if (field === 'marketStatus') return ['open', 'locked'].includes(value);
+  return false;
+}
+// Both the installed Reader and the API run this allow-list. These values are
+// diagnostic observations and never authorize a market or a score.
+function soccerAuthority(input) {
+  if (input?.version !== AUTHORITY_VERSION) return null;
+  const sources = (Array.isArray(input.sources) ? input.sources : []).slice(0, 4).filter(row => sourceValid(row?.index)).map(row => ({
+    index: row.index, dates: [...new Set((Array.isArray(row.dates) ? row.dates : []).slice(0, 40).filter(dateValid))],
+    periods: PERIODS.filter(period => Array.isArray(row.periods) && row.periods.includes(period)),
+    ...Object.fromEntries(['gameCount', 'marketCount', 'invalidGameCount', 'invalidMarketCount'].map(key => [key, diagnosticCount(row[key])])),
+  }));
+  const pairIdentity = row => ({ leftSource: row.leftSource, rightSource: row.rightSource, period: row.period });
+  const pairs = (Array.isArray(input.pairs) ? input.pairs : []).slice(0, 18).filter(pairValid).map(row => ({
+    ...pairIdentity(row), ...Object.fromEntries(PAIR_COUNTS.map(key => [key, diagnosticCount(row[key])])),
+  }));
+  const differences = (Array.isArray(input.differences) ? input.differences : []).slice(0, 8)
+    .filter(row => pairValid(row) && DIFFERENCES.includes(row.type) && dateValid(row.date)
+      && typeof row.time === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(row.time)
+      && typeof row.awayCode === 'string' && typeof row.homeCode === 'string'
+      && /^S[0-9A-F]{8}$/.test(row.awayCode) && /^S[0-9A-F]{8}$/.test(row.homeCode))
+    .map(row => ({ ...pairIdentity(row), type: row.type, date: row.date, time: row.time, awayCode: row.awayCode, homeCode: row.homeCode,
+      ...(['HANDICAP', 'TOTAL', 'MONEYLINE'].includes(row.marketKind) ? { marketKind: row.marketKind } : {}),
+      ...(typeof row.line === 'string' && authorityValue('line', row.line) ? { line: row.line } : {}),
+      ...(['home', 'away'].includes(row.lineSide) ? { lineSide: row.lineSide } : {}),
+      fields: (Array.isArray(row.fields) ? row.fields : []).slice(0, 5)
+        .filter(item => typeof item?.field === 'string' && authorityValue(item.field, item.left) && authorityValue(item.field, item.right))
+        .map(item => ({ field: item.field, left: item.left, right: item.right })),
+    }));
+  return { version: AUTHORITY_VERSION, sourceCount: diagnosticCount(input.sourceCount), sources, pairs, differences,
+    differenceCount: diagnosticCount(input.differenceCount), sourcesTruncated: input.sourcesTruncated === true,
+    detailsTruncated: input.detailsTruncated === true, differencesTruncated: input.differencesTruncated === true };
+}
 export function sanitizeDiagnosticReport(input) {
   const created = typeof input?.createdAt === 'string' ? Date.parse(input.createdAt) : NaN;
   if (input?.schema !== DIAGNOSTIC_SCHEMA || !diagnosticIdValid(input?.reportId)
@@ -55,12 +103,13 @@ export function sanitizeDiagnosticReport(input) {
   for (const league of DIAGNOSTIC_LEAGUES) {
     const row = input?.leagues?.[league];
     if (!row || !STATES.has(row.state)) continue;
+    const authority = ['EPL', 'UCL'].includes(league) ? soccerAuthority(row.authority) : null;
     leagues[league] = { state: row.state, errorCode: row.errorCode ? diagnosticCode(row.errorCode) : '',
       issues: codes(row.issues), rawGameCount: diagnosticCount(row.rawGameCount), marketCount: diagnosticCount(row.marketCount),
       boards: (Array.isArray(row.boards) ? row.boards : []).slice(0, 2).map(board => ({
         diagnostics: counts(board?.diagnostics), parsedGameCount: diagnosticCount(board?.parsedGameCount),
         issues: codes(board?.issues),
-      })) };
+      })), ...(authority ? { authority } : {}) };
   }
   return { schema: DIAGNOSTIC_SCHEMA, reportId: input.reportId, readerVersion: version(input.readerVersion),
     extensionManifestVersion: version(input.extensionManifestVersion), createdAt: new Date(created).toISOString(),
