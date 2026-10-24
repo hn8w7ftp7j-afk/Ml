@@ -42,10 +42,11 @@ export function SoccerScoringReadiness({result,game,now=Date.now()}){
   const blockers=readiness.blockers.filter(item=>!['PER_SCORE_PAYOFF','FIXED_S_FORMULA'].includes(item.code));
   if(!result||readiness.status==='SCORES_AVAILABLE')return null;
   return <section className="soccerScoringReadiness" role="status" aria-label="S 評分計算狀態" data-scoring-readiness={readiness.status}>
-    <strong>{readiness.status==='SCORING_BLOCKED'?'本次資料核對尚未產生 S 分數':readiness.status==='PARTIAL'?'部分原盤尚未產生 S 分數':'尚無可確認期間的原盤供評分'}</strong>
+    <strong>{readiness.status==='SCORING_BLOCKED'?'正式評分尚未完成':readiness.status==='PARTIAL'?'部分原盤尚未產生 S 分數':'尚無可確認期間的原盤供評分'}</strong>
     <p>八方向原盤 {readiness.quoteCount} 筆；已有 S 分數 {readiness.scoredQuoteCount} 筆{readiness.unassignedQuoteCount?`；期間待確認 ${readiness.unassignedQuoteCount} 筆`:''}。</p>
+    {readiness.status==='SCORING_BLOCKED'&&<p>已收到盤口，但下列評分依據尚未補齊，目前無法產生 S 分數。</p>}
     {blockers.length>0&&<ul>{blockers.map(blocker=><li key={blocker.code}>{blocker.label}</li>)}</ul>}
-    {readiness.status==='SCORING_BLOCKED'&&<p>重新分析會更新資料；上述計算依據補齊前，無法產生 1–10 分評分。</p>}
+    {readiness.status==='SCORING_BLOCKED'&&<p>重新分析目前只會更新比分研究與資料核對，不會補出尚未完成的正式評分。</p>}
   </section>;
 }
 
@@ -69,7 +70,7 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
       <div className="soccerMarketQuoteHeading"><strong>{textValue(q.label)||`原盤 ${index+1}`}</strong><span className="soccerMarketResearchTag">{period||'期間待確認'}</span></div>
       <p className="soccerMarketPrice">球頭 <strong>{line||'未提供'}</strong><span>水位 <strong>{water??'未提供'}</strong></span></p>
       <p className="soccerMarketNote">W {returnPct(presentation.W)}｜R {returnPct(presentation.R)}</p>
-      <p className="soccerScoreStatus" data-score-status={presentation.status}>{presentation.label}</p>
+      <p className="soccerScoreStatus" data-score-status={presentation.status}>{presentation.status==='UNAVAILABLE'&&periodConfirmed?'正式評分尚未完成':presentation.label}</p>
       {blockers.length>0&&<p className="soccerMarketCaution">無法評分：{blockers.slice(0,1).map(item=>item.label).join('；')}。</p>}
     </div></div>
     <SoccerQuoteScoring scoring={q.scoring}/>
@@ -83,14 +84,14 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
 export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,result,now=Date.now()}){
   const items=Array.isArray(directions)?directions:[],unknown=Array.isArray(unassignedQuotes)?unassignedQuotes:[];
   const diagnostic=readerDiagnostic(result,game);
-  return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">每筆原盤獨立顯示 S 分數，沿用 MLB 現有評分公式及上限規則；不是把勝率換成分數。排名另須通過 S ≥ 7.2、W &gt; 0、R &gt; 0 與正式資格核對。</p><p className="soccerMarketCaution">尚無有效計算依據時顯示「待評分」，不補造分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
+  return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">正式評分完成後，每筆原盤將獨立顯示 S 分數，沿用 MLB 現有評分公式及上限規則；不是把勝率換成分數。排名另須通過 S ≥ 7.2、W &gt; 0、R &gt; 0 與正式資格核對。</p><p className="soccerMarketCaution">尚無有效計算依據時不產生分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
     <SoccerScoringReadiness result={result} game={game} now={now}/>
     {diagnostic&&<p className="soccerMarketNote" role="status" data-reader-status={diagnostic.status}>{readerDiagnosticNames[diagnostic.code]}{Number.isInteger(diagnostic.counts?.assignedQuotes)&&diagnostic.counts.assignedQuotes>0?` 已配入 ${diagnostic.counts.assignedQuotes} 筆方向原盤。`:''}</p>}
     <div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
       const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons);
       const emptyReason=Array.isArray(d.unknownPeriodQuotes)&&d.unknownPeriodQuotes.length?'已有原盤，但尚未確認屬全場或上半場。':diagnostic&&diagnostic.status!=='READY'?readerDiagnosticNames[diagnostic.code]:'缺少此方向可確認期間的原盤。';
       const shownReasons=diagnostic&&diagnostic.status!=='READY'?reasons.filter(reason=>reason!==reasonNames.MATCHED_READER_QUOTE_MISSING):reasons;
-      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>待評分</strong><p className="soccerMarketEmpty">{emptyReason}</p></div></div>}{shownReasons.length>0&&<p className="soccerMarketNote">{shownReasons.join('；')}。</p>}</section>;
+      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>尚無此方向評分</strong><p className="soccerMarketEmpty">{emptyReason}</p></div></div>}{shownReasons.length>0&&<p className="soccerMarketNote">{shownReasons.join('；')}。</p>}</section>;
     })}</div>
     {!items.length&&<p className="soccerMarketEmpty">尚無八方向分析，請先核對賽前資料。</p>}
     {unknown.length>0&&<section className="soccerMarketUnassigned"><h4>期間待確認的原盤</h4><p className="soccerMarketCaution">以下原盤未能確認屬全場或上半場，暫不配入八方向。</p>{unknown.map((quote,i)=><SoccerRawMarketQuote quote={quote} unassigned index={i} key={`${quote.key||i}:${i}`}/>)}</section>}
