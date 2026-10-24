@@ -155,9 +155,6 @@ const read = await readNbaForwardValidation({ date: game.taipeiDate, now }, { db
   assert.match(strings.join('?'), /^SELECT/); return storeRows;
 }, prepareSchema: false });
 assert.equal(read.evaluations, 1); assert.equal(read.pendingMarkets, 3); assert.equal(read.distinctGames, 1);
-assert.equal(read.personnelComparison.canonicalMarkets,4);
-assert.equal(read.personnelComparison.legacyMarkets,4,'old captures remain in the baseline report without backfilled new-model evidence');
-assert.equal(read.personnelComparison.pairedMarkets,0);
 const microRead = await readNbaForwardValidation({ date: game.taipeiDate, now }, { db: async () => [{ ...microLate,
   captured_at: new Date(microLate.capturedAtExact), captured_at_exact: microLate.capturedAtExact,
   evaluation_hash: microEvaluation.contractHash, evaluation: microEvaluation }], prepareSchema: false });
@@ -165,8 +162,6 @@ assert.equal(microRead.evaluations, 1); assert.equal(microRead.pendingMarkets, 3
 const truncated = await readNbaForwardValidation({ date: game.taipeiDate, now }, { db: async () => Array(10001).fill(storeRows[0]), prepareSchema: false });
 assert.equal(truncated.status, 'incomplete_capture_inventory'); assert.equal(truncated.truncated, true);
 assert.equal(truncated.roi, null); assert.equal(truncated.selected.winRateExcludingPush, null); assert.equal(truncated.evaluations, null);
-assert.equal(truncated.personnelComparison.canonicalMarkets,null);
-assert.equal(truncated.personnelComparison.pairedMarkets,null,'bounded reads cannot claim a complete comparison inventory');
 await assert.rejects(readNbaForwardValidation({ date: game.taipeiDate, now }, { db: async () => [{ ...storeRows[0], evaluation_hash: 'wrong' }], prepareSchema: false }), /integrity/);
 let query = 0;
 const pendingList = await listPendingNbaForwardCaptures({ date: game.taipeiDate, now }, { db: async strings => {

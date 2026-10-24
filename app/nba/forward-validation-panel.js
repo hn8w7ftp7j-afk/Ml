@@ -48,14 +48,6 @@ export default function NbaForwardValidationPanel() {
       {!report.evaluations && <p className="noticeBox">尚無核對完成的前瞻樣本，不能宣稱勝率提升。需要先保存新比賽分析，等完賽與來源核對後才能計入。</p>}
       {!!report.missingFrozenSelection && <p>有 {report.missingFrozenSelection} 個舊方向缺少固定選擇條件，只保留原預測核對，不計入篩選成績。</p>}
       {report.truncated && <p className="errorBox">報表超過讀取上限，並非完整總成績。</p>}
-      {report.personnelComparison && <section className="noticeBox" aria-label="人員與分鐘模型比較準備進度">
-        <h3>人員與分鐘新模型｜比較準備進度</h3>
-        <p>已追蹤輸入 {report.personnelComparison.trackedMarkets ?? '—'} 個盤口；具有新舊兩套預測 {report.personnelComparison.pairedMarkets ?? '—'} 個。</p>
-        <p>目前尚無已驗證的球員分鐘、出賽情境與人員影響模型，因此未產生新人員預測或改善成績。</p>
-        <p>已保存傷停報導觀測 {report.personnelComparison.injuryObservationMarkets ?? '—'} 個盤口、來源先發觀測 {report.personnelComparison.lineupObservationMarkets ?? '—'} 個盤口；觀測完整不代表新模型已完成。</p>
-        {!!report.personnelComparison.legacyMarkets && <p>另有 {report.personnelComparison.legacyMarkets} 個舊盤口未保存這版輸入清單，保留原有驗證結果。</p>}
-        {!!report.personnelComparison.invalidMarkets && <p className="errorBox">有 {report.personnelComparison.invalidMarkets} 個盤口的人員輸入清單無法核對，未計入新模型準備樣本。</p>}
-      </section>}
       {!!report.groups.length && <div style={{ overflowX: 'auto' }}><table><thead><tr><th>盤口／方向</th><th>模型／引擎版本</th><th>不同場次</th><th>篩選方向</th><th>勝／負／走</th><th>勝率</th><th>ROI</th><th>部分贏／輸</th><th>Brier（全方向）</th></tr></thead><tbody>{report.groups.map(group => <tr key={`${group.marketKey}:${group.side}:${group.modelVersion}:${group.engineVersion}`}><td>{markets[group.marketKey]}／{sides[group.side]}</td><td>{group.modelVersion}<br/>{group.engineVersion}</td><td>{group.distinctGames}</td><td>{group.selected.directions}</td><td>{group.selected.wins}／{group.selected.losses}／{group.selected.pushes}</td><td>{percent(group.selected.winRateExcludingPush)}</td><td>{percent(group.selected.roi)}</td><td>{group.selected.partialWins}／{group.selected.partialLosses}</td><td>{number(group.brier)}</td></tr>)}</tbody></table></div>}
       <p>ROI 以每方向一單位研究本金計算，含信用盤部分輸贏與退水，不是實際下注損益。部分贏列方向勝、部分輸列方向負；Brier 對照「淨信用比例 &gt; 0」事件（走水非勝）。同場雙方向並不獨立。</p></>}
     {history?.queue && <p>永久待補抓 {history.queue.pendingGames ?? '—'} 場；最早日期 {history.queue.oldestPendingDate || '無'}；最近重試 {history.queue.lastAttemptAt || '尚無'}。待核對資料不是有效訓練樣本，核對失敗不補造值。</p>}
