@@ -40,3 +40,17 @@ This release does not change any probabilities, payoff terms, 1% football
 rebates, NBA 1.5% policy, fixed S formula, S >= 7.2 / W > 0 / R > 0 gates,
 ranking eligibility, model registrations or candidate publication authority.
 Football numeric scoring remains incomplete and must not be reported as fixed.
+
+## Pre-existing dependency audit blocker
+
+The PR's required audit stopped before tests with the same dependency versions
+already present on main. Keep the existing audit gate and apply same-major
+updates: Next.js 15.5.28, Undici 7.30.1, body-parser 2.4.0 and Zod 4.6.6.
+All installed Zod consumers already use major 4; no Workflow or Functions
+downgrade is needed. The lockfile records the patched resolution; the updated
+runtime still requires the full regression and production checks.
+
+Sources: [Next.js](https://github.com/vercel/next.js/security/advisories/GHSA-p3m5-59mp-jv5r),
+[Undici](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c),
+[body-parser](https://github.com/expressjs/body-parser/security/advisories/GHSA-27r3-jxmh-p828),
+[Zod patch](https://github.com/colinhacks/zod/commit/a0ebf970f2d752e5f58527cd2942ff48be4f46bd).
