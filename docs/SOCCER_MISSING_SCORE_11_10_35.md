@@ -1,4 +1,4 @@
-# Football missing scores — 11.10.34
+# Football missing scores — 11.10.35
 
 ## Confirmed baseline
 
@@ -45,7 +45,7 @@ Football numeric scoring remains incomplete and must not be reported as fixed.
 
 The PR's required audit stopped before tests with the same dependency versions
 already present on main. Keep the existing audit gate and apply same-major
-updates: Next.js 15.5.28, Undici 7.30.1, body-parser 2.4.0 and Zod 4.6.6.
+updates: Next.js 15.5.28, Undici 7.30.1, body-parser 2.4.0 and Zod 4.6.7.
 All installed Zod consumers already use major 4; no Workflow or Functions
 downgrade is needed. The lockfile records the patched resolution; the updated
 runtime still requires the full regression and production checks.
