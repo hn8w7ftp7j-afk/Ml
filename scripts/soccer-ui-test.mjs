@@ -206,7 +206,7 @@ await test('page exposes navigation, source evidence, empty/error states and mob
   assert.match(source, /window\.addEventListener\('popstate'/);
   assert.match(source, /type="date"/);
   assert.match(source, /game\.halfTime\?\.verified === true/);
-  assert.match(source, /正式評分驗證中/);
+  assert.match(source, /正式評分尚未完成，有盤口仍不代表已有 S 分數/);
   assert.match(source, /role="alert"/);
   assert.match(source, /aria-busy=\{busy\}/);
   assert.match(source, /當日無賽事/);

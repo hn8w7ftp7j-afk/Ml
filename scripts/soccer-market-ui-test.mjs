@@ -28,7 +28,7 @@ assert.match(markup,/總進球門檻 2 球/);assert.match(markup,/讓球方淨�
 for(const value of ['42.1%','27.1%','30.7%','0.1%'])assert.ok(markup.includes(value));
 assert.match(markup,/不是過盤率或獲利勝率/);
 assert.match(markup,/soccerMarketDirections" open/,'per-market score cards are expanded by default');
-assert.match(markup,/S 分數/);assert.match(markup,/10 分制/);assert.match(markup,/尚未產生評分/);
+assert.match(markup,/S 分數/);assert.match(markup,/10 分制/);assert.match(markup,/正式評分尚未完成/);
 assert.doesNotMatch(markup,/S —｜W —｜R —/,'the score line is not a hardcoded placeholder');
 assert.match(markup,/主隊讓／受讓/);assert.match(markup,/客隊讓／受讓/);
 assert.match(markup,/期間待確認，暫不計算/);assert.match(markup,/大2\+10 ／ 0.88 ／ 小 ／ 0.82/);

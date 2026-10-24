@@ -101,7 +101,7 @@ const currentState={status:'done',data:{...liveSnapshot,observedAt:new Date(uiSt
 h.ctx.Date=class extends Date{static now(){return uiNow;}};
 h.state[0][realGame.id]=currentState;
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiStart).current,true);
-assert.match(renderToStaticMarkup(h.renderPanel(realGame)),/分析：<strong>完成/);
+assert.match(renderToStaticMarkup(h.renderPanel(realGame)),/分析：<strong>比分研究完成/);
 uiNow=uiStart+60000;
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiNow).current,false,'expiry invalidates the display without a new analysis');
 const expiredMarkup=renderToStaticMarkup(h.renderPanel(realGame));assert.match(expiredMarkup,/待重新核對/);assert.match(expiredMarkup,/僅供歷史查閱/);assert.match(expiredMarkup,/上半場比分研究/,'expiry preserves the result for historical reading');

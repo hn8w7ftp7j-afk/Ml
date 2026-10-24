@@ -85,7 +85,7 @@ for(const analysisStatus of ['FAILED','INSUFFICIENT_DATA']){
   const markup=renderToStaticMarkup(h.panel(games[0]));
   assert.match(markup,analysisStatus==='FAILED'?/分析：<strong>失敗/:/分析：<strong>資料不足/);
   assert.match(markup,/篩選：<strong>尚無結果/);
-  assert.doesNotMatch(markup,/篩選：<strong>研究中|分析：<strong>完成/);
+  assert.doesNotMatch(markup,/篩選：<strong>研究中|分析：<strong>比分研究完成/);
 }
 const superseded=harness(async()=>Response.json({ok:true,...current,publishedCurrent:false,currentResearch:{...current.currentResearch,publishedCurrent:false,reason:'QUOTE_CHANGED'},gameId:games[0].id,league:'epl',date:games[0].date,formalScoringEnabled:false,executable:false,directions:Array.from({length:8},()=>({executable:false,eligible:false}))}));
 await superseded.provider().props.value.run(games[0]);
@@ -131,7 +131,7 @@ assert.ok(refreshed.state[0][realGame.id].data,'a failed refresh keeps the previ
 const historicalMarkup=renderToStaticMarkup(refreshed.panel(realGame));
 assert.match(historicalMarkup,/分析：<strong>失敗/);assert.match(historicalMarkup,/篩選：<strong>尚無結果/);
 assert.match(historicalMarkup,/上次資料.*僅供歷史查閱/);assert.match(historicalMarkup,/不代表本次完成/);
-assert.doesNotMatch(historicalMarkup,/分析：<strong>完成|篩選：<strong>研究中/);
+assert.doesNotMatch(historicalMarkup,/分析：<strong>比分研究完成|篩選：<strong>研究中/);
 
 const runs=[
   {analysisRunId:'processing',startedAt:at,analysisStatus:'PROCESSING',selectionResult:null,reasons:[]},

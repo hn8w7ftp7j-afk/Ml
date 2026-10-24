@@ -37,7 +37,9 @@ for(const league of ['epl','ucl']){
   assert.equal(result.formalScoringEnabled,false);assert.equal(result.executable,false);
   const before=JSON.stringify(result);
   const markup=renderToStaticMarkup(ctx.SoccerMarketDirections({directions:result.directions,result,game,now}));
-  assert.match(markup,/本次資料核對尚未產生 S 分數/);
+  assert.match(markup,/正式評分尚未完成/);
+  assert.match(markup,/已收到盤口，但下列評分依據尚未補齊，目前無法產生 S 分數/);
+  assert.match(markup,/重新分析目前只會更新比分研究與資料核對/);
   assert.match(markup,/八方向原盤 2 筆；已有 S 分數 0 筆/);
   assert.match(markup,/尚缺足球情境及模型誤差依據/);
   assert.match(markup,/足球派彩及退水適用條款未完整確認/);
