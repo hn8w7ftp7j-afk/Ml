@@ -7,6 +7,14 @@ const input = {status:'ready',league:'NBA',gameId:'nba:espn:game:123',date:'2026
 const capture=buildNbaAnalysisCapture(input);
 assert.equal(capture.payload.strictPregameReplay,false);assert.equal(capture.payload.promotionEligible,false);
 assert.equal(capture.payload.engineVersion,APP_VERSION);
+assert.equal(capture.payload.personnelComparison.purpose,'INPUT_READINESS_ONLY');
+assert.equal(capture.payload.personnelComparison.adjustedPrediction,null);
+assert.equal(capture.payload.personnelComparison.pairedPredictionAvailable,false);
+assert.deepEqual(capture.payload.prediction,input.prediction);
+assert.deepEqual(capture.payload.quote,input.quote);
+const forged=buildNbaAnalysisCapture({...input,personnelComparison:{pairedPredictionAvailable:true,adjustedPrediction:{total:999}}});
+assert.deepEqual(forged.payload.personnelComparison,capture.payload.personnelComparison,'journal recomputes audit instead of trusting supplied output');
+assert.equal(forged.revision,capture.revision);
 assert.equal(capture.revision,buildNbaAnalysisCapture({...input,generatedAt:'2026-10-07T01:01:00Z'}).revision);
 assert.notEqual(capture.revision,buildNbaAnalysisCapture({...input,quote:{...input.quote,line:'221平'}}).revision);
 assert.notEqual(capture.revision,buildNbaAnalysisCapture({...input,modelVersion:'synthetic-v2'}).revision);
