@@ -20,6 +20,22 @@ rewritten or backfilled; only new analyses contain this calculation. Previously
 calculated research numbers become historical when their source prices expire
 or the game starts. No NBA source or model changes are included.
 
+## Manual fallback
+
+After analyzing an upcoming match, a separate manual hypothesis form accepts
+period, handicap/total, side, giving team, raw line and profit-format water.
+The authenticated same-origin simulation endpoint reads the hash-verified saved
+model revision, requires a forecast/source younger than three minutes and a
+still-upcoming match, and calculates the explicit credit-payout hypothesis.
+It performs no Reader, journal, candidate, bet, settlement or return-validation
+writes. Inputs are never represented as actual observed source prices.
+
+The form clears previous results when inputs/model change, rejects mismatched
+or formal-looking responses, suppresses double submissions and fences/aborts
+late replies. The output includes model and calculation times. This provides
+a usable numerical research workflow when Reader prices are missing without
+inventing source evidence or formal W/R/S.
+
 Verification exercises all eight directions with independently computed return
 arithmetic, the retained real EPL provider fixture through buildSoccerAnalysis,
 actual shipped JSX, source/scope/time mutations and unchanged formal gates.

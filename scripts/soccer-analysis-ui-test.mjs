@@ -13,10 +13,11 @@ import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.j
 const realComponentCode=(await Promise.all([
   ['app/soccer/market-panel.js',['SoccerMarketDirections','SoccerHalfTimeResearch']],
   ['app/soccer/workload-panel.js',['SoccerWorkloadPanel']],
+  ['app/soccer/manual-simulation-panel.js',['SoccerManualSimulation']],
 ].map(async([file,exports])=>{
   const source=fs.readFileSync(file,'utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
   const compiled=await transform(source,{filename:file.replace(/\.js$/,'.jsx'),jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-  return `Object.assign(globalThis,(()=>{${compiled.code};return {${exports.join(',')}};})());`;
+  return `Object.assign(globalThis,(()=>{const {useState,useEffect,useRef}=React;${compiled.code};return {${exports.join(',')}};})());`;
 }))).join('\n');
 
 const raw=fs.readFileSync('app/soccer/analysis-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function/g,'function').replace(/export function/g,'function');
