@@ -46,7 +46,7 @@ export function SoccerScoringReadiness({result,game,now=Date.now()}){
     <p>八方向原盤 {readiness.quoteCount} 筆；已有 S 分數 {readiness.scoredQuoteCount} 筆{readiness.unassignedQuoteCount?`；期間待確認 ${readiness.unassignedQuoteCount} 筆`:''}。</p>
     {readiness.status==='SCORING_BLOCKED'&&<p>已收到盤口，但下列評分依據尚未補齊，目前無法產生 S 分數。</p>}
     {blockers.length>0&&<ul>{blockers.map(blocker=><li key={blocker.code}>{blocker.label}</li>)}</ul>}
-    {readiness.status==='SCORING_BLOCKED'&&<p>重新分析目前只會更新比分研究與資料核對，不會補出尚未完成的正式評分。</p>}
+    {readiness.status==='SCORING_BLOCKED'&&<p>重新分析會更新比分研究、資料核對與符合條件原盤的收益試算；正式評分仍須完成驗證。</p>}
   </section>;
 }
 
@@ -55,6 +55,35 @@ function SoccerThresholdProbabilities({probabilities}){
   if(!p||!['TOTAL_GOALS','GIVING_TEAM_MARGIN'].includes(p.axis)||!finite(p.boundary))return null;
   const axis=p.axis==='TOTAL_GOALS'?'總進球':'讓球方淨勝球';
   return <div className="soccerMarketThreshold"><p>{axis}門檻 {p.boundary} 球</p><dl><div><dt>高於門檻</dt><dd>{pct(p.above)}</dd></div><div><dt>等於門檻</dt><dd>{pct(p.equal)}</dd></div><div><dt>低於門檻</dt><dd>{pct(p.below)}</dd></div></dl>{finite(p.tailMass)&&p.tailMass>0&&<p className="soccerMarketNote">未展開尾端機率 {pct(p.tailMass)}，以上保留原分布計算值。</p>}</div>;
+}
+
+export function SoccerConditionalAnalysis({quote,result,game,now=Date.now()}){
+  const c=quote?.conditionalAnalysis,saved=result?.evidence?.game;
+  const distribution=quote?.period==='FT'?result?.prediction:result?.halfTimePrediction;
+  if(result?.qaFlag==='BLOCKED'||c?.version!=='SOCCER-CREDIT-ASSUMPTION-RETURN-v1'||c.status!=='CONDITIONAL_RESEARCH'
+    ||c.gameId!==result?.gameId||c.league!==result?.league||c.sourceQuoteKey!==quote.key||c.period!==quote.period
+    ||c.formalScoringEnabled!==false||c.eligible!==false||c.executable!==false
+    ||['W','R','S'].some(key=>c[key]!==null)||!saved||!game
+    ||game.id!==saved.id||game.league!==saved.league||game.date!==saved.date
+    ||game.sourceId!==saved.sourceId||Date.parse(game.startTime)!==Date.parse(saved.startTime)
+    ||game.home?.sourceId!==saved.home?.sourceId||game.away?.sourceId!==saved.away?.sourceId
+    ||Boolean(game.neutralSite)!==Boolean(saved.neutralSite)
+    ||c.assumption?.accountTermsVerified!==false||c.assumption?.mechanic!=='CREDIT_BOUNDARY'
+    ||c.assumption?.rebateRate!==.01||c.assumption?.rebateBasis!=='SETTLED_PRINCIPAL'
+    ||c.modelVersion!==distribution?.modelVersion||c.trainingHash!==distribution?.trainingHash
+    ||c.distributionHash!==quote.scoring?.provenance?.distributionHash
+    ||!finite(c.netReturnBounds?.lower)||!finite(c.netReturnBounds?.upper)||c.netReturnBounds.lower>c.netReturnBounds.upper
+    ||!finite(now)||!Number.isFinite(Date.parse(c.calculatedAt))||Date.parse(c.calculatedAt)>now
+    ||Date.parse(c.calculatedAt)>=Date.parse(saved.startTime))return null;
+  const historical=game.status!=='scheduled'||Date.parse(game.startTime)<=now||now-Date.parse(c.calculatedAt)>=180000
+    ||!Number.isFinite(Date.parse(c.quoteObservedAt))||now-Date.parse(c.quoteObservedAt)>=180000;
+  return <section className="soccerConditionalAnalysis" aria-label="條件式收益分析">
+    <strong>{historical?'歷史條件式收益分析':'條件式收益分析'}</strong>
+    <p>期望淨收益：{returnPct(c.netReturnBounds.lower)} ～ {returnPct(c.netReturnBounds.upper)}（每元本金）</p>
+    <p className="soccerMarketNote">依信用盤比例派彩假設試算，尚未確認本帳號適用；足球退水按實際輸贏本金的 1%，走盤不退。</p>
+    <dl>{Object.entries({FULL_WIN:'全贏',PARTIAL_WIN:'部分贏',PUSH:'走盤',PARTIAL_LOSS:'部分輸',FULL_LOSS:'全輸'}).map(([key,label])=><div key={key}><dt>{label}</dt><dd>{pct(c.probabilities?.[key])}</dd></div>)}</dl>
+    <p className="soccerMarketNote">範圍僅保留未展開比分的損益界線，不包含模型誤差。正式 W／R／S 與排名資格仍待驗證。{historical?'此為已保存試算，價格已過期或比賽已開始。':''}</p>
+  </section>;
 }
 
 function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result,direction,now}){
@@ -73,6 +102,7 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
       <p className="soccerScoreStatus" data-score-status={presentation.status}>{presentation.status==='UNAVAILABLE'&&periodConfirmed?'正式評分尚未完成':presentation.label}</p>
       {blockers.length>0&&<p className="soccerMarketCaution">無法評分：{blockers.slice(0,1).map(item=>item.label).join('；')}。</p>}
     </div></div>
+    {periodConfirmed&&<SoccerConditionalAnalysis quote={q} result={result} game={game} now={now}/>}
     <SoccerQuoteScoring scoring={q.scoring}/>
     {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
     {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
