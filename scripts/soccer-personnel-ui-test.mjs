@@ -15,7 +15,7 @@ const {code}=await transform(source,{filename:'soccer-personnel-analysis.jsx',js
 let analysisContext={states:{},run:()=>{}};
 const ctx=vm.createContext({React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
   useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],useRef:initial=>({current:initial}),useEffect:()=>{},
-  SoccerMarketDirections:()=>null,SoccerWorkloadPanel:()=>null,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
+  SoccerManualSimulation:()=>null,SoccerMarketDirections:()=>null,SoccerWorkloadPanel:()=>null,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
 vm.runInContext(code,ctx);
 const render=props=>renderToStaticMarkup(ctx.SoccerPersonnelResearch(props));
 const artifact=soccerPersonnelArtifacts(),analysisCutoff='2026-10-20T00:00:00Z';
