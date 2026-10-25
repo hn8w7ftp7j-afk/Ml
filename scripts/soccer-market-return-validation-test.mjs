@@ -138,6 +138,13 @@ const laterEvidence = { captures: [earliest, later, heartbeat], protocol, evalua
 const laterReport = buildSoccerMarketReturnReport(laterEvidence, after);
 assert.equal(laterReport.observedQuoteReturns, 12); assert.equal(laterReport.laterDuplicateQuoteObservationsNotSelected, 12);
 assert.equal(laterReport.unpricedPredictionPeriods, 1); assert.equal(laterReport.uniqueObservedGames, 1);
+const beforeKickoff = buildSoccerMarketReturnReport({ ...laterEvidence, evaluations: [] }, observed + 100000);
+assert.equal(beforeKickoff.quoteObservations, 12, 'all saved economic prices remain visible before any result check');
+assert.equal(beforeKickoff.selectedOriginalQuoteObservations, 12); assert.equal(beforeKickoff.checkedQuoteObservations, 0);
+assert.equal(beforeKickoff.observedQuoteReturns, 0); assert.equal(beforeKickoff.pendingQuoteReturns, 12);
+assert.equal(beforeKickoff.uncheckedQuoteReturns, 12); assert.equal(beforeKickoff.pendingReasons.MARKET_RETURN_NOT_CHECKED, 12);
+assert.equal(beforeKickoff.W, null); assert.equal(beforeKickoff.R, null); assert.equal(beforeKickoff.S, null); assert.equal(beforeKickoff.formalEligible, false);
+assert.equal(laterReport.checkedQuoteObservations, 12); assert.equal(laterReport.uncheckedQuoteReturns, 0);
 const incompleteHeartbeatHistory = buildSoccerMarketReturnReport({ ...laterEvidence,
   evaluations: [laterEvidence.evaluations[0]], incompleteResultCaptureIds: [heartbeat.captureId] }, after);
 assert.equal(incompleteHeartbeatHistory.observedQuoteReturns, 0, 'an omitted later duplicate-capture correction history cannot restore earlier selected return evidence');
@@ -147,6 +154,7 @@ const earliestCorrection = evaluateSoccerForwardCapture(earliest, protocol, { ..
 const crossCaptureCorrection = buildSoccerMarketReturnReport({ ...laterEvidence, evaluations: [...laterEvidence.evaluations, earliestCorrection] }, after);
 assert.equal(crossCaptureCorrection.observedQuoteReturns, 0, 'a real-game result correction from an unpriced legacy forecast also quarantines later priced samples');
 assert.equal(crossCaptureCorrection.conflictingQuoteReturns, 12);
+assert.equal(crossCaptureCorrection.quoteObservations, crossCaptureCorrection.observedQuoteReturns + crossCaptureCorrection.pendingQuoteReturns + crossCaptureCorrection.conflictingQuoteReturns);
 const newPrice = changed(fixture({ line: priceLines, readerDelay: 120000, water: .96 }), value => {
   value.captureSequence = '4'; value.captureId = sha('changed-economic-price-db-capture');
 });
