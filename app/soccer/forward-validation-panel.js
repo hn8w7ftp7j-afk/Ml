@@ -17,6 +17,10 @@ const reasonNames={
   FORWARD_PERSONNEL_MODEL_UNVERIFIED:'人員模型版本證據不足',FORWARD_PERSONNEL_PREGAME_XI_UNVERIFIED:'兩隊賽前先發證據不足',FORWARD_OMITTED_MASS_EXCEEDS_TOLERANCE:'未展開尾端機率超出報表容許值',
   RESULT_NORMAL_FINAL_UNCONFIRMED:'尚未確認正常完賽',RESULT_PERIOD_SCORE_UNVERIFIED:'缺少可核對的期間比分',RESULT_ENDPOINTS_DISAGREE:'兩個賽果端點不一致',
   RESULT_SCOREBOARD_CROSSCHECK_UNAVAILABLE:'賽程端點無法交叉核對',RESULT_EXTRA_PERIODS_REQUIRE_REVIEW:'涉及加時或其他額外期間',
+  SOCCER_SOURCE_CONTRACT_UNVERIFIED:'原盤適用的結算條款尚未完整確認',
+  MARKET_RETURN_NOT_CHECKED:'尚未核對原盤收益',NO_ORIGINAL_QUOTES:'此封存版本沒有可核對的原盤',
+  MARKET_RETURN_ORIGINAL_QUOTES_UNAVAILABLE:'此封存版本未保存原盤明細',
+  MARKET_RETURN_RESULT_HISTORY_INCOMPLETE:'賽果核對歷程未完整讀取',
 };
 function ReasonList({reasons={},label}){
   const rows=Object.entries(reasons||{});
@@ -39,11 +43,19 @@ function ForwardGroup({group,league}){
   </details>;
 }
 function ForwardReport({report,league,summary}){
+  const returns=report.marketReturnValidation;
   const pending=validCount(report.selectedGameModelPeriods)&&validCount(report.evaluatedGameModelPeriods)&&report.selectedGameModelPeriods>=report.evaluatedGameModelPeriods?report.selectedGameModelPeriods-report.evaluatedGameModelPeriods:null;
   return <div className="soccerForwardReport">
     <p>前瞻方案啟用：{clock(report.protocol?.activatedAt)}。每場、每期間、每模型版本採資料庫最早有效封存憑據；方案須在分析前啟用，封存必須早於開賽。</p>
     <p>收到快照期間 {count(report.capturedSnapshotPeriods)} 筆｜有效封存 {count(report.selectedGameModelPeriods)} 筆｜已評估 {count(report.evaluatedGameModelPeriods)} 筆｜待賽果 {count(pending)} 筆｜不同賽事 {count(report.uniqueSelectedGames)} 場</p>
     <p className="soccerAvailability">同場的全場、上半場及人員模型分開列示，不能當成多場獨立比賽；分母是已選用的開賽前封存預測，不是所有賽程或下注。</p>
+    {returns&&<section aria-label="原盤收益驗證">
+      <h3>原盤收益驗證</h3>
+      <p>保存原盤 {count(returns.quoteObservations)} 筆｜已核對收益 {count(returns.observedQuoteReturns)} 筆｜待核對 {count(returns.pendingQuoteReturns)} 筆｜衝突排除 {count(returns.conflictingQuoteReturns)} 筆｜不同已核對賽事 {count(returns.uniqueObservedGames)} 場</p>
+      <p className="soccerAvailability">將開賽前保存的原始盤口、預測及結算結果逐筆對照。同場不同方向不是獨立賽事；這是收益觀察資料，尚未取得正式 R，也不代表模型驗收通過。</p>
+      <ReasonList reasons={returns.pendingReasons} label="收益待核對原因"/>
+      <ReasonList reasons={returns.predictionPeriodReasons} label="封存版本待核對原因"/>
+    </section>}
     {summary&&<p role="status">本次核對 {count(summary.checkedGameModelPeriods)} 筆｜完成評估 {count(summary.evaluated)} 筆｜待核對 {count(summary.pending)} 筆｜尚待處理 {count(summary.deferred)} 筆。</p>}
     {(report.truncated===true||report.complete===false)&&<p className="soccerAnalysisWarning" role="status">本次讀取有截斷，只能查看已載入範圍，不能當成完整驗收結果；請用上方日期範圍縮小查詢。</p>}
     <ReasonList reasons={report.excludedReasons} label={`整體排除原因（${count(report.excludedSnapshotPeriods)} 筆）`}/>
@@ -54,7 +66,11 @@ function ForwardReport({report,league,summary}){
 }
 function checkedReport(value,league){
   if(!value||value.version!==VERSION||!Array.isArray(value.groups)||value.formalEligible!==false||value.promotionEligible!==false||value.executable!==false
-    ||value.groups.some(g=>g.league!==league||!Object.hasOwn(periods,g.period)||!Object.hasOwn(variants,g.variant)))throw Error('前瞻驗證回應的聯盟或範圍不符。');
+    ||value.groups.some(g=>g.league!==league||!Object.hasOwn(periods,g.period)||!Object.hasOwn(variants,g.variant))
+    ||value.marketReturnValidation&&(value.marketReturnValidation.version!=='SOCCER-SAVED-QUOTE-RETURN-OBSERVATION-v1'
+      ||value.marketReturnValidation.formalEligible!==false||value.marketReturnValidation.calibrationEligible!==false
+      ||value.marketReturnValidation.promotionEligible!==false||value.marketReturnValidation.executable!==false
+      ||['W','R','S','empiricalErrorMargin'].some(key=>value.marketReturnValidation[key]!==null)))throw Error('前瞻驗證回應的聯盟或範圍不符。');
   return value;
 }
 export function SoccerForwardValidationPanel({league}){

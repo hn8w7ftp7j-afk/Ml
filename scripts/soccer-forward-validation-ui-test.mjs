@@ -92,4 +92,15 @@ assert.equal(nodes(deferred.tree).find(n=>n.type==='input'&&n.props.name==='from
 assert.equal(nodes(deferred.tree).find(n=>n.type==='input'&&n.props.name==='through').props.value,'2026-10-20','the queued updater preserves the captured end date after the live target is cleared');
 deferred.apply();await deferred.settle();assert.equal(deferred.calls.length,2);assert.equal(deferred.calls[1].url,'/api/soccer/forward-validation?league=epl&from=2026-10-19&through=2026-10-20','submission validates and sends the preserved ISO range');
 deferred.calls[1].respond({ok:true,report:report()});await deferred.settle();deferred.unmount();
+// Return observations have their own denominator and never masquerade as R.
+const returnsReport={...report('epl',[group]),marketReturnValidation:{version:'SOCCER-SAVED-QUOTE-RETURN-OBSERVATION-v1',
+ quoteObservations:12,observedQuoteReturns:0,pendingQuoteReturns:12,conflictingQuoteReturns:0,uniqueObservedGames:0,
+ pendingReasons:{SOCCER_SOURCE_CONTRACT_UNVERIFIED:12},predictionPeriodReasons:{},
+ empiricalErrorMargin:null,W:null,R:null,S:null,formalEligible:false,calibrationEligible:false,promotionEligible:false,executable:false}};
+const returnsUi=harness();returnsUi.render();returnsUi.calls[0].respond({ok:true,report:returnsReport});await returnsUi.settle();
+assert.match(returnsUi.markup,/保存原盤 12 筆/);assert.match(returnsUi.markup,/已核對收益 0 筆/);
+assert.match(returnsUi.markup,/尚未取得正式 R/);assert.match(returnsUi.markup,/結算條款尚未完整確認/);returnsUi.unmount();
+const forgedReturns=harness();forgedReturns.render();forgedReturns.calls[0].respond({ok:true,report:{...returnsReport,
+ marketReturnValidation:{...returnsReport.marketReturnValidation,R:.01}}});await forgedReturns.settle();
+assert.match(forgedReturns.markup,/聯盟或範圍不符/);assert.doesNotMatch(forgedReturns.markup,/保存原盤 12 筆/);forgedReturns.unmount();
 console.log('PASS shipped forward-validation JSX and hooks: actual FT/HT/personnel groups, proper-score zero vs missing denominators, actual classwise audit, prospective limits, pending/excluded reasons, truncation date filters, exact scoped GET/POST, duplicate/race fencing, late league/range replies, abort/unmount and retry');

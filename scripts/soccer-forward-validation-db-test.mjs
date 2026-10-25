@@ -9,6 +9,8 @@ import { fixtureCapture } from './helpers/soccer-forward-fixture.mjs';
 import { soccerForwardAnalysisRevision, soccerForwardHash, soccerForwardModelDescriptor, validateSoccerForwardCapture,
   evaluateSoccerForwardCapture, buildSoccerForwardReport, SOCCER_FORWARD_POLICY } from '../lib/soccer/forward-validation.js';
 import { soccerDate } from '../lib/soccer/contracts.js';
+import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
+import { SOCCER_MARKET_RETURN_VERSION } from '../lib/soccer/market-return-validation.js';
 const fixture=await soccerSqlFixture(),{db}=fixture;
 const oldDatabase=process.env.DATABASE_URL,oldDatabaseV2=process.env.DATABASE_V2_URL;
 process.env.DATABASE_URL='postgres://fixture.invalid/soccer-forward';delete process.env.DATABASE_V2_URL;
@@ -23,6 +25,13 @@ try {
   for(const source of [original.evidence.source,original.evidence.game.source,original.evidence.scheduleSource])source.fetchedAt=iso(now);
   original.inputVersions.evidenceFetchedAt=iso(now);
   original.inputVersions.scheduleSourceVersion={...original.evidence.scheduleSource};
+  original.directions=buildSoccerMarketDirections({game:original.evidence.game,now,
+    reader:{revision:soccerForwardHash('synthetic-reader'),observationId:soccerForwardHash('synthetic-observation'),
+      observedAt:iso(now),firstFetchedAt:iso(now),receivedAt:iso(now),persistedAt:iso(now),sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/'},
+    matchedGames:[{officialGameId:original.gameId,league:'EPL',boardDate:original.date,prestart:true,matchStatus:'MATCHED',markets:[{
+      kind:'TOTAL',period:'FT',unit:'GOALS',line:'2.5',overWater:.95,underWater:.9,rawRows:['大 2.5 .95','小 .9'],
+      periodEvidence:{sectionTitle:'英格蘭超級聯賽',tableHeaders:['全場'],marketHeader:'全場大小',period:'FT',status:'EXPLICIT'},
+    }]}]});
   const revision=soccerForwardAnalysisRevision(original);
   await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ($1,$2,$3,$4::timestamptz,$5::jsonb)`,['epl',original.gameId,revision,original.observedAt,JSON.stringify(original)]);
   const receipt=await captureSoccerForwardSnapshot({league:'epl',gameId:original.gameId,prediction:'client-content-is-ignored'},revision);
@@ -39,6 +48,8 @@ try {
   const report=await readSoccerForwardValidation(scope);
   assert.equal(report.selectedGameModelPeriods,2);assert.equal(report.excludedSnapshotPeriods,1);assert.equal(report.evaluatedGameModelPeriods,0);
   assert.equal(report.excludedReasons.FORWARD_PERSONNEL_MODEL_UNVERIFIED,1);
+  assert.equal(report.marketReturnValidation.periodsWithoutReturnEvidence,1,'existing priced predictions do not become return samples before checked original prices/results/terms');
+  assert.equal(report.marketReturnValidation.unpricedPredictionPeriods,1);
   assert.equal((await readSoccerForwardValidation({league:'ucl',date:original.date})).capturedSnapshotPeriods,0);
   for(const table of ['protocol','captures'])await assert.rejects(()=>db.query(`UPDATE sports_soccer_forward_${table}_v1 SET ${table==='protocol'?'policy=policy':'analysis_revision=analysis_revision'}`),/SOCCER_IMMUTABLE_HISTORY/);
   const after=start+7200000;
@@ -62,6 +73,13 @@ try {
   assert.equal(corrected.recheckedGameModelPeriods,1);
   const conflict=await readSoccerForwardValidation(scope,{now:()=>correctionTime});
   assert.equal(conflict.evaluatedGameModelPeriods,0);assert.equal(conflict.conflictingResultCaptures,1,'a provider correction discovered by the runner appends evidence and withdraws the old score pending review');
+  const returnChecks=(await db.query(`SELECT payload->'evaluation'->'marketReturnValidation' AS evidence FROM sports_soccer_forward_result_checks_v1
+    WHERE capture_id=$1 AND payload->'evaluation'->'marketReturnValidation' IS NOT NULL`,[ft.captureId])).rows;
+  assert.equal(returnChecks.length,1);assert.equal(returnChecks[0].evidence.version,SOCCER_MARKET_RETURN_VERSION);
+  assert.match(returnChecks[0].evidence.evidenceHash,/^[a-f0-9]{64}$/);assert.equal(returnChecks[0].evidence.quoteObservations,2);
+  assert.ok(returnChecks[0].evidence.observations.every(row=>row.reason==='SOCCER_SOURCE_CONTRACT_UNVERIFIED'&&row.originalQuote.provenance.observedAt===iso(now)));
+  assert.equal(conflict.marketReturnValidation.quarantinedPredictionPeriods,1);
+  assert.equal(conflict.marketReturnValidation.observedQuoteReturns,0);assert.equal(conflict.marketReturnValidation.conflictingQuoteReturns,2);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM sports_soccer_forward_result_checks_v1 WHERE payload->'evaluation'->>'captureId'=$1`,[ft.captureId])).rows[0].n,2,'original evaluated result remains intact beside its changed result');
   // Real SQL must size uncompressed JSON before projecting payloads. A
   // highly compressible oversized field reproduces the TOAST-vs-heap hazard.
