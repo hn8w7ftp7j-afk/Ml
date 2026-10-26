@@ -57,3 +57,21 @@ assert.equal(render({...quote,conditionalAnalysis:{...quote.conditionalAnalysis,
 assert.equal(render({...quote,conditionalAnalysis:{...quote.conditionalAnalysis,sourceQuoteKey:'other'}}),'');
 assert.equal(render(quote,{...game,startTime:'2026-10-18T23:00:00Z'}),'');
 console.log('PASS all eight scoped original quotes → conditional numeric returns → rendered assumptions; stale/forged/future/cross-game rejected; formal W/R/S untouched');
+
+// Exercise the actual aggregate and per-quote UI against saved production data.
+const status=(r=result,g=game,t=now)=>renderToStaticMarkup(React.createElement(ctx.SoccerAutomaticAnalysisStatus,{result:r,game:g,now:t}));
+assert.match(status(),/可用試算 8 筆；歷史或過期 0 筆；未完成 0 筆/);
+assert.match(status(),/無須再手動輸入/);
+assert.match(status(result,game,now+180001),/可用試算 0 筆；歷史或過期 8 筆/);
+assert.match(status(result,{...game,startTime:'2026-10-18T23:00:00Z'}),/未完成 8 筆/);
+const failedQuote={...quote,conditionalAnalysis:{...quote.conditionalAnalysis,status:'UNAVAILABLE',reason:'SOCCER_SCORE_READER_TIME_INVALID'}};
+assert.match(render(failedQuote),/自動收益分析未完成：原盤已過期/);
+const oldQuote={...quote};delete oldQuote.conditionalAnalysis;
+assert.match(render(oldQuote),/此歷史版本尚未保存收益分析/);
+assert.equal(render({...quote,conditionalAnalysis:{...quote.conditionalAnalysis,quoteObservedAt:'2026-10-18T13:34:00.000Z'}}),'');
+assert.equal(render({...quote,conditionalAnalysis:{...quote.conditionalAnalysis,probabilities:{...quote.conditionalAnalysis.probabilities,FULL_WIN:NaN}}}), '');
+assert.equal(render({...quote,conditionalAnalysis:{...quote.conditionalAnalysis,assumption:{...quote.conditionalAnalysis.assumption,period:'INVALID'}}}), '');
+assert.equal(status({...result,directions:[]}), '');
+assert.match(status({...result,qaFlag:'BLOCKED'}),/可用試算 0 筆/);
+assert.equal(JSON.stringify(result).includes('SCORES_AVAILABLE'),false);
+console.log('PASS shipped automatic analysis summary distinguishes current, expired, missing, changed and invalid results without inventing scores');
