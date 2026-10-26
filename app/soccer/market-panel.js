@@ -82,7 +82,7 @@ export function SoccerAutomaticAnalysisStatus({result,game,now=Date.now()}){
     <p>可用試算 {counts.CURRENT} 筆；歷史或過期 {counts.HISTORICAL} 筆；未完成 {counts.UNAVAILABLE} 筆。</p>
     {counts.CURRENT>0&&<p>有效原盤已自動計算條件收益，展開下方原盤即可查看；無須再手動輸入。</p>}
     {counts.HISTORICAL>0&&<p>歷史試算不代表目前價格；未開賽場次須更新 Reader 原盤並重新核對賽前資料。</p>}
-    {counts.UNAVAILABLE>0&&<p>未完成的盤口會列出原因；重新同步原盤可修復來源或時間問題。</p>}
+    {counts.UNAVAILABLE>0&&<p>{game?.status!=='scheduled'||Date.parse(game?.startTime)<=now?'此場已開賽，現在同步的盤口不能補成當時的賽前分析；僅能查閱已保存版本。':'請查看下方盤口的來源、期間與計算核對結果；重新同步原盤可修復來源或時間問題。'}</p>}
     <p>正式 S 評分另缺派彩適用依據、足球情境與模型誤差驗證；更新盤口或重按分析不會自動補齊。</p>
   </section>;
 }
@@ -125,7 +125,7 @@ export function SoccerConditionalAnalysis({quote,result,game,now=Date.now()}){
   const state=soccerConditionalState({quote,result,game,now});
   if(state.status==='UNAVAILABLE'){
     if(quote?.conditionalAnalysis&&quote.conditionalAnalysis.status!=='UNAVAILABLE')return null;
-    const reason=conditionalFailureReason(quote);
+    const reason=game?.status!=='scheduled'||Date.parse(game?.startTime)<=now?'此場已開賽，無法用目前盤口重建賽前收益；請查閱已保存版本':conditionalFailureReason(quote);
     return <p className="soccerMarketCaution" role="status">自動收益分析未完成：{reason}。</p>;
   }
   const c=state.analysis,historical=state.status==='HISTORICAL';

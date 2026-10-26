@@ -75,3 +75,6 @@ assert.equal(status({...result,directions:[]}), '');
 assert.match(status({...result,qaFlag:'BLOCKED'}),/可用試算 0 筆/);
 assert.equal(JSON.stringify(result).includes('SCORES_AVAILABLE'),false);
 console.log('PASS shipped automatic analysis summary distinguishes current, expired, missing, changed and invalid results without inventing scores');
+
+assert.match(render(failedQuote,{...game,status:'final'}),/無法用目前盤口重建賽前收益/);
+assert.match(status({...result,qaFlag:'BLOCKED'},{...game,status:'final'}),/現在同步的盤口不能補成當時的賽前分析/);
