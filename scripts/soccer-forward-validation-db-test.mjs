@@ -89,19 +89,28 @@ try {
   await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[padded.gameId,paddedRevision,padded.observedAt,JSON.stringify(padded)]);
   await captureSoccerForwardSnapshot(padded,paddedRevision);
   const payloadSize=Number((await db.query('SELECT octet_length(payload::text)::bigint AS bytes FROM sports_soccer_analysis_v1 WHERE analysis_hash=$1',[revision])).rows[0].bytes);
-  const captureBudget=payloadSize*3;
+  const captureBudget=payloadSize;
   let returnedCaptureBytes=0,returnedCheckBytes=0,metadataMeasured=false;
   const tracedQuery=async(sql,params=[])=>{
     const rows=(await db.query(sql,params)).rows;
     if(sql.includes('AS cumulative_payload_bytes')&&sql.includes('WITH candidates')){
       metadataMeasured=true;assert.ok(sql.includes('octet_length(a.payload::text)'));assert.ok(rows.every(row=>!Object.hasOwn(row,'payload')));
     }
-    if(sql.startsWith('SELECT c.capture_id,a.payload'))returnedCaptureBytes+=rows.reduce((sum,row)=>sum+Buffer.byteLength(JSON.stringify(row.payload)),0);
+    if(sql.startsWith('SELECT DISTINCT ON (c.league,c.game_id,c.analysis_revision)'))returnedCaptureBytes+=rows.reduce((sum,row)=>sum+Buffer.byteLength(JSON.stringify(row.payload)),0);
     if(sql.includes('WITH histories'))returnedCheckBytes+=rows.reduce((sum,row)=>sum+(row.payload?Buffer.byteLength(JSON.stringify(row.payload)):0),0);
     return rows;
   };
   const bounded=await loadSoccerForwardEvidence(scope,{query:tracedQuery,capturePayloadBytes:captureBudget});
-  assert.equal(metadataMeasured,true);assert.equal(bounded.captures.length,3,'later large snapshots never cross the cumulative uncompressed byte budget');
+  assert.equal(metadataMeasured,true);assert.equal(bounded.captures.length,3,'one full analysis byte budget admits FT, HT and personnel receipts without three transfers');
+  assert.equal(bounded.readCoverage.loadedUniqueAnalysisRows,1);
+  assert.ok(bounded.captures.every(row=>row.snapshot===bounded.captures[0].snapshot),'variant receipts share one unchanged immutable payload');
+  assert.deepEqual(bounded.captures[0].snapshot,original);
+  assert.equal(bounded.captures[0].revision,soccerForwardAnalysisRevision(bounded.captures[0].snapshot));
+  const uniqueCaptureBytes=returnedCaptureBytes;
+  await captureSoccerForwardSnapshot(original,revision);
+  const retryBounded=await loadSoccerForwardEvidence(scope,{capturePayloadBytes:captureBudget});
+  assert.equal(retryBounded.captures.length,3);assert.equal(retryBounded.readCoverage.loadedCapturePayloadBytes,payloadSize,'receipt retries cannot inflate the byte charge');
+  assert.ok(uniqueCaptureBytes<=payloadSize);
   assert.ok(returnedCaptureBytes<=captureBudget);assert.equal(bounded.readCoverage.loadedCapturePayloadBytes,captureBudget);
   assert.equal(bounded.truncated,true);assert.ok(bounded.readCoverage.reasons.includes('CAPTURE_PAYLOAD_BYTE_BUDGET'));
   assert.match(bounded.readCoverage.guidance,/縮小/);assert.equal((await readSoccerForwardValidation(scope,{capturePayloadBytes:captureBudget})).complete,false);
@@ -224,6 +233,33 @@ try {
       assert.deepEqual(xiObservation.personnel.teams[side].starters,xiEvidence.teams[side].lineup.starters.map(player=>player.id));
     }
   } finally {globalThis.fetch=oldFetch;}
+  // Different revisions of one game must keep their own original bytes.
+  const revisedSnapshot=structuredClone(original);revisedSnapshot.readBudgetFixture='second-version';
+  const secondRevision=soccerForwardAnalysisRevision(revisedSnapshot);
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[original.gameId,secondRevision,original.observedAt,JSON.stringify(revisedSnapshot)]);
+  await captureSoccerForwardSnapshot(revisedSnapshot,secondRevision);
+  // An intentionally invalid same-hash/different-game DB fixture verifies that
+  // read dedup is scoped by all three FK columns, not a globally assumed hash.
+  // The model validator must still reject its forged revision after loading.
+  const collision=structuredClone(original);collision.gameId='soccer:epl:777';collision.evidence.game.id=collision.gameId;
+  collision.evidence.game.sourceId='777';collision.readBudgetFixture='different-game-same-revision';
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[collision.gameId,revision,collision.observedAt,JSON.stringify(collision)]);
+  await captureSoccerForwardSnapshot(collision,revision);
+  const scopedRead=await loadSoccerForwardEvidence(scope);
+  const versionOne=scopedRead.captures.filter(row=>row.gameId===original.gameId&&row.revision===revision);
+  const versionTwo=scopedRead.captures.filter(row=>row.gameId===original.gameId&&row.revision===secondRevision);
+  const differentGame=scopedRead.captures.filter(row=>row.gameId===collision.gameId&&row.revision===revision);
+  assert.equal(versionOne.length,3);assert.equal(versionTwo.length,3);assert.equal(differentGame.length,3);
+  assert.deepEqual(versionOne[0].snapshot,original);assert.deepEqual(versionTwo[0].snapshot,revisedSnapshot);
+  assert.deepEqual(differentGame[0].snapshot,collision);
+  assert.notEqual(versionOne[0].snapshot,versionTwo[0].snapshot);assert.notEqual(versionOne[0].snapshot,differentGame[0].snapshot);
+  assert.equal(validateSoccerForwardCapture(differentGame[0],protocol,Date.now()).ok,false,'dedup does not bypass original revision verification');
+  const scopedUnique=new Set(scopedRead.captures.map(row=>JSON.stringify([row.league,row.gameId,row.revision])));
+  assert.equal(scopedRead.readCoverage.loadedUniqueAnalysisRows,scopedUnique.size);
+  const physicalBytes=(await db.query(`SELECT sum(octet_length(a.payload::text))::bigint AS n FROM sports_soccer_analysis_v1 a
+    WHERE EXISTS (SELECT 1 FROM sports_soccer_forward_captures_v1 c WHERE c.league=a.league AND c.game_id=a.game_id AND c.analysis_revision=a.analysis_hash
+      AND c.league='epl' AND c.board_date=$1::date)`,[original.date])).rows[0].n;
+  assert.equal(scopedRead.readCoverage.loadedCapturePayloadBytes,Number(physicalBytes),'bytes are charged once per immutable composite revision');
   console.log('PASS PostgreSQL soccer forward chain: DB-clock capture after actual immutable analysis, fixed/idempotent receipts, separate absent challenger, source/league isolation, append-only results/protocol, corrections quarantined, historical backfill rejected, bounded result work and uncompressed snapshot/check read budgets without hiding correction history; retained EPL/UCL normalizer→actual service→DB→forward report with separately bound summary/scoreboard provenance and real lineup source fields.');
 } finally {
   if(oldDatabase===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=oldDatabase;
