@@ -5,6 +5,7 @@ import { adaptSoccerReaderQuote, evaluateSoccerScenarioReturns, scoreSoccerQuote
   SOCCER_SCENARIO_ARITHMETIC_VERSION } from '../lib/soccer/soccer-scoring.js';
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
 import { scoreDistribution } from '../lib/soccer/score-model.js';
+import { predictHalfTimeDistribution, HALF_TIME_MODEL_VERSION, HALF_TIME_PROTOCOL_VERSION } from '../lib/soccer/half-time-model.js';
 import { deterministicScore, SCORE_FORMULA_VERSION } from '../lib/deterministic-score.js';
 import { publishSoccerAnalysisCandidates } from '../lib/soccer/candidate-publication.js';
 import { soccerCandidatePayloadValid } from '../lib/soccer/candidate-qualification.js';
@@ -15,17 +16,17 @@ const now = Date.parse('2026-10-20T00:00:00Z'), at = new Date(now).toISOString()
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
 const source = { provider: 'REPRODUCIBLE_SYNTHETIC_TEST_NOT_EMPIRICAL_VALIDATION', url: 'https://fixture.invalid/validation',
   contentHash: 'a'.repeat(64), sourcePublishedAt: '2026-10-19T00:00:00Z', fetchedAt: '2026-10-19T00:00:01Z', availableAt: '2026-10-19T00:00:02Z' };
-function fixture(league = 'epl', period = 'FT', line = '2.5') {
+function fixture(league = 'epl', period = 'FT', line = '2.5', kind = 'TOTAL') {
   const game = { id: `soccer:${league}:123`, sourceId: '123', league, date: '2026-10-20', startTime: '2026-10-20T12:00:00Z',
     status: 'scheduled', home: { sourceId: '359', name: 'Arsenal' }, away: { sourceId: '364', name: 'Liverpool' } };
   const reader = { revision: 'b'.repeat(64), observationId: 'c'.repeat(64), observedAt: at, firstFetchedAt: at,
     receivedAt: at, persistedAt: at, sourceHost: 'www.tai888.in', pageUrl: 'https://www.tai888.in/newapp/' };
-  const market = { kind: 'TOTAL', unit: 'GOALS', period, line, overWater: .95, underWater: .9,
+  const market = { kind, unit: 'GOALS', period, line, overWater: .95, underWater: .9, homeWater: .95, awayWater: .9, lineSide: kind === 'HANDICAP' ? 'home' : null,
     rawRows: [`大 ${line} 0.95`, '小 0.9'], periodEvidence: { sectionTitle: league === 'epl' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽',
-      tableHeaders: [period === 'FT' ? '全場' : '上半場'], marketHeader: period === 'FT' ? '全場大小' : '上半場大小', period, status: 'EXPLICIT' } };
+      tableHeaders: [period === 'FT' ? '全場' : '上半場'], marketHeader: `${period === 'FT' ? '全場' : '上半場'}${kind === 'TOTAL' ? '大小' : '讓球'}`, period, status: 'EXPLICIT' } };
   const directions = buildSoccerMarketDirections({ game, reader, now, matchedGames: [{ officialGameId: game.id, league: league.toUpperCase(),
     boardDate: game.date, prestart: true, matchStatus: 'MATCHED', markets: [market] }] });
-  const quote = directions.find(direction => direction.period === period && direction.direction === 'TOTAL_OVER').quotes[0];
+  const quote = directions.find(direction => direction.period === period && direction.direction === (kind === 'TOTAL' ? 'TOTAL_OVER' : 'HANDICAP_HOME')).quotes[0];
   const grid = (over = .53, tailMass = 0) => ({ league, gameId: game.id, period: period === 'FT' ? 'REGULATION_FT' : 'REGULATION_HT',
     modelVersion: 'SYNTHETIC_FOOTBALL_MODEL_NOT_APPROVED', trainingHash: 'd'.repeat(64),
     cells: [{ home: 2, away: 1, probability: over }, { home: 1, away: 0, probability: 1 - over - tailMass }], retainedMass: 1 - tailMass, tailMass });
@@ -139,6 +140,7 @@ const registrations = Object.entries(forgedAcceptance).map(([kind, manifest]) =>
 const moduleUrl = new URL('../lib/soccer/soccer-scoring.js', import.meta.url);
 let registeredCode = fs.readFileSync(moduleUrl, 'utf8').replace('const acceptedArtifacts = Object.freeze([]);', `const acceptedArtifacts = Object.freeze(${JSON.stringify(registrations)});`);
 registeredCode = registeredCode.replace("import { soccerVerifiedSettlementContract } from './settlement-contract.js';", `const soccerVerifiedSettlementContract = () => (${JSON.stringify(input.contract)});`);
+registeredCode = registeredCode.replace("from 'decimal.js'", `from ${JSON.stringify(import.meta.resolve('decimal.js'))}`);
 registeredCode = registeredCode.replace(/(\bfrom\s*|\bimport\s*)(['"])(\.[^'"]+)\2/g, (_match, prefix, separator, specifier) => `${prefix}${separator}${new URL(specifier, moduleUrl).href}${separator}`);
 const { scoreSoccerQuote: registeredCalculation } = await import(`data:text/javascript;base64,${Buffer.from(registeredCode).toString('base64')}`);
 const acceptedInputs = { ...input, evidence: formalEvidence, acceptance: forgedAcceptance, publishedCurrent: true, persisted: true };
@@ -293,3 +295,75 @@ for(const league of ['epl','ucl'])for(const period of ['FT','HT']){
   }
 }
 console.log('PASS EPL/UCL FT/HT original quote → fractional rebate → exact net EV; full/half/20% wins and losses plus zero-push remain non-promoted');
+
+// Bound propagation reaches real infinite-support FT/HT handicap generators.
+// Source/model/contract fixtures remain synthetic and unregistered; generated
+// PMFs and payoff engine are the production implementations.
+for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
+  const f = fixture(league, period, '1.5', 'HANDICAP');
+  f.contract.labelMapping = { home: f.game.home.name, away: f.game.away.name };
+  const htModel = { version: HALF_TIME_MODEL_VERSION, protocolVersion: HALF_TIME_PROTOCOL_VERSION, league,
+    period: 'REGULATION_HT', cutoff: '2026-10-18T00:00:00Z', trainedThrough: '2026-10-17T00:00:00Z',
+    trainingHash: 'd'.repeat(64), shares: { home: .45, away: .40 } };
+  const modelVersion = period === 'HT' ? HALF_TIME_MODEL_VERSION : f.uncertainty.modelVersion;
+  const scenarios = f.scenarios.map((scenario, index) => {
+    const ft = { ...scoreDistribution(1.5 + .3 * index, 1.1, 0, 1e-7), league };
+    const generated = period === 'HT' ? predictHalfTimeDistribution(ft, htModel, { league, startTime: f.game.startTime }) : ft;
+    return { ...scenario, modelVersion, distribution: { ...scenario.distribution, ...generated, modelVersion } };
+  });
+  const current = reseal({ ...f, scenarios, distribution: scenarios[0].distribution, uncertainty: { ...f.uncertainty, modelVersion } });
+  const scored = scoreSoccerQuote(current), bounded = scored.scenarioReturns;
+  assert.ok(bounded, JSON.stringify({league,period,stages:scored.stages,payoff:scored.conditionalPayoff?.code}));
+  assert.equal(bounded.status, 'CONDITIONAL_PROTOCOL_BOUNDS');
+  assert.equal(bounded.boundsComputed, true);
+  assert.equal(bounded.ok, false, 'point-return/formal admission remains closed');
+  assert.equal(bounded.conditionalWeightedReturn, null); assert.equal(bounded.conditionalRobustReturn, null);
+  assert.equal(bounded.fixedScoreDiagnostic, null); assert.equal(scored.fixedScoreDiagnostic, null);
+  for (const field of ['W', 'R', 'score']) assert.equal(scored[field], null);
+  assert.equal(scored.formalScoringEnabled, false); assert.equal(scored.calculationEligible, false);
+  assert.equal(scored.eligible, false);
+  assert.ok(bounded.scenarioRows.every(row => row.expectedNet === null && row.unresolvedTailMass > 0));
+  assert.ok(bounded.scenarioRows.every(row => row.evBounds.lower < row.evBounds.upper));
+  for (const bound of Object.values(bounded.conditionalReturnBounds)) {
+    assert.ok(Number.isFinite(bound.lower) && Number.isFinite(bound.upper) && bound.lower < bound.upper);
+  }
+  assert.match(bounded.boundInterpretation, /NOT_A_MODEL_CONFIDENCE_INTERVAL_OR_FORMAL_R/);
+}
+
+// Different endpoint orderings must be sorted independently for q10 bounds.
+const crossing = input.scenarios.map((scenario, index) => ({ ...scenario,
+  distribution: input.grid(index === 0 ? .52 : .55, index === 0 ? .20 : .05) }));
+const crossed = scoreSoccerQuote(reseal({ ...input, scenarios: crossing })).scenarioReturns;
+const [first, second] = crossed.scenarioRows;
+assert.ok(first.evBounds.lower < second.evBounds.lower);
+assert.ok(first.evBounds.upper > second.evBounds.upper);
+assert.equal(crossed.conditionalReturnBounds.q10.lower, first.evBounds.lower);
+assert.equal(crossed.conditionalReturnBounds.q10.upper, second.evBounds.upper);
+const ranges = crossed.conditionalReturnBounds;
+for (let mask = 0; mask < 4; mask++) {
+  const values = crossed.scenarioRows.map((row, i) => ({ weight: row.weight, value: row.evBounds[mask & (1 << i) ? 'upper' : 'lower'] }));
+  const w = values.reduce((sum, row) => sum + row.weight * row.value, 0);
+  const q10 = Math.min(...values.map(row => row.value)); // two equally weighted scenarios
+  const e = input.uncertainty.modelError.value, adjusted = w - e, r = Math.min(w, q10, adjusted);
+  for (const [key, value] of Object.entries({ weighted: w, q10, errorAdjusted: adjusted, robust: r }))
+    assert.ok(ranges[key].lower <= value && value <= ranges[key].upper, `${key} endpoint completion outside enclosure`);
+}
+assert.equal(crossed.conditionalWeightedReturn, null); assert.equal(crossed.conditionalRobustReturn, null);
+assert.equal(crossed.fixedScoreDiagnostic, null);
+console.log('PASS real EPL/UCL FT/HT handicap Poisson tails and crossing scenario orders propagate outward weighted/q10/robust bounds; no point W/R/S, tail renormalization or formal admission');
+
+// Binary64 summation admits tiny positive weights beyond the visible unit-sum
+// precision. They still shift the exact 10% quantile boundary: .1 is then
+// strictly less than .1 * (.1 + .9 + tiny), so the second scenario is selected.
+for (const tinyWeight of [1e-100, Number.MIN_VALUE]) {
+  const weights = [.1, .9, tinyWeight];
+  const scenarios = weights.map((weight, index) => ({ ...input.scenarios[0], id: `tiny-weight-${index}`, weight,
+    distribution: input.grid(.50 + .05 * index, .01) }));
+  const result = scoreSoccerQuote(reseal({ ...input, scenarios })).scenarioReturns;
+  assert.equal(result.boundsComputed, true);
+  assert.ok(result.scenarioRows[0].evBounds.upper < result.scenarioRows[1].evBounds.lower);
+  assert.equal(result.conditionalReturnBounds.q10.lower, result.scenarioRows[1].evBounds.lower, `lost positive weight ${tinyWeight}`);
+  assert.equal(result.conditionalReturnBounds.q10.upper, result.scenarioRows[1].evBounds.upper, `lost positive weight ${tinyWeight}`);
+  assert.equal(result.conditionalWeightedReturn, null); assert.equal(result.fixedScoreDiagnostic, null);
+}
+console.log('PASS 10% quantile boundary retains positive weights at 1e-100 and Number.MIN_VALUE; no inward bound from decimal precision loss');
