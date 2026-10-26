@@ -119,6 +119,7 @@ import {
   cloudLedgerRetryDelay,
 } from '../lib/cloud-ledger-sync-policy.js';
 import { loadCompactCloudLedger, mergeKnownLedgerRecords } from '../lib/compact-cloud-ledger-client.js';
+import { readLedgerAfterSettlement } from '../lib/ledger-settlement-refresh.js';
 import { PERFORMANCE_LEAGUE_IDS, performanceLeagueId, performanceLeagueConfig, isNbaPerformanceBet, loadNbaPerformanceLedger } from '../lib/performance-ledger-client.js';
 import {
   allLeagueBoardDate,
@@ -1081,7 +1082,7 @@ function BreakdownButton({ label, summary, active = false, onClick }) {
   </button>;
 }
 
-function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCloudLedgerFailure, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, onCancel }) {
+function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, settlementNotice, onRetryLedger, period, setPeriod, selectedLeague, setSelectedLeague, selectedMarket, setSelectedMarket, refreshSettlements, onCancel }) {
   const [nbaLedger, setNbaLedger] = useState({ bets: [], state: 'loading', error: '', invalidRecords: 0 });
   const [nbaLedgerBusy, setNbaLedgerBusy] = useState(false);
   const [nbaSettlementNotice, setNbaSettlementNotice] = useState('');
@@ -1149,6 +1150,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
   const [detailPage, setDetailPage] = useState(0);
   const [priceFeed, setPriceFeed] = useState({});
   const [priceFeedChecked, setPriceFeedChecked] = useState(false);
+  const [priceFeedError, setPriceFeedError] = useState('');
   const [originalPriceSummaryState, setOriginalPriceSummaryState] = useState(null);
   const priceFeedBusyRef = useRef(false);
   const priceFeedRetryAtRef = useRef(0);
@@ -1195,6 +1197,7 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
   useEffect(() => {
     let disposed = false;
     setPriceFeed({});
+    setPriceFeedError('');
     setPriceFeedChecked(priceBetIds.length === 0);
     if (!priceBetIds.length || cloudLedgerStatus?.state === 'unavailable') return () => { disposed = true; };
     const refresh = async () => {
@@ -1219,12 +1222,11 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
           if (item?.betId) next[item.betId] = item;
         }
         setPriceFeed(next);
+        setPriceFeedError('');
         priceFeedRetryAtRef.current = 0;
       } catch (cause) {
         priceFeedRetryAtRef.current = Date.now() + cloudLedgerRetryDelay(cause);
-        if (String(cause?.code || '').startsWith('DATABASE_') || Number(cause?.status) >= 500) {
-          reportCloudLedgerFailure(cause);
-        }
+        if (!disposed) setPriceFeedError('即時盤口比較暫未更新；輸贏統計仍依完整帳本顯示。');
         // Keep the ledger stable; an unavailable Reader comparison must not hide the bet.
       } finally {
         priceFeedBusyRef.current = false;
@@ -1239,9 +1241,11 @@ function BetLedgerDashboard({ bets, cloudLedgerStatus, cloudLedgerBusy, reportCl
   }, [priceRequestKey, cloudLedgerStatus?.state]);
   return <section className="panel ledgerPanel">
     <div className="panelHead"><div><span className="kicker">五聯盟整合帳本</span><h2>實際下注紀錄與績效</h2></div><button className="textButton" disabled={ledgerBusy || cloudLedgerStatus?.state !== 'ready' || nbaLedger.state !== 'ready'} onClick={refreshAllSettlements}>{ledgerBusy ? '帳本同步中…' : '更新全部賽果'}</button></div>
-    {cloudLedgerStatus?.state === 'unavailable' && <div className="errorBox" role="alert"><strong>永久雲端帳本目前無法讀取</strong><br/>{cloudLedgerStatus.message}<br/>下方若顯示 0 注，只代表這台裝置沒有可用暫存，不代表資料庫內沒有紀錄；系統不會把失敗回應冒充空帳本。</div>}
+    {cloudLedgerStatus?.state === 'unavailable' && <div className="errorBox" role="alert"><strong>永久雲端帳本目前無法讀取</strong><br/>{cloudLedgerStatus.message}<br/>下方若顯示 0 注，只代表這台裝置沒有可用暫存，不代表資料庫內沒有紀錄；系統不會把失敗回應冒充空帳本。<button type="button" className="mini secondary" disabled={cloudLedgerBusy} onClick={onRetryLedger}>{cloudLedgerBusy ? '正在回讀帳本…' : '重新讀取帳本'}</button></div>}
     {nbaLedger.state === 'unavailable' && <div className="errorBox" role="alert">{nbaLedger.error} NBA 與全部聯盟統計尚未確認完整；保留先前明細。<button className="mini secondary" disabled={nbaLedgerBusy} onClick={() => loadNbaLedger()}>重新讀取 NBA</button></div>}
     {nbaSettlementNotice && <p role="status">{nbaSettlementNotice}</p>}
+    {settlementNotice && <p role="status">{settlementNotice}</p>}
+    {priceFeedError && <p role="status">{priceFeedError}</p>}
     {nbaLedger.invalidRecords > 0 && <p role="alert">NBA 有 {nbaLedger.invalidRecords} 筆原始紀錄無法驗證，已隔離，未納入績效。</p>}
     <div className="periodTabs" aria-label="下注期間">
       {BET_PERIODS.map(item => <button key={item.id} className={period === item.id ? 'active' : ''} onClick={() => choosePeriod(item.id)}>{item.label}</button>)}
@@ -2012,6 +2016,7 @@ export default function Home() {
   const [storageReady, setStorageReady] = useState(false);
   const [cloudLedgerStatus, setCloudLedgerStatus] = useState({ state: 'loading', code: '', message: '' });
   const [cloudLedgerBusy, setCloudLedgerBusy] = useState(true);
+  const [settlementNotice, setSettlementNotice] = useState('');
   const [tab, setTab] = useState('board');
   const [notificationResultNotice, setNotificationResultNotice] = useState('');
   const [nhlNotificationScope, setNhlNotificationScope] = useState(null);
@@ -2334,9 +2339,17 @@ export default function Home() {
     cloudSyncBusyRef.current = true;
     setCloudLedgerBusy(true);
     try {
+      const migrationComplete = cloudBetMigrationComplete();
+      if (!migrationComplete) {
+        requireCloudLedgerResponse(await requestJSON('/api/bets', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'merge', bets: migrateLegacyLocalBets(betsRef.current) }),
+        }, 30000));
+      }
       const data = await loadCompactCloudLedger(requestJSON);
       requireCloudLedgerResponse(data);
       if (generation !== cloudLedgerGenerationRef.current || betMutationBusyRef.current) return;
+      if (!migrationComplete) markCloudBetMigrationComplete();
       betsRef.current = data.bets;
       setBets(data.bets);
       setCalibrationStatus(data.calibration || null);
@@ -2368,20 +2381,27 @@ export default function Home() {
     setCloudLedgerBusy(true);
     try {
       const migrationComplete = cloudBetMigrationComplete();
-      const data = await requestJSON('/api/bets', {
+      const mutate = () => requestJSON('/api/bets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(migrationComplete
           ? { action: 'settleOpen', league: targetLeague, limit: 500 }
           : { action: 'merge', bets: migrateLegacyLocalBets(betsRef.current) }),
       }, 120000);
-      requireCloudLedgerResponse(data);
-      const completeReadback = await loadCompactCloudLedger(requestJSON);
+      // Migration must be acknowledged before discarding any legacy local rows.
+      // Settlement can commit even if its response is lost; always read back.
+      const result = migrationComplete
+        ? await readLedgerAfterSettlement(mutate, () => loadCompactCloudLedger(requestJSON))
+        : { settlement: requireCloudLedgerResponse(await mutate()), ledger: await loadCompactCloudLedger(requestJSON) };
+      const completeReadback = result.ledger;
       if (generation === cloudLedgerGenerationRef.current && !betMutationBusyRef.current) {
         if (!migrationComplete) markCloudBetMigrationComplete();
         betsRef.current = completeReadback.bets;
         setBets(completeReadback.bets);
-        setCalibrationStatus(data.calibration || null);
+        if (result.settlement) setCalibrationStatus(result.settlement.calibration || null);
+        setSettlementNotice(result.settlementError
+          ? '賽果更新回覆未確認；已重新完整讀取帳本，統計依目前保存的結算顯示。'
+          : '');
         cloudSyncRetryAtRef.current = 0;
         setCloudLedgerStatus({ state: 'ready', code: '', message: '' });
       }
@@ -5436,11 +5456,11 @@ export default function Home() {
       </div>) : <div className="emptySmall">目前沒有公式分數達 {BET_ORDER_MIN_SCORE.toFixed(1)} 且 W、R 都大於 0 的Reader實際盤方向。</div>}
     </section>}
 
-    {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
+    {tab === 'bets' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} settlementNotice={settlementNotice} onRetryLedger={probeCloudLedgerRecovery} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
 
     {tab === 'scorePerformance' && <ScorePerformanceDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus}/>}
 
-    {tab === 'performanceStats' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} reportCloudLedgerFailure={reportCloudLedgerFailure} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
+    {tab === 'performanceStats' && <BetLedgerDashboard bets={bets} cloudLedgerStatus={cloudLedgerStatus} cloudLedgerBusy={cloudLedgerBusy} settlementNotice={settlementNotice} onRetryLedger={probeCloudLedgerRecovery} period={betPeriod} setPeriod={setBetPeriod} selectedLeague={betLeague} setSelectedLeague={setBetLeague} selectedMarket={betMarket} setSelectedMarket={setBetMarket} refreshSettlements={refreshSettlements} onCancel={cancelBet}/>}
 
     {tab === 'settings' && <section className="panel"><div className="panelHead"><h2>{activeLeague.label}｜設定</h2><span className={`state ${activeLeague.status}`}>{nbaSelected ? '全場大小分析｜模型驗證中' : activeLeague.statusLabel}</span></div><div className="settingsGrid"><label>每筆實際下注金額<input type="number" value={settings.unitValue} min="100" step="100" onChange={event => setSettings(value => ({ ...value, unitValue: Number(event.target.value) || 10000 }))}/></label></div><div className="settingsNote"><b>模型：{activeLeague.modelFamily}</b><br/>每場正反方向、讓分大小、全場與上半場共用一份PIT凍結聯合比分分布；Tai888只提供待評估的成交盤口與水位，不改寫模型概率。前台固定以S分數為主，W與R是模型估計，不是實際收益率；Tai888差距、外部市場方向與極高EV只作WARNING，不改原始S。全場大分正常保留於分析與候選順序，仍依原有門檻與 QA 判定；資料、合約、比分分布、正反鏡像與逐腿結算等實質QA錯誤仍會BLOCK。此金額只供實際下注帳本紀錄；帳本仍依台灣信用盤逐腿結算與每萬退150規則計算。</div></section>}
 
