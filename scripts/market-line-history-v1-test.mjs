@@ -38,6 +38,13 @@ assert.ok(first[0].markets.length < 300, 'full eight-direction state must remain
 assert.ok(marketLineHistoryStorageBytes(baseball) < 400, 'one changed game should remain well below 0.4 KB payload estimate');
 assert.equal(first[0].markets.includes('rawText'), false);
 
+for (const missing of [null, undefined, '', ' ', false]) {
+  const incomplete = structuredClone(baseball);
+  incomplete.games[0].markets[0].water = missing;
+  assert.equal(JSON.parse(buildMarketLineHistoryRows(incomplete)[0].markets)[0], null,
+    'missing water must remain an uncaptured market, not a fabricated zero price');
+}
+
 const heartbeat = buildMarketLineHistoryRows({
   ...baseball,
   pageActivityAt: '2026-10-06T12:01:00.000Z',

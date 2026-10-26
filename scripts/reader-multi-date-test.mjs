@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { parseTai888Capture, canonicalReaderPayload } from '../reader/parser.js';
 import { assessBoardCandidate, selectAuthoritativeBoard, readerPayloadsByDate } from '../reader/board-selector.js';
 import { normalizeNbaReaderPayload } from '../lib/nba/reader.js';
 import { storeNbaReaderSnapshot, loadNbaReaderSnapshot } from '../lib/nba/reader-store.js';
 process.env.READER_STORE_MEMORY_ONLY = 'true';
+const readerVersion = JSON.parse(readFileSync(new URL('../reader/manifest.json', import.meta.url), 'utf8')).version;
 const now = new Date('2026-10-09T07:44:00Z');
 const cell = pair => ({ pair, lines: pair });
 const row = (date, time, teams, spread, total) => ({ cells: [cell([date, time]), cell(teams), cell([`${spread} 0.950`, '0.950']), cell([`${total} 大 0.940`, '小 0.940']), cell(['','']), cell(['',''])] });
@@ -15,7 +18,7 @@ const parsed = parseTai888Capture(capture, now);
 const candidate = { capture, parsed, tabId: 1, frameId: 0, active: true };
 assert.equal(assessBoardCandidate(candidate, +now).ok, true);
 assert.equal(selectAuthoritativeBoard([candidate], { now: +now, league: 'NBA' }).ok, true);
-const payload = { ...parsed, readerVersion: '2.1.43', deviceId: 'device-multi-date-test', pageActivityAt: now.toISOString(), expectedGameCount: 2, detectedGameCount: 2 };
+const payload = { ...parsed, readerVersion, deviceId: 'device-multi-date-test', pageActivityAt: now.toISOString(), expectedGameCount: 2, detectedGameCount: 2 };
 const daily = readerPayloadsByDate(payload);
 assert.deepEqual(daily.map(p => p.boardDate), ['2026-10-09', '2026-10-10']);
 assert.deepEqual(daily.flatMap(p => p.games), parsed.games);
@@ -54,7 +57,7 @@ const uploads = []; let failTomorrow = true;
 const fakeChrome = {
   runtime: { onInstalled: event, onStartup: event, onMessage: event }, alarms: { onAlarm: event },
   storage: { local: { get: async () => structuredClone(state), set: async value => Object.assign(state, value), remove: async key => { delete state[key]; } } },
-  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion: '2.1.43', captures: [capture] } }) },
+  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion, captures: [capture] } }) },
   webNavigation: { getAllFrames: async () => [{ frameId: 0 }] },
 };
 const ctx = { chrome: fakeChrome, parseTai888Capture, canonicalReaderPayload, readerMarketProperties, selectAuthoritativeBoard, shouldSkipSuccessfulPayload, readerPayloadsByDate,
@@ -62,9 +65,9 @@ const ctx = { chrome: fakeChrome, parseTai888Capture, canonicalReaderPayload, re
   fetch: async (url, options) => {
     const body = JSON.parse(options.body); uploads.push(body.boardDate);
     assert.equal(url, 'https://mlb-positive-ev.vercel.app/api/nba/reader');
-    const normalized = normalizeNbaReaderPayload(body, { deviceId: state.deviceId, headerVersion: '2.1.43', now: +now });
+    const normalized = normalizeNbaReaderPayload(body, { deviceId: state.deviceId, headerVersion: readerVersion, now: +now });
     if (body.boardDate === '2026-10-10' && failTomorrow) return { status: 503, ok: false, text: async () => JSON.stringify({ ok: false, error: 'synthetic temporary failure' }) };
-    return { status: 200, ok: true, text: async () => JSON.stringify({ ok: true, boardDate: body.boardDate, rawGameCount: normalized.gameCount, marketCount: normalized.marketCount }) };
+    return { status: 200, ok: true, text: async () => JSON.stringify(readerSaveReceiptFixture(body, { rawGameCount: normalized.gameCount, marketCount: normalized.marketCount })) };
   } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8').replace(/^import .*?;\n/gm, ''), ctx);

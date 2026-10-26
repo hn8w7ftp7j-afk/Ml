@@ -3,7 +3,7 @@ import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSu
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 
-const VERSION = '2.1.43';
+const VERSION = '2.1.44';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -23,6 +23,7 @@ async function ensureDiagnosticAlarm() {
   await chrome.alarms.create(DIAGNOSTIC_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
 }
 function syncExceptionCode(error) {
+  if (error?.code === 'INVALID_RESPONSE') return 'INVALID_RESPONSE';
   return error?.status ? `HTTP_${error.status}` : error?.name === 'AbortError' ? 'TIMEOUT'
     : error?.name === 'TypeError' ? 'NETWORK_ERROR' : 'SYNC_EXCEPTION';
 }
@@ -79,6 +80,59 @@ function safeUrl(value) { try { const url = new URL(String(value || '')); const 
 function safeHost(value) { try { const host = new URL(String(value || '')).hostname.toLowerCase(); return host === 'tai888.in' || host.endsWith('.tai888.in') ? host : ''; } catch { return ''; } }
 function iso(value) { const time = Date.parse(String(value || '')); return Number.isFinite(time) ? new Date(time).toISOString() : ''; }
 function integer(value, max = 10000) { const number = Number(value); return Number.isInteger(number) && number >= 0 && number <= max ? number : 0; }
+const SAVE_RECEIPT_VERSION = 'READER-SAVE-RECEIPT-v1';
+function readerSaveReceiptMatches(receipt, league, boardDate, payloadHash) {
+  return receipt?.version === SAVE_RECEIPT_VERSION && receipt.status === 'CONFIRMED'
+    && receipt.league === league && receipt.boardDate === boardDate
+    && receipt.payloadHash === payloadHash && /^[a-f0-9]{64}$/.test(payloadHash || '');
+}
+function confirmedReaderSaveReceipt(data, payload, payloadHash) {
+  const invalid = () => { throw Object.assign(new Error('伺服器未確認盤口永久保存，將自動重試'), { code: 'INVALID_RESPONSE' }); };
+  const count = value => Number.isSafeInteger(value) && value >= 0;
+  const timestamp = value => typeof value === 'string' && Boolean(iso(value));
+  const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  const league = payload?.league, boardDate = payload?.boardDate;
+  if (!data || data.ok !== true || data.league !== league || !hash(payloadHash)
+    || (data.boardDate !== undefined && data.boardDate !== boardDate)
+    || data.durable === false || data.persisted === false) invalid();
+  const receipt = { version: SAVE_RECEIPT_VERSION, status: 'CONFIRMED', league, boardDate, payloadHash,
+    confirmedAt: new Date().toISOString() };
+  if (['MLB', 'NPB', 'KBO', 'CPBL', 'NBA'].includes(league)) {
+    const history = data.historyTracking;
+    if (data.boardDate !== boardDate || data.allRequiredWritesSucceeded !== true
+      || history?.configured !== true || !['checked', 'inserted', 'unchanged', 'failed'].every(key => count(history[key]))
+      || history.failed !== 0 || history.checked !== history.inserted + history.unchanged + history.failed) invalid();
+    receipt.evidenceType = 'MARKET_HISTORY';
+    receipt.historyTracking = { configured: true, checked: history.checked, inserted: history.inserted,
+      unchanged: history.unchanged, failed: 0 };
+    // Capture receipts are additive. Older deployed APIs can still confirm the
+    // history write, while new receipts retain only this explicit evidence list.
+    const capture = history.captureReceipt;
+    if (capture?.configured === true && capture.persisted === true && hash(capture.receiptId)
+      && timestamp(capture.persistedAt) && count(capture.gameCount)
+      && capture.coverageComplete === false && capture.closingLineVerified === false
+      && ['sourceObservedAt', 'pageActivityAt', 'receivedAt'].every(key => capture[key] === null || timestamp(capture[key]))) {
+      receipt.historyTracking.captureReceipt = { configured: true, persisted: true, receiptId: capture.receiptId,
+        sourceObservedAt: capture.sourceObservedAt === null ? null : iso(capture.sourceObservedAt),
+        pageActivityAt: capture.pageActivityAt === null ? null : iso(capture.pageActivityAt),
+        receivedAt: capture.receivedAt === null ? null : iso(capture.receivedAt), persistedAt: iso(capture.persistedAt),
+        gameCount: capture.gameCount, coverageComplete: false, closingLineVerified: false };
+    }
+  } else if (['EPL', 'UCL', 'NHL'].includes(league)) {
+    if (data.persisted !== true || !hash(data.revision) || !timestamp(data.observedAt)
+      || Date.parse(data.observedAt) !== Date.parse(payload.observedAt)) invalid();
+    receipt.evidenceType = league === 'NHL' ? 'NHL_OBSERVATION' : 'SOCCER_OBSERVATION';
+    receipt.persisted = true; receipt.revision = data.revision; receipt.observedAt = iso(data.observedAt);
+    if (league !== 'NHL') {
+      if (!hash(data.observationId) || data.observationId !== data.revision
+        || !timestamp(data.receivedAt) || !timestamp(data.firstFetchedAt)
+        || data.timeEvidence !== 'SERVER_RECEIPT_RECORDED') invalid();
+      receipt.observationId = data.observationId; receipt.receivedAt = iso(data.receivedAt);
+      receipt.firstFetchedAt = iso(data.firstFetchedAt); receipt.timeEvidence = 'SERVER_RECEIPT_RECORDED';
+    }
+  } else invalid();
+  return receipt;
+}
 function localBoardDiagnostic(payload, capture) {
   const games = Array.isArray(payload?.games) ? payload.games : [];
   if (['EPL', 'UCL'].includes(payload?.league)) {
@@ -406,18 +460,19 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[syncKey], lastSuccessfulSyncAt: times[syncKey], now: Date.now() })) {
           // A skipped day still contributes to the aggregate only if its
           // previously acknowledged receipt is available.
-          const receipt = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league)
-            ? stored.readerStatuses?.[league]?.dateStatuses?.find(item => item.boardDate === payload.boardDate
-              && (!soccer || (item.periodsCovered?.length ? item.periodsCovered.join('+') : 'UNKNOWN') === periodKey))
-            : stored.readerStatuses?.[league];
-          if (receipt) { accepted.push(receipt); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, skipped: true }); continue; }
+          const receipt = stored.readerStatuses?.[league]?.dateStatuses?.find(item => item.boardDate === payload.boardDate
+            && (!soccer || (item.periodsCovered?.length ? item.periodsCovered.join('+') : 'UNKNOWN') === periodKey));
+          if (readerSaveReceiptMatches(receipt?.saveReceipt, league, payload.boardDate, payloadHash)) {
+            accepted.push(receipt); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, skipped: true }); continue;
+          }
         }
         const endpoint = ['EPL','UCL'].includes(league) ? '/api/soccer/reader' : league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
         const wirePayload = league === 'NHL' ? nhlReaderEvidencePayload(payload) : payload;
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
         const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw Object.assign(new Error('Reader 配對已過期，請重新配對'), { status: 401 }); } if (!response.ok || !data.ok) throw Object.assign(new Error(data.error || `同步失敗（${response.status}）`), { status: response.status });
+        const saveReceipt = confirmedReaderSaveReceipt(data, payload, payloadHash);
         const now = Date.now(); hashes[syncKey] = payloadHash; times[syncKey] = now;
-        accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), lastSyncAt: now, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
+        accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), lastSyncAt: now, saveReceipt, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
         results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, message: data.message });
       } catch (error) { failures.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), error: error.message, diagnosticCode: syncExceptionCode(error) }); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: false, error: error.message }); }
     }

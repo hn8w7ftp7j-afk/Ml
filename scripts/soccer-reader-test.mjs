@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import '../reader/soccer-card-normalizer.js';
 import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhlReaderEvidencePayload } from '../reader/parser.js';
 import { soccerMarket, canonicalSoccerPayload } from '../reader/soccer-parser.js';
@@ -95,7 +96,7 @@ if(process.argv.includes('--api')){
  const worker={chrome,Date:Clock,URL,setTimeout,clearTimeout,queueMicrotask,TextEncoder,AbortController,crypto:webcrypto,parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,selectAuthoritativeSoccerBoards,readerPayloadsByDate,shouldSkipSuccessfulPayload,fetch:async(url,options)=>{
   assert.equal(url,'https://mlb-positive-ev.vercel.app/api/soccer/reader');assert.equal(options.headers['X-Reader-Version'],version);
   const body=JSON.parse(options.body),checked=validateSoccerCapture(body,{now,headerVersion:version});assert.equal(checked.ok,true,JSON.stringify(checked));uploads.push(body.league);
-  return{ok:true,status:200,text:async()=>JSON.stringify({ok:true,rawGameCount:1,marketCount:4,executable:false})};
+  return{ok:true,status:200,text:async()=>JSON.stringify(readerSaveReceiptFixture(body,{rawGameCount:1,marketCount:4,executable:false}))};
  }};
  vm.createContext(worker);vm.runInContext(fs.readFileSync('reader/background.js','utf8').replace(/^import .*?;\n/gm,''),worker);
  assert.equal((await vm.runInContext("performSync('manual')",worker)).ok,true);assert.deepEqual(uploads,['EPL','UCL']);
