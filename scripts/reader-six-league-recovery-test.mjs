@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
@@ -55,7 +56,7 @@ const worker = { chrome, Date, URL, setTimeout, clearTimeout, queueMicrotask, Te
     assert.equal(options.headers['X-Reader-Version'], version);
     assert.equal(input.games.length, 1);
     if (input.league === 'NHL') assert.equal(validateNhlCapture(input, { headerVersion: version }).ok, true);
-    return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, rawGameCount: 1, matchedGameCount: 1, marketCount: 2 }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify(readerSaveReceiptFixture(input, { rawGameCount: 1, matchedGameCount: 1, marketCount: 2 })) };
   },
 };
 vm.createContext(worker);

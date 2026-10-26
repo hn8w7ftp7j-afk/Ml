@@ -189,6 +189,16 @@ export async function POST(request) {
       && previous?.boardDate === envelope.boardDate
       && previous?.league === league
       && snapshotMatchesSchedule(previous, schedule, league)) {
+      // The quote may be unchanged, but this is a new source observation.
+      // Persist its own receipt before advancing the live heartbeat; retain the
+      // original state event timestamp and original catch-up receipt above.
+      const historyTracking = await requireReaderHistorySaved({
+        ...previous,
+        observedAt: envelope.observedAt,
+        receivedAt: envelope.receivedAt,
+        pageActivityAt: envelope.pageActivityAt,
+        readerVersion: envelope.readerVersion,
+      });
       const refreshedResult = await refreshReaderSnapshot(previous, {
         league,
         observedAt: envelope.observedAt,
@@ -224,7 +234,7 @@ export async function POST(request) {
         runtimeCache: Boolean(storage?.runtimeCache),
         allRequiredWritesSucceeded: true,
         closingTracking,
-        historyTracking: previousHistoryTracking,
+        historyTracking,
         freshness: readerSnapshotStatus(refreshed, Date.now(), league),
       }, { headers });
     }

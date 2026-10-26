@@ -15,6 +15,8 @@ let previous = null;
 let historyMode = 'success';
 let databaseConfigured = true;
 let historyRows = [];
+let captureRows = [];
+let captureMode = 'success';
 let stores = 0;
 let refreshes = 0;
 let failOnHistoryCall = null;
@@ -23,6 +25,8 @@ function reset(snapshot = null) {
   previous = snapshot ? structuredClone(snapshot) : null;
   traces.length = 0;
   historyRows = [];
+  captureRows = [];
+  captureMode = 'success';
   historyMode = 'success';
   databaseConfigured = true;
   stores = 0;
@@ -80,11 +84,13 @@ const deps = {
   loadReaderSnapshot: async () => previous ? structuredClone(previous) : null,
   loadNbaReaderSnapshot: async () => previous ? structuredClone(previous) : null,
   storeReaderSnapshot: async snapshot => {
+    assert.equal(captureRows.at(-1)?.observedAt, snapshot.observedAt, 'new source capture receipt must precede live write');
     traces.push({ kind: 'store', observedAt: snapshot.observedAt }); stores++;
     previous = structuredClone(snapshot);
     return { runtimeCache: false, database: true, durable: true, allRequiredWritesSucceeded: true };
   },
   refreshReaderSnapshot: async (snapshot, times) => {
+    assert.equal(captureRows.at(-1)?.observedAt, times.observedAt, 'new heartbeat receipt must precede live refresh');
     traces.push({ kind: 'refresh', observedAt: times.observedAt }); refreshes++;
     previous = { ...structuredClone(snapshot), ...times };
     return { snapshot: previous, storage: { runtimeCache: false, database: true, durable: true, allRequiredWritesSucceeded: true } };
@@ -106,6 +112,14 @@ const deps = {
   marketLineHistoryDatabaseConfigured: () => databaseConfigured,
   buildMarketLineHistoryRows: snapshot => snapshot?.games || [],
   recordMarketLineHistory: recordHistory,
+  recordMarketCaptureReceipt: async snapshot => {
+    captureRows.push(structuredClone(snapshot));
+    if (captureMode === 'throw') throw Error('synthetic capture receipt failure');
+    return { configured: databaseConfigured, persisted: captureMode === 'success', receiptId: hash('f'),
+      sourceObservedAt: snapshot.observedAt, pageActivityAt: snapshot.pageActivityAt,
+      receivedAt: snapshot.receivedAt, persistedAt: new Date().toISOString(), gameCount: snapshot.games.length,
+      coverageComplete: false, closingLineVerified: false };
+  },
   normalizeNbaReaderPayload: body => structuredClone(body),
   nbaReaderPublicView: snapshot => snapshot,
   assertNbaReaderMonotonic: (old, incoming) => {
@@ -118,6 +132,7 @@ const deps = {
     }
   },
   storeNbaReaderSnapshot: async snapshot => {
+    assert.equal(captureRows.at(-1)?.observedAt, snapshot.observedAt, 'NBA source capture receipt must precede live write');
     // Match the actual database monotonic contract rather than accepting any
     // mock write; exact duplicates must avoid this call entirely.
     deps.assertNbaReaderMonotonic(previous, snapshot);
@@ -186,7 +201,8 @@ for (const duplicate of [false, true]) {
   assert.equal(recovered.status, 200, recovered.body.error);
   assert.equal(recovered.body.ok, true);
   assert.equal(recovered.body.historyTracking.failed, 0);
-  assert.equal(historyRows.at(-1).pageActivityAt, original.pageActivityAt);
+  assert.equal(historyRows.at(-1).pageActivityAt, incoming.pageActivityAt, 'fresh heartbeat has its own receipt after original catch-up');
+  assert.equal(captureRows.at(-1).observedAt, incoming.observedAt);
   assert.equal(refreshes, duplicate ? 0 : 1);
   assert.equal(stores, 0);
   if (duplicate) assert.equal(recovered.body.duplicateCapture, true);
@@ -256,5 +272,26 @@ for (const invalid of [nba(-1000), { ...nba(1000, hash('d')), pageActivityAt: or
   assert.equal(stores, 0);
   assert.equal(historyRows.length, 0, 'invalid NBA capture must be rejected before archive');
 }
+
+for (const [route, original, incoming] of [
+  [baseballRoute, null, baseball()],
+  [baseballRoute, baseball(), baseball(1000)],
+  [nbaRoute, null, nba()],
+  [nbaRoute, nba(), nba(1000)],
+]) {
+  reset(original); captureMode = 'throw';
+  const rejected = await post(route, incoming);
+  assert.equal(rejected.status, 503);
+  assert.equal(rejected.body.ok, false);
+  assert.equal(rejected.body.allRequiredWritesSucceeded, false);
+  assert.equal(rejected.body.code, 'MARKET_CAPTURE_RECEIPT_WRITE_FAILED');
+  assert.equal(rejected.body.historyTracking.captureReceipt.persisted, false);
+  assert.equal(stores, 0); assert.equal(refreshes, 0, 'receipt failure cannot advance current quote freshness');
+}
+
+reset(baseball()); failOnHistoryCall = 2;
+const heartbeatHistoryFailure = await post(baseballRoute, baseball(1000));
+assertArchiveFailure(heartbeatHistoryFailure, 'fresh heartbeat archive/receipt');
+assert.equal(refreshes, 0, 'fresh heartbeat evidence must save before refresh, even after original archive catch-up succeeds');
 
 console.log('Reader history route simulation PASS: archive-before-authority, truthful failure receipts, original-time heartbeat/duplicate recovery, NBA replay isolation (not live DB/Production)');

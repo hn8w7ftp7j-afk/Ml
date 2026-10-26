@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
@@ -60,7 +61,7 @@ async function execute(captures,{failPeriod=null,withDiagnostics=false}={}){
       const original=captures.find(capture=>JSON.stringify(capture.tables)===JSON.stringify(body.sourceCapture.tables));
       assert.ok(original,'uploaded sourceCapture must be an entire actual source, never an authority projection or recombined frames');
       if(shouldFail&&body.periodsCovered?.includes(shouldFail))return{ok:false,status:503,text:async()=>JSON.stringify({ok:false,error:'synthetic scope failure'})};
-      return{ok:true,status:200,text:async()=>JSON.stringify({ok:true,rawGameCount:body.games.length,marketCount:body.games.reduce((sum,game)=>sum+game.markets.length,0),executable:false})};
+      return{ok:true,status:200,text:async()=>JSON.stringify(readerSaveReceiptFixture(body,{marketCount:body.games.reduce((sum,game)=>sum+game.markets.length,0),executable:false}))};
     }});
   vm.runInContext(backgroundSource.replace(/^import .*?;\n/gm,''),worker);
   const run=reason=>vm.runInContext(`performSync('${reason}')`,worker);

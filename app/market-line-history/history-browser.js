@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { EMPTY_HISTORY_FILTERS, HISTORY_LEAGUES, groupHistoryRows, historyFilterLabel, historyQueryUrl,
   historyRowKey, historyWater, mergeHistoryRows, taipeiHistoryTime, validateHistoryResponse } from './history-view.js';
 import styles from './history.module.css';
+import CoveragePanel from './coverage-panel.js';
 
 const countText = value => value.toLocaleString('zh-TW');
 
@@ -99,6 +100,7 @@ export default function HistoryBrowser() {
 
   return <main className={`appShell ${styles.shell}`}>
     <header className={styles.header}><div><div className="eyebrow">SAVED MARKET LINES</div><h1>歷史盤口</h1><p>查看 Reader 已保存的原盤口與水位，不重算、不改分析。</p></div><Link href="/" className="secondary">回主站</Link></header>
+    <CoveragePanel/>
     <section className={`panel ${styles.scope}`} aria-label="資料範圍說明">
       <p>這裡是「變盤歸檔」，不是舊分析快照庫。同一場每次保存是一組盤口狀態，最多包含全場／上半讓分與大小、雙邊方向。</p>
       <p>盤日是 Reader 的盤面日期；下方觀測時間一律顯示台北時間。只列實際保存內容，未保存的市場不補值；筆數不代表全部歷史都已收齊。</p>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
@@ -204,7 +205,7 @@ try {
       const marketCount = body.games[0].markets.length;
       assert.equal(checked.payload.games[0].markets.length, marketCount);
       uploaded.push(body.league);
-      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, rawGameCount: 1, marketCount, executable: false }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify(readerSaveReceiptFixture(body, { rawGameCount: 1, marketCount, executable: false })) };
     },
   });
   vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), worker);
