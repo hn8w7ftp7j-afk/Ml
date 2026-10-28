@@ -17,10 +17,26 @@ const reasonNames={
   FORWARD_PERSONNEL_MODEL_UNVERIFIED:'人員模型版本證據不足',FORWARD_PERSONNEL_PREGAME_XI_UNVERIFIED:'兩隊賽前先發證據不足',FORWARD_OMITTED_MASS_EXCEEDS_TOLERANCE:'未展開尾端機率超出報表容許值',
   RESULT_NORMAL_FINAL_UNCONFIRMED:'尚未確認正常完賽',RESULT_PERIOD_SCORE_UNVERIFIED:'缺少可核對的期間比分',RESULT_ENDPOINTS_DISAGREE:'兩個賽果端點不一致',
   RESULT_SCOREBOARD_CROSSCHECK_UNAVAILABLE:'賽程端點無法交叉核對',RESULT_EXTRA_PERIODS_REQUIRE_REVIEW:'涉及加時或其他額外期間',
-  SOCCER_SOURCE_CONTRACT_UNVERIFIED:'原盤適用的結算條款尚未完整確認',
+  SOCCER_SOURCE_CONTRACT_UNVERIFIED:'原盤適用的結算條款尚未完整確認（本帳戶派彩與異常賽事規則）',
   MARKET_RETURN_NOT_CHECKED:'尚未核對原盤收益',NO_ORIGINAL_QUOTES:'此封存版本沒有可核對的原盤',
   MARKET_RETURN_ORIGINAL_QUOTES_UNAVAILABLE:'此封存版本未保存原盤明細',
   MARKET_RETURN_RESULT_HISTORY_INCOMPLETE:'賽果核對歷程未完整讀取',
+  MARKET_RETURN_PREDICTED_PAYOFF_UNRESOLVED:'原盤收益仍為數值範圍，尚不能當成精確收益誤差樣本',
+  MARKET_RETURN_CONTRACT_LOOKUP_FAILED:'系統讀取結算條款失敗',
+  MARKET_RETURN_CONTRACT_CALCULATION_MISMATCH:'系統計算的條款版本與保存依據不一致',
+  FORWARD_INPUT_SOURCE_AVAILABILITY_UNVERIFIED:'分析輸入的來源時間證據不足',
+  RETURN_ERROR_NOT_CHECKED:'原盤收益尚未核對，暫不能加入誤差研究',
+  RETURN_ERROR_NOT_OBSERVED:'尚無可驗證的原盤收益觀測',
+  RETURN_ERROR_ORIGINAL_CAPTURE_UNAVAILABLE:'原始封存預測尚未完整讀取',
+  RETURN_ERROR_ORIGINAL_RESULT_EVIDENCE_MISSING:'原始賽果核對依據缺失',
+  RETURN_ERROR_INCOMPLETE_REQUESTED_SCOPE:'本次誤差研究資料範圍尚未完整處理',
+  RETURN_ERROR_TERMS_NOT_KNOWN_AT_PREDICTION:'當時適用的派彩條款證據不足',
+  RETURN_ERROR_EXACT_RETURN_RECOMPUTE_FAILED:'無法從原始資料重算精確收益',
+  RETURN_ERROR_GAME_RESULT_OR_TERMS_QUARANTINED:'賽果或條款有衝突，整場排除',
+  RETURN_ERROR_CHECK_HASH_INVALID:'收益核對內容與保存版本不一致',
+  RETURN_ERROR_RESULT_SCOPE_MISMATCH:'收益核對與原始賽事或模型範圍不符',
+  RETURN_ERROR_DATASET_HASH_INVALID:'誤差研究資料內容與保存版本不一致',
+  RETURN_ERROR_DIAGNOSTIC_SUMMARY_INVALID:'誤差研究統計未通過核對',
 };
 function ReasonList({reasons={},label}){
   const rows=Object.entries(reasons||{});
@@ -43,7 +59,7 @@ function ForwardGroup({group,league}){
   </details>;
 }
 function ForwardReport({report,league,summary}){
-  const returns=report.marketReturnValidation;
+  const returns=report.marketReturnValidation,errorResearch=report.returnErrorResearch;
   const pending=validCount(report.selectedGameModelPeriods)&&validCount(report.evaluatedGameModelPeriods)&&report.selectedGameModelPeriods>=report.evaluatedGameModelPeriods?report.selectedGameModelPeriods-report.evaluatedGameModelPeriods:null;
   return <div className="soccerForwardReport">
     <p>前瞻方案啟用：{clock(report.protocol?.activatedAt)}。每場、每期間、每模型版本採資料庫最早有效封存憑據；方案須在分析前啟用，封存必須早於開賽。</p>
@@ -56,21 +72,52 @@ function ForwardReport({report,league,summary}){
       <ReasonList reasons={returns.pendingReasons} label="收益待核對原因"/>
       <ReasonList reasons={returns.predictionPeriodReasons} label="封存版本待核對原因"/>
     </section>}
+    {errorResearch&&<section aria-label="收益誤差研究資料"><h3>收益誤差研究資料</h3>
+      <p>已選原盤 {count(errorResearch.selectedQuoteObservations)} 筆｜已核對 {count(errorResearch.checkedQuoteObservations)} 筆｜未核對 {count(errorResearch.uncheckedQuoteObservations)} 筆。</p>
+      <p>可用收益觀測 {count(errorResearch.observedQuoteReturns)} 筆｜不同賽事 {count(errorResearch.observedGames)} 場｜衝突隔離 {count(errorResearch.quarantinedGames)} 場。</p>
+      <p>{errorResearch.observedQuoteReturns===0?'誤差研究資料尚不足：目前沒有通過來源、條款與原始收益重算核對的觀測。':'已取得可供誤差研究的觀測，但研究方法、分組與樣本外驗收尚未完成。'} 這些筆數不是 R，也不代表正式評分已通過。</p>
+      <p>{errorResearch.completeWithinRequestedScope===true&&report.complete===true?'本次誤差研究資料已涵蓋目前查詢範圍；範圍完整不等於模型已驗收。':report.scan?.nextCursor?'目前只統計已處理批次；請繼續處理下一批，尚不能當成完整驗證資料。':'本次誤差研究資料仍有完整性缺口，尚不能當成完整驗證資料。'}</p>
+      <p className="soccerAvailability">同一場的多個方向不當成多場獨立樣本；實現損益誤差包含賽果本身的變動，不能直接當成期望收益的信賴下限。下一步由系統完成資料核對、誤差擬合與驗收。</p>
+      <ReasonList reasons={errorResearch.excludedReasons} label="誤差研究待補與排除原因"/>
+    </section>}
+    {returns?.pendingReasons?.SOCCER_SOURCE_CONTRACT_UNVERIFIED>0&&<p className="soccerAvailability">下一步：先由系統核對本帳戶的非 ±50 尾碼派彩、取消與延期條款；會員規則無法讀取時才需提供規則頁。已確認的 1% 實際輸贏本金退水不必重報。</p>}
+    {returns?.pendingReasons?.MARKET_RETURN_PREDICTED_PAYOFF_UNRESOLVED>0&&<p className="soccerAvailability">下一步由系統完成收益區間與誤差樣本的計算；反覆同步 Reader 不會排除此項。</p>}
     {summary&&<p role="status">本次核對 {count(summary.checkedGameModelPeriods)} 筆｜完成評估 {count(summary.evaluated)} 筆｜待核對 {count(summary.pending)} 筆｜尚待處理 {count(summary.deferred)} 筆。</p>}
-    {(report.truncated===true||report.complete===false)&&<p className="soccerAnalysisWarning" role="status">本次讀取有截斷，只能查看已載入範圍，不能當成完整驗收結果；請用上方日期範圍縮小查詢。</p>}
+    {report.scan&&<p role="status">已處理 {count(report.scan.processedGames)}／{count(report.scan.totalGames)} 場；{report.scan.complete?(report.complete===true?'本次範圍已掃描完成':'批次已結束，但本次資料仍不完整'):'尚有後續批次，使用下方「繼續處理下一批」保留同一範圍接續處理'}。以上筆數為累計結果，各批次不重複加總。</p>}
+    {(report.truncated===true||report.complete===false)&&<p className="soccerAnalysisWarning" role="status">{report.scan?.nextCursor?'本次範圍尚未處理完整，累計數字不能當成完整驗收；請繼續處理下一批。':'本次讀取有截斷，只能查看已載入範圍，不能當成完整驗收結果；請用上方日期範圍縮小查詢。'}</p>}
     <ReasonList reasons={report.excludedReasons} label={`整體排除原因（${count(report.excludedSnapshotPeriods)} 筆）`}/>
     {summary&&<ReasonList reasons={summary.reasons} label="本次核對待處理原因"/>}
     {report.groups.length?report.groups.map((group,i)=><ForwardGroup key={`${group.modelHash}:${group.period}:${group.variant}:${i}`} group={group} league={league}/>):<p className="soccerAvailability">尚無方案啟用後的合格封存樣本，請等待開賽前分析封存與賽後核對；不以既有 2025 年資料補成新的 OOS。</p>}
     <details className="soccerDetails"><summary>方案與資料範圍</summary><p>觀察規則：<code>{report.canonicalRule?.observation||'尚未取得'}</code></p><p>封存順序：<code>{report.canonicalRule?.order||'尚未取得'}</code></p><p>讀取時間：{clock(report.readAt)}</p><p>原始來源位元組未完整保留供獨立重算；已保存正規化來源識別與封存憑據。此報表不宣稱嚴格歷史 PIT 已驗證。</p></details>
   </div>;
 }
-function checkedReport(value,league){
+function checkedReport(value,league,range={from:'',through:''}){
   if(!value||value.version!==VERSION||!Array.isArray(value.groups)||value.formalEligible!==false||value.promotionEligible!==false||value.executable!==false
     ||value.groups.some(g=>g.league!==league||!Object.hasOwn(periods,g.period)||!Object.hasOwn(variants,g.variant))
     ||value.marketReturnValidation&&(value.marketReturnValidation.version!=='SOCCER-SAVED-QUOTE-RETURN-OBSERVATION-v1'
       ||value.marketReturnValidation.formalEligible!==false||value.marketReturnValidation.calibrationEligible!==false
       ||value.marketReturnValidation.promotionEligible!==false||value.marketReturnValidation.executable!==false
       ||['W','R','S','empiricalErrorMargin'].some(key=>value.marketReturnValidation[key]!==null)))throw Error('前瞻驗證回應的聯盟或範圍不符。');
+  if(value.returnErrorResearch){
+    const e=value.returnErrorResearch,fields=['selectedQuoteObservations','checkedQuoteObservations','uncheckedQuoteObservations','observedQuoteReturns','observedGames','quarantinedGames'];
+    if(e.version!=='SOCCER-GAME-BLOCK-RETURN-ERROR-RESEARCH-v1'||e.accepted!==false||e.formalEligible!==false||e.calibrationEligible!==false
+      ||e.promotionEligible!==false||e.executable!==false||fields.some(key=>!validCount(e[key]))
+      ||e.checkedQuoteObservations>e.selectedQuoteObservations||e.observedQuoteReturns>e.checkedQuoteObservations||e.observedGames>e.observedQuoteReturns
+      ||e.uncheckedQuoteObservations!==e.selectedQuoteObservations-e.checkedQuoteObservations||typeof e.completeWithinRequestedScope!=='boolean'
+      ||e.completeWithinRequestedScope===true&&value.complete!==true
+      ||['W','R','S','empiricalErrorMargin'].some(key=>e[key]!==null))throw Error('收益誤差研究回應的範圍、統計或資格狀態不符。');
+  }
+  if(value.scan){
+    const s=value.scan, date=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v;
+    const token=v=>typeof v==='string'&&v.length>=16&&v.length<=256&&/^[A-Za-z0-9_-]+$/.test(v);
+    if(s.version!=='SOCCER-FORWARD-SCAN-v1'||!['read','evaluate'].includes(s.purpose)||s.scope?.league!==league
+      ||!date(s.scope?.from)||!date(s.scope?.through)||s.scope.from>s.scope.through
+      ||range.from&&(s.scope.from!==range.from||s.scope.through!==range.through)
+      ||!validCount(s.processedGames)||!validCount(s.totalGames)||s.processedGames>s.totalGames
+      ||typeof s.complete!=='boolean'||!token(s.cursor)||s.nextCursor!==null&&!token(s.nextCursor)
+      ||s.complete&&s.nextCursor!==null||!s.complete&&s.nextCursor===null
+      ||!Number.isFinite(Date.parse(s.frozenAt))||value.complete===true&&!s.complete)throw Error('前瞻驗證接續資料的範圍或處理狀態不符。');
+  }
   return value;
 }
 export function SoccerForwardValidationPanel({league}){
@@ -78,22 +125,28 @@ export function SoccerForwardValidationPanel({league}){
   const [state,setState]=useState({scopeKey:null,status:'loading',report:null,summary:null,error:''});
   const [range,setRange]=useState({from:'',through:''}),[draft,setDraft]=useState({from:'',through:''}),[filterError,setFilterError]=useState('');
   const scopeKey=`${league}|${range.from}|${range.through}`;
-  const generation=useRef(0),flight=useRef(null),mounted=useRef(false),scope=useRef(scopeKey);scope.current=scopeKey;
-  async function load(evaluate=false){
+  const generation=useRef(0),flight=useRef(null),mounted=useRef(false),continuation=useRef(null),scope=useRef(scopeKey);scope.current=scopeKey;
+  async function load(evaluate=false,cursor=null){
     if(!supported||!mounted.current||scope.current!==scopeKey)return;
     if(flight.current)return flight.current.promise;
+    const previousScan=cursor?continuation.current?.scan:null;
+    if(cursor&&(continuation.current?.scopeKey!==scopeKey||previousScan?.nextCursor!==cursor||previousScan?.purpose!==(evaluate?'evaluate':'read')))return;
     const token=++generation.current,controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),25000);
     setState(old=>({scopeKey,status:evaluate?'evaluating':'loading',report:old.scopeKey===scopeKey?old.report:null,summary:null,error:''}));
     const active={token,controller,timer,promise:null};flight.current=active;
     const promise=(async()=>{
       try{
-        const query={league,...(range.from&&range.through?range:{})};
+        const query={league,...(cursor?{from:previousScan.scope.from,through:previousScan.scope.through,cursor}:range.from&&range.through?range:{})};
         const options={cache:'no-store',credentials:'same-origin',signal:controller.signal,...(evaluate?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'evaluate',...query,limit:25})}:{})};
         const response=await fetch(`/api/soccer/forward-validation${evaluate?'':`?${new URLSearchParams(query)}`}`,options),body=await response.json();
         if(!mounted.current||scope.current!==scopeKey||token!==generation.current)return;
         if(!response.ok||body.ok!==true)throw Error(response.status===401?'登入已過期，請重新登入網站。':body.error||'前瞻驗證暫時無法讀取。');
-        const report=checkedReport(body.report,league);
+        const report=checkedReport(body.report,league,range);
+        if(report.scan&&report.scan.purpose!==(evaluate?'evaluate':'read'))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
+        if(cursor&&(report.scan?.cursor!==cursor||Date.parse(report.scan?.frozenAt)!==Date.parse(previousScan.frozenAt)
+          ||report.scan?.totalGames!==previousScan.totalGames||report.scan?.processedGames<previousScan.processedGames))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
+        continuation.current=report.scan?{scopeKey,scan:report.scan}:null;
         setState({scopeKey,status:'ready',report,summary:evaluate?body.summary||null:null,error:''});
       }catch(error){
         if(mounted.current&&scope.current===scopeKey&&token===generation.current)setState(old=>({...old,scopeKey,status:'failed',error:error.name==='AbortError'?'核對逾時，請重試；尚未確認的結果不列入評分。':error.message||'前瞻驗證暫時無法讀取。'}));
@@ -121,7 +174,7 @@ export function SoccerForwardValidationPanel({league}){
     {!supported?<p role="alert">只提供英超與歐冠前瞻驗證。</p>:<>
       {busy&&<p role="status">{current&&state.status==='evaluating'?'正在核對封存預測的賽果…':'正在讀取前瞻封存資料…'}</p>}
       {current&&state.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}</p>}
-      {current&&state.report&&<>{state.status==='failed'&&<p className="soccerAvailability">以下為上次成功讀取的資料，本次更新尚未完成。</p>}<ForwardReport report={state.report} league={league} summary={state.summary}/></>}
+      {current&&state.report&&<>{state.status==='failed'&&<p className="soccerAvailability">以下為上次成功讀取的資料，本次更新尚未完成。</p>}<ForwardReport report={state.report} league={league} summary={state.summary}/>{state.report.scan?.nextCursor&&<button className="secondary" disabled={busy} onClick={()=>load(state.report.scan.purpose==='evaluate',state.report.scan.nextCursor)}>繼續處理下一批</button>}</>}
     </>}
   </section>;
 }

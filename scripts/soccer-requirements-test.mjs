@@ -105,3 +105,11 @@ for (const [asOf,confirmedBasis] of [['2026-10-18T22:15:30.999Z',false],['2026-1
   else { assert.match(rebate.reason,/計算基數/); assert.doesNotMatch(rebate.reason,/投注金額 ×/); }
   assert.equal(basisAudit.formalReady,false);
 }
+
+const confirmedPolicy=soccerProviderPolicy({asOf:Date.parse('2026-10-21T00:00:00Z')});
+const confirmedAudit=buildSoccerRequirementAudit({providerPolicy:confirmedPolicy});
+const confirmedRebate=find(confirmedAudit,'rebate');
+assert.match(confirmedRebate.reason,/實際輸贏本金 × 1%/);
+assert.match(confirmedRebate.reason,/走盤不退/);
+assert.doesNotMatch(confirmedRebate.reason,/計算基數.*待核對|適用結算狀態.*待核對/);
+assert.equal(find(confirmedAudit,'contract').status,'UNKNOWN','confirmed rebate is not a complete applicable contract');

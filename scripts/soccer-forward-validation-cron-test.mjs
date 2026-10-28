@@ -9,7 +9,7 @@ const exportsByFile={
   'cloud-bet-store.js':{name:'settleOpenCloudBets',kind:'baseball',value:[{status:'SETTLED'},{status:'OPEN'}]},
   'manual-bet-settlement-service.js':{name:'settleOpenNbaManualRecords',kind:'nba',value:{settled:1}},
   'manual-settlement-service.js':{name:'settleOpenSoccerManualRecords',kind:'soccer',value:{settled:0,pending:2}},
-  'forward-validation-service.js':{name:'runSoccerForwardValidation',kind:'forward',value:{evaluated:0,pending:0,formalEligible:false}},
+  'forward-validation-scan.js':{name:'continueSoccerForwardBacklog',kind:'forward',value:{summary:{evaluated:0,pending:0,formalEligible:false}}},
 };
 const routes=Object.fromEntries(Object.entries(exportsByFile).map(([file,{name,kind,value}])=>[file,'data:text/javascript,'+encodeURIComponent(`
 export async function ${name}(...args){const state=globalThis.__SOCCER_FORWARD_CRON_TEST;state.calls.push({kind:${JSON.stringify(kind)},args});
@@ -26,7 +26,7 @@ try {
   assert.deepEqual(state.calls.map(row=>row.kind),['nba','soccer','forward','baseball']);
   const forward=state.calls.find(row=>row.kind==='forward');
   assert.deepEqual(forward.args[0],{from:shiftSoccerDate(soccerDate(),-7),through:soccerDate()});
-  assert.deepEqual(forward.args[1],{limit:5,timeBudgetMs:8000});
+  assert.deepEqual(forward.args[1],{gameLimit:5,timeBudgetMs:8000});
   assert.equal(state.calls.reduce((total,row)=>total+(row.kind==='forward'?row.args[1].timeBudgetMs:row.args[0].timeBudgetMs),0),278000);
   assert.ok(278000<maxDuration*1000,'combined declared budgets leave overhead within the actual 300 s cron duration');
   state.calls=[];state.forwardFails=true;

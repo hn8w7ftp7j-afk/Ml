@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
+import { soccerScoringReadiness } from '../lib/soccer/scoring-readiness.js';
 import { analyzeSoccerConditionalQuote } from '../lib/soccer/conditional-analysis.js';
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
 import { scoreSoccerQuote } from '../lib/soccer/soccer-scoring.js';
@@ -47,7 +48,7 @@ assert.ok(result.directions.flatMap(d=>d.quotes).every(q=>q.conditionalAnalysis.
 assert.ok(result.directions.every(d=>d.score===null&&d.W===null&&d.R===null&&d.eligible===false));
 const code=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const built=await transform(code,{filename:'conditional.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({React,Date});vm.runInContext(built.code,ctx);
+const ctx=vm.createContext({React,Date,soccerScoringReadiness});vm.runInContext(built.code,ctx);
 const quote=result.directions.flatMap(d=>d.quotes)[0];
 const render=(q=quote,g=game,t=now)=>renderToStaticMarkup(React.createElement(ctx.SoccerConditionalAnalysis,{quote:q,result,game:g,now:t}));
 assert.match(render(),/期望淨收益/);assert.match(render(),/尚未確認本帳號適用/);

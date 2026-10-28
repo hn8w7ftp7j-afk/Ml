@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { settleOpenCloudBets } from '../../../../lib/cloud-bet-store.js';
 import { settleOpenNbaManualRecords } from '../../../../lib/nba/manual-bet-settlement-service.js';
 import { settleOpenSoccerManualRecords } from '../../../../lib/soccer/manual-settlement-service.js';
-import { runSoccerForwardValidation } from '../../../../lib/soccer/forward-validation-service.js';
+import { continueSoccerForwardBacklog } from '../../../../lib/soccer/forward-validation-scan.js';
 import { soccerDate, shiftSoccerDate } from '../../../../lib/soccer/contracts.js';
 
 export const runtime = 'nodejs';
@@ -31,7 +31,8 @@ export async function GET(request) {
     let soccerForward;
     try {
       const today=soccerDate();
-      soccerForward=await runSoccerForwardValidation({from:shiftSoccerDate(today,-7),through:today},{limit:5,timeBudgetMs:8000});
+      const page=await continueSoccerForwardBacklog({from:shiftSoccerDate(today,-7),through:today},{gameLimit:5,timeBudgetMs:8000});
+      soccerForward=page.summary;
     } catch { soccerForward={status:'unavailable',evaluated:0,formalEligible:false}; }
     // Budgets total 278 s (15 + 15 + 8 + 240), leaving 22 s for
     // route overhead within this cron's 300 s duration.
