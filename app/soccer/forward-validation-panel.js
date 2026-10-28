@@ -9,6 +9,11 @@ const validCount=value=>Number.isSafeInteger(value)&&value>=0;
 const count=value=>validCount(value)?value.toLocaleString('zh-TW'):'未知';
 const metric=(value,n)=>validCount(n)&&n>0&&Number.isFinite(value)&&value>=0?value.toFixed(4):'—';
 const clock=value=>Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'尚未取得';
+const retryDelay=(value,now)=>{
+  const seconds=Number(value),at=typeof value==='string'?Date.parse(value):NaN;
+  return value!==null&&String(value).trim()!==''&&Number.isFinite(seconds)&&seconds>=0
+    ?Math.max(1000,Math.min(8.64e15-now,Math.ceil(seconds*1000))):Number.isFinite(at)?Math.max(1000,at-now):60000;
+};
 const reasonNames={
   FORWARD_MATCH_NOT_STARTED:'尚未開賽',FORWARD_RESULT_NOT_CHECKED:'賽果尚未核對',FORWARD_RESULT_SOURCE_UNAVAILABLE:'賽果來源暫時無法讀取',
   FORWARD_RESULT_SOURCES_UNVERIFIED:'賽果來源證據不足',FORWARD_CONFLICTING_RESULT_EVIDENCE:'賽果證據互相矛盾',FORWARD_RESULT_PERSISTENCE_FAILED:'賽果核對尚未取得永久保存確認',
@@ -76,15 +81,15 @@ function ForwardReport({report,league,summary}){
       <p>已選原盤 {count(errorResearch.selectedQuoteObservations)} 筆｜已核對 {count(errorResearch.checkedQuoteObservations)} 筆｜未核對 {count(errorResearch.uncheckedQuoteObservations)} 筆。</p>
       <p>可用收益觀測 {count(errorResearch.observedQuoteReturns)} 筆｜不同賽事 {count(errorResearch.observedGames)} 場｜衝突隔離 {count(errorResearch.quarantinedGames)} 場。</p>
       <p>{errorResearch.observedQuoteReturns===0?'誤差研究資料尚不足：目前沒有通過來源、條款與原始收益重算核對的觀測。':'已取得可供誤差研究的觀測，但研究方法、分組與樣本外驗收尚未完成。'} 這些筆數不是 R，也不代表正式評分已通過。</p>
-      <p>{errorResearch.completeWithinRequestedScope===true&&report.complete===true?'本次誤差研究資料已涵蓋目前查詢範圍；範圍完整不等於模型已驗收。':report.scan?.nextCursor?'目前只統計已處理批次；請繼續處理下一批，尚不能當成完整驗證資料。':'本次誤差研究資料仍有完整性缺口，尚不能當成完整驗證資料。'}</p>
+      <p>{errorResearch.completeWithinRequestedScope===true&&report.complete===true?'本次誤差研究資料已涵蓋目前查詢範圍；範圍完整不等於模型已驗收。':report.scan?.nextCursor?'目前只統計已處理批次；後續批次完成前，尚不能當成完整驗證資料。':'本次誤差研究資料仍有完整性缺口，尚不能當成完整驗證資料。'}</p>
       <p className="soccerAvailability">同一場的多個方向不當成多場獨立樣本；實現損益誤差包含賽果本身的變動，不能直接當成期望收益的信賴下限。下一步由系統完成資料核對、誤差擬合與驗收。</p>
       <ReasonList reasons={errorResearch.excludedReasons} label="誤差研究待補與排除原因"/>
     </section>}
     {returns?.pendingReasons?.SOCCER_SOURCE_CONTRACT_UNVERIFIED>0&&<p className="soccerAvailability">下一步：先由系統核對本帳戶的非 ±50 尾碼派彩、取消與延期條款；會員規則無法讀取時才需提供規則頁。已確認的 1% 實際輸贏本金退水不必重報。</p>}
     {returns?.pendingReasons?.MARKET_RETURN_PREDICTED_PAYOFF_UNRESOLVED>0&&<p className="soccerAvailability">下一步由系統完成收益區間與誤差樣本的計算；反覆同步 Reader 不會排除此項。</p>}
     {summary&&<p role="status">本次核對 {count(summary.checkedGameModelPeriods)} 筆｜完成評估 {count(summary.evaluated)} 筆｜待核對 {count(summary.pending)} 筆｜尚待處理 {count(summary.deferred)} 筆。</p>}
-    {report.scan&&<p role="status">已處理 {count(report.scan.processedGames)}／{count(report.scan.totalGames)} 場；{report.scan.complete?(report.complete===true?'本次範圍已掃描完成':'批次已結束，但本次資料仍不完整'):'尚有後續批次，使用下方「繼續處理下一批」保留同一範圍接續處理'}。以上筆數為累計結果，各批次不重複加總。</p>}
-    {(report.truncated===true||report.complete===false)&&<p className="soccerAnalysisWarning" role="status">{report.scan?.nextCursor?'本次範圍尚未處理完整，累計數字不能當成完整驗收；請繼續處理下一批。':'本次讀取有截斷，只能查看已載入範圍，不能當成完整驗收結果；請用上方日期範圍縮小查詢。'}</p>}
+    {report.scan&&<p role="status">已處理 {count(report.scan.processedGames)}／{count(report.scan.totalGames)} 場；{report.scan.complete?(report.complete===true?'本次範圍已掃描完成':'批次已結束，但本次資料仍不完整'):'尚有後續批次；系統會自動接續，暫停後可按「繼續處理下一批」恢復'}。以上筆數為累計結果，各批次不重複加總。</p>}
+    {(report.truncated===true||report.complete===false)&&<p className="soccerAnalysisWarning" role="status">{report.scan?.nextCursor?'本次範圍尚未處理完整，累計數字不能當成完整驗收。':'本次讀取有截斷，只能查看已載入範圍，不能當成完整驗收結果；請用上方日期範圍縮小查詢。'}</p>}
     <ReasonList reasons={report.excludedReasons} label={`整體排除原因（${count(report.excludedSnapshotPeriods)} 筆）`}/>
     {summary&&<ReasonList reasons={summary.reasons} label="本次核對待處理原因"/>}
     {report.groups.length?report.groups.map((group,i)=><ForwardGroup key={`${group.modelHash}:${group.period}:${group.variant}:${i}`} group={group} league={league}/>):<p className="soccerAvailability">尚無方案啟用後的合格封存樣本，請等待開賽前分析封存與賽後核對；不以既有 2025 年資料補成新的 OOS。</p>}
@@ -124,13 +129,37 @@ export function SoccerForwardValidationPanel({league}){
   const supported=['epl','ucl'].includes(league);
   const [state,setState]=useState({scopeKey:null,status:'loading',report:null,summary:null,error:''});
   const [range,setRange]=useState({from:'',through:''}),[draft,setDraft]=useState({from:'',through:''}),[filterError,setFilterError]=useState('');
+  const [automatic,setAutomatic]=useState({enabled:true,waitingUntil:null});
   const scopeKey=`${league}|${range.from}|${range.through}`;
   const generation=useRef(0),flight=useRef(null),mounted=useRef(false),continuation=useRef(null),scope=useRef(scopeKey);scope.current=scopeKey;
+  const auto=useRef({enabled:true,timer:null,retry:null,blockedUntil:0,postStarts:[]});
+  function clearAutomaticTimer(){if(auto.current.timer!==null)clearTimeout(auto.current.timer);auto.current.timer=null;}
+  function nextAllowed(evaluate){
+    const now=Date.now();auto.current.postStarts=auto.current.postStarts.filter(at=>now-at<60000);
+    return Math.max(now,auto.current.blockedUntil,evaluate&&auto.current.postStarts.length>=4?auto.current.postStarts[0]+60050:0);
+  }
+  function scheduleAutomatic(request,minimumDelay=1000){
+    clearAutomaticTimer();
+    if(!auto.current.enabled||!mounted.current||scope.current!==scopeKey)return;
+    const waitingUntil=Math.max(Date.now()+minimumDelay,nextAllowed(request.evaluate));
+    setAutomatic({enabled:true,waitingUntil});
+    auto.current.timer=setTimeout(()=>{auto.current.timer=null;if(auto.current.enabled&&mounted.current&&scope.current===scopeKey)void load(request.evaluate,request.cursor);},Math.min(2147483647,Math.max(0,waitingUntil-Date.now())));
+  }
+  function pauseAutomatic(){
+    auto.current.enabled=false;auto.current.retry=null;clearAutomaticTimer();setAutomatic({enabled:false,waitingUntil:null});
+    if(flight.current){const active=flight.current;generation.current++;clearTimeout(active.timer);active.controller.abort();flight.current=null;
+    }
+    setState(old=>old.scopeKey===scopeKey?{...old,status:'paused',error:''}:old);
+  }
   async function load(evaluate=false,cursor=null){
     if(!supported||!mounted.current||scope.current!==scopeKey)return;
     if(flight.current)return flight.current.promise;
     const previousScan=cursor?continuation.current?.scan:null;
     if(cursor&&(continuation.current?.scopeKey!==scopeKey||previousScan?.nextCursor!==cursor||previousScan?.purpose!==(evaluate?'evaluate':'read')))return;
+    clearAutomaticTimer();
+    if(Date.now()<nextAllowed(evaluate)){auto.current.enabled=true;auto.current.retry={evaluate,cursor};scheduleAutomatic({evaluate,cursor},0);return;}
+    auto.current.enabled=true;auto.current.retry=null;setAutomatic({enabled:true,waitingUntil:null});
+    if(evaluate)auto.current.postStarts.push(Date.now());
     const token=++generation.current,controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),25000);
     setState(old=>({scopeKey,status:evaluate?'evaluating':'loading',report:old.scopeKey===scopeKey?old.report:null,summary:null,error:''}));
@@ -141,22 +170,39 @@ export function SoccerForwardValidationPanel({league}){
         const options={cache:'no-store',credentials:'same-origin',signal:controller.signal,...(evaluate?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'evaluate',...query,limit:25})}:{})};
         const response=await fetch(`/api/soccer/forward-validation${evaluate?'':`?${new URLSearchParams(query)}`}`,options),body=await response.json();
         if(!mounted.current||scope.current!==scopeKey||token!==generation.current)return;
+        if(response.status===429){
+          auto.current.blockedUntil=Date.now()+retryDelay(response.headers?.get?.('Retry-After')??null,Date.now());
+          auto.current.retry={evaluate,cursor};
+          setState(old=>({...old,scopeKey,status:'waiting',error:''}));return;
+        }
         if(!response.ok||body.ok!==true)throw Error(response.status===401?'登入已過期，請重新登入網站。':body.error||'前瞻驗證暫時無法讀取。');
         const report=checkedReport(body.report,league,range);
         if(report.scan&&report.scan.purpose!==(evaluate?'evaluate':'read'))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
         if(cursor&&(report.scan?.cursor!==cursor||Date.parse(report.scan?.frozenAt)!==Date.parse(previousScan.frozenAt)
           ||report.scan?.totalGames!==previousScan.totalGames||report.scan?.processedGames<previousScan.processedGames))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
         continuation.current=report.scan?{scopeKey,scan:report.scan}:null;
+        if(cursor&&report.scan?.nextCursor&&report.scan.processedGames===previousScan.processedGames){
+          auto.current.enabled=false;setAutomatic({enabled:false,waitingUntil:null});
+          setState({scopeKey,status:'failed',report,summary:evaluate?body.summary||null:null,error:'本批尚未取得新進度，已暫停自動處理；已完成結果保留，可稍後從同一進度重試。'});return;
+        }
         setState({scopeKey,status:'ready',report,summary:evaluate?body.summary||null:null,error:''});
       }catch(error){
-        if(mounted.current&&scope.current===scopeKey&&token===generation.current)setState(old=>({...old,scopeKey,status:'failed',error:error.name==='AbortError'?'核對逾時，請重試；尚未確認的結果不列入評分。':error.message||'前瞻驗證暫時無法讀取。'}));
-      }finally{clearTimeout(timer);if(flight.current?.token===token)flight.current=null;}
+        if(mounted.current&&scope.current===scopeKey&&token===generation.current){auto.current.enabled=false;setAutomatic({enabled:false,waitingUntil:null});setState(old=>({...old,scopeKey,status:'failed',error:error.name==='AbortError'?'核對逾時，請重試；尚未確認的結果不列入評分。':error.message||'前瞻驗證暫時無法讀取。'}));}
+      }finally{
+        clearTimeout(timer);if(flight.current?.token===token)flight.current=null;
+        if(mounted.current&&scope.current===scopeKey&&token===generation.current&&auto.current.enabled){
+          const retry=auto.current.retry,next=continuation.current;
+          if(retry)scheduleAutomatic(retry,0);
+          else if(next?.scopeKey===scopeKey&&next.scan.nextCursor)scheduleAutomatic({evaluate:next.scan.purpose==='evaluate',cursor:next.scan.nextCursor});
+          else{auto.current.enabled=false;setAutomatic({enabled:false,waitingUntil:null});}
+        }
+      }
     })();
     active.promise=promise;return promise;
   }
   useEffect(()=>{
-    mounted.current=true;if(supported)void load();
-    return()=>{mounted.current=false;generation.current++;if(flight.current){clearTimeout(flight.current.timer);flight.current.controller.abort();flight.current=null;}};
+    mounted.current=true;auto.current.enabled=true;auto.current.retry=null;continuation.current=null;setAutomatic({enabled:true,waitingUntil:null});if(supported)void load();
+    return()=>{mounted.current=false;generation.current++;clearAutomaticTimer();if(flight.current){clearTimeout(flight.current.timer);flight.current.controller.abort();flight.current=null;}};
   },[league,range.from,range.through]);
   function applyRange(event){
     event.preventDefault();if(flight.current)return;
@@ -165,14 +211,17 @@ export function SoccerForwardValidationPanel({league}){
     setFilterError('');if(draft.from===range.from&&draft.through===range.through)void load();else setRange({...draft});
   }
   function resetRange(){if(flight.current)return;setFilterError('');setDraft({from:'',through:''});if(!range.from&&!range.through)void load();else setRange({from:'',through:''});}
-  const current=state.scopeKey===scopeKey,busy=!current||['loading','evaluating'].includes(state.status);
+  const current=state.scopeKey===scopeKey,busy=!current||['loading','evaluating','waiting'].includes(state.status)||automatic.waitingUntil!==null;
   return <section className="panel soccerForwardValidation" aria-label="足球前瞻驗證"><div className="panelHead"><h2>{league==='ucl'?'歐冠':'英超'}｜前瞻驗證</h2><button className="secondary" disabled={!supported||busy} onClick={()=>load()}>重新讀取</button><button className="secondary" disabled={!supported||busy} onClick={()=>load(true)}>{current&&state.status==='evaluating'?'核對中…':'核對已封存賽果'}</button></div>
-    <p>預設查詢今天及前 30 天。只核對伺服器已封存的預測與賽果，不會新增下注。</p>
+    <p>預設查詢今天及前 30 天。系統會自動接續全部批次，可隨時暫停。只核對伺服器已封存的預測與賽果，不會新增下注。</p>
     <form className="soccerForwardFilters" onSubmit={applyRange}><label>開始日期 <input type="date" name="from" value={draft.from} onChange={event=>{const value=event.target.value;setDraft(old=>({...old,from:value}));}}/></label> <label>結束日期 <input type="date" name="through" value={draft.through} onChange={event=>{const value=event.target.value;setDraft(old=>({...old,through:value}));}}/></label> <button type="submit" className="secondary" disabled={!supported||busy}>讀取日期範圍</button> <button type="button" className="secondary" disabled={!supported||busy} onClick={resetRange}>恢復預設範圍</button></form>
     {filterError&&<p role="alert">{filterError}</p>}<p className="soccerAvailability">目前範圍：{range.from&&range.through?`${range.from} ～ ${range.through}`:'今天及前 30 天（依伺服器台灣日期）'}。</p>
     <p className="soccerAvailability">既有 2025 年回顧診斷不算新的未用 OOS。賽果採 ESPN 兩個端點交叉核對，並非獨立官方來源確認；模型放行維持關閉，不能據此宣稱勝率提高。</p>
     {!supported?<p role="alert">只提供英超與歐冠前瞻驗證。</p>:<>
-      {busy&&<p role="status">{current&&state.status==='evaluating'?'正在核對封存預測的賽果…':'正在讀取前瞻封存資料…'}</p>}
+      {(!current||['loading','evaluating'].includes(state.status))&&<p role="status">{current&&state.status==='evaluating'?'正在核對封存預測的賽果…':'正在讀取前瞻封存資料…'}</p>}
+      {automatic.waitingUntil!==null&&<p role="status">已保留目前進度，將於 {clock(new Date(automatic.waitingUntil).toISOString())} 自動接續；遇到請求上限會依伺服器指定時間等待。</p>}
+      {automatic.enabled&&busy&&<button className="secondary" onClick={pauseAutomatic}>暫停自動處理</button>}
+      {current&&state.status==='paused'&&<p role="status">已暫停，已完成結果保留。可接續目前批次，或重新讀取範圍。</p>}
       {current&&state.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}</p>}
       {current&&state.report&&<>{state.status==='failed'&&<p className="soccerAvailability">以下為上次成功讀取的資料，本次更新尚未完成。</p>}<ForwardReport report={state.report} league={league} summary={state.summary}/>{state.report.scan?.nextCursor&&<button className="secondary" disabled={busy} onClick={()=>load(state.report.scan.purpose==='evaluate',state.report.scan.nextCursor)}>繼續處理下一批</button>}</>}
     </>}

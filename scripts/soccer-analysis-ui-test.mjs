@@ -62,6 +62,37 @@ h.state[0][realGame.id]={status:'done',data:{...result,persisted:true}};const re
 assert.match(text,/正規時鐘上場分鐘/);assert.match(text,/補時登場/);assert.match(text,/逐年滾動研究檢查/);assert.match(text,/原盤結算核對表/);assert.match(text,/尚無已配對原盤/);assert.doesNotMatch(text,/undefined|NaN/);
 console.log('PASS actual result JSX: postgame normalized minutes, stoppage-only player, rolling evidence, missing quotes and legacy optional fields render without invented values');
 
+// A stored analysis is not proof its provider document was archived. Render the
+// actual source section with a scope-bound receipt, failed storage and old rows.
+const archivedFetchedAt=new Date(Date.parse(realGame.startTime)-3600000).toISOString();
+const archivedRecordedAt=new Date(Date.parse(archivedFetchedAt)+2).toISOString();
+const sourceHash='a'.repeat(64),sourceReceipt={status:'ARCHIVED',persisted:true,
+  gameId:realGame.id,league:realGame.league,contentHash:sourceHash,receiptId:'b'.repeat(64),
+  representation:'NORMALIZED_JSON_DOCUMENT',normalizedDocumentHashRecomputed:true,rawSourceHashRecomputed:false,
+  fetchedAt:archivedFetchedAt,recordedAt:archivedRecordedAt,sourcePublishedAt:null,
+  prematchReceipt:true,timingStatus:'PREGAME_DATABASE_RECEIPT'};
+const archiveMarkup=receipt=>{
+  h.state[0][realGame.id]={status:'done',data:{...result,persisted:true,evidence:{...result.evidence,
+    source:{...result.evidence.source,contentHash:sourceHash,fetchedAt:archivedFetchedAt},
+    ...(receipt===undefined?{}:{sourceDocumentArchive:receipt})}}};
+  return renderToStaticMarkup(h.renderPanel(realGame));
+};
+const sourceSavedMarkup=archiveMarkup(sourceReceipt);
+assert.match(sourceSavedMarkup,/來源資料已保存/);assert.match(sourceSavedMarkup,/資料庫收到時間：/);
+assert.ok(sourceSavedMarkup.includes(new Date(archivedRecordedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false})));
+assert.match(sourceSavedMarkup,/賽前收到/);assert.match(sourceSavedMarkup,/來源公布時間：尚無可核對資料/);
+assert.match(sourceSavedMarkup,/未保存原始傳輸內容/);assert.match(sourceSavedMarkup,/不代表更早的公布時點或正式評分已通過核對/);
+assert.match(archiveMarkup(undefined),/此版本尚無來源保存收據/);
+assert.match(archiveMarkup({status:'UNAVAILABLE',persisted:false,reason:'SOURCE_DOCUMENT_STORAGE_UNAVAILABLE'}),/本次來源資料未完成保存/);
+for(const broken of [{gameId:'soccer:epl:999'},{league:'ucl'},{receiptId:'invalid'},{contentHash:'c'.repeat(64)},
+  {fetchedAt:new Date(Date.parse(archivedRecordedAt)+1).toISOString()},{normalizedDocumentHashRecomputed:false}]){
+  const markup=archiveMarkup({...sourceReceipt,...broken});
+  assert.match(markup,/來源保存收據未通過本場核對/);assert.doesNotMatch(markup,/來源資料已保存/);
+}
+assert.doesNotMatch(archiveMarkup({...sourceReceipt,recordedAt:new Date(Date.parse(realGame.startTime)+1).toISOString()}),/賽前收到/,
+  'a contradictory pregame flag cannot turn a late database receipt into pregame evidence');
+console.log('PASS actual source receipt JSX: scoped archive success, database time, unknown publication, legacy/storage failure and mismatched receipt rejection');
+
 const {soccerProviderPolicy}=await import('../lib/soccer/provider-policy.js');
 const {TAIWAN_CREDIT_REBATE_RATE}=await import('../lib/taiwan-settlement-v9.js');
 const footballPolicy=soccerProviderPolicy({asOf:'2026-10-19T00:00:00Z'});
