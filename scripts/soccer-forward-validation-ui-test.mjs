@@ -41,20 +41,23 @@ const truncated=renderReport({...report(),truncated:true,complete:false});assert
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):String(value??'');
 function harness({league='epl',throwFirst=false,deferUpdaters=false}={}){
- let props={league},cursor=0,dirty=false,tree,writes=0,fetchCount=0,timerId=0;
+ let props={league},cursor=0,dirty=false,tree,writes=0,fetchCount=0,timerId=0,now=Date.now();
+ class ControlledDate extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
  const hooks=[],effects=[],calls=[],timers=new Map(),queuedUpdates=[];
- const ctx=vm.createContext({React,Date,URLSearchParams,AbortController,SoccerCalibrationPanel:calibrationContext.SoccerCalibrationPanel,
+ const ctx=vm.createContext({React,Date:ControlledDate,URLSearchParams,AbortController,SoccerCalibrationPanel:calibrationContext.SoccerCalibrationPanel,
   useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],update=>{const apply=()=>{hooks[i]=typeof update==='function'?update(hooks[i]):update;dirty=true;writes++;};if(deferUpdaters&&typeof update==='function')queuedUpdates.push(apply);else apply();}];},
   useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},
   useEffect:(fn,deps)=>{const i=cursor++,previous=hooks[i];if(previous&&deps.every((v,j)=>Object.is(v,previous.deps[j])))return;hooks[i]={deps};effects.push(()=>{previous?.cleanup?.();hooks[i].cleanup=fn();});},
-  setTimeout:(fn,delay)=>{timers.set(++timerId,{fn,delay});return timerId;},clearTimeout:id=>timers.delete(id),
-  fetch:(url,options)=>{fetchCount++;if(throwFirst&&fetchCount===1)throw Error('controlled synchronous fetch failure');return new Promise((resolve,reject)=>calls.push({url,options,reject,respond:(body,status=200)=>resolve({ok:status>=200&&status<300,status,json:async()=>body})}));},
+  setTimeout:(fn,delay)=>{timers.set(++timerId,{fn,delay,at:now+delay});return timerId;},clearTimeout:id=>timers.delete(id),
+  fetch:(url,options)=>{fetchCount++;if(throwFirst&&fetchCount===1)throw Error('controlled synchronous fetch failure');return new Promise((resolve,reject)=>calls.push({url,options,reject,respond:(body,status=200,headers={})=>resolve({ok:status>=200&&status<300,status,headers:{get:name=>headers[name]??null},json:async()=>body})}));},
  });
  vm.runInContext(compiled.code,ctx);
  function render(next=props){props=next;let turns=0;do{cursor=0;dirty=false;tree=ctx.SoccerForwardValidationPanel(props);effects.splice(0).forEach(fn=>fn());assert.ok(turns++<20);}while(dirty);return tree;}
  async function settle(){for(let i=0;i<25;i++){await Promise.resolve();queuedUpdates.splice(0).forEach(apply=>apply());if(dirty)render();}}
  const button=label=>nodes(tree).find(n=>n.type==='button'&&text(n.props.children)===label);
  return{render,settle,calls,timers,button,get tree(){return tree;},get writes(){return writes;},get markup(){return renderToStaticMarkup(tree);},
+  get now(){return now;},
+  fireNextTimer:async()=>{const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0]||[];assert.ok(timer,'a scheduled timer must exist');timers.delete(id);now=timer.at;timer.fn();await settle();return timer;},
   input:(name,value)=>{const event={target:{value}};nodes(tree).find(n=>n.type==='input'&&n.props.name===name).props.onChange(event);return event;},
   apply:()=>nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}}),
   unmount:()=>hooks.forEach(h=>h?.cleanup?.()),
@@ -150,3 +153,65 @@ replacedJob.button('重新讀取').props.onClick();const freshJob=scanned();fres
 replacedJob.calls[1].respond({ok:true,report:freshJob});await replacedJob.settle();
 obsoleteNext();await replacedJob.settle();assert.equal(replacedJob.calls.length,2,'obsolete same-scope continuation cannot restore an older scan after refresh');
 replacedJob.button('繼續處理下一批').props.onClick();assert.equal(replacedJob.calls.length,3);assert.match(replacedJob.calls[2].url,/cursor=bbbb/);replacedJob.unmount();
+
+// Exercise the actual automatic timer callbacks, rather than only invoking the
+// old manual handlers. Fake time lets the real 4/minute admission window and
+// Retry-After waits run without sleeping or weakening the server policy.
+const page=(purpose,processed,total=7)=>{
+ const r=scanned(purpose,processed===total,processed);
+ return{...r,scan:{...r.scan,processedGames:processed,totalGames:total}};
+};
+const automaticRead=harness();automaticRead.render();automaticRead.calls[0].respond({ok:true,report:page('read',1,3)});await automaticRead.settle();
+assert.equal(automaticRead.calls.length,1,'successful partial response schedules, rather than recursively flooding, the next batch');
+assert.match(automaticRead.markup,/自動接續/);assert.ok(automaticRead.button('暫停自動處理'));
+await automaticRead.fireNextTimer();assert.equal(automaticRead.calls.length,2);assert.match(automaticRead.calls[1].url,/cursor=aaaa/);
+automaticRead.button('暫停自動處理').props.onClick();await automaticRead.settle();assert.equal(automaticRead.calls[1].options.signal.aborted,true);assert.equal(automaticRead.timers.size,0);
+automaticRead.calls[1].respond({ok:true,report:page('read',2,3)});await automaticRead.settle();
+assert.match(automaticRead.markup,/已處理 1／3 場/,'a late cancelled response cannot replace the last reviewed cumulative result');
+automaticRead.button('繼續處理下一批').props.onClick();assert.equal(automaticRead.calls.length,3);assert.equal(automaticRead.calls[2].url,automaticRead.calls[1].url,'resume replays the same durable cursor and scope');
+automaticRead.calls[2].respond({ok:true,report:page('read',3,3)});await automaticRead.settle();assert.equal(automaticRead.timers.size,0);assert.match(automaticRead.markup,/本次範圍已掃描完成/);automaticRead.unmount();
+
+const limited=harness();limited.render();limited.calls[0].respond({ok:true,report:report()});await limited.settle();
+const postStarted=limited.now;limited.button('核對已封存賽果').props.onClick();
+for(let processed=1;processed<=4;processed++){
+ assert.equal(limited.calls.at(-1).options.method,'POST');limited.calls.at(-1).respond({ok:true,report:page('evaluate',processed)});await limited.settle();
+ if(processed<4)await limited.fireNextTimer();
+}
+assert.equal(limited.calls.length,5,'four evaluate requests are admitted before the fifth is held');
+const hold=[...limited.timers.values()][0];assert.ok(hold.at>=postStarted+60000,'automatic evaluate continuation cannot exceed four starts in a rolling minute');
+await limited.fireNextTimer();assert.equal(limited.calls.length,6);assert.ok(limited.now-postStarted>=60000);
+assert.deepEqual(JSON.parse(limited.calls[5].options.body),{action:'evaluate',league:'epl',from:'2026-10-20',through:'2026-10-21',cursor:scanToken,limit:25});
+limited.calls[5].respond({ok:true,report:page('evaluate',7)});await limited.settle();assert.equal(limited.timers.size,0);limited.unmount();
+
+for(const header of ['30','HTTP_DATE',null]){
+ const throttled=harness();throttled.render();throttled.calls[0].respond({ok:true,report:report()});await throttled.settle();
+ throttled.button('核對已封存賽果').props.onClick();const request=throttled.calls[1],start=throttled.now;
+ const retryAfter=header==='HTTP_DATE'?new Date(start+45000).toUTCString():header;
+ request.respond({ok:false,error:'請求過於頻繁'},429,retryAfter===null?{}:{'Retry-After':retryAfter});await throttled.settle();
+ assert.equal(throttled.calls.length,2);assert.match(throttled.markup,/依伺服器指定時間等待/);assert.doesNotMatch(throttled.markup,/role="alert"/);
+ const timer=await throttled.fireNextTimer(),expected=header==='30'?30000:header==='HTTP_DATE'?Date.parse(retryAfter)-start:60000;
+ assert.ok(timer.delay>=expected,'429 preserves Retry-After seconds / HTTP date, with a conservative missing-header fallback');
+ assert.equal(throttled.calls.length,3);assert.equal(throttled.calls[2].options.body,request.options.body,'a throttled first page retries its exact method and body');
+ throttled.calls[2].respond({ok:true,report:report()});await throttled.settle();assert.equal(throttled.timers.size,0);throttled.unmount();
+}
+const pauseWait=harness();pauseWait.render();pauseWait.calls[0].respond({ok:false},429,{'Retry-After':'60'});await pauseWait.settle();
+pauseWait.button('暫停自動處理').props.onClick();await pauseWait.settle();assert.equal(pauseWait.timers.size,0);assert.equal(pauseWait.button('重新讀取').props.disabled,false,'pausing a rate-limit wait releases the controls');pauseWait.unmount();
+
+const pausedReturn=harness();pausedReturn.render();pausedReturn.calls[0].respond({ok:true,report:report()});await pausedReturn.settle();
+pausedReturn.button('核對已封存賽果').props.onClick();pausedReturn.calls[1].respond({ok:true,report:page('evaluate',1)});await pausedReturn.settle();await pausedReturn.fireNextTimer();
+const deniedContinuation=pausedReturn.calls[2];deniedContinuation.respond({ok:false},429,{'Retry-After':'60'});await pausedReturn.settle();
+pausedReturn.button('暫停自動處理').props.onClick();await pausedReturn.settle();assert.equal(pausedReturn.timers.size,0);assert.equal(pausedReturn.button('繼續處理下一批').props.disabled,false);
+pausedReturn.button('繼續處理下一批').props.onClick();await pausedReturn.settle();assert.equal(pausedReturn.calls.length,3,'resuming cannot bypass the existing Retry-After wait');await pausedReturn.fireNextTimer();
+assert.equal(pausedReturn.calls[3].options.method,'POST');assert.equal(pausedReturn.calls[3].options.body,deniedContinuation.options.body,'pausing a throttled evaluation retains the exact frozen cursor and purpose');
+pausedReturn.calls[3].respond({ok:true,report:page('evaluate',7)});await pausedReturn.settle();assert.equal(pausedReturn.timers.size,0);pausedReturn.unmount();
+
+const stuck=harness();stuck.render();stuck.calls[0].respond({ok:true,report:page('read',1)});await stuck.settle();await stuck.fireNextTimer();
+stuck.calls[1].respond({ok:true,report:page('read',1)});await stuck.settle();assert.equal(stuck.timers.size,0);assert.match(stuck.markup,/尚未取得新進度，已暫停/);assert.match(stuck.markup,/已處理 1／7 場/);assert.ok(stuck.button('繼續處理下一批'));stuck.unmount();
+
+const switchAuto=harness();switchAuto.render();switchAuto.calls[0].respond({ok:true,report:page('read',1)});await switchAuto.settle();
+const staleTimer=[...switchAuto.timers.values()][0];switchAuto.render({league:'ucl'});assert.equal(switchAuto.calls.length,2);
+staleTimer.fn();await switchAuto.settle();assert.equal(switchAuto.calls.length,2,'an old league timer cannot start another request after a scope change');
+switchAuto.calls[1].respond({ok:true,report:report('ucl')});await switchAuto.settle();switchAuto.unmount();assert.equal(switchAuto.timers.size,0);
+const unmountAuto=harness();unmountAuto.render();unmountAuto.calls[0].respond({ok:true,report:page('read',1)});await unmountAuto.settle();
+const unmountedTimer=[...unmountAuto.timers.values()][0];unmountAuto.unmount();assert.equal(unmountAuto.timers.size,0);unmountedTimer.fn();await unmountAuto.settle();assert.equal(unmountAuto.calls.length,1,'an unmounted pending continuation never starts a request');
+console.log('PASS automatic forward scan: complete cumulative GET/POST flow, 4/minute rolling admission, Retry-After seconds/date/fallback, same-cursor retry, pause/abort/resume, no-progress stop, scope invalidation and timer cleanup');

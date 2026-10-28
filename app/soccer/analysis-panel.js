@@ -49,6 +49,26 @@ export function SoccerRequirementDetails({audit}){
   const layers=Array.isArray(audit?.layers)?audit.layers:[];
   return <details className="soccerDetails soccerRequirementDetails"><summary>六層分析依據與缺口</summary><p className="soccerAvailability">資料已取得不代表已納入模型；研究基準的計算也不代表正式驗收通過。</p>{layers.length?layers.map(layer=><section className="soccerRequirementLayer" key={layer.key}><h4>{layer.title}</h4><ul>{(layer.items||[]).map(item=><li key={item.key}><div className="soccerRequirementRow"><strong>{item.label}</strong><span className={`soccerEvidenceStatus ${item.status||'UNKNOWN'}`}>{observationLabels[item.status]||observationLabels.UNKNOWN}</span></div><p className="soccerRequirementUsage">{usageLabels[item.modelUsage]||usageLabels.NOT_AVAILABLE}</p>{item.reason&&<p className="soccerRequirementReason">{/^[A-Z][A-Z0-9_]+$/.test(item.reason)?'來源或適用範圍仍待核對。':item.reason}</p>}</li>)}</ul></section>):<p className="soccerAvailability">此歷史版本尚未保存六層核對結果，請重新核對取得目前資料。</p>}<p className="soccerAvailability"><a href="/soccer/specification">查看完整分析規格 2.2</a></p></details>;
 }
+export function SoccerSourceDocumentReceipt({evidence,game}){
+  const receipt=evidence?.sourceDocumentArchive;
+  const recordedAt=Date.parse(receipt?.recordedAt||''),fetchedAt=Date.parse(receipt?.fetchedAt||''),kickoffAt=Date.parse(game?.startTime||'');
+  const bound=Boolean(receipt&&receipt.gameId===game?.id&&receipt.league===game?.league
+    &&receipt.contentHash===evidence?.source?.contentHash&&/^[a-f0-9]{64}$/.test(receipt.receiptId||'')
+    &&/^[a-f0-9]{64}$/.test(receipt.contentHash||'')&&Number.isFinite(recordedAt)&&Number.isFinite(fetchedAt)
+    &&receipt.fetchedAt===evidence?.source?.fetchedAt&&fetchedAt<=recordedAt);
+  const archived=bound&&receipt.status==='ARCHIVED'&&receipt.persisted===true
+    &&receipt.representation==='NORMALIZED_JSON_DOCUMENT'&&receipt.normalizedDocumentHashRecomputed===true
+    &&receipt.rawSourceHashRecomputed===false;
+  const pregame=archived&&receipt.prematchReceipt===true&&receipt.timingStatus==='PREGAME_DATABASE_RECEIPT'
+    &&Number.isFinite(kickoffAt)&&recordedAt<kickoffAt;
+  const publishedAt=Date.parse(receipt?.sourcePublishedAt||'');
+  return <div className="soccerAvailability" role="status" aria-label="來源保存狀態">
+    {archived?<><p><strong>來源資料已保存</strong></p><p>資料庫收到時間：{clock(receipt.recordedAt)}{pregame?'｜賽前收到':''}。</p><p>來源公布時間：{Number.isFinite(publishedAt)&&publishedAt<=fetchedAt?clock(receipt.sourcePublishedAt):'尚無可核對資料'}。</p><p>保存的是本次取得並解析的來源資料，未保存原始傳輸內容。保存收據不代表更早的公布時點或正式評分已通過核對。</p></>
+      :!receipt?<p>此版本尚無來源保存收據，無法確認來源資料是否已保存。</p>
+      :receipt.status==='UNAVAILABLE'?<p>本次來源資料未完成保存，請重新核對。</p>
+      :<p>來源保存收據未通過本場核對，無法確認來源資料是否已保存。</p>}
+  </div>;
+}
 export function SoccerPersonnelResearch({prediction,research,baseline,league,analysisCutoff}){
   const decimal=(value,digits=3)=>Number.isFinite(value)?value.toFixed(digits):'—';
   const count=value=>Number.isInteger(value)&&value>=0?value:null;
@@ -306,7 +326,7 @@ export default function SoccerAnalysisPanel({game}){
       <SoccerHalfTimeResearch halfTimePrediction={data.halfTimePrediction} halfTimeResearch={data.halfTimeResearch}/>
       </details>
       <SoccerPersonnelResearch prediction={data.personnelPrediction} research={data.personnelResearch} baseline={prediction} league={game.league} analysisCutoff={data.analysisCutoff||data.observedAt}/>
-      <details className="soccerDetails"><summary>先發、裁判與待核對資料</summary><div className="soccerLineupGrid">{['home','away'].map(side=>{const t=e.teams[side],l=t.lineup;return <div key={side}><h4>{side==='home'?'主隊':'客隊'}先發</h4><p>{l.starters.length===11?(data.status==='POSTSTART_AUDIT'?'賽後名單':'資料源列出先發 11 人'):'先發尚未完整提供'}{l.formation?`｜${l.formation}`:''}</p>{l.starters.length>0&&<p>{l.starters.map(p=>p.name).join('、')}</p>}<p>替補名單 {l.bench.length} 人；預計分鐘尚未驗證。</p></div>;})}</div><p>裁判：{e.referee.officials?.map(o=>o.name).join('、')||'資料源尚未提供'}。名單公布時間尚無可核對資料。</p><ul>{data.missing.map(x=><li key={x.label}>{x.label}：尚未具備可驗證資料</li>)}</ul><p className="soccerAvailability">{e.source.provider} 取得時間：{clock(e.source.fetchedAt)}。已列出的先發仍需確認公布時點。</p></details>
+      <details className="soccerDetails"><summary>先發、裁判與待核對資料</summary><SoccerSourceDocumentReceipt evidence={e} game={game}/><div className="soccerLineupGrid">{['home','away'].map(side=>{const t=e.teams[side],l=t.lineup;return <div key={side}><h4>{side==='home'?'主隊':'客隊'}先發</h4><p>{l.starters.length===11?(data.status==='POSTSTART_AUDIT'?'賽後名單':'資料源列出先發 11 人'):'先發尚未完整提供'}{l.formation?`｜${l.formation}`:''}</p>{l.starters.length>0&&<p>{l.starters.map(p=>p.name).join('、')}</p>}<p>替補名單 {l.bench.length} 人；預計分鐘尚未驗證。</p></div>;})}</div><p>裁判：{e.referee.officials?.map(o=>o.name).join('、')||'資料源尚未提供'}。名單公布時間尚無可核對資料。</p><ul>{data.missing.map(x=><li key={x.label}>{x.label}：尚未具備可驗證資料</li>)}</ul><p className="soccerAvailability">{e.source.provider} 取得時間：{clock(e.source.fetchedAt)}。已列出的先發仍需確認公布時點。</p></details>
       {data.providerPolicy?.rebateRateStatus==='USER_CONFIRMED'&&<p className="soccerAvailability">足球退水：{(data.providerPolicy.rebateRate*100).toFixed(0)}%（{data.providerPolicy.rebateRate}）；{data.providerPolicy.rebateBasis==='SETTLED_PRINCIPAL'&&data.providerPolicy.rebateApplicabilityStatus==='USER_CONFIRMED'?'按實際輸贏本金比例計算；全贏／全輸退1%，半贏／半輸退0.5%，贏20%退0.2%，走盤不退。':data.providerPolicy.rebateBasis==='TOTAL_PRINCIPAL'&&data.providerPolicy.rebateBasisStatus==='USER_CONFIRMED'?'按投注金額計算；適用條件與結算條款待核對。':'計算基數與結算條款待核對。'}</p>}
       <SoccerWorkloadPanel workload={e.workload}/>
       <SoccerRequirementDetails audit={data.requirements}/>

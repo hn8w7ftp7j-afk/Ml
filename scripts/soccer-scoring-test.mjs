@@ -17,13 +17,13 @@ const now = Date.parse('2026-10-20T00:00:00Z'), at = new Date(now).toISOString()
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
 const source = { provider: 'REPRODUCIBLE_SYNTHETIC_TEST_NOT_EMPIRICAL_VALIDATION', url: 'https://fixture.invalid/validation',
   contentHash: 'a'.repeat(64), sourcePublishedAt: '2026-10-19T00:00:00Z', fetchedAt: '2026-10-19T00:00:01Z', availableAt: '2026-10-19T00:00:02Z' };
-function fixture(league = 'epl', period = 'FT', line = '2.5', kind = 'TOTAL') {
+function fixture(league = 'epl', period = 'FT', line = '2.5', kind = 'TOTAL', water = .95) {
   const game = { id: `soccer:${league}:123`, sourceId: '123', league, date: '2026-10-20', startTime: '2026-10-20T12:00:00Z',
     status: 'scheduled', home: { sourceId: '359', name: 'Arsenal' }, away: { sourceId: '364', name: 'Liverpool' } };
   const reader = { revision: 'b'.repeat(64), observationId: 'c'.repeat(64), observedAt: at, firstFetchedAt: at,
     receivedAt: at, persistedAt: at, sourceHost: 'www.tai888.in', pageUrl: 'https://www.tai888.in/newapp/' };
-  const market = { kind, unit: 'GOALS', period, line, overWater: .95, underWater: .9, homeWater: .95, awayWater: .9, lineSide: kind === 'HANDICAP' ? 'home' : null,
-    rawRows: [`大 ${line} 0.95`, '小 0.9'], periodEvidence: { sectionTitle: league === 'epl' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽',
+  const market = { kind, unit: 'GOALS', period, line, overWater: water, underWater: .9, homeWater: water, awayWater: .9, lineSide: kind === 'HANDICAP' ? 'home' : null,
+    rawRows: [`大 ${line} ${water}`, '小 0.9'], periodEvidence: { sectionTitle: league === 'epl' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽',
       tableHeaders: [period === 'FT' ? '全場' : '上半場'], marketHeader: `${period === 'FT' ? '全場' : '上半場'}${kind === 'TOTAL' ? '大小' : '讓球'}`, period, status: 'EXPLICIT' } };
   const directions = buildSoccerMarketDirections({ game, reader, now, matchedGames: [{ officialGameId: game.id, league: league.toUpperCase(),
     boardDate: game.date, prestart: true, matchStatus: 'MATCHED', markets: [market] }] });
@@ -213,6 +213,52 @@ for (const alter of [s => { s.directions[0].quotes[0].water = 1.2; }, s => { s.d
   assert.equal(testPublish(changed, { currentStatus: currentReceipt, now }).formalScoringEnabled, false);
 }
 console.log('PASS real scorer → server revalidation → exact-quote current projection → ranking; receipt races, modified price/model/manifest and revoked registries fail closed');
+
+// Revalidate low calculations too: the threshold only controls ranking. Losing
+// current authority must not leave either a high or low score looking current.
+async function publisherForBundles(bundles) {
+  const registered=await fixtureScoringBundleModule(bundles);
+  let code=fs.readFileSync(publisherUrl,'utf8').replace("'./soccer-scoring.js'",JSON.stringify(scorerTestUrl))
+    .replace("'./scoring-bundle.js'",JSON.stringify(registered.url));
+  code=code.replace(/(\bfrom\s*|\bimport\s*)(['"])(\.[^'"]+)\2/g,(_m,prefix,separator,specifier)=>`${prefix}${separator}${new URL(specifier,publisherUrl).href}${separator}`);
+  return {publish:(await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)).publishSoccerAnalysisCandidates,
+    resolve:registered.module.resolveSoccerScoringBundle};
+}
+const lowQuote=fixture('epl','FT','2.5','TOTAL',.5).quote;
+const lowCalculation=registeredCalculation({...acceptedInputs,quote:lowQuote});
+assert.equal(lowCalculation.formalScoringEnabled,true);assert.equal(lowCalculation.calculationEligible,false);
+assert.ok(lowCalculation.score<7.2);
+const lowContext={...bundleContext,quote:lowQuote},lowBundle=fixtureScoringBundle(lowContext,lowCalculation.calculationInputs);
+const bothPublisher=await publisherForBundles([trustedBundle,lowBundle]);
+const lowSnapshot=structuredClone(snapshot);
+lowSnapshot.directions[0].quotes=[{...lowQuote,scoring:{...lowCalculation,inputBundle:bothPublisher.resolve(lowContext).receipt}}];
+const displayPublished=(result,time=now)=>soccerQuoteScorePresentation({result,direction:result.directions[0],quote:result.directions[0].quotes[0],now:time});
+for(const original of [snapshot,lowSnapshot]) {
+  const savedOriginal=JSON.stringify(original),fresh=bothPublisher.publish(original,{currentStatus:currentReceipt,now});
+  const quote=fresh.directions[0].quotes[0];
+  assert.equal(quote.calculationValidity.status,'CURRENT_VERIFIED');
+  assert.equal(displayPublished(fresh).status,original===snapshot?'QUALIFIED':'BELOW_THRESHOLD');
+  const revoked=publishSoccerAnalysisCandidates(original,{currentStatus:currentReceipt,now});
+  assert.equal(revoked.directions[0].quotes[0].calculationValidity.status,'HISTORICAL_ONLY');
+  assert.equal(displayPublished(revoked).status,'HISTORICAL');
+  assert.equal(displayPublished(revoked).score,original.directions[0].quotes[0].scoring.score);
+  assert.equal(buildSoccerRanking([input.game],{[input.game.id]:{status:'done',data:revoked}},{now}).entries.length,0);
+  assert.equal(JSON.stringify(original),savedOriginal,'read-time revocation keeps the original saved calculation unchanged');
+  const currentQuote=original.directions[0].quotes[0],context={...bundleContext,quote:currentQuote};
+  const shortBundle=fixtureScoringBundle(context,currentQuote.scoring.calculationInputs,{expiresAt:new Date(now+1000).toISOString()});
+  const shortPublisher=await publisherForBundles([shortBundle]);
+  const shortSnapshot=structuredClone(original);
+  shortSnapshot.directions[0].quotes[0].scoring.inputBundle=shortPublisher.resolve(context).receipt;
+  const shortFresh=shortPublisher.publish(shortSnapshot,{currentStatus:currentReceipt,now});
+  assert.equal(shortFresh.directions[0].quotes[0].calculationValidity.status,'CURRENT_VERIFIED');
+  if(original===snapshot)assert.equal(shortFresh.directions[0].quotes[0].qualification.validUntil,new Date(now+1000).toISOString(),'candidate lifetime cannot outlast its trusted bundle');
+  assert.equal(displayPublished(shortFresh,now+1001).status,'HISTORICAL','UI respects authority expiry before the ordinary quote/analysis expiry');
+  assert.equal(buildSoccerRanking([input.game],{[input.game.id]:{status:'done',data:shortFresh}},{now:now+1001}).entries.length,0,'loaded candidate leaves ranking at authority expiry without waiting for a server refresh');
+  const expired=shortPublisher.publish(shortSnapshot,{currentStatus:{...currentReceipt,checkedAt:new Date(now+1001).toISOString()},now:now+1001});
+  assert.equal(expired.directions[0].quotes[0].calculationValidity.status,'HISTORICAL_ONLY');
+  assert.equal(displayPublished(expired,now+1001).status,'HISTORICAL');
+}
+console.log('PASS current low/high calculations: threshold-independent trusted replay, revoked and expired authority remains historical only, original S retained without current ranking');
 
 // A reviewed server factory materializes game/price-specific manifests without
 // a new per-game static artifact registration. This registry exists only inside
