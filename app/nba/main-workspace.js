@@ -11,10 +11,11 @@ import { NbaBetRecordProvider, NbaBetRecordButton, NbaBetRecords } from './bet-r
 import AnalysisNotificationControl from '../analysis-notification-control.js';
 import AllLeagueProgress from '../all-league-progress.js';
 import { backgroundStartWasDefinitivelyRejected } from '../../lib/background-start-request-journal.js';
-import { loadNbaUpcomingBoard, nbaCompletionSummary } from '../../lib/nba/analysis-ui-policy.js';
+import { loadNbaUpcomingBoard, nbaCompletionSummary, nbaNavigationDate } from '../../lib/nba/analysis-ui-policy.js';
 import { prepareNbaNotification } from '../../lib/nba/analysis-notification-start.js';
 import { nbaBatchFinished, summarizeNbaBatchOutcome } from '../../lib/nba/analysis-outcome.js';
 import { nbaOpeningMarketCoverage } from '../../lib/nba/league-indicator.js';
+import { nbaReaderSyncFailure } from '../../lib/nba/reader-sync-diagnostic.js';
 
 const NbaDataWorkspace = dynamic(() => import('./workspace.js'), { ssr: false });
 const NbaForwardValidationPanel = dynamic(() => import('./forward-validation-panel.js'), { ssr: false });
@@ -148,6 +149,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const [reconnectRevision, setReconnectRevision] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [readerStatus, setReaderStatus] = useState('waiting');
+  const [readerFailure, setReaderFailure] = useState(null);
   const notification = useRef(null);
   const rowsRef = useRef(rows); rowsRef.current = rows;
   const dateRef = useRef(date); dateRef.current = date;
@@ -155,6 +157,10 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const operation = useRef(false);
   const jobRef = useRef(job); jobRef.current = job;
   const explicitDate = useRef(false);
+  useEffect(() => {
+    const target = nbaNavigationDate(window.location.search);
+    if (target) { explicitDate.current = true; dateRef.current = target; setDate(target); }
+  }, []);
   const running = starting || ['starting', 'running'].includes(job?.status);
   const busy = running || otherBusy;
   const trackBoard = active || validNbaJob(job) || Number(allRun?.leagues?.NBA?.total) > 0;
@@ -165,7 +171,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
     if (!validDate(preparedScope?.date) || operation.current || preparedScope.date === dateRef.current) return;
     dateRef.current = preparedScope.date; setDate(preparedScope.date); setRows([]); setSelected(''); setProgress(null);
   }, [preparedScope]);
-  useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(NBA_JOB_STORAGE) || 'null'); if (validNbaJob(saved)) { setJob(saved); if (saved.status === 'running' || saved.status === 'starting') setDate(saved.date); } } catch {} }, []);
+  useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(NBA_JOB_STORAGE) || 'null'); if (validNbaJob(saved) && (!explicitDate.current || saved.date === dateRef.current)) { setJob(saved); if (saved.status === 'running' || saved.status === 'starting') setDate(saved.date); } } catch {} }, []);
   useEffect(() => {
     const incoming = notificationJob || (allRun?.runId && Number(allRun.leagues?.NBA?.total) > 0 ? { runId: allRun.runId, date: allRun.leagues.NBA.boardDate, startedAt: allRun.startedAt } : null);
     if (!validNbaJob(incoming) || jobRef.current?.runId === incoming.runId
@@ -203,6 +209,19 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   // Quote reads stay live while model jobs run, so earlier league results do not
   // lose their current-price badge while another league is still analysing.
   useEffect(() => { if (!trackBoard) return; const timer = setInterval(() => { if (!operation.current) void load(dateRef.current); }, 30000); return () => clearInterval(timer); }, [trackBoard]);
+  useEffect(() => {
+    if (!active || readerStatus !== 'stale') { setReaderFailure(null); return; }
+    setReaderFailure(null);
+    let cancelled = false;
+    const read = async () => {
+      try {
+        const data = await api('/api/reader/diagnostics?league=NBA', {}, 15000);
+        if (!cancelled) setReaderFailure(nbaReaderSyncFailure(data.reports, { observedAt: rowsRef.current[0]?.observedAt }));
+      } catch { if (!cancelled) setReaderFailure(null); }
+    };
+    void read(); const timer = setInterval(read, 30000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [active, readerStatus, date]);
   useEffect(() => {
     const resume = () => { if (document.visibilityState !== 'hidden' && validNbaJob(jobRef.current)) setReconnectRevision(value => value + 1); };
     window.addEventListener('focus', resume); document.addEventListener('visibilitychange', resume);
@@ -256,7 +275,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       const board = await load(dateRef.current, { followLatest: !id });
       if (!board) { setMessage(''); return; }
       const tasks = board.tasks.filter(task => !id || task.nbaQuery.id === id);
-      if (!tasks.length) { setMessage('目前無可分析盤口，請查看各場狀態。'); return; }
+      if (!tasks.length) { setMessage(board.readerStatus === 'stale' && readerFailure ? `目前盤口已過期。最近同步紀錄：${readerFailure.message}` : '目前無可分析盤口，請查看各場狀態。'); return; }
       const requestId = `nba-analysis-${crypto.randomUUID()}`;
       const handle = { requestId, date: board.date, status: 'starting', startedAt: new Date().toISOString() };
       if (!store(handle)) setMessage('此裝置無法保存工作編號，完成前請保持網站開啟。');
@@ -300,6 +319,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>
+      {readerStatus === 'stale' && readerFailure && <div className="noticeBox" role="status"><strong>最近 NBA 同步失敗｜{localTime(readerFailure.at)}</strong><p>{readerFailure.message}</p><p>這是已保存的同步紀錄；目前盤口仍未取得更新確認。</p><a href="/reader-diagnostics">查看同步診斷紀錄</a></div>}
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
       {(view === 'ranking' || view === 'records' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
