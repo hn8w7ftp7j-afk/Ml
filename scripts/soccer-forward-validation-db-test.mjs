@@ -208,7 +208,12 @@ try {
       assert.deepEqual(actual.payload.inputVersions.scheduleSourceVersion,scheduleVersion);
       for(const side of ['home','away']){
         assert.equal(actual.payload.evidence.teams[side].lineup.status,'NOT_PUBLISHED');
-        assert.deepEqual(actual.payload.evidence.teams[side].lineup.source,actual.payload.evidence.source,'lineup.source is the real normalizer field, including an unpublished XI');
+        assert.deepEqual(actual.payload.evidence.teams[side].lineup.rawSource,actual.payload.evidence.rawSource,'lineup retains the original summary receipt');
+        for(const field of ['provider','url','contentHash','fetchedAt'])assert.equal(actual.payload.evidence.teams[side].lineup.source[field],actual.payload.evidence.source[field]);
+        assert.equal(actual.payload.evidence.teams[side].lineup.source.availableAt,actual.payload.evidence.source.availableAt);
+        assert.equal(actual.payload.evidence.teams[side].lineup.source.sourcePublishedAt,null);
+        assert.equal(actual.payload.evidence.teams[side].lineup.source.independentlyConfirmed,false);
+        assert.deepEqual(actual.payload.evidence.teams[side].lineup.source.scope,{league,gameId:actual.payload.gameId,field:`teams.${side}.lineup`});
       }
       const actualEvidence=await loadSoccerForwardEvidence({league,date:actual.payload.date});
       const actualCaptures=actualEvidence.captures.filter(row=>row.gameId===actual.payload.gameId);
@@ -229,7 +234,12 @@ try {
     assert.equal(xiObservation.personnel.availability,'OBSERVED_PREMATCH_XI');
     for(const side of ['home','away']){
       assert.equal(xiEvidence.teams[side].lineup.status,'PROVIDER_REPORTED_XI');assert.equal(xiEvidence.teams[side].lineup.starters.length,11);
-      assert.deepEqual(xiEvidence.teams[side].lineup.source,xiSummarySource);
+      assert.deepEqual(xiEvidence.teams[side].lineup.rawSource,xiSummarySource);
+      for(const field of ['provider','url','contentHash','fetchedAt'])assert.equal(xiEvidence.teams[side].lineup.source[field],xiSummarySource[field]);
+      assert.equal(xiEvidence.teams[side].lineup.source.availableAt,xiSummarySource.fetchedAt);
+      assert.equal(xiEvidence.teams[side].lineup.source.sourcePublishedAt,null);
+      assert.equal(xiEvidence.teams[side].lineup.source.independentlyConfirmed,false);
+      assert.deepEqual(xiEvidence.teams[side].lineup.source.scope,{league:'epl',gameId:xiEvidence.game.id,field:`teams.${side}.lineup`});
       assert.deepEqual(xiObservation.personnel.teams[side].starters,xiEvidence.teams[side].lineup.starters.map(player=>player.id));
     }
   } finally {globalThis.fetch=oldFetch;}

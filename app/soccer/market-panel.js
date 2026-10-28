@@ -9,7 +9,7 @@ const clock=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-
 const returnPct=v=>finite(v)?`${v>0?'+':''}${(v*100).toFixed(2)}%`:'—';
 const periods={FT:'全場',HT:'上半場'};
 const directionNames={HANDICAP_HOME:'主隊讓／受讓',HANDICAP_AWAY:'客隊讓／受讓',TOTAL_OVER:'大球',TOTAL_UNDER:'小球'};
-const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'期間、派彩及退水適用條件待核對',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
+const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'本帳戶派彩與異常賽事條款待來源核對',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
 const textValue=v=>typeof v==='string'||finite(v)?String(v):null;
 const rowText=row=>{
   const direct=textValue(row);if(direct!==null)return direct;
@@ -29,6 +29,10 @@ function readerDiagnostic(result,game){
     &&readerDiagnosticNames[d.code]&&readerDiagnosticStatuses[d.code]===d.status&&d.counts&&typeof d.counts==='object'?d:null;
 }
 
+function readerMessage(d,game,now){
+  return d?.status==='STALE'&&game&&(['live','final'].includes(game.status)||Date.parse(game.startTime)<=now)?'比賽已開始，已保存原盤僅供歷史核對；現在更新不能補成當時的賽前盤。':readerDiagnosticNames[d?.code];
+}
+
 function SoccerQuoteScoring({scoring}){
   if(!scoring||!Array.isArray(scoring.stages))return null;
   const payoff=scoring.conditionalPayoff;
@@ -40,12 +44,17 @@ function SoccerQuoteScoring({scoring}){
 export function SoccerScoringReadiness({result,game,now=Date.now()}){
   const readiness=soccerScoringReadiness(result,now,game||result?.evidence?.game);
   const blockers=readiness.blockers.filter(item=>!['PER_SCORE_PAYOFF','FIXED_S_FORMULA'].includes(item.code));
-  if(!result||readiness.status==='SCORES_AVAILABLE')return null;
+  if(!result)return null;
+  const owners={CURRENT_DATA:'本場原盤與資料',RULES_EVIDENCE:'本帳戶規則依據',SYSTEM:'系統尚待完成的工作'};
   return <section className="soccerScoringReadiness" role="status" aria-label="S 評分計算狀態" data-scoring-readiness={readiness.status}>
-    <strong>{readiness.status==='SCORING_BLOCKED'?'正式評分尚未完成':readiness.status==='PARTIAL'?'部分原盤尚未產生 S 分數':'尚無可確認期間的原盤供評分'}</strong>
+    <strong>{readiness.status==='SCORES_AVAILABLE'?'正式評分已計算':readiness.status==='SCORING_BLOCKED'?'正式評分尚未完成':readiness.status==='PARTIAL'?'部分原盤尚未產生 S 分數':'尚無可確認期間的原盤供評分'}</strong>
     <p>八方向原盤 {readiness.quoteCount} 筆；已有 S 分數 {readiness.scoredQuoteCount} 筆{readiness.unassignedQuoteCount?`；期間待確認 ${readiness.unassignedQuoteCount} 筆`:''}。</p>
     {readiness.status==='SCORING_BLOCKED'&&<p>已收到盤口，但下列評分依據尚未補齊，目前無法產生 S 分數。</p>}
-    {blockers.length>0&&<ul>{blockers.map(blocker=><li key={blocker.code}>{blocker.label}</li>)}</ul>}
+    <p>目前符合排名 {readiness.qualifiedQuoteCount} 筆；未達門檻 {readiness.belowThresholdQuoteCount} 筆；歷史分數 {readiness.historicalScoreCount} 筆；資格待發布 {readiness.unpublishedScoreCount} 筆。</p>
+    {Object.entries(owners).map(([owner,label])=>{const items=blockers.filter(item=>item.owner===owner);return items.length?<section key={owner} aria-label={label}><strong>{label}</strong><ul>{items.map(item=><li key={item.code}>{item.label}<p>{item.nextAction}</p></li>)}</ul></section>:null;})}
+    {readiness.unpublishedScoreCount>0&&<p>分數已計算，系統仍須核對目前原盤及發布資格；尚不列排名。</p>}
+    {readiness.belowThresholdQuoteCount>0&&<p>未同時達到 S ≥ 7.2、W &gt; 0、R &gt; 0 的原盤不列排名。</p>}
+    <p className="soccerMarketNote">「紀錄實際下注」只登記你已自行完成的下注，不代表通過排名，也不會送出下注。</p>
     {readiness.status==='SCORING_BLOCKED'&&<p>重新分析會更新比分研究、資料核對與符合條件原盤的收益試算；正式評分仍須完成驗證。</p>}
   </section>;
 }
@@ -71,6 +80,40 @@ function conditionalFailureReason(quote){
   return !c?'此歷史版本尚未保存收益分析，請重新核對賽前資料':conditionalFailures[c.reason]||'此盤口缺少可用的計算依據，須核對球頭、水位與比分模型';
 }
 
+export function SoccerScenarioResearch({result,game,now=Date.now()}){
+  const r=result?.scenarioResearch,saved=result?.evidence?.game;
+  if(!r||r.version!=='SOCCER-SOURCE-TRAINED-SCENARIO-RESEARCH-v1'||r.formalEnabled!==false||r.executable!==false
+    ||!saved||!game||r.gameId!==result.gameId||r.league!==result.league||r.date!==result.date
+    ||r.gameId!==saved.id||r.league!==saved.league||r.date!==saved.date
+    ||Boolean(game.neutralSite)!==Boolean(saved.neutralSite)
+    ||game.id!==saved.id||game.league!==saved.league||game.date!==saved.date
+    ||game.sourceId!==saved.sourceId||game.home?.sourceId!==saved.home?.sourceId||game.away?.sourceId!==saved.away?.sourceId
+    ||Date.parse(game.startTime)!==Date.parse(saved.startTime)||r.startTime!==saved.startTime)return null;
+  const reasons={SOCCER_SCENARIO_NOT_PREMATCH:'此版本不是開賽前情境計算，不能補成當時已知的資料。',
+    SOCCER_SCENARIO_ARTIFACT_NOT_AVAILABLE_AT_CUTOFF:'這份情境模型在當時尚未產生；歷史分析不會套用後來的模型。',
+    SOCCER_SCENARIO_MODEL_AFTER_CUTOFF:'情境模型晚於本次適用時間，不能套用。',
+    SOCCER_SCENARIO_GAME_IDENTITY_INVALID:'賽事身分尚未通過核對。'};
+  if(r.status!=='RESEARCH_ONLY')return <section className="soccerScoringReadiness" aria-label="足球研究情境"><strong>參數變動研究尚無適用結果</strong><p>{reasons[r.reason]||'系統尚未取得適用本場與期間的情境計算，未補入預設情境。'}</p></section>;
+  const cutoff=Date.parse(result.analysisCutoff||result.observedAt),created=Date.parse(r.createdAt),trained=Date.parse(r.trainingCutoff);
+  if(!['artifactHash','protocolHash','baselineModelHash'].every(key=>/^[a-f0-9]{64}$/.test(r[key]||''))
+    ||![now,cutoff,created,trained].every(finite)||trained>created||created>cutoff||cutoff>now||cutoff>=Date.parse(saved.startTime)
+    ||r.pointInTimeAvailabilityVerified!==false)return null;
+  const historical=['live','final'].includes(game.status)||Date.parse(game.startTime)<=now||now-cutoff>=180000;
+  const validRange=v=>finite(v?.min)&&finite(v?.max)&&v.min>=0&&v.min<=v.max;
+  return <section className="soccerScoringReadiness" aria-label="足球研究情境"><strong>{historical?'已保存的參數變動研究':'本場參數變動研究'}</strong>
+    {['FT','HT'].map(period=>{const p=r.periods?.[period],ranges=p?.parameterRanges;
+      if(!p||p.formalEnabled!==false||!Number.isSafeInteger(p.count)||!Number.isSafeInteger(p.attempted)||!Number.isSafeInteger(p.failed)
+        ||p.count<0||p.failed<0||p.attempted>1000||p.count+p.failed!==p.attempted)return null;
+      const available=p.count>0&&['RESEARCH_SCENARIOS_AVAILABLE','PARTIAL_RESEARCH_SCENARIOS'].includes(p.status)
+        &&p.weightsRenormalized===false&&validRange(ranges?.homeRate)&&validRange(ranges?.awayRate);
+      return <div key={period}><p>{periods[period]}：已計算 {p.count}／{p.attempted} 組；未完成 {p.failed} 組。</p>
+        {available?<p>主隊平均進球參數 {ranges.homeRate.min.toFixed(3)} ～ {ranges.homeRate.max.toFixed(3)}；客隊 {ranges.awayRate.min.toFixed(3)} ～ {ranges.awayRate.max.toFixed(3)}。</p>:<p>尚無可展示的適用參數範圍；失敗組別不會重分配權重。</p>}</div>;
+    })}
+    <p>以已保存歷史資料重新加權擬合，計算不同參數下的比分分布。範圍是成功計算組別的最小與最大值，不是信賴區間，也不是不同陣容發生的機率。</p>
+    <p className="soccerMarketNote">研究情境已計算，不代表正式收益誤差與 W／R／S 已驗證；正式評分仍依下方缺項判定。{historical?'此為原分析保存的研究結果。':''}</p>
+  </section>;
+}
+
 export function SoccerAutomaticAnalysisStatus({result,game,now=Date.now()}){
   if(!result)return null;
   const quotes=(Array.isArray(result.directions)?result.directions:[]).flatMap(d=>(Array.isArray(d?.quotes)?d.quotes:[]).filter(q=>q&&q.period===d.period&&['FT','HT'].includes(d.period)));
@@ -83,7 +126,7 @@ export function SoccerAutomaticAnalysisStatus({result,game,now=Date.now()}){
     {counts.CURRENT>0&&<p>有效原盤已自動計算條件收益，展開下方原盤即可查看；無須再手動輸入。</p>}
     {counts.HISTORICAL>0&&<p>歷史試算不代表目前價格；未開賽場次須更新 Reader 原盤並重新核對賽前資料。</p>}
     {counts.UNAVAILABLE>0&&<p>{game?.status!=='scheduled'||Date.parse(game?.startTime)<=now?'此場已開賽，現在同步的盤口不能補成當時的賽前分析；僅能查閱已保存版本。':'請查看下方盤口的來源、期間與計算核對結果；重新同步原盤可修復來源或時間問題。'}</p>}
-    <p>正式 S 評分另缺派彩適用依據、足球情境與模型誤差驗證；更新盤口或重按分析不會自動補齊。</p>
+    {soccerScoringReadiness(result,now,game).status!=='SCORES_AVAILABLE'&&<p>正式 S 評分仍需本帳戶派彩適用依據，以及系統完成足球情境、模型誤差驗證與接線；更新盤口或重按分析不會自動補齊。</p>}
   </section>;
 }
 
@@ -167,12 +210,13 @@ export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,r
   const items=Array.isArray(directions)?directions:[],unknown=Array.isArray(unassignedQuotes)?unassignedQuotes:[];
   const diagnostic=readerDiagnostic(result,game);
   return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">正式評分完成後，每筆原盤將獨立顯示 S 分數，沿用 MLB 現有評分公式及上限規則；不是把勝率換成分數。排名另須通過 S ≥ 7.2、W &gt; 0、R &gt; 0 與正式資格核對。</p><p className="soccerMarketCaution">尚無有效計算依據時不產生分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
+    <SoccerScenarioResearch result={result} game={game} now={now}/>
     <SoccerAutomaticAnalysisStatus result={result} game={game} now={now}/>
     <SoccerScoringReadiness result={result} game={game} now={now}/>
-    {diagnostic&&<p className="soccerMarketNote" role="status" data-reader-status={diagnostic.status}>{readerDiagnosticNames[diagnostic.code]}{Number.isInteger(diagnostic.counts?.assignedQuotes)&&diagnostic.counts.assignedQuotes>0?` 已配入 ${diagnostic.counts.assignedQuotes} 筆方向原盤。`:''}</p>}
+    {diagnostic&&<p className="soccerMarketNote" role="status" data-reader-status={diagnostic.status}>{readerMessage(diagnostic,game,now)}{Number.isInteger(diagnostic.counts?.assignedQuotes)&&diagnostic.counts.assignedQuotes>0?` 已配入 ${diagnostic.counts.assignedQuotes} 筆方向原盤。`:''}</p>}
     <div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
-      const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons);
-      const emptyReason=Array.isArray(d.unknownPeriodQuotes)&&d.unknownPeriodQuotes.length?'已有原盤，但尚未確認屬全場或上半場。':diagnostic&&diagnostic.status!=='READY'?readerDiagnosticNames[diagnostic.code]:'缺少此方向可確認期間的原盤。';
+      const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons).map(reason=>game&&(['live','final'].includes(game.status)||Date.parse(game.startTime)<=now)&&reason===reasonNames.READER_QUOTE_STALE?'此為歷史原盤，現在更新不能重建當時的賽前價格':reason);
+      const emptyReason=Array.isArray(d.unknownPeriodQuotes)&&d.unknownPeriodQuotes.length?'已有原盤，但尚未確認屬全場或上半場。':diagnostic&&diagnostic.status!=='READY'?readerMessage(diagnostic,game,now):'缺少此方向可確認期間的原盤。';
       const shownReasons=diagnostic&&diagnostic.status!=='READY'?reasons.filter(reason=>reason!==reasonNames.MATCHED_READER_QUOTE_MISSING):reasons;
       return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>尚無此方向評分</strong><p className="soccerMarketEmpty">{emptyReason}</p></div></div>}{shownReasons.length>0&&<p className="soccerMarketNote">{shownReasons.join('；')}。</p>}</section>;
     })}</div>

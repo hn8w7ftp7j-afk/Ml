@@ -1,0 +1,17 @@
+{
+  "version": "SOCCER-GAME-BLOCK-RETURN-ERROR-RESEARCH-v1",
+  "status": "CANDIDATE_NOT_REGISTERED",
+  "registeredAt": null,
+  "trainingBefore": null,
+  "calibrationBefore": null,
+  "testBefore": null,
+  "miscoverage": 0.1,
+  "method": "GAME_BALANCED_SIGNED_BIAS_THEN_GAME_MAX_ABSOLUTE_RESIDUAL_ORDER_STATISTIC",
+  "grouping": "LEAGUE_PERIOD_VARIANT_MODEL_CONTRACT_MARKET_SIDE",
+  "selection": "FIRST_VALID_SAVED_PREDICTION_PER_ECONOMIC_PRICE_MODEL",
+  "splitUnit": "WHOLE_REAL_GAME_BY_KICKOFF",
+  "reference": "https://proceedings.mlr.press/v313/barber26a.html",
+  "interpretation": "REALIZED_RETURN_PREDICTION_ERROR_INCLUDES_OUTCOME_NOISE_NOT_CONDITIONAL_EV_UNCERTAINTY",
+  "exchangeabilityVerified": false,
+  "formalEligibility": false
+}

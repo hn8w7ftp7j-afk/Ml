@@ -11,6 +11,7 @@ import { publishSoccerAnalysisCandidates } from '../lib/soccer/candidate-publica
 import { soccerCandidatePayloadValid } from '../lib/soccer/candidate-qualification.js';
 import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
+import { fixtureScoringBundle, fixtureScoringBundleModule, fixtureScoringFactory } from './helpers/soccer-scoring-bundle-fixture.mjs';
 
 const now = Date.parse('2026-10-20T00:00:00Z'), at = new Date(now).toISOString();
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
@@ -138,7 +139,7 @@ for (const [side, offset] of [['home', 100], ['away', 200]]) formalEvidence.team
   injuries: { status: 'VERIFIED', source }, suspensions: { status: 'VERIFIED', source }, minutes: { status: 'VERIFIED', source, modelEffectApplied: true } };
 const registrations = Object.entries(forgedAcceptance).map(([kind, manifest]) => ({ kind, league: 'epl', period: 'FT', manifestHash: soccerScoringHash(manifest) }));
 const moduleUrl = new URL('../lib/soccer/soccer-scoring.js', import.meta.url);
-let registeredCode = fs.readFileSync(moduleUrl, 'utf8').replace('const acceptedArtifacts = Object.freeze([]);', `const acceptedArtifacts = Object.freeze(${JSON.stringify(registrations)});`);
+let registeredCode = fs.readFileSync(moduleUrl, 'utf8').replace("import { acceptedSoccerArtifactRegistrations as acceptedArtifacts } from './scoring-bundle-registry.js';", `const acceptedArtifacts = Object.freeze(${JSON.stringify(registrations)});`);
 registeredCode = registeredCode.replace("import { soccerVerifiedSettlementContract } from './settlement-contract.js';", `const soccerVerifiedSettlementContract = () => (${JSON.stringify(input.contract)});`);
 registeredCode = registeredCode.replace("from 'decimal.js'", `from ${JSON.stringify(import.meta.resolve('decimal.js'))}`);
 registeredCode = registeredCode.replace(/(\bfrom\s*|\bimport\s*)(['"])(\.[^'"]+)\2/g, (_match, prefix, separator, specifier) => `${prefix}${separator}${new URL(specifier, moduleUrl).href}${separator}`);
@@ -158,8 +159,14 @@ console.log('PASS actual accepted-calculation branch: registered arithmetic may 
 // Reuse the actual accepted scorer test module in the publication wrapper. Only
 // private test registrations differ; production still ships empty registrations.
 const scorerTestUrl = `data:text/javascript;base64,${Buffer.from(registeredCode).toString('base64')}`;
+const bundleContext={quote:input.quote,game:input.game,distribution:input.distribution,evidence:formalEvidence,now};
+const trustedBundle=fixtureScoringBundle(bundleContext,acceptedCalculation.calculationInputs);
+const bundleFixture=await fixtureScoringBundleModule([trustedBundle]);
+const bundleResolution=bundleFixture.module.resolveSoccerScoringBundle(bundleContext);
+assert.equal(bundleResolution.status,'AVAILABLE','only the isolated test registry contains this synthetic runtime bundle');
 const publisherUrl = new URL('../lib/soccer/candidate-publication.js', import.meta.url);
 let publisherCode = fs.readFileSync(publisherUrl, 'utf8').replace("'./soccer-scoring.js'", JSON.stringify(scorerTestUrl));
+publisherCode=publisherCode.replace("'./scoring-bundle.js'",JSON.stringify(bundleFixture.url));
 publisherCode = publisherCode.replace(/(\bfrom\s*|\bimport\s*)(['"])(\.[^'"]+)\2/g, (_m, prefix, separator, specifier) => `${prefix}${separator}${new URL(specifier, publisherUrl).href}${separator}`);
 const { publishSoccerAnalysisCandidates: testPublish } = await import(`data:text/javascript;base64,${Buffer.from(publisherCode).toString('base64')}`);
 const currentReceipt = { analysisRunId: 'synthetic-run-123', qualificationVersion: '1', quoteGeneration: '1', revision: 'f'.repeat(64),
@@ -170,7 +177,7 @@ const snapshot = { gameId: input.game.id, league: input.game.league, date: input
   validUntil: currentReceipt.validUntil, persisted: true, publishedCurrent: true, analysisStatus: 'COMPLETED', qaFlag: 'WARN',
   selectionResult: 'RESEARCH_SHADOW', executable: false, formalScoringEnabled: false, evidence: formalEvidence, prediction: input.distribution,
   directions: [{ period: 'FT', direction: 'TOTAL_OVER', score: null, W: null, R: null, eligible: false, executable: false,
-    qaFlag: 'WARN', quotes: [{ ...input.quote, scoring: acceptedCalculation }] }] };
+    qaFlag: 'WARN', quotes: [{ ...input.quote, scoring: {...acceptedCalculation,inputBundle:bundleResolution.receipt} }] }] };
 const untouchedSnapshot = JSON.stringify(snapshot);
 const published = testPublish(snapshot, { currentStatus: currentReceipt, now });
 assert.equal(published.formalScoringEnabled, true); assert.equal(published.directions[0].quotes[0].eligible, true);
@@ -184,6 +191,10 @@ const marketContext=vm.createContext({...soccerReadiness,React,soccerQuoteScoreP
 const scoredMarkup=renderToStaticMarkup(marketContext.SoccerMarketDirections({directions:published.directions,result:published,game:input.game,now}));
 assert.ok(scoredMarkup.includes(`<strong>${acceptedCalculation.score.toFixed(1)}</strong>`));
 assert.match(scoredMarkup,/W \+4.35%｜R \+2.40%/);assert.match(scoredMarkup,/通過排名門檻/);
+assert.match(scoredMarkup,/目前符合排名 1 筆/);
+const historicalMarkup=renderToStaticMarkup(marketContext.SoccerMarketDirections({directions:published.directions,result:published,game:input.game,now:now+180000}));
+assert.match(historicalMarkup,/目前符合排名 0 筆/);assert.match(historicalMarkup,/歷史分數 1 筆/);
+assert.match(historicalMarkup,/只登記你已自行完成的下注，不代表通過排名/);
 const changedMarkup=renderToStaticMarkup(marketContext.SoccerMarketDirections({directions:published.directions,result:published,game:{...input.game,away:{...input.game.away,sourceId:'999'}},now}));
 assert.match(changedMarkup,/賽事資料已更新・待重新評分/);assert.doesNotMatch(changedMarkup,/通過排名門檻/);
 assert.equal(buildSoccerRanking([input.game], { [input.game.id]: { status: 'done', data: published } }, { now }).entries.length, 1);
@@ -202,6 +213,30 @@ for (const alter of [s => { s.directions[0].quotes[0].water = 1.2; }, s => { s.d
   assert.equal(testPublish(changed, { currentStatus: currentReceipt, now }).formalScoringEnabled, false);
 }
 console.log('PASS real scorer → server revalidation → exact-quote current projection → ranking; receipt races, modified price/model/manifest and revoked registries fail closed');
+
+// A reviewed server factory materializes game/price-specific manifests without
+// a new per-game static artifact registration. This registry exists only inside
+// the isolated test module; Production approvals remain entirely empty.
+const factoryFixture=await fixtureScoringBundleModule([fixtureScoringFactory(bundleContext,acceptedCalculation.calculationInputs)]);
+const factoryResolved=factoryFixture.module.resolveSoccerScoringBundle(bundleContext);
+let factoryScorerCode=fs.readFileSync(moduleUrl,'utf8').replace("'./scoring-bundle.js'",JSON.stringify(factoryFixture.url));
+factoryScorerCode=factoryScorerCode.replace("import { soccerVerifiedSettlementContract } from './settlement-contract.js';",`const soccerVerifiedSettlementContract=()=>(${JSON.stringify(input.contract)});`);
+factoryScorerCode=factoryScorerCode.replace("from 'decimal.js'",`from ${JSON.stringify(import.meta.resolve('decimal.js'))}`);
+factoryScorerCode=factoryScorerCode.replace(/(\bfrom\s*|\bimport\s*)(['"])(\.[^'"]+)\2/g,(_m,prefix,separator,specifier)=>`${prefix}${separator}${new URL(specifier,moduleUrl).href}${separator}`);
+const factoryScorerUrl=`data:text/javascript;base64,${Buffer.from(factoryScorerCode).toString('base64')}`;
+const factoryScorer=await import(factoryScorerUrl),factoryScored=factoryScorer.scoreSoccerQuote({...acceptedInputs,...factoryResolved.inputs});
+assert.equal(factoryScored.formalScoringEnabled,true,JSON.stringify(factoryScored.reasons));
+assert.equal(factoryScored.calculationEligible,true);assert.ok(Number.isFinite(factoryScored.R));
+assert.equal(factoryScored.provenance.registeredAcceptanceCount,0,'factory authority is contextual; no static per-game manifest was installed');
+const factorySnapshot=structuredClone(snapshot);factorySnapshot.directions[0].quotes[0].scoring={...factoryScored,inputBundle:factoryResolved.receipt};
+let factoryPublisherCode=fs.readFileSync(publisherUrl,'utf8').replace("'./soccer-scoring.js'",JSON.stringify(factoryScorerUrl)).replace("'./scoring-bundle.js'",JSON.stringify(factoryFixture.url));
+factoryPublisherCode=factoryPublisherCode.replace(/(\bfrom\s*|\bimport\s*)(['"])(\.[^'"]+)\2/g,(_m,prefix,separator,specifier)=>`${prefix}${separator}${new URL(specifier,publisherUrl).href}${separator}`);
+const factoryPublisher=await import(`data:text/javascript;base64,${Buffer.from(factoryPublisherCode).toString('base64')}`);
+assert.equal(factoryPublisher.publishSoccerAnalysisCandidates(factorySnapshot,{currentStatus:currentReceipt,now}).formalScoringEnabled,true);
+assert.equal(publishSoccerAnalysisCandidates(factorySnapshot,{currentStatus:currentReceipt,now}).formalScoringEnabled,false,'an isolated synthetic factory must never authorize Production publication');
+const changedFactoryInputs=structuredClone(factoryResolved.inputs);changedFactoryInputs.uncertainty.modelError.value=0;
+assert.equal(factoryScorer.scoreSoccerQuote({...acceptedInputs,...changedFactoryInputs}).formalScoringEnabled,false,'caller-supplied errors/manifests must match the exact current reviewed factory output');
+console.log('PASS reviewed server factory → exact contextual manifests → unchanged formal scorer → saved bundle replay → current publication; no per-game registry writes or Production approval from synthetic fixtures');
 
 // Omitted numerical mass is an EV interval, never a stress scenario or an R.
 const truncated = { ...input, distribution: input.grid(.52, .02), scenarios: null };
@@ -367,3 +402,75 @@ for (const tinyWeight of [1e-100, Number.MIN_VALUE]) {
   assert.equal(result.conditionalWeightedReturn, null); assert.equal(result.fixedScoreDiagnostic, null);
 }
 console.log('PASS 10% quantile boundary retains positive weights at 1e-100 and Number.MIN_VALUE; no inward bound from decimal precision loss');
+
+// Point-identified returns must use the same CDF boundary as interval returns.
+// The near-boundary case is less than 1e-12 below 10%, so adding that tolerance
+// would incorrectly select the losing scenario and alter the unchanged S input.
+for (const [weights, selected] of [
+  [[.1, .9], 0],
+  [[.0999999999995, .9000000000005], 1],
+  [[.1, .9, 1e-100], 1],
+  [[.1, .9, Number.MIN_VALUE], 1],
+]) {
+  const scenarios = weights.map((weight, index) => ({ ...input.scenarios[0], id: `point-boundary-${index}`, weight,
+    distribution: input.grid(.50 + .05 * index) }));
+  for (const ordered of [scenarios, [...scenarios].reverse(), [...scenarios.slice(1), scenarios[0]]]) {
+    const scored = scoreSoccerQuote(reseal({ ...input, scenarios: ordered })), result = scored.scenarioReturns;
+    assert.equal(result.ok, true);
+    const expectedQ10 = result.scenarioRows.find(row => row.id === `point-boundary-${selected}`).expectedNet;
+    assert.equal(result.q10, expectedQ10, `wrong point quantile for ${JSON.stringify(weights)}`);
+    const expectedRobust = Math.min(result.conditionalWeightedReturn, expectedQ10,
+      result.conditionalWeightedReturn - input.uncertainty.modelError.value);
+    assert.equal(result.conditionalRobustReturn, expectedRobust);
+    assert.deepEqual(result.fixedScoreDiagnostic, deterministicScore({ weightedEV: result.conditionalWeightedReturn,
+      robustEV: expectedRobust, actualWater: true, qaPassed: true, executable: false }));
+    assert.equal(scored.score, null); assert.equal(scored.W, null); assert.equal(scored.R, null);
+    assert.equal(scored.formalScoringEnabled, false); assert.equal(scored.calculationEligible, false);
+  }
+}
+
+// A separate integer-ratio oracle checks all endpoint completions with crossing
+// orders. No Decimal arithmetic or floating CDF accumulation is reused here.
+for (const [tinyWeight, exponent, tinyUnits] of [[1e-100, 100, 1n], [Number.MIN_VALUE, 324, 5n]]) {
+  const unit = 10n ** BigInt(exponent), units = [unit / 10n, 9n * unit / 10n, tinyUnits];
+  const total = units.reduce((sum, weight) => sum + weight, 0n), weights = [.1, .9, tinyWeight];
+  const over = [.52, .55, .80], omitted = [.20, .05, .01];
+  const scenarios = weights.map((weight, index) => ({ ...input.scenarios[0], id: `crossing-boundary-${index}`, weight,
+    distribution: input.grid(over[index], omitted[index]) }));
+  const result = scoreSoccerQuote(reseal({ ...input, scenarios })).scenarioReturns;
+  assert.equal(result.boundsComputed, true);
+  assert.ok(result.scenarioRows[0].evBounds.lower < result.scenarioRows[1].evBounds.lower);
+  assert.ok(result.scenarioRows[0].evBounds.upper > result.scenarioRows[1].evBounds.upper);
+  const integerQ10 = values => {
+    let cumulative = 0n;
+    for (const index of [0, 1, 2].sort((a, b) => values[a] - values[b])) {
+      cumulative += units[index];
+      if (10n * cumulative >= total) return values[index];
+    }
+    assert.fail('positive integer weights must reach their own quantile');
+  };
+  for (const endpoint of ['lower', 'upper'])
+    assert.equal(result.conditionalReturnBounds.q10[endpoint],
+      integerQ10(result.scenarioRows.map(row => row.evBounds[endpoint])));
+  for (let mask = 0; mask < 8; mask++) {
+    const completion = scenarios.map((scenario, index) => ({ ...scenario,
+      distribution: input.grid(over[index] + (mask & (1 << index) ? omitted[index] : 0)) }));
+    const exact = scoreSoccerQuote(reseal({ ...input, scenarios: completion })).scenarioReturns;
+    assert.equal(exact.ok, true);
+    assert.equal(exact.q10, integerQ10(exact.scenarioRows.map(row => row.expectedNet)),
+      `point/bounded quantile conventions disagree for ${tinyWeight}, mask ${mask}`);
+    // Per-score payoff operation order can differ by binary64 roundoff; the
+    // chosen scenario must still lie in the independently propagated interval.
+    assert.ok(result.conditionalReturnBounds.q10.lower <= exact.q10 + 1e-12);
+    assert.ok(exact.q10 <= result.conditionalReturnBounds.q10.upper + 1e-12);
+  }
+  assert.equal(result.fixedScoreDiagnostic, null); assert.equal(result.conditionalRobustReturn, null);
+}
+
+const highReturn = scoreSoccerQuote(reseal({ ...input,
+  scenarios: input.scenarios.map(scenario => ({ ...scenario, distribution: input.grid(1) })) }));
+assert.equal(highReturn.fixedScoreDiagnostic.score, 8.9);
+assert.ok(highReturn.fixedScoreDiagnostic.caps.includes('GENERAL_SINGLE_BET_MAX_8_9'));
+assert.equal(highReturn.scoreFormulaVersion, SCORE_FORMULA_VERSION);
+assert.equal(highReturn.score, null); assert.equal(highReturn.formalScoringEnabled, false);
+console.log('PASS point and interval q10 share the exact >=10% CDF boundary, including near-threshold/subnormal weights, input permutations and crossing completions; fixed S/caps and formal gates unchanged');

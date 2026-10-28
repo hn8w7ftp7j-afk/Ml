@@ -104,3 +104,49 @@ const forgedReturns=harness();forgedReturns.render();forgedReturns.calls[0].resp
  marketReturnValidation:{...returnsReport.marketReturnValidation,R:.01}}});await forgedReturns.settle();
 assert.match(forgedReturns.markup,/聯盟或範圍不符/);assert.doesNotMatch(forgedReturns.markup,/保存原盤 12 筆/);forgedReturns.unmount();
 console.log('PASS shipped forward-validation JSX and hooks: actual FT/HT/personnel groups, proper-score zero vs missing denominators, actual classwise audit, prospective limits, pending/excluded reasons, truncation date filters, exact scoped GET/POST, duplicate/race fencing, late league/range replies, abort/unmount and retry');
+
+const scanToken='a'.repeat(64);
+const scanned=(purpose='read',complete=false,n=1)=>({...report('epl',[{...group,capturedGames:n,evaluatedGames:n}]),complete,truncated:!complete,
+ scan:{version:'SOCCER-FORWARD-SCAN-v1',purpose,scope:{league:'epl',from:'2026-10-20',through:'2026-10-21'},cursor:scanToken,nextCursor:complete?null:scanToken,
+ complete,processedGames:complete?2:1,totalGames:2,frozenAt:'2026-10-21T00:00:00Z'}});
+const continuation=harness();continuation.render();continuation.calls[0].respond({ok:true,report:scanned()});await continuation.settle();
+assert.match(continuation.markup,/已處理 1／2 場/);assert.match(continuation.markup,/尚有後續批次/);
+assert.match(continuation.markup,/各批次不重複加總/);assert.match(continuation.markup,/累計數字不能當成完整驗收/);
+const next=continuation.button('繼續處理下一批').props.onClick;next();next();
+assert.equal(continuation.calls.length,2,'continuation deduplicates concurrent clicks');
+const nextQuery=new URLSearchParams(continuation.calls[1].url.split('?')[1]);
+assert.equal(nextQuery.get('cursor'),scanToken);assert.equal(nextQuery.get('from'),'2026-10-20','default scope is pinned across a date rollover');
+assert.equal(nextQuery.get('through'),'2026-10-21');
+continuation.calls[1].respond({ok:false,error:'controlled continuation failure'},503);await continuation.settle();
+assert.match(continuation.markup,/上次成功讀取的資料/);assert.match(continuation.markup,/已處理 1／2 場/);
+continuation.button('繼續處理下一批').props.onClick();continuation.calls[2].respond({ok:true,report:scanned('read',true,3)});await continuation.settle();
+assert.equal(continuation.button('繼續處理下一批'),undefined);assert.match(continuation.markup,/本次範圍已掃描完成/);
+assert.match(continuation.markup,/有效封存 3 筆/);assert.doesNotMatch(continuation.markup,/有效封存 4 筆/,'cumulative pages replace rather than add counts');continuation.unmount();
+const evalPages=harness();evalPages.render();evalPages.calls[0].respond({ok:true,report:report()});await evalPages.settle();
+evalPages.button('核對已封存賽果').props.onClick();evalPages.calls[1].respond({ok:true,report:scanned('evaluate'),summary:{checkedGameModelPeriods:1,evaluated:1,pending:0,deferred:0}});await evalPages.settle();
+evalPages.button('繼續處理下一批').props.onClick();
+assert.equal(evalPages.calls[2].options.method,'POST');
+assert.deepEqual(JSON.parse(evalPages.calls[2].options.body),{action:'evaluate',league:'epl',from:'2026-10-20',through:'2026-10-21',cursor:scanToken,limit:25});
+evalPages.calls[2].respond({ok:true,report:scanned('read',true)});await evalPages.settle();
+assert.match(evalPages.markup,/接續工作已改變/,'read tokens cannot replace an evaluation continuation');evalPages.unmount();
+for(const patch of [{scope:{league:'ucl',from:'2026-10-20',through:'2026-10-21'}},{nextCursor:'<invalid>'},{processedGames:3},{complete:true}]){
+ const malformedScan=harness();malformedScan.render();const r=scanned();malformedScan.calls[0].respond({ok:true,report:{...r,scan:{...r.scan,...patch}}});await malformedScan.settle();
+ assert.match(malformedScan.markup,/接續資料的範圍或處理狀態不符/);assert.equal(malformedScan.button('繼續處理下一批'),undefined);malformedScan.unmount();
+}
+assert.match(renderReport(returnsReport),/已確認的 1% 實際輸贏本金退水不必重報/);
+console.log('PASS actual continuation UI: scope/date rollover pinning, GET/POST purpose, cumulative replacement, retries, duplicate fencing and malformed cursor/scope rejection');
+
+for(const patch of [{frozenAt:'2026-10-22T00:00:00Z'},{totalGames:3},{processedGames:0},{cursor:'b'.repeat(64)}]){
+ const changedJob=harness();changedJob.render();changedJob.calls[0].respond({ok:true,report:scanned()});await changedJob.settle();
+ changedJob.button('繼續處理下一批').props.onClick();const r=scanned();changedJob.calls[1].respond({ok:true,report:{...r,scan:{...r.scan,...patch}}});await changedJob.settle();
+ assert.match(changedJob.markup,/接續工作已改變/);assert.match(changedJob.markup,/已處理 1／2 場/);changedJob.unmount();
+}
+const falseCompletion=renderReport({...scanned('read',true),complete:false,truncated:true});
+assert.match(falseCompletion,/批次已結束，但本次資料仍不完整/);assert.doesNotMatch(falseCompletion,/本次範圍已掃描完成/);
+
+const replacedJob=harness();replacedJob.render();replacedJob.calls[0].respond({ok:true,report:scanned()});await replacedJob.settle();
+const obsoleteNext=replacedJob.button('繼續處理下一批').props.onClick;
+replacedJob.button('重新讀取').props.onClick();const freshJob=scanned();freshJob.scan.cursor='b'.repeat(64);freshJob.scan.nextCursor=freshJob.scan.cursor;
+replacedJob.calls[1].respond({ok:true,report:freshJob});await replacedJob.settle();
+obsoleteNext();await replacedJob.settle();assert.equal(replacedJob.calls.length,2,'obsolete same-scope continuation cannot restore an older scan after refresh');
+replacedJob.button('繼續處理下一批').props.onClick();assert.equal(replacedJob.calls.length,3);assert.match(replacedJob.calls[2].url,/cursor=bbbb/);replacedJob.unmount();

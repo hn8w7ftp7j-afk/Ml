@@ -1,7 +1,11 @@
 // Synthetic source contracts, never treated as historical soccer model evidence.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { SOCCER_CAPABILITIES, SOCCER_LEAGUES, publicSoccerLeagues, soccerDate, validSoccerDate, soccerCacheKey } from '../lib/soccer/contracts.js';
 import { fetchSoccerJson, fetchSoccerSchedule, fetchSoccerStandings, normalizeSoccerEvent, normalizeSoccerSchedule, normalizeSoccerStandings } from '../lib/soccer/data.js';
+import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
+import { soccerObservationSource } from '../lib/soccer/source-evidence.js';
 const source = { provider: 'ESPN', fetchedAt: '2026-10-18T00:00:00.000Z', url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard' };
 const competition = league => ({ id: SOCCER_LEAGUES[league].espnId, slug: SOCCER_LEAGUES[league].espnSlug });
 const event = (overrides = {}) => ({ id: '401000001', date: '2026-10-17T16:00Z', status: { type: { state: 'pre', completed: false, name: 'STATUS_SCHEDULED', shortDetail: '10/18 - 12:00 AM' } }, competitions: [{ competitors: [{ homeAway: 'home', team: { id: '1', displayName: 'Home fixture' }, score: '0' }, { homeAway: 'away', team: { id: '2', displayName: 'Away fixture' }, score: '0' }], venue: { fullName: 'Fixture venue' } }], ...overrides });
@@ -144,6 +148,110 @@ await test('standings preserve missing values and reject another league or dupli
   const fetched = await fetchSoccerStandings('epl', { fetchImpl: async () => json(fixture) }); assert.equal(fetched.ok, true);
   fixture.children[0].standings.entries.push(fixture.children[0].standings.entries[0]);
   assert.equal(normalizeSoccerStandings(fixture, 'epl', source).ok, false);
+});
+
+// Retained provider schemas exercise the real producer. Added publication and
+// medical records below are synthetic adapter contracts, never live evidence.
+const summaryFixture=()=>JSON.parse(fs.readFileSync(new URL('./fixtures/soccer/lineup-announced.json',import.meta.url)));
+const sourceHash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const prematchNow=Date.parse('2026-10-18T14:50:00.000Z');
+const summarySource=payload=>({provider:'ESPN',url:`https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=${payload.header.id}`,
+  requestedAt:'2026-10-18T14:49:59.000Z',fetchedAt:new Date(prematchNow).toISOString(),contentHash:sourceHash(payload)});
+const summaryGame=(payload,meta=summarySource(payload))=>{
+  const c=payload.header.competitions[0];
+  return normalizeSoccerSchedule({leagues:[payload.header.league],events:[{...payload.header,date:c.date,status:c.status}]},'epl',meta).games[0];
+};
+await test('prematch producer distinguishes actual document fetch availability from unknown publication and independent confirmation',async()=>{
+  const payload=summaryFixture(),before=JSON.stringify(payload),meta=summarySource(payload),game=summaryGame(payload,meta);
+  const fetched=await fetchSoccerJson(meta.url,{fetchImpl:async()=>json(payload),now:()=>prematchNow,ttlMs:0});
+  const evidence=normalizeSoccerPrematch(fetched.data,game,fetched.source,prematchNow);
+  assert.equal(evidence.ok,true);assert.equal(evidence.observedAvailabilityVerified,true);
+  assert.equal(evidence.source.availableAt,fetched.source.fetchedAt);
+  assert.equal(evidence.source.availabilityBasis,'OBSERVED_FETCH_COMPLETION');
+  assert.equal(evidence.sourcePublishedAt,undefined);assert.equal(evidence.source.sourcePublishedAt,null);
+  assert.equal(evidence.sourceEvidence.contentHashVerified,true);assert.equal(evidence.sourceEvidence.sourceScopeVerified,true);
+  assert.equal(evidence.pointInTimeAvailabilityVerified,false);assert.equal(evidence.historicalAvailabilityVerified,false);
+  assert.equal(evidence.sourceEvidence.missingReason,'SOURCE_PUBLICATION_TIME_UNVERIFIED');
+  assert.deepEqual(evidence.rawSource,fetched.source);
+  for(const side of ['home','away']){
+    const lineup=evidence.teams[side].lineup;
+    assert.equal(lineup.starters.length,11);assert.equal(lineup.status,'PROVIDER_REPORTED_XI');
+    assert.equal(lineup.independentlyConfirmed,false);assert.equal(lineup.sourcePublishedAt,null);
+    assert.equal(lineup.source.availableAt,fetched.source.fetchedAt);assert.equal(lineup.source.scope.field,`teams.${side}.lineup`);
+    assert.equal(lineup.source.contentHash,evidence.source.contentHash);assert.deepEqual(lineup.rawSource,fetched.source);
+    assert.ok(lineup.starters.every(player=>player.sourcePublishedAt===null&&player.expectedMinutes===null));
+  }
+  assert.equal(JSON.stringify(payload),before,'normalization preserves original provider JSON/hash');
+});
+await test('publication and update timestamps remain field-local and never borrow kickoff, logos or article dates',()=>{
+  const payload=summaryFixture();payload.publishedAt='2026-10-18T14:40:00Z';payload.lastUpdated='2026-10-18T14:48:00Z';
+  payload.rosters[0].publishedAt='2026-10-18T14:45:00Z';payload.rosters[0].lastUpdated='2026-10-18T14:47:00Z';
+  const evidence=normalizeSoccerPrematch(payload,summaryGame(payload),summarySource(payload),prematchNow);
+  assert.equal(evidence.source.sourcePublishedAt,'2026-10-18T14:40:00.000Z');
+  assert.equal(evidence.source.sourceUpdatedAt,'2026-10-18T14:48:00.000Z');
+  assert.equal(evidence.pointInTimeAvailabilityVerified,true,'only the currently fetched document has source publication evidence');
+  assert.equal(evidence.pointInTimeAvailabilityScope,'CURRENT_FETCHED_DOCUMENT_ONLY_NOT_HISTORICAL_ARCHIVE');
+  assert.equal(evidence.historicalAvailabilityVerified,false);assert.equal(evidence.teams.home.lineup.independentlyConfirmed,false);
+  const publishedSide=payload.rosters[0].homeAway,other=publishedSide==='home'?'away':'home';
+  assert.equal(evidence.teams[publishedSide].lineup.sourcePublishedAt,'2026-10-18T14:45:00.000Z');
+  assert.equal(evidence.teams[other].lineup.sourcePublishedAt,null,'document publication does not become lineup publication');
+  assert.ok(evidence.teams[publishedSide].lineup.starters.every(player=>player.sourcePublishedAt===null));
+  const updatedOnly=summaryFixture();updatedOnly.lastUpdated='2026-10-18T14:48:00Z';
+  updatedOnly.news={articles:[{published:'2026-10-18T14:40:00Z'}]};
+  const noPublication=normalizeSoccerPrematch(updatedOnly,summaryGame(updatedOnly),summarySource(updatedOnly),prematchNow);
+  assert.equal(noPublication.source.sourceUpdatedAt,'2026-10-18T14:48:00.000Z');
+  assert.equal(noPublication.source.sourcePublishedAt,null);assert.equal(noPublication.pointInTimeAvailabilityVerified,false);
+});
+await test('source hash/scope/fetch and invalid/future/conflicting publication evidence fail closed',()=>{
+  const payload=summaryFixture();payload.publishedAt='2026-10-18T14:40:00Z';
+  const meta=summarySource(payload),game=summaryGame(payload,meta);
+  for(const patch of [{contentHash:'a'.repeat(64)},{url:meta.url.replace('eng.1','uefa.champions')},
+    {url:meta.url+'&event=999'},{fetchedAt:'2026-10-18T14:50:01Z'},{requestedAt:'2026-10-18T14:50:01Z'},
+    {availableAt:'2026-10-18T14:50:01Z'},{availableAt:'2026-10-18T14:49:59Z'}]){
+    const evidence=normalizeSoccerPrematch(payload,game,{...meta,...patch},prematchNow);
+    assert.equal(evidence.pointInTimeAvailabilityVerified,false);assert.equal(evidence.observedAvailabilityVerified,false);
+  }
+  for(const value of ['2026-10-18T14:50:01Z','2026-10-18T14:40:00','2026-02-30T14:40:00Z','bad']){
+    const body={...payload,publishedAt:value},evidence=normalizeSoccerPrematch(body,game,summarySource(body),prematchNow);
+    assert.equal(evidence.source.sourcePublishedAt,null);assert.equal(evidence.pointInTimeAvailabilityVerified,false);
+  }
+  const conflict={...payload,datePublished:'2026-10-18T14:41:00Z'};
+  assert.equal(normalizeSoccerPrematch(conflict,game,summarySource(conflict),prematchNow).source.publicationStatus,'CONFLICTING_TIMESTAMPS');
+  const supplied=soccerObservationSource({node:payload,payload,game,source:{...meta,sourcePublishedAt:'2026-10-18T14:40:00Z'},now:prematchNow});
+  assert.equal(supplied.source.sourcePublishedAt,'2026-10-18T14:40:00.000Z');
+  const conflictingAdapter=soccerObservationSource({node:payload,payload,game,source:{...meta,sourcePublishedAt:'2026-10-18T14:42:00Z'},now:prematchNow});
+  assert.equal(conflictingAdapter.source.sourcePublishedAt,null);
+  const laterAvailable=soccerObservationSource({node:payload,payload,game,source:{...meta,availableAt:'2026-10-18T14:50:00.500Z'},now:prematchNow+1000});
+  assert.equal(laterAvailable.source.availableAt,'2026-10-18T14:50:00.500Z','a real later availability time is never moved back to fetch time');
+  const final=JSON.parse(fs.readFileSync(new URL('./fixtures/soccer/historic-summary.json',import.meta.url)));
+  final.publishedAt='2026-10-18T14:40:00Z';
+  assert.equal(normalizeSoccerPrematch(final,summaryGame(final),summarySource(final),prematchNow).pointInTimeAvailabilityVerified,false,'a poststart document is never historical prematch PIT');
+});
+await test('available injury/suspension records preserve scoped provider metadata without claiming complete eligibility or minutes',()=>{
+  const payload=summaryFixture(),home=payload.rosters.find(row=>row.homeAway==='home'),away=payload.rosters.find(row=>row.homeAway==='away');
+  const injury={athlete:{id:'9999001',displayName:'Synthetic injured player'},status:'Out',date:'2026-10-15T00:00:00Z',details:{type:'Knee',returnDate:'2026-11-01'}};
+  payload.injuries=[{team:{id:home.team.id},publishedAt:'2026-10-18T14:42:00Z',injuries:[injury]}];
+  payload.suspensions=[{team:{id:home.team.id},suspensions:[]}];
+  away.suspensions=[{athlete:{id:'9999002',displayName:'Synthetic suspended player'},status:'Suspended',updatedAt:'2026-10-18T14:43:00Z'}];
+  const normalize=body=>normalizeSoccerPrematch(body,summaryGame(body),summarySource(body),prematchNow);
+  const evidence=normalize(payload),observed=evidence.teams.home.injuries;
+  assert.equal(observed.status,'PROVIDER_REPORTED');assert.equal(observed.value.length,1);
+  assert.equal(observed.sourcePublishedAt,'2026-10-18T14:42:00.000Z');
+  assert.equal(observed.value[0].reportedDate,injury.date);assert.equal(observed.value[0].sourcePublishedAt,null,'injury record date is not publication');
+  assert.equal(observed.value[0].source.scope.field,'teams.home.injuries.9999001');
+  assert.equal(observed.coverage,'PROVIDER_LIST_ONLY_NOT_COMPLETE_ELIGIBILITY');assert.equal(observed.independentlyConfirmed,false);
+  assert.equal(evidence.teams.away.injuries.status,'UNKNOWN','one team cannot establish another team coverage');
+  assert.deepEqual(evidence.teams.home.suspensions.value,[]);assert.equal(evidence.teams.home.suspensions.status,'PROVIDER_REPORTED');
+  assert.equal(evidence.teams.away.suspensions.value[0].source.sourceUpdatedAt,'2026-10-18T14:43:00.000Z');
+  assert.equal(evidence.teams.away.suspensions.value[0].sourcePublishedAt,null);
+  assert.equal(evidence.teams.home.minutes.status,'UNKNOWN');assert.equal(evidence.teams.home.injuries.modelEffectApplied,false);
+  for(const change of [body=>body.injuries[0].injuries.push(structuredClone(injury)),
+    body=>{body.injuries[0].injuries[0].team={id:away.team.id};},body=>{body.injuries[0].injuries={};}]){
+    const body=structuredClone(payload);change(body);assert.equal(normalize(body).teams.home.injuries.status,'UNKNOWN');
+  }
+  const cross=structuredClone(payload);cross.injuries.push({team:{id:away.team.id},injuries:[structuredClone(injury)]});
+  assert.equal(normalize(cross).teams.home.injuries.reason,'INJURY_CROSS_TEAM_PLAYER_CONFLICT');
+  assert.equal(normalize(cross).teams.away.injuries.status,'UNKNOWN');
 });
 console.log(`Soccer data contracts: ${checks} checks passed. Live provider and historical model validation are separate.`);
 

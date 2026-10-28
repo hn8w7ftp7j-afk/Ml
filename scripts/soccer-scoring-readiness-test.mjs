@@ -7,6 +7,8 @@ import { transform } from 'next/dist/build/swc/index.js';
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
 import { buildSoccerAnalysis, soccerAnalysisHash } from '../lib/soccer/analysis.js';
+import { soccerScenarioArtifacts } from '../lib/soccer/scenario-frozen.js';
+import { soccerDate } from '../lib/soccer/contracts.js';
 import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../lib/soccer/scoring-readiness.js';
 
@@ -42,7 +44,16 @@ for(const league of ['epl','ucl']){
   assert.match(markup,/重新分析會更新比分研究、資料核對與符合條件原盤的收益試算/);
   assert.match(markup,/八方向原盤 2 筆；已有 S 分數 0 筆/);
   assert.match(markup,/尚缺足球情境及模型誤差依據/);
-  assert.match(markup,/足球派彩及退水適用條款未完整確認/);
+  assert.match(markup,/本帳戶派彩與異常賽事條款仍缺適用依據/);
+  assert.match(markup,/系統尚待完成的工作/);
+  assert.match(markup,/讀取不到時才需要規則頁/);
+  assert.match(markup,/已確認的 1% 實際輸贏本金退水不必重報/);
+  assert.match(markup,/目前符合排名 0 筆/);
+  assert.match(markup,/只登記你已自行完成的下注，不代表通過排名/);
+  assert.equal(result.scoreReadiness.qualifiedQuoteCount,0);
+  assert.equal(result.scoreReadiness.historicalScoreCount,0);
+  assert.equal(result.scoreReadiness.blockers.find(b=>b.code==='SETTLEMENT_CONTRACT').owner,'RULES_EVIDENCE');
+  assert.equal(result.scoreReadiness.blockers.find(b=>b.code==='FOOTBALL_UNCERTAINTY').owner,'SYSTEM');
   assert.doesNotMatch(markup,/undefined|NaN|Infinity|data-scoring-readiness="SCORES_AVAILABLE"/);
   assert.equal(JSON.stringify(result),before);
   const legacy=structuredClone(result);delete legacy.scoreReadiness;
@@ -51,9 +62,39 @@ for(const league of ['epl','ucl']){
   assert.ok(soccerScoringReadiness(result,now,changed).blockers.some(item=>item.code==='CONTEXT_CHANGED'));
   const blocked={...result,qaFlag:'BLOCKED'};
   assert.ok(soccerScoringReadiness(blocked,now).blockers.some(item=>item.code==='BLOCKED'));
+  // Real source-trained scenario generator → saved compact analysis → actual JSX,
+  // including an upcoming fixture without any Reader prices.
+  const scenarioNow=Date.parse(soccerScenarioArtifacts().createdAt)+1000;
+  const scenarioStart=new Date(scenarioNow+86400000).toISOString();
+  const upcoming={...game,startTime:scenarioStart,date:soccerDate(scenarioStart),status:'scheduled'};
+  const futureEvidence={...evidence,game:upcoming,phase:'PREMATCH_OBSERVATION',source:{...evidence.source,fetchedAt:new Date(scenarioNow).toISOString()}};
+  const research=buildSoccerAnalysis({evidence:futureEvidence,reader:null,now:scenarioNow});
+  assert.equal(research.scenarioResearch.status,'RESEARCH_ONLY');
+  const scenarioMarkup=renderToStaticMarkup(ctx.SoccerScenarioResearch({result:research,game:upcoming,now:scenarioNow}));
+  assert.match(scenarioMarkup,/本場參數變動研究/);
+  for(const period of ['FT','HT']){
+    const row=research.scenarioResearch.periods[period];
+    assert.ok(row.count>0);
+    assert.ok(scenarioMarkup.includes(`${period==='FT'?'全場':'上半場'}：已計算 ${row.count}／${row.attempted} 組`));
+    assert.ok(scenarioMarkup.includes(row.parameterRanges.homeRate.min.toFixed(3)));
+    assert.equal(Object.hasOwn(row,'scenarios'),false,'saved UI summary cannot duplicate score grids');
+  }
+  assert.equal(renderToStaticMarkup(ctx.SoccerScenarioResearch({result:research,game:{...upcoming,neutralSite:!upcoming.neutralSite},now:scenarioNow})), '');
+  assert.match(scenarioMarkup,/不是信賴區間/);assert.match(scenarioMarkup,/不代表正式收益誤差與 W／R／S 已驗證/);
+  assert.equal(research.formalScoringEnabled,false);assert.equal(research.directions.flatMap(d=>d.quotes).length,0);
+  const noQuotesMarkup=renderToStaticMarkup(ctx.SoccerMarketDirections({result:research,game:upcoming,now:scenarioNow}));
+  assert.match(noQuotesMarkup,/本場參數變動研究/,'actual research work remains visible before original prices arrive');
+  assert.match(renderToStaticMarkup(ctx.SoccerScenarioResearch({result:research,game:upcoming,now:scenarioNow+180001})),/已保存的參數變動研究/);
+  for(const patch of [{gameId:'soccer:epl:999'},{formalEnabled:true},{createdAt:scenarioStart},{artifactHash:'invalid'}])
+    assert.equal(renderToStaticMarkup(ctx.SoccerScenarioResearch({result:{...research,scenarioResearch:{...research.scenarioResearch,...patch}},game:upcoming,now:scenarioNow})), '');
+
 }
 assert.equal(soccerScoringReadiness(null).status,'NO_SCOPED_QUOTES');
 assert.equal(soccerScoringReadiness({directions:[null,{}]}).quoteCount,0);
 assert.equal(soccerQuoteScoringBlockers(null)[0].code,'SCORING_NOT_RUN');
 assert.equal(soccerScoringReadiness({unassignedQuotes:[{},{}]}).unassignedQuoteCount,2);
 console.log('PASS actual EPL/UCL model → original quote scoring → hashed readiness → shipped JSX; missing contracts/scenarios stay visible and no S is fabricated');
+
+const noBundle=soccerQuoteScoringBlockers({inputBundle:{code:'SOCCER_SCORING_BUNDLE_MISSING'},stages:[{stage:'READER_QUOTE',status:'PASS'}]});
+assert.equal(noBundle[0].owner,'SYSTEM');assert.match(noBundle[0].nextAction,/不需要使用者反覆更新 Reader/);
+assert.equal(soccerQuoteScoringBlockers({inputBundle:{code:'__proto__'},stages:[{}]}).some(b=>b.code==='__proto__'),false);
