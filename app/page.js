@@ -1069,7 +1069,7 @@ function SummaryCards({ summary, originalPriceSummary }) {
   ];
   return <div className="ledgerSummary">
     {values.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
-    <div className="originalPriceSummary"><span>原下注盤優劣</span><strong>{originalPriceSummary == null ? '計算中…' : originalPriceSummary.unavailable ? '暫時無法計算' : <>總數 {originalPriceSummary.total}｜<b className="positive">優 {originalPriceSummary.better}</b>｜<b className="negative">劣 {originalPriceSummary.worse}</b></>}</strong></div>
+    <div className="originalPriceSummary"><span>原下注盤優劣</span><strong>{originalPriceSummary == null ? '計算中…' : originalPriceSummary.unavailable ? '暫時無法計算' : !originalPriceSummary.eligible ? '無有效下注紀錄' : originalPriceSummary.unsupported === originalPriceSummary.eligible ? `NBA 尚未接入比較（${originalPriceSummary.unsupported} 筆）` : !originalPriceSummary.comparable ? `尚無可比較盤口（${originalPriceSummary.missingReference} 筆缺資料）` : <>已比較 {originalPriceSummary.comparable}｜<b className="positive">優 {originalPriceSummary.better}</b>｜<b className="negative">劣 {originalPriceSummary.worse}</b></>}</strong>{originalPriceSummary?.comparable > 0 && <small className="muted">相同 {originalPriceSummary.equivalent}｜混合 {originalPriceSummary.mixed}｜尚缺資料 {originalPriceSummary.missingReference}｜NBA 尚未比較 {originalPriceSummary.unsupported}</small>}</div>
   </div>;
 }
 

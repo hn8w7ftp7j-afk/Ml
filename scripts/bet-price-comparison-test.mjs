@@ -158,7 +158,7 @@ const originalPriceSummary = summarizeOriginalBetPrices([
     pick: '小8+50',
   },
 ], {}, { now: Date.parse('2026-08-20T10:00:00.000Z') });
-assert.deepEqual(originalPriceSummary, { total: 2, better: 1, worse: 1 });
+assert.deepEqual(originalPriceSummary, { total: 2, better: 1, worse: 1, eligible: 2, supported: 2, unsupported: 0, comparable: 2, equivalent: 0, mixed: 0, missingReference: 0, invalidComparison: 0 });
 
 console.log('Placed-versus-current Taiwan price comparison, exact suppression and key-hole delta PASS');
 await import('./bet-price-summary-performance-test.mjs');
