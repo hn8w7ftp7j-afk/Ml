@@ -199,7 +199,8 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       setReaderStatus(board.readerStatus);
       setRows(current => board.rows.map(row => {
         const previous = current.find(old => old.game.id === row.game.id);
-        return previous ? { ...row, result: previous.result, resultRunId: previous.resultRunId, jobState: previous.jobState, jobError: previous.jobError } : row;
+        const newerSaved = row.result && (!previous?.result || Date.parse(row.result.generatedAt) > Date.parse(previous.result.generatedAt));
+        return previous && !newerSaved ? { ...row, result: previous.result, resultRunId: previous.resultRunId, jobState: previous.jobState, jobError: previous.jobError } : row;
       }));
       return board;
     } catch (cause) { if (revision === requestRevision.current && target === dateRef.current) setError(cause.message); return null; }
