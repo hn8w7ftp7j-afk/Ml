@@ -77,7 +77,9 @@ try {
   Date.now = () => now;
   const calls = [];
   globalThis.fetch = async input => {
-    const url = new URL(String(input)); calls.push(url.href);
+    const url = new URL(String(input));
+    if (['https://theanalyst.com/competition/premier-league/table?view=expected','https://theanalyst.com/competition/uefa-champions-league/table'].includes(url.href)) return new Response('', { status: 503 });
+    calls.push(url.href);
     assert.equal(url.origin, 'https://site.api.espn.com');
     assert.match(url.pathname, /^\/apis\/site\/v2\/sports\/soccer\//);
     if (url.pathname.includes('/all/teams/')) return Response.json({}, { status: 503 });

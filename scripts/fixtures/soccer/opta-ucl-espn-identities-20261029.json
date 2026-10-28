@@ -1,0 +1,320 @@
+{
+  "representation": "EXTRACTED_REVIEWED_TEAM_IDENTITY_MAP",
+  "league": "uefa.champions",
+  "season": "2026/2027",
+  "espnSource": {
+    "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/teams?limit=100",
+    "requestedAt": "2026-10-28T22:33:40.712Z",
+    "fetchedAt": "2026-10-28T22:33:45.850Z",
+    "status": 200,
+    "responseUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/teams?limit=100",
+    "sha256": "cf43f52e9dad2a95e7378cfd3305e50c7d3fd5c8bd42cc422d02bd0ea6d0c941"
+  },
+  "optaOriginalSourceSha256": "2203559eee8a3becb02acb45fcffd49a9a69ba0bf64501512dd1316037bf7a92",
+  "explicitLabelCorrespondences": {
+    "Bayern München": "Bayern Munich",
+    "Stuttgart": "VfB Stuttgart",
+    "Roma": "AS Roma",
+    "Bodø / Glimt": "Bodo/Glimt",
+    "Fenerbahçe": "Fenerbahce",
+    "PSV": "PSV Eindhoven",
+    "Atlético de Madrid": "Atlético Madrid",
+    "Porto": "FC Porto",
+    "LASK": "LASK Linz",
+    "Feyenoord": "Feyenoord Rotterdam",
+    "Sabah": "Sabah FK",
+    "Viking": "Viking FK",
+    "Slavia Praha": "Slavia Prague"
+  },
+  "note": "Reviewed one-to-one cross-provider IDs for the actual 36-team table. Runtime lookup is by both exact IDs, with explicit labels/codes checked, never fuzzy/name-only resolution.",
+  "mappings": [
+    {
+      "espnId": "132",
+      "espnName": "Bayern Munich",
+      "espnUid": "s:600~t:132",
+      "optaId": "apoawtpvac4zqlancmvw4nk4o",
+      "optaName": "Bayern München",
+      "optaCode": "FCB"
+    },
+    {
+      "espnId": "362",
+      "espnName": "Aston Villa",
+      "espnUid": "s:600~t:362",
+      "optaId": "b496gs285it6bheuikox6z9mj",
+      "optaName": "Aston Villa",
+      "optaCode": "AVL"
+    },
+    {
+      "espnId": "382",
+      "espnName": "Manchester City",
+      "espnUid": "s:600~t:382",
+      "optaId": "a3nyxabgsqlnqfkeg41m6tnpp",
+      "optaName": "Manchester City",
+      "optaCode": "MCI"
+    },
+    {
+      "espnId": "134",
+      "espnName": "VfB Stuttgart",
+      "espnUid": "s:600~t:134",
+      "optaId": "3dwlvz6cl4lcavvrg0y2dycrt",
+      "optaName": "Stuttgart",
+      "optaCode": "VFB"
+    },
+    {
+      "espnId": "2572",
+      "espnName": "Como",
+      "espnUid": "s:600~t:2572",
+      "optaId": "6uzfw7ahyxg4wrrfxo5u7qt0n",
+      "optaName": "Como",
+      "optaCode": "COM"
+    },
+    {
+      "espnId": "244",
+      "espnName": "Real Betis",
+      "espnUid": "s:600~t:244",
+      "optaId": "ah8dala7suqqkj04n2l8xz4zd",
+      "optaName": "Real Betis",
+      "optaCode": "BET"
+    },
+    {
+      "espnId": "86",
+      "espnName": "Real Madrid",
+      "espnUid": "s:600~t:86",
+      "optaId": "3kq9cckrnlogidldtdie2fkbl",
+      "optaName": "Real Madrid",
+      "optaCode": "RMA"
+    },
+    {
+      "espnId": "359",
+      "espnName": "Arsenal",
+      "espnUid": "s:600~t:359",
+      "optaId": "4dsgumo7d4zupm2ugsvm4zm4d",
+      "optaName": "Arsenal",
+      "optaCode": "ARS"
+    },
+    {
+      "espnId": "124",
+      "espnName": "Borussia Dortmund",
+      "espnUid": "s:600~t:124",
+      "optaId": "dt4pinj0vw0t0cvz7za6mhmzy",
+      "optaName": "Borussia Dortmund",
+      "optaCode": "BVB"
+    },
+    {
+      "espnId": "83",
+      "espnName": "Barcelona",
+      "espnUid": "s:600~t:83",
+      "optaId": "agh9ifb2mw3ivjusgedj7c3fe",
+      "optaName": "Barcelona",
+      "optaCode": "BAR"
+    },
+    {
+      "espnId": "2250",
+      "espnName": "Sporting CP",
+      "espnUid": "s:600~t:2250",
+      "optaId": "7catg5lpivcmpf4xhggh6d8rk",
+      "optaName": "Sporting CP",
+      "optaCode": "SCP"
+    },
+    {
+      "espnId": "160",
+      "espnName": "Paris Saint-Germain",
+      "espnUid": "s:600~t:160",
+      "optaId": "2b3mar72yy8d6uvat1ka6tn3r",
+      "optaName": "Paris Saint-Germain",
+      "optaCode": "PSG"
+    },
+    {
+      "espnId": "364",
+      "espnName": "Liverpool",
+      "espnUid": "s:600~t:364",
+      "optaId": "c8h9bw1l82s06h77xxrelzhur",
+      "optaName": "Liverpool",
+      "optaCode": "LIV"
+    },
+    {
+      "espnId": "494",
+      "espnName": "Slavia Prague",
+      "espnUid": "s:600~t:494",
+      "optaId": "8kpapuorr6hf0vosnovbreqqd",
+      "optaName": "Slavia Praha",
+      "optaCode": "SLA"
+    },
+    {
+      "espnId": "104",
+      "espnName": "AS Roma",
+      "espnUid": "s:600~t:104",
+      "optaId": "2tk2l9sgktwc9jhzqdd4mpdtb",
+      "optaName": "Roma",
+      "optaCode": "ROM"
+    },
+    {
+      "espnId": "360",
+      "espnName": "Manchester United",
+      "espnUid": "s:600~t:360",
+      "optaId": "6eqit8ye8aomdsrrq0hk3v7gh",
+      "optaName": "Manchester United",
+      "optaCode": "MUN"
+    },
+    {
+      "espnId": "2980",
+      "espnName": "Bodo/Glimt",
+      "espnUid": "s:600~t:2980",
+      "optaId": "ctvzi2jbl1q6xzq0s3sexj73g",
+      "optaName": "Bodø / Glimt",
+      "optaCode": "BOD"
+    },
+    {
+      "espnId": "436",
+      "espnName": "Fenerbahce",
+      "espnUid": "s:600~t:436",
+      "optaId": "8lroq0cbhdxj8124qtxwrhvmm",
+      "optaName": "Fenerbahçe",
+      "optaCode": "FB"
+    },
+    {
+      "espnId": "570",
+      "espnName": "Club Brugge",
+      "espnUid": "s:600~t:570",
+      "optaId": "1oyb7oym5nwzny8vxf03szd2h",
+      "optaName": "Club Brugge",
+      "optaCode": "CLU"
+    },
+    {
+      "espnId": "148",
+      "espnName": "PSV Eindhoven",
+      "espnUid": "s:600~t:148",
+      "optaId": "24fvcruwqrqvqa3aonf8c3zuy",
+      "optaName": "PSV",
+      "optaCode": "PSV"
+    },
+    {
+      "espnId": "887",
+      "espnName": "AEK Athens",
+      "espnUid": "s:600~t:887",
+      "optaId": "7ruua9q5rtswwi5d6xtquuto5",
+      "optaName": "AEK Athens",
+      "optaCode": "AEK"
+    },
+    {
+      "espnId": "110",
+      "espnName": "Internazionale",
+      "espnUid": "s:600~t:110",
+      "optaId": "3vo5mpj7catp66nrwwqiuhuup",
+      "optaName": "Internazionale",
+      "optaCode": "INT"
+    },
+    {
+      "espnId": "493",
+      "espnName": "Shakhtar Donetsk",
+      "espnUid": "s:600~t:493",
+      "optaId": "cf8plcmeniaen0fc5emyb5j93",
+      "optaName": "Shakhtar Donetsk",
+      "optaCode": "SHK"
+    },
+    {
+      "espnId": "1068",
+      "espnName": "Atlético Madrid",
+      "espnUid": "s:600~t:1068",
+      "optaId": "4ku8o6uf87yd8iecdalipo6wd",
+      "optaName": "Atlético de Madrid",
+      "optaCode": "ATM"
+    },
+    {
+      "espnId": "175",
+      "espnName": "Lens",
+      "espnUid": "s:600~t:175",
+      "optaId": "3xedluek08t2ka7oypwuullcn",
+      "optaName": "Lens",
+      "optaCode": "RCL"
+    },
+    {
+      "espnId": "166",
+      "espnName": "Lille",
+      "espnUid": "s:600~t:166",
+      "optaId": "be2k34rut1lz79jxenabttqlc",
+      "optaName": "Lille",
+      "optaCode": "LIL"
+    },
+    {
+      "espnId": "114",
+      "espnName": "Napoli",
+      "espnUid": "s:600~t:114",
+      "optaId": "gi0l1habji5hpgar77dl5jqe",
+      "optaName": "Napoli",
+      "optaCode": "NAP"
+    },
+    {
+      "espnId": "11420",
+      "espnName": "RB Leipzig",
+      "espnUid": "s:600~t:11420",
+      "optaId": "9gefq4dz9b2hl8rqrxwrlrzmp",
+      "optaName": "RB Leipzig",
+      "optaCode": "RBL"
+    },
+    {
+      "espnId": "102",
+      "espnName": "Villarreal",
+      "espnUid": "s:600~t:102",
+      "optaId": "74mcjsm72vr3l9pw2i4qfjchj",
+      "optaName": "Villarreal",
+      "optaCode": "VIL"
+    },
+    {
+      "espnId": "437",
+      "espnName": "FC Porto",
+      "espnUid": "s:600~t:437",
+      "optaId": "66bsnl0zjb7l5akwo00h0y5me",
+      "optaName": "Porto",
+      "optaCode": "POR"
+    },
+    {
+      "espnId": "432",
+      "espnName": "Galatasaray",
+      "espnUid": "s:600~t:432",
+      "optaId": "esa748l653sss1wurz5ps3228",
+      "optaName": "Galatasaray",
+      "optaCode": "GS"
+    },
+    {
+      "espnId": "4411",
+      "espnName": "LASK Linz",
+      "espnUid": "s:600~t:4411",
+      "optaId": "boxkkgnpn38ywao4kzu7dx58h",
+      "optaName": "LASK",
+      "optaCode": "ASK"
+    },
+    {
+      "espnId": "142",
+      "espnName": "Feyenoord Rotterdam",
+      "espnUid": "s:600~t:142",
+      "optaId": "20vymiy7bo8wkyxai3ew494fz",
+      "optaName": "Feyenoord",
+      "optaCode": "FEY"
+    },
+    {
+      "espnId": "21922",
+      "espnName": "Sabah FK",
+      "espnUid": "s:600~t:21922",
+      "optaId": "evvhmz4bq4dq1v9llaev1j97u",
+      "optaName": "Sabah",
+      "optaCode": "SAB"
+    },
+    {
+      "espnId": "510",
+      "espnName": "Viking FK",
+      "espnUid": "s:600~t:510",
+      "optaId": "bsykw9d70ffqe9atosc92n1e9",
+      "optaName": "Viking",
+      "optaCode": "VIK"
+    },
+    {
+      "espnId": "521",
+      "espnName": "Slovan Bratislava",
+      "espnUid": "s:600~t:521",
+      "optaId": "cmj1019uptq8i042n5y16itbd",
+      "optaName": "Slovan Bratislava",
+      "optaCode": "SLO"
+    }
+  ]
+}

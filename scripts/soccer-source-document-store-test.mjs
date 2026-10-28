@@ -101,6 +101,7 @@ try {
     beginSoccerAnalysisRun: async () => ({ runId: 'source-archive-fixture', requestSeq: '1', quoteGeneration: '0', startedAt: iso(now) }),
     fetchSoccerSchedule: async () => ({ ok: true, games: [value.evidence.game] }), recordSoccerCohort: async () => {},
     fetchSoccerPrematch: async () => value.evidence,
+    fetchSoccerTeamXg: async () => ({ ok: false, reason: 'TEAM_XG_NOT_PART_OF_FIXTURE' }),
     fetchSoccerWorkload: async () => ({ ok: false, status: 'INCOMPLETE', teams: {}, sources: [] }),
     loadSoccerReaderSnapshot: async () => null, listSoccerAnalysis: async () => [],
     buildSoccerAnalysis: ({ evidence }) => { builtReceipt = evidence.sourceDocumentArchive; return { evidence, status: 'RESEARCH_ONLY', analysisStatus: 'COMPLETED', qaFlag: 'WARN', selectionResult: 'RESEARCH_SHADOW', formalScoringEnabled: false, executable: false }; },

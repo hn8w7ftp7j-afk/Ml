@@ -63,6 +63,7 @@ try{
       beginSoccerAnalysisRun:async()=>({runId:'diagnostic-fixture-run',requestSeq:'1',quoteGeneration:'1',startedAt:at}),
       fetchSoccerSchedule:async()=>({ok:true,games:[game]}),recordSoccerCohort:async()=>{},
       fetchSoccerPrematch:async()=>structuredClone(evidence),fetchSoccerWorkload:async()=>({ok:false,teams:{},sources:[]}),
+      fetchSoccerTeamXg:async()=>({ok:false,reason:'TEAM_XG_NOT_PART_OF_FIXTURE'}),
       loadSoccerReaderSnapshot:async()=>{if(throws)throw Error('postgres://private-password@private-host/?token=do-not-expose');return structuredClone(value);},
       listSoccerAnalysis:async()=>[],saveSoccerAnalysis:async snapshot=>{persisted=structuredClone(snapshot);const {analysisHash,...body}=snapshot;
         assert.equal(analysisHash,soccerAnalysisHash(body));return{persisted:true,revision:analysisHash};},

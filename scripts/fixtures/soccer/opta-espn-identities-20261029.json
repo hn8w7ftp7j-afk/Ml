@@ -1,0 +1,172 @@
+{
+  "representation": "EXTRACTED_REVIEWED_TEAM_IDENTITY_MAP",
+  "league": "eng.1",
+  "season": "2026/2027",
+  "espnSourceUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams?limit=100",
+  "espnSourceSha256": "0746d7ba071771de6796ea769b18d090366e5fbffda7418acb6613533aaa4cf6",
+  "espnBodySavedAt": "2026-10-28T22:24:47.119Z",
+  "optaOriginalSourceSha256": "633702d88f455bd9ffe0cd254052641f5a29dcd97d57aa26cc59b8547b778a9c",
+  "note": "Explicit reviewed one-to-one IDs. Bournemouth→AFC Bournemouth is the sole recorded cross-provider label spelling difference. Runtime lookup uses exact ESPN and Opta IDs plus these exact labels, never fuzzy name matching.",
+  "mappings": [
+    {
+      "espnId": "359",
+      "espnName": "Arsenal",
+      "espnUid": "s:600~t:359",
+      "optaId": "4dsgumo7d4zupm2ugsvm4zm4d",
+      "optaName": "Arsenal",
+      "optaCode": "ARS"
+    },
+    {
+      "espnId": "382",
+      "espnName": "Manchester City",
+      "espnUid": "s:600~t:382",
+      "optaId": "a3nyxabgsqlnqfkeg41m6tnpp",
+      "optaName": "Manchester City",
+      "optaCode": "MCI"
+    },
+    {
+      "espnId": "393",
+      "espnName": "Nottingham Forest",
+      "espnUid": "s:600~t:393",
+      "optaId": "1qtaiy11gswx327s0vkibf70n",
+      "optaName": "Nottingham Forest",
+      "optaCode": "NFO"
+    },
+    {
+      "espnId": "331",
+      "espnName": "Brighton & Hove Albion",
+      "espnUid": "s:600~t:331",
+      "optaId": "e5p0ehyguld7egzhiedpdnc3w",
+      "optaName": "Brighton & Hove Albion",
+      "optaCode": "BHA"
+    },
+    {
+      "espnId": "349",
+      "espnName": "AFC Bournemouth",
+      "espnUid": "s:600~t:349",
+      "optaId": "1pse9ta7a45pi2w2grjim70ge",
+      "optaName": "Bournemouth",
+      "optaCode": "BOU"
+    },
+    {
+      "espnId": "364",
+      "espnName": "Liverpool",
+      "espnUid": "s:600~t:364",
+      "optaId": "c8h9bw1l82s06h77xxrelzhur",
+      "optaName": "Liverpool",
+      "optaCode": "LIV"
+    },
+    {
+      "espnId": "337",
+      "espnName": "Brentford",
+      "espnUid": "s:600~t:337",
+      "optaId": "7yx5dqhhphyvfisohikodajhv",
+      "optaName": "Brentford",
+      "optaCode": "BRE"
+    },
+    {
+      "espnId": "370",
+      "espnName": "Fulham",
+      "espnUid": "s:600~t:370",
+      "optaId": "hzqh7z0mdl3v7gwete66syxp",
+      "optaName": "Fulham",
+      "optaCode": "FUL"
+    },
+    {
+      "espnId": "357",
+      "espnName": "Leeds United",
+      "espnUid": "s:600~t:357",
+      "optaId": "48gk2hpqtsl6p9sx9kjhaydq4",
+      "optaName": "Leeds United",
+      "optaCode": "LEE"
+    },
+    {
+      "espnId": "367",
+      "espnName": "Tottenham Hotspur",
+      "espnUid": "s:600~t:367",
+      "optaId": "22doj4sgsocqpxw45h607udje",
+      "optaName": "Tottenham Hotspur",
+      "optaCode": "TOT"
+    },
+    {
+      "espnId": "360",
+      "espnName": "Manchester United",
+      "espnUid": "s:600~t:360",
+      "optaId": "6eqit8ye8aomdsrrq0hk3v7gh",
+      "optaName": "Manchester United",
+      "optaCode": "MUN"
+    },
+    {
+      "espnId": "363",
+      "espnName": "Chelsea",
+      "espnUid": "s:600~t:363",
+      "optaId": "9q0arba2kbnywth8bkxlhgmdr",
+      "optaName": "Chelsea",
+      "optaCode": "CHE"
+    },
+    {
+      "espnId": "368",
+      "espnName": "Everton",
+      "espnUid": "s:600~t:368",
+      "optaId": "ehd2iemqmschhj2ec0vayztzz",
+      "optaName": "Everton",
+      "optaCode": "EVE"
+    },
+    {
+      "espnId": "366",
+      "espnName": "Sunderland",
+      "espnUid": "s:600~t:366",
+      "optaId": "1r3545b2dzan8yqa80gtmcjch",
+      "optaName": "Sunderland",
+      "optaCode": "SUN"
+    },
+    {
+      "espnId": "362",
+      "espnName": "Aston Villa",
+      "espnUid": "s:600~t:362",
+      "optaId": "b496gs285it6bheuikox6z9mj",
+      "optaName": "Aston Villa",
+      "optaCode": "AVL"
+    },
+    {
+      "espnId": "373",
+      "espnName": "Ipswich Town",
+      "espnUid": "s:600~t:373",
+      "optaId": "8b523ujgl21tbc01me65q0aoh",
+      "optaName": "Ipswich Town",
+      "optaCode": "IPS"
+    },
+    {
+      "espnId": "384",
+      "espnName": "Crystal Palace",
+      "espnUid": "s:600~t:384",
+      "optaId": "1c8m2ko0wxq1asfkuykurdr0y",
+      "optaName": "Crystal Palace",
+      "optaCode": "CRY"
+    },
+    {
+      "espnId": "388",
+      "espnName": "Coventry City",
+      "espnUid": "s:600~t:388",
+      "optaId": "dacoc20k0n3fxu4zek8wufmko",
+      "optaName": "Coventry City",
+      "optaCode": "COV"
+    },
+    {
+      "espnId": "306",
+      "espnName": "Hull City",
+      "espnUid": "s:600~t:306",
+      "optaId": "f0figafm2v9h8ofo6slajj7xf",
+      "optaName": "Hull City",
+      "optaCode": "HUL"
+    },
+    {
+      "espnId": "361",
+      "espnName": "Newcastle United",
+      "espnUid": "s:600~t:361",
+      "optaId": "7vn2i2kd35zuetw6b38gw9jsz",
+      "optaName": "Newcastle United",
+      "optaCode": "NEW"
+    }
+  ]
+}

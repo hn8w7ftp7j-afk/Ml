@@ -48,6 +48,7 @@ const readCurrent=async()=>{if(currentReadError)throw Error('controlled current-
 const deps={
   beginSoccerAnalysisRun:async()=>run,recordSoccerCohort:async()=>{},fetchSoccerSchedule:async()=>{sourceReads++;return{ok:true,games:[game]};},
   fetchSoccerPrematch:async()=>({ok:true,source:{fetchedAt:new Date(at).toISOString()}}),fetchSoccerWorkload:async()=>({ok:false}),loadSoccerReaderSnapshot:async()=>null,
+  fetchSoccerTeamXg:async()=>({ok:false,reason:'TEAM_XG_NOT_PART_OF_FIXTURE'}),
   listSoccerAnalysis:async()=>[],
   buildSoccerAnalysis:()=>({analysisHash:'discarded',ok:true,status:'RESEARCH_ONLY',league:'epl',date:game.date,gameId:game.id,analysisStatus:'COMPLETED',qaFlag:'WARN',selectionResult:'RESEARCH_SHADOW',executable:false,formalScoringEnabled:false}),
   soccerAnalysisHash:value=>{assert.ok(value.validUntil,'the shared service hashes the expiry into the immutable snapshot');return 'snapshot-hash';},
