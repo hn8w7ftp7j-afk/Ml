@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireApiAuth, checkRateLimit, rateLimitResponse } from '../../../../lib/security.js';
 import { validDate } from '../../../../lib/nba/identity.js';
 import { loadNbaAnalysisBoard } from '../../../../lib/nba/analysis-board.js';
+import { restoreNbaAnalysisBoard } from '../../../../lib/nba/analysis-journal.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export async function GET(request) {
   if (query.size !== 1 || !validDate(query.get('date'))) return response({ ok: false, error: 'NBA 日期或參數無效' }, 400);
   const rate = checkRateLimit(request, { id: 'nba-analysis-board', limit: 60, windowMs: 60_000 });
   if (!rate.allowed) return rateLimitResponse(rate);
-  try { return response({ ok: true, ...await loadNbaAnalysisBoard(query.get('date')) }); }
+  try { return response({ ok: true, ...await restoreNbaAnalysisBoard(await loadNbaAnalysisBoard(query.get('date'))) }); }
   catch (error) {
     console.error('[NBA_ANALYSIS_BOARD_FAILED]', { date: query.get('date'), code: error?.code || 'NBA_BOARD_UNAVAILABLE', issueCodes: error?.issueCodes || [] });
     return response({ ok: false, error: 'NBA 賽程或盤口暫時無法核對，請重試。', code: error?.code || 'NBA_BOARD_UNAVAILABLE' }, 503);
