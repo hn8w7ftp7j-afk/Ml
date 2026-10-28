@@ -1,0 +1,83 @@
+{
+  "version": "SOCCER-PERSONNEL-MINUTES-V2-COVERAGE-v1",
+  "extractorVersion": "SOCCER-REGULATION-MINUTES-SOURCE-ID-STATE-v2",
+  "population": 2995,
+  "sourceArtifactHashes": {
+    "research/soccer/epl-history.json.gz": "a0056a6ce6942cfc354dc87354f2350c56278a11658f797e8fd09e603bc5030f",
+    "research/soccer/personnel-epl-history.json.gz": "cb887c92edd734afbcab671d6d9f6a7a384ef30973015b1027b3a942feec498f",
+    "research/soccer/personnel-epl-sources.json.gz": "2a0e7af17c8a7e87d199540e5025bfd55e271a6610bad810bd43b924965068ac",
+    "research/soccer/ucl-history.json.gz": "f033a25c8c03bd35f78a410b33d059cc44c675c1a5c49e4ead4744dee45ec25a",
+    "research/soccer/personnel-ucl-history.json.gz": "1ad021159829f6806bff82d24ae8dcb10984a400b19e91c80655504eff00e41a",
+    "research/soccer/personnel-ucl-sources.json.gz": "fb2c7ca92363c9eb6b27c9776dfb516707561cc9cf7e0520d7ef58c085c9d463"
+  },
+  "preservedModelArtifactHashes": {
+    "lib/soccer/research-frozen.js": "48005016cdcd5b1701bc410e08c1bd2e23483c13dd0cfc4ea7d2d5b1f971ffa9",
+    "lib/soccer/half-time-frozen.js": "4e4cbebe45ddd61d765b64b8be41e8372236ff722ad0511cfb2ced95b24b86ed",
+    "lib/soccer/personnel-frozen.js": "5701f71c603de4f6b021e2d485c3b612ec9f52eb6d6e0765cc231ffc9f20b091"
+  },
+  "implementationArtifactHashes": {
+    "lib/soccer/personnel-audit.js": "1bf356205574c03112fe78819e4e0d01dcefd74cebca47a7253fe2ef626801c0",
+    "lib/soccer/personnel-minutes-v2.js": "a2b7d6139f81a72e5c5ac1c9723be75ee6d3b029eb4d872e4fc3e9802a2550b7",
+    "scripts/soccer-minutes-v2-replay.mjs": "1c819f7f203407342b53636ad655301f3751f3280fe55fede8f8e8bd5ea73c4a"
+  },
+  "leagues": {
+    "epl": {
+      "population": 2190,
+      "sourceCount": 2190,
+      "derivationAccepted": 2190,
+      "derivationExcluded": 0,
+      "v1Reconstructed": 1247,
+      "v2Reconstructed": 2177,
+      "recovered": 930,
+      "regressed": 0,
+      "numericChangesOnOriginalUsableGames": 0,
+      "unverified": 13,
+      "v1Reasons": {
+        "SUBSTITUTION_ROLE_UNVERIFIED": 932,
+        "SUBSTITUTION_STATE_CONFLICT": 5,
+        "DISMISSAL_IDENTITY_CONFLICT": 6
+      },
+      "v2Reasons": {
+        "SUBSTITUTION_STATE_CONFLICT": 5,
+        "DISMISSAL_IDENTITY_CONFLICT": 8
+      },
+      "stateResolvedSubstitutions": 1186,
+      "inputHistoryRowsHash": "63d8b0c55686b10111276c3ae117913c197799abe6c3666cdabf3a1ef794930f",
+      "derivedObservationsHash": "c04b403d34079dcc0e54f09e74800f530aafa7adfa9240d8bccf147cace0554d"
+    },
+    "ucl": {
+      "population": 805,
+      "sourceCount": 805,
+      "derivationAccepted": 805,
+      "derivationExcluded": 0,
+      "v1Reconstructed": 246,
+      "v2Reconstructed": 799,
+      "recovered": 553,
+      "regressed": 0,
+      "numericChangesOnOriginalUsableGames": 0,
+      "unverified": 6,
+      "v1Reasons": {
+        "SUBSTITUTION_ROLE_UNVERIFIED": 555,
+        "REGULATION_END_MISSING": 4
+      },
+      "v2Reasons": {
+        "DISMISSAL_IDENTITY_CONFLICT": 1,
+        "SUBSTITUTION_STATE_CONFLICT": 1,
+        "REGULATION_END_MISSING": 4
+      },
+      "stateResolvedSubstitutions": 973,
+      "inputHistoryRowsHash": "6711da71a85dc5d271d4d497c9f37078e21a4821e4d02e2dd9739313396a375c",
+      "derivedObservationsHash": "0e6842b2b6e97da488a3fccf8467e16b32935fbcfc90929eba292dcd1de03446"
+    }
+  },
+  "networkRequests": 0,
+  "currentModelUnchanged": true,
+  "modelEffectApplied": false,
+  "pointInTimeAvailabilityVerified": false,
+  "physicalElapsedMinutesVerified": false,
+  "formalEligible": false,
+  "executable": false,
+  "interpretation": "REPLAYED_RETAINED_POSTMATCH_REGULATION_CLOCK_MINUTES_NOT_PREGAME_FORECAST_OR_MODEL_ACCEPTANCE",
+  "sourceTimestampMeaning": "Original retained postmatch fetch times and hashes remain unchanged; replay creates no new provider fetch receipt.",
+  "summaryHash": "b041453be543a9eb2038c1e6997217952026c6b87e16b372fa2215d31202deb2"
+}

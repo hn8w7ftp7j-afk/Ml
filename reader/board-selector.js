@@ -1,5 +1,6 @@
 import { canonicalReaderPayload, readerMarketProperties } from './parser.js';
 import { buildSoccerAuthorityDiagnostics } from './soccer-authority-diagnostics.js';
+import { scopeSoccerPayload, SOCCER_SOURCE_SCOPE_VERSION } from './soccer-parser.js';
 
 export const BOARD_ACTIVITY_TTL_MS = 5 * 60 * 1000;
 // Kept for diagnostic compatibility only. Candidate selection is board-based,
@@ -372,9 +373,9 @@ function soccerGamePeriods(game) {
   return ['FT', 'HT', 'UNKNOWN'].filter(period => scopes.has(period));
 }
 
-function soccerAuthorityProjection(candidate, period) {
+function soccerAuthorityProjection(candidate, period, boardDate) {
   const games = (candidate.parsed.games || []).flatMap(game => {
-    if (!soccerGamePeriods(game).includes(period)) return [];
+    if (game.boardDate !== boardDate || !soccerGamePeriods(game).includes(period)) return [];
     const markets = (game.markets || []).filter(market =>
       (['FT', 'HT'].includes(market.period) ? market.period : 'UNKNOWN') === period)
       .map(market => Object.fromEntries(['period', 'kind', 'unit', 'line', 'lineSide',
@@ -388,9 +389,8 @@ function soccerAuthorityProjection(candidate, period) {
       awayCode: game.awayCode, homeCode: game.homeCode, marketStatus,
       markets, periodsCovered: [period], periodStates: { [period]: marketStatus }, executable: false }];
   });
-  const dates = [...new Set(games.map(game => game.boardDate))].sort();
   return { ...candidate, parsed: { ...candidate.parsed, games,
-    boardDate: dates.includes(candidate.parsed.boardDate) ? candidate.parsed.boardDate : dates[0] || '',
+    boardDate,
     pageLeagueLabel: candidate.parsed.league, periodsCovered: [period] } };
 }
 
@@ -402,8 +402,9 @@ function soccerConflictEvidence(sources, league, period) {
 }
 
 /**
- * Validate each soccer period independently, then return the original complete
- * source captures. Projections are comparison-only; they are never uploaded.
+ * Validate each dated soccer period independently, then return the original
+ * source captures with their selected date allow-list. Projections are only
+ * comparisons; the transport retains the original for server-side reparse.
  * A conflict in any covered scope rejects the whole league, preserving the
  * existing fail-closed policy. The same selected frame is returned only once.
  */
@@ -416,23 +417,30 @@ export function selectAuthoritativeSoccerBoards(candidates, { now = Date.now(), 
   if (assessed.some(row => row.issues.some(issue => /conflict/i.test(issue)))) {
     return { ok: false, error: 'conflicting-duplicate-rows', assessed, selections: [] };
   }
-  const valid = assessed.filter(row => row.ok), scopes = ['FT', 'HT', 'UNKNOWN'].filter(period =>
-    valid.some(row => row.candidate.parsed.games.some(game => soccerGamePeriods(game).includes(period))));
+  const valid = assessed.filter(row => row.ok);
+  const dates = [...new Set(valid.flatMap(row => row.candidate.parsed.games.map(game => game.boardDate)))].sort();
   const selectedSources = new Map(), scopeSelections = [];
-  for (const period of scopes) {
-    const projections = valid.map(row => ({ original: row, projection: soccerAuthorityProjection(row.candidate, period) }))
+  for (const boardDate of dates) for (const period of ['FT', 'HT', 'UNKNOWN']) {
+    const projections = valid.map(row => ({ original: row, projection: soccerAuthorityProjection(row.candidate, period, boardDate) }))
       .filter(row => row.projection.parsed.games.length);
     if (!projections.length) continue;
     const selection = selectAuthoritativeBoard(projections.map(row => row.projection), { now, preferredTabId, league });
-    if (!selection.ok) return { ...selection, ok: false, period, assessed, selections: [], scopeSelections,
+    if (!selection.ok) return { ...selection, ok: false, boardDate, period, assessed, selections: [], scopeSelections,
       diagnosticEvidence: soccerConflictEvidence(sources, league, period) };
     const original = projections.find(row => row.projection === selection.selected.candidate)?.original;
     if (!original) return { ok: false, error: 'soccer-authority-source-missing', period, assessed, selections: [] };
-    scopeSelections.push({ period, authorityTabId: selection.authorityTabId });
+    scopeSelections.push({ boardDate, period, authorityTabId: selection.authorityTabId });
     if (!selectedSources.has(original.candidate)) selectedSources.set(original.candidate, {
       selected: original, authorityTabId: original.candidate.tabId,
       periodsCovered: ['FT', 'HT', 'UNKNOWN'].filter(value => original.candidate.parsed.games.some(game => soccerGamePeriods(game).includes(value))),
+      boardDates: [],
+      sourceScopes: [],
     });
+    const source = selectedSources.get(original.candidate);
+    if (!source.boardDates.includes(boardDate)) source.boardDates.push(boardDate);
+    let scope = source.sourceScopes.find(value => value.boardDate === boardDate);
+    if (!scope) { scope = { boardDate, periodsCovered: [] }; source.sourceScopes.push(scope); }
+    if (!scope.periodsCovered.includes(period)) scope.periodsCovered.push(period);
   }
   const selections = [...selectedSources.values()];
   return selections.length ? { ok: true, selections, scopeSelections, assessed }
@@ -457,14 +465,23 @@ export function shouldSkipSuccessfulPayload({
 
 // Called only after source-wide authority/conflict validation. Each upload
 // preserves the game date and contracts; never relabel tomorrow as today.
-export function readerPayloadsByDate(payload) {
+export function readerPayloadsByDate(payload, { soccerScopes = null } = {}) {
   if (!['NBA', 'NHL', 'EPL', 'UCL'].includes(payload.league)) return [payload];
   const dates = [...new Set(payload.games.map(game => game.boardDate))].sort();
-  return dates.map(boardDate => {
+  const dated = dates.map(boardDate => {
     const games = payload.games.filter(game => game.boardDate === boardDate);
     return { ...payload, boardDate, games,
       ...(['EPL', 'UCL'].includes(payload.league) ? { periodsCovered: ['FT', 'HT', 'UNKNOWN']
         .filter(period => games.some(game => soccerGamePeriods(game).includes(period))) } : {}),
       expectedGameCount: games.length, detectedGameCount: games.length };
+  });
+  if (!['EPL', 'UCL'].includes(payload.league) || soccerScopes === null) return dated;
+  if (!Array.isArray(soccerScopes)) return [];
+  return dated.flatMap(value => {
+    const scopes = soccerScopes.filter(scope => scope?.boardDate === value.boardDate);
+    if (scopes.length !== 1) return [];
+    const scoped = scopeSoccerPayload(value, { version: SOCCER_SOURCE_SCOPE_VERSION,
+      boardDate: value.boardDate, periodsCovered: scopes[0].periodsCovered });
+    return scoped ? [scoped] : [];
   });
 }

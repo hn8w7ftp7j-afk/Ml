@@ -8,6 +8,13 @@ import { soccerPersonnelArtifacts } from '../lib/soccer/personnel-frozen.js';
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
 import { buildSoccerAnalysis } from '../lib/soccer/analysis.js';
+import { loadSoccerMinutesV2CoverageForTest } from './helpers/soccer-minutes-v2-ui-fixture.mjs';
+
+const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
+const xgSource=fs.readFileSync('app/soccer/team-xg-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
+const xgCode=await transform(xgSource,{filename:'soccer-personnel-xg.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+const xgContext=vm.createContext({React,Date});vm.runInContext(xgCode.code,xgContext);
+const SoccerTeamXgPanel=xgContext.SoccerTeamXgPanel;
 
 const shipped=fs.readFileSync('app/soccer/analysis-panel.js','utf8');
 const source=shipped.replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
@@ -15,7 +22,7 @@ const {code}=await transform(source,{filename:'soccer-personnel-analysis.jsx',js
 let analysisContext={states:{},run:()=>{}};
 const ctx=vm.createContext({React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
   useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],useRef:initial=>({current:initial}),useEffect:()=>{},
-  SoccerManualSimulation:()=>null,SoccerMarketDirections:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel:()=>null,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
+  SoccerManualSimulation:()=>null,SoccerMarketDirections:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel,SoccerMinutesV2Coverage,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
 vm.runInContext(code,ctx);
 const render=props=>renderToStaticMarkup(ctx.SoccerPersonnelResearch(props));
 const artifact=soccerPersonnelArtifacts(),analysisCutoff='2026-10-20T00:00:00Z';
@@ -46,6 +53,8 @@ for(const league of ['epl','ucl']){
   for(const metric of [p.validation.reference.logLoss,p.validation.trials.find(t=>t.penalty===p.selectedPenalty).common.logLoss,p.diagnostic.logLoss,p.diagnostic.baseline.logLoss])assert.ok(html.includes(metric.toFixed(3)));
   assert.match(html,/2024 年選模保留原比分基準/);assert.match(html,/2025 年資料已用於先前開發/);assert.match(html,/不是新的未用樣本外測試（OOS）/);
   assert.match(html,/目前預設比分分布維持原基準/);assert.match(html,/未啟用正式 W／R／S、候選或下注/);
+  assert.match(html,/歷史上場分鐘補齊/);assert.match(html,/這是目前保留歷史資料的賽後重播/);
+  assert.match(html,league==='epl'?/本次可重建 2177／2190 場，補回 930 場/:/本次可重建 799／805 場，補回 553 場/);
   assert.doesNotMatch(html,/undefined|NaN|Infinity|RESEARCH_CHALLENGER_AVAILABLE|UNCHANGED_BASELINE|personnel-frozen/);
   assert.equal(JSON.stringify(props),before,'rendering cannot alter either distribution or stored research metrics');
 }

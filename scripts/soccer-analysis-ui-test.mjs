@@ -7,6 +7,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import * as soccerBackgroundClient from '../lib/soccer/background-client.js';
 import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
+import { loadSoccerMinutesV2CoverageForTest } from './helpers/soccer-minutes-v2-ui-fixture.mjs';
+
+const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
 
 // Compile the shipped child components in isolated lexical scopes. Rendering
 // the parent must execute the real JSX, including legacy/missing-data paths.
@@ -30,7 +33,7 @@ function harness(fetch,{boardFetch=null}={}){
  const state=[],refs=[],effects=[],intervals=new Map(),cleanups=[],listeners=new Map();let si=0,ri=0,tree,intervalId=0;
  const document={visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
- const ctx=vm.createContext({...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
+ const ctx=vm.createContext({...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
    if(url.startsWith('/api/soccer/analysis?')&&!new URL(url,'https://fixture.invalid').searchParams.has('view')){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
    return fetch(url,options);
   },SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
@@ -61,6 +64,8 @@ const payload=JSON.parse(fs.readFileSync('scripts/fixtures/soccer/minutes-past.j
 const realGame=normalizeSoccerSchedule({leagues:[payload.header.league],events:[{...payload.header,date:comp.date,status:comp.status}]},'epl',source).games[0],evidence=normalizeSoccerPrematch(payload,realGame,source,Date.parse(at)),result=buildSoccerAnalysis({evidence,now:Date.parse(at)});
 h.state[0][realGame.id]={status:'done',data:{...result,persisted:true}};const rendered=h.renderPanel(realGame),text=renderToStaticMarkup(rendered);
 assert.match(text,/正規時鐘上場分鐘/);assert.match(text,/補時登場/);assert.match(text,/逐年滾動研究檢查/);assert.match(text,/原盤結算核對表/);assert.match(text,/尚無已配對原盤/);assert.doesNotMatch(text,/undefined|NaN/);
+assert.match(text,/歷史上場分鐘補齊/);assert.match(text,/本次可重建 2177／2190 場/);assert.match(text,/補回 930 場/);
+assert.match(text,/不是賽前預計分鐘/);assert.match(text,/尚未納入現行模型/);
 console.log('PASS actual result JSX: postgame normalized minutes, stoppage-only player, rolling evidence, missing quotes and legacy optional fields render without invented values');
 
 // A stored analysis is not proof its provider document was archived. Render the

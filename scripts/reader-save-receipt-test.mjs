@@ -23,7 +23,7 @@ function board(league, dates = ['2026-10-27']) {
   return { league, boardDate: dates[0], observedAt: at, sourceHost: 'tai888.in', games: dates.map(boardDate => ({
     boardDate, boardTime: '20:00', awayCode: 'AAA', homeCode: 'BBB', marketStatus: 'open',
     fullTotal: { line: '3+50', overWater: 0.95, underWater: 0.95 },
-    ...(league === 'EPL' || league === 'UCL' ? { periodsCovered: ['FT'], markets: [
+    ...(league === 'EPL' || league === 'UCL' ? { periodsCovered: ['FT'], periodStates: { FT: 'open' }, markets: [
       { period: 'FT', kind: 'TOTAL', line: '3+50', overWater: 0.95, underWater: 0.95 },
     ] } : {}),
   })) };
@@ -43,7 +43,9 @@ function harness(payload, respond = input => readerSaveReceiptFixture(input)) {
     readerPayloadsByDate, shouldSkipSuccessfulPayload,
     nhlReaderEvidencePayload: input => input,
     selectAuthoritativeBoard: items => ({ ok: true, selected: selected(items) }),
-    selectAuthoritativeSoccerBoards: items => ({ ok: true, selections: [{ selected: selected(items) }] }),
+    selectAuthoritativeSoccerBoards: items => ({ ok: true, selections: [{ selected: selected(items),
+      sourceScopes: [...new Set(items[0].parsed.games.map(game => game.boardDate))]
+        .map(boardDate => ({ boardDate, periodsCovered: ['FT'] })) }] }),
     testScan: { candidates: [candidate], sections: [], emptyCaptures: [], silentTabIds: [] },
     fetch: async (url, options) => {
       const input = JSON.parse(options.body); uploads.push({ url, input });

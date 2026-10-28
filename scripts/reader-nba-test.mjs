@@ -203,7 +203,7 @@ for (const sections of [specialFixture.sections, [...specialFixture.sections].re
   const selection = selectAuthoritativeBoard([candidate(input)], { league: 'NBA', now: +now });
   assert.equal(selection.ok, true);
   assert.equal(selection.selected.detectedGameCount, 11, 'upload count uses deduplicated parsed event identities');
-  const payload = { ...parsed, readerVersion: '2.1.44', deviceId: 'nba-diagnostic-fixture', pageActivityAt: now.toISOString(), expectedGameCount: 11, detectedGameCount: 11 };
+  const payload = { ...parsed, readerVersion: '2.1.45', deviceId: 'nba-diagnostic-fixture', pageActivityAt: now.toISOString(), expectedGameCount: 11, detectedGameCount: 11 };
   payload.payloadHash = createHash('sha256').update(canonicalReaderPayload(payload)).digest('hex');
   const received = normalizeNbaReaderPayload(payload, { deviceId: payload.deviceId, headerVersion: payload.readerVersion, now: +now });
   assert.equal(received.gameCount, 11);
@@ -250,7 +250,7 @@ assert.equal(createHash('sha256').update(canonicalReaderPayload(baseball)).diges
 assert.deepEqual(readerMarketProperties('NBA'), ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
 const background = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(background, /league === 'NHL' \? '\/api\/nhl\/reader' : league === 'NBA' \? '\/api\/nba\/reader' : '\/api\/reader\/ingest'/);
-assert.match(background, /const VERSION = '2\.1\.44'/);
+assert.match(background, /const VERSION = '2\.1\.45'/);
 // Execute v2.1.26 recovery behaviors against a stale and then current tab.
 let contentVersion = '2.1.26';
 const reloaded = [];
@@ -267,11 +267,11 @@ vm.runInContext(background.replace(/^import .*?;\n/gm, ''), backgroundContext);
 let scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 0, 'stale content scripts cannot masquerade as the new installed Reader');
 assert.deepEqual([...scanned.silentTabIds], [7]);
-contentVersion = '2.1.44';
+contentVersion = '2.1.45';
 scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 1);
 const report = await vm.runInContext('readerDiagnostics()', backgroundContext);
-assert.equal(report.report.readerVersion, '2.1.44');
+assert.equal(report.report.readerVersion, '2.1.45');
 assert.equal(report.report.boards[0].league, 'NBA');
 assert.equal(Object.hasOwn(report.report, 'readerToken'), false);
 assert.equal(Object.hasOwn(report.report.boards[0], 'pageUrl'), false);

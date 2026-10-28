@@ -40,7 +40,7 @@ function harness(){
   return{state,events,render,async load(value,props={league,date}){response=value;render(props);const cleanup=effects.at(-1)();await new Promise(resolve=>setImmediate(resolve));return cleanup;}};
 }
 const ui=harness();
-let markup=renderToStaticMarkup(ui.render());assert.match(markup,new RegExp(`等待 Reader ${escapePattern(manifest.version)}`));assert.doesNotMatch(markup,/白禮頓|0\.84/);
+let markup=renderToStaticMarkup(ui.render());assert.match(markup,/正在核對.*原盤保存狀態/);assert.doesNotMatch(markup,/白禮頓|0\.84/);
 const cleanup=await ui.load(body);markup=renderToStaticMarkup(ui.render());cleanup();
 assert.equal(ui.events.length,0,'an initial unknown fingerprint does not invent a previous price');
 await ui.load({...body,revision:'new-heartbeat',observedAt:freshAt(-1)});assert.equal(ui.events.length,0,'same-price verification heartbeats do not invalidate research');
@@ -61,6 +61,10 @@ assert.match(markup,/沒有開放盤口|目前無開放原盤|目前無開放盤
 assert.match(markup,/白禮頓/,'all-locked evidence keeps its dated match identity');assert.doesNotMatch(markup,/等待 Reader|大 0\.84|大 0\.92/);
 const empty={...body,games:[]};await ui.load(empty);markup=renderToStaticMarkup(ui.render());assert.match(markup,/沒有開放盤口|目前無開放原盤|目前無開放盤口/);assert.doesNotMatch(markup,/等待 Reader/);
 const waiting={ok:true,league:'epl',date,status:'WAITING_READER',games:[],executable:false};await ui.load(waiting);markup=renderToStaticMarkup(ui.render());assert.match(markup,/等待 Reader/);assert.doesNotMatch(markup,/沒有開放盤口/,'missing Reader evidence must not become a no-market claim');
+const firstArrival=harness();await firstArrival.load(waiting);assert.equal(firstArrival.events.length,0);
+await firstArrival.load(body);assert.equal(firstArrival.events.length,1,'a first original price arriving after a known missing board revokes the no-quote analysis immediately');
+assert.deepEqual(plain(firstArrival.events[0].detail),{league:'epl',date,contentHash:body.contentHash});
+await firstArrival.load({...body,observedAt:freshAt(-1)});assert.equal(firstArrival.events.length,1,'unchanged heartbeats do not repeatedly revoke current research');
 const legacy={...body,isPeriodAggregate:false,sourceObservations:[],observedAt:freshAt(3600000),games:[game]};await ui.load(legacy);markup=renderToStaticMarkup(ui.render());assert.match(markup,/原盤已逾期|待更新/,'a far-future legacy timestamp cannot be called fresh');
 await ui.load({...body,sourceObservations:[null,...sources]});assert.doesNotThrow(()=>renderToStaticMarkup(ui.render()));
 await ui.load({...body,league:'ucl'});markup=renderToStaticMarkup(ui.render());assert.match(markup,/原盤更新失敗.*身分核對未通過/,'wrong-league API results cannot silently replace the current board');

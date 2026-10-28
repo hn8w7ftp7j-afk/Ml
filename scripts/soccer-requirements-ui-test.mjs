@@ -7,6 +7,9 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
+import { loadSoccerMinutesV2CoverageForTest } from './helpers/soccer-minutes-v2-ui-fixture.mjs';
+
+const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
 
 // Compile the shipped child components in isolated lexical scopes. Rendering
 // the parent must execute the real JSX, including legacy/missing-data paths.
@@ -30,7 +33,7 @@ const current={analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',publ
   currentResearch:{publishedCurrent:true,reason:'ACTIVE',revision:'requirements-current',analysisRunId:'requirements-run',checkedAt:new Date(receiptAt).toISOString(),validUntil:new Date(receiptAt+180000).toISOString(),formalScoringEnabled:false,executable:false}};
 const currentState=data=>({status:'done',data,currentResearchRequestedAt:receiptAt,currentResearchReceivedAt:receiptAt});
 const plain=v=>JSON.parse(JSON.stringify(v));
-const context=vm.createContext({...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,React,createContext:()=>({Provider:'provider'})});
+const context=vm.createContext({...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,createContext:()=>({Provider:'provider'})});
 vm.runInContext(realComponentCode,context);
 vm.runInContext(code,context);
 const presentation=state=>plain(context.soccerAnalysisPresentation(state));
@@ -71,7 +74,7 @@ assert.match(renderToStaticMarkup(context.SoccerRequirementDetails({})),/歷史�
 
 function harness(fetch){
   const state=[],refs=[];let si=0,ri=0;
-  const ctx=vm.createContext({...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
+  const ctx=vm.createContext({...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
     createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
     useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
     useRef:initial=>refs[ri++]||(refs[ri-1]={current:initial}),useEffect:()=>{}});
