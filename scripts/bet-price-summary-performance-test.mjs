@@ -60,19 +60,19 @@ const bets = Array.from({ length: 7 }, (_, i) => ({ ...base.bet, id: `summary-${
 }));
 const after = Date.parse(start), before = after - 1;
 assert.deepEqual(await summarizeOriginalBetPricesAsync(bets, {}, { now: before, yieldControl: async () => {} }),
-  { total: 0, better: 0, worse: 0 }, 'a warmed payoff cache cannot make a future closing contract authoritative before game start');
+  { total: 0, better: 0, worse: 0, eligible: 7, supported: 7, unsupported: 0, comparable: 0, equivalent: 0, mixed: 0, missingReference: 7, invalidComparison: 0 }, 'a warmed payoff cache cannot make a future closing contract authoritative before game start');
 const complete = await summarizeOriginalBetPricesAsync(bets, {}, { now: after, yieldControl: async () => {} });
 assert.deepEqual(complete, summarizeOriginalBetPrices(bets, {}, { now: after }));
-assert.deepEqual(complete, { total: 7, better: 7, worse: 0 });
+assert.deepEqual(complete, { total: 7, better: 7, worse: 0, eligible: 7, supported: 7, unsupported: 0, comparable: 7, equivalent: 0, mixed: 0, missingReference: 0, invalidComparison: 0 });
 assert.deepEqual(await summarizeOriginalBetPricesAsync(bets.map(bet => ({ ...bet,
   closingContractSnapshot: { ...bet.closingContractSnapshot, verified: false } })), {}, { now: after, yieldControl: async () => {} }),
-  { total: 0, better: 0, worse: 0 }, 'cache hits must never bypass changed closing verification');
+  { total: 0, better: 0, worse: 0, eligible: 7, supported: 7, unsupported: 0, comparable: 0, equivalent: 0, mixed: 0, missingReference: 7, invalidComparison: 0 }, 'cache hits must never bypass changed closing verification');
 assert.deepEqual(await summarizeOriginalBetPricesAsync(bets.map(bet => ({ ...bet,
   closingContractSnapshot: { ...bet.closingContractSnapshot, lineAsOf: '2026-08-20T10:01:00.000Z' } })), {}, { now: after, yieldControl: async () => {} }),
-  { total: 0, better: 0, worse: 0 }, 'post-start closing observations remain ineligible');
+  { total: 0, better: 0, worse: 0, eligible: 7, supported: 7, unsupported: 0, comparable: 0, equivalent: 0, mixed: 0, missingReference: 7, invalidComparison: 0 }, 'post-start closing observations remain ineligible');
 const currentFeed = Object.fromEntries(bets.map(bet => [bet.id, { current: { ...base.row, pick: '小8+40' } }]));
 assert.deepEqual(await summarizeOriginalBetPricesAsync(bets, currentFeed, { now: before, yieldControl: async () => {} }),
-  { total: 7, better: 0, worse: 7 }, 'before start, current feed authority and changed prices are evaluated independently');
+  { total: 7, better: 0, worse: 7, eligible: 7, supported: 7, unsupported: 0, comparable: 7, equivalent: 0, mixed: 0, missingReference: 0, invalidComparison: 0 }, 'before start, current feed authority and changed prices are evaluated independently');
 
 let cancelled = false, compared = 0, published = false;
 const yields = [];
@@ -97,7 +97,7 @@ const repeated = createBetPriceComparisonCache({ compare: options => { repeatCom
 const history = Array.from({ length: 739 }, (_, i) => ({ ...bets[0], id: `history-${i}` }));
 const unchanged = JSON.stringify(history);
 assert.deepEqual(await summarizeOriginalBetPricesAsync(history, {}, { now: after,
-  yieldControl: async () => {}, compare: repeated }), { total: 739, better: 739, worse: 0 });
+  yieldControl: async () => {}, compare: repeated }), { total: 739, better: 739, worse: 0, eligible: 739, supported: 739, unsupported: 0, comparable: 739, equivalent: 0, mixed: 0, missingReference: 0, invalidComparison: 0 });
 assert.equal(repeatComputations, 1, '739 identical immutable contracts require one payoff computation');
 assert.equal(JSON.stringify(history), unchanged);
 console.log('Original-price summary: bounded complete-input cache, mutation isolation, fresh authority, yielded cold work and cancelled scope PASS');
