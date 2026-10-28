@@ -1,0 +1,9 @@
+{
+  "representation": "EXTRACTED_PROVIDER_STATE_TEST_CARRIER",
+  "sourceUrl": "https://theanalyst.com/competition/premier-league/table?view=expected",
+  "originalHtmlSha256": "633702d88f455bd9ffe0cd254052641f5a29dcd97d57aa26cc59b8547b778a9c",
+  "originalHtmlBytes": 486611,
+  "originalFetchTimeRecorded": false,
+  "originalBodySavedAt": "2026-10-28T21:59:12.531Z",
+  "note": "Actual fetch completion timestamp was not separately recorded during the initial feasibility GET. originalBodySavedAt is filesystem save time, not fabricated source publication/fetch proof. This fixture retains provider expected rows and metadata in a reduced HTML test carrier; it is not the full original HTTP document."
+}

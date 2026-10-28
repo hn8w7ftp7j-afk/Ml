@@ -195,6 +195,7 @@ try {
         assert.ok(url.pathname.endsWith('/scoreboard'));return Response.json(scoreboard);
       };
       const actual=await analyzeSoccerGame({league,date:soccerDate(competition.date),eventId:value.header.id},{
+        fetchSoccerTeamXg:async()=>({ok:false,reason:'TEAM_XG_NOT_PART_OF_FIXTURE'}),
         fetchSoccerWorkload:async()=>({ok:false,status:'INCOMPLETE',teams:{},sources:[],modelEffectApplied:false,executable:false}),
       });
       assert.equal(actual.status,200,JSON.stringify(actual.payload));
