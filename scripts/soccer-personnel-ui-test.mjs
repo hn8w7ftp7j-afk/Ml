@@ -11,6 +11,7 @@ import { buildSoccerAnalysis } from '../lib/soccer/analysis.js';
 import { loadSoccerMinutesV2CoverageForTest } from './helpers/soccer-minutes-v2-ui-fixture.mjs';
 
 const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
+const minutesV2Summary=JSON.parse(fs.readFileSync('research/soccer/personnel-minutes-v2-coverage.json','utf8'));
 const xgSource=fs.readFileSync('app/soccer/team-xg-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const xgCode=await transform(xgSource,{filename:'soccer-personnel-xg.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const xgContext=vm.createContext({React,Date});vm.runInContext(xgCode.code,xgContext);
@@ -54,7 +55,8 @@ for(const league of ['epl','ucl']){
   assert.match(html,/2024 年選模保留原比分基準/);assert.match(html,/2025 年資料已用於先前開發/);assert.match(html,/不是新的未用樣本外測試（OOS）/);
   assert.match(html,/目前預設比分分布維持原基準/);assert.match(html,/未啟用正式 W／R／S、候選或下注/);
   assert.match(html,/歷史上場分鐘補齊/);assert.match(html,/這是目前保留歷史資料的賽後重播/);
-  assert.match(html,league==='epl'?/本次可重建 2177／2190 場，補回 930 場/:/本次可重建 799／805 場，補回 553 場/);
+  const minutes=minutesV2Summary.leagues[league];
+  assert.ok(html.includes(`本次可重建 ${minutes.v2Reconstructed}／${minutes.population} 場，補回 ${minutes.recovered} 場`));
   assert.doesNotMatch(html,/undefined|NaN|Infinity|RESEARCH_CHALLENGER_AVAILABLE|UNCHANGED_BASELINE|personnel-frozen/);
   assert.equal(JSON.stringify(props),before,'rendering cannot alter either distribution or stored research metrics');
 }

@@ -10,6 +10,7 @@ import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.j
 import { loadSoccerMinutesV2CoverageForTest } from './helpers/soccer-minutes-v2-ui-fixture.mjs';
 
 const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
+const minutesV2Epl=JSON.parse(fs.readFileSync('research/soccer/personnel-minutes-v2-coverage.json','utf8')).leagues.epl;
 
 // Compile the shipped child components in isolated lexical scopes. Rendering
 // the parent must execute the real JSX, including legacy/missing-data paths.
@@ -64,7 +65,7 @@ const payload=JSON.parse(fs.readFileSync('scripts/fixtures/soccer/minutes-past.j
 const realGame=normalizeSoccerSchedule({leagues:[payload.header.league],events:[{...payload.header,date:comp.date,status:comp.status}]},'epl',source).games[0],evidence=normalizeSoccerPrematch(payload,realGame,source,Date.parse(at)),result=buildSoccerAnalysis({evidence,now:Date.parse(at)});
 h.state[0][realGame.id]={status:'done',data:{...result,persisted:true}};const rendered=h.renderPanel(realGame),text=renderToStaticMarkup(rendered);
 assert.match(text,/正規時鐘上場分鐘/);assert.match(text,/補時登場/);assert.match(text,/逐年滾動研究檢查/);assert.match(text,/原盤結算核對表/);assert.match(text,/尚無已配對原盤/);assert.doesNotMatch(text,/undefined|NaN/);
-assert.match(text,/歷史上場分鐘補齊/);assert.match(text,/本次可重建 2177／2190 場/);assert.match(text,/補回 930 場/);
+assert.match(text,/歷史上場分鐘補齊/);assert.ok(text.includes(`本次可重建 ${minutesV2Epl.v2Reconstructed}／${minutesV2Epl.population} 場`));assert.ok(text.includes(`補回 ${minutesV2Epl.recovered} 場`));
 assert.match(text,/不是賽前預計分鐘/);assert.match(text,/尚未納入現行模型/);
 console.log('PASS actual result JSX: postgame normalized minutes, stoppage-only player, rolling evidence, missing quotes and legacy optional fields render without invented values');
 

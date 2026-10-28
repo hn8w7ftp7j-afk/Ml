@@ -16,9 +16,9 @@
     "lib/soccer/personnel-frozen.js": "5701f71c603de4f6b021e2d485c3b612ec9f52eb6d6e0765cc231ffc9f20b091"
   },
   "implementationArtifactHashes": {
-    "lib/soccer/personnel-audit.js": "1bf356205574c03112fe78819e4e0d01dcefd74cebca47a7253fe2ef626801c0",
-    "lib/soccer/personnel-minutes-v2.js": "a2b7d6139f81a72e5c5ac1c9723be75ee6d3b029eb4d872e4fc3e9802a2550b7",
-    "scripts/soccer-minutes-v2-replay.mjs": "1c819f7f203407342b53636ad655301f3751f3280fe55fede8f8e8bd5ea73c4a"
+    "lib/soccer/personnel-audit.js": "f2073f96e3bf05e53275bb529c28e67765628eefd97449eb6dea8f4f5b448d52",
+    "lib/soccer/personnel-minutes-v2.js": "1a11fa2470d1bfc3dd43b3790f700dddbc4b2e2bd4834367bdfdbf62aeea5675",
+    "scripts/soccer-minutes-v2-replay.mjs": "6da4adfa45d16affc8beea5fe8e85a780766c357a62ee94fc4068b13bfcb2198"
   },
   "leagues": {
     "epl": {
@@ -27,23 +27,26 @@
       "derivationAccepted": 2190,
       "derivationExcluded": 0,
       "v1Reconstructed": 1247,
-      "v2Reconstructed": 2177,
-      "recovered": 930,
+      "v2Reconstructed": 2190,
+      "recovered": 943,
       "regressed": 0,
-      "numericChangesOnOriginalUsableGames": 0,
-      "unverified": 13,
+      "numericChangesOnOriginalUsableGames": 7,
+      "correctedOriginalUsableGames": 7,
+      "correctionReasons": {
+        "VAR_REVIEW_MISCLASSIFIED_AS_DISMISSAL": 7
+      },
+      "originalUsableVarReviewCorrectionGames": 8,
+      "originalUsableVarReviewCorrectionsWithNoMinuteChange": 1,
+      "unverified": 0,
       "v1Reasons": {
         "SUBSTITUTION_ROLE_UNVERIFIED": 932,
         "SUBSTITUTION_STATE_CONFLICT": 5,
         "DISMISSAL_IDENTITY_CONFLICT": 6
       },
-      "v2Reasons": {
-        "SUBSTITUTION_STATE_CONFLICT": 5,
-        "DISMISSAL_IDENTITY_CONFLICT": 8
-      },
-      "stateResolvedSubstitutions": 1186,
+      "v2Reasons": {},
+      "stateResolvedSubstitutions": 1191,
       "inputHistoryRowsHash": "63d8b0c55686b10111276c3ae117913c197799abe6c3666cdabf3a1ef794930f",
-      "derivedObservationsHash": "c04b403d34079dcc0e54f09e74800f530aafa7adfa9240d8bccf147cace0554d"
+      "derivedObservationsHash": "7433fef2a519803fe322f370d583ce5816add83bdeda175f503c6404aac1b513"
     },
     "ucl": {
       "population": 805,
@@ -51,23 +54,26 @@
       "derivationAccepted": 805,
       "derivationExcluded": 0,
       "v1Reconstructed": 246,
-      "v2Reconstructed": 799,
-      "recovered": 553,
+      "v2Reconstructed": 800,
+      "recovered": 554,
       "regressed": 0,
       "numericChangesOnOriginalUsableGames": 0,
-      "unverified": 6,
+      "correctedOriginalUsableGames": 0,
+      "correctionReasons": {},
+      "originalUsableVarReviewCorrectionGames": 0,
+      "originalUsableVarReviewCorrectionsWithNoMinuteChange": 0,
+      "unverified": 5,
       "v1Reasons": {
         "SUBSTITUTION_ROLE_UNVERIFIED": 555,
         "REGULATION_END_MISSING": 4
       },
       "v2Reasons": {
-        "DISMISSAL_IDENTITY_CONFLICT": 1,
         "SUBSTITUTION_STATE_CONFLICT": 1,
         "REGULATION_END_MISSING": 4
       },
-      "stateResolvedSubstitutions": 973,
+      "stateResolvedSubstitutions": 977,
       "inputHistoryRowsHash": "6711da71a85dc5d271d4d497c9f37078e21a4821e4d02e2dd9739313396a375c",
-      "derivedObservationsHash": "0e6842b2b6e97da488a3fccf8467e16b32935fbcfc90929eba292dcd1de03446"
+      "derivedObservationsHash": "93f7aaf95ab3f35e832aea6adbb6a7f3b678e30843334178c4181fbd12985d5e"
     }
   },
   "networkRequests": 0,
@@ -79,5 +85,5 @@
   "executable": false,
   "interpretation": "REPLAYED_RETAINED_POSTMATCH_REGULATION_CLOCK_MINUTES_NOT_PREGAME_FORECAST_OR_MODEL_ACCEPTANCE",
   "sourceTimestampMeaning": "Original retained postmatch fetch times and hashes remain unchanged; replay creates no new provider fetch receipt.",
-  "summaryHash": "b041453be543a9eb2038c1e6997217952026c6b87e16b372fa2215d31202deb2"
+  "summaryHash": "7797d92b6e124e882cddc30aea98aac7aa4a2992094b0d0d968a96c19ef713d8"
 }

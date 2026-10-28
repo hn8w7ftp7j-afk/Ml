@@ -33,8 +33,9 @@ export function replaySoccerMinutesV2({root=repositoryRoot}={}){
     if(byId.size!==rows.length||original.size!==retained.rows.length||retained.excluded.length
       ||sources.length!==rows.length||new Set(sources.map(source=>source.eventId)).size!==sources.length)
       throw Error('PERSONNEL_MINUTES_V2_COHORT_OR_DUPLICATE_CONFLICT');
-    const cohort=[],excluded=[],v1Reasons={},v2Reasons={};
+    const cohort=[],excluded=[],v1Reasons={},v2Reasons={},correctionReasons={};
     let v1Reconstructed=0,v2Reconstructed=0,recovered=0,regressed=0,stateResolvedSubstitutions=0,numericChangesOnOriginalUsableGames=0;
+    let originalUsableVarReviewCorrectionGames=0,originalUsableVarReviewCorrectionsWithNoMinuteChange=0;
     for(const record of sources){
       const row=byId.get(record.eventId),saved=original.get(record.eventId);
       if(!row||!saved||record.ok!==true)throw Error('PERSONNEL_MINUTES_V2_RETAINED_SOURCE_MISSING');
@@ -56,15 +57,24 @@ export function replaySoccerMinutesV2({root=repositoryRoot}={}){
           players:observation.minutes.teams[side].players.map(player=>({id:player.id,starter:player.starter,
             appeared:player.appeared,regulationClockMinutes:player.regulationClockMinutes})),
         }]));
-        if(canonical(compact)!==canonical(saved.personnel.minutes.teams))numericChangesOnOriginalUsableGames++;
+        const hasVarCorrection=observation.corrections.some(value=>value.code==='VAR_REVIEW_MISCLASSIFIED_AS_DISMISSAL');
+        if(hasVarCorrection)originalUsableVarReviewCorrectionGames++;
+        if(canonical(compact)!==canonical(saved.personnel.minutes.teams)){
+          if(!hasVarCorrection)
+            throw Error('PERSONNEL_MINUTES_V2_UNEXPLAINED_NUMERICAL_CHANGE');
+          numericChangesOnOriginalUsableGames++;
+          add(correctionReasons,'VAR_REVIEW_MISCLASSIFIED_AS_DISMISSAL');
+        }else if(hasVarCorrection)originalUsableVarReviewCorrectionsWithNoMinuteChange++;
       }
       cohort.push(observation);observations.push(observation);
     }
     if(excluded.length)throw Error('PERSONNEL_MINUTES_V2_DERIVATION_SOURCE_EXCLUDED');
-    if(regressed||numericChangesOnOriginalUsableGames)throw Error('PERSONNEL_MINUTES_V2_ORIGINAL_NUMERICAL_AUDIT_CHANGED');
+    if(regressed)throw Error('PERSONNEL_MINUTES_V2_ORIGINAL_USABLE_GAME_REGRESSED');
     leagues[league]={population:rows.length,sourceCount:sources.length,derivationAccepted:cohort.length,
       derivationExcluded:excluded.length,v1Reconstructed,v2Reconstructed,recovered,regressed,
-      numericChangesOnOriginalUsableGames,unverified:cohort.length-v2Reconstructed,v1Reasons,v2Reasons,
+      numericChangesOnOriginalUsableGames,correctedOriginalUsableGames:numericChangesOnOriginalUsableGames,correctionReasons,
+      originalUsableVarReviewCorrectionGames,originalUsableVarReviewCorrectionsWithNoMinuteChange,
+      unverified:cohort.length-v2Reconstructed,v1Reasons,v2Reasons,
       stateResolvedSubstitutions,inputHistoryRowsHash:hash(rows),derivedObservationsHash:hash(cohort)};
   }
   const implementationArtifactHashes=Object.fromEntries(['lib/soccer/personnel-audit.js','lib/soccer/personnel-minutes-v2.js','scripts/soccer-minutes-v2-replay.mjs']

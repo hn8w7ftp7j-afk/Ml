@@ -92,16 +92,74 @@ assert.equal(teamOnly.teamScope,'TEAM_ONLY');assert.deepEqual(Object.keys(teamOn
 assert.equal(teamOnly.stateResolvedSubstitutions,0,'other-side evidence is not silently certified by a team-only audit');
 console.log('PASS explicit minutes v2: unique source IDs/current active state/two roster flags, unordered and simultaneous substitutions, contradictory/ambiguous roles rejected, duplicate coverage and original timing/roster/stoppage safeguards');
 
+const actualSources=Object.fromEntries(['epl','ucl'].map(league=>[league,JSON.parse(gunzipSync(fs.readFileSync(`research/soccer/personnel-${league}-sources.json.gz`)))]));
+const actualRows=Object.fromEntries(['epl','ucl'].map(league=>[league,new Map(JSON.parse(gunzipSync(fs.readFileSync(`research/soccer/${league}-history.json.gz`))).rows.map(row=>[row.eventId,row]))]));
+const actual=(league,eventId)=>{
+  const record=actualSources[league].find(source=>source.eventId===eventId),row=actualRows[league].get(eventId);
+  assert.ok(record&&row);
+  return{record,row,game:{status:'final',home:{sourceId:row.homeId},away:{sourceId:row.awayId}}};
+};
+// The provider explicitly distinguishes actual red card type 93 from type
+// 167/168 VAR reviews. A review may confirm, decline or precede an actual card;
+// only the actual card changes participation, with final roster corroboration.
+const noChange=actual('epl','578438');
+const noChangeV1=soccerMinutesAudit(noChange.record.data,noChange.game),noChangeV2=soccerMinutesAuditV2(noChange.record.data,noChange.game);
+assert.equal(noChangeV1.status,'REGULATION_CLOCK_RECONSTRUCTED');assert.equal(noChangeV2.status,'REGULATION_CLOCK_RECONSTRUCTED');
+const oldBednarek=noChangeV1.teams.away.players.find(player=>player.id==='221788');
+const newBednarek=noChangeV2.teams.away.players.find(player=>player.id==='221788');
+assert.ok(oldBednarek.regulationClockMinutes<90);assert.equal(newBednarek.regulationClockMinutes,90);
+assert.ok(noChangeV2.teams.away.informationalCardReviews.some(event=>/No card change/.test(event.sourceText)));
+assert.ok(!noChangeV2.teams.away.events.some(event=>event.type.includes('DISMISSAL')&&event.playerId==='221788'));
+const secondYellow=noChange.record.data.keyEvents.find(event=>/^Second yellow card/.test(event.text||''));
+assert.equal(secondYellow.type.id,'93');assert.equal(secondYellow.type.type,'red-card');
+assert.ok(noChangeV2.teams.home.events.some(event=>event.eventId===String(secondYellow.id)&&event.type==='ON_FIELD_DISMISSAL'),
+  'a true second-yellow dismissal remains an actual red-card event');
+for(const[league,eventId,playerId]of[['epl','578473','222396'],['epl','578444','221788'],['ucl','618705','199049']]){
+  const sample=actual(league,eventId),audit=soccerMinutesAuditV2(sample.record.data,sample.game);
+  assert.equal(audit.status,'REGULATION_CLOCK_RECONSTRUCTED',eventId);
+  const card=sample.record.data.keyEvents.find(event=>event.type.type==='red-card'&&String(event.participants[0].athlete.id)===playerId);
+  const side=sample.game.home.sourceId===String(card.team.id)?'home':'away';
+  assert.equal(audit.teams[side].players.find(player=>player.id===playerId).regulationClockMinutes,card.clock.value/60,
+    'the actual red-card time, not an earlier or later VAR notification, closes the segment');
+  assert.equal(audit.teams[side].events.filter(event=>event.type.includes('DISMISSAL')&&event.playerId===playerId).length,1);
+  assert.ok(audit.teams[side].informationalCardReviews.some(event=>event.playerIds.includes(playerId)));
+}
+const genuine=actual('epl','578473');
+const recipient=payload=>payload.rosters.find(group=>String(group.team.id)==='370').roster.find(player=>String(player.athlete.id)==='222396');
+for(const kind of ['explicit-zero','missing-stat','duplicate-stat','string-stat','review-without-actual-card','unknown-card-type','different-id-duplicate-real-card']){
+  const changed=structuredClone(genuine.record.data),player=recipient(changed);
+  if(kind==='explicit-zero')player.stats.find(stat=>stat.name==='redCards').value=0;
+  if(kind==='missing-stat')player.stats=player.stats.filter(stat=>stat.name!=='redCards');
+  if(kind==='duplicate-stat')player.stats.push({name:'redCards',value:1});
+  if(kind==='string-stat')player.stats.find(stat=>stat.name==='redCards').value='1';
+  if(kind==='review-without-actual-card')changed.keyEvents=changed.keyEvents.filter(event=>event.type.type!=='red-card');
+  if(kind==='unknown-card-type')changed.keyEvents.find(event=>event.type.type==='red-card').type={id:'999',type:'second-yellow-card',text:'Unrecognized card schema'};
+  if(kind==='different-id-duplicate-real-card')changed.keyEvents.push({...structuredClone(changed.keyEvents.find(event=>event.type.type==='red-card')),id:'999999999999'});
+  const result=soccerMinutesAuditV2(changed,genuine.game);
+  assert.equal(result.status,'UNVERIFIED',kind);assert.equal(result.formalEligible,false);
+  if(kind==='explicit-zero'||kind==='review-without-actual-card')assert.equal(result.reason,'ROSTER_DISMISSAL_EVENT_CONFLICT');
+  if(['missing-stat','duplicate-stat','string-stat'].includes(kind))assert.equal(result.reason,'ROSTER_DISMISSAL_COUNT_UNVERIFIED');
+  if(kind==='unknown-card-type')assert.equal(result.reason,'DISMISSAL_EVENT_TYPE_UNVERIFIED');
+  if(kind==='different-id-duplicate-real-card')assert.equal(result.reason,'DISMISSAL_IDENTITY_CONFLICT');
+}
+console.log('PASS actual retained VAR regressions: no-card reviews do not dismiss players, true red/second-yellow type93 remains counted at actual time, VAR given/upgrade is informational in either order, missing/zero/conflicting roster stats and unknown or duplicated true card events stay unverified');
+
 const replay=replaySoccerMinutesV2();
 const committed=JSON.parse(fs.readFileSync('research/soccer/personnel-minutes-v2-coverage.json','utf8'));
 assert.deepEqual(replay.summary,committed,'the small shipped coverage artifact is exactly reproducible from every retained original source');
 assert.equal(replay.observations.length,2995);
-for(const[league,wanted]of Object.entries({epl:{population:2190,v1Reconstructed:1247,v2Reconstructed:2177,recovered:930,unverified:13},
-  ucl:{population:805,v1Reconstructed:246,v2Reconstructed:799,recovered:553,unverified:6}})){
+for(const[league,wanted]of Object.entries({epl:{population:2190,v1Reconstructed:1247,v2Reconstructed:2190,recovered:943,unverified:0,
+    numericChangesOnOriginalUsableGames:7,correctedOriginalUsableGames:7,originalUsableVarReviewCorrectionGames:8,originalUsableVarReviewCorrectionsWithNoMinuteChange:1},
+  ucl:{population:805,v1Reconstructed:246,v2Reconstructed:800,recovered:554,unverified:5,numericChangesOnOriginalUsableGames:0,
+    correctedOriginalUsableGames:0,originalUsableVarReviewCorrectionGames:0,originalUsableVarReviewCorrectionsWithNoMinuteChange:0}})){
   const actual=replay.summary.leagues[league];for(const[key,value]of Object.entries(wanted))assert.equal(actual[key],value,`${league}/${key}`);
-  assert.equal(actual.regressed,0);assert.equal(actual.numericChangesOnOriginalUsableGames,0);
+  assert.equal(actual.regressed,0);
   assert.equal(actual.derivationAccepted,actual.population);assert.equal(actual.derivationExcluded,0);
 }
+assert.deepEqual(replay.summary.leagues.epl.correctionReasons,{VAR_REVIEW_MISCLASSIFIED_AS_DISMISSAL:7});
+assert.deepEqual(replay.summary.leagues.ucl.v2Reasons,{SUBSTITUTION_STATE_CONFLICT:1,REGULATION_END_MISSING:4});
+const correctedEvents=replay.observations.filter(value=>value.corrections.length).map(value=>value.eventId).sort();
+assert.deepEqual(correctedEvents,['578438','578328','605948','605909','605889','605832','605754','638213'].sort());
 for(const observation of replay.observations){
   assert.equal(observation.source.contentHash.length,64);assert.equal(observation.sourcePublishedAt,null);
   assert.equal(observation.availability,'BACKFILLED_POSTMATCH_OBSERVATION_NOT_PREMATCH_SAVED');
@@ -122,7 +180,7 @@ assert.equal(normalizeSoccerPersonnelHistoryV2({...row,eventId:'999'},record.dat
 assert.equal(normalizeSoccerPersonnelHistoryV2(row,record.data,{...record.source,sourcePublishedAt:'2020-01-01T00:00:00Z'}).ok,false,'historical source publication is never filled from assumed timestamps');
 const changedPayload=structuredClone(record.data);changedPayload.header.competitions[0].competitors[0].score='99';
 assert.equal(normalizeSoccerPersonnelHistoryV2(row,changedPayload,{...record.source,contentHash:soccerPersonnelHash(changedPayload)}).ok,false,'recomputed projection hashes do not excuse result/identity conflicts');
-console.log('PASS retained 2995-source replay: EPL1247→2177, UCL246→799, 1483 newly usable; 19 excluded remain explicit, zero v1 regressions/numerical changes, immutable source/model hashes and independent postmatch-only observations');
+console.log('PASS retained 2995-source replay: EPL1247→2190, UCL246→800, 1497 newly usable; five remain unverified, seven separate V2 numerical corrections have actual VAR evidence, eight semantic corrections include one at90min; immutable original V1/source/model artifacts and no model use or promotion');
 
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'soccer-minutes-v2-'));
 try{

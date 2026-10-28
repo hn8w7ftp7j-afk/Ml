@@ -22,10 +22,15 @@ function verifiedCoverage(summary,league){
   const sources=summary.sourceArtifactHashes,row=summary.leagues?.[league];
   if(!sources||typeof sources!=='object'||Array.isArray(sources)||!Object.keys(sources).length
     ||Object.values(sources).some(value=>!hash(value))||!row
-    ||!['population','v1Reconstructed','v2Reconstructed','recovered','regressed','unverified','stateResolvedSubstitutions'].every(key=>count(row[key]))
+    ||!['population','v1Reconstructed','v2Reconstructed','recovered','regressed','unverified','stateResolvedSubstitutions',
+      'numericChangesOnOriginalUsableGames','correctedOriginalUsableGames'].every(key=>count(row[key]))
     ||row.population===0||row.v1Reconstructed>row.population||row.v2Reconstructed>row.population
     ||row.regressed!==0||row.v2Reconstructed-row.v1Reconstructed!==row.recovered
-    ||row.numericChangesOnOriginalUsableGames!==0
+    ||row.numericChangesOnOriginalUsableGames>row.v1Reconstructed
+    ||row.correctedOriginalUsableGames!==row.numericChangesOnOriginalUsableGames
+    ||!row.correctionReasons||typeof row.correctionReasons!=='object'||Array.isArray(row.correctionReasons)
+    ||Object.entries(row.correctionReasons).some(([reason,value])=>!count(value)||reason!=='VAR_REVIEW_MISCLASSIFIED_AS_DISMISSAL'&&value>0)
+    ||Object.values(row.correctionReasons).reduce((total,value)=>total+value,0)!==row.correctedOriginalUsableGames
     ||row.v2Reconstructed+row.unverified!==row.population
     ||!row.v2Reasons||typeof row.v2Reasons!=='object'||Array.isArray(row.v2Reasons)
     ||Object.values(row.v2Reasons).some(value=>!count(value))
@@ -40,6 +45,7 @@ export function SoccerMinutesV2Coverage({league,summary=minutesV2Coverage}){
   return <section className="soccerMinutesV2Coverage" aria-label="歷史分鐘重建覆蓋">
     <h4>歷史上場分鐘補齊</h4>
     {row?<><p>{leagueNames[league]}保留資料：原可重建 {row.v1Reconstructed}／{row.population} 場；本次可重建 {row.v2Reconstructed}／{row.population} 場，補回 {row.recovered} 場。</p>
+      {row.correctedOriginalUsableGames>0&&<p>原可重建場次中，本次更正 {row.correctedOriginalUsableGames} 場 VAR 紀錄誤判造成的分鐘數值；現行模型仍未使用 V2。</p>}
       <p>仍有 {row.unverified} 場未通過核對{row.unverified?'：':'。'}</p>
       {row.unverified>0&&<ul>{Object.entries(row.v2Reasons).filter(([,value])=>value>0).map(([reason,value])=><li key={reason}>{reasonNames[reason]||'其他來源檢核未通過'}：{value} 場</li>)}</ul>}
       <p className="soccerAvailability">這是目前保留歷史資料的賽後重播，按球員身分與當時場上狀態核對正規時鐘分鐘，不含實際補時。不是賽前預計分鐘，也不證明當時已取得資料。</p>
