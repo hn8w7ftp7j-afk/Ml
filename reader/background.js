@@ -3,7 +3,7 @@ import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSu
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 
-const VERSION = '2.1.46';
+const VERSION = '2.1.47';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -423,7 +423,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     }
     const soccer = ['EPL', 'UCL'].includes(league);
     const selection = soccer ? selectAuthoritativeSoccerBoards(own, { now: Date.now(), preferredTabId, league })
-      : selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league });
+      : selectAuthoritativeBoard(own, { now: Date.now(), preferredTabId, league, dateScoped: true });
     context.leagues[league] = (selection.assessed || []).map(item => ({ diagnostics: item.candidate?.capture?.diagnostics,
       parsedGameCount: item.candidate?.parsed?.games?.length || 0, issues: item.issues || [] }));
     if (!selection.ok) {
@@ -440,19 +440,21 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
-    const sources = (soccer || league === 'NBA' ? selection.selections : [{ selected: selection.selected }]).map(({ selected, sourceScopes }) => {
+    const sources = (soccer ? selection.selections : selection.selections || [{ selected: selection.selected }]).map(({ selected, sourceScopes, boardDates }) => {
       // Comparison projections must never replace the captured evidence sent to
       // the server. Each dated upload retains its intact original raw frame.
       const sourcePayload = soccer ? { ...selected.candidate.parsed } : selected.candidate.parsed;
       Object.assign(sourcePayload, { league, readerVersion: VERSION, deviceId: stored.deviceId, pageActivityAt: selected.pageActivityAt, expectedGameCount: selected.expectedGameCount, detectedGameCount: selected.detectedGameCount });
-      return { selected, sourcePayload, sourceScopes: soccer && Array.isArray(sourceScopes) ? sourceScopes : [] };
+      return { selected, sourcePayload, boardDates: !soccer && Array.isArray(boardDates) ? boardDates : null,
+        sourceScopes: soccer && Array.isArray(sourceScopes) ? sourceScopes : [] };
     });
     const { selected, sourcePayload } = sources[0];
     // A frame can win authority for only some dated periods. Keep its complete
     // raw source for reparse, but remove every unselected date and period so a
     // full frame cannot overwrite a different scope's chosen source receipt.
     const payloads = sources.flatMap(source => readerPayloadsByDate(source.sourcePayload,
-      soccer ? { soccerScopes: source.sourceScopes } : {}));
+      soccer ? { soccerScopes: source.sourceScopes } : {}).filter(payload =>
+      soccer || source.boardDates === null || source.boardDates.includes(payload.boardDate)));
     if (soccer && !payloads.length) {
       statuses[league] = { ok: false, state: 'error', league, diagnosticCode: 'soccer-authority-date-missing',
         message: `${LABELS[league]}來源盤日尚未通過核對，已停止上傳`, readerVersion: VERSION };
@@ -462,7 +464,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     for (const payload of payloads) {
       const periodsCovered = soccer ? (payload.periodsCovered?.length ? payload.periodsCovered : ['UNKNOWN']) : null;
       const periodKey = soccer ? periodsCovered.join('+') : '';
-      const baseSyncKey = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? `${league}:${payload.boardDate}` : league;
+      const baseSyncKey = `${league}:${payload.boardDate}`;
       const syncKey = soccer && periodKey !== 'UNKNOWN' ? `${baseSyncKey}:${periodKey}` : baseSyncKey;
       try {
         const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;

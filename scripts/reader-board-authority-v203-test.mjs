@@ -111,7 +111,7 @@ assert.match(
   /tab\.active === true \? tabId : null/,
   'an inactive tab load may not become preferred either',
 );
-assert.match(backgroundSource, /selectAuthoritativeBoard\(own, \{ now: Date\.now\(\), preferredTabId, league \}\)/);
+assert.match(backgroundSource, /selectAuthoritativeBoard\(own, \{ now: Date\.now\(\), preferredTabId, league, dateScoped: true \}\)/);
 assert.doesNotMatch(backgroundSource, /!withinTai888TabScanLimit\(tabs\.length\)/);
 assert.match(backgroundSource, /for \(const tab of tabs\)/);
 assert.doesNotMatch(backgroundSource, /tabs\.slice\(0,\s*4\)/);
