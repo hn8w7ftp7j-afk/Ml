@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -82,6 +83,7 @@ async function workerFlow(captures, { persist = null, selector = selectAuthorita
       const data = persist ? await persist(payload) : readerSaveReceiptFixture(payload);
       return { ok: true, status: 200, text: async () => JSON.stringify(data) };
     } });
+  installArchiveWorkerFixture(worker);
   vm.runInContext(background, worker);
   const run = reason => vm.runInContext(`performSync('${reason}')`, worker);
   const first = await run('manual'); return { first, state, uploads, run };

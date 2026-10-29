@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import fs from 'node:fs';
@@ -208,6 +209,7 @@ try {
       return { ok: true, status: 200, text: async () => JSON.stringify(readerSaveReceiptFixture(body, { rawGameCount: 1, marketCount, executable: false })) };
     },
   });
+  installArchiveWorkerFixture(worker);
   vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), worker);
   const result = await vm.runInContext("performSync('manual')", worker);
   assert.equal(result.ok, true, JSON.stringify(result));

@@ -58,6 +58,21 @@ function renderDiagnosticDelivery(delivery) {
     : '診斷將隨讀取自動回傳';
 }
 
+function renderMarketArchiveDelivery(delivery) {
+  const element = byId('marketArchiveDelivery');
+  if (!element) return;
+  const pending = Number(delivery?.pendingCount || 0), saved = Number(delivery?.savedCaptureCount || 0);
+  const failure = delivery?.code === 'QUEUE_FULL' ? '本機待傳空間已滿，新增擷取未備份；舊待傳資料仍保留'
+    : delivery?.code === 'LOCAL_SAVE_FAILED' ? '本機保存未確認，新增擷取未備份'
+    : delivery?.code === 'PAIR_REQUIRED' ? '等待重新配對後補傳'
+    : delivery?.code === 'DEVICE_MISMATCH' ? '待傳資料屬於其他裝置，已保留並停止補傳'
+    : delivery?.code === 'INVALID_RECEIPT' ? '伺服器保存回條不符，資料仍保留'
+    : delivery?.code === 'RETRY_PENDING' ? '連線恢復後自動補傳' : '';
+  element.textContent = `盤口歷史備份：待傳 ${pending} 筆｜已確認 ${saved} 筆${failure ? `｜${failure}` : ''}`
+    + (Number(delivery?.failedCaptureCount || 0) ? `｜累計未加入備份 ${delivery.failedCaptureCount} 次` : '')
+    + '。歷史補傳不代表即時盤已同步或所有賽事已收齊。';
+}
+
 function render(statuses) {
   leagueGrid.replaceChildren(); let healthy = 0;
   for (const [id, label] of LEAGUES) {
@@ -81,6 +96,7 @@ async function refresh() {
   if (!result.ok) throw new Error(result.error || '無法取得 Reader 狀態');
   const paired = Boolean(result.paired);
   pairPanel.classList.toggle('hidden', paired); statusPanel.classList.toggle('hidden', !paired);
+  renderMarketArchiveDelivery(result.marketArchiveDelivery);
   if (!paired) { show(result?.error || '第一次使用請輸入一次配對密碼。'); return; }
   autoToggle.checked = result.autoEnabled !== false; render(result.statuses || {});
   renderDiagnosticDelivery(result.diagnosticDelivery);
@@ -99,5 +115,6 @@ async function initialize() {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.readerStatuses) render(changes.readerStatuses.newValue || {});
   if (area === 'local' && changes.diagnosticDelivery) renderDiagnosticDelivery(changes.diagnosticDelivery.newValue);
+  if (area === 'local' && changes.marketArchiveDelivery) renderMarketArchiveDelivery(changes.marketArchiveDelivery.newValue);
 });
 initialize().catch(error => show(error.message, 'error'));

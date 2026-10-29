@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -87,6 +88,7 @@ async function workerFlow(captures) {
       } else assert.equal(url, 'https://mlb-positive-ev.vercel.app/api/reader/ingest');
       return { ok: true, status: 200, text: async () => JSON.stringify(readerSaveReceiptFixture(p)) };
     } });
+  installArchiveWorkerFixture(worker);
   vm.runInContext(source, worker); const run = reason => vm.runInContext(`performSync('${reason}')`, worker);
   return { first: await run('manual'), state, uploads, run };
 }
