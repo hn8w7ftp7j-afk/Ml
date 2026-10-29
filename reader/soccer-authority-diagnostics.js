@@ -1,5 +1,5 @@
 // Observational evidence only. This module cannot select a source or authorize
-// an upload; it describes bounded differences between already-parsed football
+// an upload; it describes bounded differences between already-parsed typed
 // boards without retaining browser identifiers, raw team names or raw text.
 export const SOCCER_AUTHORITY_DIAGNOSTICS_VERSION = 'SOCCER-AUTHORITY-DIAGNOSTICS-v1';
 const PERIODS = ['FT', 'HT', 'UNKNOWN'];
@@ -15,8 +15,8 @@ const validLine = value => typeof value === 'string' && /^(?:\d{1,3}(?:\.\d{1,3}
 const validWater = value => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1000;
 const marketKey = market => [market.kind, market.line || '', market.lineSide || ''].join('|');
 
-function marketEvidence(input) {
-  if (!input || input.unit !== 'GOALS' || !['HANDICAP', 'TOTAL', 'MONEYLINE'].includes(input.kind)) return null;
+function marketEvidence(input, unit) {
+  if (!input || input.unit !== unit || !['HANDICAP', 'TOTAL', 'MONEYLINE'].includes(input.kind)) return null;
   if (input.kind !== 'MONEYLINE' && !validLine(input.line)) return null;
   if (input.kind === 'HANDICAP' && !['home', 'away'].includes(input.lineSide)) return null;
   const fields = input.kind === 'HANDICAP' ? ['awayWater', 'homeWater']
@@ -28,13 +28,14 @@ function marketEvidence(input) {
     ...Object.fromEntries(fields.map(field => [field, input[field]])) };
 }
 
-function sourceEvidence(candidate, index, scope) {
+function sourceEvidence(candidate, index, scope, { unit, teamCodeValid, gameEvidence }) {
   const inputGames = Array.isArray(candidate?.parsed?.games) ? candidate.parsed.games : [];
   const games = new Map(), dates = new Set(), periods = new Set();
   let marketCount = 0, invalidGameCount = 0, invalidMarketCount = 0, truncated = inputGames.length > MAX_GAMES;
-  for (const input of inputGames.slice(0, MAX_GAMES)) {
+  for (const rawGame of inputGames.slice(0, MAX_GAMES)) {
+    const input = gameEvidence(rawGame);
     if (!validDate(input?.boardDate) || !validTime(input?.boardTime)
-      || !validCode(input?.awayCode) || !validCode(input?.homeCode) || input.awayCode === input.homeCode) {
+      || !teamCodeValid(input?.awayCode) || !teamCodeValid(input?.homeCode) || input.awayCode === input.homeCode) {
       invalidGameCount++; continue;
     }
     const rawMarkets = Array.isArray(input.markets) ? input.markets : [];
@@ -42,7 +43,7 @@ function sourceEvidence(candidate, index, scope) {
     if (rawMarkets.length > MAX_MARKETS) truncated = true;
     const scoped = new Map();
     for (const raw of rawMarkets.slice(0, MAX_MARKETS)) {
-      const market = marketEvidence(raw);
+      const market = marketEvidence(raw, unit);
       if (!market) { invalidMarketCount++; continue; }
       if (scope && market.period !== scope) continue;
       if (!scoped.has(market.period)) scoped.set(market.period, { state: 'open', markets: new Map() });
@@ -67,8 +68,14 @@ function sourceEvidence(candidate, index, scope) {
 
 export function buildSoccerAuthorityDiagnostics(candidates, { league, period = null } = {}) {
   if (!['EPL', 'UCL'].includes(league) || period !== null && !PERIODS.includes(period)) return null;
+  return buildTypedAuthorityDiagnostics(candidates, { league, period, version: SOCCER_AUTHORITY_DIAGNOSTICS_VERSION, unit: 'GOALS', teamCodeValid: validCode });
+}
+
+// Shared observational comparison only. Callers provide already-normalized,
+// strictly typed identities; this function never selects or authorizes sources.
+export function buildTypedAuthorityDiagnostics(candidates, { league, period = null, version, unit, teamCodeValid, gameEvidence = input => input }) {
   const eligible = (Array.isArray(candidates) ? candidates : []).filter(candidate => candidate?.parsed?.league === league);
-  const sources = eligible.slice(0, MAX_SOURCES).map((candidate, index) => sourceEvidence(candidate, index + 1, period));
+  const sources = eligible.slice(0, MAX_SOURCES).map((candidate, index) => sourceEvidence(candidate, index + 1, period, { unit, teamCodeValid, gameEvidence }));
   const pairs = [], differences = [];
   let differenceCount = 0;
   const record = value => { differenceCount++; if (differences.length < MAX_DIFFERENCES) differences.push(value); };
@@ -120,7 +127,7 @@ export function buildSoccerAuthorityDiagnostics(candidates, { league, period = n
       pairs.push(pair);
     }
   }
-  return { version: SOCCER_AUTHORITY_DIAGNOSTICS_VERSION, sourceCount: count(eligible.length),
+  return { version, sourceCount: count(eligible.length),
     sourcesTruncated: eligible.length > MAX_SOURCES, detailsTruncated: sources.some(source => source.truncated),
     sources: sources.map(source => source.summary), pairs, differences, differenceCount: count(differenceCount),
     differencesTruncated: differenceCount > MAX_DIFFERENCES };

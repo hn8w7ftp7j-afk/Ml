@@ -151,6 +151,28 @@ await assert.rejects(
   error => error?.status === 502 && error?.code === 'OFFICIAL_SCHEDULE_UNAVAILABLE',
 );
 
+// Official empty schedules must not become a retrying 502/network failure.
+assert.deepEqual(await fetchOfficialTaipeiSlate('2099-08-12', {
+  fetchImpl: async () => Response.json({ dates: [] }),
+}), []);
+assert.deepEqual(await fetchOfficialTaipeiSlate('2099-08-12', {
+  fetchImpl: async () => Response.json({ dates: [{ games: [] }] }),
+}), []);
+assert.deepEqual(await fetchOfficialTaipeiSlate('2099-08-12', {
+  fetchImpl: async () => Response.json({ dates: [{ games: [
+    statsGame({ gamePk: 990003, gameDate: '2099-08-12T22:00:00Z', gameNumber: 1 }),
+  ] }] }),
+}), [], 'official neighboring-date games must not be moved into the selected Taipei date');
+for (const malformed of [{}, { dates: [{}] }, { dates: [{ games: [{}] }] }, { dates: [], totalGames: 1 }]) {
+  await assert.rejects(() => fetchOfficialTaipeiSlate('2099-08-12', {
+    fetchImpl: async () => Response.json(malformed),
+  }), error => error?.status === 502 && error?.code === 'OFFICIAL_SCHEDULE_UNAVAILABLE');
+}
+await assert.rejects(() => fetchOfficialTaipeiSlate('2099-08-12', {
+  fetchImpl: async url => new URL(url).searchParams.get('date') === '2099-08-11'
+    ? new Response('unavailable', { status: 503 }) : Response.json({ dates: [] }),
+}), error => error?.code === 'OFFICIAL_SCHEDULE_UNAVAILABLE', 'one failed official date cannot be declared an empty slate');
+
 assert.equal(providerTimestamp('2099-08-12T10:00', { assumeTaipei: true }), '2099-08-12T02:00:00.000Z');
 assert.equal(providerTimestamp('2099-08-12T10:00'), null);
 const fetchedAt = '2099-08-12T01:55:00.000Z';

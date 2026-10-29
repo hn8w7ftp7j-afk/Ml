@@ -346,6 +346,19 @@ try {
   assert.match((await unavailableTaipeiSlate.json()).error, /官方賽程/);
   officialStatus = 200;
 
+  const nonemptyOfficialPayload = officialPayload;
+  officialPayload = { dates: [], totalGames: 0 };
+  const scheduleRoute = await import('../app/api/schedule/route.js');
+  for (const [route, path] of [[mlbRoute, '/api/mlb?date=2099-08-12'],
+    [scheduleRoute, '/api/schedule?league=MLB&date=2099-08-12']]) {
+    const emptyResponse = await route.GET(getRequest(path, token));
+    assert.equal(emptyResponse.status, 200, 'official off days are successful empty schedules, not a network failure');
+    const emptyPayload = await emptyResponse.json();
+    assert.equal(emptyPayload.ok, true);
+    assert.deepEqual(emptyPayload.games, []);
+  }
+  officialPayload = nonemptyOfficialPayload;
+
   const readerObservedAt = new Date(Date.now() - 2_000).toISOString();
   const readerPayload = {
     version: 'TAI888-READER-DOM-v2.0.3',

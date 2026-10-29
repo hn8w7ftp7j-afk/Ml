@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { ACTIVE_ANALYSIS_LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, analysisBatchScope, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
-import { createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueAnalysisProgress, allLeagueAnalysisOutcomeText, summarizeAllLeagueBatchResult, allLeagueStatusLabel } from '../lib/all-league-analysis-v117.js';
+import { createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState, allLeagueAnalysisProgress, allLeagueAnalysisOutcomeText, summarizeAllLeagueBatchResult, allLeagueStatusLabel } from '../lib/all-league-analysis-v117.js';
 import { soccerAnalysisResultHref } from '../lib/soccer/analysis-link.js';
 import { validSoccerDate, soccerLeague } from '../lib/soccer/contracts.js';
 import { isLeagueId, requestedLeagueId, LEAGUE_IDS } from '../lib/leagues.js';
@@ -22,10 +22,10 @@ const action = page.slice(startIndex, page.indexOf('\n  useEffect(', startIndex)
 const prepareIndex = page.indexOf('  async function prepareSoccerBatch(');
 const prepare = page.slice(prepareIndex, startIndex);
 const copy = value => JSON.parse(JSON.stringify(value));
-function harness({ failure = '', empty = '' } = {}) {
+function harness({ failure = '', empty = '', nbaReaderStatus = '' } = {}) {
   const calls = [], saved = [], jobs = [], notices = [];
   const ctx = { Date, URLSearchParams, ANALYSIS_LEAGUE_IDS: ids, LEAGUE_IDS, isSoccerAnalysisLeague,
-    createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
+    createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState,
     readerPollBusyRef: { current: false }, independentRunsRef: { current: new Map() },
     allLeagueBusyRef: { current: false }, operationBusyRef: { current: false }, allLeagueRunning: false, nbaRunning: false, soccerRunning: false,
     leagueDatesRef: { current: { MLB: '2026-10-19', NPB: '2026-10-18', KBO: '2026-10-19', CPBL: '2026-10-19' } },
@@ -48,7 +48,13 @@ function harness({ failure = '', empty = '' } = {}) {
     startBackgroundAnalysisJob: async value => { jobs.push(copy(value)); return { runId: 'workflow-seven-leagues' }; },
     saveBackgroundJob: value => { saved.push(copy(value)); return true; },
   };
-  function batch(league, date) { return { league, date, tasks: league === empty ? [] : [{ game: { gamePk: 12, leagueId: league } }], preparedBoard: [], emptyReason: league === empty ? 'no_games' : null }; }
+  function batch(league, date) {
+    const readerWaiting = league === 'NBA' && nbaReaderStatus;
+    return { league, date, tasks: league === empty || readerWaiting ? [] : [{ game: { gamePk: 12, leagueId: league } }], preparedBoard: [],
+      emptyReason: readerWaiting ? 'no_open_markets' : league === empty ? 'no_games' : null,
+      ...(readerWaiting ? { readerStatus: nbaReaderStatus } : {}),
+    };
+  }
   vm.createContext(ctx); vm.runInContext(prepare + action, ctx);
   return { ctx, calls, saved, jobs, notices };
 }
@@ -76,6 +82,14 @@ assert.equal(partial.jobs[0].batches.some(b => b.league === 'UCL'), true, 'EPL p
 const empty = harness({ empty: 'UCL' });
 assert.equal(await empty.ctx.oneClickAnalyzeAll(), true);
 assert.equal(empty.ctx.run.leagues.UCL.status, 'no_games', 'an empty football slate is explicit');
+for (const readerStatus of ['stale', 'waiting']) {
+  const waiting = harness({ nbaReaderStatus: readerStatus });
+  assert.equal(await waiting.ctx.oneClickAnalyzeAll(), true);
+  assert.equal(waiting.ctx.run.leagues.NBA.status, 'waiting_reader');
+  assert.equal(waiting.jobs[0].batches.find(row => row.league === 'NBA').tasks.length, 0, 'waiting quotes cannot enter a model task');
+  assert.equal(waiting.jobs[0].batches.find(row => row.league === 'NBA').emptyReason, 'no_open_markets', 'display classification does not change the server batch contract');
+  assert.equal(waiting.ctx.run.leagues.EPL.status, 'queued', 'NBA waiting cannot block healthy football work');
+}
 
 const research = { league: 'EPL', total: 1, results: [{ ok: true, research: true, saved: true }] };
 assert.equal(summarizeAllLeagueBatchResult(research).status, 'research');

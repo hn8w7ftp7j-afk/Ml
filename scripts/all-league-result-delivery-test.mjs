@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
-import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
+import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState } from '../lib/all-league-analysis-v117.js';
 import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 
 const ids = ['MLB', 'NPB', 'KBO', 'CPBL'];
@@ -34,7 +34,7 @@ async function runSummary({ fresh = true, failLeague = '', switchLeague = false,
     submittedAllLeagueRunRef: { current: fresh ? run.runId : null },
     allLeagueBoardsRef: { current: new Map() }, currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date }, boardRef: { current: [] },
     analysisGenerationRef: { current: 1 }, verifyCompletedBoard: async (board, league) => { verifications.push(league); return board; },
-    LEAGUE_IDS: ids, analysisLeagueIdsForRun, isSoccerAnalysisLeague, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, materializeAllLeagueResult,
+    LEAGUE_IDS: ids, analysisLeagueIdsForRun, isSoccerAnalysisLeague, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState, materializeAllLeagueResult,
     requestJSON: async url => {
       requests.push(url);
       if (url.includes('summary=1')) {
@@ -104,7 +104,7 @@ const clickContext = {
   loadAllLeagueAnalysisRun: () => null, clearAllLeagueBackgroundJobs: noop,
   analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: {}, manualAnalysisScopesRef: { current: new Set() },
   markAppOperationBusy: noop, setAllLeaguePreparing: noop, setError: noop, setNotice: noop,
-  createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, publishAllLeagueRun: run => { publishedRun = run; },
+  createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState, publishAllLeagueRun: run => { publishedRun = run; },
   allLeagueTargetDate: async (_id, date) => date, clearBackgroundJob: noop,
   prepareSoccerBatch: async (id, date) => ({ league: id, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
@@ -130,6 +130,7 @@ assert.equal(savedJobs.length, 3);
 assert.equal(clickContext.requestedRecoveryScopeRef.current, `MLB:${date}`, 'visible league must attach to incremental progress immediately');
 assert.equal(publishedRun.leagues.NPB.message, '盤口已過期');
 assert.equal(publishedRun.leagues.NPB.code, 'READER_STALE', 'diagnostic code remains available without prefixing user text');
+assert.equal(publishedRun.leagues.NPB.status, 'waiting_reader', 'an unavailable Reader is a waiting prerequisite while healthy leagues continue');
 assert.equal(publishedRun.leagues.MLB.status, 'queued', 'submission alone does not establish running status');
 assert.equal(clickContext.allLeagueBusyRef.current, false);
 console.log('PASS actual all-league click: failed Reader isolated, healthy jobs submitted, incremental polling attached and preparation lock released');

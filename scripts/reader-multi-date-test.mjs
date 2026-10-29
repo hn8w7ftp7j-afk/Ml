@@ -40,6 +40,67 @@ assert.equal(readerPayloadsByDate(baseball)[0], baseball);
 assert.equal(assessBoardCandidate({ ...candidate, parsed: { ...parsed, league: 'MLB' } }, +now).ok, false);
 const conflicting = structuredClone(candidate); conflicting.parsed.games[1].fullTotal.line = '240平';
 assert.equal(selectAuthoritativeBoard([candidate, { ...conflicting, frameId: 1 }], { now: +now, league: 'NBA' }).ok, false);
+// Different dated tabs can expose different prices without contradicting each
+// other. Select an intact source for each stored date, never relabel a slate.
+function datedCandidate(index, tabId) {
+  const ownCapture = structuredClone(capture);
+  ownCapture.tables[0].rows = [ownCapture.tables[0].rows[index]];
+  ownCapture.diagnostics.gameCount = ownCapture.diagnostics.expectedGameCount = 1;
+  return { ...candidate, tabId, capture: ownCapture, parsed: parseTai888Capture(ownCapture, now) };
+}
+const todayTab = datedCandidate(0, 11), tomorrowTab = datedCandidate(1, 12);
+for (const tabs of [[todayTab, tomorrowTab], [tomorrowTab, todayTab], [todayTab, candidate], [candidate, tomorrowTab]]) {
+  const selected = selectAuthoritativeBoard(tabs, { now: +now, league: 'NBA' });
+  assert.equal(selected.ok, true, 'disjoint dates and identical shared dated boards are not quote conflicts');
+  assert.deepEqual(selected.selections.map(item => item.boardDate), ['2026-10-09', '2026-10-10']);
+  const selectedGames = selected.selections.flatMap(item => item.selected.candidate.parsed.games);
+  assert.deepEqual(selectedGames, parsed.games, 'preserve exact quotes, lock state, and raw evidence for both dates');
+}
+const sameDayCapture = structuredClone(capture);
+sameDayCapture.tables[0].rows[1].cells[0] = cell(['10-09', '21:05']);
+const sameDay = { ...candidate, tabId: 21, capture: sameDayCapture, parsed: parseTai888Capture(sameDayCapture, now) };
+const sameDaySubset = { ...todayTab, active: true, tabId: 22 };
+for (const tabs of [[sameDay, sameDaySubset], [sameDaySubset, sameDay]]) {
+  const selected = selectAuthoritativeBoard(tabs, { now: +now, league: 'NBA', preferredTabId: sameDaySubset.tabId });
+  assert.equal(selected.ok, true, 'a non-conflicting subset cannot block a complete intact source');
+  assert.equal(selected.authorityTabId, sameDay.tabId, 'coverage must take precedence over focus');
+  assert.deepEqual(selected.selected.candidate.parsed.games, sameDay.parsed.games);
+}
+const partialMarkets = structuredClone(sameDay);
+partialMarkets.tabId = 23;
+partialMarkets.parsed.games.forEach(game => { game.fullRunline = null; });
+assert.equal(selectAuthoritativeBoard([partialMarkets, sameDay], { now: +now, league: 'NBA' }).authorityTabId, sameDay.tabId,
+  'a complete source also covers non-conflicting partial markets');
+const sameDayDisjoint = structuredClone(sameDay);
+sameDayDisjoint.tabId = 24;
+sameDayDisjoint.parsed.games = [sameDayDisjoint.parsed.games[1]];
+const uncovered = selectAuthoritativeBoard([sameDaySubset, sameDayDisjoint], { now: +now, league: 'NBA' });
+assert.equal(uncovered.ok, false, 'no intact source covers disjoint same-date fragments; never union quotes');
+assert.equal(uncovered.error, 'no-complete-tab', 'missing full coverage is not mislabeled as contradictory prices');
+const changedSubset = structuredClone(sameDaySubset);
+changedSubset.parsed.games[0].fullTotal.overWater = 0.99;
+for (const tabs of [[sameDay, changedSubset], [changedSubset, sameDay]]) {
+  const selected = selectAuthoritativeBoard(tabs, { now: +now, league: 'NBA', preferredTabId: sameDay.tabId });
+  assert.equal(selected.ok, false, 'a newer/larger/active board never overrides a genuinely changed quote');
+  assert.equal(selected.error, 'conflicting-duplicate-tabs');
+}
+const lockedSubset = structuredClone(sameDaySubset);
+lockedSubset.parsed.games[0].marketStatus = 'locked';
+for (const key of ['fullRunline', 'fullTotal']) delete lockedSubset.parsed.games[0][key];
+assert.equal(selectAuthoritativeBoard([lockedSubset, sameDay], { now: +now, league: 'NBA' }).ok, false,
+  'open versus explicitly locked evidence remains a conflict');
+const changedTomorrow = structuredClone(tomorrowTab);
+changedTomorrow.parsed.games[0].fullTotal.line = '240平';
+for (const tabs of [[todayTab, candidate, changedTomorrow], [changedTomorrow, candidate, todayTab]]) {
+  const selected = selectAuthoritativeBoard(tabs, { now: +now, league: 'NBA' });
+  assert.equal(selected.ok, false, 'one real same-date conflict stops the entire league');
+  assert.equal(selected.error, 'conflicting-duplicate-tabs');
+  assert.deepEqual(selected.selections, []);
+}
+const internallyConflicting = structuredClone(candidate);
+internallyConflicting.parsed.parseIssues = ['conflicting-duplicate:tomorrow'];
+assert.equal(selectAuthoritativeBoard([todayTab, internallyConflicting], { now: +now, league: 'NBA' }).ok, false,
+  'validate all original rows before projecting dates');
 const invalid = structuredClone(candidate); invalid.parsed.games[1].boardDate = 'bad-date';
 assert.equal(assessBoardCandidate(invalid, +now).ok, false);
 console.log('NBA multi-date capture → authority → date payload/hash → backend normalization → isolated storage PASS');
@@ -53,11 +114,11 @@ const { shouldSkipSuccessfulPayload } = await import('../reader/board-selector.j
 class Clock extends Date { constructor(...args) { super(...(args.length ? args : [+now])); } static now() { return +now; } }
 const event = { addListener() {} };
 const state = { readerToken: 'synthetic-token', deviceId: payload.deviceId, autoEnabled: true };
-const uploads = []; let failTomorrow = true;
+const uploads = []; let failTomorrow = true; let syncCaptures = [capture];
 const fakeChrome = {
   runtime: { onInstalled: event, onStartup: event, onMessage: event }, alarms: { onAlarm: event },
   storage: { local: { get: async () => structuredClone(state), set: async value => Object.assign(state, value), remove: async key => { delete state[key]; } } },
-  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion, captures: [capture] } }) },
+  tabs: { onUpdated: event, query: async () => [{ id: 7, active: true }], sendMessage: async () => ({ ok: true, capture: { readerVersion, captures: syncCaptures } }) },
   webNavigation: { getAllFrames: async () => [{ frameId: 0 }] },
 };
 const ctx = { chrome: fakeChrome, parseTai888Capture, canonicalReaderPayload, readerMarketProperties, selectAuthoritativeBoard, shouldSkipSuccessfulPayload, readerPayloadsByDate,
@@ -89,3 +150,15 @@ await vm.runInContext("performSync('alarm')", ctx);
 assert.deepEqual(uploads, []);
 assert.equal(state.readerStatuses.NBA.ok, true);
 console.log('Actual Reader service worker: date uploads, partial failure, isolated retry, receipts and heartbeat PASS');
+
+// Repeat the real worker using independent today/tomorrow tabs/frames. This
+// verifies both dated sources reach backend normalization and save receipts.
+syncCaptures = [todayTab.capture, tomorrowTab.capture];
+uploads.length = 0;
+await vm.runInContext("performSync('manual')", ctx);
+assert.deepEqual(uploads, ['2026-10-09', '2026-10-10']);
+assert.equal(state.readerStatuses.NBA.ok, true);
+assert.equal(state.readerStatuses.NBA.dateStatuses.length, 2);
+assert.equal(state.readerStatuses.NBA.rawGameCount, 2);
+assert.deepEqual([...state.readerStatuses.NBA.boardDates], ['2026-10-09', '2026-10-10']);
+console.log('NBA independent dated sources: scoped authority, intact quotes, whole-league conflict rejection and actual worker uploads PASS');
