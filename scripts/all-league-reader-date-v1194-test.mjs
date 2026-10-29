@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { LEAGUE_IDS } from '../lib/leagues.js';
 import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
-import { createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
+import { createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState } from '../lib/all-league-analysis-v117.js';
 
 // Execute the actual page's resolver and four-league submission flow. Provider
 // responses and the workflow submission are isolated mocks; no live writes.
@@ -25,7 +25,7 @@ function harness({ manual = [], latest = id => ({ fresh: true, boardDate: id ===
   const saved = [];
   const submitted = [];
   const context = vm.createContext({
-    Date, Number, String, encodeURIComponent, LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, nbaRunning: false, soccerRunning: false, nbaDate: TODAY, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague,
+    Date, Number, String, encodeURIComponent, LEAGUE_IDS, ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague, nbaRunning: false, soccerRunning: false, nbaDate: TODAY, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState,
     independentRunsRef: { current: new Map() },
     manualDateSelectionRef: { current: new Set(manual) },
     leagueDatesRef: { current: Object.fromEntries(LEAGUE_IDS.map(id => [id, TODAY])) },
@@ -142,7 +142,7 @@ await test('empty and failed preflights never create an empty workflow or overwr
   assert.equal(state.context.allLeagueRun.state, 'completed');
   assert.equal(state.context.allLeagueRun.leagues.MLB.status, 'no_games');
   for (const id of ['NPB', 'KBO', 'CPBL']) {
-    assert.equal(state.context.allLeagueRun.leagues[id].status, 'failed');
+    assert.equal(state.context.allLeagueRun.leagues[id].status, 'waiting_reader');
     assert.equal(state.context.allLeagueRun.leagues[id].code, 'READER_NOT_SYNCED');
     assert.equal(state.context.allLeagueRun.leagues[id].stage, 'reader_preflight');
   }

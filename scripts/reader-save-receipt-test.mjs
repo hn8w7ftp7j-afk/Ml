@@ -42,7 +42,11 @@ function harness(payload, respond = input => readerSaveReceiptFixture(input)) {
     AbortController, setTimeout, clearTimeout, queueMicrotask, canonicalReaderPayload, readerMarketProperties,
     readerPayloadsByDate, shouldSkipSuccessfulPayload,
     nhlReaderEvidencePayload: input => input,
-    selectAuthoritativeBoard: items => ({ ok: true, selected: selected(items) }),
+    selectAuthoritativeBoard: (items, { league }) => ({ ok: true, selected: selected(items),
+      ...(league === 'NBA' ? { selections: [...new Set(items[0].parsed.games.map(game => game.boardDate))]
+        .map(boardDate => ({ selected: selected([{ ...items[0], parsed: { ...items[0].parsed, boardDate,
+          games: items[0].parsed.games.filter(game => game.boardDate === boardDate) } }]) })) } : {}),
+    }),
     selectAuthoritativeSoccerBoards: items => ({ ok: true, selections: [{ selected: selected(items),
       sourceScopes: [...new Set(items[0].parsed.games.map(game => game.boardDate))]
         .map(boardDate => ({ boardDate, periodsCovered: ['FT'] })) }] }),

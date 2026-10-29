@@ -5,6 +5,9 @@ import {
   allLeagueAnalysisProgress,
   allLeagueAnalysisOutcomeText,
   allLeagueRunContainsDate,
+  allLeaguePreflightFailureState,
+  allLeagueStateForDisplay,
+  allLeagueStatusLabel,
   createAllLeagueAnalysisRun,
   mergePreparedLeagueBoard,
   preserveCompletedReaderResult,
@@ -51,6 +54,33 @@ assert.deepEqual(summarizeAllLeagueBatchResult({
   results: [{ ok: true }, { ok: false, status: 422 }, { ok: false, status: 500 }],
 }), { status: 'partial', total: 3, completed: 1, blocked: 1, failed: 1 });
 assert.equal(summarizeAllLeagueBatchResult({ total: 0, emptyReason: 'no_games', results: [] }).status, 'no_games');
+
+const missingReader = Object.assign(new Error('尚未收到 Tai888 Reader 盤口'), { code: 'READER_NOT_SYNCED', stage: 'reader_preflight' });
+assert.equal(allLeaguePreflightFailureState(missingReader).status, 'waiting_reader');
+assert.equal(allLeaguePreflightFailureState({ code: 'READER_STALE' }).status, 'waiting_reader');
+for (const code of ['READER_SLATE_MISMATCH', 'READER_MARKET_COVERAGE_MISMATCH', 'OFFICIAL_IDENTITY_MISMATCH', 'TRANSIENT_BROWSER_LOAD_FAILED']) {
+  assert.equal(allLeaguePreflightFailureState({ code }).status, 'failed', `unverified data and network errors remain failures: ${code}`);
+}
+let waitingRun = createAllLeagueAnalysisRun('2026-10-30', Date.now(), ['MLB', 'KBO', 'NBA']);
+waitingRun = updateAllLeagueAnalysisLeague(waitingRun, 'MLB', { status: 'failed', code: 'TRANSIENT_BROWSER_LOAD_FAILED' });
+waitingRun = updateAllLeagueAnalysisLeague(waitingRun, 'KBO', { ...allLeaguePreflightFailureState(missingReader) });
+waitingRun = updateAllLeagueAnalysisLeague(waitingRun, 'NBA', { status: 'no_open_markets', readerStatus: 'stale' });
+const waitingSnapshot = JSON.stringify(waitingRun);
+const waitingProgress = allLeagueAnalysisProgress(waitingRun);
+assert.equal(waitingProgress.terminal, 3);
+assert.equal(waitingProgress.failed, 1);
+assert.equal(waitingProgress.waitingReader, 2);
+assert.equal(waitingProgress.succeeded, 0, 'waiting for data is never a successful analysis');
+assert.equal(allLeagueAnalysisOutcomeText(waitingProgress), '失敗 1 聯盟｜等待同步 2 聯盟');
+assert.equal(JSON.stringify(waitingRun), waitingSnapshot, 'saved receipts remain immutable during display normalization');
+assert.equal(allLeagueStateForDisplay({ status: 'failed', code: 'READER_NOT_SYNCED' }).status, 'waiting_reader');
+assert.equal(allLeagueStateForDisplay({ status: 'no_open_markets', readerStatus: 'waiting' }).status, 'waiting_reader');
+assert.equal(allLeagueStateForDisplay({ status: 'no_open_markets', readerStatus: 'fresh' }).status, 'no_open_markets', 'verified fresh locked boards still mean waiting for opening');
+assert.equal(allLeagueStateForDisplay({ status: 'no_games', readerStatus: 'stale' }).status, 'no_games', 'absence of official games is independent from Reader availability');
+assert.equal(allLeagueStatusLabel('waiting_reader'), '等待盤口同步');
+const nbaWorkspace = read('app/nba/main-workspace.js');
+assert.match(nbaWorkspace, /readerStatus === 'stale' && readerFailure && <div className="errorBox" role="alert">/);
+assert.match(nbaWorkspace, /這是上次分析結果；目前盤口同步狀態請見下方/);
 
 const previous = [{
   game: { gamePk: 10, gameDate: '2026-08-30T10:00:00Z', leagueId: 'MLB' },

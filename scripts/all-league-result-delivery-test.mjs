@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { materializeAllLeagueResult } from '../lib/all-league-result-board.js';
-import { allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
+import { ALL_LEAGUE_TERMINAL_STATUSES, allLeagueBoardDate, createAllLeagueAnalysisRun, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState } from '../lib/all-league-analysis-v117.js';
 import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, analysisLeagueIdsForRun, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 
 const ids = ['MLB', 'NPB', 'KBO', 'CPBL'];
@@ -34,7 +34,7 @@ async function runSummary({ fresh = true, failLeague = '', switchLeague = false,
     submittedAllLeagueRunRef: { current: fresh ? run.runId : null },
     allLeagueBoardsRef: { current: new Map() }, currentLeagueRef: { current: 'MLB' }, currentDateRef: { current: date }, boardRef: { current: [] },
     analysisGenerationRef: { current: 1 }, verifyCompletedBoard: async (board, league) => { verifications.push(league); return board; },
-    LEAGUE_IDS: ids, analysisLeagueIdsForRun, isSoccerAnalysisLeague, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, materializeAllLeagueResult,
+    ALL_LEAGUE_TERMINAL_STATUSES, LEAGUE_IDS: ids, analysisLeagueIdsForRun, isSoccerAnalysisLeague, useEffect: fn => { effect = fn; }, allLeagueBoardDate, summarizeAllLeagueBatchResult, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState, materializeAllLeagueResult,
     requestJSON: async url => {
       requests.push(url);
       if (url.includes('summary=1')) {
@@ -91,6 +91,64 @@ for (const supersedeAt of ['summary', 'full']) {
 }
 console.log('All-league result delivery: four immutable boards after reload, Reader authority separation, failure isolation and newer-run/selection races PASS');
 
+// Execute both real failure exits. A failure of the shared workflow cannot
+// rewrite another league's completed research or missing-Reader prerequisite.
+async function failedSummary(mode) {
+  const leagues = {
+    MLB: { status: 'running', boardDate: date, readerStatus: 'stale' },
+    NPB: { status: 'queued', boardDate: date },
+    KBO: { status: 'waiting_reader', code: 'READER_NOT_SYNCED', boardDate: date },
+    CPBL: { status: 'failed', code: 'READER_SLATE_MISMATCH', boardDate: date, message: '官方場次不符' },
+    NBA: { status: 'no_open_markets', readerStatus: 'stale', boardDate: date },
+    EPL: { status: 'research', total: 2, completed: 2, boardDate: date },
+    UCL: { status: 'insufficient_data', total: 1, blocked: 1, boardDate: date },
+  };
+  const run = { runId: 'workflow-failure-fixture', state: 'running', date, leagues };
+  let effect, published, shownError = '', retryCount = 0;
+  const cleared = [];
+  const context = vm.createContext({
+    storageReady: true, date, allLeagueRun: run, allLeagueRunRef: { current: run },
+    ALL_LEAGUE_TERMINAL_STATUSES, analysisLeagueIdsForRun, allLeagueBoardDate, updateAllLeagueAnalysisLeague,
+    useEffect: fn => { effect = fn; },
+    requestJSON: async () => {
+      if (mode === 'missing') throw Object.assign(new Error('Unknown workflow run'), { status: 404 });
+      if (mode === 'temporary') throw Object.assign(new Error('temporary unavailable'), { status: 503 });
+      return { status: mode };
+    },
+    loadAllLeagueAnalysisRun: () => run,
+    clearBackgroundJob: (...args) => cleared.push(args),
+    publishAllLeagueRun: value => { published = value; },
+    setProgress() {}, setBackgroundJobRevision() {}, setError: value => { shownError = value; },
+    window: { setTimeout: () => { retryCount++; }, clearTimeout() {} },
+  });
+  const failureStart = page.indexOf('function analysisFailureState(');
+  const failureEnd = page.indexOf('\n}\n', failureStart);
+  vm.runInContext(page.slice(failureStart, failureEnd + 3), context);
+  vm.runInContext(page.slice(start, end), context);
+  effect();
+  await new Promise(resolve => setImmediate(resolve));
+  return { run, published, shownError, cleared, retryCount };
+}
+for (const mode of ['failed', 'cancelled', 'missing']) {
+  const failure = await failedSummary(mode);
+  assert.equal(failure.published.state, 'completed');
+  assert.equal(failure.published.leagues.MLB.status, 'failed', `${mode}: a real running failure remains failed even with old Reader state`);
+  assert.equal(failure.published.leagues.NPB.status, 'failed');
+  for (const league of ['KBO', 'CPBL', 'NBA', 'EPL', 'UCL']) {
+    assert.deepEqual(failure.published.leagues[league], failure.run.leagues[league], `${mode}: terminal ${league} evidence remains untouched`);
+  }
+  assert.equal(allLeagueStateForDisplay(failure.published.leagues.CPBL).status, 'failed', 'genuine schedule mismatch cannot become waiting');
+  assert.equal(allLeagueStateForDisplay(failure.published.leagues.NBA).status, 'waiting_reader', 'unchanged stale NBA preflight still means waiting for sync');
+  assert.equal(failure.cleared.length, 7);
+  assert.equal(failure.retryCount, 0);
+  if (mode === 'missing') assert.match(failure.shownError, /已失效.*解鎖/);
+}
+const transient = await failedSummary('temporary');
+assert.equal(transient.published, undefined, 'a temporary status-read error cannot declare the durable job failed');
+assert.equal(transient.cleared.length, 0);
+assert.equal(transient.retryCount, 1);
+console.log('PASS actual summary failure exits: full terminal status preservation, genuine failures, 404 unlock and transient reconnect');
+
 // Execute the real all-league click: one failed preflight must not block the
 // healthy leagues or leave the visible board polling only the final summary.
 const savedJobs = [], submittedJobs = [];
@@ -104,7 +162,7 @@ const clickContext = {
   loadAllLeagueAnalysisRun: () => null, clearAllLeagueBackgroundJobs: noop,
   analysisGenerationRef: { current: 1 }, restoredBoardNeedsValidationRef: {}, manualAnalysisScopesRef: { current: new Set() },
   markAppOperationBusy: noop, setAllLeaguePreparing: noop, setError: noop, setNotice: noop,
-  createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, publishAllLeagueRun: run => { publishedRun = run; },
+  createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState, publishAllLeagueRun: run => { publishedRun = run; },
   allLeagueTargetDate: async (_id, date) => date, clearBackgroundJob: noop,
   prepareSoccerBatch: async (id, date) => ({ league: id, date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
   prepareNhlBatch: async date => ({ league: 'NHL', date, tasks: [], preparedBoard: [], emptyReason: 'no_games' }),
@@ -130,6 +188,7 @@ assert.equal(savedJobs.length, 3);
 assert.equal(clickContext.requestedRecoveryScopeRef.current, `MLB:${date}`, 'visible league must attach to incremental progress immediately');
 assert.equal(publishedRun.leagues.NPB.message, '盤口已過期');
 assert.equal(publishedRun.leagues.NPB.code, 'READER_STALE', 'diagnostic code remains available without prefixing user text');
+assert.equal(publishedRun.leagues.NPB.status, 'waiting_reader', 'an unavailable Reader is a waiting prerequisite while healthy leagues continue');
 assert.equal(publishedRun.leagues.MLB.status, 'queued', 'submission alone does not establish running status');
 assert.equal(clickContext.allLeagueBusyRef.current, false);
 console.log('PASS actual all-league click: failed Reader isolated, healthy jobs submitted, incremental polling attached and preparation lock released');

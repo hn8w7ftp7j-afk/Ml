@@ -130,3 +130,5 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.appShell,.shell,.gameCard
 .screen-awake button { padding: 8px 12px; min-height: 44px; border: 1px solid #42617c; border-radius: 10px; background: #10263b; color: #e0efff; cursor: pointer; }
 
 .leagueDot.batch-insufficient_data,.leagueDot.batch-result_pending{background:#f5bd54;box-shadow:0 0 0 3px rgba(245,189,84,.15)}
+
+.allLeaguePills .batch-waiting_reader{background:#493718;color:#ffd27e}.leagueDot.batch-waiting_reader{background:#f5bd54;box-shadow:0 0 0 3px rgba(245,189,84,.15)}

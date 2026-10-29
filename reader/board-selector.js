@@ -1,5 +1,6 @@
 import { canonicalReaderPayload, readerMarketProperties } from './parser.js';
 import { buildSoccerAuthorityDiagnostics } from './soccer-authority-diagnostics.js';
+import { buildNbaAuthorityDiagnostics } from './nba-authority-diagnostics.js';
 import { scopeSoccerPayload, SOCCER_SOURCE_SCOPE_VERSION } from './soccer-parser.js';
 
 export const BOARD_ACTIVITY_TTL_MS = 5 * 60 * 1000;
@@ -269,12 +270,74 @@ function sharedContractsDisagree(left, right) {
   });
 }
 
+// A partial NBA DOM board is not evidence of contradictory prices. It can
+// only be ignored when one intact source contains every captured contract,
+// including explicit locks. Disjoint fragments are never stitched together.
+function coversNbaContracts(left, right) {
+  const canonical = row => JSON.parse(row.payloadFingerprint).games;
+  const identity = game => [game.boardDate, game.boardTime, game.awayCode, game.homeCode].join('|');
+  const leftGames = new Map(canonical(left).map(game => [identity(game), game]));
+  return canonical(right).every(game => {
+    const other = leftGames.get(identity(game));
+    if (!other || game.marketStatus !== other.marketStatus) return false;
+    if (Object.entries(game.marketStates || {}).some(([key, value]) => other.marketStates?.[key] !== value)) return false;
+    return readerMarketProperties('NBA').every(key => game[key] == null
+      || other[key] != null && JSON.stringify(game[key]) === JSON.stringify(other[key]));
+  });
+}
+
 /**
  * Pick one board from one frame in one authoritative tab.  The function never
  * combines tables or games across frames.  If two complete frames in that tab
  * disagree, it fails closed instead of guessing which contract is current.
  */
-export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferredTabId = null, league = '' } = {}) {
+export function selectAuthoritativeBoard(candidates, options = {}) {
+  // NBA standard pages may independently display today's and tomorrow's
+  // slates. Compare authority within the stored date, retaining one complete
+  // source per date; an unrelated dated slate is not contradictory evidence.
+  if (options.league === 'NBA') {
+    const selection = selectAuthoritativeNbaDates(candidates, options);
+    if (!selection.ok) {
+      // Bounded source/contract diagnostics are observational only and must
+      // never turn a rejected quote into an authorized upload.
+      try { selection.diagnosticEvidence = buildNbaAuthorityDiagnostics(candidates); } catch {}
+    }
+    return selection;
+  }
+  return selectSingleAuthoritativeBoard(candidates, options);
+}
+
+function selectAuthoritativeNbaDates(candidates, { now = Date.now(), preferredTabId = null, league = 'NBA' } = {}) {
+  const sources = (Array.isArray(candidates) ? candidates : []).filter(candidate =>
+    candidate?.parsed?.league === league && Array.isArray(candidate?.capture?.tables) && candidate.capture.tables.length > 0);
+  const assessed = sources.map(candidate => assessBoardCandidate(candidate, now));
+  if (!sources.length) return { ok: false, error: 'no-board-candidates', assessed, selections: [] };
+  // A malformed/conflicting original cannot become valid by projecting away
+  // its bad row. Validate the complete source before date-scoped selection.
+  if (assessed.some(row => row.issues.some(issue => issue.includes('conflicting-')))) {
+    return { ok: false, error: 'conflicting-duplicate-rows', assessed, selections: [] };
+  }
+  const valid = assessed.filter(row => row.ok);
+  const dates = [...new Set(valid.flatMap(row => row.candidate.parsed.games.map(game => game.boardDate)))].sort();
+  const selections = [];
+  for (const boardDate of dates) {
+    const projections = valid.flatMap(row => {
+      const games = row.candidate.parsed.games.filter(game => game.boardDate === boardDate);
+      return games.length ? [{ ...row.candidate, parsed: { ...row.candidate.parsed, boardDate, games } }] : [];
+    });
+    const selection = selectSingleAuthoritativeBoard(projections, { now, preferredTabId, league });
+    if (!selection.ok) return { ...selection, boardDate, assessed, selections: [] };
+    // The projection retains the original frame and every selected game's
+    // untouched marketEvidence. Never union markets or prices across sources.
+    selections.push({ selected: selection.selected, authorityTabId: selection.authorityTabId, boardDate,
+      ignoredDuplicateTabCount: selection.ignoredDuplicateTabCount,
+      ignoredDuplicateFrameCount: selection.ignoredDuplicateFrameCount });
+  }
+  if (!selections.length) return { ok: false, error: 'no-complete-tab', assessed, selections: [] };
+  return { ok: true, ...selections[0], selections, assessed };
+}
+
+function selectSingleAuthoritativeBoard(candidates, { now = Date.now(), preferredTabId = null, league = '' } = {}) {
   if (league && !LEAGUES.has(league)) return { ok: false, error: 'unknown-league', assessed: [] };
   const boardCandidates = (Array.isArray(candidates) ? candidates : [])
     .filter(candidate => (!league || candidate?.parsed?.league === league)
@@ -306,7 +369,7 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     const completeDisagree = new Set(fullBoards.map(row => row.payloadFingerprint)).size > 1;
     const overlapDisagrees = validTabFrames.some((left, index) =>
       validTabFrames.slice(index + 1).some(right => sharedContractsDisagree(left, right)));
-    if (completeDisagree || overlapDisagrees) {
+    if ((league !== 'NBA' && completeDisagree) || overlapDisagrees) {
       return {
         ok: false,
         error: 'conflicting-duplicate-frames',
@@ -315,10 +378,13 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
         assessed,
       };
     }
+    const authoritativeFrames = league === 'NBA'
+      ? validTabFrames.filter(row => validTabFrames.every(other => coversNbaContracts(row, other))) : complete;
+    if (!authoritativeFrames.length) return { ok: false, error: 'no-complete-tab', authorityTabId: tab.tabId, assessed };
     usableTabs.push({
       tab,
-      selected: [...complete].sort(framePriority)[0],
-      duplicateFrameCount: Math.max(0, complete.length - 1),
+      selected: [...authoritativeFrames].sort(framePriority)[0],
+      duplicateFrameCount: Math.max(0, authoritativeFrames.length - 1),
     });
   }
 
@@ -326,7 +392,9 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
   // same canonical contracts. Never select a stale duplicate by focus/access
   // order when another usable tab shows a different price.
   const fingerprints = new Set(usableTabs.map(row => row.selected.payloadFingerprint).filter(Boolean));
-  if (fingerprints.size > 1) {
+  const nbaConflict = league === 'NBA' && usableTabs.some((left, index) =>
+    usableTabs.slice(index + 1).some(right => sharedContractsDisagree(left.selected, right.selected)));
+  if ((league !== 'NBA' && fingerprints.size > 1) || nbaConflict) {
     return {
       ok: false,
       error: 'conflicting-duplicate-tabs',
@@ -337,7 +405,10 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
   }
 
   if (usableTabs.length) {
-    const authority = [...usableTabs].sort((left, right) =>
+    const authoritativeTabs = league === 'NBA' ? usableTabs.filter(row =>
+      usableTabs.every(other => coversNbaContracts(row.selected, other.selected))) : usableTabs;
+    if (!authoritativeTabs.length) return { ok: false, error: 'no-complete-tab', authorityTabId: null, assessed };
+    const authority = [...authoritativeTabs].sort((left, right) =>
       tabPriority(left.tab, right.tab, preferredTabId))[0];
     return {
       ok: true,

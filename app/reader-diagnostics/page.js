@@ -45,16 +45,17 @@ export default function ReaderDiagnosticsPage() {
         <strong>{id}｜{states[row.state] || row.state}</strong>
         {row.errorCode && <p>{reasons[row.errorCode] || row.errorCode}</p>}
         {row.authority && <details>
-          <summary>足球盤面差異明細</summary>
+          <summary>{id === 'NBA' ? 'NBA 盤面差異明細' : '足球盤面差異明細'}</summary>
           {row.authority.sources.map(source => <p key={source.index}>盤面 {source.index}：{source.dates.join('、') || '日期無有效證據'}｜{source.periods.map(period => periods[period]).join('、') || '期間無有效證據'}｜{source.gameCount} 場</p>)}
           {row.authority.differences.map((difference, index) => <p key={index}>
-            盤面 {difference.leftSource}／{difference.rightSource}：{difference.date} {difference.time}｜{periods[difference.period]}｜{differenceTypes[difference.type]}
+            盤面 {difference.leftSource}／{difference.rightSource}：{difference.date} {difference.time}{id === 'NBA' && <>｜{difference.awayCode} @ {difference.homeCode}</>}｜{periods[difference.period]}｜{differenceTypes[difference.type]}
             {difference.line !== undefined && <>｜盤線 {difference.line}</>}
             {difference.fields.map((field, fieldIndex) => <span key={fieldIndex}>；{fields[field.field]} {display(field.left)} → {display(field.right)}</span>)}
           </p>)}
           {!row.authority.differences.length && <p>已保存來源範圍；這份摘要尚未定位到單筆差異。</p>}
           {(row.authority.sourcesTruncated || row.authority.detailsTruncated || row.authority.differencesTruncated) && <p>僅列部分來源或差異，不能視為完整盤面。</p>}
         </details>}
+        {id === 'NBA' && row.errorCode === 'conflicting-duplicate-tabs' && !row.authority && <p>此紀錄尚未保存 NBA 盤面差異，無法判定是盤日、賽事或價格不同；更新電腦 Reader 2.1.46 後會自動回傳明細。</p>}
         {['EPL', 'UCL'].includes(id) && row.errorCode === 'conflicting-duplicate-tabs' && !row.authority && <p>此版本尚未回傳盤面差異明細；需更新電腦 Reader 2.1.43 後同步。舊紀錄無法補回未曾回傳的資料。</p>}
         {row.issues?.length > 0 && <p style={{ overflowWrap: 'anywhere' }}>{row.issues.join('、')}</p>}
         {row.boards?.map((board, index) => <div key={index} style={{ fontSize: 13, marginTop: 8, overflowWrap: 'anywhere' }}>
