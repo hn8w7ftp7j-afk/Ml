@@ -6,6 +6,7 @@ import { EMPTY_HISTORY_FILTERS, HISTORY_LEAGUES, groupHistoryRows, historyFilter
   historyRowKey, historyWater, mergeHistoryRows, taipeiHistoryTime, validateHistoryResponse } from './history-view.js';
 import styles from './history.module.css';
 import CoveragePanel from './coverage-panel.js';
+import SeenCapturePanel from './seen-capture-panel.js';
 
 const countText = value => value.toLocaleString('zh-TW');
 
@@ -100,6 +101,7 @@ export default function HistoryBrowser({ children } = {}) {
 
   return <main className={`appShell ${styles.shell}`}>
     <header className={styles.header}><div><div className="eyebrow">SAVED MARKET LINES</div><h1>歷史盤口</h1><p>查看 Reader 已保存的原盤口與水位，不重算、不改分析。</p></div><Link href="/" className="secondary">回主站</Link></header>
+    <SeenCapturePanel/>
     <CoveragePanel/>
     {children}
     <section className={`panel ${styles.scope}`} aria-label="資料範圍說明">

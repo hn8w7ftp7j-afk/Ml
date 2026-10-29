@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Tai888 Reader",
-  "version": "2.1.48",
-  "version_name": "2.1.48 EPL-UCL",
+  "version": "2.1.49",
+  "version_name": "2.1.49 EPL-UCL",
   "description": "各聯盟隔離同步，支援英超與歐冠桌面表格及卡片盤口；足球結算規格與模型驗證中。",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "alarms",
     "webNavigation"
   ],
@@ -33,6 +34,8 @@
         "soccer-card-normalizer.js",
         "soccer-table-normalizer.js",
         "row-normalizer.js",
+        "seen-local.js",
+        "seen-evidence.js",
         "tai888-content.js"
       ],
       "run_at": "document_idle",

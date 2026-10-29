@@ -26,7 +26,30 @@ export function readerArchiveReceiptFixture(input) {
     pageActivityAt: payload.pageActivityAt, receivedAt, persistedAt: receivedAt };
 }
 
+export function installSeenWorkerFixture(worker) {
+  if (!worker.chrome.storage) {
+    const values = {};
+    worker.chrome.storage = { local: {
+      get: async () => structuredClone(values),
+      set: async input => Object.assign(values, structuredClone(input)),
+      remove: async keys => { for (const key of Array.isArray(keys) ? keys : [keys]) delete values[key]; },
+    } };
+  }
+  // These legacy regressions exercise the live board selection/ingest path.
+  // The raw seen-evidence transport is tested independently with its actual
+  // durable store in reader-seen-local-outbox-test.mjs.
+  worker.SEEN_CAPTURE_ALARM = 'tai888-reader-seen-retry';
+  worker.createSeenCaptureOutbox = () => ({
+    enqueue: async () => ({ queued: true, durable: true, captureIds: [] }),
+    flush: async () => {}, failure: async () => {},
+    status: async () => ({ state: 'sent', pendingCount: 0, pendingBytes: 0,
+      savedCaptureCount: 0, failedCaptureCount: 0, code: '', lastPersistedAt: null,
+      updatedAt: new Date().toISOString() }),
+  });
+}
+
 export function installArchiveWorkerFixture(worker) {
+  installSeenWorkerFixture(worker);
   worker.createMarketOutbox = createMarketOutbox;
   worker.MARKET_ARCHIVE_ALARM = MARKET_ARCHIVE_ALARM;
   const fetchLive = worker.fetch;

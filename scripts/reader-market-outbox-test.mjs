@@ -1,3 +1,4 @@
+import { installSeenWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { createHash, webcrypto } from 'node:crypto';
 import fs from 'node:fs';
@@ -150,6 +151,7 @@ const worker = vm.createContext({ chrome, ...parser, ...selector, Date: Clock, U
     }
     live.push(body); return Response.json({ ok: false, error: 'Synthetic live-service outage' }, { status: 503 });
   } });
+installSeenWorkerFixture(worker);
 vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), worker);
 await vm.runInContext("performSync('manual')", worker);
 assert.equal(live.length, seven.length, 'all seven live requests still execute during archive outage');
@@ -184,6 +186,7 @@ const quotaWorker = vm.createContext({ chrome: quotaChrome, ...parser, ...select
     if (url.endsWith('/api/reader/diagnostics')) return Response.json({ ok: true, durable: true, reportId: body.reportId, receivedAt: new Date(clock).toISOString() });
     assert.ok(url.endsWith('/api/reader/ingest')); quotaLive.push(body); return Response.json(readerSaveReceiptFixture(body));
   } });
+installSeenWorkerFixture(quotaWorker);
 vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), quotaWorker);
 await vm.runInContext("performSync('manual')", quotaWorker);
 assert.equal(quotaLive.length, 1, 'full archive queue cannot block live sync');

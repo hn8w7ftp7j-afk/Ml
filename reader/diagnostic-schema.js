@@ -99,6 +99,23 @@ function authorityEvidence(input, league) {
     differenceCount: diagnosticCount(input.differenceCount), sourcesTruncated: input.sourcesTruncated === true,
     detailsTruncated: input.detailsTruncated === true, differencesTruncated: input.differencesTruncated === true };
 }
+const SEEN_CODES=new Set(['SEEN_EVIDENCE_INVALID','SEEN_EVIDENCE_UNKNOWN_FIELD','SEEN_SOURCE_INVALID',
+  'SEEN_PRIVATE_TEXT_BLOCKED','SEEN_ROWS_INVALID','SEEN_ROW_TOO_LARGE','SEEN_CAPTURE_TOO_LARGE',
+  'SEEN_FRAGMENT_TOO_LARGE','SEEN_STORAGE_UNAVAILABLE','SEEN_PAIR_REQUIRED','SEEN_LOCAL_CONFLICT',
+  'SEEN_LOCAL_READBACK_FAILED','SEEN_LOCAL_SAVE_FAILED','SEEN_LOCAL_HASH_MISMATCH','SEEN_INVALID_RECEIPT',
+  'SEEN_ACK_READBACK_FAILED','SEEN_ACK_CONFLICT','SEEN_RETRY_SAVE_FAILED','SEEN_UPLOAD_FAILED',
+  'SEEN_DEVICE_MISMATCH','SEEN_FLUSH_FAILED','SEEN_SAVE_FAILED','SEEN_CAPTURE_FAILED',
+  'SEEN_TEXT_TOO_LARGE','SEEN_VERSION_INVALID','SEEN_TIME_INVALID','SEEN_REASONS_INVALID',
+  'SEEN_HEADER_TOO_LARGE','SEEN_CELL_TOO_LARGE','SEEN_PAIR_TOO_LARGE','SEEN_DIAGNOSTICS_INVALID']);
+export function sanitizeSeenCaptureDelivery(input) {
+  if(!input||!['error','pending','sent'].includes(input.state))return null;
+  const count=value=>Number.isSafeInteger(value)&&value>=0&&value<=1e12?value:null;
+  const time=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
+  return {state:input.state,pendingCount:count(input.pendingCount),pendingBytes:count(input.pendingBytes),
+    failedCaptureCount:count(input.failedCaptureCount),savedCaptureCount:count(input.savedCaptureCount),
+    code:input.code?(SEEN_CODES.has(input.code)?input.code:'SEEN_SAVE_FAILED'):'',
+    lastPersistedAt:time(input.lastPersistedAt),updatedAt:time(input.updatedAt)};
+}
 export function sanitizeDiagnosticReport(input) {
   const created = typeof input?.createdAt === 'string' ? Date.parse(input.createdAt) : NaN;
   if (input?.schema !== DIAGNOSTIC_SCHEMA || !diagnosticIdValid(input?.reportId)
@@ -115,8 +132,10 @@ export function sanitizeDiagnosticReport(input) {
         issues: codes(board?.issues),
       })), ...(authority ? { authority } : {}) };
   }
+  const seenCaptureDelivery=sanitizeSeenCaptureDelivery(input.seenCaptureDelivery);
   return { schema: DIAGNOSTIC_SCHEMA, reportId: input.reportId, readerVersion: version(input.readerVersion),
     extensionManifestVersion: version(input.extensionManifestVersion), createdAt: new Date(created).toISOString(),
     silentTabCount: diagnosticCount(input.silentTabCount), tabCount: diagnosticCount(input.tabCount),
-    exceptionCode: input.exceptionCode ? diagnosticCode(input.exceptionCode) : '', leagues };
+    exceptionCode: input.exceptionCode ? diagnosticCode(input.exceptionCode) : '', leagues,
+    ...(seenCaptureDelivery?{seenCaptureDelivery}:{}) };
 }
