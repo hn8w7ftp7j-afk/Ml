@@ -3,7 +3,7 @@ import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSu
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 
-const VERSION = '2.1.46';
+const VERSION = '2.1.47';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -427,7 +427,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     context.leagues[league] = (selection.assessed || []).map(item => ({ diagnostics: item.candidate?.capture?.diagnostics,
       parsedGameCount: item.candidate?.parsed?.games?.length || 0, issues: item.issues || [] }));
     if (!selection.ok) {
-      if (soccer && selection.diagnosticEvidence) context.authority[league] = selection.diagnosticEvidence;
+      if (selection.diagnosticEvidence) context.authority[league] = selection.diagnosticEvidence;
       const detail = selection.error === 'conflicting-duplicate-rows'
         ? '同場盤口重複且數字不一致，已停止上傳；請重新整理 Tai888 分頁後再同步'
         : selection.error === 'conflicting-duplicate-frames'

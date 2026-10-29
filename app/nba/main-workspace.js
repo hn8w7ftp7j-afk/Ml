@@ -303,7 +303,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   return <NbaBetRecordProvider date={date} active={active} candidates={betReminder.candidates} quotesCurrent={betReminder.quotesCurrent} analysisReady={!running} onHighScoreStatusChange={onHighScoreStatusChange}><div hidden={!active} aria-label="NBA 主站分析">
     <nav className="mainTabs"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>今日盤口</button><button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>分析結果</button><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>影子排名</button><button className={view === 'records' ? 'active' : ''} onClick={() => setView('records')}>下注紀錄</button><button className={view === 'data' ? 'active' : ''} onClick={() => setView('data')}>賽程與球員</button><button className={view === 'validation' ? 'active' : ''} onClick={() => setView('validation')}>模型驗證</button></nav>
     {error && <div className="errorBox" role="alert">{error}{error.includes('登入') && <a href="/login?next=/?sport=NBA">重新登入</a>}<button className="mini" onClick={() => setError('')}>關閉</button></div>}
-    {message && <div className="noticeBox" role="status">{message}</div>}
+    {message && <div className="noticeBox" role="status">{message}{message.startsWith('NBA 已處理') && <small>這是上次分析結果；目前盤口同步狀態請見下方。</small>}</div>}
 
     {!['data', 'validation', 'records'].includes(view) && <><section className="heroCard nbaHero"><div className="heroCopy"><h2>NBA 盤口分析</h2></div>
       <div className="heroControls">
@@ -316,11 +316,11 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         <button className="primary" disabled={busy || !selected} onClick={() => start(selected)}>只分析這一場</button>
         <button className="secondary" disabled={busy || loading} onClick={() => { explicitDate.current = false; onDateChange(dateRef.current, false); void load(); }}>跟隨最新盤日</button>
         <button className="secondary" disabled={starting || !job} onClick={() => { setDate(job.date); setReconnectRevision(value => value + 1); }}>載入先前分析</button>
-        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.46-EPL-UCL.zip" download>下載 Reader v2.1.46</a>
+        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.47-EPL-UCL.zip" download>下載 Reader v2.1.47</a>
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>
-      {readerStatus === 'stale' && readerFailure && <div className="noticeBox" role="status"><strong>最近 NBA 同步失敗｜{localTime(readerFailure.at)}</strong><p>{readerFailure.message}</p><p>這是已保存的同步紀錄；目前盤口仍未取得更新確認。</p><a href="/reader-diagnostics">查看同步診斷紀錄</a></div>}
+      {readerStatus === 'stale' && readerFailure && <div className="errorBox" role="alert"><strong>最近 NBA 同步失敗｜{localTime(readerFailure.at)}</strong><p>{readerFailure.message}</p><p>這是已保存的同步紀錄；目前盤口仍未取得更新確認。</p><a href="/reader-diagnostics">查看同步診斷紀錄</a></div>}
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
       {(view === 'ranking' || view === 'records' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}

@@ -27,15 +27,19 @@ function board(league, dates, { water = '0.950', locked = false, host = 'tai888.
 function candidate(capture, tabId = 1, frameId = 0) {
   return { capture, parsed: parseTai888Capture(capture, new Date(now)), tabId, frameId, active: tabId === 1, lastAccessed: tabId };
 }
-const select = (captures, league) => selectAuthoritativeDatedBoards(captures.map((b, i) => candidate(b, i + 1)), { league, now });
+const selectCandidates = (candidates, league) => league === 'NBA'
+  ? selectAuthoritativeBoard(candidates, { league, now })
+  : selectAuthoritativeDatedBoards(candidates, { league, now });
+const select = (captures, league) => selectCandidates(captures.map((b, i) => candidate(b, i + 1)), league);
+const winningDates = row => row.boardDates || [row.boardDate];
 for (const league of Object.keys(teams)) {
   const today = board(league, ['10-09']), tomorrow = board(league, ['10-10']);
   const unchanged = JSON.stringify([today, tomorrow]);
   assert.equal(assessBoardCandidate(candidate(today), now).ok, true, league);
-  assert.equal(selectAuthoritativeBoard([candidate(today), candidate(tomorrow, 2)], { league, now }).ok, false, 'regression reproduces the old whole-board date conflict');
+  assert.equal(selectAuthoritativeBoard([candidate(today), candidate(tomorrow, 2)], { league, now }).ok, league === 'NBA', 'preserve incoming NBA default date authority; other legacy generic calls retain their old behavior');
   const result = select([today, tomorrow], league);
   assert.equal(result.ok, true, league);
-  assert.deepEqual(result.selections.map(row => row.boardDates), [['2026-10-09'], ['2026-10-10']]);
+  assert.deepEqual(result.selections.map(winningDates), [['2026-10-09'], ['2026-10-10']]);
   assert.equal(JSON.stringify([today, tomorrow]), unchanged, 'date authority leaves original captures unchanged');
   assert.equal(select([today, structuredClone(today)], league).selections.length, 1, 'same-date equal quotes still deduplicate');
   const identityDisagreement = board(league, ['10-09']);
@@ -46,16 +50,16 @@ for (const league of Object.keys(teams)) {
     assert.equal(bad.boardDate, '2026-10-09'); assert.equal(bad.selections.length, 0);
   }
   const invalid = candidate(structuredClone(today)); invalid.parsed.parseIssues = ['conflicting-captured-row'];
-  assert.equal(selectAuthoritativeDatedBoards([invalid, candidate(tomorrow, 2)], { league, now }).ok, false, 'full-source explicit parser conflicts block the whole league');
+  assert.equal(selectCandidates([invalid, candidate(tomorrow, 2)], league).ok, false, 'full-source explicit parser conflicts block the whole league');
 }
 assert.equal(selectAuthoritativeDatedBoards([], { league: 'EPL', now }).ok, false, 'football uses its separate period-aware authority');
 const multi = board('NBA', ['10-09', '10-10'], { host: 'www.tai888.in' });
 const activeTomorrow = board('NBA', ['10-10']);
 const result = select([activeTomorrow, multi], 'NBA');
 assert.equal(result.ok, true);
-assert.deepEqual(result.selections.map(row => [row.selected.candidate.tabId, row.boardDates]), [[2, ['2026-10-09']], [1, ['2026-10-10']]]);
+assert.deepEqual(result.selections.map(row => [row.selected.candidate.tabId, winningDates(row)]), [[2, ['2026-10-09']], [1, ['2026-10-10']]]);
 const brokenMulti = candidate(structuredClone(multi)); brokenMulti.parsed.games[1].boardTime = 'bad-time';
-const fullValidation = selectAuthoritativeDatedBoards([brokenMulti], { league: 'NBA', now });
+const fullValidation = selectCandidates([brokenMulti], 'NBA');
 assert.equal(fullValidation.ok, false, 'an invalid row on another date cannot be hidden by date projection');
 const changedTomorrow = structuredClone(multi); changedTomorrow.tables[0].rows[1].cells[3].pair[0] = '226平 大 0.940';
 assert.equal(select([activeTomorrow, changedTomorrow], 'NBA').ok, false, 'partially overlapping multi-date original detects conflicting date');

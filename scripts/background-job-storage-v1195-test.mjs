@@ -5,7 +5,7 @@ import { referenceGameMap } from '../lib/reference-acquisition-evidence.js';
 import * as cache from '../lib/analysis-board-cache-v1.js';
 import * as receipts from '../lib/analysis-completed-receipt-v1.js';
 import { analysisHasCalculatedDirections } from '../lib/analysis-display-state-v116.js';
-import { allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague } from '../lib/all-league-analysis-v117.js';
+import { allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState } from '../lib/all-league-analysis-v117.js';
 import { LEAGUE_IDS, normalizeLeagueId } from '../lib/leagues.js';
 import { ACTIVE_ANALYSIS_LEAGUE_IDS as ANALYSIS_LEAGUE_IDS, isSoccerAnalysisLeague } from '../lib/analysis-leagues.js';
 import { prepareLeagueReaderPreflight } from '../lib/all-league-reader-preflight.js';
@@ -72,7 +72,7 @@ const verificationMarkets = Array.from({ length: 120 }, (_, index) => ({
 
 function sandbox(storage = new MemoryStorage()) {
   const context = vm.createContext({ ...cache, ...receipts, analysisHasCalculatedDirections, referenceGameMap,
-    allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, LEAGUE_IDS, normalizeLeagueId, prepareLeagueReaderPreflight,
+    allLeagueBoardDate, createAllLeagueAnalysisRun, updateAllLeagueAnalysisLeague, allLeagueStateForDisplay, allLeaguePreflightFailureState, LEAGUE_IDS, normalizeLeagueId, prepareLeagueReaderPreflight,
     Date, Map, Set, Number, String, Array, JSON, encodeURIComponent,
     backgroundJobsInMemory: new Map(), supersededBackgroundRuns: new Set(), window: { localStorage: storage },
     safeParse: value => { try { return JSON.parse(value); } catch { return null; } },

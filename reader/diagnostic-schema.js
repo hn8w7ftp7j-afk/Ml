@@ -1,3 +1,5 @@
+import { NBA_AUTHORITY_DIAGNOSTICS_VERSION, NBA_DIAGNOSTIC_TEAM_CODES } from './nba-authority-diagnostics.js';
+
 // Shared browser/server allow-list. Never upload arbitrary page text, URLs,
 // raw DOM, credentials, or server error messages as diagnostic evidence.
 export const DIAGNOSTIC_SCHEMA = 'READER-DIAGNOSTICS-v1';
@@ -67,8 +69,10 @@ function authorityValue(field, value) {
 }
 // Both the installed Reader and the API run this allow-list. These values are
 // diagnostic observations and never authorize a market or a score.
-function soccerAuthority(input) {
-  if (input?.version !== AUTHORITY_VERSION) return null;
+function authorityEvidence(input, league) {
+  const expectedVersion = league === 'NBA' ? NBA_AUTHORITY_DIAGNOSTICS_VERSION : AUTHORITY_VERSION;
+  const teamCodeValid = league === 'NBA' ? value => NBA_DIAGNOSTIC_TEAM_CODES.includes(value) : value => /^S[0-9A-F]{8}$/.test(value);
+  if (input?.version !== expectedVersion) return null;
   const sources = (Array.isArray(input.sources) ? input.sources : []).slice(0, 4).filter(row => sourceValid(row?.index)).map(row => ({
     index: row.index, dates: [...new Set((Array.isArray(row.dates) ? row.dates : []).slice(0, 40).filter(dateValid))],
     periods: PERIODS.filter(period => Array.isArray(row.periods) && row.periods.includes(period)),
@@ -82,7 +86,7 @@ function soccerAuthority(input) {
     .filter(row => pairValid(row) && DIFFERENCES.includes(row.type) && dateValid(row.date)
       && typeof row.time === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(row.time)
       && typeof row.awayCode === 'string' && typeof row.homeCode === 'string'
-      && /^S[0-9A-F]{8}$/.test(row.awayCode) && /^S[0-9A-F]{8}$/.test(row.homeCode))
+      && teamCodeValid(row.awayCode) && teamCodeValid(row.homeCode))
     .map(row => ({ ...pairIdentity(row), type: row.type, date: row.date, time: row.time, awayCode: row.awayCode, homeCode: row.homeCode,
       ...(['HANDICAP', 'TOTAL', 'MONEYLINE'].includes(row.marketKind) ? { marketKind: row.marketKind } : {}),
       ...(typeof row.line === 'string' && authorityValue('line', row.line) ? { line: row.line } : {}),
@@ -91,7 +95,7 @@ function soccerAuthority(input) {
         .filter(item => typeof item?.field === 'string' && authorityValue(item.field, item.left) && authorityValue(item.field, item.right))
         .map(item => ({ field: item.field, left: item.left, right: item.right })),
     }));
-  return { version: AUTHORITY_VERSION, sourceCount: diagnosticCount(input.sourceCount), sources, pairs, differences,
+  return { version: expectedVersion, sourceCount: diagnosticCount(input.sourceCount), sources, pairs, differences,
     differenceCount: diagnosticCount(input.differenceCount), sourcesTruncated: input.sourcesTruncated === true,
     detailsTruncated: input.detailsTruncated === true, differencesTruncated: input.differencesTruncated === true };
 }
@@ -103,7 +107,7 @@ export function sanitizeDiagnosticReport(input) {
   for (const league of DIAGNOSTIC_LEAGUES) {
     const row = input?.leagues?.[league];
     if (!row || !STATES.has(row.state)) continue;
-    const authority = ['EPL', 'UCL'].includes(league) ? soccerAuthority(row.authority) : null;
+    const authority = ['NBA', 'EPL', 'UCL'].includes(league) ? authorityEvidence(row.authority, league) : null;
     leagues[league] = { state: row.state, errorCode: row.errorCode ? diagnosticCode(row.errorCode) : '',
       issues: codes(row.issues), rawGameCount: diagnosticCount(row.rawGameCount), marketCount: diagnosticCount(row.marketCount),
       boards: (Array.isArray(row.boards) ? row.boards : []).slice(0, 2).map(board => ({
