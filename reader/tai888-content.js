@@ -37,9 +37,11 @@
     if (!evidence) return;
     const fingerprint = JSON.stringify([evidence.sourceHost, evidence.pageUrl, evidence.league, evidence.tables]);
     const key = `${path}:${evidence.league}`;
-    // Consecutive identical displayed states can share one retained raw state.
-    // A -> B -> A enqueues three distinct observations, including on failure.
-    if (lastSeenFingerprint.get(key) === fingerprint) return;
+    // Repeated DOM notifications without a sport-text change are noise. An
+    // explicit SCAN is a new observation even when every price is unchanged.
+    // A -> B -> A still enqueues three states, including on persistence failure.
+    const mutationOnly = evidence.captureReasons?.includes('MUTATION') && !evidence.captureReasons.includes('SCAN');
+    if (mutationOnly && lastSeenFingerprint.get(key) === fingerprint) return;
     lastSeenFingerprint.set(key, fingerprint);
     const item = { sequence: ++seenSequence, evidence, saving: false, nextAttemptAt: 0 };
     pendingSeenCaptures.set(item.sequence, item);

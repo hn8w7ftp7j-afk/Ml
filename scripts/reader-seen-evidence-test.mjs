@@ -105,6 +105,7 @@ function content(options = {}) {
   return { context, document, saved, messages, intervals, timeouts,
     capture() { let response; handler({ type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, {}, value => { response = value; }); return response; },
     mutate() { clock += 1; observer([{ type: 'characterData', target: document.documentElement }]); },
+    advance(milliseconds) { clock += milliseconds; },
     retry() { clock += 6000; for (const item of intervals.filter(row => row.delay === 5000)) item.callback(); },
     recover() { fail = false; }, resolveLocal() { resolveLocal?.(ack); }, normalizations: () => normalizations };
 }
@@ -113,6 +114,15 @@ const real = content();
 assert.ok(real.saved.length > 0, 'initial frame content is archived without waiting for worker selection');
 const capture = real.capture(); assert.equal(capture.ok, true); assert.equal(capture.capture.seenCaptureVersion, 'READER-SEEN-CAPTURE-v1');
 assert.ok(real.normalizations() > 0);
+const initialSeen = real.saved.map(item => ({ observedAt: item.observedAt, tables: JSON.stringify(item.tables) }));
+const beforeRepeatedScan = real.saved.length;
+real.advance(61000); assert.equal(real.capture().ok, true);
+const repeatedScan = real.saved.slice(beforeRepeatedScan);
+assert.ok(repeatedScan.length > 0, 'an explicit scan persists a new observation when all displayed odds remain unchanged');
+assert.ok(repeatedScan.some(item => initialSeen.some(old => old.tables === JSON.stringify(item.tables)
+  && Date.parse(item.observedAt) - Date.parse(old.observedAt) === 61000)), 'same-price scan preserves its actual later source timestamp');
+const beforeMutationNoise = real.saved.length;
+real.mutate(); assert.equal(real.saved.length, beforeMutationNoise, 'unchanged mutation notifications remain deduplicated');
 const rawText = JSON.stringify(real.saved);
 assert.ok(rawText.includes('UNKNOWN'), 'malformed alternative water survives before normalizer rejection');
 assert.ok(rawText.includes('角球數') && rawText.includes('罰牌數'), 'raw sport-only evidence is not limited by live goal-market selection');
