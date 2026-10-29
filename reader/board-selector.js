@@ -274,7 +274,8 @@ function sharedContractsDisagree(left, right) {
  * combines tables or games across frames.  If two complete frames in that tab
  * disagree, it fails closed instead of guessing which contract is current.
  */
-export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferredTabId = null, league = '' } = {}) {
+export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferredTabId = null, league = '', dateScoped = false } = {}) {
+  if (dateScoped) return selectAuthoritativeDatedBoards(candidates, { now, preferredTabId, league });
   if (league && !LEAGUES.has(league)) return { ok: false, error: 'unknown-league', assessed: [] };
   const boardCandidates = (Array.isArray(candidates) ? candidates : [])
     .filter(candidate => (!league || candidate?.parsed?.league === league)
@@ -355,6 +356,43 @@ export function selectAuthoritativeBoard(candidates, { now = Date.now(), preferr
     authorityTabId: tabs[0]?.tabId,
     assessed,
   };
+}
+
+// Different board dates have independent authority. Validate every complete
+// original first, then compare date-only projections without splicing rows
+// across sources. The transport must honor each original's selected dates.
+export function selectAuthoritativeDatedBoards(candidates, { now = Date.now(), preferredTabId = null, league = '' } = {}) {
+  if (!['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL'].includes(league)) {
+    return { ok: false, error: 'unknown-league', assessed: [], selections: [] };
+  }
+  const sources = (Array.isArray(candidates) ? candidates : []).filter(candidate =>
+    candidate?.parsed?.league === league && Array.isArray(candidate?.capture?.tables) && candidate.capture.tables.length > 0);
+  const assessed = sources.map(candidate => assessBoardCandidate(candidate, now));
+  if (!sources.length) return { ok: false, error: 'no-board-candidates', assessed, selections: [] };
+  if (assessed.some(row => row.issues.some(issue => /conflict/i.test(issue)))) {
+    return { ok: false, error: 'conflicting-duplicate-rows', assessed, selections: [] };
+  }
+  const valid = assessed.filter(row => row.ok);
+  const dates = [...new Set(valid.flatMap(row => row.candidate.parsed.games.map(game => game.boardDate)))].sort();
+  const selectedSources = new Map(), scopeSelections = [];
+  for (const boardDate of dates) {
+    const projections = valid.map(original => ({ original, projection: {
+      ...original.candidate, parsed: { ...original.candidate.parsed, boardDate,
+        games: original.candidate.parsed.games.filter(game => game.boardDate === boardDate) },
+    } })).filter(row => row.projection.parsed.games.length);
+    const selection = selectAuthoritativeBoard(projections.map(row => row.projection), { now, preferredTabId, league });
+    if (!selection.ok) return { ...selection, ok: false, boardDate, assessed, selections: [], scopeSelections };
+    const original = projections.find(row => row.projection === selection.selected.candidate)?.original;
+    if (!original) return { ok: false, error: 'date-authority-source-missing', boardDate, assessed, selections: [] };
+    scopeSelections.push({ boardDate, authorityTabId: selection.authorityTabId });
+    if (!selectedSources.has(original.candidate)) selectedSources.set(original.candidate, {
+      selected: original, authorityTabId: original.candidate.tabId, boardDates: [],
+    });
+    selectedSources.get(original.candidate).boardDates.push(boardDate);
+  }
+  const selections = [...selectedSources.values()];
+  return selections.length ? { ok: true, selections, scopeSelections, assessed }
+    : { ok: false, error: 'no-complete-tab', assessed, selections: [] };
 }
 
 
