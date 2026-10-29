@@ -363,7 +363,7 @@ assert.match(contentSource, /function mutationTouchesMarketBoard\(mutation, mark
 assert.match(contentSource, /function marketMutationElements\(\)/, 'refresh evidence must be restricted to actual odds rows');
 assert.match(contentSource, /record\.cells\.length < 4 \|\| record\.cells\.length > 16/, 'broad page containers and tiny status widgets must not renew market activity');
 assert.match(contentSource, /waterToken\.test\(cell\.text\)/, 'refresh evidence must contain visible odds-water cells');
-assert.match(contentSource, /captureAll\(\{ verifiedBoardRefreshAt \}\)/, 'verified board refresh must renew activity without requiring a price change');
+assert.match(contentSource, /captureAll\(\{\s*verifiedBoardRefreshAt\b[^}]*\}\)/, 'verified board refresh must renew activity without requiring a price change');
 assert.match(contentSource, /verifiedBoardRefreshAt > 0 \|\| before\[league\] !== fingerprintByLeague\[league\]/, 'verified same-price board refresh must notify the background heartbeat');
 assert.match(contentSource, /function latestTai888NetworkRefreshAt\(\)/, 'same-price liveness may use recent same-origin Tai888 network evidence');
 assert.match(contentSource, /\['fetch', 'xmlhttprequest'\]/, 'only fetch/XHR resource activity may renew a static board');
