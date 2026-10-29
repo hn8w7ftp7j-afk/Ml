@@ -47,7 +47,7 @@ const diagnosticResult=(code,status)=>({gameId:diagnosticGame.id,league:'ucl',da
 const diagnosticDirections=directions.map(d=>({...d,quotes:[],unknownPeriodQuotes:[],reasons:['MATCHED_READER_QUOTE_MISSING']}));
 for(const [suffix,status,label] of [
   ['STORAGE_UNAVAILABLE','UNAVAILABLE','原盤暫時讀取失敗'],
-  ['CAPTURE_MISSING','MISSING','此比賽日期尚未收到 Reader 原盤'],
+  ['CAPTURE_MISSING','MISSING','此分析版本建立時尚無可用原盤'],
   ['CAPTURE_SCOPE_MISMATCH','SCOPE_MISMATCH','原盤的聯盟或日期與本場不符'],
   ['GAME_UNMATCHED','UNMATCHED','已收到原盤，但本場隊名或開賽時間尚未配對'],
   ['NO_OPEN_GOAL_MARKET','NO_OPEN_GOALS','本場已配對，目前沒有開放的讓球或大小盤'],

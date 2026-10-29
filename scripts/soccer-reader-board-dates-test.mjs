@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import React from 'react';
+import { transform } from 'next/dist/build/swc/index.js';
+
+const source=fs.readFileSync('app/soccer/reader-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function/g,'function').replace(/export function/g,'function');
+const compiled=await transform(source,{filename:'reader-board-dates.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+const ctx=vm.createContext({React,Date});vm.runInContext(compiled.code,ctx);
+const plain=value=>JSON.parse(JSON.stringify(value));
+const game=(date,league='epl',id='1')=>({id:`soccer:${league}:${id}`,league,date});
+const props={league:'EPL',date:'2026-10-29',view:'upcoming',games:[game('2026-11-01','epl','2'),game('2026-10-31'),game('2026-10-31','epl','3')]};
+assert.deepEqual(plain(ctx.soccerReaderBoardDates(props)),['2026-10-31','2026-11-01'],'upcoming boards must use actual match dates rather than the query anchor date');
+assert.deepEqual(plain(ctx.soccerReaderBoardDates({...props,view:'schedule'})),['2026-10-29']);
+assert.deepEqual(plain(ctx.soccerReaderBoardDates({...props,games:[]})),['2026-10-29']);
+assert.deepEqual(plain(ctx.soccerReaderBoardDates({...props,games:[game('2026-10-28'),game('2026-11-12'),game('2026-10-31','ucl'),{...game('2026-11-01'),id:'soccer:ucl:1'},game('2026-02-30')]})),['2026-10-29'],'old, foreign, malformed and outside-board dates never create extra quote reads');
+for(const invalid of [{...props,date:'2026-02-30'},{...props,league:'NBA'},{...props,league:'epl'},{}])assert.deepEqual(plain(ctx.soccerReaderBoardDates(invalid)),[]);
+const tree=ctx.SoccerReaderBoards(props);
+const rows=React.Children.toArray(tree.props.children).filter(child=>child.type===ctx.SoccerReaderPanel);
+assert.equal(rows.length,2);assert.deepEqual(rows.map(row=>[row.props.league,row.props.date,row.props.showDownload]),[['EPL','2026-10-31',true],['EPL','2026-11-01',false]]);
+assert.notEqual(rows[0].key,rows[1].key,'per-date state and original receipt invalidation remain separately mounted');
+const ucl=ctx.SoccerReaderBoards({...props,league:'UCL',games:[game('2026-11-04','ucl')]});
+const uclRow=React.Children.toArray(ucl.props.children).find(child=>child.type===ctx.SoccerReaderPanel);
+assert.deepEqual([uclRow.props.league,uclRow.props.date],['UCL','2026-11-04']);assert.notEqual(uclRow.key,rows[0].key);
+assert.match(React.Children.toArray(tree.props.children)[0].props.children.join(''),/2026-10-31、2026-11-01/);
+console.log('PASS actual soccer Reader board composition: upcoming dates, period/date separation, bounded scope, independent state keys and single download control');

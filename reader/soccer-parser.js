@@ -74,9 +74,37 @@ export function parseSoccerCapture(capture, now=new Date()) {
   const values=[...games.values()].sort((a,b)=>`${a.boardDate}${a.boardTime}${a.awayCode}`.localeCompare(`${b.boardDate}${b.boardTime}${b.awayCode}`));
   return {version:'TAI888-SOCCER-READER-v1',interfaceVersion:'SOCCER-READER-v1',provider:'TAI888_READER',league,pageLeagueLabel:label,sourceHost:capture?.sourceHost||'',pageUrl:capture?.pageUrl||'',observedAt:capture?.observedAt||now.toISOString(),boardDate:values[0]?.boardDate||'',games:values.slice(0,40),periodsCovered:[...new Set(values.slice(0,40).flatMap(game=>game.periodsCovered))].sort(),parseIssues:[...new Set(issues)],sourceCapture:{league,pageLeagueLabel:label,tables:capture?.tables||[]},executable:false};
 }
+export const SOCCER_SOURCE_SCOPE_VERSION='SOCCER-DATE-PERIOD-SCOPE-v1';
+// An upload may omit periods whose authority belongs to a different source.
+// Derive every retained identity, contract and lock from the complete parser
+// result. This function can only delete; it cannot rename or create a period.
+export function scopeSoccerPayload(payload,scope) {
+  if(!scope||typeof scope!=='object'||Array.isArray(scope)
+    ||Object.keys(scope).sort().join(',')!=='boardDate,periodsCovered,version'
+    ||scope.version!==SOCCER_SOURCE_SCOPE_VERSION||!/^\d{4}-\d{2}-\d{2}$/.test(scope.boardDate||'')
+    ||!Array.isArray(scope.periodsCovered)||!scope.periodsCovered.length||scope.periodsCovered.length>3
+    ||scope.periodsCovered.some(period=>!['FT','HT','UNKNOWN'].includes(period))
+    ||new Set(scope.periodsCovered).size!==scope.periodsCovered.length
+    ||scope.periodsCovered.join('|')!==[...scope.periodsCovered].sort().join('|')
+    ||!['EPL','UCL'].includes(payload?.league)||!Array.isArray(payload.games))return null;
+  const selected=new Set(scope.periodsCovered),dated=payload.games.filter(game=>game.boardDate===scope.boardDate);
+  const available=new Set(dated.flatMap(game=>game.periodsCovered||[]));
+  if(scope.periodsCovered.some(period=>!available.has(period)))return null;
+  const games=dated.flatMap(game=>{
+    const periodsCovered=(game.periodsCovered||[]).filter(period=>selected.has(period));
+    if(!periodsCovered.length)return[];
+    const markets=game.markets.filter(market=>selected.has(market.period));
+    return[{...game,markets,periodsCovered,periodStates:Object.fromEntries(periodsCovered.map(period=>[period,game.periodStates[period]])),
+      marketStatus:markets.length?'open':'locked'}];
+  });
+  if(!games.length)return null;
+  return{...payload,boardDate:scope.boardDate,games,
+    periodsCovered:[...new Set(games.flatMap(game=>game.periodsCovered))].sort(),
+    sourceScope:{version:SOCCER_SOURCE_SCOPE_VERSION,boardDate:scope.boardDate,periodsCovered:[...scope.periodsCovered]}};
+}
 function canonicalMarket(m){
   // Legacy captures did not assert a period. They remain UNKNOWN without a hash migration.
   if(!m.period||m.period==='UNKNOWN'){const{period,periodEvidence,...legacy}=m;return legacy;}
   return m;
 }
-export function canonicalSoccerPayload(payload){return JSON.stringify({league:payload.league,boardDate:payload.boardDate,pageLeagueLabel:payload.pageLeagueLabel,...(Array.isArray(payload.periodsCovered)?{periodsCovered:[...payload.periodsCovered].sort()}:{}),games:[...(payload.games||[])].map(g=>({...g,markets:[...(g.markets||[])].sort((a,b)=>soccerMarketKey(a).localeCompare(soccerMarketKey(b))).map(canonicalMarket)})).sort((a,b)=>`${a.boardDate}${a.boardTime}${a.awayCode}`.localeCompare(`${b.boardDate}${b.boardTime}${b.awayCode}`))},(_key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);}
+export function canonicalSoccerPayload(payload){return JSON.stringify({league:payload.league,boardDate:payload.boardDate,pageLeagueLabel:payload.pageLeagueLabel,...(Array.isArray(payload.periodsCovered)?{periodsCovered:[...payload.periodsCovered].sort()}:{}),...(Object.hasOwn(payload,'sourceScope')?{sourceScope:payload.sourceScope}:{}),games:[...(payload.games||[])].map(g=>({...g,markets:[...(g.markets||[])].sort((a,b)=>soccerMarketKey(a).localeCompare(soccerMarketKey(b))).map(canonicalMarket)})).sort((a,b)=>`${a.boardDate}${a.boardTime}${a.awayCode}`.localeCompare(`${b.boardDate}${b.boardTime}${b.awayCode}`))},(_key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);}

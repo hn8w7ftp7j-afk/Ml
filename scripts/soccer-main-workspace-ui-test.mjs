@@ -9,6 +9,9 @@ import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 const shipped = fs.readFileSync('app/soccer/main-workspace.js', 'utf8');
 const source = shipped.replace(/^import .*?;\n/gm, '').replace('export default function', 'function');
 const compiled = await transform(source, { filename: 'main-workspace.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
+const readerSource = fs.readFileSync('app/soccer/reader-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export default function/g,'function').replace(/export function/g,'function');
+const readerCompiled = await transform(readerSource, { filename: 'reader-scope.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
+const readerScope = vm.createContext({React, Date}); vm.runInContext(readerCompiled.code, readerScope);
 const plain = value => JSON.parse(JSON.stringify(value));
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const response = (league, date) => ({ ok: true, league: { id: league.toLowerCase() }, timeZone: 'Asia/Taipei', date,
@@ -24,7 +27,8 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
   const hooks = [], effects = [], requests = [], history = [], listeners = new Map(), scopes = [];
   const timerMap = new Map(); let timerId = 0;
   function SoccerAnalysisProvider({ children }) { return React.createElement('div', { 'data-analysis-provider': true }, children); }
-  function SoccerReaderPanel() { return React.createElement('div', { 'data-reader': true }); }
+  function SoccerReaderBoards() { return React.createElement('div', { 'data-reader': true }); }
+  function SoccerReaderInventoryPanel() { return React.createElement('div', { 'data-reader-inventory': true }); }
   const window = { location: { search }, localStorage: { getItem: () => null },
     addEventListener: (name, listener) => { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(listener); },
     removeEventListener: (name, listener) => listeners.get(name)?.delete(listener),
@@ -32,7 +36,7 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
       history.push({ method, url }); window.location.search = new URL(url, 'https://fixture.invalid').search;
     }])) };
   const ctx = vm.createContext({ React, URL, URLSearchParams, Date, Intl, AbortController, soccerTeamLabel, APP_VERSION: 'test', window,
-    SoccerReaderPanel, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
+    SoccerReaderBoards, SoccerReaderInventoryPanel, soccerReaderBoardDates:readerScope.soccerReaderBoardDates, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
     Link: ({ children, prefetch, ...attributes }) => React.createElement('a', attributes, children),
     useState: initial => { const index = cursor++; if (!(index in hooks)) hooks[index] = typeof initial === 'function' ? initial() : initial;
       return [hooks[index], update => { const next = typeof update === 'function' ? update(hooks[index]) : update; if (!Object.is(next, hooks[index])) { hooks[index] = next; dirty = true; } }]; },
@@ -171,6 +175,18 @@ await test('fixed league instances have unique accessible date controls and a ne
   epl.render({ embedded: true, selectedLeague: 'EPL', allRun: { runId: 'wrun_new_first_batch_101', leagues: { EPL: { boardDate: '2026-10-20' } } } });
   assert.equal(epl.scopes.at(-1).date, '2026-10-20'); assert.equal(epl.scopes.at(-1).runId, 'wrun_new_first_batch_101');
   epl.unmount(); ucl.unmount();
+});
+await test('upcoming Reader scope follows match dates and saved-date navigation stays on the same root league', async () => {
+  const h=harness({embedded:true,selectedLeague:'EPL'},'?sport=EPL&date=2026-10-29&view=upcoming');h.render();
+  const board=response('EPL','2026-10-29');board.games=[{...board.games[0],date:'2026-10-31'},{...board.games[0],id:'soccer:epl:102',date:'2026-11-01'}];
+  h.requests[0].respond(board);await h.settle();
+  const reader=find(h.tree,element=>element.props?.games===board.games&&element.props?.view==='upcoming');assert.ok(reader);
+  assert.equal(reader.props.date,'2026-10-29');assert.equal(reader.props.league,'EPL');
+  const inventory=find(h.tree,element=>typeof element.props?.onSelectDate==='function');assert.ok(inventory);
+  assert.equal(inventory.props.throughDate,'2026-11-01');
+  inventory.props.onSelectDate('2026-10-25');h.render();
+  assert.equal(h.history.at(-1).url,'/?sport=EPL&date=2026-10-25');
+  assert.equal(h.scopes.at(-1).league,'EPL');assert.equal(h.scopes.at(-1).view,'schedule');h.unmount();
 });
 await test('legacy football route redirects to the root with valid query scope and strips unrelated controls', async () => {
   const route = fs.readFileSync('app/soccer/page.js', 'utf8').replace(/^import .*?;\n/gm, '').replace('export default async function', 'async function');

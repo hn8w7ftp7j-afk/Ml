@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { APP_VERSION } from '../../lib/app-version.js';
-import SoccerReaderPanel from './reader-panel.js';
+import { SoccerReaderBoards, soccerReaderBoardDates } from './reader-panel.js';
+import { SoccerReaderInventoryPanel } from './reader-inventory-panel.js';
 import SoccerAnalysisPanel, { SoccerAnalysisProvider } from './analysis-panel.js';
 import { soccerTeamLabel } from '../../lib/soccer/team-labels.js';
 import './soccer.css';
@@ -269,7 +270,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
       {location.date&&<><div className="soccerAnalyzeActions"><button type="button" className="primary soccerLeagueAnalyzeButton" disabled={!canAnalyzeLeague} onClick={analyzeLeague}>{otherBusy ? '分析工作進行中…' : `一鍵分析${location.league === 'EPL' ? '英超' : '歐冠'}`}</button>{embedded ? <button type="button" className="secondary allLeagueAnalyzeButton" disabled={otherBusy || !onAnalyzeAll} onClick={() => onAnalyzeAll?.(location.date)}>一鍵分析全部聯盟</button> : <a className="secondary allLeagueAnalyzeButton" href={`/?analyzeAll=1&date=${encodeURIComponent(location.date)}`}>一鍵分析全部聯盟</a>}</div><p className="soccerAvailability">{location.view === 'standings' ? '切回當日或近期賽程，即可分析本聯盟。' : busy ? '正在讀取本聯盟賽程…' : error ? '請先重新整理賽程，再分析本聯盟。' : analysisTargets.length ? `${location.view === 'upcoming' ? '目前近期賽程' : `${location.date}（台灣時間）`}｜僅分析${league.name}未開賽 ${analysisTargets.length} 場` : '目前沒有可分析的未開賽賽事。'}</p></>}
       <p className="soccerAvailability">目前可更新賽前資料與比分研究；正式評分尚未完成，有盤口仍不代表已有 S 分數。新鮮且期間已確認的原盤可顯示條件式收益分析；未同步原盤時，可先分析賽事，再使用手動盤口試算。<Link prefetch={false} href="/soccer/specification">分析規格 2.2</Link></p>
     </section>
-    {active && <SoccerReaderPanel league={location.league} date={location.date}/>}
+    {active && <><SoccerReaderBoards league={location.league} date={location.date} games={games} view={location.view}/><SoccerReaderInventoryPanel league={location.league} date={location.date} throughDate={soccerReaderBoardDates({league:location.league,date:location.date,games,view:location.view}).at(-1)||location.date} onSelectDate={savedDate=>navigate({...location,date:savedDate,view:'schedule'})}/></>}
     {error && <div className="errorBox soccerError" role="alert"><div><strong>{board ? '更新失敗，保留上次資料' : '資料載入失敗'}</strong><p>{error}</p></div><button type="button" className="secondary" disabled={busy} onClick={retry}>重試</button></div>}
     <section aria-label={`${league.name}${VIEW_NAMES[location.view]}`} aria-busy={busy}>
       <div className="soccerBoardHeading"><h2>{location.view === 'upcoming' ? '近期賽程' : location.view === 'standings' ? '目前積分榜' : dateLabel}</h2><span role="status" aria-live="polite">{busy ? board ? '更新中…' : '載入中…' : board ? displayCount : ''}</span></div>

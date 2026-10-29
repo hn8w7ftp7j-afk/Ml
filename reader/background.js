@@ -3,7 +3,7 @@ import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSu
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 
-const VERSION = '2.1.44';
+const VERSION = '2.1.45';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -440,15 +440,24 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
-    const sources = (soccer ? selection.selections.map(item => item.selected) : [selection.selected]).map(selected => {
+    const sources = (soccer ? selection.selections : [{ selected: selection.selected }]).map(({ selected, sourceScopes }) => {
       // Comparison projections must never replace the captured evidence sent to
-      // the server. Each chosen original frame is uploaded intact, once.
+      // the server. Each dated upload retains its intact original raw frame.
       const sourcePayload = soccer ? { ...selected.candidate.parsed } : selected.candidate.parsed;
       Object.assign(sourcePayload, { league, readerVersion: VERSION, deviceId: stored.deviceId, pageActivityAt: selected.pageActivityAt, expectedGameCount: selected.expectedGameCount, detectedGameCount: selected.detectedGameCount });
-      return { selected, sourcePayload };
+      return { selected, sourcePayload, sourceScopes: soccer && Array.isArray(sourceScopes) ? sourceScopes : [] };
     });
     const { selected, sourcePayload } = sources[0];
-    const payloads = sources.flatMap(source => readerPayloadsByDate(source.sourcePayload));
+    // A frame can win authority for only some dated periods. Keep its complete
+    // raw source for reparse, but remove every unselected date and period so a
+    // full frame cannot overwrite a different scope's chosen source receipt.
+    const payloads = sources.flatMap(source => readerPayloadsByDate(source.sourcePayload,
+      soccer ? { soccerScopes: source.sourceScopes } : {}));
+    if (soccer && !payloads.length) {
+      statuses[league] = { ok: false, state: 'error', league, diagnosticCode: 'soccer-authority-date-missing',
+        message: `${LABELS[league]}來源盤日尚未通過核對，已停止上傳`, readerVersion: VERSION };
+      continue;
+    }
     const accepted = [], failures = [];
     for (const payload of payloads) {
       const periodsCovered = soccer ? (payload.periodsCovered?.length ? payload.periodsCovered : ['UNKNOWN']) : null;

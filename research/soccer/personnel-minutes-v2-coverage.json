@@ -1,0 +1,89 @@
+{
+  "version": "SOCCER-PERSONNEL-MINUTES-V2-COVERAGE-v1",
+  "extractorVersion": "SOCCER-REGULATION-MINUTES-SOURCE-ID-STATE-v2",
+  "population": 2995,
+  "sourceArtifactHashes": {
+    "research/soccer/epl-history.json.gz": "a0056a6ce6942cfc354dc87354f2350c56278a11658f797e8fd09e603bc5030f",
+    "research/soccer/personnel-epl-history.json.gz": "cb887c92edd734afbcab671d6d9f6a7a384ef30973015b1027b3a942feec498f",
+    "research/soccer/personnel-epl-sources.json.gz": "2a0e7af17c8a7e87d199540e5025bfd55e271a6610bad810bd43b924965068ac",
+    "research/soccer/ucl-history.json.gz": "f033a25c8c03bd35f78a410b33d059cc44c675c1a5c49e4ead4744dee45ec25a",
+    "research/soccer/personnel-ucl-history.json.gz": "1ad021159829f6806bff82d24ae8dcb10984a400b19e91c80655504eff00e41a",
+    "research/soccer/personnel-ucl-sources.json.gz": "fb2c7ca92363c9eb6b27c9776dfb516707561cc9cf7e0520d7ef58c085c9d463"
+  },
+  "preservedModelArtifactHashes": {
+    "lib/soccer/research-frozen.js": "48005016cdcd5b1701bc410e08c1bd2e23483c13dd0cfc4ea7d2d5b1f971ffa9",
+    "lib/soccer/half-time-frozen.js": "4e4cbebe45ddd61d765b64b8be41e8372236ff722ad0511cfb2ced95b24b86ed",
+    "lib/soccer/personnel-frozen.js": "5701f71c603de4f6b021e2d485c3b612ec9f52eb6d6e0765cc231ffc9f20b091"
+  },
+  "implementationArtifactHashes": {
+    "lib/soccer/personnel-audit.js": "f2073f96e3bf05e53275bb529c28e67765628eefd97449eb6dea8f4f5b448d52",
+    "lib/soccer/personnel-minutes-v2.js": "1a11fa2470d1bfc3dd43b3790f700dddbc4b2e2bd4834367bdfdbf62aeea5675",
+    "scripts/soccer-minutes-v2-replay.mjs": "6da4adfa45d16affc8beea5fe8e85a780766c357a62ee94fc4068b13bfcb2198"
+  },
+  "leagues": {
+    "epl": {
+      "population": 2190,
+      "sourceCount": 2190,
+      "derivationAccepted": 2190,
+      "derivationExcluded": 0,
+      "v1Reconstructed": 1247,
+      "v2Reconstructed": 2190,
+      "recovered": 943,
+      "regressed": 0,
+      "numericChangesOnOriginalUsableGames": 7,
+      "correctedOriginalUsableGames": 7,
+      "correctionReasons": {
+        "VAR_REVIEW_MISCLASSIFIED_AS_DISMISSAL": 7
+      },
+      "originalUsableVarReviewCorrectionGames": 8,
+      "originalUsableVarReviewCorrectionsWithNoMinuteChange": 1,
+      "unverified": 0,
+      "v1Reasons": {
+        "SUBSTITUTION_ROLE_UNVERIFIED": 932,
+        "SUBSTITUTION_STATE_CONFLICT": 5,
+        "DISMISSAL_IDENTITY_CONFLICT": 6
+      },
+      "v2Reasons": {},
+      "stateResolvedSubstitutions": 1191,
+      "inputHistoryRowsHash": "63d8b0c55686b10111276c3ae117913c197799abe6c3666cdabf3a1ef794930f",
+      "derivedObservationsHash": "7433fef2a519803fe322f370d583ce5816add83bdeda175f503c6404aac1b513"
+    },
+    "ucl": {
+      "population": 805,
+      "sourceCount": 805,
+      "derivationAccepted": 805,
+      "derivationExcluded": 0,
+      "v1Reconstructed": 246,
+      "v2Reconstructed": 800,
+      "recovered": 554,
+      "regressed": 0,
+      "numericChangesOnOriginalUsableGames": 0,
+      "correctedOriginalUsableGames": 0,
+      "correctionReasons": {},
+      "originalUsableVarReviewCorrectionGames": 0,
+      "originalUsableVarReviewCorrectionsWithNoMinuteChange": 0,
+      "unverified": 5,
+      "v1Reasons": {
+        "SUBSTITUTION_ROLE_UNVERIFIED": 555,
+        "REGULATION_END_MISSING": 4
+      },
+      "v2Reasons": {
+        "SUBSTITUTION_STATE_CONFLICT": 1,
+        "REGULATION_END_MISSING": 4
+      },
+      "stateResolvedSubstitutions": 977,
+      "inputHistoryRowsHash": "6711da71a85dc5d271d4d497c9f37078e21a4821e4d02e2dd9739313396a375c",
+      "derivedObservationsHash": "93f7aaf95ab3f35e832aea6adbb6a7f3b678e30843334178c4181fbd12985d5e"
+    }
+  },
+  "networkRequests": 0,
+  "currentModelUnchanged": true,
+  "modelEffectApplied": false,
+  "pointInTimeAvailabilityVerified": false,
+  "physicalElapsedMinutesVerified": false,
+  "formalEligible": false,
+  "executable": false,
+  "interpretation": "REPLAYED_RETAINED_POSTMATCH_REGULATION_CLOCK_MINUTES_NOT_PREGAME_FORECAST_OR_MODEL_ACCEPTANCE",
+  "sourceTimestampMeaning": "Original retained postmatch fetch times and hashes remain unchanged; replay creates no new provider fetch receipt.",
+  "summaryHash": "7797d92b6e124e882cddc30aea98aac7aa4a2992094b0d0d968a96c19ef713d8"
+}

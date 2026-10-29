@@ -4,6 +4,7 @@ import { SoccerMarketDirections, SoccerHalfTimeResearch } from './market-panel.j
 import { SoccerManualSimulation } from './manual-simulation-panel.js';
 import { SoccerWorkloadPanel } from './workload-panel.js';
 import { SoccerTeamXgPanel } from './team-xg-panel.js';
+import { SoccerMinutesV2Coverage } from './minutes-v2-coverage.js';
 import SoccerWorkspace from './workspace.js';
 import { SOCCER_ALL_LEAGUE_STORAGE, validateSoccerAnalysisPayload, soccerSavedAnalysisState, findSoccerBackgroundJob, soccerBackgroundStates } from '../../lib/soccer/background-client.js';
 
@@ -111,6 +112,7 @@ export function SoccerPersonnelResearch({prediction,research,baseline,league,ana
       {diagnosticPaired?<><p>共同可評估 {diagnosticCount}／原始母體 {diagnosticSample} 場。Log Loss：原基準 {decimal(diagnostic.baseline.logLoss)}／人員研究 {decimal(diagnostic.logLoss)}；Brier：原基準 {decimal(diagnostic.baseline.brier)}／人員研究 {decimal(diagnostic.brier)}。</p>{Number.isFinite(diagnostic.comparison?.meanDifference)&&<p>Log Loss 差異（人員研究減原基準）：{decimal(diagnostic.comparison.meanDifference,4)}{interval&&[interval.lower,interval.upper].every(Number.isFinite)&&interval.lower<=interval.upper?`；週區塊重抽樣範圍 ${decimal(interval.lower,4)} ～ ${decimal(interval.upper,4)}`:''}。此回顧比較不作正式升級依據。</p>}</>:<p>2025 年尚無可核對的共同樣本診斷。</p>}
     </>}
     <p className="soccerAvailability">目前預設比分分布維持原基準；人員研究未啟用正式 W／R／S、候選或下注。</p>
+    <SoccerMinutesV2Coverage league={league}/>
   </details>;
 }
 export function SoccerRunHistory({runs=[]}){
