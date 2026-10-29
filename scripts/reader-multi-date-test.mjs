@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import { createHash } from 'node:crypto';
@@ -131,6 +132,7 @@ const ctx = { chrome: fakeChrome, parseTai888Capture, canonicalReaderPayload, re
     return { status: 200, ok: true, text: async () => JSON.stringify(readerSaveReceiptFixture(body, { rawGameCount: normalized.gameCount, marketCount: normalized.marketCount })) };
   } };
 vm.createContext(ctx);
+installArchiveWorkerFixture(ctx);
 vm.runInContext(fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8').replace(/^import .*?;\n/gm, ''), ctx);
 await vm.runInContext("performSync('manual')", ctx);
 assert.deepEqual(uploads, ['2026-10-09','2026-10-10']);

@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
@@ -55,6 +56,7 @@ function harness(payload, respond = input => readerSaveReceiptFixture(input)) {
       const input = JSON.parse(options.body); uploads.push({ url, input });
       return { ok: true, status: 200, text: async () => JSON.stringify(await respond(input)) };
     } });
+  installArchiveWorkerFixture(worker);
   vm.runInContext(source, worker);
   vm.runInContext('collectCandidates = async () => testScan', worker);
   return { state, uploads, worker, candidate, run: reason => vm.runInContext(`performSync('${reason}')`, worker) };

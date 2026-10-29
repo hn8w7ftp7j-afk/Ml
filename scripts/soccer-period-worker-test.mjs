@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import fs from 'node:fs';
@@ -63,6 +64,7 @@ async function execute(captures,{failPeriod=null,withDiagnostics=false}={}){
       if(shouldFail&&body.periodsCovered?.includes(shouldFail))return{ok:false,status:503,text:async()=>JSON.stringify({ok:false,error:'synthetic scope failure'})};
       return{ok:true,status:200,text:async()=>JSON.stringify(readerSaveReceiptFixture(body,{marketCount:body.games.reduce((sum,game)=>sum+game.markets.length,0),executable:false}))};
     }});
+  installArchiveWorkerFixture(worker);
   vm.runInContext(backgroundSource.replace(/^import .*?;\n/gm,''),worker);
   const run=reason=>vm.runInContext(`performSync('${reason}')`,worker);
   const first=await run('manual');

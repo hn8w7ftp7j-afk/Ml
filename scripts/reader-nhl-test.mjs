@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import fs from 'node:fs';
@@ -154,6 +155,7 @@ const worker = { chrome, Date, URL, setTimeout, clearTimeout, queueMicrotask, Te
   },
 };
 vm.createContext(worker);
+installArchiveWorkerFixture(worker);
 vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), worker);
 const synced = await vm.runInContext("performSync('manual')", worker);
 assert.equal(synced.ok, true, JSON.stringify({synced, statuses: state.readerStatuses}));

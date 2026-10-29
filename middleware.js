@@ -7,6 +7,8 @@ const PUBLIC_PWA_PATHS = new Set(['/manifest.webmanifest', '/sw.js']);
 PUBLIC_PATHS.add('/api/soccer/reader');
 // Extension POST has its own device token; GET still requires site login.
 PUBLIC_PATHS.add('/api/reader/diagnostics');
+// Archive POST authenticates the paired device; its read endpoint requires site login.
+PUBLIC_PATHS.add('/api/reader/archive');
 // Native cron has no browser session. Its route requires CRON_SECRET; only
 // this exact maintenance endpoint skips the unrelated session middleware.
 PUBLIC_PATHS.add('/api/cron/nba-maintenance');

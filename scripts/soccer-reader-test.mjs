@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 import '../reader/soccer-card-normalizer.js';
@@ -98,6 +99,7 @@ if(process.argv.includes('--api')){
   const body=JSON.parse(options.body),checked=validateSoccerCapture(body,{now,headerVersion:version});assert.equal(checked.ok,true,JSON.stringify(checked));uploads.push(body.league);
   return{ok:true,status:200,text:async()=>JSON.stringify(readerSaveReceiptFixture(body,{rawGameCount:1,marketCount:4,executable:false}))};
  }};
+ installArchiveWorkerFixture(worker);
  vm.createContext(worker);vm.runInContext(fs.readFileSync('reader/background.js','utf8').replace(/^import .*?;\n/gm,''),worker);
  assert.equal((await vm.runInContext("performSync('manual')",worker)).ok,true);assert.deepEqual(uploads,['EPL','UCL']);
  for(const league of uploads){assert.equal(state.readerStatuses[league].captureOnly,true);assert.equal(state.readerStatuses[league].executable,false);assert.equal(state.readerStatuses[league].marketCount,4);}

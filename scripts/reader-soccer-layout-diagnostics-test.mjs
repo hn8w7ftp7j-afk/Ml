@@ -1,3 +1,4 @@
+import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -36,6 +37,7 @@ const chrome = {
 const context = vm.createContext({ chrome, Date, URL, setTimeout, clearTimeout, TextEncoder, AbortController,
   Tai888LeagueRegistry: globalThis.Tai888LeagueRegistry, Tai888SoccerTeams: globalThis.Tai888SoccerTeams,
   fetch: async (...args) => { requests.push(args); throw new Error('layout diagnostics must not upload'); } });
+installArchiveWorkerFixture(context);
 vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), context);
 const plain = value => JSON.parse(JSON.stringify(value));
 context.rawIssueCapture = { league: 'UCL', diagnostics: { tableIssues: [

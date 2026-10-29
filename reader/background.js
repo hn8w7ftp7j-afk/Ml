@@ -2,13 +2,29 @@ import { parseTai888Capture, canonicalReaderPayload, readerMarketProperties, nhl
 import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSuccessfulPayload, readerPayloadsByDate } from './board-selector.js';
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
+import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
 
-const VERSION = '2.1.47';
+const VERSION = '2.1.48';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
 const LABELS = { MLB: '美棒', NPB: '日棒', KBO: '韓棒', CPBL: '中職', NBA: '美籃', NHL: '冰球', EPL:'英超', UCL:'歐冠' };
 const ALARM = 'tai888-reader-auto-sync';
+let marketOutbox;
+function getMarketOutbox() { return marketOutbox ||= createMarketOutbox({ storage: chrome.storage.local, sha,
+  upload: async (payload, stored) => {
+    const response = await request(`${ORIGIN}/api/reader/archive`, { method: 'POST', headers: {
+      Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json',
+      'X-Device-Id': stored.deviceId, 'X-Reader-Version': payload.readerVersion,
+    }, body: JSON.stringify({ schema: 'READER-CAPTURE-ARCHIVE-v1', payload: { ...payload, deviceId: stored.deviceId } }) }, 8000);
+    const receipt = await json(response);
+    if (!response.ok) throw Object.assign(new Error('MARKET_ARCHIVE_UPLOAD_FAILED'), { status: response.status });
+    return receipt;
+  },
+}); }
+async function ensureMarketArchiveAlarm() {
+  await chrome.alarms.create(MARKET_ARCHIVE_ALARM, { delayInMinutes: .5, periodInMinutes: .5 });
+}
 let diagnosticOutbox;
 function getDiagnosticOutbox() { return diagnosticOutbox ||= createDiagnosticOutbox({ storage: chrome.storage.local, upload: async (report, stored) => {
   const response = await request(`${ORIGIN}/api/reader/diagnostics`, { method: 'POST', headers: {
@@ -47,12 +63,19 @@ chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.remove(['readerStatus', 'pairError']);
   await ensureAlarm();
   await ensureDiagnosticAlarm();
+  await ensureMarketArchiveAlarm();
+  await getMarketOutbox().flush().catch(() => {});
   // Existing tabs retain their old content scripts after an extension update.
   const tabs = await chrome.tabs.query({ url: PATTERNS });
   await Promise.all(tabs.map(tab => chrome.tabs.reload(tab.id).catch(() => {})));
 });
 chrome.runtime.onStartup.addListener(ensureAlarm);
 chrome.runtime.onStartup.addListener(ensureDiagnosticAlarm);
+chrome.runtime.onStartup.addListener(async () => {
+  await ensureMarketArchiveAlarm();
+  await getMarketOutbox().flush().catch(() => {});
+});
+chrome.alarms.onAlarm.addListener(event => { if (event.name === MARKET_ARCHIVE_ALARM) getMarketOutbox().flush().catch(() => {}); });
 chrome.alarms.onAlarm.addListener(event => { if (event.name === DIAGNOSTIC_ALARM) getDiagnosticOutbox().flush().catch(() => {}); });
 chrome.alarms.onAlarm.addListener(event => { if (event.name === ALARM) syncNow('alarm').catch(() => {}); });
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
@@ -356,6 +379,9 @@ async function performSync(reason, preferredTabId) {
   try { return await performSyncAttempt(reason, preferredTabId, context); }
   catch (error) { exceptionCode = syncExceptionCode(error); throw error; }
   finally {
+    // The historical outbox does not need any open source tab. Its endpoint
+    // cannot advance live-board authority, analysis, freshness or live ACKs.
+    try { await getMarketOutbox().flush(); } catch {}
     // Diagnostics use an independent endpoint and never authorize a failed
     // board. Do not let diagnostic/storage/network failure break market sync.
     try {
@@ -477,6 +503,10 @@ async function performSyncAttempt(reason, preferredTabId, context) {
             accepted.push(receipt); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, skipped: true }); continue;
           }
         }
+        // Save selected evidence locally before the live POST can fail. A
+        // quota/archive outage remains visible in its own delivery status and
+        // does not change the existing live-board acceptance contract.
+        if (league !== 'NHL') await getMarketOutbox().enqueue(payload, stored.deviceId);
         const endpoint = ['EPL','UCL'].includes(league) ? '/api/soccer/reader' : league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
         const wirePayload = league === 'NHL' ? nhlReaderEvidencePayload(payload) : payload;
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
@@ -506,7 +536,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
   const successes = LEAGUES.filter(league => statuses[league]?.ok === true && statuses[league]?.state === 'synced').length;
   return { ok: successes > 0, results, message: `各聯盟檢查完成｜${successes} 個分頁同步成功` };
 }
-async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt', 'diagnosticDelivery']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, diagnosticDelivery: stored.diagnosticDelivery || null, error: stored.pairError || '', readerVersion: VERSION }; }
+async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt', 'diagnosticDelivery', 'marketArchiveDelivery']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, diagnosticDelivery: stored.diagnosticDelivery || null, marketArchiveDelivery: stored.marketArchiveDelivery || null, error: stored.pairError || '', readerVersion: VERSION }; }
 
 // A missing content script cannot receive RECOVER. Reload only after the user
 // explicitly clicks repair, only on allowlisted tabs that did not respond.
