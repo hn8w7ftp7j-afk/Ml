@@ -464,7 +464,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     for (const payload of payloads) {
       const periodsCovered = soccer ? (payload.periodsCovered?.length ? payload.periodsCovered : ['UNKNOWN']) : null;
       const periodKey = soccer ? periodsCovered.join('+') : '';
-      const baseSyncKey = ['NBA', 'NHL', 'EPL', 'UCL'].includes(league) ? `${league}:${payload.boardDate}` : league;
+      const baseSyncKey = `${league}:${payload.boardDate}`;
       const syncKey = soccer && periodKey !== 'UNKNOWN' ? `${baseSyncKey}:${periodKey}` : baseSyncKey;
       try {
         const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;

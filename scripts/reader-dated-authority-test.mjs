@@ -92,6 +92,8 @@ for (const league of Object.keys(teams)) {
   assert.deepEqual(flow.uploads.map(row => [row.league, row.boardDate]), [[league, '2026-10-09'], [league, '2026-10-10']]);
   assert.equal(flow.state.readerStatuses[league].dateStatuses.length, 2);
   assert.ok(flow.state.readerStatuses[league].dateStatuses.every(row => row.saveReceipt.status === 'CONFIRMED'));
+  flow.uploads.length = 0; await flow.run('alarm');
+  assert.equal(flow.uploads.length, 0, `${league}: unchanged acknowledged dates retain independent heartbeat throttles`);
 }
 const scopeFlow = await workerFlow([activeTomorrow, multi]);
 assert.deepEqual(scopeFlow.uploads.map(row => [row.boardDate, row.sourceHost]), [['2026-10-09', 'www.tai888.in'], ['2026-10-10', 'tai888.in']], 'a multi-date original cannot upload a date won by another source');
