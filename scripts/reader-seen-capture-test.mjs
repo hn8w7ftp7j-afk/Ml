@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server.js';
 import * as auth from '../lib/reader-auth-v2.js';
 import * as security from '../lib/security.js';
 import { READER_SEEN_CAPTURE_SCHEMA as SCHEMA, READER_SEEN_CAPTURE_LEAGUES as LEAGUES,
-  buildReaderSeenCapture, canonicalReaderSeenCapture, saveReaderSeenCapture, listReaderSeenCaptures, parseReaderSeenCaptureQuery } from '../lib/reader-seen-capture.js';
+  buildReaderSeenCapture, canonicalReaderSeenCapture, initializeReaderSeenCaptureStore, saveReaderSeenCapture, listReaderSeenCaptures, parseReaderSeenCaptureQuery } from '../lib/reader-seen-capture.js';
 
 const db = new PGlite(), statements = [];
 const sql = (parts, ...values) => {
@@ -55,6 +55,13 @@ try {
   const preRead = statements.length;
   await assert.rejects(() => listReaderSeenCaptures({}, { sql }), cause => cause.code === 'READER_SEEN_CAPTURE_TABLE_NOT_READY' && cause.status === 503);
   assert.ok(statements.slice(preRead).every(query => !/\b(?:CREATE|ALTER|INSERT|UPDATE|DELETE)\b/i.test(query)), 'GET on a missing table never creates schema or fabricates zeros');
+  await Promise.all([initializeReaderSeenCaptureStore({sql}),initializeReaderSeenCaptureStore({sql})]);
+  const activated=await listReaderSeenCaptures({}, {sql});
+  assert.equal(activated.coverageComplete,false);
+  assert.equal(activated.leagues.length,8);
+  assert.ok(activated.leagues.every(row=>row.captureCount===0&&row.lastObservedAt===null));
+  assert.equal(await count(),0,'schema activation never invents observations');
+  assert.equal(statements.slice(preRead).filter(query=>/CREATE TABLE IF NOT EXISTS/.test(query)).length,1,'concurrent activation is coalesced');
   const source = fixture(), expected = build(source);
   assert.equal(expected.captureId, source.captureId); assert.equal(expected.evidenceHash, source.evidenceHash);
   assert.deepEqual(expected.evidence, source.evidence, 'sport evidence is exact, including whitespace, unresolved identity, malformed date and conflicting rows');
@@ -165,7 +172,9 @@ try {
   // Run real route logic, identity, body parsing and actual PostgreSQL transport.
   const token = await auth.createReaderToken({ deviceId }), session = await security.createSessionToken();
   let unavailable = false, limited = false, calls = 0;
-  const deps = { NextResponse, ...auth, ...security, saveReaderSeenCapture: async (input, options) => {
+  const deps = { NextResponse, ...auth, ...security, initializeReaderSeenCaptureStore: async () => {
+    calls+=1;if(unavailable)throw Error('private database transport details');await initializeReaderSeenCaptureStore({sql});
+  }, saveReaderSeenCapture: async (input, options) => {
     calls += 1; if (unavailable) throw Error('private database transport details'); return saveReaderSeenCapture(input, { ...options, sql });
   }, listReaderSeenCaptures: async query => { calls += 1; if (unavailable) throw Error('private database transport details'); return listReaderSeenCaptures(query, { sql }); },
   parseReaderSeenCaptureQuery, checkRateLimit: (...args) => limited ? { allowed: false } : security.checkRateLimit(...args), console: { warn() {} } };
@@ -192,7 +201,9 @@ try {
   const routeReceipt = await routeSaved.json(); assert.equal(routeReceipt.captureId, source.captureId); assert.equal(routeReceipt.durable, true);
   assert.equal(routeSaved.headers.get('Cache-Control'), 'no-store');
   assert.equal(routeSaved.headers.get('Access-Control-Allow-Origin'), `chrome-extension://${'a'.repeat(32)}`);
+  const beforeReadAuth=calls;
   assert.equal((await route.GET(request('GET', undefined, { cookie: '' }))).status, 401, 'Reader bearer token never authorizes archive reads');
+  assert.equal(calls,beforeReadAuth,'unauthenticated reads never initialize storage');
   assert.equal((await route.GET(request('GET'))).status, 200);
   assert.equal((await route.GET(request('GET', undefined, {}, '?league=UNKNOWN'))).status, 400);
   limited = true; assert.equal((await post()).status, 429); assert.equal((await route.GET(request('GET'))).status, 429); limited = false;

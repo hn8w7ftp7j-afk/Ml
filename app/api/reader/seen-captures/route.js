@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { bearerToken, readerCorsHeaders, readerOriginAllowed, verifyReaderToken } from '../../../../lib/reader-auth-v2.js';
 import { checkRateLimit, readJsonBody, requireApiAuth } from '../../../../lib/security.js';
-import { saveReaderSeenCapture, listReaderSeenCaptures, parseReaderSeenCaptureQuery } from '../../../../lib/reader-seen-capture.js';
+import { initializeReaderSeenCaptureStore, saveReaderSeenCapture, listReaderSeenCaptures, parseReaderSeenCaptureQuery } from '../../../../lib/reader-seen-capture.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +38,7 @@ export async function GET(request) {
     return reject(request, 'READER_SEEN_CAPTURE_RATE_LIMIT', 429);
   try {
     const query = parseReaderSeenCaptureQuery(new URL(request.url).searchParams);
+    await initializeReaderSeenCaptureStore();
     return response(request, await listReaderSeenCaptures(query));
   } catch (cause) {
     const status = [400, 404].includes(cause?.status) ? cause.status : 503;
