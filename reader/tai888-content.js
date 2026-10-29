@@ -4,9 +4,87 @@
 
   const policy = globalThis.Tai888CapturePolicy;
   const normalizer = globalThis.Tai888RowNormalizer;
-  if (!policy?.shouldKeepRecord || !normalizer?.normalizeRowRecords) return;
-  const clean = policy.clean;
-  const READER_VERSION = '2.1.48';
+  const liveNormalizerAvailable = Boolean(policy?.shouldKeepRecord && normalizer?.normalizeRowRecords);
+  const clean = policy?.clean || (value => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim());
+  const READER_VERSION = '2.1.49';
+  const pendingSeenCaptures = new Map();
+  const lastSeenFingerprint = new Map();
+  let seenSequence = 0;
+  let seenCaptureReason = 'SCAN';
+  function seenAckConfirmed(receipt) {
+    return receipt?.queued === true && receipt.durable === true
+      && Array.isArray(receipt.captureIds) && receipt.captureIds.length > 0
+      && receipt.captureIds.every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value));
+  }
+  async function persistSeenCapture(item) {
+    if (item.saving || !pendingSeenCaptures.has(item.sequence)) return;
+    item.saving = true;
+    try {
+      const local = (async () => globalThis.Tai888SeenStorage?.persist(item.evidence, { storage: chrome.storage?.local }))();
+      // Send the full immutable evidence before awaiting local hashing/storage.
+      // The worker now owns it even if this source frame closes during a write.
+      const remote = (async () => chrome.runtime?.sendMessage({ type: 'TAI888_SEEN_CAPTURE', evidence: item.evidence }))();
+      const receipts = await Promise.allSettled([local, remote]);
+      const confirmed = receipts.some(result => result.status === 'fulfilled' && seenAckConfirmed(result.value));
+      if (confirmed) pendingSeenCaptures.delete(item.sequence);
+      else {
+        item.nextAttemptAt = Date.now() + 5000;
+        notifyBackground({ type: 'SEEN_CAPTURE_FAILURE', code: 'SEEN_LOCAL_SAVE_FAILED', pendingCount: pendingSeenCaptures.size });
+      }
+    } finally { item.saving = false; }
+  }
+  function publishSeenCapture(evidence, path) {
+    if (!evidence) return;
+    const fingerprint = JSON.stringify([evidence.sourceHost, evidence.pageUrl, evidence.league, evidence.tables]);
+    const key = `${path}:${evidence.league}`;
+    // Repeated DOM notifications without a sport-text change are noise. An
+    // explicit SCAN is a new observation even when every price is unchanged.
+    // A -> B -> A still enqueues three states, including on persistence failure.
+    const mutationOnly = evidence.captureReasons?.includes('MUTATION') && !evidence.captureReasons.includes('SCAN');
+    if (mutationOnly && lastSeenFingerprint.get(key) === fingerprint) return;
+    lastSeenFingerprint.set(key, fingerprint);
+    const item = { sequence: ++seenSequence, evidence, saving: false, nextAttemptAt: 0 };
+    pendingSeenCaptures.set(item.sequence, item);
+    void persistSeenCapture(item);
+  }
+  function seenMetadata(reason = seenCaptureReason) {
+    const frameUrl = currentTai888PageUrl();
+    let pageUrl = frameUrl;
+    if (!pageUrl) {
+      // about:blank/srcdoc descendants may inherit an actual Tai888 document.
+      // Retain only a URL the browser exposes as its observed owner/referrer;
+      // never construct an invented board path from an ancestor hostname.
+      const candidates = [document.referrer];
+      try {
+        if (globalThis.parent && globalThis.parent !== globalThis) {
+          const owner = globalThis.parent.location;
+          const hint = /^#\/(?:BS|BB|FT)(?:$|[/?&])/i.test(owner.hash || '') ? owner.hash.match(/^#\/(?:BS|BB|FT)/i)[0] : '';
+          candidates.push(`${owner.origin}${owner.pathname}${hint}`);
+        }
+      } catch {}
+      for (const candidate of candidates) try {
+        const observed = new URL(candidate);
+        if (observed.protocol !== 'https:' || observed.username || observed.password || observed.port
+          || observed.hostname !== 'tai888.in' && !observed.hostname.endsWith('.tai888.in')) continue;
+        const hint = /^#\/(?:BS|BB|FT)(?:$|[/?&])/i.test(observed.hash) ? observed.hash.match(/^#\/(?:BS|BB|FT)/i)[0] : '';
+        pageUrl = `${observed.origin}${observed.pathname}${hint}`; break;
+      } catch {}
+    }
+    let sourceHost = tai888SourceHost();
+    try { sourceHost = new URL(pageUrl).hostname; } catch {}
+    return { sourceHost, pageUrl, ...(frameUrl ? { frameUrl } : {}), readerVersion: READER_VERSION,
+      observedAt: new Date().toISOString(), captureReasons: [reason, 'PRE_NORMALIZATION'], completeCapture: false };
+  }
+  function publishSeenRecords(records, reason = seenCaptureReason) {
+    try {
+      for (const evidence of globalThis.Tai888SeenEvidence?.collect(records, seenMetadata(reason)) || []) publishSeenCapture(evidence, 'ROWS');
+    } catch (error) { notifyBackground({ type: 'SEEN_CAPTURE_FAILURE', code: error?.code === 'SEEN_SOURCE_INVALID' ? 'SEEN_SOURCE_INVALID' : 'SEEN_CAPTURE_FAILED', pendingCount: pendingSeenCaptures.size }); }
+  }
+  function publishSeenSections(sections, league) {
+    try {
+      publishSeenCapture(globalThis.Tai888SeenEvidence?.collectSections(sections, league, seenMetadata()), 'CARDS');
+    } catch (error) { notifyBackground({ type: 'SEEN_CAPTURE_FAILURE', code: error?.code === 'SEEN_SOURCE_INVALID' ? 'SEEN_SOURCE_INVALID' : 'SEEN_CAPTURE_FAILED', pendingCount: pendingSeenCaptures.size }); }
+  }
   function notifyBackground(message) {
     // An extension update can invalidate this context and throw synchronously.
     try {
@@ -88,7 +166,7 @@
     return result;
   }
 
-  function textRows(element, { fragmentsOnly = false, limit = 24 } = {}) {
+  function textRows(element, { fragmentsOnly = false, limit = 24, preserveText = false } = {}) {
     const fragments = [];
     const owner = element.ownerDocument || document;
     const walker = owner.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
@@ -103,8 +181,8 @@
 
     while (walker.nextNode()) {
       const node = walker.currentNode;
-      const value = clean(node.nodeValue || '');
-      if (!value) continue;
+      const value = preserveText && typeof node.nodeValue === 'string' ? node.nodeValue : clean(node.nodeValue || '');
+      if (!value.trim()) continue;
       const range = owner.createRange();
       range.selectNodeContents(node);
       const rectangles = [...range.getClientRects()].filter(rectangle => rectangle.width > 0 && rectangle.height > 0);
@@ -116,9 +194,9 @@
 
     if (!fragments.length) {
       const rectangle = element.getBoundingClientRect();
-      return clean(element.innerText || element.textContent || '')
+      return (preserveText ? String(element.innerText || element.textContent || '') : clean(element.innerText || element.textContent || ''))
         .split(/\r?\n/)
-        .map(clean)
+        .map(value => preserveText ? value : clean(value))
         .filter(Boolean)
         .slice(0, limit)
         .map((text, index) => ({ text, top: rectangle.top + index * 18, left: rectangle.left }));
@@ -283,6 +361,109 @@
     return { elements, records };
   }
 
+  // The archive source has its own unfiltered record pass. A malformed price,
+  // unknown team, duplicate row or missing date must survive the live parser's
+  // row policy and normalization. Only explicitly observed sports column spans
+  // and league headings admit DIV continuations; forms/body text are excluded.
+  function collectSeenRecords(elements = []) {
+    const adapter = globalThis.Tai888SeenEvidence;
+    if (!adapter) return [];
+    const roots = [document], queued = [document], seenRoots = new Set(roots);
+    while (queued.length) {
+      const root = queued.shift();
+      let descendants = [];
+      try { descendants = root.querySelectorAll('*'); } catch {}
+      for (const element of descendants) if (element.shadowRoot && !seenRoots.has(element.shadowRoot)) {
+        seenRoots.add(element.shadowRoot); roots.push(element.shadowRoot); queued.push(element.shadowRoot);
+      }
+    }
+    function rawRecord(element) {
+      if (!visible(element) || /^(BODY|HTML|FORM|INPUT|TEXTAREA|SELECT|SCRIPT|STYLE)$/i.test(element.tagName)
+        || element.closest?.('form,input,textarea,select,[contenteditable="true"]')) return null;
+      let cells = [...element.children].filter(cell => visible(cell) && (/^(TD|TH)$/i.test(cell.tagName)
+        || /^(cell|columnheader|rowheader)$/i.test(cell.getAttribute?.('role') || '')));
+      if (!cells.length) cells = rowCellElements(element);
+      const box = element.getBoundingClientRect();
+      if (!cells.length) {
+        const text = clean(element.innerText || element.textContent || '');
+        if (!adapter.headingLeague({ text })) return null;
+        return { text, cells: [{ pair: [text], left: box.left, right: box.right }], top: box.top, left: box.left, right: box.right };
+      }
+      const values = cells.map(cell => {
+        const cellBox = cell.getBoundingClientRect();
+        const excluded = /^(FORM|INPUT|TEXTAREA|SELECT)$/i.test(cell.tagName)
+          || Boolean(cell.querySelector?.('form,input,textarea,select,[contenteditable="true"]'));
+        const fragments = excluded ? [] : textRows(cell, { fragmentsOnly: true, limit: Number.POSITIVE_INFINITY, preserveText: true });
+        return { pair: fragments.map(fragment => fragment.text), left: cellBox.left, right: cellBox.right };
+      });
+      return { text: values.map(cell => cell.pair.join(' ')).join(' '), cells: values,
+        top: box.top, left: box.left, right: box.right, marketLocked: hasExplicitMarketLock(element) };
+    }
+    const nodes = new Set([...queryAcrossRoots(roots, 'tr,[role="row"]'), ...elements]);
+    const records = [], rawByNode = new Map();
+    function add(element) {
+      if (rawByNode.has(element)) return;
+      const record = rawRecord(element);
+      if (record) { rawByNode.set(element, record); records.push(record); }
+    }
+    for (const node of nodes) add(node);
+    const extras = queryAcrossRoots(roots, 'div,li,span,h1,h2,h3,h4,p,strong,button');
+    // DIV-only layouts may have no TR/ARIA rows at all. Discover their observed
+    // headers before using the header spans to collect malformed continuations.
+    for (const element of extras) {
+      if (rawByNode.has(element) || !visible(element)) continue;
+      const cells = rowCellElements(element).map(cell => ({ text: clean(cell.innerText || cell.textContent || '') }));
+      const probe = { text: clean(element.innerText || element.textContent || ''), cells };
+      if (adapter.headingLeague(probe) || adapter.sportsHeader(probe)) add(element);
+    }
+    const headers = records.filter(adapter.sportsHeader);
+    for (const element of extras) {
+      if (rawByNode.has(element) || !visible(element)) continue;
+      const box = element.getBoundingClientRect();
+      const inSportSpan = headers.some(header => box.top >= header.top
+        && box.left >= header.left - 2 && box.right <= header.right + 2);
+      if (!inSportSpan) {
+        const label = clean(element.innerText || element.textContent || '');
+        if (!adapter.headingLeague({ text: label })) continue;
+      }
+      if (element.querySelector?.('tr,[role="row"]')) continue;
+      add(element);
+    }
+    return records;
+  }
+
+  function captureSeenMutation(reason = 'MUTATION') {
+    if (!globalThis.Tai888SeenEvidence) return;
+    try {
+      seenCaptureReason = reason;
+      publishSeenRecords(collectSeenRecords(), reason);
+      for (const league of ['NHL', 'EPL', 'UCL']) publishSeenSections(collectSeenCardSections(league), league);
+    }
+    catch { notifyBackground({ type: 'SEEN_CAPTURE_FAILURE', code: 'SEEN_CAPTURE_FAILED', pendingCount: pendingSeenCaptures.size }); }
+  }
+
+  function collectSeenCardSections(league) {
+    const adapter = globalThis.Tai888SeenEvidence;
+    if (!adapter) return [];
+    const sections = [], owners = new Set();
+    for (const heading of queryAcrossRoots(openRoots(), 'div,span,h1,h2,h3,h4,p,strong,button')) {
+      if (!visible(heading) || heading.closest?.('form,input,textarea,select,[contenteditable="true"]')) continue;
+      const label = clean(heading.innerText || heading.textContent || '');
+      if (adapter.headingLeague({ text: label }) !== league) continue;
+      for (let section = heading.parentElement; section && !/^(BODY|HTML|FORM)$/i.test(section.tagName); section = section.parentElement) {
+        const value = clean(section.innerText || section.textContent || '');
+        if (!/(?:讓分|让分|讓球|让球|大小|獨贏|独赢)/.test(value)
+          || !/\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d|\d+(?:平|[+-]\d+)/.test(value)) continue;
+        if (!owners.has(section)) {
+          owners.add(section);
+          sections.push({ label, fragments: textRows(section, { fragmentsOnly: true, limit: Number.POSITIVE_INFINITY, preserveText: true }) });
+        }
+        break;
+      }
+    }
+    return sections;
+  }
+
   function stableMarketFingerprint(normalized, { soccer = false } = {}) {
     return JSON.stringify((normalized?.tables || []).map(table => {
       const rows=(table.rows || []).map(row => (row.cells || []).map(cell => Array.isArray(cell?.pair) ? cell.pair : cell?.lines || []));
@@ -408,7 +589,10 @@
       .sort((a, b) => a.top - b.top || a.left - b.left || b.right - a.right);
   }
 
-  function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0 } = {}) {
+  function captureAll({ updateActivity = true, verifiedBoardRefreshAt = 0, captureReason = 'SCAN' } = {}) {
+    seenCaptureReason = captureReason;
+    captureSeenMutation(captureReason);
+    if (!liveNormalizerAvailable) return [];
     const { elements, records } = collectRecords();
     const nhlCards = captureNhlCards();
     const soccerTableRecords = collectSoccerTableRecords(elements);
@@ -497,6 +681,7 @@
     return {
       version: 'TAI888-MULTI-LEAGUE-CAPTURE-v2.2.0',
       readerVersion: READER_VERSION,
+      ...(globalThis.Tai888SeenEvidence ? { seenCaptureVersion: 'READER-SEEN-CAPTURE-v1' } : {}),
       captures,
       sectionDiagnostics,
       soccerLayouts,
@@ -574,6 +759,10 @@
   let mutationTimer = null;
   let pendingMutations = [];
   function handleMutations(mutations) {
+    // Persist this observed state now. The existing live-analysis debounce can
+    // rescan later without erasing a transient/invalid/conflicting quote here.
+    captureSeenMutation();
+    if (!liveNormalizerAvailable) return;
     pendingMutations.push(...mutations);
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(() => {
@@ -585,7 +774,7 @@
         ? Date.now()
         : 0;
       const before = { ...fingerprintByLeague };
-      const captures = captureAll({ verifiedBoardRefreshAt });
+      const captures = captureAll({ verifiedBoardRefreshAt, captureReason: 'MUTATION' });
       const activeLeagues = captures
         .map(item => item.league)
         .filter(league => verifiedBoardRefreshAt > 0 || before[league] !== fingerprintByLeague[league]);
@@ -602,5 +791,12 @@
   setInterval(() => {
     if (attachObserver()) announceFrameReady('root-replaced');
   }, 15000);
+  setInterval(() => {
+    for (const item of pendingSeenCaptures.values()) if (Date.now() >= item.nextAttemptAt) void persistSeenCapture(item);
+  }, 5000);
+  addEventListener('pagehide', () => {
+    for (const item of pendingSeenCaptures.values()) void persistSeenCapture(item);
+  });
+  captureSeenMutation('SCAN');
   announceFrameReady('content-ready');
 })();

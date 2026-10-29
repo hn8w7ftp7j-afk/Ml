@@ -5,11 +5,11 @@ import vm from 'node:vm';
 const manifest = JSON.parse(fs.readFileSync('reader/manifest.json', 'utf8'));
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.48');
-assert.equal(manifest.version_name, '2.1.48 EPL-UCL');
+assert.equal(manifest.version, '2.1.49');
+assert.equal(manifest.version_name, '2.1.49 EPL-UCL');
 assert.deepEqual(
   [...manifest.permissions].sort(),
-  ['alarms', 'storage', 'webNavigation'].sort(),
+  ['alarms', 'storage', 'unlimitedStorage', 'webNavigation'].sort(),
 );
 for (const forbidden of ['tabs', 'cookies', 'downloads', 'history', 'scripting', 'webRequest', 'webRequestBlocking', 'management', 'nativeMessaging']) {
   assert.equal(manifest.permissions.includes(forbidden), false, `forbidden permission: ${forbidden}`);
@@ -21,14 +21,14 @@ assert.deepEqual(
 );
 assert.deepEqual(
   manifest.content_scripts[0].js,
-  ['capture-policy.js', 'league-registry.js', 'nhl-teams.js', 'nhl-card-normalizer.js', 'soccer-teams.js', 'soccer-card-normalizer.js', 'soccer-table-normalizer.js', 'row-normalizer.js', 'tai888-content.js'],
+  ['capture-policy.js', 'league-registry.js', 'nhl-teams.js', 'nhl-card-normalizer.js', 'soccer-teams.js', 'soccer-card-normalizer.js', 'soccer-table-normalizer.js', 'row-normalizer.js', 'seen-local.js', 'seen-evidence.js', 'tai888-content.js'],
 );
 assert.equal(manifest.content_scripts[0].all_frames, true);
 assert.equal(manifest.content_scripts[0].match_origin_as_fallback, true);
 
 const background = fs.readFileSync('reader/background.js', 'utf8');
 assert.equal(fs.existsSync('reader/board-selector.js'), true);
-assert.match(background, /const VERSION = '2\.1\.48'/);
+assert.match(background, /const VERSION = '2\.1\.49'/);
 assert.match(background, /selectAuthoritativeBoard/);
 assert.match(background, /TAI888_READER_RECOVER/);
 assert.match(background, /RECOVERY_COOLDOWN_MS = 90_000/);
@@ -112,4 +112,4 @@ assert.match(status, /requestIsAuthenticated\(request\)/, 'Reader status must ac
 assert.match(auth, /60 \* 60 \* 24 \* 30/, 'Reader token lifetime must be limited to 30 days');
 assert.match(ingest, /allRequiredWritesSucceeded|Runtime Cache/);
 
-console.log('Reader 2.1.48 static security audit: minimal permissions, verified live rescan, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');
+console.log('Reader 2.1.49 static security audit: minimal permissions, verified live rescan, self-heal, single-frame board selection, no credential storage, signed device token and strict origins PASS');

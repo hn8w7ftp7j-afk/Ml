@@ -3,13 +3,38 @@ import { selectAuthoritativeBoard, selectAuthoritativeSoccerBoards, shouldSkipSu
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js';
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
+import { createSeenCaptureOutbox, SEEN_CAPTURE_ALARM } from './seen-outbox.js';
 
-const VERSION = '2.1.48';
+const VERSION = '2.1.49';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
 const LABELS = { MLB: '美棒', NPB: '日棒', KBO: '韓棒', CPBL: '中職', NBA: '美籃', NHL: '冰球', EPL:'英超', UCL:'歐冠' };
 const ALARM = 'tai888-reader-auto-sync';
+let seenOutbox;
+function getSeenOutbox() { return seenOutbox ||= createSeenCaptureOutbox({storage:chrome.storage.local,
+  upload:async (wire,stored) => {
+    const response=await request(`${ORIGIN}/api/reader/seen-captures`,{method:'POST',headers:{
+      Authorization:`Bearer ${stored.readerToken}`,'Content-Type':'application/json',
+      'X-Device-Id':stored.deviceId,'X-Reader-Version':wire.evidence.readerVersion,
+    },body:JSON.stringify(wire)},8000);
+    const receipt=await json(response);
+    if(!response.ok)throw Object.assign(new Error('SEEN_UPLOAD_FAILED'),{status:response.status});
+    return receipt;
+  },
+}); }
+async function ensureSeenCaptureAlarm() {
+  await chrome.alarms.create(SEEN_CAPTURE_ALARM,{delayInMinutes:.5,periodInMinutes:.5});
+}
+function seenSenderAllowed(sender) {
+  if(sender?.id&&sender.id!==chrome.runtime.id)return false;
+  try {
+    const value=sender?.url==='about:blank'||sender?.url==='about:srcdoc'?sender?.tab?.url:sender?.url||sender?.tab?.url;
+    const url=new URL(value);
+    return url.protocol==='https:'&&!url.username&&!url.password&&!url.port
+      && (url.hostname==='tai888.in'||url.hostname.endsWith('.tai888.in'));
+  }catch{return false;}
+}
 let marketOutbox;
 function getMarketOutbox() { return marketOutbox ||= createMarketOutbox({ storage: chrome.storage.local, sha,
   upload: async (payload, stored) => {
@@ -64,6 +89,8 @@ chrome.runtime.onInstalled.addListener(async () => {
   await ensureAlarm();
   await ensureDiagnosticAlarm();
   await ensureMarketArchiveAlarm();
+  await ensureSeenCaptureAlarm();
+  await getSeenOutbox().flush().catch(() => {});
   await getMarketOutbox().flush().catch(() => {});
   // Existing tabs retain their old content scripts after an extension update.
   const tabs = await chrome.tabs.query({ url: PATTERNS });
@@ -71,11 +98,13 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 chrome.runtime.onStartup.addListener(ensureAlarm);
 chrome.runtime.onStartup.addListener(ensureDiagnosticAlarm);
+chrome.runtime.onStartup.addListener(async () => {await ensureSeenCaptureAlarm();await getSeenOutbox().flush().catch(()=>{});});
 chrome.runtime.onStartup.addListener(async () => {
   await ensureMarketArchiveAlarm();
   await getMarketOutbox().flush().catch(() => {});
 });
 chrome.alarms.onAlarm.addListener(event => { if (event.name === MARKET_ARCHIVE_ALARM) getMarketOutbox().flush().catch(() => {}); });
+chrome.alarms.onAlarm.addListener(event => {if(event.name===SEEN_CAPTURE_ALARM)getSeenOutbox().flush().catch(()=>{});});
 chrome.alarms.onAlarm.addListener(event => { if (event.name === DIAGNOSTIC_ALARM) getDiagnosticOutbox().flush().catch(() => {}); });
 chrome.alarms.onAlarm.addListener(event => { if (event.name === ALARM) syncNow('alarm').catch(() => {}); });
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
@@ -84,6 +113,15 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   mutationTimer = setTimeout(() => syncNow('tab-loaded', tab.active === true ? tabId : null).catch(() => {}), 3500);
 });
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if(message?.type==='TAI888_SEEN_CAPTURE') {
+    if(!seenSenderAllowed(sender)) {reply({queued:false,durable:false,code:'SEEN_SOURCE_INVALID'});return;}
+    getSeenOutbox().enqueue(message.evidence).then(result=>{reply(result);if(result.durable)getSeenOutbox().flush().catch(()=>{});})
+      .catch(()=>reply({queued:false,durable:false,code:'SEEN_LOCAL_SAVE_FAILED'}));return true;
+  }
+  if(message?.type==='SEEN_CAPTURE_FAILURE') {
+    if(!seenSenderAllowed(sender)) {reply({ok:false});return;}
+    getSeenOutbox().failure(message.code).then(()=>reply({ok:true})).catch(()=>reply({ok:false}));return true;
+  }
   if (message?.type === 'PAIR_READER') { pair(message.password, message.deviceName).then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'SYNC_NOW') { syncNow('manual').then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'GET_READER_STATUS') { readerStatus().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
@@ -283,6 +321,22 @@ async function collectCandidates(tabs) {
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0, url: tab.url }]);
     for (const frame of frames || []) try {
       const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, { frameId: frame.frameId });
+      // Legacy content may not have direct pre-normalization storage. Preserve
+      // its returned sport cells before version, parse or authority rejection.
+      if(answer?.capture?.seenCaptureVersion!=='READER-SEEN-CAPTURE-v1') {
+        const raws=Array.isArray(answer?.capture?.captures)?answer.capture.captures:answer?.capture?[answer.capture]:[];
+        for(const raw of raws) if(LEAGUES.includes(raw?.league)&&Array.isArray(raw.tables)) {
+          const evidence={version:raw.version,league:raw.league,readerVersion:answer.capture.readerVersion,
+            sourceHost:raw.sourceHost,pageUrl:raw.pageUrl,observedAt:raw.observedAt,
+            ...(raw.pageActivityAt?{pageActivityAt:raw.pageActivityAt}:{}),
+            captureReasons:['BEFORE_SELECTION','SOURCE_PARTIAL'],completeCapture:false,
+            tables:raw.tables.map(table=>({...(typeof table.sectionTitle==='string'?{sectionTitle:table.sectionTitle}:{}),
+              ...(Array.isArray(table.headers)?{headers:table.headers}:{}),
+              rows:(table.rows||[]).map(row=>({marketLocked:row.marketLocked===true,
+                cells:(row.cells||[]).map(cell=>({pair:Array.isArray(cell.pair)?cell.pair:[]}))}))}))};
+          await getSeenOutbox().enqueue(evidence);
+        }
+      }
       if (answer?.capture?.readerVersion !== VERSION) continue;
       responded = responded || answer?.ok === true;
       if (answer?.ok === true) for (const input of (Array.isArray(answer.capture.soccerLayouts) ? answer.capture.soccerLayouts : []).slice(0, 2)) {
@@ -382,6 +436,7 @@ async function performSync(reason, preferredTabId) {
     // The historical outbox does not need any open source tab. Its endpoint
     // cannot advance live-board authority, analysis, freshness or live ACKs.
     try { await getMarketOutbox().flush(); } catch {}
+    try {await getSeenOutbox().flush({force:reason==='manual'});}catch {await getSeenOutbox().failure('SEEN_FLUSH_FAILED','delivery');}
     // Diagnostics use an independent endpoint and never authorize a failed
     // board. Do not let diagnostic/storage/network failure break market sync.
     try {
@@ -398,7 +453,8 @@ async function performSync(reason, preferredTabId) {
         await getDiagnosticOutbox().enqueue({ schema: DIAGNOSTIC_SCHEMA, reportId: crypto.randomUUID(),
           readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(),
           createdAt: new Date().toISOString(), tabCount: context.tabCount,
-          silentTabCount: context.silentTabCount, exceptionCode, leagues });
+          silentTabCount: context.silentTabCount, exceptionCode, leagues,
+          seenCaptureDelivery:await getSeenOutbox().status() });
         await getDiagnosticOutbox().flush();
       }
     } catch {}
@@ -536,7 +592,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
   const successes = LEAGUES.filter(league => statuses[league]?.ok === true && statuses[league]?.state === 'synced').length;
   return { ok: successes > 0, results, message: `各聯盟檢查完成｜${successes} 個分頁同步成功` };
 }
-async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt', 'diagnosticDelivery', 'marketArchiveDelivery']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, diagnosticDelivery: stored.diagnosticDelivery || null, marketArchiveDelivery: stored.marketArchiveDelivery || null, error: stored.pairError || '', readerVersion: VERSION }; }
+async function readerStatus() { const stored = await chrome.storage.local.get(['readerToken', 'deviceId', 'autoEnabled', 'readerStatuses', 'pairError', 'pairedAt', 'diagnosticDelivery', 'marketArchiveDelivery']); return { ok: true, paired: Boolean(stored.readerToken), deviceId: stored.deviceId || null, autoEnabled: stored.autoEnabled !== false, pairedAt: stored.pairedAt || null, statuses: stored.readerStatuses || {}, diagnosticDelivery: stored.diagnosticDelivery || null, marketArchiveDelivery: stored.marketArchiveDelivery || null,seenCaptureDelivery:await getSeenOutbox().status(), error: stored.pairError || '', readerVersion: VERSION }; }
 
 // A missing content script cannot receive RECOVER. Reload only after the user
 // explicitly clicks repair, only on allowlisted tabs that did not respond.

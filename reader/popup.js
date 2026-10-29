@@ -2,7 +2,7 @@ const byId = id => document.getElementById(id);
 const pairPanel = byId('pairPanel'), statusPanel = byId('statusPanel'), password = byId('password'), deviceName = byId('deviceName');
 const pairButton = byId('pair'), syncButton = byId('sync'), unpairButton = byId('unpair'), autoToggle = byId('auto');
 const message = byId('message'), state = byId('state'), dot = byId('dot'), leagueGrid = byId('leagueGrid');
-const LEAGUES = [['MLB', '美棒'], ['NPB', '日棒'], ['KBO', '韓棒'], ['CPBL', '中職'], ['NBA', '美籃'], ['EPL', '英超'], ['UCL', '歐冠']];
+const LEAGUES = [['MLB', '美棒'], ['NPB', '日棒'], ['KBO', '韓棒'], ['CPBL', '中職'], ['NBA', '美籃'], ['NHL', '冰球'], ['EPL', '英超'], ['UCL', '歐冠']];
 const STALE_MS = 180000;
 async function send(payload) {
   let timer;
@@ -49,6 +49,13 @@ syncButton.addEventListener('click', async () => {
 autoToggle.addEventListener('change', async () => { const result = await send({ type: 'SET_AUTO_ENABLED', enabled: autoToggle.checked }); show(result.enabled ? '自動同步已開啟。' : '自動同步已暫停。', result.enabled ? 'ok' : ''); });
 unpairButton.addEventListener('click', async () => { await chrome.storage.local.remove(['readerToken', 'pairedAt', 'readerStatuses', 'pairError', 'lastSuccessfulPayloadHashes', 'lastSuccessfulSyncAts', 'diagnosticOutbox', 'diagnosticDelivery', 'diagnosticLastSignature', 'diagnosticLastQueuedAt']); await refresh(); show('已移除裝置配對。'); });
 
+function renderSeenCaptureDelivery(delivery) {
+  const element=byId('seenCaptureDelivery');if(!element)return;
+  const count=value=>Number.isSafeInteger(value)&&value>=0?String(value):'未確認';
+  const problem=delivery?.state==='error'?'｜保存或補傳異常，請查看後台診斷':
+    delivery?.code==='SEEN_PAIR_REQUIRED'?'｜等待配對後補傳':'';
+  element.textContent=`已看過原盤：本機待傳 ${count(delivery?.pendingCount)} 片｜伺服器回條 ${count(delivery?.savedCaptureCount)} 片${problem}。保留未通過核對的原盤證據；片數不等於賽事數。`;
+}
 function renderDiagnosticDelivery(delivery) {
   const element = byId('diagnosticDelivery');
   if (!element) return;
@@ -97,6 +104,7 @@ async function refresh() {
   const paired = Boolean(result.paired);
   pairPanel.classList.toggle('hidden', paired); statusPanel.classList.toggle('hidden', !paired);
   renderMarketArchiveDelivery(result.marketArchiveDelivery);
+  renderSeenCaptureDelivery(result.seenCaptureDelivery);
   if (!paired) { show(result?.error || '第一次使用請輸入一次配對密碼。'); return; }
   autoToggle.checked = result.autoEnabled !== false; render(result.statuses || {});
   renderDiagnosticDelivery(result.diagnosticDelivery);
