@@ -5,6 +5,7 @@ import { validateSoccerCapture, matchSoccerReaderGames } from '../../../../lib/s
 import { loadSoccerReaderSnapshot, saveSoccerReaderSnapshot, soccerReaderStorageConfigured } from '../../../../lib/soccer/reader-store.js';
 import { fetchSoccerSchedule } from '../../../../lib/soccer/data.js';
 import { soccerLeague, validSoccerDate } from '../../../../lib/soccer/contracts.js';
+import { soccerReaderPeriodBindingDiagnostics } from '../../../../lib/soccer/reader-period-binding.js';
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
 export async function OPTIONS(request){return new Response(null,{status:readerOriginAllowed(request)?204:403,headers:readerCorsHeaders(request)});}
@@ -35,6 +36,7 @@ export async function GET(request){
     return response({ok:true,league:league.id,date,status:'CAPTURED_RULES_UNVERIFIED',observedAt:capture.observedAt,
       firstFetchedAt:capture.firstFetchedAt,receivedAt:capture.receivedAt||null,observationId:capture.observationId,
       isPeriodAggregate:capture.isPeriodAggregate===true,sourceObservations:capture.sourceObservations||[],periodsCovered:capture.periodsCovered||[],
-      timeEvidence:capture.timeEvidence,historicalAvailabilityVerified:false,revision:capture.revision,contentHash:capture.contentHash,games,officialAvailable:official.ok,executable:false});
+      timeEvidence:capture.timeEvidence,historicalAvailabilityVerified:false,revision:capture.revision,contentHash:capture.contentHash,games,
+      periodBindingDiagnostics:soccerReaderPeriodBindingDiagnostics(games,capture),officialAvailable:official.ok,executable:false});
   }catch{return response({ok:false,error:'足球原盤暫時無法讀取',executable:false},503);}
 }

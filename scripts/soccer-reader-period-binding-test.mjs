@@ -4,7 +4,7 @@ import { parseSoccerCapture, canonicalSoccerPayload } from '../reader/soccer-par
 import { matchSoccerReaderGames, validateSoccerCapture, soccerReaderGameHasFreshGoalMarket } from '../lib/soccer/reader.js';
 import { buildSoccerMarketDirections, collectUnassignedSoccerQuotes } from '../lib/soccer/market-directions.js';
 import { adaptSoccerReaderQuote } from '../lib/soccer/soccer-scoring.js';
-import { readSoccerReaderPeriodBinding, soccerMarketHasVerifiedPeriodResolution } from '../lib/soccer/reader-period-binding.js';
+import { readSoccerReaderPeriodBinding, soccerMarketHasVerifiedPeriodResolution, soccerReaderPeriodBindingDiagnostics } from '../lib/soccer/reader-period-binding.js';
 
 const envBefore=process.env.SOCCER_READER_PERIOD_BINDING_JSON;
 const confirmedAt='2026-10-25T00:00:00.000Z',observedAt='2026-10-25T00:01:00.000Z',now=Date.parse('2026-10-25T00:01:02.000Z');
@@ -32,12 +32,17 @@ const periods=value=>value[0].markets.map(market=>market.period);
 try {
   setConfig(null);assert.equal(readSoccerReaderPeriodBinding(),null);
   assert.deepEqual(periods(matched()),['UNKNOWN','UNKNOWN','HT','HT']);
+  const diagnosis=()=>soccerReaderPeriodBindingDiagnostics(matched(),reader,now);
+  assert.deepEqual(diagnosis().blockerCounts,{CONFIG_MISSING:2});
+  setConfig('broken');assert.equal(diagnosis().configurationStatus,'INVALID');assert.deepEqual(diagnosis().blockerCounts,{CONFIG_INVALID:2});
   const original=JSON.stringify(reader),originalWire=canonicalSoccerPayload(wire);
   setConfig(config);
   const resolved=matched(),ft=resolved[0].markets.filter(market=>market.period==='FT');
   assert.equal(ft.length,2);assert.equal(resolved[0].matchStatus,'MATCHED');
   assert.ok(ft.every(market=>market.periodEvidence.status==='UNKNOWN'&&market.periodEvidence.period==='UNKNOWN'));
   assert.ok(ft.every(market=>soccerMarketHasVerifiedPeriodResolution(market,now)));
+  assert.deepEqual(diagnosis(),{version:'SOCCER-PERIOD-BINDING-DIAGNOSTICS-v1',configurationStatus:'READY',candidateMarketCount:2,resolvedMarketCount:2,blockedMarketCount:0,blockerCounts:{}});
+  assert.ok(!JSON.stringify(diagnosis()).includes(config.proofKey)&&!JSON.stringify(diagnosis()).includes(config.deviceHash),'diagnostics disclose neither key nor device identity');
   assert.equal(soccerReaderGameHasFreshGoalMarket({markets:ft},reader,now),true);
   const directions=buildSoccerMarketDirections({reader,matchedGames:resolved,game,now});
   assert.equal(directions.filter(direction=>direction.period==='FT').flatMap(direction=>direction.quotes).length,4);
@@ -90,7 +95,13 @@ try {
   assert.equal(adaptSoccerReaderQuote({quote,game,now}).ok,false,'private config key rotation invalidates old claims');
   setConfig({...config,confirmedAt:'2026-10-25T00:02:00.000Z'});
   assert.equal(periods(matched()).includes('FT'),false,'confirmation is never backdated into an older observation');
+  assert.deepEqual(diagnosis().blockerCounts,{CONFIRMATION_NOT_EFFECTIVE:2});
+  setConfig({...config,deviceHash:'d'.repeat(64)});assert.deepEqual(diagnosis().blockerCounts,{SOURCE_DEVICE_MISMATCH:2});
+  setConfig({...config,leagues:['ucl']});assert.deepEqual(diagnosis().blockerCounts,{LEAGUE_NOT_BOUND:2});
   setConfig(config);
+  const noHalf=structuredClone(reader);noHalf.games[0].markets=noHalf.games[0].markets.filter(market=>market.period!=='HT');
+  assert.deepEqual(soccerReaderPeriodBindingDiagnostics(matched(noHalf),noHalf,now).blockerCounts,{SAME_CAPTURE_HALF_MISSING:2});
+  const noMatch=matchSoccerReaderGames(reader,[],now);assert.deepEqual(soccerReaderPeriodBindingDiagnostics(noMatch,reader,now).blockerCounts,{GAME_NOT_MATCHED:2});
   assert.equal(adaptSoccerReaderQuote({quote,game,now:now+180001}).ok,false,'account confirmation cannot freshen stale quotes');
   console.log('PASS server-owned football period binding: exact profile and companion HT, current account/host/device/receipt scope, HMAC revalidation, quote hash, no retroactive promotion, immutable Reader43 wire and unchanged betting gates');
 } finally {if(envBefore===undefined)delete process.env.SOCCER_READER_PERIOD_BINDING_JSON;else process.env.SOCCER_READER_PERIOD_BINDING_JSON=envBefore;}
