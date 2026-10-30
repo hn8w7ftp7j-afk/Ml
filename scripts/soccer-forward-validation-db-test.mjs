@@ -134,10 +134,12 @@ try {
   await assert.rejects(()=>loadSoccerForwardEvidence(scope,{capturePayloadBytes:24*1024*1024+1}),/READ_BUDGET_INVALID/);
   const past=structuredClone(original);past.gameId='soccer:epl:200';past.evidence.game.id=past.gameId;past.evidence.game.sourceId='200';
   past.evidence.source.url=past.evidence.source.url.replace('event=100','event=200');past.evidence.game.startTime=iso(now-1000);
+  // Moving kickoff across Taipei midnight also changes this fixture's board date.
+  past.date=soccerDate(past.evidence.game.startTime);past.evidence.game.date=past.date;
   const pastRevision=soccerForwardAnalysisRevision(past);
   await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,[past.gameId,pastRevision,past.observedAt,JSON.stringify(past)]);
   await captureSoccerForwardSnapshot(past,pastRevision);
-  evidence=await loadSoccerForwardEvidence(scope);
+  evidence=await loadSoccerForwardEvidence({league:'epl',date:past.date});
   const pastCapture=evidence.captures.find(row=>row.gameId===past.gameId);
   assert.equal(validateSoccerForwardCapture(pastCapture,protocol,Date.now()).reason,'FORWARD_FIRST_CAPTURE_NOT_PREGAME','a backdated observed_at cannot manufacture a historical forward sample');
   await assert.rejects(()=>captureSoccerForwardSnapshot(original,'f'.repeat(64)),/ORIGINAL_SNAPSHOT_MISSING/);

@@ -9,7 +9,7 @@ const clock=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-
 const returnPct=v=>finite(v)?`${v>0?'+':''}${(v*100).toFixed(2)}%`:'—';
 const periods={FT:'全場',HT:'上半場'};
 const directionNames={HANDICAP_HOME:'主隊讓／受讓',HANDICAP_AWAY:'客隊讓／受讓',TOTAL_OVER:'大球',TOTAL_UNDER:'小球'};
-const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'本帳戶派彩與異常賽事條款待來源核對',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
+const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'系統尚未完成原盤派彩規則綁定與正式登錄',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
 const textValue=v=>typeof v==='string'||finite(v)?String(v):null;
 const rowText=row=>{
   const direct=textValue(row);if(direct!==null)return direct;
@@ -19,7 +19,7 @@ const rowText=row=>{
 };
 const readableReasons=list=>[...new Set((Array.isArray(list)?list:[]).map(reason=>reasonNames[reason]||(typeof reason==='string'&&/[\u3400-\u9fff]/.test(reason)?reason:null)).filter(Boolean))];
 const scoreStages={READER_QUOTE:'原盤來源與期間',SETTLEMENT_CONTRACT:'實際派彩條款',PER_SCORE_PAYOFF:'逐比分損益',FOOTBALL_UNCERTAINTY:'足球情境與誤差依據',FIXED_S_FORMULA:'固定 S 評分公式',FORMAL_ACCEPTANCE:'正式模型與校準驗收',CURRENT_PUBLICATION:'目前候選資格'};
-const scoreStageStatuses={PASS:'已核對',REGISTERED:'已登錄核對依據',CALCULATED_CONDITIONALLY:'已完成條件試算',CONDITIONAL_ONLY:'僅供條件試算',CONDITIONAL_PROTOCOL_ARITHMETIC:'已完成情境算術核對',DIAGNOSTIC_ONLY:'研究分數',MISSING:'尚缺條款',NOT_CALCULABLE:'尚缺計算依據',BLOCKED:'尚未通過',PENDING:'尚待核對',NOT_AUTHORIZED:'尚未授權'};
+const scoreStageStatuses={PASS:'已核對',REGISTERED:'已登錄核對依據',CALCULATED_CONDITIONALLY:'已完成條件試算',CONDITIONAL_ONLY:'僅供條件試算',CONDITIONAL_PROTOCOL_ARITHMETIC:'已完成情境算術核對',DIAGNOSTIC_ONLY:'研究分數',MISSING:'尚未完成規則登錄',NOT_CALCULABLE:'尚缺計算依據',BLOCKED:'尚未通過',PENDING:'尚待核對',NOT_AUTHORIZED:'尚未授權'};
 const readerDiagnosticNames={SOCCER_READER_STORAGE_UNAVAILABLE:'原盤暫時讀取失敗，無法確認是否缺盤。',SOCCER_READER_CAPTURE_MISSING:'此分析版本建立時尚無可用原盤；目前保存狀態請看上方原盤與「已保存原盤」。',SOCCER_READER_CAPTURE_SCOPE_MISMATCH:'原盤的聯盟或日期與本場不符。',SOCCER_READER_GAME_UNMATCHED:'已收到原盤，但本場隊名或開賽時間尚未配對。',SOCCER_READER_NO_OPEN_GOAL_MARKET:'本場已配對，目前沒有開放的讓球或大小盤。',SOCCER_READER_PERIOD_UNCONFIRMED:'本場原盤已配對，但全場／上半場標示尚未確認。',SOCCER_READER_CAPTURE_UNUSABLE_AT_CUTOFF:'本場原盤尚未通過分析時間核對。',SOCCER_READER_MATCH_STARTED:'比賽已開始；原盤僅供歷史核對。',SOCCER_READER_QUOTES_STALE:'本場原盤已配對，但已逾期，請更新原盤。',SOCCER_READER_CAPTURE_READY:'本場已有配對成功的賽前原盤。'};
 const readerDiagnosticStatuses={SOCCER_READER_STORAGE_UNAVAILABLE:'UNAVAILABLE',SOCCER_READER_CAPTURE_MISSING:'MISSING',SOCCER_READER_CAPTURE_SCOPE_MISMATCH:'SCOPE_MISMATCH',SOCCER_READER_GAME_UNMATCHED:'UNMATCHED',SOCCER_READER_NO_OPEN_GOAL_MARKET:'NO_OPEN_GOALS',SOCCER_READER_PERIOD_UNCONFIRMED:'PERIOD_UNCONFIRMED',SOCCER_READER_CAPTURE_UNUSABLE_AT_CUTOFF:'UNUSABLE_CAPTURE',SOCCER_READER_MATCH_STARTED:'POSTSTART',SOCCER_READER_QUOTES_STALE:'STALE',SOCCER_READER_CAPTURE_READY:'READY'};
 function readerDiagnostic(result,game){
@@ -126,7 +126,7 @@ export function SoccerAutomaticAnalysisStatus({result,game,now=Date.now()}){
     {counts.CURRENT>0&&<p>有效原盤已自動計算條件收益，展開下方原盤即可查看；無須再手動輸入。</p>}
     {counts.HISTORICAL>0&&<p>歷史試算不代表目前價格；未開賽場次須更新 Reader 原盤並重新核對賽前資料。</p>}
     {counts.UNAVAILABLE>0&&<p>{game?.status!=='scheduled'||Date.parse(game?.startTime)<=now?'此場已開賽，現在同步的盤口不能補成當時的賽前分析；僅能查閱已保存版本。':'請查看下方盤口的來源、期間與計算核對結果；重新同步原盤可修復來源或時間問題。'}</p>}
-    {soccerScoringReadiness(result,now,game).status!=='SCORES_AVAILABLE'&&<p>正式 S 評分仍需本帳戶派彩適用依據，以及系統完成足球情境、模型誤差驗證與接線；更新盤口或重按分析不會自動補齊。</p>}
+    {soccerScoringReadiness(result,now,game).status!=='SCORES_AVAILABLE'&&<p>正式 S 評分仍待系統完成原盤派彩規則綁定、足球情境與模型誤差驗證；更新盤口或重按分析不會自動補齊，也不需重報已確認的算法。</p>}
   </section>;
 }
 

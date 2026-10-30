@@ -22,7 +22,7 @@ const reasonNames={
   FORWARD_PERSONNEL_MODEL_UNVERIFIED:'人員模型版本證據不足',FORWARD_PERSONNEL_PREGAME_XI_UNVERIFIED:'兩隊賽前先發證據不足',FORWARD_OMITTED_MASS_EXCEEDS_TOLERANCE:'未展開尾端機率超出報表容許值',
   RESULT_NORMAL_FINAL_UNCONFIRMED:'尚未確認正常完賽',RESULT_PERIOD_SCORE_UNVERIFIED:'缺少可核對的期間比分',RESULT_ENDPOINTS_DISAGREE:'兩個賽果端點不一致',
   RESULT_SCOREBOARD_CROSSCHECK_UNAVAILABLE:'賽程端點無法交叉核對',RESULT_EXTRA_PERIODS_REQUIRE_REVIEW:'涉及加時或其他額外期間',
-  SOCCER_SOURCE_CONTRACT_UNVERIFIED:'原盤適用的結算條款尚未完整確認（本帳戶派彩與異常賽事規則）',
+  SOCCER_SOURCE_CONTRACT_UNVERIFIED:'系統尚未完成原盤適用派彩規則的綁定與正式登錄',
   MARKET_RETURN_NOT_CHECKED:'尚未核對原盤收益',NO_ORIGINAL_QUOTES:'此封存版本沒有可核對的原盤',
   MARKET_RETURN_ORIGINAL_QUOTES_UNAVAILABLE:'此封存版本未保存原盤明細',
   MARKET_RETURN_RESULT_HISTORY_INCOMPLETE:'賽果核對歷程未完整讀取',
@@ -85,7 +85,7 @@ function ForwardReport({report,league,summary}){
       <p className="soccerAvailability">同一場的多個方向不當成多場獨立樣本；實現損益誤差包含賽果本身的變動，不能直接當成期望收益的信賴下限。下一步由系統完成資料核對、誤差擬合與驗收。</p>
       <ReasonList reasons={errorResearch.excludedReasons} label="誤差研究待補與排除原因"/>
     </section>}
-    {returns?.pendingReasons?.SOCCER_SOURCE_CONTRACT_UNVERIFIED>0&&<p className="soccerAvailability">下一步：先由系統核對本帳戶的非 ±50 尾碼派彩、取消與延期條款；會員規則無法讀取時才需提供規則頁。已確認的 1% 實際輸贏本金退水不必重報。</p>}
+    {returns?.pendingReasons?.SOCCER_SOURCE_CONTRACT_UNVERIFIED>0&&<p className="soccerAvailability">下一步：系統須完成原盤、期間與派彩規則版本的綁定及正式登錄。已確認的信用盤算法與 1% 實際輸贏本金退水不需重報；異常賽事保留人工核對。</p>}
     {returns?.pendingReasons?.MARKET_RETURN_PREDICTED_PAYOFF_UNRESOLVED>0&&<p className="soccerAvailability">下一步由系統完成收益區間與誤差樣本的計算；反覆同步 Reader 不會排除此項。</p>}
     {summary&&<p role="status">本次核對 {count(summary.checkedGameModelPeriods)} 筆｜完成評估 {count(summary.evaluated)} 筆｜待核對 {count(summary.pending)} 筆｜尚待處理 {count(summary.deferred)} 筆。</p>}
     {report.scan&&<p role="status">已處理 {count(report.scan.processedGames)}／{count(report.scan.totalGames)} 場；{report.scan.complete?(report.complete===true?'本次範圍已掃描完成':'批次已結束，但本次資料仍不完整'):'尚有後續批次；系統會自動接續，暫停後可按「繼續處理下一批」恢復'}。以上筆數為累計結果，各批次不重複加總。</p>}

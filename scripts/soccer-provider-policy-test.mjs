@@ -3,6 +3,7 @@ import { soccerProviderPolicy, SOCCER_PROVIDER_POLICY_VERSION } from '../lib/soc
 import { evaluateSoccerQuote } from '../lib/soccer/market-payoff.js';
 import { NBA_FORWARD_RULE } from '../lib/nba/forward-validation.js';
 import { soccerSettlementMissingTerms } from '../lib/soccer/settlement-contract.js';
+import { soccerCreditRuleConfirmation } from '../lib/soccer/credit-rule-confirmation.js';
 
 const policy = soccerProviderPolicy({ asOf: '2026-10-18T22:15:31Z' });
 assert.equal(policy.version, SOCCER_PROVIDER_POLICY_VERSION);
@@ -124,3 +125,32 @@ assert.equal(NBA_FORWARD_RULE.rebateRate,.015);
 assert.equal(soccerSettlementMissingTerms(confirmation).some(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES'),false);
 assert.equal(soccerSettlementMissingTerms(Date.parse(confirmation)-1).find(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES').status,'UNKNOWN');
 console.log('PASS confirmed football fractional principal: full/half/20% wins/losses and no push rebate, exact confirmation cutoff and unchanged NBA policy');
+
+const creditReceipt=soccerCreditRuleConfirmation('2026-10-30T15:01:39Z');
+assert.equal(creditReceipt.status,'USER_CONFIRMED');
+assert.equal(creditReceipt.formalContractVerified,false);
+assert.deepEqual(creditReceipt.examples.map(e=>[e.line,e.netProfit]),[['1+20',182],['1-20',-198],['1平',0]]);
+assert.ok(Object.isFrozen(creditReceipt.examples[0]));
+for(const cutoff of ['2026-10-30T15:01:38.999Z','2026-10-30T15:01:39',null,NaN,Infinity,1e20,{}]){
+  assert.equal(soccerCreditRuleConfirmation(cutoff).status,'NOT_YET_CONFIRMED');
+  assert.deepEqual(soccerCreditRuleConfirmation(cutoff).examples,[]);
+}
+// Reproduce the user's amounts through the shipped payoff engine, for both home
+// and away giving sides. This checks arithmetic, not empirical model acceptance.
+for(const league of creditReceipt.leagues)for(const period of ['FT','HT'])for(const giving of ['home','away'])for(const example of creditReceipt.examples){
+  const amount=evaluateSoccerQuote({
+    quote:{league,kind:'HANDICAP',direction:giving.toUpperCase(),sourceLine:example.line,lineSide:giving,period,water:example.water,waterFormat:'PROFIT_PER_UNIT'},
+    distribution:{period:period==='FT'?'REGULATION_FT':'REGULATION_HT',retainedMass:1,tailMass:0,cells:[{home:giving==='home'?1:0,away:giving==='away'?1:0,probability:1}]},
+    contract:{type:'CREDIT_BOUNDARY',period,labelMapping:{home:'主隊',away:'客隊'},rebate:{rate:.01,basis:'SETTLED_PRINCIPAL'},provenance:{status:'ASSUMPTION'}},
+  });
+  assert.equal(amount.ok,true);
+  assert.ok(Math.abs(amount.netEV*example.stake-example.netProfit)<1e-9);
+  assert.ok(Math.abs(amount.retainedEV.rebate*example.stake-example.rebate)<1e-9);
+  assert.equal(amount.formalScoringEnabled,false);
+  assert.equal(amount.R,null);assert.equal(amount.S,null);
+}
+const currentTerms=soccerSettlementMissingTerms(creditReceipt.confirmedAt);
+assert.equal(currentTerms.find(t=>t.code==='INTEGER_AND_CREDIT_BOUNDARY_PAYOFF').status,'SYSTEM_BINDING_PENDING');
+assert.equal(currentTerms.some(t=>t.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES'),false);
+assert.equal(soccerSettlementMissingTerms('2026-10-29T00:00:00Z').find(t=>t.code==='INTEGER_AND_CREDIT_BOUNDARY_PAYOFF').status,'PARTIAL');
+console.log('PASS confirmed credit examples: +182/-198/0, receipt cutoff, immutable scoped examples and no invented formal model approval');
