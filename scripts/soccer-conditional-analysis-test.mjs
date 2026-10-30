@@ -11,6 +11,7 @@ import { scoreSoccerQuote } from '../lib/soccer/soccer-scoring.js';
 import { buildSoccerAnalysis } from '../lib/soccer/analysis.js';
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
+import { soccerDate } from '../lib/soccer/contracts.js';
 const at='2026-10-18T13:35:00.000Z',now=Date.parse(at);
 const payload=JSON.parse(fs.readFileSync('scripts/fixtures/soccer/epl-summary.json'));
 const source={provider:'ESPN',url:'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=401878769',fetchedAt:at,contentHash:'retained-provider-fixture'};
@@ -31,6 +32,8 @@ for(const quote of quotes){
  assert.ok(Math.abs(actual.netReturnBounds.lower-expected)<1e-12);
  assert.ok(Math.abs(actual.netReturnBounds.upper-expected)<1e-12);
  assert.equal(actual.assumption.accountTermsVerified,false);
+ assert.equal(actual.assumption.rebateConfirmation.status,'ASSUMPTION');
+ assert.equal(actual.assumption.rebateConfirmation.confirmedAt,null);
  for(const field of ['W','R','S'])assert.equal(actual[field],null);
  assert.equal(actual.eligible,false);assert.equal(actual.executable,false);
  assert.equal(scoreSoccerQuote(input).score,null,'research cannot manufacture formal scoring inputs');
@@ -39,6 +42,43 @@ for(const quote of quotes){
  assert.equal(analyzeSoccerConditionalQuote({...input,distribution:{...distribution,gameId:'soccer:epl:999'}}).status,'UNAVAILABLE');
  assert.equal(analyzeSoccerConditionalQuote({...input,distribution:{...distribution,trainedThrough:at}}).status,'UNAVAILABLE');
 }
+// Fresh synthetic quotes on each independent cutoff exercise policy receipt
+// boundaries without rewriting any original saved quote or observation time.
+const rebateCutoffs=[
+ ['2026-10-18T20:53:41.999Z','ASSUMPTION','UNKNOWN','UNKNOWN','UNKNOWN'],
+ ['2026-10-18T20:53:42Z','ASSUMPTION','USER_CONFIRMED','UNKNOWN','UNKNOWN'],
+ ['2026-10-18T22:15:30.999Z','ASSUMPTION','USER_CONFIRMED','UNKNOWN','UNKNOWN'],
+ ['2026-10-18T22:15:31Z','ASSUMPTION','USER_CONFIRMED','USER_CONFIRMED','UNKNOWN'],
+ ['2026-10-20T09:11:47.999Z','ASSUMPTION','USER_CONFIRMED','USER_CONFIRMED','UNKNOWN'],
+ ['2026-10-20T09:11:48Z','USER_CONFIRMED','USER_CONFIRMED','USER_CONFIRMED','USER_CONFIRMED'],
+];
+for(const [cutoff,status,rateStatus,basisStatus,applicabilityStatus] of rebateCutoffs){
+ const clock=Date.parse(cutoff),iso=new Date(clock).toISOString(),startTime=new Date(clock+3600000).toISOString();
+ const scopedGame={...game,startTime,date:soccerDate(startTime)};
+ const scopedReceipt={...receipt,observedAt:iso,firstFetchedAt:iso,receivedAt:iso,persistedAt:iso};
+ const scopedMatched={...matched,boardDate:scopedGame.date};
+ const scopedQuotes=buildSoccerMarketDirections({game:scopedGame,reader:scopedReceipt,now:clock,matchedGames:[scopedMatched]}).flatMap(d=>d.quotes);
+ assert.equal(scopedQuotes.length,8);
+ for(const scopedQuote of scopedQuotes){
+  const input={quote:scopedQuote,distribution:grid(scopedQuote.period),game:scopedGame,now:clock};
+  const original=JSON.stringify(input),actual=analyzeSoccerConditionalQuote(input);
+  assert.equal(actual.status,'CONDITIONAL_RESEARCH',JSON.stringify(actual));
+  assert.deepEqual(actual.assumption.rebateConfirmation,{
+   status,asOf:iso,policyVersion:'SOCCER-USER-REBATE-POLICY-v3',
+   confirmedAt:status==='USER_CONFIRMED'?'2026-10-20T09:11:48Z':null,
+   rateStatus,basisStatus,applicabilityStatus,
+  });
+  const win=scopedQuote.side==='home'||scopedQuote.side==='over';
+  const expected=(win?.6:.4)*.9-(win?.4:.6)+.01;
+  assert.ok(Math.abs(actual.netReturnBounds.lower-expected)<1e-12);
+  assert.ok(Math.abs(actual.netReturnBounds.upper-expected)<1e-12);
+  assert.equal(actual.quoteObservedAt,iso);assert.equal(actual.calculatedAt,iso);
+  assert.equal(JSON.stringify(input),original,'confirmation metadata cannot alter source receipt or inputs');
+  assert.equal(actual.formalScoringEnabled,false);assert.equal(actual.eligible,false);assert.equal(actual.executable,false);
+  assert.equal(actual.W,null);assert.equal(actual.R,null);assert.equal(actual.S,null);
+ }
+}
+console.log('PASS conditional rebate confirmation: exact rate/basis/fractional receipt cutoffs, explicit earlier assumptions, unchanged numeric returns and source observation times');
 // Exercise the real retained provider fixture through the production analysis.
 const reader={...receipt,league:'EPL',games:[{league:'EPL',boardDate:game.date,boardTime:'23:30',homeKey:globalThis.Tai888SoccerTeams.key(game.home.name),awayKey:globalThis.Tai888SoccerTeams.key(game.away.name),markets}]};
 const evidence=normalizeSoccerPrematch(payload,game,source,now);

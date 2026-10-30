@@ -87,6 +87,19 @@ const errorMerged = mergeSoccerForwardGameReport(errorFirst, errorNext).returnEr
 assert.equal(errorMerged.selectedQuoteObservations, 12); assert.equal(errorMerged.observedGames, 2);
 assert.equal(errorMerged.excludedReasons.RETURN_ERROR_NOT_OBSERVED, 4); assert.equal(errorMerged.completeWithinRequestedScope, false);
 assert.equal(errorMerged.empiricalErrorMargin, null); assert.equal(errorMerged.accepted, false);
+const boundedPart = { ...errorCounts, observedQuoteReturns: 0, observedGames: 0,
+  boundedQuoteReturns: 4, boundedGames: 1, status: 'BOUNDED_OBSERVATIONS_AVAILABLE' };
+const boundedMerged = mergeSoccerForwardGameReport(
+  { ...parts[0], returnErrorResearch: boundedPart },
+  { ...parts[1], returnErrorResearch: boundedPart }).returnErrorResearch;
+assert.equal(boundedMerged.boundedQuoteReturns, 8); assert.equal(boundedMerged.boundedGames, 2);
+assert.equal(boundedMerged.observedQuoteReturns, 0); assert.equal(boundedMerged.observedGames, 0);
+assert.equal(boundedMerged.status, 'BOUNDED_OBSERVATIONS_AVAILABLE'); assert.equal(boundedMerged.R, null);
+const legacyPart = { ...errorCounts }; delete legacyPart.boundedQuoteReturns; delete legacyPart.boundedGames;
+const legacyMerge = mergeSoccerForwardGameReport(
+  { ...parts[0], returnErrorResearch: legacyPart },
+  { ...parts[1], returnErrorResearch: boundedPart }).returnErrorResearch;
+assert.equal(legacyMerge.boundedQuoteReturns, 4); assert.equal(legacyMerge.observedQuoteReturns, 2);
 assert.throws(() => mergeSoccerForwardGameReport(null, { ...errorFirst, returnErrorResearch: { ...errorCounts, accepted: true } }), /PROMOTION_REJECTED/);
 const wrongBins = structuredClone(buildSoccerProbabilityAudit(second)); wrongBins.binning.edges[1] = .11;
 assert.throws(() => mergeSoccerForwardProbabilityAudits(buildSoccerProbabilityAudit(first), wrongBins), /BINNING_MISMATCH/);

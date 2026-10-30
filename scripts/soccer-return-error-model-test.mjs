@@ -152,4 +152,107 @@ assert.equal(pages,2);assert.equal(cli.datasetHashes.length,2);assert.equal(cli.
 assert.equal(cli.observedQuoteReturns,0,'CLI uses real server contract registry, never the test resolver');
 assert.equal(cli.R,null);assert.equal(cli.accepted,false);
 assert.equal(cli.missingReasons.RETURN_ERROR_EXACT_RETURN_RECOMPUTE_FAILED,28);
+// Real finite-grid handicap tails are intervals, not missing observations.
+// Keep them independently sealed/recomputed without feeding point-error fits.
+const handicapCapture=changed(captures[0],value=>{
+  const snapshot=value.snapshot,game=snapshot.evidence.game;
+  game.home.name='主隊甲';game.away.name='客隊乙';
+  const reader={revision:'b'.repeat(64),observationId:'c'.repeat(64),observedAt:snapshot.analysisCutoff,
+    firstFetchedAt:snapshot.analysisCutoff,receivedAt:snapshot.analysisCutoff,persistedAt:snapshot.analysisCutoff,
+    sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/'};
+  const market={period:'FT',kind:'HANDICAP',unit:'GOALS',line:'1平',lineSide:'home',homeWater:.95,awayWater:.9,
+    rawRows:['主隊讓1平 0.95','客隊受讓1平 0.9'],
+    periodEvidence:{period:'FT',status:'EXPLICIT',sectionTitle:'英格蘭超級聯賽',tableHeaders:['全場'],marketHeader:'全場讓球'}};
+  snapshot.directions=buildSoccerMarketDirections({reader,game,now:Date.parse(snapshot.analysisCutoff),
+    matchedGames:[{officialGameId:game.id,league:'EPL',boardDate:game.date,matchStatus:'MATCHED',prestart:true,markets:[market]}]});
+});
+const handicapResult=resultFor(handicapCapture);
+const handicapEvaluation=evaluateSoccerForwardCapture(handicapCapture,protocol,handicapResult,after);
+handicapEvaluation.marketReturnValidation=evaluateSoccerMarketReturnCapture({capture:handicapCapture,protocol,
+  result:handicapResult,now:after,resolveContract:trustedContract});
+assert.equal(handicapEvaluation.marketReturnValidation.status,'OBSERVED_BOUNDED');
+const handicapEvidence={...evidence,captures:[handicapCapture],evaluations:[handicapEvaluation],checks:[{
+  captureId:handicapCapture.captureId,checkedAt:iso(after),resultEvidence:handicapResult,
+  marketReturnEvidenceHash:handicapEvaluation.marketReturnValidation.evidenceHash}]};
+const handicapDataset=buildSoccerReturnErrorDataset(handicapEvidence,{now,resolveContract:trustedContract});
+assert.equal(handicapDataset.status,'BOUNDED_OBSERVATIONS_AVAILABLE');
+assert.equal(handicapDataset.observedQuoteReturns,0);assert.equal(handicapDataset.observations.length,0);
+assert.equal(handicapDataset.boundedQuoteReturns,2);assert.equal(handicapDataset.boundedGames,1);
+for(const row of handicapDataset.boundedObservations){
+  const source=handicapEvaluation.marketReturnValidation.observations.find(value=>value.observationId===row.observationId);
+  assert.deepEqual(row.predictedReturnBounds,source.predictedReturnBounds);
+  assert.deepEqual(row.predictionErrorBounds,source.predictionErrorBounds);
+  assert.equal(row.predictedNetReturn,null);assert.equal(row.predictionError,null);
+  assert.ok(Number.isFinite(row.realizedNetReturn));assert.ok(row.unresolvedTailMass>0);
+}
+const handicapSummary=summarizeSoccerReturnErrorDatasets([handicapDataset,handicapDataset]);
+assert.equal(handicapSummary.boundedQuoteReturns,2);assert.equal(handicapSummary.boundedGames,1);
+assert.equal(handicapSummary.observedQuoteReturns,0);assert.equal(handicapSummary.checkedQuoteObservations,2);
+assert.deepEqual(mergeSoccerReturnErrorDiagnostics([handicapSummary]),handicapSummary);
+assert.equal(mergeSoccerReturnErrorDiagnostics([{...handicapSummary,boundedQuoteReturns:3}]).completeWithinRequestedScope,false);
+const legacySummary={...summary};delete legacySummary.boundedQuoteReturns;delete legacySummary.boundedGames;
+assert.deepEqual(mergeSoccerReturnErrorDiagnostics([legacySummary]),summary,'old cached summaries mean zero new interval observations');
+const intervalFit=fitSoccerReturnErrorResearch({datasets:[handicapDataset],protocol:candidate,now});
+assert.equal(intervalFit.boundedQuoteReturns,2);assert.equal(intervalFit.boundedGames,1);
+assert.equal(intervalFit.observedQuoteReturns,0);assert.equal(intervalFit.groups.length,0);
+assert.equal(intervalFit.R,null);assert.equal(intervalFit.empiricalErrorMargin,null);
+assert.equal(intervalFit.missingReasons.RETURN_ERROR_INTERVAL_OBSERVATIONS_NOT_POINT_FIT,2);
+const bothFit=fitSoccerReturnErrorResearch({datasets:[dataset,handicapDataset],protocol:candidate,now});
+assert.deepEqual(bothFit.groups,fit.groups,'interval observations never alter exact point-fit parameters or metrics');
+assert.equal(bothFit.boundedQuoteReturns,2);
+assert.deepEqual(await buildSoccerReturnErrorDatasetHydrated(handicapEvidence,{now,resolveContract:trustedContract,
+  hydrateCapture:async()=>handicapCapture}),handicapDataset,'streaming intake retains original interval evidence');
+const noHandicapContract=buildSoccerReturnErrorDataset(handicapEvidence,{now});
+assert.equal(noHandicapContract.boundedQuoteReturns,0);assert.equal(noHandicapContract.observedQuoteReturns,0);
+assert.equal(noHandicapContract.excludedReasons.RETURN_ERROR_EXACT_RETURN_RECOMPUTE_FAILED,2);
+const lateHandicapContract=record=>({...trustedContract(record),verifiedAt:iso(after-1)});
+const lateHandicapEvaluation={...handicapEvaluation,marketReturnValidation:evaluateSoccerMarketReturnCapture({
+  capture:handicapCapture,protocol,result:handicapResult,now:after,resolveContract:lateHandicapContract})};
+const lateHandicapDataset=buildSoccerReturnErrorDataset({...handicapEvidence,evaluations:[lateHandicapEvaluation],checks:[{
+  ...handicapEvidence.checks[0],marketReturnEvidenceHash:lateHandicapEvaluation.marketReturnValidation.evidenceHash}]},
+  {now,resolveContract:lateHandicapContract});
+assert.equal(lateHandicapDataset.boundedQuoteReturns,0);
+assert.equal(lateHandicapDataset.excludedReasons.RETURN_ERROR_TERMS_NOT_KNOWN_AT_PREDICTION,2,'later contract verification cannot backdate interval return observations');
+const incompleteHandicap=buildSoccerReturnErrorDataset({...handicapEvidence,incompleteResultCaptureIds:[handicapCapture.captureId]},
+  {now,resolveContract:trustedContract});
+assert.equal(incompleteHandicap.boundedQuoteReturns,0);assert.equal(incompleteHandicap.quarantinedGames,1);
+const resealCheck=check=>{
+  const {evidenceHash,checkedAt,...body}=check;
+  check.evidenceHash=soccerForwardHash({...body,observations:check.observations.map(({checkedAt,...row})=>row)});
+};
+for(const mutate of [
+  row=>{row.predictedReturnBounds.upper+=.1;},
+  row=>{row.predictionErrorBounds.lower-=.1;},
+  row=>{row.unresolvedTailMass=0;},
+  row=>{row.predictedNetReturn=(row.predictedReturnBounds.lower+row.predictedReturnBounds.upper)/2;},
+]){
+  const bad=structuredClone(handicapEvidence),check=bad.evaluations[0].marketReturnValidation;
+  mutate(check.observations[0]);resealCheck(check);bad.checks[0].marketReturnEvidenceHash=check.evidenceHash;
+  const rejected=buildSoccerReturnErrorDataset(bad,{now,resolveContract:trustedContract});
+  assert.equal(rejected.boundedQuoteReturns,1,'resealing altered interval bytes cannot replace actual engine recomputation');
+  assert.equal(rejected.excludedReasons.RETURN_ERROR_EXACT_RETURN_RECOMPUTE_FAILED,1);
+}
+const intervalConflict=structuredClone(handicapEvaluation);
+intervalConflict.marketReturnValidation.observations[0].predictedReturnBounds.upper+=.1;
+resealCheck(intervalConflict.marketReturnValidation);
+const conflictedIntervals=buildSoccerReturnErrorDataset({...handicapEvidence,evaluations:[handicapEvaluation,intervalConflict]},
+  {now,resolveContract:trustedContract});
+assert.equal(conflictedIntervals.boundedQuoteReturns,0);assert.equal(conflictedIntervals.quarantinedGames,1,'inconsistent interval histories quarantine the entire real game');
+const correctedHandicapResult=structuredClone(handicapResult);
+correctedHandicapResult.fullTime={home:0,away:0,period:'REGULATION_FT'};
+correctedHandicapResult.halfTime={home:0,away:0,period:'REGULATION_HT',verified:true};
+correctedHandicapResult.resultHash=soccerForwardHash('synthetic-bounded-result-correction');
+const correctedHandicapEvaluation=evaluateSoccerForwardCapture(handicapCapture,protocol,correctedHandicapResult,after);
+correctedHandicapEvaluation.marketReturnValidation=evaluateSoccerMarketReturnCapture({capture:handicapCapture,protocol,
+  result:correctedHandicapResult,now:after,resolveContract:trustedContract});
+const correctedHandicapDataset=buildSoccerReturnErrorDataset({...handicapEvidence,evaluations:[correctedHandicapEvaluation],checks:[{
+  captureId:handicapCapture.captureId,checkedAt:iso(after),resultEvidence:correctedHandicapResult,
+  marketReturnEvidenceHash:correctedHandicapEvaluation.marketReturnValidation.evidenceHash}]},{now,resolveContract:trustedContract});
+assert.equal(correctedHandicapDataset.boundedQuoteReturns,2);
+const crossKindSummary=summarizeSoccerReturnErrorDatasets([dataset,correctedHandicapDataset]);
+assert.equal(crossKindSummary.boundedQuoteReturns,0);assert.equal(crossKindSummary.observedQuoteReturns,26);
+assert.equal(crossKindSummary.quarantinedGames,1,'interval result corrections also quarantine point observations in another market');
+const crossKindFit=fitSoccerReturnErrorResearch({datasets:[dataset,correctedHandicapDataset],protocol:candidate,now});
+assert.equal(crossKindFit.boundedQuoteReturns,0);assert.equal(crossKindFit.observedQuoteReturns,26);
+assert.equal(crossKindFit.quarantinedGames,1);
 console.log('PASS return-error research: exact sealed-source recompute, economic dedup, whole-game correction quarantine, chronological train/calibration/test, game-balanced errors, supported order-statistic bands, no test fitting, missing-data nulls and bounded capture hydration; no acceptance or formal R');
