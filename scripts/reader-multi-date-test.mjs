@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
@@ -133,7 +134,7 @@ const ctx = { chrome: fakeChrome, parseTai888Capture, canonicalReaderPayload, re
   } };
 vm.createContext(ctx);
 installArchiveWorkerFixture(ctx);
-vm.runInContext(fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8').replace(/^import .*?;\n/gm, ''), ctx);
+vm.runInContext(fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : ''), ctx);
 await vm.runInContext("performSync('manual')", ctx);
 assert.deepEqual(uploads, ['2026-10-09','2026-10-10']);
 assert.equal(state.readerStatuses.NBA.ok, false);
@@ -164,3 +165,30 @@ assert.equal(state.readerStatuses.NBA.dateStatuses.length, 2);
 assert.equal(state.readerStatuses.NBA.rawGameCount, 2);
 assert.deepEqual([...state.readerStatuses.NBA.boardDates], ['2026-10-09', '2026-10-10']);
 console.log('NBA independent dated sources: scoped authority, intact quotes, whole-league conflict rejection and actual worker uploads PASS');
+
+// Real worker incident: conflicting intact tabs -> bounded source refresh ->
+// a new, unanimously matching capture carries both full and half markets.
+const completeSource = structuredClone(sameDayCapture);
+for (const record of completeSource.tables[0].rows) {
+  record.cells[4] = cell(['1平 0.940', '0.940']);
+  record.cells[5] = cell(['112.5 大 0.930', '小 0.930']);
+}
+const oldSource = structuredClone(completeSource);
+oldSource.tables[0].rows[0].cells[3] = cell(['226平 大 0.940','小 0.940']);
+let recovered = false;
+const refreshedTabs = [];
+fakeChrome.tabs.query = async () => [71,72].map(id => ({id,url:'https://tai888.in/newapp/#/BK'}));
+fakeChrome.tabs.reload = async id => { refreshedTabs.push(id); recovered = true; };
+fakeChrome.tabs.sendMessage = async id => ({ok:true,capture:{readerVersion,captures:[recovered || id === 72 ? completeSource : oldSource]}});
+uploads.length = 0;
+await vm.runInContext("performSync('alarm')", ctx);
+assert.deepEqual(uploads, [], 'conflicting capture cannot reach live ingest, even after initiating reload');
+assert.deepEqual(refreshedTabs, [71,72]);
+assert.equal(state.readerStatuses.NBA.diagnosticCode, 'conflicting-duplicate-tabs');
+assert.ok(state.nbaConflictRecoveryV1, 'incident budget survives service worker restart');
+await vm.runInContext("performSync('alarm')", ctx);
+assert.deepEqual(uploads, ['2026-10-09']);
+assert.equal(state.readerStatuses.NBA.ok, true);
+assert.equal(state.readerStatuses.NBA.marketCount, 8, 'both full and both half markets per game reach backend normalization');
+assert.equal(state.nbaConflictRecoveryV1, undefined, 'only confirmed live receipt resets the incident budget');
+console.log('PASS actual NBA worker: duplicate-price rejection -> source reload -> fresh full/half capture -> strict backend normalization/save receipt; no conflicting-price upload');

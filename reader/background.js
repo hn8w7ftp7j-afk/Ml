@@ -4,8 +4,9 @@ import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from './diagnostic-outbox.js
 import { DIAGNOSTIC_SCHEMA } from './diagnostic-schema.js';
 import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
 import { createSeenCaptureOutbox, SEEN_CAPTURE_ALARM } from './seen-outbox.js';
+import { recoverNbaConflict, NBA_CONFLICT_RECOVERY_KEY } from './nba-conflict-recovery.js';
 
-const VERSION = '2.1.49';
+const VERSION = '2.1.50';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -509,6 +510,9 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     context.leagues[league] = (selection.assessed || []).map(item => ({ diagnostics: item.candidate?.capture?.diagnostics,
       parsedGameCount: item.candidate?.parsed?.games?.length || 0, issues: item.issues || [] }));
     if (!selection.ok) {
+      const refreshed = league === 'NBA' ? await recoverNbaConflict(selection, {
+        tabs, storage: chrome.storage.local, reload: id => chrome.tabs.reload(id), manual: reason === 'manual',
+      }).catch(() => []) : [];
       if (selection.diagnosticEvidence) context.authority[league] = selection.diagnosticEvidence;
       const detail = selection.error === 'conflicting-duplicate-rows'
         ? '同場盤口重複且數字不一致，已停止上傳；請重新整理 Tai888 分頁後再同步'
@@ -519,7 +523,8 @@ async function performSyncAttempt(reason, preferredTabId, context) {
           : selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
       statuses[league] = { ok: false, state: 'error', league, diagnosticCode: selection.error,
         diagnosticIssues: selection.assessed?.flatMap(item => item.issues || []),
-        message: `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
+        message: refreshed.length ? `NBA 分頁價格衝突，已重新整理 ${refreshed.length} 個來源；載入後自動重讀，核對一致前不採用任何衝突盤口。`
+          : `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
     const sources = (soccer ? selection.selections : selection.selections || [{ selected: selection.selected }]).map(({ selected, sourceScopes, boardDates }) => {
@@ -568,6 +573,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
         const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw Object.assign(new Error('Reader 配對已過期，請重新配對'), { status: 401 }); } if (!response.ok || !data.ok) throw Object.assign(new Error(data.error || `同步失敗（${response.status}）`), { status: response.status });
         const saveReceipt = confirmedReaderSaveReceipt(data, payload, payloadHash);
+        if (league === 'NBA') { try { await chrome.storage.local.remove(NBA_CONFLICT_RECOVERY_KEY); } catch {} }
         const now = Date.now(); hashes[syncKey] = payloadHash; times[syncKey] = now;
         accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), lastSyncAt: now, saveReceipt, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
         results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, message: data.message });

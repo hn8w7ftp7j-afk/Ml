@@ -1,3 +1,4 @@
+import {nbaMarketDisplayState} from '../lib/nba/market-display-state.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -111,7 +112,7 @@ const source=fs.readFileSync('app/nba/main-workspace.js','utf8');
 const helpers=source.slice(source.indexOf('const name ='),source.indexOf('const store ='));
 const card=source.slice(source.indexOf('export function NbaGameCard'),source.indexOf('export default function')).replace('export function','function');
 const {code}=await transform(helpers+card+'\nglobalThis.Card=NbaGameCard;globalThis.validationView=openingValidationView;',{filename:'nba-opening-composite-card.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}},module:{type:'commonjs'}});
-const context={React,NBA_TEAM_LABELS,nbaResultQuoteCurrent,nbaMarketScore,NbaBetRecordButton:()=>React.createElement('button',null,'紀錄實際下注')};
+const context={nbaMarketDisplayState,React,NBA_TEAM_LABELS,nbaResultQuoteCurrent,nbaMarketScore,NbaBetRecordButton:()=>React.createElement('button',null,'紀錄實際下注')};
 vm.createContext(context);vm.runInContext(code,context);
 assert.equal(context.validationView({...combined.marketAnalyses.fullTotal.validationDiagnostics,market:'fullRunline',variable:'fullMargin'},'fullRunline'),null,'V6 diagnostics may never authorize spread markets');
 assert.equal(context.validationView({...combined.marketAnalyses.fullTotal.validationDiagnostics,modelVersion:'foreign'},'fullTotal'),null);

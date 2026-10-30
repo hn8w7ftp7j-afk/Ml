@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,7 +11,7 @@ import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 // Exercise the actual worker's receipt boundary and upload loop. DOM parsing
 // and source selection have their own real-DOM regressions; only those inputs
 // and HTTP persistence responses are synthetic here. No Production requests.
-const source = readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, '');
+const source = readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : '');
 const leagues = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
 const clock = Date.parse('2026-10-27T00:00:00.000Z'), at = new Date(clock).toISOString();
 const poison = 'private-cookie-and-password';

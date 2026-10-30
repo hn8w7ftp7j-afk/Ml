@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
@@ -210,7 +211,7 @@ try {
     },
   });
   installArchiveWorkerFixture(worker);
-  vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), worker);
+  vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : ''), worker);
   const result = await vm.runInContext("performSync('manual')", worker);
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(uploaded, ['EPL', 'UCL']);

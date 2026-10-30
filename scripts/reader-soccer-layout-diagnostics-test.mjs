@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -38,7 +39,7 @@ const context = vm.createContext({ chrome, Date, URL, setTimeout, clearTimeout, 
   Tai888LeagueRegistry: globalThis.Tai888LeagueRegistry, Tai888SoccerTeams: globalThis.Tai888SoccerTeams,
   fetch: async (...args) => { requests.push(args); throw new Error('layout diagnostics must not upload'); } });
 installArchiveWorkerFixture(context);
-vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), context);
+vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : ''), context);
 const plain = value => JSON.parse(JSON.stringify(value));
 context.rawIssueCapture = { league: 'UCL', diagnostics: { tableIssues: [
   'SOCCER_TABLE_QUOTES_AMBIGUOUS', privateValue, 'SOCCER_TABLE_QUOTES_AMBIGUOUS',

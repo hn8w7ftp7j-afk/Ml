@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,7 +13,7 @@ import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 // bookmaker coverage. It exercises the shipped parser, selector and worker.
 const now = Date.parse('2026-10-09T07:44:00Z'), at = new Date(now).toISOString();
 const version = JSON.parse(fs.readFileSync('reader/manifest.json')).version;
-const source = fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, '');
+const source = fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : '');
 const teams = { MLB: ['NYY-洋基', 'BOS-紅襪[主]'], NPB: ['SOF-軟銀鷹', 'NIP-日本火腿[主]'],
   KBO: ['LOG-樂天巨人', 'DOO-斗山熊[主]'], CPBL: ['CTB-中信兄弟', 'UNI-統一獅[主]'], NBA: ['HOU-火箭', 'DAL-獨行俠[主]'] };
 const cell = pair => ({ pair, lines: pair });

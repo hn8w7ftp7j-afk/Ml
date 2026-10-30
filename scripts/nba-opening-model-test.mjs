@@ -1,3 +1,4 @@
+import {nbaMarketDisplayState} from '../lib/nba/market-display-state.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -88,7 +89,7 @@ const file='app/nba/main-workspace.js',source=fs.readFileSync(file,'utf8');
 const helpers=source.slice(source.indexOf('const name ='),source.indexOf('const store ='));
 const card=source.slice(source.indexOf('export function NbaGameCard'),source.indexOf('export default function')).replace('export function','function');
 const {code}=await transform(helpers+card+'\nglobalThis.Card=NbaGameCard;',{filename:'nba-opening-card.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}},module:{type:'commonjs'}});
-const scope={React,NBA_TEAM_LABELS,nbaResultQuoteCurrent,nbaMarketScore,NbaBetRecordButton:()=>React.createElement('button',null,'紀錄實際下注')};
+const scope={nbaMarketDisplayState,React,NBA_TEAM_LABELS,nbaResultQuoteCurrent,nbaMarketScore,NbaBetRecordButton:()=>React.createElement('button',null,'紀錄實際下注')};
 vm.createContext(scope);vm.runInContext(code,scope);
 const markup=renderToStaticMarkup(React.createElement(scope.Card,{row:{...row,jobState:'ready'},now,busy:false,onAnalyze:()=>{}}));
 assert.match(markup,/開季分析/);assert.match(markup,/5\+75/);assert.match(markup,/232\.5/);assert.match(markup,/待驗證/);
