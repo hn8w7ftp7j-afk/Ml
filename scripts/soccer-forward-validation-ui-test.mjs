@@ -102,7 +102,7 @@ const returnsReport={...report('epl',[group]),marketReturnValidation:{version:'S
  empiricalErrorMargin:null,W:null,R:null,S:null,formalEligible:false,calibrationEligible:false,promotionEligible:false,executable:false}};
 const returnsUi=harness();returnsUi.render();returnsUi.calls[0].respond({ok:true,report:returnsReport});await returnsUi.settle();
 assert.match(returnsUi.markup,/保存原盤 12 筆/);assert.match(returnsUi.markup,/已核對收益 0 筆/);
-assert.match(returnsUi.markup,/尚未取得正式 R/);assert.match(returnsUi.markup,/結算條款尚未完整確認/);returnsUi.unmount();
+assert.match(returnsUi.markup,/尚未取得正式 R/);assert.match(returnsUi.markup,/系統尚未完成原盤適用派彩規則的綁定與正式登錄/);returnsUi.unmount();
 const forgedReturns=harness();forgedReturns.render();forgedReturns.calls[0].respond({ok:true,report:{...returnsReport,
  marketReturnValidation:{...returnsReport.marketReturnValidation,R:.01}}});await forgedReturns.settle();
 assert.match(forgedReturns.markup,/聯盟或範圍不符/);assert.doesNotMatch(forgedReturns.markup,/保存原盤 12 筆/);forgedReturns.unmount();
