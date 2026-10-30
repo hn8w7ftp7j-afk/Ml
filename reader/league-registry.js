@@ -7,7 +7,7 @@
     NBA: Object.freeze({ id: 'NBA', label: '美籃', marker: /(?:聯盟|联盟)\s*[:：]?\s*NBA(?=\s|[-－–—:：（(]|美國職業籃球|美国职业篮球|美國職籃|美国职篮|$)/i }),
     NHL: Object.freeze({ id: 'NHL', label: '冰球', marker: /(?:^(?=NHL(?:國家冰球聯盟|国家冰球联盟|美式冰球))|(?:聯盟|联盟)\s*[:：]?\s*)NHL(?=\s|[-－–—:：（(]|美式冰球|國家冰球|国家冰球|美國職業冰球|美国职业冰球|$)/i }),
     EPL: Object.freeze({ id: 'EPL', label: '英超', marker: /^(?:(?:聯盟|联盟)\s*[:：]?\s*)?(?:(?:EPL\s*[-:：]?\s*)?(?:英格蘭|英格兰|英國|英国)(?:足球)?(?:超級|超级)(?:足球)?(?:聯賽|联赛)|英超(?:聯賽|联赛)?|English Premier League|EPL(?=\s|[-:：（(]|$))/i }),
-    UCL: Object.freeze({ id: 'UCL', label: '歐冠', marker: /^(?:(?:聯盟|联盟)\s*[:：]?\s*)?(?:(?:UCL\s*[-:：]?\s*)?歐洲(?:冠軍聯賽|冠军联赛|聯賽冠軍盃)|歐冠(?:聯賽|联赛)?|UEFA Champions League|UCL(?=\s|[-:：（(]|$))/i }),
+    UCL: Object.freeze({ id: 'UCL', label: '歐冠', marker: /^(?:(?:聯盟|联盟)\s*[:：]?\s*)?(?:(?:UCL\s*[-:：]?\s*)?歐洲(?:冠軍聯賽|冠军联赛|聯賽冠軍盃)|歐冠(?:聯賽|联赛|盃|杯)?|UEFA Champions League|UCL(?=\s|[-:：（(]|$))/i }),
   });
   const ids = Object.freeze(Object.keys(leagues));
   const special = /(?:走地(?:中)?|滾球|滚球|即時|即时|LIVE|IN[ -]?PLAY|總得分|总得分|主隊|主队|客隊|客队|單隊|单队|特殊|球隊得分|球队得分)/i;
@@ -15,6 +15,18 @@
   const soccerFirstHalf = /(?:上半(?:場|场)?|第\s*[一1]\s*半(?:場|场)?|前\s*45\s*(?:分鐘|分钟)|FIRST\s+HALF|1ST\s+HALF|\b1H\b|\bHT\b)/i;
   const soccerFullTime = /(?:全(?:場|场)|正規時間|正规时间|常規時間|常规时间|90\s*(?:分鐘|分钟|MIN(?:UTES?)?)|FULL[ -]?TIME|\bFT\b)/i;
   const bounded = (value,maximum=240) => String(value || '').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,maximum);
+  // A senior competition name can prefix a different competition (for
+  // example an U21 league cup). Keep that identity out of EPL/UCL diagnostics
+  // and raw lanes as well as out of standard market parsing. Check only the
+  // unmatched suffix: UCL's official 冠軍盃 alias is itself a valid base name.
+  const competitionVariant = /(?:青(?:年|少)|女(?:子|足)?|預備|预备|後備|后备|二隊|二队|B\s*[隊队]|U\s*[-－]?\s*\d{1,2}|UNDER\s*[- ]?\s*\d{1,2}|WOMEN|YOUTH|JUNIOR|RESERVES?|ACADEMY|\bCUPS?\b|盃|杯|^\s*2(?=\s|[（(]|$))/i;
+  function excludedSoccerCompetition(text) {
+    const value=String(text||'').normalize('NFKC').replace(/\s+/g,' ').trim();
+    return ['EPL','UCL'].some(id=>{
+      const match=value.match(leagues[id].marker);
+      return match && competitionVariant.test(value.slice(match[0].length));
+    });
+  }
 
   // Period is an observation of a scoped heading, never a verified settlement rule.
   function soccerPeriodEvidence({sectionTitle='',headers=[],marketHeader='',truncated=false}={}) {
@@ -24,7 +36,7 @@
     // Only standalone scope qualifiers apply to the entire table. Do not
     // borrow a sibling corner/prop market or match the normal team column.
     const excludedScope=/^(?:LIVE|IN[ -]?PLAY|走地(?:中)?|滾球|滚球|即時|即时|(?:全場|全场)?角球(?:數|数|盤|盘)?|CORNERS?|下半(?:場|场)?|第\s*[二2]\s*半(?:場|场)?|SECOND\s+HALF|2ND\s+HALF|2H|加時|加时|延長|延长|OVERTIME|EXTRA\s+TIME|黃牌|黄牌|紅牌|红牌|卡牌|BOOKINGS?|PROPS?)$/i;
-    if(soccerExcluded.test(title)||soccerExcluded.test(column)||tableHeaders.some(value=>excludedScope.test(value)))return{...evidence,period:'UNKNOWN',status:'EXCLUDED'};
+    if(excludedSoccerCompetition(title)||soccerExcluded.test(title)||soccerExcluded.test(column)||tableHeaders.some(value=>excludedScope.test(value)))return{...evidence,period:'UNKNOWN',status:'EXCLUDED'};
     if(incomplete)return{...evidence,period:'UNKNOWN',status:'TRUNCATED'};
     const periods=text=>[...(soccerFullTime.test(text)?['FT']:[]),...(soccerFirstHalf.test(text)?['HT']:[])];
     // A dedicated header cell is table-wide evidence. A sibling market's
@@ -41,7 +53,8 @@
 
   function identifyAll(text) {
     const value = String(text || '').replace(/\s+/g, ' ').trim();
-    return ids.filter(id => leagues[id].marker.test(value));
+    return ids.filter(id => leagues[id].marker.test(value)
+      && (!['EPL','UCL'].includes(id) || !excludedSoccerCompetition(value)));
   }
 
   // `identify` is intentionally marker-scoped. Callers must pass one league
@@ -84,5 +97,5 @@
     return /^\s*(?:[（(]\s*\d{1,2}\s*[）)])?\s*$/.test(suffix);
   }
 
-  globalThis.Tai888LeagueRegistry = Object.freeze({ ids, leagues, identify, identifyAll, standardMarker, soccerPeriodEvidence, version: 'TAI888-LEAGUES-v2.2.0' });
+  globalThis.Tai888LeagueRegistry = Object.freeze({ ids, leagues, identify, identifyAll, standardMarker, soccerPeriodEvidence, excludedSoccerCompetition, version: 'TAI888-LEAGUES-v2.2.0' });
 })();

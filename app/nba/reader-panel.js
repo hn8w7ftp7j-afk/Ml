@@ -6,7 +6,7 @@ import { matchNbaReaderGame, nbaReaderDisplayStatus } from '../../lib/nba/reader
 import NbaAnalysisPanel from './analysis-panel';
 import styles from './nba.module.css';
 
-const DOWNLOAD = '/downloads/Tai888-Reader-v2.1.51-EPL-UCL.zip';
+const DOWNLOAD = '/downloads/Tai888-Reader-v2.1.52-EPL-UCL.zip';
 const teamName = (team, code) => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || code || '待核對';
 const water = value => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : '—';
 const time = value => Number.isFinite(Date.parse(value || ''))
@@ -59,7 +59,7 @@ export default function NbaReaderPanel({ date, scheduleResult }) {
     return () => clearTimeout(timer);
   }, [board, scheduleResult, now]);
   return <section aria-label="NBA 今日盤口">
-    <div className={styles.toolbar}><a href={DOWNLOAD}>下載 Reader v2.1.51</a><button type="button" className={styles.refresh} disabled={state.loading} onClick={() => setRevision(value => value + 1)}>{state.loading ? '讀取中…' : '重新讀取盤口'}</button></div>
+    <div className={styles.toolbar}><a href={DOWNLOAD}>下載 Reader v2.1.52</a><button type="button" className={styles.refresh} disabled={state.loading} onClick={() => setRevision(value => value + 1)}>{state.loading ? '讀取中…' : '重新讀取盤口'}</button></div>
     {state.error && <p className={styles.error} role="alert">{state.error}{state.error.includes('登入') && <a href="/login?next=/nba">重新登入</a>}</p>}
     <aside className={styles.sourceStatus} aria-label="NBA 盤口狀態"><div><strong>{status === 'fresh' ? board?.coverage?.status === 'PARTIAL' ? 'NBA 已同步部分盤口｜缺漏待查' : 'NBA 盤口已同步' : status === 'stale' ? 'NBA 盤口已過期・保留上次內容' : '等待 NBA 盤口同步'}</strong><span>盤日 {date}・已讀 {games.length} 場</span>{board?.observedAt && <span>來源時間 {time(board.observedAt)}・Reader {board.readerVersion}</span>}{board?.coverage?.status === 'PARTIAL' && <span>部分場次或市場尚未收到有效盤口，不代表莊家未開盤。<a href="/reader-diagnostics">查看自動診斷</a></span>}</div></aside>
     {!games.length ? <div className={styles.empty}><p>電腦更新 Reader v2.1.33 後，開啟 Tai888「NBA → 讓分／大小」標準盤，按 Reader「立即同步」，再按「重新讀取盤口」。</p></div>

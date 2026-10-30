@@ -106,6 +106,25 @@ assert.match(returnsUi.markup,/尚未取得正式 R/);assert.match(returnsUi.mar
 const forgedReturns=harness();forgedReturns.render();forgedReturns.calls[0].respond({ok:true,report:{...returnsReport,
  marketReturnValidation:{...returnsReport.marketReturnValidation,R:.01}}});await forgedReturns.settle();
 assert.match(forgedReturns.markup,/聯盟或範圍不符/);assert.doesNotMatch(forgedReturns.markup,/保存原盤 12 筆/);forgedReturns.unmount();
+const boundedUi = harness(); boundedUi.render();
+const boundedReport = { ...returnsReport, marketReturnValidation: { ...returnsReport.marketReturnValidation,
+  pendingQuoteReturns: 8, boundedQuoteReturns: 4, uniqueBoundedGames: 2 },
+  returnErrorResearch: { version: 'SOCCER-GAME-BLOCK-RETURN-ERROR-RESEARCH-v1',
+    selectedQuoteObservations: 12, checkedQuoteObservations: 12, uncheckedQuoteObservations: 0,
+    observedQuoteReturns: 0, observedGames: 0, boundedQuoteReturns: 4, boundedGames: 2, quarantinedGames: 0,
+    completeWithinRequestedScope: true, excludedReasons: {}, accepted: false,
+    formalEligible: false, calibrationEligible: false, promotionEligible: false, executable: false,
+    W: null, R: null, S: null, empiricalErrorMargin: null } };
+boundedUi.calls[0].respond({ ok: true, report: boundedReport }); await boundedUi.settle();
+assert.match(boundedUi.markup, /另已保存收益區間 4 筆，來自 2 場/);
+assert.match(boundedUi.markup, /另保存誤差區間 4 筆，來自 2 場/);
+assert.match(boundedUi.markup, /已核對收益 0 筆/); assert.match(boundedUi.markup, /可用收益觀測 0 筆/);
+assert.match(boundedUi.markup, /未取中點/); boundedUi.unmount();
+const impossibleBounded = harness(); impossibleBounded.render();
+impossibleBounded.calls[0].respond({ ok: true, report: { ...boundedReport,
+  returnErrorResearch: { ...boundedReport.returnErrorResearch, boundedQuoteReturns: 13 } } });
+await impossibleBounded.settle(); assert.match(impossibleBounded.markup, /統計或資格狀態不符/);
+assert.doesNotMatch(impossibleBounded.markup, /另保存誤差區間/); impossibleBounded.unmount();
 console.log('PASS shipped forward-validation JSX and hooks: actual FT/HT/personnel groups, proper-score zero vs missing denominators, actual classwise audit, prospective limits, pending/excluded reasons, truncation date filters, exact scoped GET/POST, duplicate/race fencing, late league/range replies, abort/unmount and retry');
 
 const scanToken='a'.repeat(64);

@@ -112,8 +112,13 @@
       }
       // An explicit foreign/unidentified league boundary closes the previous
       // lane instead of attributing its rows to the preceding known league.
-      if (/^(?:聯盟|联盟)\s*[:：]?/.test(recordText(row))) {
+      if (/^(?:聯盟|联盟)\s*[:：]?/.test(recordText(row))
+        || globalThis.Tai888LeagueRegistry?.excludedSoccerCompetition?.(recordText(row))) {
         for (const lane of lanes.filter(item => overlaps(box, item))) { lane.league = ''; lane.table = null; }
+        // A later table header must not resurrect the preceding senior
+        // football label after a different competition closed that lane.
+        for (let index=pending.length-1;index>=0;index--) if (['EPL','UCL'].includes(pending[index].league)
+          && overlaps(box,pending[index])) pending.splice(index,1);
         continue;
       }
       const target = [...lanes].reverse().find(lane => lane.league && lane.table && inside(row, lane));

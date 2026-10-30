@@ -73,6 +73,7 @@ function ForwardReport({report,league,summary}){
     {returns&&<section aria-label="原盤收益驗證">
       <h3>原盤收益驗證</h3>
       <p>保存原盤 {count(returns.quoteObservations)} 筆｜已核對收益 {count(returns.observedQuoteReturns)} 筆｜待核對 {count(returns.pendingQuoteReturns)} 筆｜衝突排除 {count(returns.conflictingQuoteReturns)} 筆｜不同已核對賽事 {count(returns.uniqueObservedGames)} 場</p>
+      {returns.boundedQuoteReturns>0&&<p>另已保存收益區間 {count(returns.boundedQuoteReturns)} 筆，來自 {count(returns.uniqueBoundedGames)} 場。原盤與賽果已核對，但比分尾端仍有未定收益；上下界分開保留，不算入上方精確收益筆數。</p>}
       <p className="soccerAvailability">將開賽前保存的原始盤口、預測及結算結果逐筆對照。同場不同方向不是獨立賽事；這是收益觀察資料，尚未取得正式 R，也不代表模型驗收通過。</p>
       <ReasonList reasons={returns.pendingReasons} label="收益待核對原因"/>
       <ReasonList reasons={returns.predictionPeriodReasons} label="封存版本待核對原因"/>
@@ -80,7 +81,8 @@ function ForwardReport({report,league,summary}){
     {errorResearch&&<section aria-label="收益誤差研究資料"><h3>收益誤差研究資料</h3>
       <p>已選原盤 {count(errorResearch.selectedQuoteObservations)} 筆｜已核對 {count(errorResearch.checkedQuoteObservations)} 筆｜未核對 {count(errorResearch.uncheckedQuoteObservations)} 筆。</p>
       <p>可用收益觀測 {count(errorResearch.observedQuoteReturns)} 筆｜不同賽事 {count(errorResearch.observedGames)} 場｜衝突隔離 {count(errorResearch.quarantinedGames)} 場。</p>
-      <p>{errorResearch.observedQuoteReturns===0?'誤差研究資料尚不足：目前沒有通過來源、條款與原始收益重算核對的觀測。':'已取得可供誤差研究的觀測，但研究方法、分組與樣本外驗收尚未完成。'} 這些筆數不是 R，也不代表正式評分已通過。</p>
+      {errorResearch.boundedQuoteReturns>0&&<p>另保存誤差區間 {count(errorResearch.boundedQuoteReturns)} 筆，來自 {count(errorResearch.boundedGames)} 場；未取中點，也未加入單一數值的誤差擬合。這些區間不是正式 R 或 S。</p>}
+      <p>{errorResearch.observedQuoteReturns===0?'誤差研究資料尚不足：目前沒有可供單一數值誤差擬合的精確收益觀測。':'已取得可供誤差研究的觀測，但研究方法、分組與樣本外驗收尚未完成。'} 這些筆數不是 R，也不代表正式評分已通過。</p>
       <p>{errorResearch.completeWithinRequestedScope===true&&report.complete===true?'本次誤差研究資料已涵蓋目前查詢範圍；範圍完整不等於模型已驗收。':report.scan?.nextCursor?'目前只統計已處理批次；後續批次完成前，尚不能當成完整驗證資料。':'本次誤差研究資料仍有完整性缺口，尚不能當成完整驗證資料。'}</p>
       <p className="soccerAvailability">同一場的多個方向不當成多場獨立樣本；實現損益誤差包含賽果本身的變動，不能直接當成期望收益的信賴下限。下一步由系統完成資料核對、誤差擬合與驗收。</p>
       <ReasonList reasons={errorResearch.excludedReasons} label="誤差研究待補與排除原因"/>
@@ -107,7 +109,9 @@ function checkedReport(value,league,range={from:'',through:''}){
     const e=value.returnErrorResearch,fields=['selectedQuoteObservations','checkedQuoteObservations','uncheckedQuoteObservations','observedQuoteReturns','observedGames','quarantinedGames'];
     if(e.version!=='SOCCER-GAME-BLOCK-RETURN-ERROR-RESEARCH-v1'||e.accepted!==false||e.formalEligible!==false||e.calibrationEligible!==false
       ||e.promotionEligible!==false||e.executable!==false||fields.some(key=>!validCount(e[key]))
-      ||e.checkedQuoteObservations>e.selectedQuoteObservations||e.observedQuoteReturns>e.checkedQuoteObservations||e.observedGames>e.observedQuoteReturns
+      ||['boundedQuoteReturns','boundedGames'].some(key=>e[key]!==undefined&&!validCount(e[key]))
+      ||(e.boundedGames??0)>(e.boundedQuoteReturns??0)
+      ||e.checkedQuoteObservations>e.selectedQuoteObservations||e.observedQuoteReturns+(e.boundedQuoteReturns??0)>e.checkedQuoteObservations||e.observedGames>e.observedQuoteReturns
       ||e.uncheckedQuoteObservations!==e.selectedQuoteObservations-e.checkedQuoteObservations||typeof e.completeWithinRequestedScope!=='boolean'
       ||e.completeWithinRequestedScope===true&&value.complete!==true
       ||['W','R','S','empiricalErrorMargin'].some(key=>e[key]!==null))throw Error('收益誤差研究回應的範圍、統計或資格狀態不符。');

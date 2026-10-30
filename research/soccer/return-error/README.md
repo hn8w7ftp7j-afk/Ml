@@ -24,6 +24,28 @@ prediction cutoff. Later terms can support separate retrospective arithmetic,
 but do not create a pre-bet return forecast in this dataset. Current empty
 contract registries produce no fitted observations.
 
+### Bounded original-price observations
+
+A finite score rectangle can leave unresolved handicap tail mass even when the
+original price, source terms and final result all pass their existing checks.
+These rows are now saved as `OBSERVED_BOUNDED`, with the original predicted net
+return bounds, the actual settled return and an outward-rounded error interval.
+The predicted point return and point error remain null. They are not assigned a
+midpoint, renormalized, or added to the exact-return sample count.
+
+The dataset independently recomputes these rows from the original immutable
+capture, contract and result receipt, then keeps them in `boundedObservations`.
+Reports expose separate bounded quote/game counts. Corrections, conflicting
+terms and incomplete result histories retain the existing quarantine rules.
+The current point-error fitter does not consume these intervals. Their width
+describes omitted score mass only, not model confidence or formal R.
+
+This repairs collection rather than accepting the football model. Formal scores
+still require source-bound settlement registrations, reviewed model/calibration
+and uncertainty artifacts, complete current match evidence and current publication.
+An empty source registry stays empty; a successfully collected synthetic test
+row is never written to production or presented as observed account evidence.
+
 Complete result histories are required. Changed results or contract/return
 conflicts quarantine the whole real game, including correlated directions.
 An incomplete requested date range blocks fitting. Declared source hashes and

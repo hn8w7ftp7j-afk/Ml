@@ -7,7 +7,7 @@ import { fixtureCapture, resultFor, changed, protocol, sha, iso, active, observe
 
 // Synthetic test inputs verify arithmetic and boundaries, never register source
 // terms or claim that production already has empirical football error evidence.
-function fixture({ league = 'epl', period = 'FT', line = '2.5', readerDelay = 0, water = .95 } = {}) {
+function fixture({ league = 'epl', period = 'FT', line = '2.5', readerDelay = 0, water = .95, kind = 'TOTAL' } = {}) {
   return changed(fixtureCapture({ league, period: period === 'FT' ? 'REGULATION_FT' : 'REGULATION_HT' }), capture => {
     const snapshot = capture.snapshot, game = snapshot.evidence.game;
     game.home.name = '主隊甲'; game.away.name = '客隊乙';
@@ -18,7 +18,7 @@ function fixture({ league = 'epl', period = 'FT', line = '2.5', readerDelay = 0,
     const readerAt = observed + readerDelay;
     const reader = { revision: sha(['original-reader', readerDelay]), observationId: sha(['original-reader-observation', readerDelay]), observedAt: iso(readerAt),
       firstFetchedAt: iso(readerAt), receivedAt: iso(readerAt), persistedAt: iso(readerAt), sourceHost: 'www.tai888.in', pageUrl: 'https://www.tai888.in/newapp/' };
-    const markets = (Array.isArray(line) ? line : [line]).map(line => ({ period, kind: 'TOTAL', unit: 'GOALS', line, overWater: water, underWater: .9, rawRows: [`大 ${line} ${water}`, '小 .9'],
+    const markets = (Array.isArray(line) ? line : [line]).map(line => ({ period, kind, unit: 'GOALS', line, ...(kind === 'HANDICAP' ? { lineSide: 'home', homeWater: water, awayWater: .9 } : { overWater: water, underWater: .9 }), rawRows: [`大 ${line} ${water}`, '小 .9'],
       periodEvidence: { sectionTitle: league === 'epl' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽', tableHeaders: [period === 'FT' ? '全場' : '上半場'],
         marketHeader: period === 'FT' ? '全場大小' : '上半場大小', period, status: 'EXPLICIT' } }));
     if (readerDelay) { snapshot.analysisCutoff = iso(readerAt); snapshot.observedAt = iso(readerAt); capture.capturedAt = iso(readerAt + 1); }
@@ -170,4 +170,61 @@ assert.equal(archived.length, 1); assert.equal(archived[0].saved.captureId, late
 assert.equal(archived[0].evaluation.marketReturnValidation.quoteObservations, 12);
 assert.equal(runner.checkedGameModelPeriods, 0); assert.equal(runner.marketReturnCheckedPredictionPeriods, 1);
 assert.equal(runner.marketReturnPendingQuoteReturns, 12, 'production empty terms retain real prices and final result without inventing realized returns');
-console.log('PASS soccer saved quote return evidence: immutable original Reader/model/cutoff, EPL/UCL FT/HT, source-term and account-time binding, 1% settled-principal arithmetic, result corrections/term conflicts quarantined, checks deduplicated, all quote denominators retained, no fabricated empirical R or scoring approval');
+// A finite generated Poisson rectangle has a nonzero unresolved handicap tail.
+// Keep verified realized returns and rigorous error intervals rather than losing
+// the entire observation or pretending that an interval midpoint is exact EV.
+for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
+  const handicap = fixture({ league, period, kind: 'HANDICAP', line: '1平' });
+  const noTerms = run(handicap);
+  assert.equal(noTerms.status, 'PENDING');
+  assert.ok(noTerms.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'));
+  const bounded = run(handicap, { resolveContract: trustedSyntheticContract });
+  assert.equal(bounded.status, 'OBSERVED_BOUNDED', 'valid handicap tail must retain a separate bounded return observation');
+  assert.equal(bounded.observedQuoteReturns, 0); assert.equal(bounded.boundedQuoteReturns, 2); assert.equal(bounded.pendingQuoteReturns, 0);
+  for (const row of bounded.observations) {
+    assert.equal(row.status, 'OBSERVED_BOUNDED'); assert.equal(row.predictedNetReturn, null); assert.equal(row.predictionError, null);
+    assert.ok(row.unresolvedTailMass > 0); assert.ok(Number.isFinite(row.realizedNetReturn));
+    assert.ok(row.predictedReturnBounds.lower < row.predictedReturnBounds.upper);
+    assert.ok(row.predictionErrorBounds.lower < row.realizedNetReturn - row.predictedReturnBounds.upper);
+    assert.ok(row.predictionErrorBounds.upper > row.realizedNetReturn - row.predictedReturnBounds.lower);
+    for (const flag of ['formalEligible', 'calibrationEligible', 'promotionEligible', 'executable']) assert.equal(row[flag], false);
+  }
+  const duplicate = summarizeSoccerMarketReturnObservations([bounded, noTerms, bounded]);
+  assert.equal(duplicate.boundedQuoteReturns, 2); assert.equal(duplicate.observedQuoteReturns, 0);
+  assert.equal(duplicate.pendingQuoteReturns, 0); assert.equal(duplicate.uniqueBoundedGames, 1);
+  assert.equal(duplicate.W, null); assert.equal(duplicate.R, null); assert.equal(duplicate.S, null);
+  const exact = structuredClone(bounded);
+  for (const row of exact.observations) {
+    row.status = 'OBSERVED'; row.predictedNetReturn = row.predictedReturnBounds.lower;
+    row.predictionError = row.realizedNetReturn - row.predictedNetReturn;
+  }
+  for (const checks of [[bounded, exact, noTerms], [noTerms, exact, bounded]]) {
+    const preferred = summarizeSoccerMarketReturnObservations(checks);
+    assert.equal(preferred.observedQuoteReturns, 2); assert.equal(preferred.boundedQuoteReturns, 0);
+    assert.equal(preferred.conflictingQuoteReturns, 0);
+  }
+  exact.observations[0].predictedNetReturn = bounded.observations[0].predictedReturnBounds.upper + .01;
+  assert.equal(summarizeSoccerMarketReturnObservations([bounded, exact]).conflictingQuoteReturns, 1);
+  const differentTerms = run(handicap, { resolveContract: record => ({ ...trustedSyntheticContract(record), version: 'bounded-different-terms' }) });
+  const conflicting = summarizeSoccerMarketReturnObservations([bounded, differentTerms]);
+  assert.equal(conflicting.boundedQuoteReturns, 0); assert.equal(conflicting.conflictingQuoteReturns, 2);
+  const intervalTamper = structuredClone(bounded); intervalTamper.observations[0].predictedReturnBounds.lower -= .01;
+  assert.equal(summarizeSoccerMarketReturnObservations([bounded, intervalTamper]).conflictingQuoteReturns, 1);
+  const result = resultFor(handicap), alteredResult = { ...result, fullTime: { home: 0, away: 0, period: 'REGULATION_FT' },
+    halfTime: { home: 0, away: 0, period: 'REGULATION_HT', verified: true }, resultHash: sha('bounded-corrected-result') };
+  const correction = run(handicap, { result: alteredResult, resolveContract: trustedSyntheticContract });
+  assert.equal(summarizeSoccerMarketReturnObservations([bounded, correction]).boundedQuoteReturns, 0);
+  const evaluated = { ...evaluateSoccerForwardCapture(handicap, protocol, result, after), marketReturnValidation: bounded };
+  const input = { captures: [handicap], protocol, evaluations: [evaluated] };
+  const report = buildSoccerMarketReturnReport(input, after);
+  assert.equal(report.boundedQuoteReturns, 2); assert.equal(report.observedQuoteReturns, 0);
+  assert.equal(report.quoteObservations, report.observedQuoteReturns + report.boundedQuoteReturns + report.pendingQuoteReturns + report.conflictingQuoteReturns);
+  const incomplete = buildSoccerMarketReturnReport({ ...input, incompleteResultCaptureIds: [handicap.captureId] }, after);
+  assert.equal(incomplete.boundedQuoteReturns, 0); assert.equal(incomplete.pendingQuoteReturns, 2);
+  const correctedReport = buildSoccerMarketReturnReport({ ...input, evaluations: [evaluated,
+    evaluateSoccerForwardCapture(handicap, protocol, alteredResult, after)] }, after);
+  assert.equal(correctedReport.boundedQuoteReturns, 0); assert.equal(correctedReport.conflictingQuoteReturns, 2);
+  assert.ok(run(handicap, { resolveContract: trustedSyntheticContract, result: { ...result, status: 'ABANDONED' } })
+    .observations.every(row => row.status === 'PENDING' && row.realizedNetReturn === null));
+}
+console.log('PASS soccer saved quote return evidence: immutable original Reader/model/cutoff, EPL/UCL FT/HT, source-term and account-time binding, 1% settled-principal arithmetic, result corrections/term conflicts quarantined, checks deduplicated, all quote denominators retained, bounded handicap-return/error intervals retained separately with exact-first deduplication, no fabricated empirical R or scoring approval');
