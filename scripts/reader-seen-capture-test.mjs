@@ -19,7 +19,7 @@ const sql = (parts, ...values) => {
 sql.transaction = queries => db.transaction(async transaction => {
   const rows = []; for (const query of queries) rows.push((await transaction.query(query.query, query.values)).rows); return rows;
 });
-const deviceId = 'seen-capture-fixture-device', version = '2.1.50';
+const deviceId = 'seen-capture-fixture-device', version = '2.1.51';
 const observedAt = '2026-10-24T22:00:01.000Z', pageActivityAt = '2026-10-24T22:00:00.000Z';
 const clock = Date.parse('2026-10-29T22:00:00.000Z');
 const settings = { deviceId, headerVersion: version, now: clock, sql };
