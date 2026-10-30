@@ -27,6 +27,22 @@ const conflict = record(21, [['not-a-date', '07:00'], ['新隊伍', 'LAL-湖人[
 const locked = record(22, [['10/29', '08:00'], ['GS-勇士', 'NY-尼克[主]'], ['🔒', '-'], ['-', '-']], { marketLocked: true });
 const privateRow = record(23, ['餘額', '123456.78', 'cookie opaque', 'do-not-export']);
 const rows = [header, heading, first, conflict, locked, privateRow];
+
+// An excluded competition is not raw EPL/UCL evidence. After its boundary a
+// repeated column header must not restore the preceding senior heading.
+for(const [senior,foreign]of [['英格蘭超級聯賽','英格蘭超級聯賽盃U21'],
+  ['英格蘭超級聯賽','English Premier League 2'],['歐洲冠軍聯賽','UCL Youth']]){
+  const seniorHeading=record(10,[`聯盟: ${senior}(2)`]);seniorHeading.cells[0].right=400;
+  const foreignHeading=record(30,[foreign]);foreignHeading.cells[0].right=400;
+  const repeatedHeader={...header,top:40};
+  const output=plain(adapter.collect([header,seniorHeading,record(20,['senior-original-row']),
+    foreignHeading,record(35,['excluded-first-row']),repeatedHeader,record(50,['excluded-after-header'])],source));
+  assert.equal(output.length,1);assert.equal(output[0].tables.flatMap(table=>table.rows).length,1);
+  assert.equal(output[0].tables[0].rows[0].cells[0].pair[0],'senior-original-row');
+  assert.equal(JSON.stringify(output).includes('excluded-'),false,'closed football scope cannot be revived by another header');
+  assert.deepEqual(plain(adapter.collectSections([{label:foreign,fragments:[{text:'synthetic-cup-row'}]}],
+    senior.includes('英格蘭')?'EPL':'UCL',source)),null);
+}
 const extracted = plain(adapter.collect(rows, source));
 assert.equal(extracted.length, 1); const evidence = extracted[0];
 assert.equal(evidence.version, 'TAI888-DOM-CAPTURE-v2.2.0'); assert.equal(evidence.league, 'NBA');

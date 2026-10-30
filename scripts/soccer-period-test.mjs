@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import '../reader/soccer-card-normalizer.js';
+import '../reader/soccer-table-normalizer.js';
 import { parseSoccerCapture, canonicalSoccerPayload } from '../reader/soccer-parser.js';
 import { validateSoccerCapture, matchSoccerReaderGames } from '../lib/soccer/reader.js';
 import { buildSoccerMarketDirections, collectUnassignedSoccerQuotes } from '../lib/soccer/market-directions.js';
@@ -16,6 +17,35 @@ const capture=tables=>({league:'EPL',pageLeagueLabel:'英格蘭超級聯賽',sou
 const parse=raw=>parseSoccerCapture(raw,new Date(now));
 const wire=payload=>({...payload,readerVersion:'2.1.34',pageActivityAt:at});
 const check=payload=>validateSoccerCapture(payload,{now,headerVersion:'2.1.34'});
+
+// Synthetic competition labels only: a familiar senior-name prefix does not
+// establish the senior competition, even when rows use otherwise known teams.
+const registry=globalThis.Tai888LeagueRegistry;
+const competitionLookalikes=['聯盟: 英格蘭超級聯賽盃U21(12)','英超聯賽盃(4)',
+  '英格蘭超級聯賽杯(4)','English Premier League Cup (4)','English Premier League 2 (4)',
+  '英超2(4)','EPL Reserve (4)','EPL 預備隊(4)','英超 女子(4)',
+  '英超 U23(4)','英超 U19(4)','英超 U-21(4)','英超 Under-21(4)',
+  '英超 Ｕ２１(4)','UCL Youth (4)','歐洲冠軍聯賽 U19(4)',
+  'UEFA Champions League Women (4)','歐冠 後備隊(4)'];
+for(const label of competitionLookalikes){
+  assert.equal(registry.identify(label),null,label);
+  assert.deepEqual(registry.identifyAll(label),[],label);
+  assert.equal(registry.standardMarker(label,'EPL'),false,label);
+  assert.equal(registry.standardMarker(label,'UCL'),false,label);
+  assert.equal(registry.soccerPeriodEvidence({sectionTitle:label,headers:['全場']}).status,'EXCLUDED',label);
+  const expected=label.includes('UCL')||label.includes('歐')||label.includes('UEFA')?'UCL':'EPL';
+  const scoped={...capture([{...table('全場'),sectionTitle:label}]),league:expected,
+    pageLeagueLabel:expected==='EPL'?'英格蘭超級聯賽':'歐洲冠軍聯賽'};
+  assert.equal(parse(scoped).games.length,0,`server parser cannot borrow a senior page label for ${label}`);
+}
+for(const [label,league]of [
+  ['聯盟: 英格蘭超級聯賽(6)','EPL'],['EPL(6)','EPL'],['英超 全場(6)','EPL'],
+  ['English Premier League 上半場(6)','EPL'],['歐洲聯賽冠軍盃(6)','UCL'],
+  ['UEFA Champions League 全場(6)','UCL'],['UCL 上半場(6)','UCL'],
+  ['歐冠盃(6)','UCL'],['歐冠杯 上半場(6)','UCL'],
+]){assert.equal(registry.identify(label),league,label);assert.equal(registry.standardMarker(label,league),true,label);}
+// Period/prop identity continues to be separate from competition identity.
+assert.equal(registry.identify('英超 角球'),'EPL');assert.equal(registry.standardMarker('英超 角球','EPL'),false);
 
 const mixedRaw=capture([table('全場'),table('全場',{line:'1.5',total:'3-50'}),table('上半場',{line:'0.5',total:'1+50'})]);
 const mixed=parse(mixedRaw);
@@ -84,6 +114,28 @@ assert.deepEqual(normalized.diagnostics.cardIssues,[]);assert.equal(normalized.t
 assert.equal(normalized.diagnostics.expectedGameCount,1);assert.equal(normalized.diagnostics.gameCount,1,'period and alternative rows do not multiply fixture count');
 const geometry=parse(capture(normalized.tables));assert.deepEqual(geometry.periodsCovered,['FT','HT']);assert.equal(geometry.games[0].markets.length,4);
 assert.equal(check(wire(geometry)).ok,true);
+for(const foreign of ['英格蘭超級聯賽盃U21','English Premier League 2','EPL Reserve']){
+  const mixedSection=globalThis.Tai888SoccerCardNormalizer.normalize([{label:'英格蘭超級聯賽',
+    fragments:[...fragments,{text:foreign,left:40,top:100}]}],'EPL');
+  assert.equal(mixedSection.tables.length,0,'a senior card cannot borrow a nested different-competition price');
+  assert.ok(mixedSection.diagnostics.cardIssues.includes('SOCCER_MIXED_LEAGUE_SECTION'));
+}
+const desktopHeader={text:'時間 主客隊伍 讓球 大小盤',cells:['時間','主客隊伍','讓球','大小盤']
+  .map((text,index)=>({text,left:index*100,right:(index+1)*100}))};
+const desktopHeading=text=>({text,cells:[{text,left:0,right:400}]});
+const desktopGame=top=>({text:'synthetic fixture',cells:[['10-18','21:00'],['水晶宮','白禮頓[主]'],
+  ['1平 0.950','0.950'],['大2.5 0.940','小 0.940']].map((values,index)=>({
+    text:values.join(' '),left:index*100,right:(index+1)*100,top,
+    rows:values.map((text,row)=>({text,left:index*100,top:top+row*18})),
+  }))});
+const seniorDesktop=globalThis.Tai888SoccerTableNormalizer.normalize([[desktopHeader,
+  desktopHeading('聯盟: 英格蘭超級聯賽(1)'),desktopGame(100)]],'EPL');
+assert.equal(seniorDesktop.tables.flatMap(table=>table.rows).length,1,'positive synthetic desktop source is readable');
+for(const foreign of ['聯盟: 英格蘭超級聯賽盃U21(12)','English Premier League 2','EPL Reserve']){
+  const isolatedDesktop=globalThis.Tai888SoccerTableNormalizer.normalize([[desktopHeader,
+    desktopHeading('聯盟: 英格蘭超級聯賽(1)'),desktopGame(100),desktopHeading(foreign),desktopGame(200)]],'EPL');
+  assert.equal(isolatedDesktop.tables.flatMap(table=>table.rows).length,1,'foreign youth/cup/reserve rows do not borrow the previous senior table');
+}
 const dedicatedFragments=fragments.filter(part=>part.left<800).map(part=>({...part,text:part.text.replace('全場','')}));dedicatedFragments.push({text:'上半場',left:300,top:0});
 const dedicated=globalThis.Tai888SoccerCardNormalizer.normalize([{label:'英格蘭超級聯賽',fragments:dedicatedFragments}],'EPL');
 assert.ok(parse(capture(dedicated.tables)).games[0].markets.every(market=>market.period==='HT'),'a separate observed cell in the same physical table header is retained');

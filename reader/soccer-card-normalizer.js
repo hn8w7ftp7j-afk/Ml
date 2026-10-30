@@ -29,7 +29,8 @@
       const parts=(section.fragments||[]).filter(p => typeof p.text==='string' && clean(p.text) && Number.isFinite(p.top) && Number.isFinite(p.left)).map(p=>({...p,text:clean(p.text)}));
       if (!parts.length || parts.length>2400) continue;
       const all=bands(parts);
-      if (all.some(p => { const ids=globalThis.Tai888LeagueRegistry.identifyAll(p.text);return ids.some(id=>id!==league); })) { issues.push('SOCCER_MIXED_LEAGUE_SECTION');continue; }
+      if (all.some(p => { const ids=globalThis.Tai888LeagueRegistry.identifyAll(p.text);return ids.some(id=>id!==league)
+        || globalThis.Tai888LeagueRegistry.excludedSoccerCompetition?.(p.text); })) { issues.push('SOCCER_MIXED_LEAGUE_SECTION');continue; }
       const dates=all.map(p=>({...p,match:p.text.replace(/\s*[（(]更多玩法[）)]\s*[>›]?$/,'').match(clock)})).filter(p=>p.match);
       if (!dates.length) continue;
       label ||= clean(section.label); count+=dates.length;

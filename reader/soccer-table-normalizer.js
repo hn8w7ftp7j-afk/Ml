@@ -185,7 +185,8 @@
         const headingRow = header && record.cells?.length === 1 && text.length <= 240
           && record.cells[0].right - record.cells[0].left >= (header.at(-1).right - header[0].left) * 0.7
           && !homeMarker.test(text) && !/\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d/.test(text);
-        if (identified || headingRow || pureHeading && /^(?:聯盟|联盟)\s*[:：]?/.test(text)) {
+        if (identified || headingRow || pureHeading && (/^(?:聯盟|联盟)\s*[:：]?/.test(text)
+          || registry.excludedSoccerCompetition?.(text))) {
           flush(); sectionTitle = text.slice(0, 240); accepted = identified === league && registry.standardMarker(text, league);
           if (accepted) { label ||= sectionTitle; markerCount++; }
           continue;
