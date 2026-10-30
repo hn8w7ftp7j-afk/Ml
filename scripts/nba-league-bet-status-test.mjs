@@ -252,7 +252,7 @@ let boardRows = [initialRow], readCount = 0, refresh, disposed = false, heldResp
 const boardScope = {
   trackBoard: true, busy: true, operation: { current: false }, requestRevision: { current: 0 },
   dateRef: { current: boardDate }, explicitDate: { current: false }, jobRef: { current: { status: 'completed' } },
-  setLoading: () => {}, setError: message => assert.equal(message, ''), setReaderStatus: () => {},
+  setLoading: () => {}, setError: message => assert.equal(message, ''), setReaderStatus: () => {}, setReaderCoverage: () => {},
   setDate: () => { throw Error('Read-only quote refresh must not change this board date'); }, onDateChange: () => {},
   setProgress: () => {}, setSelected: () => {}, setRows: update => { boardRows = typeof update === 'function' ? update(boardRows) : update; },
   loadNbaUpcomingBoard: options => loadNbaUpcomingBoard({ ...options, now: clock }),

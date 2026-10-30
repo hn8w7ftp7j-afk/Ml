@@ -152,6 +152,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const [reconnectRevision, setReconnectRevision] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [readerStatus, setReaderStatus] = useState('waiting');
+  const [readerCoverage, setReaderCoverage] = useState(null);
   const [readerFailure, setReaderFailure] = useState(null);
   const notification = useRef(null);
   const rowsRef = useRef(rows); rowsRef.current = rows;
@@ -200,6 +201,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         setRows([]); setProgress(null); setSelected('');
       }
       setReaderStatus(board.readerStatus);
+      setReaderCoverage(board.readerCoverage ? { ...board.readerCoverage, boardDate: board.date } : null);
       setRows(current => board.rows.map(row => {
         const previous = current.find(old => old.game.id === row.game.id);
         const newerSaved = row.result && (!previous?.result || Date.parse(row.result.generatedAt) > Date.parse(previous.result.generatedAt));
@@ -300,6 +302,10 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const changeDate = value => { if (!validDate(value)) return; explicitDate.current = true; onDateChange(value, true); dateRef.current = value; requestRevision.current += 1; setRows([]); setProgress(null); setSelected(''); setDate(value); };
   const betReminder = useMemo(() => buildNbaBetReminder(rows, date, now), [rows, date, now]);
   const openingMarketCoverage = useMemo(() => nbaOpeningMarketCoverage(rows, date, job), [rows, date, job]);
+  const coverage = readerCoverage?.boardDate === date ? readerCoverage : null;
+  const missingQuoteRows = rows.filter(row => !row.quote && row.game.status === 'scheduled' && !row.game.completed
+    && row.game.timeConfirmed === true && Date.parse(row.game.startTime) > now);
+  const partialReader = coverage?.status === 'PARTIAL' || missingQuoteRows.length > 0;
   useEffect(() => {
     onBoardStateChange?.({ date, readerStatus, analysisGameCount: betReminder.analysisGameCount, openingMarketCoverage });
   }, [date, readerStatus, betReminder.analysisGameCount, openingMarketCoverage, onBoardStateChange]);
@@ -322,7 +328,13 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.51-EPL-UCL.zip" download>下載 Reader v2.1.51</a>
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
-      </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>
+      </div><div className={`providerState ${readerStatus === 'fresh' && !partialReader ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? partialReader ? '已同步部分盤口｜缺漏待查' : '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>
+      {readerStatus === 'fresh' && partialReader && <div className="noticeBox" role="status" aria-label="NBA 盤口缺漏">
+        <strong>已收到的盤口可查看與分析，以下缺漏仍待查</strong>
+        {missingQuoteRows.length > 0 && <p>{missingQuoteRows.map(row => `${name(row.game.away)}／${name(row.game.home)}`).join('、')}：未配對到目前盤口。</p>}
+        {coverage?.missingMarkets?.map(gap => <p key={`${gap.awayCode}:${gap.homeCode}:${gap.boardTime}`}>{NBA_TEAM_LABELS[gap.awayCode] || gap.awayCode}／{NBA_TEAM_LABELS[gap.homeCode] || gap.homeCode}：未收到{gap.markets.map(key => openingMarketLabels[key]).join('、')}。</p>)}
+        <p>缺資料不代表莊家未開盤。Reader 診斷與原始盤面會自動回傳。</p><a href="/reader-diagnostics">查看自動診斷</a>
+      </div>}
       {readerStatus === 'stale' && readerFailure && <div className="errorBox" role="alert"><strong>最近 NBA 同步失敗｜{localTime(readerFailure.at)}</strong><p>{readerFailure.message}</p><p>這是已保存的同步紀錄；目前盤口仍未取得更新確認。</p><a href="/reader-diagnostics">查看同步診斷紀錄</a></div>}
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
       {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}

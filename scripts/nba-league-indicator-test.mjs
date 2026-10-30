@@ -145,7 +145,7 @@ const coverageEnd = child.indexOf('\n  return <NbaBetRecordProvider', coverageSt
 assert.ok(coverageStart >= 0 && coverageEnd > coverageStart);
 const publishBoard = (rows, job, readerStatus = 'fresh') => {
   let published;
-  vm.runInNewContext(child.slice(coverageStart, coverageEnd), { rows, date, job, readerStatus,
+  vm.runInNewContext(child.slice(coverageStart, coverageEnd), { rows, date, job, readerStatus, readerCoverage: null, now: Date.parse(observedAt),
     nbaOpeningMarketCoverage, betReminder: { analysisGameCount: rows.filter(row => row.result?.status === 'ready').length },
     useMemo: callback => callback(), useEffect: callback => callback(), onBoardStateChange: value => { published = value; } });
   return published;
