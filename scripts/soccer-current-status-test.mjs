@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
+import { soccerReaderPeriodBindingDiagnostics } from '../lib/soccer/reader-period-binding.js';
 
 // Run the real read/publication SQL against PostgreSQL, not a SQL-text matcher.
 const fixture=await soccerSqlFixture(),{db}=fixture;
@@ -102,7 +103,7 @@ const readerRouteSource=fs.readFileSync('app/api/soccer/reader/route.js','utf8')
 const aggregateHash='f'.repeat(64),readerContext=vm.createContext({URL,Response,NextResponse:{json:(body,options)=>Response.json(body,options)},
   requireApiAuth:async()=>null,soccerLeague:value=>value==='epl'?{id:'epl'}:null,validSoccerDate:value=>value==='2026-10-20',
   soccerReaderStorageConfigured:()=>true,loadSoccerReaderSnapshot:async()=>({contentHash:aggregateHash,revision:'heartbeat-revision',games:[],sourceObservations:[],periodsCovered:['FT']}),
-  fetchSoccerSchedule:async()=>({ok:true,games:[]}),matchSoccerReaderGames:()=>[],
+  fetchSoccerSchedule:async()=>({ok:true,games:[]}),matchSoccerReaderGames:()=>[],soccerReaderPeriodBindingDiagnostics,
 });
 vm.runInContext(readerRouteSource+';globalThis.readerGet=GET;',readerContext);
 const readerBody=await (await readerContext.readerGet(new Request('https://fixture.invalid/api/soccer/reader?league=epl&date=2026-10-20'))).json();
