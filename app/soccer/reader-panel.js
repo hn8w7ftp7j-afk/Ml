@@ -27,6 +27,20 @@ export function soccerReaderPeriods(data,now=Date.now()){
   const sources=Array.isArray(data?.sourceObservations)?data.sourceObservations:[];
   return sources.filter(source=>source&&typeof source==='object').map(source=>({...source,label:periodName[source.period]||'期間待確認',fresh:observedIsFresh(source.observedAt||source.sourceObservedAt,now)}));
 }
+const periodBindingReasons={
+  CONFIG_MISSING:'尚未設定本來源的全場期間對應。',CONFIG_INVALID:'既有全場期間設定無效，系統需修復設定。',
+  LEAGUE_NOT_BOUND:'本聯盟尚未綁定全場期間。',GAME_NOT_MATCHED:'場次尚未與官方賽程配對。',
+  MARKET_INVALID:'盤口欄位未通過核對。',HEADER_PROFILE_MISMATCH:'盤面標頭與既有期間設定不符。',
+  OBSERVATION_MISSING:'尚缺盤口保存收據。',SOURCE_DEVICE_MISMATCH:'來源裝置與既有期間設定不符，系統需重新綁定。',
+  SOURCE_HOST_MISMATCH:'來源網站與既有期間設定不符。',CONFIRMATION_NOT_EFFECTIVE:'期間設定尚未生效。',
+  OBSERVATION_BEFORE_CONFIRMATION:'此盤口早於期間設定生效時間，等待生效後的新盤口。',
+  OBSERVATION_TIME_INVALID:'盤口來源時間或保存收據未通過核對。',SAME_CAPTURE_HALF_MISSING:'尚缺同一次讀盤的明確上半場標頭。',
+  RESOLUTION_NOT_APPLIED:'期間設定符合，但解析結果尚未套用。',
+};
+export function soccerReaderPeriodBindingMessages(diagnostics){
+  return Object.entries(diagnostics?.blockerCounts||{}).filter(([reason,count])=>Object.hasOwn(periodBindingReasons,reason)&&Number.isSafeInteger(count)&&count>0)
+    .map(([reason,count])=>`${count} 筆：${periodBindingReasons[reason]}`);
+}
 export default function SoccerReaderPanel({league,date,showDownload=true}) {
   const [revision,setRevision]=useState(0),[state,setState]=useState({key:'',data:null,error:'',loading:false});
   const key=`${league}:${date}`;
@@ -51,10 +65,12 @@ export default function SoccerReaderPanel({league,date,showDownload=true}) {
   },[key,revision]);
   const current=state.key===key?state:null,data=current?.data,games=data?.games||[];
   const periodSources=soccerReaderPeriods(data),fresh=observedIsFresh(data?.observedAt),openMarketCount=games.reduce((count,game)=>count+game.markets.length,0);
+  const periodBindingMessages=soccerReaderPeriodBindingMessages(data?.periodBindingDiagnostics);
   return <section className="panel soccerReader" aria-label={`足球Tai888原盤 ${date}`}>
     <div className="soccerBoardHeading"><h2>Tai888 足球原盤｜{date}</h2><button type="button" className="secondary" disabled={!date||current?.loading} onClick={()=>setRevision(n=>n+1)}>{current?.loading?'讀取原盤中…':'更新原盤'}</button></div>
     <p className="soccerAvailability">{current?.error?`原盤更新失敗：${current.error}`:!data?`正在核對 ${date} 原盤保存狀態…`:games.length?`${games.length} 場｜${openMarketCount} 筆盤口${openMarketCount?'':'｜此版本沒有開放盤口'}${periodSources.length?'｜按期間分開保存':`｜同步 ${time(data.observedAt)}${fresh?'':'｜原盤已逾期，請重新同步'}`}`:periodSources.length?'原盤來源已保存，此版本沒有開放盤口。':`${date} 尚無原盤；等待 Reader ${READER_VERSION} 同步該日期分頁。其他已保存日期可在「已保存原盤」查看。`}</p>
     {periodSources.length>0&&<p className="soccerAvailability">{periodSources.map(source=>`${source.label} ${time(source.observedAt||source.sourceObservedAt)}${source.fresh?'':'（待更新）'}`).join('｜')}</p>}
+    {periodBindingMessages.length>0&&<div className="soccerAvailability" role="status" aria-label="全場期間核對原因">{periodBindingMessages.map(message=><p key={message}>{message}</p>)}</div>}
     {showDownload&&<a className="secondary readerDownload" href={DOWNLOAD} download>下載 Reader {READER_VERSION} 足球版</a>}
     {games.length>0&&<p className="soccerAvailability">原始盤口；足球結算規格與模型仍在驗證。</p>}
     {games.map((game,index)=><div className="soccerQuoteGame" key={`${game.boardTime}:${game.homeCode}:${game.awayCode}:${index}`}><h3>{name(game.homeRaw)}（主）對 {name(game.awayRaw)}（客）</h3><p className="soccerAvailability">{game.boardTime}｜{game.matchStatus==='MATCHED'?'官方場次已配對':'場次待核對'}{game.prestart?'':'｜非已確認賽前盤'}</p>

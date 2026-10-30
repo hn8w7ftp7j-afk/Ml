@@ -66,6 +66,9 @@ await firstArrival.load(body);assert.equal(firstArrival.events.length,1,'a first
 assert.deepEqual(plain(firstArrival.events[0].detail),{league:'epl',date,contentHash:body.contentHash});
 await firstArrival.load({...body,observedAt:freshAt(-1)});assert.equal(firstArrival.events.length,1,'unchanged heartbeats do not repeatedly revoke current research');
 const legacy={...body,isPeriodAggregate:false,sourceObservations:[],observedAt:freshAt(3600000),games:[game]};await ui.load(legacy);markup=renderToStaticMarkup(ui.render());assert.match(markup,/原盤已逾期|待更新/,'a far-future legacy timestamp cannot be called fresh');
+await ui.load({...body,periodBindingDiagnostics:{blockerCounts:{SOURCE_DEVICE_MISMATCH:6,GAME_NOT_MATCHED:2,UNTRUSTED_REASON:1}}});markup=renderToStaticMarkup(ui.render());
+assert.match(markup,/6 筆：來源裝置與既有期間設定不符/);assert.match(markup,/2 筆：場次尚未與官方賽程配對/);assert.doesNotMatch(markup,/UNTRUSTED_REASON/);
+assert.deepEqual(plain(inspect.soccerReaderPeriodBindingMessages({blockerCounts:JSON.parse('{"toString":1,"__proto__":1,"SOURCE_DEVICE_MISMATCH":-1}')})),[],'only own reason codes with positive integer counts are displayed');
 await ui.load({...body,sourceObservations:[null,...sources]});assert.doesNotThrow(()=>renderToStaticMarkup(ui.render()));
 await ui.load({...body,league:'ucl'});markup=renderToStaticMarkup(ui.render());assert.match(markup,/原盤更新失敗.*身分核對未通過/,'wrong-league API results cannot silently replace the current board');
 const otherDate={league,date:'2026-10-20'};markup=renderToStaticMarkup(ui.render(otherDate));assert.doesNotMatch(markup,/白禮頓|大 0\.84/,'changing date cannot display the previous date as its current board');

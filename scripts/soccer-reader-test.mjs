@@ -80,6 +80,7 @@ if(process.argv.includes('--api')){
     const get=(query='league=EPL&date=2026-10-18',auth=true)=>GET(new Request(`https://fixture.invalid/api/soccer/reader?${query}`,{headers:auth?{cookie:`mlb_session=${session}`}:{}}));
     assert.equal((await get(undefined,false)).status,401);assert.equal((await get('league=NHL&date=2026-10-18')).status,400);
     const read=await get();assert.equal(read.status,200);assert.equal(read.headers.get('Cache-Control'),'no-store');const body=await read.json();assert.equal(body.games.length,1);assert.equal(body.games[0].officialGameId,'soccer:epl:123');assert.equal(body.executable,false);
+    assert.equal(body.periodBindingDiagnostics.version,'SOCCER-PERIOD-BINDING-DIAGNOSTICS-v1');assert.equal(body.periodBindingDiagnostics.candidateMarketCount,4);
     assert.equal((await get('league=UCL&date=2026-10-18')).status,200);assert.equal((await(await get('league=UCL&date=2026-10-18')).json()).games.length,0);
     assert.equal((await OPTIONS(new Request('https://fixture.invalid/api/soccer/reader',{headers:{Origin:'https://evil.invalid'}}))).status,403);
     console.log('PASS real soccer Reader API/store with isolated SQL transport: origin/token/device, server reparse, durable readback/dedup, private GET, official join and league isolation; no Production writes.');
