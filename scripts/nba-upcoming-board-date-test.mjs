@@ -74,7 +74,7 @@ const base = {
   requestRevision: { current: 0 }, dateRef: { current: today }, jobRef: { current: null },
   explicitDate: { current: false }, operation: { current: false }, notification: { current: null }, busy: false,
   setDate: date => screen.push(date), onDateChange: date => screen.push(date), setRows: () => {}, setSelected: () => {},
-  setReaderStatus: () => {}, setLoading: () => {}, setError: value => { if (value) throw Error(value); },
+  setReaderStatus: () => {}, setReaderCoverage: () => {}, setLoading: () => {}, setError: value => { if (value) throw Error(value); },
   setProgress: () => {}, setStarting: () => {}, setMessage: () => {}, setJob: value => saved.push(value),
   store: value => { saved.push(value); return true; }, prepareNbaNotification: () => {},
 };

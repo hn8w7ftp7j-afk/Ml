@@ -42,7 +42,12 @@ export default function ReaderDiagnosticsPage() {
       <p style={{ overflowWrap: 'anywhere', fontSize: 13 }}>裝置：{record.device_id}<br />回報：{record.report_id}<br />電腦記錄時間：{new Date(record.payload.createdAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}<br />分頁 {record.payload.tabCount}，未連線 {record.payload.silentTabCount}</p>
       {record.payload.exceptionCode && <p>同步例外：{reasons[record.payload.exceptionCode] || record.payload.exceptionCode}</p>}
       {Object.entries(record.payload.leagues || {}).filter(([id]) => !league || id === league).map(([id, row]) => <section key={id} style={{ borderTop: '1px solid #33465c', paddingTop: 10, marginTop: 10 }}>
-        <strong>{id}｜{states[row.state] || row.state}</strong>
+        <strong>{id}｜{row.state === 'synced' && record.computedCoverage?.[id]?.status === 'PARTIAL' ? '已同步部分盤口｜缺漏待查' : states[row.state] || row.state}</strong>
+        {record.computedCoverage?.[id]?.status === 'PARTIAL' && <div role="note">
+          <p>自動回報已收到，但盤面有未讀到的場次或市場，不能視為完整同步。</p>
+          {record.computedCoverage[id].sourceGaps.map(gap => <p key={gap.sourceIndex}>盤面 {gap.sourceIndex}：標題 {gap.expected} 場，解析 {gap.parsed} 場，{gap.missing} 場未讀到。不同盤面的缺額可能重疊。</p>)}
+          {record.computedCoverage[id].missingMarketCount > 0 && <p>已解析場次另有 {record.computedCoverage[id].missingMarketCount} 個市場未收到有效盤口，可能包含鎖盤；不能據此判定莊家未開盤。</p>}
+        </div>}
         {row.errorCode && <p>{reasons[row.errorCode] || row.errorCode}</p>}
         {row.authority && <details>
           <summary>{id === 'NBA' ? 'NBA 盤面差異明細' : '足球盤面差異明細'}</summary>
