@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,7 +16,7 @@ import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
 // treat these fixtures as an actual historical source receipt.
 const now = Date.parse('2026-10-24T22:00:00Z'), at = new Date(now).toISOString();
 const version = JSON.parse(fs.readFileSync('reader/manifest.json')).version;
-const background = fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, '');
+const background = fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : '');
 const labels = { EPL: '英格蘭超級聯賽', UCL: '歐洲冠軍聯賽' };
 const plain = value => JSON.parse(JSON.stringify(value));
 const cell = pair => ({ pair });

@@ -15,7 +15,7 @@ assert.equal(seenCaptureQueryUrl(), '/api/reader/seen-captures?limit=20');
 assert.equal(seenCaptureQueryUrl('NHL'), '/api/reader/seen-captures?limit=20&league=NHL');
 assert.throws(() => seenCaptureQueryUrl('NFL'));
 const one = { ...empty, leagues: [empty.leagues.find(row => row.league === 'EPL')], recent: [{ captureId: 'a'.repeat(64), evidenceHash: 'b'.repeat(64), league: 'EPL',
-  observedAt: time, pageActivityAt: null, readerVersion: '2.1.49', tableCount: 0, rowCount: 0, cellCount: 0, lockedRowCount: 0,
+  observedAt: time, pageActivityAt: null, readerVersion: '2.1.50', tableCount: 0, rowCount: 0, cellCount: 0, lockedRowCount: 0,
   captureReasons: ['BEFORE_SELECTION', 'SOURCE_PARTIAL'], completeCapture: false, receivedAt: time, persistedAt: time, status: 'EVIDENCE_UNVERIFIED',
   captureBatchId: 'c'.repeat(64), partIndex: 1, partCount: 3 }] };
 assert.equal(validateSeenCaptureResponse(one, 'EPL'), one, 'zero rows and rejected/incomplete parsing still remain source evidence');
@@ -42,13 +42,13 @@ assert.equal(evidence.tables[0].rows[0].cells[1].pair[1], '  0.95', 'rendering d
 
 // Cross the actual server DTO/readback boundary, including NHL and nullable
 // legacy batch metadata. These are synthetic sport-only fixtures, never uploads.
-const rawEvidence = { version: 'TAI888-DOM-CAPTURE-v2.2.0', league: 'NHL', readerVersion: '2.1.49', sourceHost: 'us.tai888.in',
+const rawEvidence = { version: 'TAI888-DOM-CAPTURE-v2.2.0', league: 'NHL', readerVersion: '2.1.50', sourceHost: 'us.tai888.in',
   pageUrl: 'https://us.tai888.in/#/BS', observedAt: time, pageActivityAt: null, pageLeagueLabel: '冰球',
   captureReasons: ['PRE_NORMALIZATION', 'SOURCE_PARTIAL'], completeCapture: false,
   tables: [{ sectionTitle: '冰球', headers: [], rows: [{ cells: [{ pair: ['尚未識別球隊', '盤口尚未解析'] }] }] }] };
-const raw = buildReaderSeenCapture({ schema: 'READER-SEEN-CAPTURE-v1', evidence: rawEvidence }, { deviceId: 'synthetic-device-one', headerVersion: '2.1.49' });
+const raw = buildReaderSeenCapture({ schema: 'READER-SEEN-CAPTURE-v1', evidence: rawEvidence }, { deviceId: 'synthetic-device-one', headerVersion: '2.1.50' });
 const dbRow = { capture_id: raw.captureId, schema_version: 'READER-SEEN-CAPTURE-v1', league: 'NHL', source_observed_at: time,
-  page_activity_at: null, evidence_hash: raw.evidenceHash, evidence_json: raw.evidenceJson, source_scope_hash: raw.sourceScopeHash, reader_version: '2.1.49',
+  page_activity_at: null, evidence_hash: raw.evidenceHash, evidence_json: raw.evidenceJson, source_scope_hash: raw.sourceScopeHash, reader_version: '2.1.50',
   table_count: raw.tableCount, row_count: raw.rowCount, cell_count: raw.cellCount, locked_row_count: raw.lockedRowCount,
   capture_batch_id: null, part_index: null, part_count: null, received_at: time, persisted_at: time };
 const sql = async parts => {
@@ -64,7 +64,7 @@ assert.equal(serverInventory.recent[0].status, 'EVIDENCE_UNVERIFIED');
 const serverDetail = await listReaderSeenCaptures({ captureId: raw.captureId }, { sql });
 assert.equal(validateSeenCaptureDetail(serverDetail, serverInventory.recent[0]).tables[0].rows[0].cells[0].pair[1], '盤口尚未解析');
 
-const report = (id, received, delivery, version = '2.1.49') => ({ device_id: id, received_at: received,
+const report = (id, received, delivery, version = '2.1.50') => ({ device_id: id, received_at: received,
   payload: { createdAt: received, readerVersion: version, ...(delivery === undefined ? {} : { seenCaptureDelivery: delivery }) } });
 const pending = { state: 'pending', pendingCount: 2, pendingBytes: 800, failedCaptureCount: 1, savedCaptureCount: 4, code: 'RETRY_PENDING', lastPersistedAt: time };
 let reports = latestSeenDeliveryReports([report('device-one', '2026-10-29T00:00:00Z', pending), report('device-one', time, undefined), report('device-two', time, pending)]);

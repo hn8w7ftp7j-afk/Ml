@@ -5,6 +5,7 @@ import { NBA_TEAM_LABELS } from '../../lib/nba/labels.js';
 import { taipeiDate, validDate } from '../../lib/nba/identity.js';
 import { NBA_JOB_STORAGE, validNbaJob, mergeNbaAnalysisResults, nbaResultQuoteCurrent } from '../../lib/nba/analysis-job-display.js';
 import { nbaMarketScore } from '../../lib/nba/market-score.js';
+import { nbaMarketDisplayState } from '../../lib/nba/market-display-state.js';
 import { buildNbaBetReminder } from '../../lib/nba/shadow-ranking.js';
 import NbaShadowRanking from './shadow-ranking.js';
 import { NbaBetRecordProvider, NbaBetRecordButton, NbaBetRecords } from './bet-records.js';
@@ -105,16 +106,18 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     {(row.reason || row.jobError) && <p className="muted">{row.jobError || row.reason}</p>}
     <div className="nbaMarketList">{[['fullTotal', '全場大小'], ['fullRunline', '全場讓分'], ['firstHalfTotal', '上半大小'], ['firstHalfRunline', '上半讓分']].map(([key, label]) => {
       const modelMarket = result?.marketAnalyses?.[key];
+      const marketDisplay = nbaMarketDisplayState(row, key);
       const analyzed = preseason || regular || opening ? modelMarket?.status === 'ready' && modelMarket.quote : key === 'fullTotal' && result?.status === 'ready' && result.quote;
       const market = analyzed || row.quote?.[key]; const total = key.endsWith('Total');
       const choices = total ? [['over', '大分', market?.overWater, assessment?.positiveExpectedNet], ['under', '小分', market?.underWater, assessment?.negativeExpectedNet]] : [['away', `${name(row.game.away)}（客）${market?.lineSide === 'away' ? '讓分' : '受讓'}`, market?.awayWater], ['home', `${name(row.game.home)}（主）${market?.lineSide === 'home' ? '讓分' : '受讓'}`, market?.homeWater]];
       return <div className={`marketBlock actualMarket ${market ? '' : 'nbaUnavailableMarket'}`} key={key}><h3>{label}｜{market?.line || '—'}{market && !total ? `｜${market.lineSide === 'home' ? '主隊' : '客隊'}讓分` : ''}</h3>
+        {marketDisplay.message && <p className="muted">{marketDisplay.message}</p>}
         {analyzed && !current && <p className="muted">目前 Reader 盤口：{row.quote?.[key]?.line || '等待開盤'}；以下估計對應上次分析的盤口與水位。</p>}
-        {modelMarket && !['ready','unavailable'].includes(modelMarket.status) && (modelMarket.status === 'insufficient' && openingValidationView(modelMarket.validationDiagnostics, key)?.status === 'FAIL' ? <NbaMarketValidation diagnostics={modelMarket.validationDiagnostics} market={key}/> : <p className="muted">{modelMarket.reason}</p>)}
+        {modelMarket?.status === 'insufficient' && openingValidationView(modelMarket.validationDiagnostics, key)?.status === 'FAIL' && <NbaMarketValidation diagnostics={modelMarket.validationDiagnostics} market={key}/>}
         {market && choices.map(([side, pick, water, legacyEstimate]) => {
           const estimate = modelMarket?.status === 'ready' ? modelMarket.sides[side] : null;
           const scoring = nbaMarketScore(estimate);
-          return <div className="scoreRow" key={pick}><div className={`score ${scoring?.score >= 8.5 ? 'strongest' : 'pass'}`} title="S 分數"><small>S 分數</small>{scoring ? scoring.score.toFixed(1) : '—'}</div><div className="scoreBody"><div className="scorePick">{pick}</div><div className="scorePrice">水位 {num(water)}</div><div className="scoreMeta">{estimate ? `估計勝率 ${(estimate.winProbability * 100).toFixed(2)}%` : modelMarket?.status === 'insufficient' ? '待驗證' : statusText(row.jobState)}</div>{estimate ? <div className="scoreMeta">W {num(estimate.expectedNet)}%｜R {num(estimate.robustExpectedNet)}%{!scoring ? '｜S 待核對' : ''}</div> : analyzed ? <div className="scoreMeta">每 100 元淨額 {num(legacyEstimate)} 元</div> : null}
+          return <div className="scoreRow" key={pick}><div className={`score ${scoring?.score >= 8.5 ? 'strongest' : 'pass'}`} title="S 分數"><small>S 分數</small>{scoring ? scoring.score.toFixed(1) : '—'}</div><div className="scoreBody"><div className="scorePick">{pick}</div><div className="scorePrice">水位 {num(water)}</div><div className="scoreMeta">{estimate ? `估計勝率 ${(estimate.winProbability * 100).toFixed(2)}%` : marketDisplay.label}</div>{estimate ? <div className="scoreMeta">W {num(estimate.expectedNet)}%｜R {num(estimate.robustExpectedNet)}%{!scoring ? '｜S 待核對' : ''}</div> : analyzed ? <div className="scoreMeta">每 100 元淨額 {num(legacyEstimate)} 元</div> : null}
             {estimate && <details className="rankingDetails"><summary>估計明細</summary><p>模型估計勝率 {(estimate.winProbability * 100).toFixed(2)}%｜走水 {(estimate.pushProbability * 100).toFixed(2)}%。W／R 為每 100 元含退水淨額。{!scoring && '壓力樣本不足，暫不產生 S。'}</p></details>}
           </div><div className="rowActions"><NbaBetRecordButton entry={{ game: row.game, marketKey: key, side, line: market.line, lineSide: total ? null : market.lineSide, water, away: name(row.game.away), home: name(row.game.home) }}/></div></div>;
         })}
@@ -316,7 +319,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         <button className="primary" disabled={busy || !selected} onClick={() => start(selected)}>只分析這一場</button>
         <button className="secondary" disabled={busy || loading} onClick={() => { explicitDate.current = false; onDateChange(dateRef.current, false); void load(); }}>跟隨最新盤日</button>
         <button className="secondary" disabled={starting || !job} onClick={() => { setDate(job.date); setReconnectRevision(value => value + 1); }}>載入先前分析</button>
-        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.49-EPL-UCL.zip" download>下載 Reader v2.1.49</a>
+        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.50-EPL-UCL.zip" download>下載 Reader v2.1.50</a>
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
       </div><div className={`providerState ${readerStatus === 'fresh' ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>

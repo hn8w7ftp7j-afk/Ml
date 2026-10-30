@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 import { installArchiveWorkerFixture } from './reader-archive-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readerSaveReceiptFixture } from './reader-save-receipt-fixture.mjs';
@@ -62,7 +63,7 @@ const worker = { chrome, Date, URL, setTimeout, clearTimeout, queueMicrotask, Te
 };
 vm.createContext(worker);
 installArchiveWorkerFixture(worker);
-vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), worker);
+vm.runInContext(fs.readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : ''), worker);
 assert.equal((await vm.runInContext("performSync('manual')", worker)).ok, true);
 assert.deepEqual(uploaded.sort(), definitions.map(row => row[0]).sort());
 for (const [league] of definitions) assert.equal(state.readerStatuses[league].state, 'synced', league);

@@ -1,3 +1,4 @@
+import { readFileSync as readNbaRecoverySource } from 'node:fs';
 // Actual worker + actual raw-evidence storage/outbox, with synthetic Chrome
 // transport and backend-validated receipts. This is not live desktop evidence.
 import assert from 'node:assert/strict';
@@ -18,7 +19,7 @@ const clone = value => structuredClone(value);
 const ordered = value => Array.isArray(value) ? value.map(ordered) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, ordered(value[key])])) : value;
 function evidence(league = 'NBA') {
-  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', league, readerVersion: '2.1.49',
+  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', league, readerVersion: '2.1.50',
     sourceHost: host, pageUrl, observedAt, pageActivityAt: observedAt,
     captureReasons: ['PRE_NORMALIZATION', 'SOURCE_PARTIAL'], completeCapture: false,
     tables: [{ sectionTitle: `聯盟：${league}`, headers: ['時間', '主客隊伍', '讓分', '大小盤'], rows: [
@@ -27,7 +28,7 @@ function evidence(league = 'NBA') {
       { marketLocked: true, cells: [{ pair: ['封盤', ''] }] },
     ] }] };
 }
-function setup({ capture = null, captureVersion = '2.1.49', autoEnabled = true, parseThrows = false, tabs = [1] } = {}) {
+function setup({ capture = null, captureVersion = '2.1.50', autoEnabled = true, parseThrows = false, tabs = [1] } = {}) {
   const state = { readerToken: 'synthetic-signed-token', deviceId, pairedAt: Date.now(), autoEnabled };
   const writes = [], uploads = [], diagnostics = [], listeners = [];
   const flags = { online: false, statusReadFails: false };
@@ -44,7 +45,7 @@ function setup({ capture = null, captureVersion = '2.1.49', autoEnabled = true, 
   const event = { addListener() {} };
   const chrome = {
     runtime: { id: 'seen-worker-test-extension', onMessage: { addListener(listener) { listeners.push(listener); } },
-      onInstalled: event, onStartup: event, getManifest: () => ({ version: '2.1.49' }) },
+      onInstalled: event, onStartup: event, getManifest: () => ({ version: '2.1.50' }) },
     storage: { local: storage }, alarms: { onAlarm: event, create: async () => {}, clear: async () => {} },
     tabs: { onUpdated: event, reload: async () => {}, query: async () => tabs.map(id => ({ id, url: pageUrl })),
       sendMessage: async () => ({ ok: true, capture: { readerVersion: captureVersion, captures: capture ? [clone(capture)] : [] } }) },
@@ -80,8 +81,8 @@ function setup({ capture = null, captureVersion = '2.1.49', autoEnabled = true, 
     },
   });
   vm.runInContext(readFileSync('reader/seen-local.js', 'utf8'), context);
-  vm.runInContext(readFileSync('reader/seen-outbox.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/^export /gm, ''), context);
-  vm.runInContext(readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, ''), context);
+  vm.runInContext(readFileSync('reader/seen-outbox.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : '').replace(/^export /gm, ''), context);
+  vm.runInContext(readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : ''), context);
   return { state, writes, uploads, diagnostics, flags, context,
     run: source => vm.runInContext(source, context),
     async message(message, sender = { id: chrome.runtime.id, url: pageUrl, tab: { id: 1, url: pageUrl } }) {

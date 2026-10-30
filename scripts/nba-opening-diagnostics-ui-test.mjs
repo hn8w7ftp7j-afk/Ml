@@ -1,3 +1,4 @@
+import {nbaMarketDisplayState} from '../lib/nba/market-display-state.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -19,7 +20,7 @@ const { code } = await transform(helpers + card + '\nglobalThis.Card=NbaGameCard
   jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } },
   module: { type: 'commonjs' },
 });
-const scope = { React, NBA_TEAM_LABELS, nbaResultQuoteCurrent, nbaMarketScore,
+const scope = { nbaMarketDisplayState, React, NBA_TEAM_LABELS, nbaResultQuoteCurrent, nbaMarketScore,
   NbaBetRecordButton: () => React.createElement('button', null, '紀錄實際下注') };
 vm.createContext(scope);
 vm.runInContext(code, scope);
@@ -123,3 +124,14 @@ assert.match(unanalysed, /尚未分析/);
 assert.doesNotMatch(unanalysed, /歷史驗證數據|開季平均誤差|0\.25495/);
 
 console.log('PASS NBA diagnostic UI: shipped JSX, actual failed checks and baselines, mixed readiness, totals-only rows, unchanged accepted scores, missing/foreign/unavailable/blocked states and collapsed responsive table semantics');
+
+// A newly received total must not inherit the successful spread job status.
+const oldMissing = structuredClone(result);
+oldMissing.quotes.fullTotal = null;
+oldMissing.marketAnalyses.fullTotal = {status:'unavailable',reason:'此盤口尚未開盤'};
+const recoveredQuote = render(rowFor(oldMissing));
+const pendingTotal = marketBlock(recoveredQuote, '全場大小', '全場讓分');
+assert.match(pendingTotal, /此市場已有盤口，但尚無對應分析/);
+assert.match(pendingTotal, /待分析/);
+assert.doesNotMatch(pendingTotal, /已分析|此盤口尚未開盤|估計勝率|>W /);
+assert.match(recoveredQuote, /尚未收到此市場的有效盤口；不代表莊家尚未開盤/);
