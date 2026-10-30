@@ -124,6 +124,28 @@ assert.deepEqual(warmupParsed.games.map(game => [game.awayCode, game.homeCode, g
 assert.ok(warmupParsed.games.every(game => !game.firstHalfRunline && !game.firstHalfTotal));
 assert.equal(normalizer.normalizeRowRecords(warmupRecords, { expectedLeague: 'MLB' }).diagnostics.gameCount, 0);
 
+// Reproduce the saved 10/30 source spelling. A recognized CHI alias used
+// to suppress code fallback while the unrecognized BOS spelling dropped the
+// entire row. Preserve all four actual contracts, rather than filling prices.
+for (const home of ['BOS 塞爾蒂克[主]', '波士頓塞爾蒂克[主]', 'BOS 塞爾提克[主]']) {
+  const records = [
+    record(0, 0, ['時間','主客隊伍','讓球','大小盤','單雙','獨贏','上半讓球','上半大小']),
+    record(1, 30, ['聯盟：NBA 美國職業籃球(1)']),
+    record(2, 60, ['10-31','CHI 公牛','0.950','235平 大 0.940','','','0.940','118平 大 0.930']),
+    record(3, 82, ['07:35',home,'15平 0.950','小 0.940','','','9平 0.940','小 0.930']),
+  ];
+  const normalized = normalizer.normalizeRowRecords(records, {expectedLeague:'NBA'});
+  assert.equal(normalized.diagnostics.gameCount, 1, home);
+  const value = parseTai888Capture({...capture(), tables:normalized.tables, diagnostics:normalized.diagnostics}, now);
+  assert.equal(value.games.length, 1);
+  const g = value.games[0];
+  assert.deepEqual([g.awayCode,g.homeCode,g.boardDate,g.boardTime], ['CHI','BOS','2026-10-31','07:35']);
+  assert.deepEqual([g.fullRunline.line,g.fullRunline.lineSide,g.fullTotal.line,g.firstHalfRunline.line,g.firstHalfRunline.lineSide,g.firstHalfTotal.line],
+    ['15平','home','235平','9平','home','118平']);
+  assert.deepEqual([g.fullRunline.homeWater,g.fullTotal.overWater,g.firstHalfRunline.homeWater,g.firstHalfTotal.overWater],[.95,.94,.94,.93]);
+  assert.equal(normalizer.normalizeRowRecords(records,{expectedLeague:'MLB'}).diagnostics.gameCount,0);
+}
+
 // The 10/22 desktop NBA page contains an 11-game standard board followed by
 // another 11-game 「主推過關」 board. They share event identities but are
 // different contracts. Synthetic prices make any cross-section leak visible.
@@ -205,7 +227,7 @@ for (const sections of [specialFixture.sections, [...specialFixture.sections].re
   const selection = selectAuthoritativeBoard([candidate(input)], { league: 'NBA', now: +now });
   assert.equal(selection.ok, true);
   assert.equal(selection.selected.detectedGameCount, 11, 'upload count uses deduplicated parsed event identities');
-  const payload = { ...parsed, readerVersion: '2.1.50', deviceId: 'nba-diagnostic-fixture', pageActivityAt: now.toISOString(), expectedGameCount: 11, detectedGameCount: 11 };
+  const payload = { ...parsed, readerVersion: '2.1.51', deviceId: 'nba-diagnostic-fixture', pageActivityAt: now.toISOString(), expectedGameCount: 11, detectedGameCount: 11 };
   payload.payloadHash = createHash('sha256').update(canonicalReaderPayload(payload)).digest('hex');
   const received = normalizeNbaReaderPayload(payload, { deviceId: payload.deviceId, headerVersion: payload.readerVersion, now: +now });
   assert.equal(received.gameCount, 11);
@@ -252,7 +274,7 @@ assert.equal(createHash('sha256').update(canonicalReaderPayload(baseball)).diges
 assert.deepEqual(readerMarketProperties('NBA'), ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
 const background = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(background, /league === 'NHL' \? '\/api\/nhl\/reader' : league === 'NBA' \? '\/api\/nba\/reader' : '\/api\/reader\/ingest'/);
-assert.match(background, /const VERSION = '2\.1\.50'/);
+assert.match(background, /const VERSION = '2\.1\.51'/);
 // Execute v2.1.26 recovery behaviors against a stale and then current tab.
 let contentVersion = '2.1.26';
 const reloaded = [];
@@ -270,11 +292,11 @@ vm.runInContext(background.replace(/^import .*?;\n/gm, line => line.includes('./
 let scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 0, 'stale content scripts cannot masquerade as the new installed Reader');
 assert.deepEqual([...scanned.silentTabIds], [7]);
-contentVersion = '2.1.50';
+contentVersion = '2.1.51';
 scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 1);
 const report = await vm.runInContext('readerDiagnostics()', backgroundContext);
-assert.equal(report.report.readerVersion, '2.1.50');
+assert.equal(report.report.readerVersion, '2.1.51');
 assert.equal(report.report.boards[0].league, 'NBA');
 assert.equal(Object.hasOwn(report.report, 'readerToken'), false);
 assert.equal(Object.hasOwn(report.report.boards[0], 'pageUrl'), false);

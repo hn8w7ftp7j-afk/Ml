@@ -32,7 +32,7 @@ function store(seed = {}) {
   return storage;
 }
 function source(league = 'NBA', at = '2026-10-24T22:00:01.000Z') {
-  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', readerVersion: '2.1.50', league,
+  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', readerVersion: '2.1.51', league,
     sourceHost: 'www1.tai888.in', pageUrl: 'https://www1.tai888.in/newapp/#/BS', frameUrl: 'https://www1.tai888.in/newapp/',
     observedAt: at, pageActivityAt: '2026-10-24T22:00:00.000Z', completeCapture: false,
     captureReasons: ['PRE_NORMALIZATION', 'SOURCE_PARTIAL'], pageLeagueLabel: `${league} 聯盟`,
@@ -71,7 +71,7 @@ try {
   for (const row of await queued(storage)) {
     assert.equal(await local.sha(row.wireText), row.captureId);
     const wire = JSON.parse(row.wireText);
-    assert.equal(buildReaderSeenCapture(wire, { deviceId: device, headerVersion: '2.1.50' }).captureId, row.captureId,
+    assert.equal(buildReaderSeenCapture(wire, { deviceId: device, headerVersion: '2.1.51' }).captureId, row.captureId,
       'local fragments and backend canonical identities match after Chrome key sorting');
     assert.deepEqual(wire.evidence.tables, captures.find(value => value.league === wire.evidence.league).tables,
       'unknown identities, malformed dates, conflicting quote strings, whitespace and locks are exact');
@@ -103,7 +103,7 @@ try {
   const many = source('NBA'); many.tables[0].rows = Array.from({ length: 2001 }, (_, index) => ({ marketLocked: false, cells: [{ pair: [`第${index}筆 3+50 0.95`, '1.5 0.93'] }] }));
   const chunks = await local.fragments(many); assert.ok(chunks.length >= 3);
   assert.deepEqual(chunks.flatMap(chunk => JSON.parse(chunk.wireText).evidence.tables.flatMap(table => table.rows)), many.tables[0].rows);
-  chunks.forEach(chunk => { assert.ok(local.bytes(chunk.wireText) <= 590000); buildReaderSeenCapture(JSON.parse(chunk.wireText), { deviceId: device, headerVersion: '2.1.50' }); });
+  chunks.forEach(chunk => { assert.ok(local.bytes(chunk.wireText) <= 590000); buildReaderSeenCapture(JSON.parse(chunk.wireText), { deviceId: device, headerVersion: '2.1.51' }); });
   const partial = store(); let chunkWrites = 0;
   partial.beforeSet = values => { if (Object.keys(values).some(key => key.startsWith(local.PREFIX)) && ++chunkWrites === 2) throw Error('QUOTA_EXCEEDED'); };
   const partialOutbox = createSeenCaptureOutbox({ storage: partial, upload: validAck });

@@ -12,7 +12,7 @@ import * as selector from '../reader/board-selector.js';
 
 let clock = Date.now();
 const makeReport = (state = 'error') => ({ schema: DIAGNOSTIC_SCHEMA, reportId: randomUUID(),
-  readerVersion: '2.1.50', extensionManifestVersion: '2.1.50', createdAt: new Date(clock).toISOString(),
+  readerVersion: '2.1.51', extensionManifestVersion: '2.1.51', createdAt: new Date(clock).toISOString(),
   silentTabCount: 0, tabCount: 1, leagues: { NBA: { state, errorCode: 'no-complete-tab',
     issues: ['game-1:full-total:invalid-line'], boards: [{ parsedGameCount: 1, diagnostics: { expectedGameCount: 2, gameCount: 1 }, issues: ['expected-2-parsed-1'] }] } } });
 const poison = 'password=secret-cookie-token';
@@ -86,11 +86,11 @@ assert.ok(statements.every(query => !/sports_baseball_reader|nba_reader|analysis
 const events = { addListener() {} }, requests = [];
 const workerState = { readerToken: 'test-token', deviceId: 'worker-device-12345', pairedAt: clock, autoEnabled: true };
 const fakeChrome = {
-  runtime: { onInstalled: events, onStartup: events, onMessage: events, getManifest: () => ({ version: '2.1.50' }) },
+  runtime: { onInstalled: events, onStartup: events, onMessage: events, getManifest: () => ({ version: '2.1.51' }) },
   alarms: { onAlarm: events },
   storage: { local: { get: async () => structuredClone(workerState), set: async values => Object.assign(workerState, structuredClone(values)) } },
   tabs: { onUpdated: events, query: async () => [{ id: 1 }], sendMessage: async () => ({ ok: true,
-    capture: { readerVersion: '2.1.50', captures: [{ league: 'NBA', observedAt: new Date().toISOString(), sourceHost: 'www.tai888.in', tables: [{ rows: [] }], diagnostics: { gameCount: 1, expectedGameCount: 1 } }] } }) },
+    capture: { readerVersion: '2.1.51', captures: [{ league: 'NBA', observedAt: new Date().toISOString(), sourceHost: 'www.tai888.in', tables: [{ rows: [] }], diagnostics: { gameCount: 1, expectedGameCount: 1 } }] } }) },
   webNavigation: { getAllFrames: async () => [{ frameId: 0 }] },
 };
 const context = vm.createContext({ chrome: fakeChrome, ...parser, ...selector, createDiagnosticOutbox,
