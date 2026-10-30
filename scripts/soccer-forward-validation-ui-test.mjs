@@ -136,7 +136,7 @@ for(const patch of [{scope:{league:'ucl',from:'2026-10-20',through:'2026-10-21'}
  const malformedScan=harness();malformedScan.render();const r=scanned();malformedScan.calls[0].respond({ok:true,report:{...r,scan:{...r.scan,...patch}}});await malformedScan.settle();
  assert.match(malformedScan.markup,/接續資料的範圍或處理狀態不符/);assert.equal(malformedScan.button('繼續處理下一批'),undefined);malformedScan.unmount();
 }
-assert.match(renderReport(returnsReport),/已確認的 1% 實際輸贏本金退水不必重報/);
+assert.match(renderReport(returnsReport),/已確認的信用盤算法與 1% 實際輸贏本金退水不需重報/);
 console.log('PASS actual continuation UI: scope/date rollover pinning, GET/POST purpose, cumulative replacement, retries, duplicate fencing and malformed cursor/scope rejection');
 
 for(const patch of [{frozenAt:'2026-10-22T00:00:00Z'},{totalGames:3},{processedGames:0},{cursor:'b'.repeat(64)}]){
