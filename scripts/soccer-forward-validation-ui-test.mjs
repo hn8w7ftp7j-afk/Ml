@@ -102,7 +102,7 @@ const returnsReport={...report('epl',[group]),marketReturnValidation:{version:'S
  empiricalErrorMargin:null,W:null,R:null,S:null,formalEligible:false,calibrationEligible:false,promotionEligible:false,executable:false}};
 const returnsUi=harness();returnsUi.render();returnsUi.calls[0].respond({ok:true,report:returnsReport});await returnsUi.settle();
 assert.match(returnsUi.markup,/保存原盤 12 筆/);assert.match(returnsUi.markup,/已核對收益 0 筆/);
-assert.match(returnsUi.markup,/尚未取得正式 R/);assert.match(returnsUi.markup,/結算條款尚未完整確認/);returnsUi.unmount();
+assert.match(returnsUi.markup,/尚未取得正式 R/);assert.match(returnsUi.markup,/系統尚未完成原盤適用派彩規則的綁定與正式登錄/);returnsUi.unmount();
 const forgedReturns=harness();forgedReturns.render();forgedReturns.calls[0].respond({ok:true,report:{...returnsReport,
  marketReturnValidation:{...returnsReport.marketReturnValidation,R:.01}}});await forgedReturns.settle();
 assert.match(forgedReturns.markup,/聯盟或範圍不符/);assert.doesNotMatch(forgedReturns.markup,/保存原盤 12 筆/);forgedReturns.unmount();
@@ -136,7 +136,7 @@ for(const patch of [{scope:{league:'ucl',from:'2026-10-20',through:'2026-10-21'}
  const malformedScan=harness();malformedScan.render();const r=scanned();malformedScan.calls[0].respond({ok:true,report:{...r,scan:{...r.scan,...patch}}});await malformedScan.settle();
  assert.match(malformedScan.markup,/接續資料的範圍或處理狀態不符/);assert.equal(malformedScan.button('繼續處理下一批'),undefined);malformedScan.unmount();
 }
-assert.match(renderReport(returnsReport),/已確認的 1% 實際輸贏本金退水不必重報/);
+assert.match(renderReport(returnsReport),/已確認的信用盤算法與 1% 實際輸贏本金退水不需重報/);
 console.log('PASS actual continuation UI: scope/date rollover pinning, GET/POST purpose, cumulative replacement, retries, duplicate fencing and malformed cursor/scope rejection');
 
 for(const patch of [{frozenAt:'2026-10-22T00:00:00Z'},{totalGames:3},{processedGames:0},{cursor:'b'.repeat(64)}]){

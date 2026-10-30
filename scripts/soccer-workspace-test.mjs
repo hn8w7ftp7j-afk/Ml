@@ -32,6 +32,16 @@ console.log('PASS football ranking: both views exclude research, low scores and 
 
 const record=soccerManualRecordFromSnapshot({...result,revision:'r1'},'q1');
 assert.equal(record.stake,10000);assert.equal(record.rebateRate,.01);assert.equal(record.calibrationEligible,false);assert.equal(record.executable,false);
+const originalSnapshot=JSON.stringify(result),policyCutoff=Date.parse('2026-10-20T09:11:48Z');
+const earlierPolicy=soccerManualRecordFromSnapshot(result,'q1',{now:policyCutoff-1});
+const confirmedPolicy=soccerManualRecordFromSnapshot(result,'q1',{now:policyCutoff});
+assert.equal(earlierPolicy.rebateBasis,'TOTAL_PRINCIPAL');
+assert.equal(confirmedPolicy.rebateBasis,'SETTLED_PRINCIPAL');
+assert.equal(confirmedPolicy.rebatePolicyAsOf,'2026-10-20T09:11:48.000Z');
+assert.equal(confirmedPolicy.rebatePolicyScope,'RECORD_CREATION_METADATA_NOT_ORIGINAL_CONTRACT');
+assert.equal(confirmedPolicy.formalEligible,false);assert.equal(confirmedPolicy.settlementStatus,'UNVERIFIED');
+assert.equal(confirmedPolicy.sourceQuote,quote);assert.equal(JSON.stringify(result),originalSnapshot);
+assert.equal(earlierPolicy.rebateBasis,'TOTAL_PRINCIPAL','later record creation cannot rewrite an earlier policy snapshot');
 for(const patch of [{period:null},{unit:'CORNERS'},{water:NaN},{provenance:{gameId:'soccer:ucl:123'}}])assert.throws(()=>soccerManualRecordFromSnapshot({...result,directions:[{quotes:[{...quote,...patch}]}]},'q1'));
 assert.throws(()=>soccerManualRecordFromSnapshot(result,'forged'));
 const fixture=await soccerSqlFixture();process.env.DATABASE_URL='postgres://fixture.invalid/workspace';delete process.env.DATABASE_V2_URL;
@@ -54,7 +64,8 @@ try{
   const cancelled=await changeSoccerManualRecordStatus('epl',date,first.record.id,'cancel');assert.equal(cancelled.record.status,'CANCELLED');
   await changeSoccerManualRecordStatus('epl',date,first.record.id,'cancel');
   const restored=await changeSoccerManualRecordStatus('epl',date,first.record.id,'restore');assert.equal(restored.record.status,'OPEN');assert.equal(restored.record.history.length,2);
-  for(const key of ['line','water','stake','recordedAt','analysisRevision','sourceQuote'])assert.deepEqual(restored.record[key],first.record[key]);
+  for(const key of ['line','water','stake','recordedAt','analysisRevision','sourceQuote','rebateRate','rebateBasis','rebatePolicyVersion','rebatePolicyAsOf','rebatePolicyScope'])assert.deepEqual(restored.record[key],first.record[key]);
+  assert.equal(first.record.rebatePolicyAsOf,first.record.recordedAt,'policy metadata uses the exact durable record creation time');
   assert.equal(soccerRecordStats([restored.record]).stake,10000);assert.equal(soccerRecordStats([cancelled.record]).stake,0);assert.equal(soccerRecordStats([restored.record]).profit,null);
   await fixture.db.query(`UPDATE sports_soccer_analysis_heads_v2 SET valid_until=now()-interval '1 second'`);
   assert.equal((await listSoccerAnalysisBoard('epl',date,date))[0].publishedCurrent,false,'restored history does not authorize expired projection');

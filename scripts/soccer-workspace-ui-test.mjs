@@ -10,6 +10,7 @@ import { soccerRecordKey,soccerRecordStats } from '../lib/soccer/manual-record.j
 import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 import { soccerValidationArtifacts } from '../lib/soccer/validation-frozen.js';
 import { soccerHalfTimeArtifacts } from '../lib/soccer/half-time-frozen.js';
+import { soccerCreditRuleConfirmation } from '../lib/soccer/credit-rule-confirmation.js';
 const source=fs.readFileSync('app/soccer/workspace.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
 const compiled=await transform(source,{filename:'workspace.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const calibrationSource=fs.readFileSync('app/soccer/calibration-panel.js','utf8').replace(/export function/g,'function');
@@ -76,7 +77,15 @@ const record={...quote,gameId:game.id,league:'epl',date:game.date,id:'id',status
 ledger={records:[record],status:'ready',date:game.date,pending:new Set()};
 assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/已下注 ✓/);
 ledger.records=[{...record,status:'CANCELLED'}];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/重新紀錄下注/);
-ledger={...ledger,league:'epl',load:()=>{},mutate:()=>{}};assert.match(renderToStaticMarkup(recordCtx.SoccerBetRecords()),/足球退水 0.01/);
+ledger={...ledger,league:'epl',load:()=>{},mutate:()=>{}};assert.match(renderToStaticMarkup(recordCtx.SoccerBetRecords()),/實際輸贏本金的 1%/);
+ledger.settlementPolicy={creditRuleConfirmation:soccerCreditRuleConfirmation('2026-10-30T15:01:39Z'),
+  missingTerms:[{code:'REGISTRATION',label:'原盤規則登錄仍待完成'}]};
+const confirmedMarkup=renderToStaticMarkup(recordCtx.SoccerBetRecords());
+for(const value of ['已確認的信用盤派彩例子','1+20','1-20','1平','淨損益 182 元','淨損益 -198 元','淨損益 0 元','走盤不退','系統證據與登錄待完成'])assert.ok(confirmedMarkup.includes(value),value);
+assert.match(confirmedMarkup,/正式 S 評分的模型校準與誤差驗證仍由系統完成/);
+assert.doesNotMatch(confirmedMarkup,/按投注金額計算|尚待核對的派彩條款|正式評分已啟用/);
+ledger.settlementPolicy.creditRuleConfirmation=soccerCreditRuleConfirmation('2026-10-30T15:01:38Z');
+assert.doesNotMatch(renderToStaticMarkup(recordCtx.SoccerBetRecords()),/已確認的信用盤派彩例子|淨損益 182 元/,'earlier receipt does not display later confirmed examples');
 ledger.records=[];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/紀錄實際下注/);
 assert.equal(recordCtx.SoccerRecordButton({game,result,quote:{...quote,period:null}}),null);
 console.log('PASS shipped record JSX: original prices, recorded/cancelled/restore states, 1% football policy and unknown-period exclusion');

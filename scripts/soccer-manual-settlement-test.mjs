@@ -127,6 +127,10 @@ let loads=0,archives=0;
 const service=await settleOpenSoccerManualRecords({now:()=>now,list:async()=>[base.record,{...base.record,id:'other',period:'HT'}],hydrate:async r=>r,
  load:async()=>{loads++;return base.result;},archive:async(r,check)=>{archives++;return{check};}});
 assert.equal(loads,1);assert.equal(archives,2);assert.equal(service.resultVerified,2);assert.equal(service.settled,0);assert.equal(service.pending,2);assert.equal(service.reasons.SOCCER_SOURCE_CONTRACT_UNVERIFIED,2);
+const currentSummary=await settleOpenSoccerManualRecords({now:()=>Date.parse('2026-10-30T15:01:39Z'),list:async()=>[]});
+assert.equal(currentSummary.missingTerms.some(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES'),false);
+assert.equal(currentSummary.settled,0);assert.equal(currentSummary.contractApproval,'SOURCE_TERMS_UNVERIFIED');
+assert.equal(service.missingTerms.some(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES'),true,'historical checks do not inherit a later rebate confirmation');
 const identityConflict=await settleOpenSoccerManualRecords({now:()=>now,list:async()=>[base.record,{...base.record,teamIds:{...base.record.teamIds,home:'soccer:epl:team:999'}}],hydrate:async r=>r,
  load:async()=>{throw Error('conflicting original identities must not fetch or select a winner');},archive:async(r,check)=>({check})});
 assert.equal(identityConflict.resultVerified,0);assert.equal(identityConflict.reasons.ORIGINAL_RECORD_TEAM_IDENTITY_CONFLICT,2);

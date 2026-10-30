@@ -3,7 +3,9 @@ import { requireApiAuth,validateSameOrigin,originErrorResponse,checkRateLimit,ra
 import { loadSoccerAnalysisRevision } from '../../../../lib/soccer/analysis-store.js';
 import { listSoccerManualRecords,archiveSoccerManualRecord,changeSoccerManualRecordStatus } from '../../../../lib/soccer/manual-record-store.js';
 import { settleOpenSoccerManualRecords } from '../../../../lib/soccer/manual-settlement-service.js';
-import { SOCCER_SETTLEMENT_MISSING_TERMS,SOCCER_PUBLIC_TERM_EVIDENCE } from '../../../../lib/soccer/settlement-contract.js';
+import { soccerSettlementMissingTerms,SOCCER_PUBLIC_TERM_EVIDENCE } from '../../../../lib/soccer/settlement-contract.js';
+import { soccerProviderPolicy } from '../../../../lib/soccer/provider-policy.js';
+import { soccerCreditRuleConfirmation } from '../../../../lib/soccer/credit-rule-confirmation.js';
 import { validSoccerDate } from '../../../../lib/soccer/contracts.js';
 export const dynamic='force-dynamic';
 export const maxDuration=30;
@@ -13,7 +15,12 @@ export async function GET(request){
   const denied=await requireApiAuth(request);if(denied)return denied;
   const rate=checkRateLimit(request,{id:'soccer-record-read',limit:90,windowMs:60000});if(!rate.allowed)return rateLimitResponse(rate);
   const q=new URL(request.url).searchParams,league=q.get('league'),date=q.get('date'),through=q.get('through')||date;
-  try{return response({ok:true,league,date,through,records:await listSoccerManualRecords(league,date,{through}),settlementPolicy:{status:'SOURCE_TERMS_UNVERIFIED',rebateRate:0.01,rebateBasis:'TOTAL_PRINCIPAL',missingTerms:SOCCER_SETTLEMENT_MISSING_TERMS,sourceEvidence:SOCCER_PUBLIC_TERM_EVIDENCE}});}catch(e){return fail(e);}
+  try{
+    const records=await listSoccerManualRecords(league,date,{through}),now=Date.now();
+    return response({ok:true,league,date,through,records,settlementPolicy:{...soccerProviderPolicy({asOf:now}),
+      status:'SOURCE_TERMS_UNVERIFIED',missingTerms:soccerSettlementMissingTerms(now),sourceEvidence:SOCCER_PUBLIC_TERM_EVIDENCE,
+      creditRuleConfirmation:soccerCreditRuleConfirmation(now)}});
+  }catch(e){return fail(e);}
 }
 export async function POST(request){
   const denied=await requireApiAuth(request);if(denied)return denied;
