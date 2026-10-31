@@ -52,6 +52,10 @@ export function SoccerScoringReadiness({result,game,now=Date.now()}){
     {readiness.status==='SCORING_BLOCKED'&&<p>已收到盤口，但下列評分依據尚未補齊，目前無法產生 S 分數。</p>}
     <p>目前符合排名 {readiness.qualifiedQuoteCount} 筆；未達門檻 {readiness.belowThresholdQuoteCount} 筆；歷史分數 {readiness.historicalScoreCount} 筆；資格待發布 {readiness.unpublishedScoreCount} 筆。</p>
     {Object.entries(owners).map(([owner,label])=>{const items=blockers.filter(item=>item.owner===owner);return items.length?<section key={owner} aria-label={label}><strong>{label}</strong><ul>{items.map(item=><li key={item.code}>{item.label}<p>{item.nextAction}</p></li>)}</ul></section>:null;})}
+    {readiness.evidenceReadiness?.blockers?.length>0&&<details className="soccerDetails" aria-label="本次分析的正式資料缺項"><summary>正式模型資料尚缺 {readiness.evidenceReadiness.blockers.length} 項</summary>
+      <p>依本次保存資料逐項核對；更新 Reader 不會補齊下列模型資料。已收到來源回報，也不代表已完成正式模型驗證。</p>
+      <ul>{readiness.evidenceReadiness.blockers.map(item=><li key={item.code}>{item.label}<ul>{item.details.map(detail=><li key={detail.code}>{detail.label}</li>)}</ul></li>)}</ul>
+    </details>}
     {readiness.unpublishedScoreCount>0&&<p>分數已計算，系統仍須核對目前原盤及發布資格；尚不列排名。</p>}
     {readiness.belowThresholdQuoteCount>0&&<p>未同時達到 S ≥ 7.2、W &gt; 0、R &gt; 0 的原盤不列排名。</p>}
     <p className="soccerMarketNote">「紀錄實際下注」只登記你已自行完成的下注，不代表通過排名，也不會送出下注。</p>
