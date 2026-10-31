@@ -20,7 +20,7 @@ assert.deepEqual(calls,[]);
 assert.deepEqual(await recoverNbaConflict(selection,{...options,reload:async id=>{if(id===1)throw Error('tab closed');calls.push(id);}}),[2]);
 assert.ok(state[KEY]);
 const quote={line:'220.5',overWater:.94,underWater:.94},row={quote:{fullTotal:quote},jobState:'ready',result:{marketAnalyses:{fullTotal:{status:'unavailable',reason:'此盤口尚未開盤'}}}};
-assert.equal(nbaMarketDisplayState(row,'fullTotal').label,'待分析','new quote must not inherit game completed badge or old unopened reason');
+assert.equal(nbaMarketDisplayState(row,'fullTotal').label,'待補分析','new quote must not inherit game completed badge or old unopened reason');
 assert.equal(nbaMarketDisplayState(row,'firstHalfTotal').label,'盤口待同步');
 assert.match(nbaMarketDisplayState(row,'firstHalfTotal').message,/不代表莊家尚未開盤/);
 row.result.marketAnalyses.fullTotal={status:'ready',quote:{...quote}};
