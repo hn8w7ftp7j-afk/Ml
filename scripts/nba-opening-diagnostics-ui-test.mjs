@@ -120,18 +120,41 @@ const unopened = render(rowFor(resultFor({}), {}));
 assert.match(unopened, /尚無可分析市場/);
 assert.doesNotMatch(unopened, /市場驗證未通過|未通過原因與驗證數據|待驗證，暫不計分/, 'no quote does not mean a failed validation');
 const unanalysed = render({ ...rowFor(null), jobState: undefined });
-assert.match(unanalysed, /尚未分析/);
+assert.match(unanalysed, /待補分析/);
+assert.doesNotMatch(unanalysed, /部分市場已分析/);
 assert.doesNotMatch(unanalysed, /歷史驗證數據|開季平均誤差|0\.25495/);
-
-console.log('PASS NBA diagnostic UI: shipped JSX, actual failed checks and baselines, mixed readiness, totals-only rows, unchanged accepted scores, missing/foreign/unavailable/blocked states and collapsed responsive table semantics');
 
 // A newly received total must not inherit the successful spread job status.
 const oldMissing = structuredClone(result);
+oldMissing.generatedAt = '2026-10-20T21:45:00Z';
 oldMissing.quotes.fullTotal = null;
 oldMissing.marketAnalyses.fullTotal = {status:'unavailable',reason:'此盤口尚未開盤'};
 const recoveredQuote = render(rowFor(oldMissing));
 const pendingTotal = marketBlock(recoveredQuote, '全場大小', '全場讓分');
 assert.match(pendingTotal, /此市場已有盤口，但尚無對應分析/);
-assert.match(pendingTotal, /待分析/);
+assert.match(pendingTotal, /待補分析/);
 assert.doesNotMatch(pendingTotal, /已分析|此盤口尚未開盤|估計勝率|>W /);
 assert.match(recoveredQuote, /尚未收到此市場的有效盤口；不代表莊家尚未開盤/);
+assert.match(recoveredQuote, /<span class="state unopened">部分市場已分析<\/span>/, 'a ready spread cannot imply that the newly received total was analysed');
+assert.match(recoveredQuote, /全場大小待補分析。請按「分析全部 NBA」或本場分析按鈕補齊/);
+assert.match(recoveredQuote, /盤口 10\/21\s+06:00｜分析 10\/21\s+05:45/, 'quote observation and analysis generation have separate visible timestamps');
+for (const [jobState, label] of [['running', '分析中'], ['queued', '排隊中'], ['failed', '分析失敗'], ['blocked', '核對未通過']]) {
+  const ongoing = render({ ...rowFor(oldMissing), jobState });
+  assert.match(ongoing, new RegExp(`<span class="state [^"]*">${label}<\\/span>`), 'gap display cannot conceal an active job or its failure');
+}
+
+// The screenshot case: stored analysis had no half markets, then Reader sent
+// both half contracts. Display the gap while preserving every earlier value.
+const halfQuotes = { ...quotes, firstHalfTotal: { line: '123.5', overWater: .93, underWater: .93 },
+  firstHalfRunline: { line: '2.5', lineSide: 'away', homeWater: .94, awayWater: .94 } };
+const before = JSON.stringify(result);
+const halfGap = render(rowFor(result, halfQuotes));
+assert.match(halfGap, /<span class="state unopened">部分市場已分析<\/span>/);
+assert.match(halfGap, /上半大小、上半讓分待補分析/);
+for (const [label, nextLabel] of [['上半大小', '上半讓分'], ['上半讓分', 'unused']]) {
+  const block = marketBlock(halfGap, label, nextLabel);
+  assert.match(block, /待補分析/);
+  assert.doesNotMatch(block, /估計勝率|>W /, 'display must not synthesize estimates for a newly received quote');
+}
+assert.equal(JSON.stringify(result), before, 'coverage display never mutates stored model estimates');
+console.log('PASS NBA diagnostic UI: shipped JSX, actual failed checks and baselines, mixed readiness, totals-only rows, unchanged accepted scores, new-market gaps and distinct observation/analysis times, missing/foreign/unavailable/blocked states and collapsed responsive table semantics');

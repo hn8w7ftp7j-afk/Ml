@@ -83,6 +83,9 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   const opening = result?.openingAnalysis;
   const validationPending = opening ? Object.entries(result?.marketAnalyses || {}).filter(([key, market]) => market?.status === 'insufficient' && openingValidationView(market?.validationDiagnostics, key)?.status === 'FAIL').map(([key]) => openingMarketLabels[key]) : [];
   const estimatedMarkets = opening ? Object.entries(result?.marketAnalyses || {}).filter(([key, market]) => openingMarketLabels[key] && market?.status === 'ready').map(([key]) => openingMarketLabels[key]) : [];
+  const pendingMarkets = Object.entries(openingMarketLabels).filter(([key]) => row.quote?.[key] && nbaMarketDisplayState(row, key).label === '待補分析').map(([, label]) => label);
+  const hasMarketEstimate = Object.values(result?.marketAnalyses || {}).some(market => market?.status === 'ready');
+  const pendingAnalysis = pendingMarkets.length > 0 && !['queued', 'running', 'failed', 'blocked'].includes(row.jobState);
   const noOpeningMarket = opening && result.status === 'insufficient' && !validationPending.length;
   const reference = result?.status === 'reference' ? result.referencePrediction : null;
   const current = nbaResultQuoteCurrent(row, now);
@@ -90,8 +93,9 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     && now - Date.parse(row.pageActivityAt || row.observedAt) < 180000 && Date.parse(row.game.startTime) > now;
   return <section className="gameCard" data-nba-game={row.game.id}>
     <div className="gameHead"><div><h2>{name(row.game.away)}（客）@ {name(row.game.home)}（主）</h2><p>{localTime(row.game.startTime)}（台灣）｜{row.game.season?.label}｜{({ preseason: '季前賽', regular: '例行賽', postseason: '季後賽' })[row.game.seasonType] || '賽事類型待核對'}</p></div>
-      <span className={`state ${validationPending.length ? 'unopened' : row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{validationPending.length ? estimatedMarkets.length ? '部分市場已分析' : '市場驗證未通過' : noOpeningMarket ? '尚無可分析市場' : statusText(row.jobState)}</span></div>
-    <p className="nbaQuoteTime">{row.observedAt ? `盤口 ${localTime(row.observedAt)}` : '盤口待同步'}</p>
+      <span className={`state ${pendingAnalysis || validationPending.length ? 'unopened' : row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{pendingAnalysis ? hasMarketEstimate ? '部分市場已分析' : '待補分析' : validationPending.length ? estimatedMarkets.length ? '部分市場已分析' : '市場驗證未通過' : noOpeningMarket ? '尚無可分析市場' : statusText(row.jobState)}</span></div>
+    <p className="nbaQuoteTime">{row.observedAt ? `盤口 ${localTime(row.observedAt)}` : '盤口待同步'}{result?.generatedAt && `｜分析 ${localTime(result.generatedAt)}`}</p>
+    {pendingMarkets.length > 0 && <p className="muted">{pendingMarkets.join('、')}待補分析。請按「分析全部 NBA」或本場分析按鈕補齊。</p>}
     {opening && <p className="muted">開季分析｜上一季基準＋本季表現。{estimatedMarkets.length > 0 && `${estimatedMarkets.join('、')}已產生估計。`}{validationPending.length > 0 ? `${validationPending.join('、')}待驗證，暫不計分。` : '未開盤或核對未完成的市場不產生估計。'}</p>}
     {reference && <p className="muted">跨季基準，尚未校正。</p>}
     {(prediction || reference) && <details className="rankingDetails"><summary>比分預估與樣本</summary>
