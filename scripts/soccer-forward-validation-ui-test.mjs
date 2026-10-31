@@ -38,6 +38,25 @@ const empty=renderReport(report());assert.match(empty,/尚無方案啟用後的�
 const infinite=renderReport(report('epl',[{...group,properScores:{...group.properScores,logLoss:null,logLossState:'POSITIVE_INFINITY'}}]));assert.match(infinite,/\+∞（實際結果曾被預估為零機率）/);
 const truncated=renderReport({...report(),truncated:true,complete:false});assert.match(truncated,/請用上方日期範圍縮小查詢/);
 
+const replay={version:'SOCCER-RETROSPECTIVE-CONFIRMED-RULE-PAYOFF-v1',status:'PARTIAL',
+ selectedQuoteObservations:12,replayedQuoteObservations:10,exactPredictedQuoteReturns:6,boundedPredictedQuoteReturns:4,
+ pendingQuoteObservations:2,quarantinedQuoteObservations:0,uniqueReplayedGames:3,invalidOriginalQuotes:5,
+ completeWithinRequestedScope:false,accountSettlementVerified:false,historicalContractVerified:false,verifiedAtOriginalCutoff:false,
+ formalEligible:false,calibrationEligible:false,promotionEligible:false,executable:false,W:null,R:null,S:null,empiricalErrorMargin:null};
+const replayText=renderReport({...report(),retrospectivePayoffReplay:replay});
+assert.match(replayText,/有效原盤 12 筆｜已重播 10 筆｜待核對 2 筆/);
+assert.match(replayText,/可精確計算 6 筆；保留收益區間 4 筆/);
+assert.match(replayText,/另有原始盤口未通過核對 5 筆/);
+assert.match(replayText,/本次重播範圍尚未完整/);
+assert.match(replayText,/尚未確認為帳戶實際派彩/);assert.match(replayText,/不直接作為正式 R 或 S/);
+assert.match(renderReport({...report(),retrospectivePayoffReplay:{...replay,completeWithinRequestedScope:true}}),/本次範圍已完成重播核對/);
+for(const patch of [{selectedQuoteObservations:13},{exactPredictedQuoteReturns:7},{pendingQuoteObservations:-1},{R:0},{accountSettlementVerified:true}]){
+ const rejected=renderReport({...report(),retrospectivePayoffReplay:{...replay,...patch}});
+ assert.match(rejected,/未顯示未確認的筆數/);assert.doesNotMatch(rejected,/有效原盤 12 筆/);
+}
+const legacyReplay=renderReport({...report(),retrospectivePayoffReplay:{...replay,status:'NOT_VERIFIED_LEGACY_SCAN'}});
+assert.match(legacyReplay,/此舊批次尚未核對收益重播/);assert.doesNotMatch(legacyReplay,/有效原盤 12 筆/);
+
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):String(value??'');
 function harness({league='epl',throwFirst=false,deferUpdaters=false}={}){

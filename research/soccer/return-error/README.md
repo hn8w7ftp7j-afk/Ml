@@ -13,6 +13,28 @@ match outcome. It is not uncertainty of conditional expected profit and cannot
 be substituted into formal football R or S. Every artifact remains NOT_ACCEPTED,
 with formal eligibility, promotion and execution disabled.
 
+## Separate retrospective credit-rule replay
+
+`lib/soccer/retrospective-payoff.js` replays actual archived predictions and
+original Reader prices against archived, crosschecked results using the current
+user-confirmed credit arithmetic and 1% settled-principal rebate. It records the
+rule application time separately from the original prediction and quote times.
+This is hypothetical retrospective arithmetic, not observed account profit or a
+contract that was verified before the original prediction.
+
+The durable forward scanner exposes this compact summary as
+`retrospectivePayoffReplay`, separately from the strict `marketReturnValidation`
+and `returnErrorResearch` datasets. Exact and unresolved-tail forecasts remain
+separate; bounds are propagated outward without midpoints or renormalization.
+Repeated prices are deduplicated and changed results quarantine the real game.
+The response contains grouped statistics, never raw account/device/quote rows.
+
+Every replay retains false account, historical-contract and formal-eligibility
+flags and null W/R/S/error margins. A replayed quote is not admitted into the
+formal return-error fitter. A partial scan or a cursor with older, unreplayed
+contributions cannot claim complete replay coverage; start a fresh scan to
+recompute those derived contributions from the unchanged original evidence.
+
 ## Source admission
 
 The dataset reuses the first valid database prediction per economic original
