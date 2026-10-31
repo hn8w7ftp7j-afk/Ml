@@ -31,6 +31,10 @@ for(const league of ['epl','ucl']){
   assert.equal(result.scoreReadiness.status,'SCORING_BLOCKED');
   assert.equal(result.scoreReadiness.quoteCount,2);
   assert.equal(result.scoreReadiness.scoredQuoteCount,0,'real shipped path must report zero, never the synthetic test score');
+  assert.equal(result.scoringSystemReadiness.status,'BLOCKED');
+  assert.equal(result.scoringSystemReadiness.league,league);
+  assert.ok(result.scoringSystemReadiness.blockers.some(value=>value.code==='RUNTIME_INPUTS'));
+  assert.equal(result.scoreReadiness.evidenceReadiness.status,'BLOCKED');
   assert.ok(result.scoreReadiness.blockers.some(value=>value.code==='SETTLEMENT_CONTRACT'));
   assert.ok(result.scoreReadiness.blockers.some(value=>value.code==='FOOTBALL_UNCERTAINTY'));
   assert.deepEqual(result.scoreReadiness,soccerScoringReadiness(result,now));
@@ -82,8 +86,14 @@ for(const league of ['epl','ucl']){
   assert.equal(renderToStaticMarkup(ctx.SoccerScenarioResearch({result:research,game:{...upcoming,neutralSite:!upcoming.neutralSite},now:scenarioNow})), '');
   assert.match(scenarioMarkup,/不是信賴區間/);assert.match(scenarioMarkup,/不代表正式收益誤差與 W／R／S 已驗證/);
   assert.equal(research.formalScoringEnabled,false);assert.equal(research.directions.flatMap(d=>d.quotes).length,0);
+  assert.ok(research.scoreReadiness.evidenceReadiness.blockers.length>0,'missing formal model evidence must remain visible without any Reader quote');
+  assert.ok(research.scoreReadiness.evidenceReadiness.blockers.some(item=>item.field==='weather'));
+  assert.deepEqual(soccerScoringReadiness(research,scenarioNow+180001).evidenceReadiness,research.scoreReadiness.evidenceReadiness,
+    'later viewing does not rewrite evidence availability at the saved analysis cutoff');
   const noQuotesMarkup=renderToStaticMarkup(ctx.SoccerMarketDirections({result:research,game:upcoming,now:scenarioNow}));
   assert.match(noQuotesMarkup,/本場參數變動研究/,'actual research work remains visible before original prices arrive');
+  assert.match(noQuotesMarkup,/本次分析的正式資料缺項/);
+  assert.match(noQuotesMarkup,/更新 Reader 不會補齊下列模型資料/);
   assert.match(renderToStaticMarkup(ctx.SoccerScenarioResearch({result:research,game:upcoming,now:scenarioNow+180001})),/已保存的參數變動研究/);
   for(const patch of [{gameId:'soccer:epl:999'},{formalEnabled:true},{createdAt:scenarioStart},{artifactHash:'invalid'}])
     assert.equal(renderToStaticMarkup(ctx.SoccerScenarioResearch({result:{...research,scenarioResearch:{...research.scenarioResearch,...patch}},game:upcoming,now:scenarioNow})), '');

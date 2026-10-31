@@ -1,6 +1,6 @@
 {
   "name": "mlb-positive-ev",
-  "version": "11.10.61",
+  "version": "11.10.62",
   "private": true,
   "type": "module",
   "engines": {
@@ -17,7 +17,7 @@
     "test:nba-opening-diagnostics": "node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/nba-opening-diagnostics-test.mjs && node scripts/nba-opening-diagnostics-ui-test.mjs && node scripts/nba-opening-history-acquisition-test.mjs && node scripts/nba-opening-history-evidence-test.mjs && node scripts/nba-opening-research-test.mjs && npm run test:nba-opening-v3 && npm run test:nba-opening-v4 && npm run test:nba-opening-v5 && npm run test:nba-opening-v6",
     "nba:opening-research": "node scripts/nba-opening-research.mjs",
     "test:screen-awake": "node scripts/screen-awake-test.mjs",
-    "pretest:soccer": "npm run test:soccer-reader-diagnostics && npm run test:soccer-workspace",
+    "pretest:soccer": "npm run test:soccer-reader-diagnostics && npm run test:soccer-workspace && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-system-readiness-test.mjs && node scripts/soccer-formal-evidence-readiness-test.mjs",
     "test:soccer-reader-diagnostics": "node scripts/soccer-reader-fresh-board-test.mjs && node scripts/soccer-reader-diagnostics-test.mjs",
     "test:soccer-workspace": "node scripts/main-sport-navigation-test.mjs && node scripts/soccer-main-workspace-ui-test.mjs && node scripts/soccer-workspace-test.mjs && node scripts/soccer-workspace-ui-test.mjs && node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/soccer-workspace-api-test.mjs",
     "test:league-bet-status": "node scripts/soccer-league-bet-status-test.mjs && node scripts/league-bet-status-test.mjs && node scripts/nba-league-bet-status-test.mjs",
