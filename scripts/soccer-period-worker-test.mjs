@@ -47,11 +47,11 @@ assert.deepEqual(readerPayloadsByDate({league:'EPL',games:[],periodsCovered:['FT
 
 const event={addListener(){}};
 class Clock extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
-async function execute(captures,{failPeriod=null,withDiagnostics=false}={}){
-  const state={readerToken:'synthetic-period-worker-token',deviceId:'synthetic-period-worker-device',autoEnabled:true,...(withDiagnostics?{pairedAt:at}:{})},uploads=[],diagnosticReports=[];
+async function execute(captures,{failPeriod=null,withDiagnostics=false,enableRecovery=false}={}){
+  const state={readerToken:'synthetic-period-worker-token',deviceId:'synthetic-period-worker-device',autoEnabled:true,...(withDiagnostics?{pairedAt:at}:{})},uploads=[],diagnosticReports=[],reloadCalls=[];
   let shouldFail=failPeriod;
-  const tabs=captures.map((capture,index)=>({id:index+1,active:index===0,lastAccessed:index+1}));
-  const chrome={runtime:{onInstalled:event,onStartup:event,onMessage:event},alarms:{onAlarm:event},tabs:{onUpdated:event,query:async()=>tabs,sendMessage:async(tabId)=>({ok:true,capture:{readerVersion:version,captures:[captures[tabId-1]]}})},webNavigation:{getAllFrames:async()=>[{frameId:0}]},storage:{local:{get:async()=>structuredClone(state),set:async value=>Object.assign(state,value),remove:async key=>{delete state[key];}}}};
+  const tabs=captures.map((capture,index)=>({id:index+1,active:index===0,lastAccessed:index+1,...(enableRecovery?{url:'https://www.tai888.in/newapp/#/BS'}:{})}));
+  const chrome={runtime:{onInstalled:event,onStartup:event,onMessage:event},alarms:{onAlarm:event},tabs:{onUpdated:event,query:async()=>tabs,reload:async id=>reloadCalls.push(id),sendMessage:async(tabId)=>({ok:true,capture:{readerVersion:version,captures:[captures[tabId-1]]}})},webNavigation:{getAllFrames:async()=>[{frameId:0}]},storage:{local:{get:async()=>structuredClone(state),set:async value=>Object.assign(state,value),remove:async keys=>{for(const key of Array.isArray(keys)?keys:[keys])delete state[key];}}}};
   const worker=vm.createContext({chrome,Date:Clock,URL,setTimeout,clearTimeout,queueMicrotask,TextEncoder,AbortController,crypto:webcrypto,
     createDiagnosticOutbox,DIAGNOSTIC_ALARM,DIAGNOSTIC_SCHEMA,parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,selectAuthoritativeSoccerBoards,shouldSkipSuccessfulPayload,readerPayloadsByDate,
     fetch:async(url,options)=>{
@@ -68,7 +68,7 @@ async function execute(captures,{failPeriod=null,withDiagnostics=false}={}){
   vm.runInContext(backgroundSource.replace(/^import .*?;\n/gm,''),worker);
   const run=reason=>vm.runInContext(`performSync('${reason}')`,worker);
   const first=await run('manual');
-  return{state,uploads,diagnosticReports,run,first,clearFailure(){shouldFail=null;}};
+  return{state,uploads,diagnosticReports,reloadCalls,run,first,clearFailure(){shouldFail=null;}};
 }
 const separateWorker=await execute([ft,ht]);
 assert.equal(separateWorker.first.ok,true,JSON.stringify(separateWorker.state.readerStatuses.EPL));assert.equal(separateWorker.uploads.length,2);
@@ -121,3 +121,40 @@ assert.deepEqual(sanitizeDiagnosticReport(wireDiagnostic).leagues.EPL.authority,
 assert.equal(diagnosticWorker.state.diagnosticDelivery.state,'sent');
 assert.doesNotMatch(JSON.stringify(authority),/tai888\.in|synthetic-period-worker|rawRows|水晶宮|白禮頓|tabId|frameId/);
 console.log('PASS actual rejected soccer worker → automatic diagnostic outbox → API allow-list: exact date/period/line/price evidence, durable ACK and zero market uploads');
+
+const mutableSources=[ft,changed,ht];
+const recoveryWorker=await execute(mutableSources,{withDiagnostics:true,enableRecovery:true});
+assert.deepEqual(recoveryWorker.reloadCalls,[1,2],'only disagreeing FT sources reload; a valid HT tab is untouched');
+assert.equal(recoveryWorker.uploads.length,0,'requesting reload never grants authority to the conflicting capture');
+assert.equal(recoveryWorker.state.readerStatuses.EPL.conflictRecovery.state,'REQUESTED');
+assert.deepEqual(recoveryWorker.diagnosticReports[0].leagues.EPL.conflictRecovery,
+  sanitizeDiagnosticReport(recoveryWorker.diagnosticReports[0]).leagues.EPL.conflictRecovery,'automatic repair evidence survives the actual diagnostic upload allow-list');
+await recoveryWorker.run('alarm');
+assert.deepEqual(recoveryWorker.reloadCalls,[1,2]);
+assert.equal(recoveryWorker.uploads.length,0,'persistent true prices remain rejected after refresh');
+assert.equal(recoveryWorker.state.readerStatuses.EPL.conflictRecovery.state,'ALREADY_ATTEMPTED');
+assert.ok(recoveryWorker.state['soccerConflictRecoveryV1:EPL:2026-10-19:FT']);
+mutableSources[1]=ft;
+recoveryWorker.state['soccerConflictRecoveryV1:UCL:2026-10-19:FT']={at:now,attemptedTabCount:2,refreshedTabCount:2};
+recoveryWorker.state['soccerConflictRecoveryV1:EPL:2026-10-20:FT']={at:now,attemptedTabCount:2,refreshedTabCount:2};
+await recoveryWorker.run('alarm');
+assert.equal(recoveryWorker.uploads.length,2,'only fresh mutually consistent sources can pass existing live-ingest gates');
+assert.equal(recoveryWorker.state.readerStatuses.EPL.ok,true);
+assert.equal(recoveryWorker.state['soccerConflictRecoveryV1:EPL:2026-10-19:FT'],undefined,'successful live save closes only the resolved dated period incident');
+assert.ok(recoveryWorker.state['soccerConflictRecoveryV1:UCL:2026-10-19:FT'],'EPL live success cannot rearm a UCL incident');
+assert.ok(recoveryWorker.state['soccerConflictRecoveryV1:EPL:2026-10-20:FT'],'one board date cannot rearm another date');
+mutableSources[1]=changed;
+await recoveryWorker.run('alarm');
+assert.deepEqual(recoveryWorker.reloadCalls,[1,2,1,2],'a new conflict can recover after the previous one was actually saved');
+assert.equal(recoveryWorker.uploads.length,2,'new conflicting captures cannot reuse prior live success to upload');
+const partialRecoverySources=[ft,changed,ht];
+const partialRecovery=await execute(partialRecoverySources,{enableRecovery:true,failPeriod:'HT'});
+partialRecoverySources[1]=ft;
+await partialRecovery.run('alarm');
+assert.equal(partialRecovery.state.readerStatuses.EPL.ok,false);
+assert.ok(partialRecovery.state['soccerConflictRecoveryV1:EPL:2026-10-19:FT'],'a partially saved scan cannot close the recovery incident');
+partialRecovery.clearFailure();
+await partialRecovery.run('manual');
+assert.equal(partialRecovery.state.readerStatuses.EPL.ok,true);
+assert.equal(partialRecovery.state['soccerConflictRecoveryV1:EPL:2026-10-19:FT'],undefined);
+console.log('PASS real soccer worker: responsive conflict → bounded reload → fresh recheck → persistent rejection or live ACK → incident reset, with automatic repair diagnostics');

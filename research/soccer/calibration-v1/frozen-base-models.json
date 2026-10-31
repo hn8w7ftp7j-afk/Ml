@@ -1,0 +1,706 @@
+{
+  "epl": {
+    "model": {
+      "version": "SOCCER-POISSON-DC-RESEARCH-v1",
+      "league": "epl",
+      "period": "REGULATION_FT",
+      "cutoff": "2026-10-18T00:00:00.000Z",
+      "trainedThrough": "2026-10-12T19:00:00.000Z",
+      "trainingCount": 2185,
+      "trainingHash": "2df930f58bf63584945ade7f882f4da35d038876d6f880f6485845db2651459a",
+      "halfLifeDays": 730,
+      "penalty": 0.002,
+      "intercept": 0.22694910003043609,
+      "homeEffect": 0.17375208254587093,
+      "rho": -0.05,
+      "coefficients": {
+        "301": {
+          "attack": 0.058596551537603785,
+          "defence": 0.3563496037395867
+        },
+        "306": {
+          "attack": 0.05443125024115596,
+          "defence": -0.3145661066547268
+        },
+        "331": {
+          "attack": 0.20446213585920486,
+          "defence": -0.1317966775026746
+        },
+        "337": {
+          "attack": 0.17615450060098767,
+          "defence": -0.08203879794337428
+        },
+        "349": {
+          "attack": 0.09897814619858014,
+          "defence": -0.026744578073071984
+        },
+        "357": {
+          "attack": 0.006770259944905774,
+          "defence": 0.0063048681694343285
+        },
+        "359": {
+          "attack": 0.3887646638574549,
+          "defence": -0.5379128531531537
+        },
+        "360": {
+          "attack": 0.17078670672778323,
+          "defence": -0.1183952728212983
+        },
+        "361": {
+          "attack": 0.2506411126956389,
+          "defence": -0.06036074640919515
+        },
+        "362": {
+          "attack": 0.15625894429137033,
+          "defence": -0.10391379410826132
+        },
+        "363": {
+          "attack": 0.2505683509574645,
+          "defence": -0.1289089988444115
+        },
+        "364": {
+          "attack": 0.39641856097202366,
+          "defence": -0.24785541789341028
+        },
+        "366": {
+          "attack": -0.12623431189615103,
+          "defence": -0.12496526031609623
+        },
+        "367": {
+          "attack": 0.17354994777228677,
+          "defence": 0.014144889861089133
+        },
+        "368": {
+          "attack": -0.14054034191105488,
+          "defence": -0.1702026140892562
+        },
+        "370": {
+          "attack": 0.006027945783856457,
+          "defence": -0.0798144560382922
+        },
+        "371": {
+          "attack": 0.021738062622129482,
+          "defence": 0.06010264752452104
+        },
+        "373": {
+          "attack": -0.1558900644746681,
+          "defence": 0.319096904673378
+        },
+        "375": {
+          "attack": -0.09302596958566027,
+          "defence": 0.18642670415962867
+        },
+        "376": {
+          "attack": -0.38761137260770107,
+          "defence": 0.2904557381703093
+        },
+        "379": {
+          "attack": -0.22668665939614482,
+          "defence": 0.18587520513962397
+        },
+        "380": {
+          "attack": -0.2144433551827037,
+          "defence": 0.06710497296636012
+        },
+        "381": {
+          "attack": -0.5690638976190239,
+          "defence": 0.3433056180313255
+        },
+        "382": {
+          "attack": 0.527111360699249,
+          "defence": -0.46667410825264033
+        },
+        "383": {
+          "attack": -0.12558981619030934,
+          "defence": 0.16692737453518824
+        },
+        "384": {
+          "attack": -0.030956005045955783,
+          "defence": -0.08793826552728365
+        },
+        "388": {
+          "attack": -0.1755788387267927,
+          "defence": 0.021560321306315373
+        },
+        "393": {
+          "attack": -0.00044856994765803864,
+          "defence": -0.07797913580077209
+        },
+        "395": {
+          "attack": -0.33206980636270594,
+          "defence": 0.2709328221157186
+        },
+        "398": {
+          "attack": -0.36505032914869473,
+          "defence": 0.46954857570191183
+        }
+      },
+      "fit": {
+        "converged": true,
+        "iterations": 3990,
+        "gradientNorm": 9.916848540549204e-7,
+        "rhoScores": [
+          {
+            "rho": -0.15,
+            "valid": true,
+            "conditionalLoss": 0.0015474626305837652
+          },
+          {
+            "rho": -0.1,
+            "valid": true,
+            "conditionalLoss": -0.0004070166264625891
+          },
+          {
+            "rho": -0.05,
+            "valid": true,
+            "conditionalLoss": -0.0009057361087728126
+          },
+          {
+            "rho": 0,
+            "valid": true,
+            "conditionalLoss": 0
+          },
+          {
+            "rho": 0.05,
+            "valid": true,
+            "conditionalLoss": 0.0023159256671063267
+          },
+          {
+            "rho": 0.1,
+            "valid": true,
+            "conditionalLoss": 0.0061054752502012
+          },
+          {
+            "rho": 0.15,
+            "valid": true,
+            "conditionalLoss": 0.011501887461743389
+          }
+        ],
+        "dependenceFit": "CONDITIONAL_TRAINING_GRID"
+      },
+      "status": "RESEARCH_ONLY",
+      "executable": false,
+      "missing": [
+        "NO_XG_OR_PLAYER_EFFECTS",
+        "NO_DOMESTIC_CROSS_LEAGUE_MAPPING",
+        "NO_VERIFIED_HALF_TIME_MODEL",
+        "RETROSPECTIVE_AVAILABILITY_UNVERIFIED"
+      ]
+    },
+    "halfTimeModel": {
+      "version": "SOCCER-HT-FT-CONDITIONAL-BINOMIAL-v1",
+      "protocolVersion": "SOCCER-HT-PAST-ONLY-WEIGHTED-MLE-v1",
+      "league": "epl",
+      "period": "REGULATION_HT",
+      "cutoff": "2026-10-18T00:00:00.000Z",
+      "halfLifeDays": 730,
+      "trainedThrough": "2026-10-12T19:00:00.000Z",
+      "inputCount": 2185,
+      "uniqueInputCount": 2185,
+      "trainingCount": 2182,
+      "excludedCount": 3,
+      "excluded": [
+        {
+          "eventId": "740675",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        },
+        {
+          "eventId": "740876",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        },
+        {
+          "eventId": "740882",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        }
+      ],
+      "coverage": 0.9986270022883296,
+      "trainingHash": "8a34667ec0adac59c51924e300a335871a2e337e650cd2068e14d76210cfe02c",
+      "inputHash": "ac26c4697d7516ba65cf20d9f5e86f9c59ceac11a1c34e96d38763df06e22c88",
+      "shares": {
+        "home": 0.45622755405082516,
+        "away": 0.4229215775428096
+      },
+      "weightedExposure": {
+        "homeGoals": 1430.468927034536,
+        "awayGoals": 1198.472662166571,
+        "homeHalfGoals": 652.6193397266746,
+        "awayHalfGoals": 506.8599489254169,
+        "matchWeightSum": 905.8344870433223
+      },
+      "estimator": "TIME_WEIGHTED_CONDITIONAL_BINOMIAL_MLE_RATIO_OF_GOAL_SUMS",
+      "status": "RESEARCH_ONLY",
+      "formalEnabled": false,
+      "executable": false,
+      "assumptions": [
+        "CONSTANT_ROLE_SPECIFIC_HALF_TIME_SHARE",
+        "CONDITIONAL_INDEPENDENT_BINOMIAL_ALLOCATIONS_GIVEN_FULL_TIME",
+        "REGULATION_PERIODS_INCLUDE_THEIR_OWN_STOPPAGE_TIME"
+      ],
+      "missing": [
+        "NO_SCORE_STATE_DEPENDENT_TIMING",
+        "NO_EVENT_PROCESS_OR_PLAYER_EFFECTS",
+        "RETROSPECTIVE_AVAILABILITY_UNVERIFIED"
+      ]
+    },
+    "modelCreatedAt": "2026-10-19T08:34:51.515Z",
+    "halfTimeModelCreatedAt": "2026-10-19T08:35:01.055Z"
+  },
+  "ucl": {
+    "model": {
+      "version": "SOCCER-POISSON-DC-RESEARCH-v1",
+      "league": "ucl",
+      "period": "REGULATION_FT",
+      "cutoff": "2026-10-18T00:00:00.000Z",
+      "trainedThrough": "2026-10-14T19:00:00.000Z",
+      "trainingCount": 805,
+      "trainingHash": "8940a35423495513f6de4b1d5ea8b587f4f1f44e3e148a8dc24ec9be960ff546",
+      "halfLifeDays": 365,
+      "penalty": 0.01,
+      "intercept": 0.2834920029962272,
+      "homeEffect": 0.2967437913096897,
+      "rho": 0.05,
+      "coefficients": {
+        "83": {
+          "attack": 0.6169031047578277,
+          "defence": -0.15755148291227397
+        },
+        "86": {
+          "attack": 0.544299066477696,
+          "defence": -0.19496598760708195
+        },
+        "89": {
+          "attack": -0.12298849825856324,
+          "defence": -0.30134460295143745
+        },
+        "93": {
+          "attack": -0.14037669406312012,
+          "defence": -0.06603321128391766
+        },
+        "102": {
+          "attack": -0.1686308793308612,
+          "defence": 0.22204146715405865
+        },
+        "103": {
+          "attack": -0.15822509272679788,
+          "defence": -0.296071637583224
+        },
+        "104": {
+          "attack": 0.12306901694569182,
+          "defence": 0.26035643970108385
+        },
+        "105": {
+          "attack": 0.07754633127395805,
+          "defence": -0.08042038289245379
+        },
+        "107": {
+          "attack": -0.35189422663859354,
+          "defence": -0.2833796101057466
+        },
+        "110": {
+          "attack": 0.098860293921102,
+          "defence": -0.31729834276437624
+        },
+        "111": {
+          "attack": 0.07614647433269943,
+          "defence": -0.18371301680850902
+        },
+        "112": {
+          "attack": -0.13572671255679641,
+          "defence": -0.22731619368042322
+        },
+        "114": {
+          "attack": -0.22856104589504417,
+          "defence": 0.03750402334097942
+        },
+        "124": {
+          "attack": 0.22937390896925197,
+          "defence": -0.14565896720490618
+        },
+        "125": {
+          "attack": -0.18813730453905558,
+          "defence": 0.23068981194942442
+        },
+        "131": {
+          "attack": -0.016113110816868094,
+          "defence": -0.27773366670206096
+        },
+        "132": {
+          "attack": 0.6733482819425811,
+          "defence": -0.37972498448003505
+        },
+        "134": {
+          "attack": 0.13363668157055755,
+          "defence": -0.13406035243085498
+        },
+        "138": {
+          "attack": -0.06791701352490015,
+          "defence": 0.025435096647433496
+        },
+        "139": {
+          "attack": -0.1967338926215737,
+          "defence": 0.41618990910369785
+        },
+        "142": {
+          "attack": 0.1742821398150602,
+          "defence": 0.21668778985863588
+        },
+        "148": {
+          "attack": 0.15246223880311133,
+          "defence": 0.014078934072496784
+        },
+        "160": {
+          "attack": 0.7046747704644839,
+          "defence": -0.4284280686601302
+        },
+        "166": {
+          "attack": 0.09786985775425451,
+          "defence": -0.03514101605833121
+        },
+        "174": {
+          "attack": 0.006811425467218778,
+          "defence": -0.08609351160857134
+        },
+        "175": {
+          "attack": -0.06894746894242164,
+          "defence": 0.20888234430716426
+        },
+        "176": {
+          "attack": -0.07596171928394063,
+          "defence": -0.055242903650097874
+        },
+        "243": {
+          "attack": -0.11497390370488296,
+          "defence": 0.027509878788397155
+        },
+        "244": {
+          "attack": 0.5118881335970893,
+          "defence": 0.12854827245870237
+        },
+        "256": {
+          "attack": -0.14555131960685233,
+          "defence": -0.02239452959418533
+        },
+        "257": {
+          "attack": -0.17372863898287083,
+          "defence": 0.2644063842708633
+        },
+        "268": {
+          "attack": -0.022467090872864158,
+          "defence": -0.0009802087535700822
+        },
+        "359": {
+          "attack": 0.3531073253109108,
+          "defence": -1.0362099531536466
+        },
+        "360": {
+          "attack": 0.1267077873311334,
+          "defence": -0.17993480360164407
+        },
+        "361": {
+          "attack": 0.3397478071148697,
+          "defence": -0.22714459035454448
+        },
+        "362": {
+          "attack": 0.49208192790344446,
+          "defence": -0.4392580657549991
+        },
+        "363": {
+          "attack": 0.15037792014415974,
+          "defence": -0.1527493309332237
+        },
+        "364": {
+          "attack": 0.36625350795033473,
+          "defence": -0.452884858665842
+        },
+        "367": {
+          "attack": 0.25944891947692106,
+          "defence": -0.2035856713857326
+        },
+        "382": {
+          "attack": 0.2748706801832744,
+          "defence": -0.21562507835994413
+        },
+        "432": {
+          "attack": -0.03519367599218227,
+          "defence": 0.04749290440903841
+        },
+        "433": {
+          "attack": -0.27977599660326485,
+          "defence": 0.3069906373169337
+        },
+        "435": {
+          "attack": -0.2463816274436131,
+          "defence": -0.10873198856049081
+        },
+        "436": {
+          "attack": -0.44776416425470444,
+          "defence": 0.351580973763894
+        },
+        "437": {
+          "attack": -0.013932667481787418,
+          "defence": -0.11247791643143863
+        },
+        "440": {
+          "attack": -0.08150752946792625,
+          "defence": -0.04575082085869518
+        },
+        "493": {
+          "attack": 0.007351146337393079,
+          "defence": -0.026244569914196315
+        },
+        "494": {
+          "attack": -0.46257125362219065,
+          "defence": 0.3357568522883215
+        },
+        "510": {
+          "attack": 0.3275695239836946,
+          "defence": 0.1802339214697131
+        },
+        "521": {
+          "attack": -0.36771784906082894,
+          "defence": 0.4991707161974649
+        },
+        "570": {
+          "attack": 0.33620025788883123,
+          "defence": 0.12009166240635835
+        },
+        "597": {
+          "attack": -0.05107897199659792,
+          "defence": 0.20482562324035725
+        },
+        "598": {
+          "attack": -0.11376302627964766,
+          "defence": -0.019031076179735804
+        },
+        "611": {
+          "attack": -0.0012234821651073012,
+          "defence": 0.17289190664630635
+        },
+        "614": {
+          "attack": -0.013429279609518613,
+          "defence": -0.009173203015982154
+        },
+        "887": {
+          "attack": -0.4212189231858429,
+          "defence": -0.04266817187686259
+        },
+        "909": {
+          "attack": -0.11895422457151554,
+          "defence": 0.24151116155645547
+        },
+        "1068": {
+          "attack": 0.3989154312209481,
+          "defence": -0.22990553758190443
+        },
+        "1895": {
+          "attack": -0.08504452782742912,
+          "defence": 0.11491685475138896
+        },
+        "1929": {
+          "attack": -0.03560562103609768,
+          "defence": -0.21105818441875593
+        },
+        "2250": {
+          "attack": 0.11684238867666093,
+          "defence": -0.32036387583515
+        },
+        "2290": {
+          "attack": 0.01608025649692087,
+          "defence": 0.3846386734208853
+        },
+        "2528": {
+          "attack": -0.2578043971494991,
+          "defence": 0.3566390285927396
+        },
+        "2533": {
+          "attack": 0.02032697511843126,
+          "defence": 0.005662654593611956
+        },
+        "2572": {
+          "attack": 0.3983185242923832,
+          "defence": 0.1293889209022785
+        },
+        "2720": {
+          "attack": -0.09450105181446238,
+          "defence": 0.043415706535568956
+        },
+        "2722": {
+          "attack": -0.47091562267755094,
+          "defence": 0.3156731334040713
+        },
+        "2790": {
+          "attack": -0.3976033816327484,
+          "defence": 0.30671117413682986
+        },
+        "2980": {
+          "attack": 0.2121837758648787,
+          "defence": -0.11114993793932529
+        },
+        "2994": {
+          "attack": -0.11866861538142509,
+          "defence": 0.04692875817250754
+        },
+        "3746": {
+          "attack": -0.3666818678439845,
+          "defence": 0.0605184382113479
+        },
+        "4411": {
+          "attack": 0.14298529235315593,
+          "defence": 0.6144533426654877
+        },
+        "5807": {
+          "attack": -0.2126394050880415,
+          "defence": 0.023232649447080124
+        },
+        "6997": {
+          "attack": -0.25991679161543974,
+          "defence": 0.06094530113854063
+        },
+        "9812": {
+          "attack": -0.36341673545663655,
+          "defence": -0.07529822962842941
+        },
+        "10414": {
+          "attack": 0.002780145193227091,
+          "defence": 0.5459769898381426
+        },
+        "11420": {
+          "attack": -0.1423756966781775,
+          "defence": -0.035867893507769685
+        },
+        "11706": {
+          "attack": -0.04622155655229521,
+          "defence": 0.1651689282864647
+        },
+        "17544": {
+          "attack": -0.09274825174255744,
+          "defence": 0.15528801230142783
+        },
+        "21922": {
+          "attack": -0.29043336676272485,
+          "defence": 0.1933927178831841
+        },
+        "22281": {
+          "attack": -0.2975438417717827,
+          "defence": -0.10740825573626939
+        }
+      },
+      "fit": {
+        "converged": true,
+        "iterations": 1191,
+        "gradientNorm": 9.986297441283759e-7,
+        "rhoScores": [
+          {
+            "rho": -0.15,
+            "valid": true,
+            "conditionalLoss": 0.009691275868814068
+          },
+          {
+            "rho": -0.1,
+            "valid": true,
+            "conditionalLoss": 0.005136954196878371
+          },
+          {
+            "rho": -0.05,
+            "valid": true,
+            "conditionalLoss": 0.0019407699670915318
+          },
+          {
+            "rho": 0,
+            "valid": true,
+            "conditionalLoss": 0
+          },
+          {
+            "rho": 0.05,
+            "valid": true,
+            "conditionalLoss": -0.0007133898150427864
+          },
+          {
+            "rho": 0.1,
+            "valid": true,
+            "conditionalLoss": -0.00015283435704278316
+          },
+          {
+            "rho": 0.15,
+            "valid": true,
+            "conditionalLoss": 0.0018340570993268497
+          }
+        ],
+        "dependenceFit": "CONDITIONAL_TRAINING_GRID"
+      },
+      "status": "RESEARCH_ONLY",
+      "executable": false,
+      "missing": [
+        "NO_XG_OR_PLAYER_EFFECTS",
+        "NO_DOMESTIC_CROSS_LEAGUE_MAPPING",
+        "NO_VERIFIED_HALF_TIME_MODEL",
+        "RETROSPECTIVE_AVAILABILITY_UNVERIFIED"
+      ]
+    },
+    "halfTimeModel": {
+      "version": "SOCCER-HT-FT-CONDITIONAL-BINOMIAL-v1",
+      "protocolVersion": "SOCCER-HT-PAST-ONLY-WEIGHTED-MLE-v1",
+      "league": "ucl",
+      "period": "REGULATION_HT",
+      "cutoff": "2026-10-18T00:00:00.000Z",
+      "halfLifeDays": 730,
+      "trainedThrough": "2026-10-14T19:00:00.000Z",
+      "inputCount": 805,
+      "uniqueInputCount": 805,
+      "trainingCount": 800,
+      "excludedCount": 5,
+      "excluded": [
+        {
+          "eventId": "618784",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        },
+        {
+          "eventId": "720370",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        },
+        {
+          "eventId": "720410",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        },
+        {
+          "eventId": "720412",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        },
+        {
+          "eventId": "720321",
+          "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+        }
+      ],
+      "coverage": 0.9937888198757764,
+      "trainingHash": "62b708435eb0e73a04d5d073fb215011d479d8f5a9eb6450a9979e01e2cb2171",
+      "inputHash": "a0c2204514e66d1ec777618d2b9d57888919d4e8ed0fade68629415deee003c8",
+      "shares": {
+        "home": 0.4378725205795618,
+        "away": 0.42369682193093955
+      },
+      "weightedExposure": {
+        "homeGoals": 711.7017127533542,
+        "awayGoals": 540.4346254608762,
+        "homeHalfGoals": 311.6346228641024,
+        "awayHalfGoals": 228.98043326921086,
+        "matchWeightSum": 374.4227984393432
+      },
+      "estimator": "TIME_WEIGHTED_CONDITIONAL_BINOMIAL_MLE_RATIO_OF_GOAL_SUMS",
+      "status": "RESEARCH_ONLY",
+      "formalEnabled": false,
+      "executable": false,
+      "assumptions": [
+        "CONSTANT_ROLE_SPECIFIC_HALF_TIME_SHARE",
+        "CONDITIONAL_INDEPENDENT_BINOMIAL_ALLOCATIONS_GIVEN_FULL_TIME",
+        "REGULATION_PERIODS_INCLUDE_THEIR_OWN_STOPPAGE_TIME"
+      ],
+      "missing": [
+        "NO_SCORE_STATE_DEPENDENT_TIMING",
+        "NO_EVENT_PROCESS_OR_PLAYER_EFFECTS",
+        "RETROSPECTIVE_AVAILABILITY_UNVERIFIED"
+      ]
+    },
+    "modelCreatedAt": "2026-10-19T08:34:51.515Z",
+    "halfTimeModelCreatedAt": "2026-10-19T08:35:01.055Z"
+  }
+}

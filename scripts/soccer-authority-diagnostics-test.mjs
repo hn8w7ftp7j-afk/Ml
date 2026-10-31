@@ -90,6 +90,13 @@ const oversized = structuredClone(base);
 oversized.parsed.games = Array.from({ length: 41 }, () => structuredClone(base.parsed.games[0]));
 assert.equal(inspect([oversized]).detailsTruncated, true);
 assert.deepEqual(inspect(null).sources, []);
+const samePage = structuredClone(base), otherPage = structuredClone(base);
+samePage.frameId = 222222; samePage.active = true;
+otherPage.tabId = 444444; otherPage.active = false;
+const topology = inspect([base, samePage, otherPage, structuredClone(base)]);
+assert.deepEqual(topology.sources.map(source => [source.pageIndex, source.frameIndex, source.active]),
+  [[1, 1, undefined], [1, 2, true], [2, 1, false], [1, 1, undefined]], 'report-local page/frame ordinals locate sources without browser identifiers');
+assert.doesNotMatch(JSON.stringify(topology), /987654|123456|222222|444444|tabId|frameId|tai888\.in|secret/);
 console.log('PASS football authority diagnostics: typed price/state/contract/date/slate differences, independent periods, anonymous bounded sources, parser-code identities, strict text redaction, immutable evidence and explicit truncation');
 
 const { sanitizeDiagnosticReport } = await import('../reader/diagnostic-schema.js');
@@ -114,4 +121,19 @@ assert.doesNotMatch(JSON.stringify(sanitized), /password=|private-url-cookie|202
 assert.equal(sanitized.leagues.NBA.authority, undefined, 'football evidence cannot expand other-league diagnostic payloads');
 assert.deepEqual(sanitized.leagues.EPL.authority.differences, diagnosticFixture.differences);
 assert.deepEqual(sanitizeDiagnosticReport(sanitized), sanitized, 'Reader and API sanitization must be idempotent');
+const recovery = { version: 'SOCCER-CONFLICT-RECOVERY-v1', state: 'REQUESTED',
+  attemptedAt: '2026-11-01T00:00:00.000Z', attemptedTabCount: 2, refreshedTabCount: 2 };
+const topologyReport = { ...reportFixture, leagues: { EPL: { state: 'error', authority: topology,
+  conflictRecovery: { ...recovery, secret: poisonText } }, NBA: { state: 'error', conflictRecovery: recovery } } };
+const topologyClean = sanitizeDiagnosticReport(topologyReport);
+assert.deepEqual(topologyClean.leagues.EPL.authority, topology);
+assert.deepEqual(topologyClean.leagues.EPL.conflictRecovery, recovery);
+assert.equal(topologyClean.leagues.NBA.conflictRecovery, undefined, 'soccer recovery evidence cannot expand NBA diagnostics');
+assert.deepEqual(sanitizeDiagnosticReport(topologyClean), topologyClean);
+topologyReport.leagues.EPL.authority.sources[0].pageIndex = poisonText;
+topologyReport.leagues.EPL.conflictRecovery.refreshedTabCount = 3;
+const invalidTopology = sanitizeDiagnosticReport(topologyReport);
+assert.equal(invalidTopology.leagues.EPL.authority.sources[0].pageIndex, undefined);
+assert.equal(invalidTopology.leagues.EPL.conflictRecovery, undefined);
+assert.doesNotMatch(JSON.stringify(invalidTopology), /private-url-cookie|tabId|frameId/);
 console.log('PASS double-boundary football authority allow-list: typed evidence preserved, malformed dates/codes/text and null-valued unknown fields removed, NBA unchanged');

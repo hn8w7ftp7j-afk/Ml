@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   const liveNormalizerAvailable = Boolean(policy?.shouldKeepRecord && normalizer?.normalizeRowRecords);
   const clean = policy?.clean || (value => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim());
-  const READER_VERSION = '2.1.52';
+  const READER_VERSION = '2.1.53';
   const pendingSeenCaptures = new Map();
   const lastSeenFingerprint = new Map();
   let seenSequence = 0;
