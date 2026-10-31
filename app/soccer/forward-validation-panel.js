@@ -63,6 +63,25 @@ function ForwardGroup({group,league}){
     </details>
   </details>;
 }
+function RetrospectivePayoffReplay({value}){
+  if(!value)return null;
+  const restrictions=['accountSettlementVerified','historicalContractVerified','verifiedAtOriginalCutoff','formalEligible','calibrationEligible','promotionEligible','executable'];
+  const safe=value.version==='SOCCER-RETROSPECTIVE-CONFIRMED-RULE-PAYOFF-v1'
+    &&restrictions.every(key=>value[key]===false)&&['W','R','S','empiricalErrorMargin'].every(key=>value[key]===null);
+  if(safe&&value.status==='NOT_VERIFIED_LEGACY_SCAN')return <section aria-label="已確認算法收益重播"><h3>已確認算法收益重播</h3><p>此舊批次尚未核對收益重播。請重新讀取範圍，從原始保存資料建立新的重播批次。</p></section>;
+  const counts=['selectedQuoteObservations','replayedQuoteObservations','exactPredictedQuoteReturns','boundedPredictedQuoteReturns','pendingQuoteObservations','quarantinedQuoteObservations','uniqueReplayedGames','invalidOriginalQuotes'];
+  const verified=safe&&counts.every(key=>validCount(value[key]))
+    &&value.selectedQuoteObservations===value.replayedQuoteObservations+value.pendingQuoteObservations+value.quarantinedQuoteObservations
+    &&value.replayedQuoteObservations===value.exactPredictedQuoteReturns+value.boundedPredictedQuoteReturns
+    &&value.uniqueReplayedGames<=value.replayedQuoteObservations;
+  if(!verified)return <section aria-label="已確認算法收益重播"><h3>已確認算法收益重播</h3><p>本次重播資料尚未通過核對，未顯示未確認的筆數。</p></section>;
+  return <section aria-label="已確認算法收益重播"><h3>已確認算法收益重播</h3>
+    <p>有效原盤 {count(value.selectedQuoteObservations)} 筆｜已重播 {count(value.replayedQuoteObservations)} 筆｜待核對 {count(value.pendingQuoteObservations)} 筆｜衝突隔離 {count(value.quarantinedQuoteObservations)} 筆｜不同賽事 {count(value.uniqueReplayedGames)} 場。</p>
+    <p>預測收益可精確計算 {count(value.exactPredictedQuoteReturns)} 筆；保留收益區間 {count(value.boundedPredictedQuoteReturns)} 筆。另有原始盤口未通過核對 {count(value.invalidOriginalQuotes)} 筆，不列入有效原盤。</p>
+    <p>{value.completeWithinRequestedScope===true?'本次範圍已完成重播核對。':'本次重播範圍尚未完整，請繼續處理或重新讀取範圍。'}</p>
+    <p className="soccerAvailability">用現在已確認的信用盤算法與 1% 比例退水，對照已保存的預測、原盤及賽果試算。這些是假設收益，尚未確認為帳戶實際派彩；同場多盤不當成多場獨立樣本，也不直接作為正式 R 或 S。</p>
+  </section>;
+}
 function ForwardReport({report,league,summary}){
   const returns=report.marketReturnValidation,errorResearch=report.returnErrorResearch;
   const pending=validCount(report.selectedGameModelPeriods)&&validCount(report.evaluatedGameModelPeriods)&&report.selectedGameModelPeriods>=report.evaluatedGameModelPeriods?report.selectedGameModelPeriods-report.evaluatedGameModelPeriods:null;
@@ -70,6 +89,7 @@ function ForwardReport({report,league,summary}){
     <p>前瞻方案啟用：{clock(report.protocol?.activatedAt)}。每場、每期間、每模型版本採資料庫最早有效封存憑據；方案須在分析前啟用，封存必須早於開賽。</p>
     <p>收到快照期間 {count(report.capturedSnapshotPeriods)} 筆｜有效封存 {count(report.selectedGameModelPeriods)} 筆｜已評估 {count(report.evaluatedGameModelPeriods)} 筆｜待賽果 {count(pending)} 筆｜不同賽事 {count(report.uniqueSelectedGames)} 場</p>
     <p className="soccerAvailability">同場的全場、上半場及人員模型分開列示，不能當成多場獨立比賽；分母是已選用的開賽前封存預測，不是所有賽程或下注。</p>
+    <RetrospectivePayoffReplay value={report.retrospectivePayoffReplay}/>
     {returns&&<section aria-label="原盤收益驗證">
       <h3>原盤收益驗證</h3>
       <p>保存原盤 {count(returns.quoteObservations)} 筆｜已核對收益 {count(returns.observedQuoteReturns)} 筆｜待核對 {count(returns.pendingQuoteReturns)} 筆｜衝突排除 {count(returns.conflictingQuoteReturns)} 筆｜不同已核對賽事 {count(returns.uniqueObservedGames)} 場</p>
