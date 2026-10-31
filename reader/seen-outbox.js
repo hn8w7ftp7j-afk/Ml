@@ -3,28 +3,67 @@ const local=globalThis.Tai888SeenStorage;
 export const SEEN_CAPTURE_ALARM='tai888-reader-seen-retry';
 export function createSeenCaptureOutbox({storage,upload,now=Date.now}) {
   let flushing, memoryFailure=null;
+  const captureFailures=new Map(), retryCaptures=new Map();
+  const failureCodes=new Set(['SEEN_EVIDENCE_INVALID','SEEN_EVIDENCE_UNKNOWN_FIELD','SEEN_SOURCE_INVALID',
+    'SEEN_PRIVATE_TEXT_BLOCKED','SEEN_ROWS_INVALID','SEEN_ROW_TOO_LARGE','SEEN_CAPTURE_TOO_LARGE',
+    'SEEN_FRAGMENT_TOO_LARGE','SEEN_STORAGE_UNAVAILABLE','SEEN_PAIR_REQUIRED','SEEN_LOCAL_CONFLICT',
+    'SEEN_LOCAL_READBACK_FAILED','SEEN_LOCAL_SAVE_FAILED','SEEN_LOCAL_HASH_MISMATCH','SEEN_INVALID_RECEIPT',
+    'SEEN_ACK_READBACK_FAILED','SEEN_ACK_CONFLICT','SEEN_RETRY_SAVE_FAILED','SEEN_UPLOAD_FAILED',
+    'SEEN_DEVICE_MISMATCH','SEEN_FLUSH_FAILED','SEEN_SAVE_FAILED','SEEN_CAPTURE_FAILED',
+    'SEEN_TEXT_TOO_LARGE','SEEN_VERSION_INVALID','SEEN_TIME_INVALID','SEEN_REASONS_INVALID',
+    'SEEN_HEADER_TOO_LARGE','SEEN_CELL_TOO_LARGE','SEEN_PAIR_TOO_LARGE','SEEN_DIAGNOSTICS_INVALID']);
+  const safeFailureCode=code=>failureCodes.has(code)?code:'SEEN_SAVE_FAILED';
   const receiptTime=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
     && Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
-  async function failure(code,stage='capture') {
-    memoryFailure={code:/^[A-Z][A-Z0-9_]{0,79}$/.test(code||'')?code:'SEEN_SAVE_FAILED',stage,updatedAt:new Date(now()).toISOString()};
+  async function failure(code,stage='capture',evidence=null) {
+    if(stage==='capture'&&evidence)try {
+      const scope=await local.failureScope(evidence,storage), key=local.FAILURE_PREFIX+scope.ownerDeviceId+':'+scope.failureId;
+      const [rows,acks]=await Promise.all([local.entries(storage),local.entries(storage,local.ACK_PREFIX)]);
+      // A delayed failure notification may arrive after the other writer has
+      // already saved this exact source. Never turn that race into a loss alert.
+      if(await local.scopeConfirmed(scope,rows,acks))return scope;
+      const item={...scope,code:safeFailureCode(code),stage,updatedAt:new Date(now()).toISOString()};
+      captureFailures.set(key,item);
+      try {await storage.set({[key]:item});} catch {}
+      return scope;
+    } catch {}
+    memoryFailure={code:safeFailureCode(code),stage,updatedAt:new Date(now()).toISOString()};
     try {await storage.set({[stage==='capture'?'seenCaptureFailure':'seenDeliveryFailure']:memoryFailure});} catch {}
+    return null;
   }
   async function status() {
     try {
-      const [rows,acks,state]=await Promise.all([local.entries(storage),local.entries(storage,local.ACK_PREFIX),
+      const [rows,acks,storedFailures,state]=await Promise.all([local.entries(storage),local.entries(storage,local.ACK_PREFIX),local.entries(storage,local.FAILURE_PREFIX),
         storage.get(['deviceId','readerToken','seenCaptureFailure','seenDeliveryFailure'])]);
-      const fail=state.seenCaptureFailure||memoryFailure||state.seenDeliveryFailure;
+      const scoped=new Map([...storedFailures.map(row=>[row.key,row]),...captureFailures]);
+      for(const [key,item] of scoped)if(await local.scopeConfirmed(item,rows,acks)) {
+        try {await storage.remove(key);scoped.delete(key);captureFailures.delete(key);retryCaptures.delete(item.failureId);} catch {}
+      }
+      // Legacy reports lack the exact failed fragment identities. A newer
+      // unrelated ACK cannot establish whether that historical source survived.
+      const fail=state.seenCaptureFailure||memoryFailure||scoped.values().next().value||state.seenDeliveryFailure;
+      const unidentified=state.seenCaptureFailure||(memoryFailure?.stage==='capture'?memoryFailure:null);
+      const captureFailure=unidentified||scoped.values().next().value;
       const mismatch=rows.some(row=>row.ownerDeviceId!==state.deviceId);
       return {state:fail||mismatch?'error':rows.length?'pending':'sent',pendingCount:rows.length,
         pendingBytes:rows.reduce((n,row)=>n+local.bytes(row.wireText||''),0),savedCaptureCount:acks.length,
-        failedCaptureCount:state.seenCaptureFailure||memoryFailure?.stage==='capture'?1:0,
+        failedCaptureCount:scoped.size+(state.seenCaptureFailure||memoryFailure?.stage==='capture'?1:0),
+        captureFailureScope:unidentified?'UNIDENTIFIED_CAPTURE':scoped.size?'EXACT_FRAGMENTS':'NONE',
+        captureFailureAt:captureFailure?.updatedAt||null,
         code:fail?.code||(mismatch?'SEEN_DEVICE_MISMATCH':rows.length&&!state.readerToken?'SEEN_PAIR_REQUIRED':''),
         lastPersistedAt:acks.map(row=>row.persistedAt).filter(Boolean).sort().at(-1)||null,updatedAt:new Date(now()).toISOString()};
     } catch {return {state:'error',pendingCount:null,pendingBytes:null,savedCaptureCount:null,failedCaptureCount:null,code:'SEEN_STORAGE_UNAVAILABLE',lastPersistedAt:null,updatedAt:new Date(now()).toISOString()};}
   }
   async function enqueue(evidence) {
     try{return await local.persist(evidence,{storage});}
-    catch(error){await failure(error.message);return {queued:false,durable:false,code:error.message||'SEEN_LOCAL_SAVE_FAILED'};}
+    catch(error){
+      const scope=await failure(error.message,'capture',evidence);
+      // The worker keeps a safe copy for the retry alarm if a source frame
+      // closes after both local writers failed. It remains explicitly failed
+      // until durable storage or the exact server ACK is read back.
+      if(scope)retryCaptures.set(scope.failureId,{scope,evidence:JSON.parse(local.canonical(evidence))});
+      return {queued:false,durable:false,code:safeFailureCode(error.message)};
+    }
   }
   async function accepted(ack,row,wire) {
     return ack?.ok===true && ack.durable===true && ack.schema===local.SCHEMA && ack.captureId===row.captureId
@@ -39,7 +78,11 @@ export function createSeenCaptureOutbox({storage,upload,now=Date.now}) {
     if(flushing)return flushing;
     flushing=(async()=>{
       const config=await storage.get(['readerToken','deviceId']);
-      if(!config.readerToken||!config.deviceId)return;
+      if(!config.deviceId)return;
+      for(const [id,item] of retryCaptures)if(item.scope.ownerDeviceId===config.deviceId) {
+        try {await local.persist(item.evidence,{storage});retryCaptures.delete(id);} catch {}
+      }
+      if(!config.readerToken)return;
       const rows=(await local.entries(storage)).filter(row=>row.ownerDeviceId===config.deviceId&&(force||Number(row.nextAttemptAt||0)<=now())).sort((a,b)=>a.queuedAt-b.queuedAt).slice(0,20);
       const start=now();
       for(const row of rows) {

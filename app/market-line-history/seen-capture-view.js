@@ -67,6 +67,8 @@ export function latestSeenDeliveryReports(reports) {
     const delivery = available ? { state: raw.state,
       ...Object.fromEntries(['pendingCount', 'pendingBytes', 'failedCaptureCount', 'savedCaptureCount'].map(key => [key, count(raw[key]) ? raw[key] : null])),
       code: typeof raw.code === 'string' && raw.code.length <= 100 ? raw.code : '',
+      captureFailureScope:['UNIDENTIFIED_CAPTURE','EXACT_FRAGMENTS','NONE'].includes(raw.captureFailureScope)?raw.captureFailureScope:null,
+      captureFailureAt:['UNIDENTIFIED_CAPTURE','EXACT_FRAGMENTS'].includes(raw.captureFailureScope)&&timestamp(raw.captureFailureAt)?raw.captureFailureAt:null,
       lastPersistedAt: timestamp(raw.lastPersistedAt) ? raw.lastPersistedAt : null } : null;
     return { deviceId: report.device_id, reportReceivedAt: report.received_at,
       reportCreatedAt: timestamp(report.payload.createdAt) ? report.payload.createdAt : null,

@@ -52,7 +52,11 @@ unpairButton.addEventListener('click', async () => { await chrome.storage.local.
 function renderSeenCaptureDelivery(delivery) {
   const element=byId('seenCaptureDelivery');if(!element)return;
   const count=value=>Number.isSafeInteger(value)&&value>=0?String(value):'未確認';
-  const problem=delivery?.state==='error'?'｜保存或補傳異常，請查看後台診斷':
+  const failureTime=typeof delivery?.captureFailureAt==='string'&&Number.isFinite(Date.parse(delivery.captureFailureAt))
+    ?new Date(delivery.captureFailureAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'未確認';
+  const problem=delivery?.captureFailureScope==='UNIDENTIFIED_CAPTURE'
+    ?`｜先前有無法對應來源的保存失敗（${failureTime}），當次是否已補存仍未確認`
+    :delivery?.state==='error'?'｜保存或補傳異常，請查看後台診斷':
     delivery?.code==='SEEN_PAIR_REQUIRED'?'｜等待配對後補傳':'';
   element.textContent=`已看過原盤：本機待傳 ${count(delivery?.pendingCount)} 片｜伺服器回條 ${count(delivery?.savedCaptureCount)} 片${problem}。保留未通過核對的原盤證據；片數不等於賽事數。`;
 }

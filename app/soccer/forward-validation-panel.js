@@ -1,6 +1,7 @@
 'use client';
 import { useEffect,useRef,useState } from 'react';
 import { SoccerCalibrationPanel } from './calibration-panel.js';
+import { SoccerCalibrationShadowPanel } from './calibration-shadow-panel.js';
 
 const VERSION='SOCCER-PROSPECTIVE-SAVED-PREDICTION-v1';
 const periods={REGULATION_FT:'全場',REGULATION_HT:'上半場'};
@@ -237,6 +238,7 @@ export function SoccerForwardValidationPanel({league}){
   function resetRange(){if(flight.current)return;setFilterError('');setDraft({from:'',through:''});if(!range.from&&!range.through)void load();else setRange({from:'',through:''});}
   const current=state.scopeKey===scopeKey,busy=!current||['loading','evaluating','waiting'].includes(state.status)||automatic.waitingUntil!==null;
   return <section className="panel soccerForwardValidation" aria-label="足球前瞻驗證"><div className="panelHead"><h2>{league==='ucl'?'歐冠':'英超'}｜前瞻驗證</h2><button className="secondary" disabled={!supported||busy} onClick={()=>load()}>重新讀取</button><button className="secondary" disabled={!supported||busy} onClick={()=>load(true)}>{current&&state.status==='evaluating'?'核對中…':'核對已封存賽果'}</button></div>
+    <SoccerCalibrationShadowPanel key={league} league={league}/>
     <p>預設查詢今天及前 30 天。系統會自動接續全部批次，可隨時暫停。只核對伺服器已封存的預測與賽果，不會新增下注。</p>
     <form className="soccerForwardFilters" onSubmit={applyRange}><label>開始日期 <input type="date" name="from" value={draft.from} onChange={event=>{const value=event.target.value;setDraft(old=>({...old,from:value}));}}/></label> <label>結束日期 <input type="date" name="through" value={draft.through} onChange={event=>{const value=event.target.value;setDraft(old=>({...old,through:value}));}}/></label> <button type="submit" className="secondary" disabled={!supported||busy}>讀取日期範圍</button> <button type="button" className="secondary" disabled={!supported||busy} onClick={resetRange}>恢復預設範圍</button></form>
     {filterError&&<p role="alert">{filterError}</p>}<p className="soccerAvailability">目前範圍：{range.from&&range.through?`${range.from} ～ ${range.through}`:'今天及前 30 天（依伺服器台灣日期）'}。</p>

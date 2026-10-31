@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { SEEN_CAPTURE_LEAGUES, latestSeenDeliveryReports, seenCaptureQueryUrl, validateSeenCaptureDetail, validateSeenCaptureResponse } from '../app/market-line-history/seen-capture-view.js';
 import { buildReaderSeenCapture, listReaderSeenCaptures } from '../lib/reader-seen-capture.js';
 
@@ -76,6 +77,26 @@ reports = latestSeenDeliveryReports([report('device-one', time, { ...pending, pe
 assert.equal(reports[0].delivery.pendingCount, null); assert.equal(reports[0].delivery.failedCaptureCount, null, 'unknown counters never coerce to zero');
 reports = latestSeenDeliveryReports([report('device-one', time, { ...pending, state: 'sent', pendingCount: 0, failedCaptureCount: 0 })]);
 assert.equal(reports[0].delivery.pendingCount, 0, 'explicit zero remains distinguishable from missing telemetry');
+const oldFailureAt='2026-10-28T00:00:00.000Z';
+reports=latestSeenDeliveryReports([report('device-one',time,{...pending,state:'error',pendingCount:0,
+  code:'SEEN_LOCAL_SAVE_FAILED',captureFailureScope:'UNIDENTIFIED_CAPTURE',captureFailureAt:oldFailureAt,lastPersistedAt:time})]);
+assert.equal(reports[0].delivery.captureFailureScope,'UNIDENTIFIED_CAPTURE');
+assert.equal(reports[0].delivery.captureFailureAt,oldFailureAt);
+assert.equal(reports[0].delivery.failedCaptureCount,1,'fresh later ACKs do not clear a historical unidentified source gap');
+assert.equal(reports[0].delivery.lastPersistedAt,time);
+const historicalDelivery=reports[0].delivery;
+reports=latestSeenDeliveryReports([report('device-one',time,{...pending,captureFailureScope:'EXACT_FRAGMENTS',captureFailureAt:time})]);
+assert.equal(reports[0].delivery.captureFailureScope,'EXACT_FRAGMENTS');
+assert.equal(reports[0].delivery.captureFailureAt,time);
+for(const unsafe of [
+  {captureFailureScope:'private-account-value',captureFailureAt:'private-account-value'},
+  {captureFailureScope:'NONE',captureFailureAt:oldFailureAt},
+  {captureFailureScope:'UNIDENTIFIED_CAPTURE',captureFailureAt:'invalid'},
+]) {
+  const delivery=latestSeenDeliveryReports([report('device-one',time,{...pending,...unsafe})])[0].delivery;
+  assert.equal(delivery.captureFailureAt,null,'invalid or unrelated failure timestamps are not propagated');
+  assert.equal(JSON.stringify(delivery).includes('private-account-value'),false);
+}
 assert.deepEqual(latestSeenDeliveryReports([]), []); assert.throws(() => latestSeenDeliveryReports(null));
 assert.deepEqual(latestSeenDeliveryReports([{ device_id: 'bad', received_at: 'invalid', payload: {} }]), []);
 
@@ -88,4 +109,19 @@ assert.match(ui, /不是場數、可分析盤口數或完整尾盤數/);
 assert.match(ui, /並非電腦目前的即時佇列/);
 assert.match(ui, /role="alert"/);
 assert.doesNotMatch(ui, /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i, 'inventory panel must only read data');
+assert.match(ui,/先前回報過一筆無法對應來源的保存失敗/);
+assert.match(ui,/後續回條不代表已補齊這筆來源/);
+const popup=readFileSync(new URL('../reader/popup.js',import.meta.url),'utf8');
+const renderSeen=popup.slice(popup.indexOf('function renderSeenCaptureDelivery('),popup.indexOf('function renderDiagnosticDelivery('));
+const element={textContent:''},context=vm.createContext({byId:()=>element,Date});
+vm.runInContext(renderSeen,context);context.delivery=historicalDelivery;
+vm.runInContext('renderSeenCaptureDelivery(delivery)',context);
+assert.match(element.textContent,/先前有無法對應來源的保存失敗/);
+assert.match(element.textContent,/當次是否已補存仍未確認/);
+assert.doesNotMatch(element.textContent,/保存或補傳異常，請查看後台診斷/,'old unidentified source failure has its own wording');
+assert.match(element.textContent,/本機待傳 0 片/);
+context.delivery={state:'error',pendingCount:null,savedCaptureCount:null,captureFailureScope:'EXACT_FRAGMENTS'};
+vm.runInContext('renderSeenCaptureDelivery(delivery)',context);
+assert.match(element.textContent,/本機待傳 未確認 片/);
+assert.match(element.textContent,/保存或補傳異常/,'unresolved exact-source failures retain the current failure warning');
 console.log('PASS seen-capture panel: eight-league raw-observation units, partial batches, strict empty/error/filter boundaries, independent diagnostics, explicit unknown/error queue counters and server snapshot timing; NOT Production');

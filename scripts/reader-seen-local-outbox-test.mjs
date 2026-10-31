@@ -113,7 +113,58 @@ try {
   partial.beforeSet = null; await local.persist(many, { storage: partial });
   assert.equal((await queued(partial)).length, chunks.length, 'retry resumes missing immutable chunks without evicting the saved part');
   await partialOutbox.flush(); assert.equal((await queued(partial)).length, 0); assert.equal((await acks(partial)).length, chunks.length);
-  assert.equal((await partialOutbox.status()).failedCaptureCount, 1, 'a capture-stage loss alert is not cleared by unrelated successful delivery');
+  assert.equal((await partialOutbox.status()).failedCaptureCount, 0, 'the same failed capture is resolved only after all its exact fragments are durable');
+
+  // A restarted worker can distinguish an old capture gap from a current
+  // upload failure without claiming unrelated new receipts repaired the gap.
+  const tracked = store(), lost = source('EPL', '2026-10-24T22:03:01.000Z');
+  tracked.beforeSet = values => { if(Object.keys(values).some(key=>key.startsWith(local.PREFIX)))throw Error('QUOTA_EXCEEDED'); };
+  const oldWorker = createSeenCaptureOutbox({storage:tracked,upload:validAck});
+  assert.equal((await oldWorker.enqueue(lost)).durable,false);
+  assert.equal((await local.entries(tracked,local.FAILURE_PREFIX)).length,1,'capture identity survives a worker restart without storing source text in the failure record');
+  tracked.beforeSet = null;
+  const newWorker = createSeenCaptureOutbox({storage:tracked,upload:validAck});
+  await newWorker.enqueue(source('NBA','2026-10-24T22:03:02.000Z')); await newWorker.flush();
+  assert.equal((await newWorker.status()).failedCaptureCount,1,'an unrelated fresh server ACK cannot erase the missing original capture');
+  assert.equal((await newWorker.status()).state,'error');
+  assert.equal((await newWorker.status()).captureFailureScope,'EXACT_FRAGMENTS');
+  assert.ok(Date.parse((await newWorker.status()).captureFailureAt)>0);
+  const lostChunks = await local.fragments(lost), lostScope = await local.failureScope(lost,tracked);
+  assert.equal(await local.scopeConfirmed(lostScope,await queued(tracked),await acks(tracked)),false);
+  await local.persist(lost,{storage:tracked});
+  const corruptTracked = await queued(tracked);
+  corruptTracked[0].wireText += ' ';
+  assert.equal(await local.scopeConfirmed(lostScope,corruptTracked,await acks(tracked)),false,'a hash-mismatched local item is not recovery proof');
+  assert.equal((await newWorker.status()).failedCaptureCount,0,'readback of the exact original durable item resolves the capture failure while delivery may remain pending');
+  assert.equal((await newWorker.status()).captureFailureScope,'NONE');
+  await newWorker.flush();
+  assert.ok((await acks(tracked)).some(row=>row.captureId===lostChunks[0].captureId));
+  await newWorker.failure('SEEN_LOCAL_SAVE_FAILED','capture',lost);
+  assert.equal((await newWorker.status()).state,'sent','a delayed content failure cannot recreate a gap after the same capture has an exact ACK');
+
+  // The background already received this source before its frame closed.
+  // A storage outage must not discard its in-memory retry copy.
+  const closingFrame = store();
+  closingFrame.beforeSet=values=>{if(Object.keys(values).some(key=>key.startsWith(local.PREFIX)))throw Error('QUOTA_EXCEEDED');};
+  const survivingWorker=createSeenCaptureOutbox({storage:closingFrame,upload:validAck});
+  await survivingWorker.enqueue(lost);
+  closingFrame.beforeSet=null; await survivingWorker.flush();
+  assert.equal((await survivingWorker.status()).state,'sent');
+  assert.equal((await acks(closingFrame))[0].captureId,lostChunks[0].captureId,'alarm retry saves the original timestamp and price even without another frame message');
+  const expiredPair=store();
+  expiredPair.beforeSet=values=>{if(Object.keys(values).some(key=>key.startsWith(local.PREFIX)))throw Error('QUOTA_EXCEEDED');};
+  const expiredWorker=createSeenCaptureOutbox({storage:expiredPair,upload:async()=>{throw Error('MUST_WAIT_FOR_PAIRING');}});
+  await expiredWorker.enqueue(lost);expiredPair.beforeSet=null;await expiredPair.remove('readerToken');await expiredWorker.flush();
+  assert.equal((await queued(expiredPair)).length,1,'pairing expiry does not prevent retrying the local durable save');
+  assert.equal((await expiredWorker.status()).code,'SEEN_PAIR_REQUIRED');
+
+  const legacy=store({seenCaptureFailure:{code:'SEEN_LOCAL_SAVE_FAILED',stage:'capture',updatedAt:'2026-10-24T22:00:00.000Z'}});
+  const legacyWorker=createSeenCaptureOutbox({storage:legacy,upload:validAck});
+  await legacyWorker.enqueue(source()); await legacyWorker.flush();
+  assert.equal((await legacyWorker.status()).failedCaptureCount,1,'old unidentifiable failures stay unknown despite healthy new uploads');
+  assert.equal((await legacyWorker.status()).code,'SEEN_LOCAL_SAVE_FAILED');
+  assert.equal((await legacyWorker.status()).captureFailureScope,'UNIDENTIFIED_CAPTURE');
+  assert.equal((await legacyWorker.status()).captureFailureAt,'2026-10-24T22:00:00.000Z');
 
   const privacyMutations = [
     value => { value.account = 'private'; }, value => { value.tables[0].rows[0].rawDOM = 'private'; },

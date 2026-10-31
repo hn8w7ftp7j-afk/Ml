@@ -6,7 +6,7 @@ import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
 import { createSeenCaptureOutbox, SEEN_CAPTURE_ALARM } from './seen-outbox.js';
 import { recoverNbaConflict, NBA_CONFLICT_RECOVERY_KEY } from './nba-conflict-recovery.js';
 
-const VERSION = '2.1.52';
+const VERSION = '2.1.54';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -76,6 +76,40 @@ let pendingPreferredTabId = null;
 let mutationTimer;
 const recoveryCooldownByTab = new Map();
 const RECOVERY_COOLDOWN_MS = 90_000;
+const SOCCER_CONFLICT_RECOVERY_PREFIX = 'soccerConflictRecoveryV1:';
+
+// A responsive page may still display an old board. Refresh every implicated
+// soccer source once, then let the unchanged selector compare fresh captures.
+// Persist the incident before reloading so worker restarts cannot create a loop.
+async function recoverSoccerConflict(selection, { league, tabs, storage, reload, now = Date.now(), manual = false }) {
+  if (!['EPL', 'UCL'].includes(league)
+    || !['conflicting-duplicate-tabs', 'conflicting-duplicate-frames'].includes(selection?.error)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(selection.boardDate || '')
+    || !['FT', 'HT', 'UNKNOWN'].includes(selection.period)) return null;
+  const candidateIds = selection.error === 'conflicting-duplicate-tabs'
+    ? selection.conflictingTabIds || [] : [selection.authorityTabId];
+  const ids = [...new Set(candidateIds)].filter(id => Number.isInteger(id) && id >= 0
+    && selection.assessed?.some(row => row.ok && row.candidate?.tabId === id && row.candidate.parsed?.league === league)
+    && tabs.some(tab => {
+      if (tab.id !== id) return false;
+      try { const url = new URL(tab.url); return url.protocol === 'https:' && !url.username && !url.password && !url.port
+        && (url.hostname === 'tai888.in' || url.hostname.endsWith('.tai888.in')); } catch { return false; }
+    }));
+  if (ids.length < (selection.error === 'conflicting-duplicate-tabs' ? 2 : 1)) return null;
+  const key = `${SOCCER_CONFLICT_RECOVERY_PREFIX}${league}:${selection.boardDate}:${selection.period}`;
+  const saved = (await storage.get(key))[key];
+  if (saved && (!manual || now - Number(saved.at) < RECOVERY_COOLDOWN_MS)) return {
+    version: 'SOCCER-CONFLICT-RECOVERY-v1', state: 'ALREADY_ATTEMPTED',
+    attemptedAt: new Date(Number(saved.at)).toISOString(), attemptedTabCount: Number(saved.attemptedTabCount) || 0,
+    refreshedTabCount: Number(saved.refreshedTabCount) || 0,
+  };
+  await storage.set({ [key]: { at: now, attemptedTabCount: ids.length, refreshedTabCount: 0 } });
+  let refreshedTabCount = 0;
+  for (const id of ids) { try { await reload(id); refreshedTabCount++; } catch {} }
+  await storage.set({ [key]: { at: now, attemptedTabCount: ids.length, refreshedTabCount } });
+  return { version: 'SOCCER-CONFLICT-RECOVERY-v1', state: refreshedTabCount ? 'REQUESTED' : 'FAILED',
+    attemptedAt: new Date(now).toISOString(), attemptedTabCount: ids.length, refreshedTabCount };
+}
 
 chrome.runtime.onInstalled.addListener(async () => {
   const old = await chrome.storage.local.get(['deviceId', 'autoEnabled', 'readerStatus', 'lastSuccessfulPayloadHash', 'lastSuccessfulSyncAt']);
@@ -121,7 +155,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   }
   if(message?.type==='SEEN_CAPTURE_FAILURE') {
     if(!seenSenderAllowed(sender)) {reply({ok:false});return;}
-    getSeenOutbox().failure(message.code).then(()=>reply({ok:true})).catch(()=>reply({ok:false}));return true;
+    getSeenOutbox().failure(message.code,'capture',message.evidence).then(()=>reply({ok:true})).catch(()=>reply({ok:false}));return true;
   }
   if (message?.type === 'PAIR_READER') { pair(message.password, message.deviceName).then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'SYNC_NOW') { syncNow('manual').then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
@@ -361,24 +395,100 @@ async function collectCandidates(tabs) {
   return { candidates, silentTabIds, sections, emptyCaptures, soccerLayouts };
 }
 
+function diagnosticTableText(value, league) {
+  const text = soccerDiagnosticText(value);
+  if (!text) return '';
+  if (soccerDiagnosticHeading(text, league)) return text;
+  const header = text.replace(/(?:全場|全场|上半場|上半场|上半|前\s*(?:5|五)|FULL[ -]?TIME|FIRST\s+HALF|1ST\s+HALF|\bFT\b|\bHT\b|\b1H\b)/gi, '').replace(/[\s:：()（）-]/g, '');
+  if (!header && /(?:全場|全场|上半|前\s*(?:5|五)|FULL[ -]?TIME|FIRST\s+HALF|1ST\s+HALF|\bFT\b|\bHT\b|\b1H\b)/i.test(text)) return text;
+  return ['時間', '时间', '開賽', '开赛', '開賽時間', '开赛时间', '主客隊伍', '主客队伍', '隊伍', '队伍', '獨贏', '独赢', '讓球', '让球', '讓分', '让分', '大小', '大小盤', '大小盘', '單雙', '单双'].includes(header) ? text : '';
+}
+function diagnosticCellText(value, league) {
+  const text = soccerDiagnosticText(value);
+  if (!text) return '';
+  if (['EPL', 'UCL'].includes(league)) return /^(?:主[勝胜]|客[勝胜]|和|大|小)\s*[-－—]$/.test(text) ? text : soccerDiagnosticLine(value, league);
+  if (/^[A-Z][A-Z0-9]{1,11}\s*-\s*[\p{L}\p{M}\d\s.'’&\-\[\]［］【】()（）]+$/u.test(text)) return text;
+  return /^(?:\d{1,2}[/-]\d{1,2}|(?:[01]?\d|2[0-3]):[0-5]\d)$/.test(text)
+    || /^[-－—]$/.test(text) || /^[\d.＋+\/－–—−\-\s平大小單单双主客勝胜和]+$/u.test(text) && /\d/.test(text) ? text : '';
+}
+function diagnosticTables(capture) {
+  let replayComplete = true;
+  const text = (value, clean) => {
+    const result = clean(value);
+    if (String(value ?? '') !== result) replayComplete = false;
+    return result;
+  };
+  const source = Array.isArray(capture.tables) ? capture.tables : [];
+  if (source.length > 12) replayComplete = false;
+  const tables = source.slice(0, 12).map(table => {
+    const headers = Array.isArray(table.headers) ? table.headers : [];
+    const rows = Array.isArray(table.rows) ? table.rows : [];
+    if (headers.length > 12 || rows.length > 100) replayComplete = false;
+    return {
+      ...(typeof table.sectionTitle === 'string' ? { sectionTitle: text(table.sectionTitle, value => diagnosticTableText(value, capture.league)) } : {}),
+      headers: headers.slice(0, 12).map(value => text(value, value => diagnosticTableText(value, capture.league))),
+      ...(table.periodEvidenceTruncated === true ? { periodEvidenceTruncated: true } : {}),
+      rows: rows.slice(0, 100).map(row => {
+        const cells = Array.isArray(row.cells) ? row.cells : [];
+        if (cells.length > 12 || row.text || row.teamEvidence || row.marketEvidence) replayComplete = false;
+        return { marketLocked: row.marketLocked === true, cells: cells.slice(0, 12).map(cell => {
+          const pair = Array.isArray(cell.pair) ? cell.pair : [];
+          if (pair.length > 3 || !Array.isArray(cell.pair)) replayComplete = false;
+          return { pair: pair.slice(0, 3).map(value => text(value, value => diagnosticCellText(value, capture.league))) };
+        }) };
+      }),
+    };
+  });
+  return { tables, replayComplete };
+}
+// This is the same cross-source decision used before a sync, not a claim that
+// any upload succeeded. Never serialize selector candidates or raw page data.
+function diagnosticAuthority(candidates, now) {
+  const authority = {};
+  for (const league of LEAGUES) {
+    const own = candidates.filter(candidate => candidate.parsed.league === league);
+    if (!own.length) continue;
+    const selection = ['EPL', 'UCL'].includes(league)
+      ? selectAuthoritativeSoccerBoards(own, { now, league })
+      : selectAuthoritativeBoard(own, { now, league, dateScoped: true });
+    const browserId = value => Number.isInteger(value) && value >= 0 ? value : null;
+    const boardDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : null;
+    const period = value => ['FT', 'HT', 'UNKNOWN'].includes(value) ? value : null;
+    const scope = row => ({ boardDate: boardDate(row.boardDate), period: period(row.period),
+      authorityTabId: browserId(row.authorityTabId) });
+    authority[league] = { ok: selection.ok === true, error: selection.error || '',
+      boardDate: boardDate(selection.boardDate), period: period(selection.period),
+      authorityTabId: browserId(selection.authorityTabId),
+      conflictingTabIds: (selection.conflictingTabIds || []).slice(0, 40).map(browserId).filter(value => value !== null),
+      conflictingFrameIds: (selection.conflictingFrameIds || []).slice(0, 40).map(browserId).filter(value => value !== null),
+      scopes: (selection.scopeSelections || selection.selections || []).slice(0, 120).map(scope),
+    };
+  }
+  return authority;
+}
 async function readerDiagnostics() {
   const tabs = await chrome.tabs.query({ url: PATTERNS });
   const scan = await collectCandidates(tabs);
+  const now = Date.now();
   const boards = scan.candidates.map(candidate => {
-    const selection = selectAuthoritativeBoard([candidate], { now: Date.now(), league: candidate.parsed.league });
+    const selection = selectAuthoritativeBoard([candidate], { now, league: candidate.parsed.league });
+    const tableEvidence = diagnosticTables(candidate.capture);
+    const pageLeagueLabel = diagnosticTableText(candidate.capture.pageLeagueLabel, candidate.parsed.league);
+    if (['NHL', 'EPL', 'UCL'].includes(candidate.parsed.league)
+      && String(candidate.capture.pageLeagueLabel || '') !== pageLeagueLabel) tableEvidence.replayComplete = false;
     return {
       tabId: candidate.tabId, frameId: candidate.frameId, league: candidate.parsed.league,
+      active: candidate.active === true, lastAccessed: integer(candidate.lastAccessed, Number.MAX_SAFE_INTEGER),
+      captureVersion: candidate.capture.version, sourceHost: candidate.capture.sourceHost,
+      observedAt: candidate.capture.observedAt,
+      ...(['NHL', 'EPL', 'UCL'].includes(candidate.parsed.league)
+        ? { pageLeagueLabel } : {}),
       error: selection.error || '', issues: selection.assessed.flatMap(row => row.issues || []),
       diagnostics: candidate.capture.diagnostics,
-      tables: candidate.capture.tables.map(table => ({
-        rows: (table.rows || []).map(row => ({
-          marketLocked: row.marketLocked === true,
-          cells: (row.cells || []).map(cell => ({ pair: (cell.pair || []).map(value => String(value).slice(0, 200)) })),
-        })),
-      })),
+      ...tableEvidence,
     };
   });
-  return { ok: true, report: { readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(), createdAt: new Date().toISOString(), silentTabIds: scan.silentTabIds, sections: scan.sections, emptyCaptures: scan.emptyCaptures, soccerLayouts: scan.soccerLayouts, boards } };
+  return { ok: true, report: { readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(), createdAt: new Date(now).toISOString(), silentTabIds: scan.silentTabIds, sections: scan.sections, emptyCaptures: scan.emptyCaptures, soccerLayouts: scan.soccerLayouts, boards, authority: diagnosticAuthority(scan.candidates, now) } };
 }
 
 async function recoverTabs(tabs, tabIds, { force = false } = {}) {
@@ -449,6 +559,7 @@ async function performSync(reason, preferredTabId) {
           if (status) leagues[league] = { state: status.state, errorCode: status.diagnosticCode || '',
             issues: status.diagnosticIssues || [], rawGameCount: status.rawGameCount || 0,
             marketCount: status.marketCount || 0, boards: context.leagues[league] || [],
+            ...(status.conflictRecovery ? { conflictRecovery: status.conflictRecovery } : {}),
             ...(context.authority[league] ? { authority: context.authority[league] } : {}) };
         }
         await getDiagnosticOutbox().enqueue({ schema: DIAGNOSTIC_SCHEMA, reportId: crypto.randomUUID(),
@@ -513,6 +624,9 @@ async function performSyncAttempt(reason, preferredTabId, context) {
       const refreshed = league === 'NBA' ? await recoverNbaConflict(selection, {
         tabs, storage: chrome.storage.local, reload: id => chrome.tabs.reload(id), manual: reason === 'manual',
       }).catch(() => []) : [];
+      const conflictRecovery = soccer ? await recoverSoccerConflict(selection, {
+        league, tabs, storage: chrome.storage.local, reload: id => chrome.tabs.reload(id), manual: reason === 'manual',
+      }).catch(() => null) : null;
       if (selection.diagnosticEvidence) context.authority[league] = selection.diagnosticEvidence;
       const detail = selection.error === 'conflicting-duplicate-rows'
         ? '同場盤口重複且數字不一致，已停止上傳；請重新整理 Tai888 分頁後再同步'
@@ -523,7 +637,12 @@ async function performSyncAttempt(reason, preferredTabId, context) {
           : selection.assessed?.flatMap(item => item.issues || []).slice(0, 3).join('、');
       statuses[league] = { ok: false, state: 'error', league, diagnosticCode: selection.error,
         diagnosticIssues: selection.assessed?.flatMap(item => item.issues || []),
-        message: refreshed.length ? `NBA 分頁價格衝突，已重新整理 ${refreshed.length} 個來源；載入後自動重讀，核對一致前不採用任何衝突盤口。`
+        ...(conflictRecovery ? { conflictRecovery } : {}),
+        message: conflictRecovery?.state === 'REQUESTED'
+          ? `${LABELS[league]}來源盤口衝突，已要求重新整理 ${conflictRecovery.refreshedTabCount} 個來源；載入後自動重讀，核對一致前不採用衝突盤口。`
+          : conflictRecovery?.state === 'ALREADY_ATTEMPTED'
+          ? `${LABELS[league]}來源盤口仍不一致；本次衝突已嘗試重新整理，已停止上傳並自動回報來源差異。請只保留一個相同日期與期間的標準盤來源。`
+          : refreshed.length ? `NBA 分頁價格衝突，已重新整理 ${refreshed.length} 個來源；載入後自動重讀，核對一致前不採用任何衝突盤口。`
           : `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
@@ -547,7 +666,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         message: `${LABELS[league]}來源盤日尚未通過核對，已停止上傳`, readerVersion: VERSION };
       continue;
     }
-    const accepted = [], failures = [];
+    const accepted = [], failures = [], confirmedSoccerScopes = [];
     for (const payload of payloads) {
       const periodsCovered = soccer ? (payload.periodsCovered?.length ? payload.periodsCovered : ['UNKNOWN']) : null;
       const periodKey = soccer ? periodsCovered.join('+') : '';
@@ -573,6 +692,8 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
         const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw Object.assign(new Error('Reader 配對已過期，請重新配對'), { status: 401 }); } if (!response.ok || !data.ok) throw Object.assign(new Error(data.error || `同步失敗（${response.status}）`), { status: response.status });
         const saveReceipt = confirmedReaderSaveReceipt(data, payload, payloadHash);
+        if (soccer) confirmedSoccerScopes.push(...periodsCovered.map(period =>
+          `${SOCCER_CONFLICT_RECOVERY_PREFIX}${league}:${payload.boardDate}:${period}`));
         if (league === 'NBA') { try { await chrome.storage.local.remove(NBA_CONFLICT_RECOVERY_KEY); } catch {} }
         const now = Date.now(); hashes[syncKey] = payloadHash; times[syncKey] = now;
         accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), lastSyncAt: now, saveReceipt, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
@@ -592,6 +713,11 @@ async function performSyncAttempt(reason, preferredTabId, context) {
       localDiagnostic: soccer ? sources.map(source => localBoardDiagnostic(source.sourcePayload, source.selected.candidate.capture)).reduce((total,item)=>({openCount:total.openCount+item.openCount,lockedCount:total.lockedCount+item.lockedCount,marketCount:total.marketCount+item.marketCount,sample:[total.sample,item.sample].filter(Boolean).join('｜').slice(0,280)}),{openCount:0,lockedCount:0,marketCount:0,sample:''}) : localBoardDiagnostic(sourcePayload, selected.candidate.capture), boardDate: sourcePayload.boardDate,
       boardDates: soccer ? [...new Set(payloads.map(item => item.boardDate))] : payloads.map(item => item.boardDate), dateStatuses: accepted, dateErrors: failures, readerVersion: VERSION };
     if (skippedAlternativeCount) statuses[league].message += `；略過 ${skippedAlternativeCount} 組無法核對的盤口，已保留其餘有效盤口`;
+    // Only a fully accepted live scan closes this league's incident. Partial
+    // saves, failed ACKs and another league's success cannot rearm recovery.
+    if (soccer && accepted.length && !failures.length && confirmedSoccerScopes.length) {
+      try { await chrome.storage.local.remove([...new Set(confirmedSoccerScopes)]); } catch {}
+    }
 
   }
   await chrome.storage.local.set({ readerStatuses: statuses, lastSuccessfulPayloadHashes: hashes, lastSuccessfulSyncAts: times, pairError: '' });

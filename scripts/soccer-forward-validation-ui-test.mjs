@@ -12,7 +12,7 @@ const compile=async(path,name)=>transform(fs.readFileSync(path,'utf8').replace(/
 });
 const calibration=await compile('app/soccer/calibration-panel.js','forward-calibration.jsx'),calibrationContext=vm.createContext({React});vm.runInContext(calibration.code,calibrationContext);
 const compiled=await compile('app/soccer/forward-validation-panel.js','forward-validation-panel.jsx');
-const renderContext=vm.createContext({React,SoccerCalibrationPanel:calibrationContext.SoccerCalibrationPanel});vm.runInContext(compiled.code,renderContext);
+const renderContext=vm.createContext({React,SoccerCalibrationPanel:calibrationContext.SoccerCalibrationPanel,SoccerCalibrationShadowPanel:()=>null});vm.runInContext(compiled.code,renderContext);
 const report=(league='epl',groups=[])=>({version:SOCCER_FORWARD_VERSION,protocol:{activatedAt:'2026-10-20T00:00:00Z'},canonicalRule:SOCCER_FORWARD_POLICY,
  capturedSnapshotPeriods:groups.length,selectedGameModelPeriods:groups.reduce((n,g)=>n+(g.capturedGames||0),0),evaluatedGameModelPeriods:groups.reduce((n,g)=>n+(g.evaluatedGames||0),0),
  excludedSnapshotPeriods:0,excludedReasons:{},laterReanalysesNotSelected:0,uniqueSelectedGames:groups.length,groups,complete:true,truncated:false,
@@ -63,7 +63,7 @@ function harness({league='epl',throwFirst=false,deferUpdaters=false}={}){
  let props={league},cursor=0,dirty=false,tree,writes=0,fetchCount=0,timerId=0,now=Date.now();
  class ControlledDate extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
  const hooks=[],effects=[],calls=[],timers=new Map(),queuedUpdates=[];
- const ctx=vm.createContext({React,Date:ControlledDate,URLSearchParams,AbortController,SoccerCalibrationPanel:calibrationContext.SoccerCalibrationPanel,
+ const ctx=vm.createContext({React,Date:ControlledDate,URLSearchParams,AbortController,SoccerCalibrationPanel:calibrationContext.SoccerCalibrationPanel,SoccerCalibrationShadowPanel:()=>null,
   useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],update=>{const apply=()=>{hooks[i]=typeof update==='function'?update(hooks[i]):update;dirty=true;writes++;};if(deferUpdaters&&typeof update==='function')queuedUpdates.push(apply);else apply();}];},
   useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},
   useEffect:(fn,deps)=>{const i=cursor++,previous=hooks[i];if(previous&&deps.every((v,j)=>Object.is(v,previous.deps[j])))return;hooks[i]={deps};effects.push(()=>{previous?.cleanup?.();hooks[i].cleanup=fn();});},
