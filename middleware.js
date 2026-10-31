@@ -13,6 +13,8 @@ PUBLIC_PATHS.add('/api/reader/seen-captures');
 // Native cron has no browser session. Its route requires CRON_SECRET; only
 // this exact maintenance endpoint skips the unrelated session middleware.
 PUBLIC_PATHS.add('/api/cron/nba-maintenance');
+// Calibration cron authenticates with its own CRON_SECRET, without a browser session.
+PUBLIC_PATHS.add('/api/cron/soccer-calibration');
 
 export async function middleware(request) {
   const { pathname, search } = request.nextUrl;

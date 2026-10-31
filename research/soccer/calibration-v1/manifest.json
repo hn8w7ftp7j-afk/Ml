@@ -1,0 +1,42 @@
+{
+  "version": "SOCCER-FROZEN-MODEL-RATE-CALIBRATION-v1",
+  "createdAt": "2026-10-31T21:58:44.784Z",
+  "from": "2026-10-20",
+  "through": "2026-10-31",
+  "validationThrough": null,
+  "method": {
+    "version": "SOCCER-FROZEN-MODEL-RATE-CALIBRATION-v1",
+    "fullTime": "UNWEIGHTED_POISSON_MARGINAL_RATE_SCALE_MLE_BY_HOME_AWAY",
+    "halfTime": "CONDITIONAL_BINOMIAL_GOAL_SHARE_MLE_BY_HOME_AWAY",
+    "dependence": "UNCHANGED_BASELINE_RHO_FAIL_IF_CALIBRATED_DC_FACTORS_INVALID",
+    "selection": "ALL_SOURCE_VERIFIED_NORMAL_FINAL_GAMES_IN_DECLARED_DEVELOPMENT_WINDOW",
+    "grouping": "LEAGUE_EXACT_FROZEN_FT_AND_HT_MODEL_HASHES",
+    "target": "COMPLETE_FT_SCORE_DISTRIBUTION_AND_ITS_CONDITIONAL_HT_DISTRIBUTION",
+    "interpretation": "DEVELOPMENT_FIT_NOT_UNTOUCHED_VALIDATION_OR_FORMAL_CALIBRATION_ACCEPTANCE"
+  },
+  "archives": {
+    "documents": "retained-documents.json.gz",
+    "documentsSha256": "4585e77e2f1bd26b752edc7314dcf7b0ce4b383298009c36295ad00c6c0b39a0",
+    "models": "frozen-base-models.json",
+    "modelsSha256": "d3dd2233b7a74698e2b8f2c0100ac8599f5d2bf9d12bc19669a5cff73c08bf9f",
+    "originalBaselineFileSha256": "5a1717d7834b67c500bc750018fc4c36b4f1b5dd13524d8a04c3a7f1bef26086",
+    "originalHalfTimeFileSha256": "1deab39c68d69d31d8aea308669ef1abd7ca309f8f9c885964ebed39acf8d547"
+  },
+  "candidateHashes": {
+    "epl": "e432d66b9ea72e00da76884c54fb8f5217f91c272d1726bf7a09aa6940121992",
+    "ucl": "52be99271805fe5dda45f814fbee52b9f0348c90b5f7b1789dd5bd2631ff3706"
+  },
+  "restrictions": {
+    "accepted": false,
+    "baselineChanged": false,
+    "historicalPitVerified": false,
+    "durableFreezeVerified": false,
+    "untouchedValidationGames": 0,
+    "formalEligible": false,
+    "executable": false
+  },
+  "validationPlanHashes": {
+    "epl": "891df5ff4563b9100a1d07c36f77b26c53082abca8e2687ea60345acc3e318d7",
+    "ucl": "fe1bbb3431967b8f01485a36320fbc5ad7c66d04ed63e9f95a35d0e641c5d945"
+  }
+}
