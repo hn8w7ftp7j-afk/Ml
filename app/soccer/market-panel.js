@@ -194,6 +194,19 @@ export function SoccerConditionalAnalysis({quote,result,game,now=Date.now()}){
     </section>}
     <p>期望淨收益：{returnPct(c.netReturnBounds.lower)} ～ {returnPct(c.netReturnBounds.upper)}（每元本金）</p>
     <p className="soccerMarketNote">依信用盤比例派彩假設試算，尚未確認本帳號適用；足球退水按實際輸贏本金的 1%，走盤不退。</p>
+    {c.ruleBinding?.status==='ARITHMETIC_BOUND'&&c.ruleBinding.sourceQuoteKey===quote.key
+      &&c.ruleBinding.gameId===c.gameId&&c.ruleBinding.league===c.league
+      &&c.ruleBinding.quote?.period===quote.period&&c.ruleBinding.quote?.sourceLine===quote.line
+      &&c.ruleBinding.quote?.direction===quote.side?.toUpperCase()&&c.ruleBinding.quote?.water===quote.water
+      &&c.ruleBinding.quote?.kind===quote.kind&&c.ruleBinding.quote?.lineSide===(quote.lineSide??null)
+      &&c.ruleBinding.accountTermsVerified===false&&c.ruleBinding.formalScoringEnabled===false
+      &&/^[a-f0-9]{64}$/.test(c.ruleBinding.bindingHash||'')
+      &&<details className="soccerDetails"><summary>已確認算式已綁定本筆原盤</summary>
+        <p>球頭、方向、全場／半場、水位及原盤來源已分別綁定；退水為實際輸贏本金 × 1%，走盤不退。</p>
+        <p>規則：{c.ruleBinding.ruleVersion}｜套用時間：{clock(c.ruleBinding.appliedAt)}</p>
+        <p>綁定憑據：{c.ruleBinding.bindingHash}</p>
+        <p>這是計算規則綁定；帳號與期間條款仍待核對，異常賽事保留人工核對，並未取得正式評分資格。</p>
+      </details>}
     <dl>{Object.entries({FULL_WIN:'全贏',PARTIAL_WIN:'部分贏',PUSH:'走盤',PARTIAL_LOSS:'部分輸',FULL_LOSS:'全輸'}).map(([key,label])=><div key={key}><dt>{label}</dt><dd>{pct(c.probabilities?.[key])}</dd></div>)}</dl>
     <p className="soccerMarketNote">範圍僅保留未展開比分的損益界線，不包含模型誤差。正式 W／R／S 與排名資格仍待驗證。{historical?'此為已保存試算，價格已過期或比賽已開始。':''}</p>
   </section>;

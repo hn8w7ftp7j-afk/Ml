@@ -27,6 +27,7 @@ for(const quote of quotes){
  const distribution=grid(quote.period),input={quote,distribution,game,now};
  const actual=analyzeSoccerConditionalQuote(input);
  assert.equal(actual.status,'CONDITIONAL_RESEARCH',JSON.stringify(actual));
+ assert.equal(actual.ruleBinding.status,'UNBOUND','old quotes cannot inherit a later confirmation');
  const win=quote.side==='home'||quote.side==='over';
  const expected=(win?.6:.4)*.9-(win?.4:.6)+.01;
  assert.ok(Math.abs(actual.netReturnBounds.lower-expected)<1e-12);
@@ -119,3 +120,35 @@ console.log('PASS shipped automatic analysis summary distinguishes current, expi
 
 assert.match(render(failedQuote,{...game,status:'final'}),/無法用目前盤口重建賽前收益/);
 assert.match(status({...result,qaFlag:'BLOCKED'},{...game,status:'final'}),/現在同步的盤口不能補成當時的賽前分析/);
+
+// Every current original quote receives a separate server-created arithmetic
+// binding. A saved pre-confirmation receipt cannot acquire one retroactively.
+const bindingNow=Date.parse('2026-11-01T09:00:00Z');
+const bindingTime=new Date(bindingNow).toISOString();
+const bindingGame={...game,startTime:'2026-11-01T16:30:00Z',date:soccerDate('2026-11-01T16:30:00Z')};
+const bindingReceipt={...receipt,observedAt:bindingTime,firstFetchedAt:bindingTime,receivedAt:bindingTime,persistedAt:bindingTime};
+const bindingMatched={...matched,boardDate:bindingGame.date};
+const bindings=new Set();
+for(const league of ['epl','ucl']){
+ const g={...bindingGame,league,id:`soccer:${league}:${bindingGame.sourceId}`};
+ const m={...bindingMatched,league:league.toUpperCase(),officialGameId:g.id};
+ const qs=buildSoccerMarketDirections({game:g,reader:bindingReceipt,now:bindingNow,matchedGames:[m]}).flatMap(d=>d.quotes);
+ assert.equal(qs.length,8);
+ for(const q of qs){
+  const input={quote:q,game:g,distribution:{...grid(q.period),league,gameId:g.id},now:bindingNow};
+  const a=analyzeSoccerConditionalQuote(input),b=a.ruleBinding;
+  assert.equal(b.status,'ARITHMETIC_BOUND');
+  assert.equal(b.sourceQuoteKey,q.key);assert.equal(b.gameId,g.id);
+  assert.equal(b.quote.sourceLine,q.line);assert.equal(b.quote.direction,q.side.toUpperCase());
+  assert.equal(b.quote.period,q.period);assert.equal(b.quote.water,q.water);
+  assert.equal(b.contract.rebate.rate,.01);assert.equal(b.contract.rebate.basis,'SETTLED_PRINCIPAL');
+  assert.equal(b.accountTermsVerified,false);assert.equal(b.historicalContractVerified,false);
+  assert.equal(b.formalScoringEnabled,false);assert.equal(a.S,null);
+  assert.deepEqual(analyzeSoccerConditionalQuote(input).ruleBinding,b,'deterministic receipt');
+  bindings.add(b.bindingHash);
+  assert.equal(analyzeSoccerConditionalQuote({...input,quote:{...q,water:1.2}}).status,'UNAVAILABLE');
+  assert.equal(analyzeSoccerConditionalQuote({...input,now:bindingNow+180000}).status,'UNAVAILABLE');
+ }
+}
+assert.equal(bindings.size,16,'league, period, direction and quote are not conflated');
+console.log('PASS original-quote arithmetic bindings across both leagues and all eight directions; no account/source approval or formal S manufactured');
