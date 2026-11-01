@@ -19,7 +19,7 @@ const clone = value => structuredClone(value);
 const ordered = value => Array.isArray(value) ? value.map(ordered) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, ordered(value[key])])) : value;
 function evidence(league = 'NBA') {
-  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', league, readerVersion: '2.1.52',
+  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', league, readerVersion: '2.1.54',
     sourceHost: host, pageUrl, observedAt, pageActivityAt: observedAt,
     captureReasons: ['PRE_NORMALIZATION', 'SOURCE_PARTIAL'], completeCapture: false,
     tables: [{ sectionTitle: `聯盟：${league}`, headers: ['時間', '主客隊伍', '讓分', '大小盤'], rows: [
@@ -28,7 +28,7 @@ function evidence(league = 'NBA') {
       { marketLocked: true, cells: [{ pair: ['封盤', ''] }] },
     ] }] };
 }
-function setup({ capture = null, captureVersion = '2.1.52', autoEnabled = true, parseThrows = false, tabs = [1] } = {}) {
+function setup({ capture = null, captureVersion = '2.1.54', autoEnabled = true, parseThrows = false, tabs = [1] } = {}) {
   const state = { readerToken: 'synthetic-signed-token', deviceId, pairedAt: Date.now(), autoEnabled };
   const writes = [], uploads = [], diagnostics = [], listeners = [];
   const flags = { online: false, statusReadFails: false };
@@ -45,7 +45,7 @@ function setup({ capture = null, captureVersion = '2.1.52', autoEnabled = true, 
   const event = { addListener() {} };
   const chrome = {
     runtime: { id: 'seen-worker-test-extension', onMessage: { addListener(listener) { listeners.push(listener); } },
-      onInstalled: event, onStartup: event, getManifest: () => ({ version: '2.1.52' }) },
+      onInstalled: event, onStartup: event, getManifest: () => ({ version: '2.1.54' }) },
     storage: { local: storage }, alarms: { onAlarm: event, create: async () => {}, clear: async () => {} },
     tabs: { onUpdated: event, reload: async () => {}, query: async () => tabs.map(id => ({ id, url: pageUrl })),
       sendMessage: async () => ({ ok: true, capture: { readerVersion: captureVersion, captures: capture ? [clone(capture)] : [] } }) },
@@ -113,6 +113,8 @@ const ackWrite = direct.writes.findIndex(row => row.action === 'set' && row.key.
 const queueDelete = direct.writes.findIndex(row => row.action === 'remove' && row.key.startsWith('tai888SeenV1:'));
 assert.ok(ackWrite >= 0 && queueDelete > ackWrite, 'local immutable ACK must be saved before deleting queued evidence');
 assert.equal((await direct.run('getSeenOutbox().status()')).savedCaptureCount, 1);
+await direct.message({type:'SEEN_CAPTURE_FAILURE',code:'SEEN_LOCAL_SAVE_FAILED',evidence:directEvidence});
+assert.equal((await direct.run('getSeenOutbox().status()')).state,'sent','delayed content failure is checked against the exact persisted capture');
 assert.equal((await direct.run("performSync('alarm')")).skipped, true);
 
 // Both an obsolete content version and parser failure archive before rejection.
@@ -165,5 +167,17 @@ const delivery = reporting.diagnostics[0].seenCaptureDelivery;
 assert.equal(delivery.state, 'error'); assert.equal(delivery.code, 'SEEN_STORAGE_UNAVAILABLE');
 for (const field of ['pendingCount', 'pendingBytes', 'savedCaptureCount', 'failedCaptureCount']) assert.equal(delivery[field], null, `${field} is unknown, never a fabricated zero`);
 assert.equal(JSON.stringify(reporting.diagnostics).includes('synthetic-signed-token'), false);
+
+const historical=setup({tabs:[]});
+await historical.message({type:'SEEN_CAPTURE_FAILURE',code:'SEEN_LOCAL_SAVE_FAILED'});
+await historical.run("performSync('manual')");
+const historicalDelivery=historical.diagnostics[0].seenCaptureDelivery;
+assert.equal(historicalDelivery.captureFailureScope,'UNIDENTIFIED_CAPTURE');
+assert.ok(Date.parse(historicalDelivery.captureFailureAt)>0,'automatic diagnostic preserves when the unidentified gap was reported');
+const privateFailure=setup({tabs:[]});
+await privateFailure.message({type:'SEEN_CAPTURE_FAILURE',code:'PRIVATE_ACCOUNT_SECRET_VALUE'});
+await privateFailure.run("performSync('manual')");
+assert.equal(privateFailure.diagnostics[0].seenCaptureDelivery.code,'SEEN_SAVE_FAILED');
+assert.equal(JSON.stringify(privateFailure.state).includes('PRIVATE_ACCOUNT_SECRET_VALUE'),false,'arbitrary exception strings never enter persistent failure metadata');
 
 console.log('PASS actual Reader worker + raw outbox: direct disabled-auto capture, local-before-upload, strict receipt-before-delete, offline retry, pre-version/parser archive, origin rejection and nullable automatic diagnostics; desktop/Production NOT VERIFIED');

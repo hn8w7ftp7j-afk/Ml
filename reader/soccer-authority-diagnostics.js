@@ -68,14 +68,28 @@ function sourceEvidence(candidate, index, scope, { unit, teamCodeValid, gameEvid
 
 export function buildSoccerAuthorityDiagnostics(candidates, { league, period = null } = {}) {
   if (!['EPL', 'UCL'].includes(league) || period !== null && !PERIODS.includes(period)) return null;
-  return buildTypedAuthorityDiagnostics(candidates, { league, period, version: SOCCER_AUTHORITY_DIAGNOSTICS_VERSION, unit: 'GOALS', teamCodeValid: validCode });
+  return buildTypedAuthorityDiagnostics(candidates, { league, period, version: SOCCER_AUTHORITY_DIAGNOSTICS_VERSION, unit: 'GOALS', teamCodeValid: validCode, includeSourceTopology: true });
 }
 
 // Shared observational comparison only. Callers provide already-normalized,
 // strictly typed identities; this function never selects or authorizes sources.
-export function buildTypedAuthorityDiagnostics(candidates, { league, period = null, version, unit, teamCodeValid, gameEvidence = input => input }) {
+export function buildTypedAuthorityDiagnostics(candidates, { league, period = null, version, unit, teamCodeValid, gameEvidence = input => input, includeSourceTopology = false }) {
   const eligible = (Array.isArray(candidates) ? candidates : []).filter(candidate => candidate?.parsed?.league === league);
-  const sources = eligible.slice(0, MAX_SOURCES).map((candidate, index) => sourceEvidence(candidate, index + 1, period, { unit, teamCodeValid, gameEvidence }));
+  const pages = new Map();
+  const sources = eligible.slice(0, MAX_SOURCES).map((candidate, index) => {
+    const source = sourceEvidence(candidate, index + 1, period, { unit, teamCodeValid, gameEvidence });
+    // Report-local ordinals reveal whether two captures came from the same
+    // page/frame without exporting Chrome identifiers, URLs or page titles.
+    if (includeSourceTopology && Number.isInteger(candidate?.tabId) && candidate.tabId >= 0
+      && Number.isInteger(candidate?.frameId) && candidate.frameId >= 0) {
+      if (!pages.has(candidate.tabId)) pages.set(candidate.tabId, { index: pages.size + 1, frames: new Map() });
+      const page = pages.get(candidate.tabId);
+      if (!page.frames.has(candidate.frameId)) page.frames.set(candidate.frameId, page.frames.size + 1);
+      Object.assign(source.summary, { pageIndex: page.index, frameIndex: page.frames.get(candidate.frameId),
+        ...(typeof candidate.active === 'boolean' ? { active: candidate.active } : {}) });
+    }
+    return source;
+  });
   const pairs = [], differences = [];
   let differenceCount = 0;
   const record = value => { differenceCount++; if (differences.length < MAX_DIFFERENCES) differences.push(value); };

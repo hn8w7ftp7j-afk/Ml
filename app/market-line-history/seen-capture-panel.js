@@ -140,9 +140,10 @@ export default function SeenCapturePanel() {
         <strong>Reader {row.readerVersion || '版本未確認'}<span className={styles.muted}>｜裝置 …{row.deviceId.slice(-6)}</span></strong>
         <p className={styles.muted}>最近狀態產生 {timeText(row.reportCreatedAt)}｜伺服器收到 {timeText(row.reportReceivedAt)}</p>
         {!row.delivery ? <p className={styles.notice}>此份回報未包含原始盤面補傳狀態；待補傳數量未確認。</p> : <>
-          <p className={row.delivery.state === 'error' || row.delivery.failedCaptureCount > 0 ? styles.error : styles.notice}>{row.delivery.state === 'sent' && row.delivery.pendingCount !== 0 ? '補傳狀態待核對' : DELIVERY_STATES[row.delivery.state]}｜待補傳 {countText(row.delivery.pendingCount)} 筆</p>
-          {row.delivery.failedCaptureCount > 0 && <p className={styles.error}>Reader 回報保存或補傳異常，不能視為全部保存成功。</p>}
-          {row.delivery.code && <p className={styles.notice}>{DELIVERY_CODES[row.delivery.code] || row.delivery.code}</p>}
+          <p className={row.delivery.state === 'error' || row.delivery.failedCaptureCount > 0 ? styles.error : styles.notice}>{row.delivery.captureFailureScope === 'UNIDENTIFIED_CAPTURE' ? '先前保存失敗待核對' : row.delivery.state === 'sent' && row.delivery.pendingCount !== 0 ? '補傳狀態待核對' : DELIVERY_STATES[row.delivery.state]}｜待補傳 {countText(row.delivery.pendingCount)} 筆</p>
+          {row.delivery.captureFailureScope === 'UNIDENTIFIED_CAPTURE' ? <p className={styles.error}>先前回報過一筆無法對應來源的保存失敗，當次來源是否已補存仍未確認。失敗回報時間 {timeText(row.delivery.captureFailureAt)}。後續回條不代表已補齊這筆來源。</p>
+            : row.delivery.failedCaptureCount > 0 && <p className={styles.error}>{row.delivery.captureFailureScope === 'EXACT_FRAGMENTS' ? `原始來源仍待確認保存。失敗回報時間 ${timeText(row.delivery.captureFailureAt)}。` : 'Reader 回報保存或補傳異常，不能視為全部保存成功。'}</p>}
+          {row.delivery.code && row.delivery.captureFailureScope !== 'UNIDENTIFIED_CAPTURE' && <p className={styles.notice}>{DELIVERY_CODES[row.delivery.code] || row.delivery.code}</p>}
           <p className={styles.muted}>最近回條存入 {timeText(row.delivery.lastPersistedAt)}</p>
         </>}
       </div>)}

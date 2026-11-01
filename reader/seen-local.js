@@ -2,6 +2,7 @@
   if (globalThis.Tai888SeenStorage) return;
   const PREFIX = 'tai888SeenV1:';
   const ACK_PREFIX = 'tai888SeenAckV1:';
+  const FAILURE_PREFIX = 'tai888SeenFailureV1:';
   const SCHEMA = 'READER-SEEN-CAPTURE-v1';
   const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
   const canonical = value => Array.isArray(value) ? `[${value.map(canonical).join(',')}]`
@@ -117,6 +118,26 @@
     const all=await storage.get(null);
     return Object.entries(all||{}).filter(([key])=>key.startsWith(prefix)).map(([key,value])=>({...value,key}));
   }
+  async function failureScope(input, storage) {
+    const chunks = await fragments(input), config = await storage.get(['deviceId']);
+    if(typeof config.deviceId!=='string'||!config.deviceId) throw Error('SEEN_PAIR_REQUIRED');
+    const captureIds = chunks.map(chunk=>chunk.captureId);
+    return { ownerDeviceId:config.deviceId,captureIds,
+      failureId:await sha(canonical({ownerDeviceId:config.deviceId,captureIds})) };
+  }
+  async function scopeConfirmed(scope, rows, acks) {
+    if(!scope||typeof scope.ownerDeviceId!=='string'||!Array.isArray(scope.captureIds)||!scope.captureIds.length
+      ||scope.captureIds.some(id=>typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))
+      ||scope.failureId!==await sha(canonical({ownerDeviceId:scope.ownerDeviceId,captureIds:scope.captureIds})))return false;
+    for(const id of scope.captureIds) {
+      const ack=acks.find(row=>row.key===ACK_PREFIX+scope.ownerDeviceId+':'+id);
+      if(validAck(ack,id,scope.ownerDeviceId))continue;
+      const row=rows.find(row=>row.key===PREFIX+scope.ownerDeviceId+':'+id);
+      if(row?.captureId!==id||row.ownerDeviceId!==scope.ownerDeviceId||typeof row.wireText!=='string'
+        ||await sha(row.wireText)!==id)return false;
+    }
+    return true;
+  }
   async function persist(input,{storage}={}) {
     if(!storage?.get || !storage?.set) throw Error('SEEN_STORAGE_UNAVAILABLE');
     const chunks=await fragments(input), config=await storage.get(['deviceId']);
@@ -137,5 +158,5 @@
     }
     return {queued:true,durable:true,captureIds};
   }
-  globalThis.Tai888SeenStorage=Object.freeze({PREFIX,ACK_PREFIX,SCHEMA,canonical,sha,bytes,fragments,entries,persist});
+  globalThis.Tai888SeenStorage=Object.freeze({PREFIX,ACK_PREFIX,FAILURE_PREFIX,SCHEMA,canonical,sha,bytes,fragments,entries,persist,failureScope,scopeConfirmed});
 })();

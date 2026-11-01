@@ -1,0 +1,3057 @@
+{
+  "version": "SOCCER-FROZEN-MODEL-RATE-CALIBRATION-v1",
+  "type": "CALIBRATION_RESEARCH_CANDIDATE",
+  "league": "ucl",
+  "createdAt": "2026-10-31T21:58:44.784Z",
+  "status": "DEVELOPMENT_FIT_AVAILABLE",
+  "method": {
+    "version": "SOCCER-FROZEN-MODEL-RATE-CALIBRATION-v1",
+    "fullTime": "UNWEIGHTED_POISSON_MARGINAL_RATE_SCALE_MLE_BY_HOME_AWAY",
+    "halfTime": "CONDITIONAL_BINOMIAL_GOAL_SHARE_MLE_BY_HOME_AWAY",
+    "dependence": "UNCHANGED_BASELINE_RHO_FAIL_IF_CALIBRATED_DC_FACTORS_INVALID",
+    "selection": "ALL_SOURCE_VERIFIED_NORMAL_FINAL_GAMES_IN_DECLARED_DEVELOPMENT_WINDOW",
+    "grouping": "LEAGUE_EXACT_FROZEN_FT_AND_HT_MODEL_HASHES",
+    "target": "COMPLETE_FT_SCORE_DISTRIBUTION_AND_ITS_CONDITIONAL_HT_DISTRIBUTION",
+    "interpretation": "DEVELOPMENT_FIT_NOT_UNTOUCHED_VALIDATION_OR_FORMAL_CALIBRATION_ACCEPTANCE"
+  },
+  "modelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+  "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+  "jointHalfTimeModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+  "calibratedModelHashes": {
+    "FT": "990ebdddbb2ce39610c61b6d14edadbcd158e6030c90c9715750dd7f6320830e",
+    "HT": "23f8bbc8737c2d62600aa298704c4527bb624e804440f990b6c39a523e8ed5da"
+  },
+  "modelAvailability": {
+    "modelCreatedAt": "2026-10-19T08:34:51.515Z",
+    "halfTimeModelCreatedAt": "2026-10-19T08:35:01.055Z",
+    "historicalFreezeReceiptVerified": false,
+    "currentInputsAvailableAtFit": true,
+    "durableCurrentInputArchiveVerified": false
+  },
+  "datasetHash": "cba6d501130e69bdd1700a993a047094844dc72580e034c9a6ea75d41c0b6a3d",
+  "window": {
+    "from": "2026-10-20",
+    "through": "2026-10-31"
+  },
+  "totals": {
+    "games": 18,
+    "homeGoals": 47,
+    "awayGoals": 27,
+    "homeHalfGoals": 22,
+    "awayHalfGoals": 9,
+    "predictedHomeGoals": 43.73649803526929,
+    "predictedAwayGoals": 23.903993154751372
+  },
+  "parameters": {
+    "fullTimeRateScales": {
+      "home": 1.0746173587583305,
+      "away": 1.1295183957427313
+    },
+    "halfTimeGoalShares": {
+      "home": 0.46808510638297873,
+      "away": 0.3333333333333333
+    },
+    "rho": 0.05
+  },
+  "excluded": [],
+  "failures": [],
+  "developmentGameIds": [
+    "ucl:401915403",
+    "ucl:401915404",
+    "ucl:401915392",
+    "ucl:401915397",
+    "ucl:401915398",
+    "ucl:401915399",
+    "ucl:401915400",
+    "ucl:401915401",
+    "ucl:401915402",
+    "ucl:401915395",
+    "ucl:401915396",
+    "ucl:401915312",
+    "ucl:401915313",
+    "ucl:401915388",
+    "ucl:401915389",
+    "ucl:401915390",
+    "ucl:401915391",
+    "ucl:401915394"
+  ],
+  "inspectedGameIds": [
+    "ucl:401858734",
+    "ucl:401858735",
+    "ucl:401858736",
+    "ucl:401858737",
+    "ucl:401858758",
+    "ucl:401858759",
+    "ucl:401858760",
+    "ucl:401858761",
+    "ucl:401858762",
+    "ucl:401858763",
+    "ucl:401858764",
+    "ucl:401858766",
+    "ucl:401858767",
+    "ucl:401858768",
+    "ucl:401858769",
+    "ucl:401862577",
+    "ucl:401862578",
+    "ucl:401862579",
+    "ucl:401862580",
+    "ucl:401862581",
+    "ucl:401862582",
+    "ucl:401862583",
+    "ucl:401862641",
+    "ucl:401862642",
+    "ucl:401862645",
+    "ucl:401862646",
+    "ucl:401862647",
+    "ucl:401862648",
+    "ucl:401862667",
+    "ucl:401862668",
+    "ucl:401862885",
+    "ucl:401862886",
+    "ucl:401862887",
+    "ucl:401862888",
+    "ucl:401862889",
+    "ucl:401862890",
+    "ucl:401862891",
+    "ucl:401862892",
+    "ucl:401862893",
+    "ucl:401862894",
+    "ucl:401862895",
+    "ucl:401862896",
+    "ucl:401915312",
+    "ucl:401915313",
+    "ucl:401915388",
+    "ucl:401915389",
+    "ucl:401915390",
+    "ucl:401915391",
+    "ucl:401915392",
+    "ucl:401915393",
+    "ucl:401915394",
+    "ucl:401915395",
+    "ucl:401915396",
+    "ucl:401915397",
+    "ucl:401915398",
+    "ucl:401915399",
+    "ucl:401915400",
+    "ucl:401915401",
+    "ucl:401915402",
+    "ucl:401915403",
+    "ucl:401915404",
+    "ucl:401915405",
+    "ucl:401915406",
+    "ucl:401915407",
+    "ucl:401915408",
+    "ucl:401915409",
+    "ucl:401915410",
+    "ucl:401915411",
+    "ucl:401915412",
+    "ucl:401915413",
+    "ucl:401915414",
+    "ucl:401915415",
+    "ucl:401915416",
+    "ucl:401915417",
+    "ucl:401915418",
+    "ucl:401915422",
+    "ucl:401915423",
+    "ucl:401915424",
+    "ucl:401915425",
+    "ucl:401915426",
+    "ucl:401915434",
+    "ucl:401915435",
+    "ucl:401915436",
+    "ucl:401915440",
+    "ucl:401915441",
+    "ucl:401915442",
+    "ucl:401915443",
+    "ucl:401915444",
+    "ucl:401915445",
+    "ucl:401915446",
+    "ucl:401915447",
+    "ucl:401915448",
+    "ucl:401915449",
+    "ucl:401915450",
+    "ucl:401915451",
+    "ucl:401915452",
+    "ucl:757761",
+    "ucl:757762",
+    "ucl:757763",
+    "ucl:757764",
+    "ucl:757765",
+    "ucl:757766",
+    "ucl:757767",
+    "ucl:757768",
+    "ucl:757769",
+    "ucl:757770",
+    "ucl:757771",
+    "ucl:757772",
+    "ucl:757773",
+    "ucl:757774",
+    "ucl:757775",
+    "ucl:757776",
+    "ucl:757777",
+    "ucl:757778",
+    "ucl:757779",
+    "ucl:757780",
+    "ucl:757781",
+    "ucl:757782",
+    "ucl:757783",
+    "ucl:757784",
+    "ucl:757785",
+    "ucl:757786",
+    "ucl:757787",
+    "ucl:757788",
+    "ucl:757789",
+    "ucl:757790",
+    "ucl:757791",
+    "ucl:757792",
+    "ucl:757793",
+    "ucl:757794",
+    "ucl:757795",
+    "ucl:757796"
+  ],
+  "observations": [
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915403",
+      "eventId": "401915403",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 1.5971622843763038,
+      "awayRate": 1.1882738681729983,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 2,
+        "away": 2
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.840Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "3cdd551c107f37688892c1d4d41470885f9676bca6cf6928ccacee34934032cc"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915403",
+      "eventId": "401915403",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.699353475234463,
+      "awayRate": 0.5034678615284836,
+      "rho": 0.010271860740298665,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.840Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "3cdd551c107f37688892c1d4d41470885f9676bca6cf6928ccacee34934032cc"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915404",
+      "eventId": "401915404",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 1.155049800474631,
+      "awayRate": 2.0263955624793124,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.868Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "ec3c5970c82e7e3394de387eaba9befc6176096a86c3ff7bb3b1476ea273ea53"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915404",
+      "eventId": "401915404",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.5057645675287465,
+      "awayRate": 0.8585773597974433,
+      "rho": 0.008124787465654598,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.868Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "ec3c5970c82e7e3394de387eaba9befc6176096a86c3ff7bb3b1476ea273ea53"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915392",
+      "eventId": "401915392",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 1.6224980022144844,
+      "awayRate": 1.7303904588249788,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.131Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "822a01a57d6d81ccd7e1d1698877184e4081a5278d1eb1d84f9fd6d69f6e90b7"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915392",
+      "eventId": "401915392",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.7104472898649596,
+      "awayRate": 0.7331609381037638,
+      "rho": 0.0074093504163700585,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.131Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "822a01a57d6d81ccd7e1d1698877184e4081a5278d1eb1d84f9fd6d69f6e90b7"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915397",
+      "eventId": "401915397",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 3.2172622642404516,
+      "awayRate": 0.7131783604086723,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 4,
+        "away": 3
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.014Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "972af2f391b654c22cb7c0077c7db2a680ecdf8359f7cdee08775f963b8da762"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915397",
+      "eventId": "401915397",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.4087507370084746,
+      "awayRate": 0.30217140477507265,
+      "rho": 0.0054330709282409476,
+      "actualScore": {
+        "home": 2,
+        "away": 2
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.014Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "972af2f391b654c22cb7c0077c7db2a680ecdf8359f7cdee08775f963b8da762"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915398",
+      "eventId": "401915398",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 1.7867209365654244,
+      "awayRate": 1.3819234393517354,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 0,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.856Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "d98562540adfb0da29808fdde29aa496b0dbef96f3e5e53a0e549daa3e659642"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915398",
+      "eventId": "401915398",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.7823560000661777,
+      "awayRate": 0.5855165694052038,
+      "rho": 0.008258567934728163,
+      "actualScore": {
+        "home": 0,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.856Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "d98562540adfb0da29808fdde29aa496b0dbef96f3e5e53a0e549daa3e659642"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915399",
+      "eventId": "401915399",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 3.0874919104642937,
+      "awayRate": 1.603144541759053,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 4,
+        "away": 2
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.996Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "73f23a07eebebfd6b247315e14a6800267fd307a5416b8f86a66ac580d812553"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915399",
+      "eventId": "401915399",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.351927865104007,
+      "awayRate": 0.6792472474392431,
+      "rho": 0.0034992955112945197,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.996Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "73f23a07eebebfd6b247315e14a6800267fd307a5416b8f86a66ac580d812553"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915400",
+      "eventId": "401915400",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 1.2719164902856228,
+      "awayRate": 1.7043431754987306,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 4,
+        "away": 3
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.049Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "40fb97ee850c1521dfaa96e77006800e19ad466496d797143f27ddf4ea588417"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915400",
+      "eventId": "401915400",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.5569372795680754,
+      "awayRate": 0.7221247869384977,
+      "rho": 0.009159809725549481,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.049Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "40fb97ee850c1521dfaa96e77006800e19ad466496d797143f27ddf4ea588417"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915401",
+      "eventId": "401915401",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 2.253395754292839,
+      "awayRate": 0.7023299307448159,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 5,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.034Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "825be94279eb3436e41b800e346fbe43548feefa308e69e4c87b17505a4d458e"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915401",
+      "eventId": "401915401",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.9867000787954884,
+      "awayRate": 0.29757495960355534,
+      "rho": 0.009398709182063978,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.034Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "825be94279eb3436e41b800e346fbe43548feefa308e69e4c87b17505a4d458e"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915402",
+      "eventId": "401915402",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 3.328346144943093,
+      "awayRate": 1.1925937936418063,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 4,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.896Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "1c9fd8a48ba49f8d08716556d280075edf104dea95800a79c882ba0e2ae0ff2c"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915402",
+      "eventId": "401915402",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-20T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.4573913158474996,
+      "awayRate": 0.505298200220596,
+      "rho": 0.003872005473064297,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:43.896Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "1c9fd8a48ba49f8d08716556d280075edf104dea95800a79c882ba0e2ae0ff2c"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915395",
+      "eventId": "401915395",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 2.2224707222907494,
+      "awayRate": 1.7153012329512163,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 4,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.160Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "0ef7555dd396e8c9e4894e5452086027d24e3d7c0b84edd381d39114ba859dbe"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915395",
+      "eventId": "401915395",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.9731588570837297,
+      "awayRate": 0.7267676810556526,
+      "rho": 0.005334406266596614,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.160Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "0ef7555dd396e8c9e4894e5452086027d24e3d7c0b84edd381d39114ba859dbe"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915396",
+      "eventId": "401915396",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 2.0659673280628037,
+      "awayRate": 1.2375793207047165,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 2,
+        "away": 4
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.145Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "823cd3f1e69c55173fde6195c6689ba876dee4b7bbd8e5a22f8f3e964e2a06e8"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915396",
+      "eventId": "401915396",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T16:45:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.9046303213738822,
+      "awayRate": 0.5243584250700394,
+      "rho": 0.007671138985414269,
+      "actualScore": {
+        "home": 2,
+        "away": 2
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.145Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "823cd3f1e69c55173fde6195c6689ba876dee4b7bbd8e5a22f8f3e964e2a06e8"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915312",
+      "eventId": "401915312",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 1.2428089787132355,
+      "awayRate": 1.2928826578651655,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 2,
+        "away": 2
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.266Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "ca81c831c9d8bcd9348675d85a7077c0b4d7112193df9b51b23cba50563742de"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915312",
+      "eventId": "401915312",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.5441919001080754,
+      "awayRate": 0.5477902732670968,
+      "rho": 0.011802525597131753,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.266Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "ca81c831c9d8bcd9348675d85a7077c0b4d7112193df9b51b23cba50563742de"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915313",
+      "eventId": "401915313",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 2.9703119093270764,
+      "awayRate": 0.9475745339792663,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 4,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.770Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "8848c70583fc26f726b7b88b0aa2023a67beabc5cf7494f5bdaaf5d749962afb"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915313",
+      "eventId": "401915313",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.3006179626445378,
+      "awayRate": 0.40148431858970623,
+      "rho": 0.005453397687679294,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.770Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "8848c70583fc26f726b7b88b0aa2023a67beabc5cf7494f5bdaaf5d749962afb"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915388",
+      "eventId": "401915388",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 3.0811977353349738,
+      "awayRate": 1.3974319020614385,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.316Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "431d364d22d4a313e35bd1718f5bf1e24365dd9cfdd8e796a5c07ab08b5ee1bf"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915388",
+      "eventId": "401915388",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.3491718187751625,
+      "awayRate": 0.5920874557683394,
+      "rho": 0.003953703136231937,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.316Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "431d364d22d4a313e35bd1718f5bf1e24365dd9cfdd8e796a5c07ab08b5ee1bf"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915389",
+      "eventId": "401915389",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 3.7017723473654445,
+      "awayRate": 1.7973662793449814,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.327Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "d5475064c6e0ac8ecc01f1a212d187f6180f4548567a32d820344aedbbe6fff5"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915389",
+      "eventId": "401915389",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.6209043883526282,
+      "awayRate": 0.7615383804043059,
+      "rho": 0.0022151655640976686,
+      "actualScore": {
+        "home": 0,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.327Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "d5475064c6e0ac8ecc01f1a212d187f6180f4548567a32d820344aedbbe6fff5"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915390",
+      "eventId": "401915390",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 1.921010823955714,
+      "awayRate": 0.9738916796029216,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.281Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "7311d07b40e2fa244d6a4d9600ccff0fc356adcd6b29eae193db02e456b2b502"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915390",
+      "eventId": "401915390",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 0.8411578515461093,
+      "awayRate": 0.4126348095527427,
+      "rho": 0.009688243721345434,
+      "actualScore": {
+        "home": 0,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.281Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "7311d07b40e2fa244d6a4d9600ccff0fc356adcd6b29eae193db02e456b2b502"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915391",
+      "eventId": "401915391",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 3.711854161072873,
+      "awayRate": 1.1119479859551789,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 2,
+        "away": 3
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.479Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "e5478878e80b4cc0dc18d1396f3c09dc6d81f6e87e4145d8ca60afece2b99efb"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915391",
+      "eventId": "401915391",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.6253189375327135,
+      "awayRate": 0.4711288278017183,
+      "rho": 0.0032696031730391193,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.479Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "e5478878e80b4cc0dc18d1396f3c09dc6d81f6e87e4145d8ca60afece2b99efb"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915394",
+      "eventId": "401915394",
+      "period": "REGULATION_FT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": null,
+      "homeRate": 3.4992604412892794,
+      "awayRate": 1.1874444314043837,
+      "rho": 0.05,
+      "actualScore": {
+        "home": 3,
+        "away": 1
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.187Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "80f4c14f5f1cac03bc924bf88a195956d6b1eb09c980ce8d59cc25091a039a39"
+      ],
+      "untouchedVerified": false
+    },
+    {
+      "league": "ucl",
+      "gameId": "soccer:ucl:401915394",
+      "eventId": "401915394",
+      "period": "REGULATION_HT",
+      "kickoff": "2026-10-21T19:00:00.000Z",
+      "predictedAt": null,
+      "predictionSemantics": "RECONSTRUCTED_FROM_UNCHANGED_FROZEN_MODEL_FOR_DEVELOPMENT",
+      "baselineModelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+      "fullTimeModelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+      "halfTimeModelHash": "180411c9b8b5229de54aead64b14e3a8600a0214919aa0660d15e325d3b40408",
+      "homeRate": 1.5322299895916864,
+      "awayRate": 0.5031164318056289,
+      "rho": 0.0035277650994234282,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "resultAvailableAt": "2026-10-31T21:58:44.187Z",
+      "sourceHashes": [
+        "69beaa2043e4bf4b8b22a7f878f5e6dae7097347692e4257ffb792d023a1f614",
+        "80f4c14f5f1cac03bc924bf88a195956d6b1eb09c980ce8d59cc25091a039a39"
+      ],
+      "untouchedVerified": false
+    }
+  ],
+  "diagnostic": {
+    "interpretation": "IN_SAMPLE_DEVELOPMENT_DIAGNOSTICS_NOT_A_NEW_UNTOUCHED_TEST",
+    "before": {
+      "FT": {
+        "games": 18,
+        "scoreLogLoss": 3.39594744626491,
+        "scoreLogLossState": "FINITE",
+        "logLoss": 0.8261599204666493,
+        "logLossState": "FINITE",
+        "brier": 0.46367544563806107,
+        "probabilityAudit": {
+          "version": "SOCCER-CLASSWISE-PROBABILITY-AUDIT-v1",
+          "league": null,
+          "period": "REGULATION_FT",
+          "fold": null,
+          "modelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+          "cohort": {
+            "unit": "INPUT_EVALUATION_RECORD",
+            "sample": 18,
+            "used": 18,
+            "excluded": 0,
+            "coverage": 1,
+            "uniqueGames": 18,
+            "usedUniqueGames": 18,
+            "duplicateRecords": 0,
+            "missingIdentityRecords": 0,
+            "reasons": [],
+            "independenceAssumed": false
+          },
+          "pooledEventCount": 54,
+          "classes": {
+            "home": {
+              "count": 18,
+              "positiveCount": 11,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.5088710366082997,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.25443551830414984,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.7290675419509227,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.36453377097546136,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 1.4505318806110092,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.4835106268703364,
+                  "observedFrequency": 0.3333333333333333
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.5693840118445608,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.5693840118445608,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 1.2755512884594453,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.6377756442297227,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 3.7375294922304527,
+                  "sumObserved": 5,
+                  "meanPredicted": 0.7475058984460905,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 2.4956460884409752,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.8318820294803251,
+                  "observedFrequency": 0.6666666666666666
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.26237098364162614,
+              "REL_L2": 0.0800721696602055
+            },
+            "draw": {
+              "count": 18,
+              "positiveCount": 3,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.18625931819248664,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.09312965909624332,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 8,
+                  "sumPredicted": 1.1254141099420814,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.14067676374276017,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 8,
+                  "sumPredicted": 1.7687079551403055,
+                  "sumObserved": 3,
+                  "meanPredicted": 0.2210884943925382,
+                  "observedFrequency": 0.375
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.14127585961079236,
+              "REL_L2": 0.02028754967392788
+            },
+            "away": {
+              "count": 18,
+              "positiveCount": 4,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 0.4018271644317215,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.0803654328863443,
+                  "observedFrequency": 0.2
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 0.7651698739460921,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.15303397478921843,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.5188928925556633,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.25944644627783164,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 0.9924419421301096,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.33081398071003654,
+                  "observedFrequency": 0.3333333333333333
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.8948144016094755,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.4474072008047377,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.5798910018992485,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.5798910018992485,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.17594062636326802,
+              "REL_L2": 0.04895823212333464
+            }
+          },
+          "binning": {
+            "method": "FIXED_WIDTH",
+            "edges": [
+              0,
+              0.1,
+              0.2,
+              0.3,
+              0.4,
+              0.5,
+              0.6,
+              0.7,
+              0.8,
+              0.9,
+              1
+            ],
+            "lastUpperInclusive": true,
+            "probabilityRounding": false
+          },
+          "probabilityMass": {
+            "tolerance": 1e-10,
+            "smallTailTolerance": 1e-10,
+            "renormalized": false,
+            "knownTailCount": 18,
+            "tailAffectedGames": 18,
+            "maxTailMass": 5.779821066198565e-13,
+            "interpretation": "Only complete vectors or known omitted mass <= tolerance enter class bins. Original probabilities are unchanged; larger or unverified missing mass is audit-excluded with its reason."
+          },
+          "composition": [
+            {
+              "league": "ucl",
+              "period": "REGULATION_FT",
+              "fold": "CALIBRATION_DEVELOPMENT_REUSED",
+              "modelHash": "a2b27fb6bb86dc2b04a8ff56129b0bd0e56221c1492ff4a1e22732774017540e",
+              "count": 18
+            }
+          ],
+          "missingMetadata": {
+            "league": 0,
+            "period": 0,
+            "fold": 0,
+            "modelHash": 0
+          },
+          "exactScoreEvidence": {
+            "available": 0,
+            "zeroModelProbability": 0,
+            "unavailable": 18,
+            "invalid": 0
+          },
+          "interpretation": "CLASSWISE_FIXED_BIN_DESCRIPTIVE_CALIBRATION_NOT_A_PROMOTION_OR_PIT_CERTIFICATE",
+          "estimator": {
+            "ECE_L1": "sum_b(n_b/N)*abs(mean_p_b-mean_y_b)",
+            "REL_L2": "sum_b(n_b/N)*(mean_p_b-mean_y_b)^2",
+            "biasCorrected": false,
+            "fullMurphyDecomposition": false,
+            "uncertaintyInterval": null,
+            "uncertaintyReason": "No independence or sampling-design guarantee; bin counts and duplicate-game evidence are reported."
+          },
+          "formalEnabled": false
+        }
+      },
+      "HT": {
+        "games": 18,
+        "scoreLogLoss": 2.3260202391959246,
+        "scoreLogLossState": "FINITE",
+        "logLoss": 0.929848699220092,
+        "logLossState": "FINITE",
+        "brier": 0.5715431695718891,
+        "probabilityAudit": {
+          "version": "SOCCER-CLASSWISE-PROBABILITY-AUDIT-v1",
+          "league": null,
+          "period": "REGULATION_HT",
+          "fold": null,
+          "modelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+          "cohort": {
+            "unit": "INPUT_EVALUATION_RECORD",
+            "sample": 18,
+            "used": 18,
+            "excluded": 0,
+            "coverage": 1,
+            "uniqueGames": 18,
+            "usedUniqueGames": 18,
+            "duplicateRecords": 0,
+            "missingIdentityRecords": 0,
+            "reasons": [],
+            "independenceAssumed": false
+          },
+          "pooledEventCount": 54,
+          "classes": {
+            "home": {
+              "count": 18,
+              "positiveCount": 10,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 0.7321332226910697,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.24404440756368992,
+                  "observedFrequency": 0.3333333333333333
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 1.0292089560084405,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.34306965200281353,
+                  "observedFrequency": 0.6666666666666666
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 1.267630755234337,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.42254358507811235,
+                  "observedFrequency": 0.3333333333333333
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 2.78607050737756,
+                  "sumObserved": 4,
+                  "meanPredicted": 0.557214101475512,
+                  "observedFrequency": 0.8
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 4,
+                  "sumPredicted": 2.553590538779061,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.6383976346947653,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.18187825599646268,
+              "REL_L2": 0.04073770062836683
+            },
+            "draw": {
+              "count": 18,
+              "positiveCount": 8,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 8,
+                  "sumPredicted": 2.1165023991254555,
+                  "sumObserved": 3,
+                  "meanPredicted": 0.26456279989068193,
+                  "observedFrequency": 0.375
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 8,
+                  "sumPredicted": 2.990099319419764,
+                  "sumObserved": 4,
+                  "meanPredicted": 0.3737624149274705,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.85453111279774,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.42726555639887,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.1132703982587245,
+              "REL_L2": 0.013091056833076079
+            },
+            "away": {
+              "count": 18,
+              "positiveCount": 0,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.07797610283467384,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.07797610283467384,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 9,
+                  "sumPredicted": 1.2747534949499113,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.1416392772166568,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 1.2289166875594941,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.24578333751189882,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.6709195005645541,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.33545975028227704,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.4176674026527357,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.4176674026527357,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.20390184380896495,
+              "REL_L2": 0.049344179367634106
+            }
+          },
+          "binning": {
+            "method": "FIXED_WIDTH",
+            "edges": [
+              0,
+              0.1,
+              0.2,
+              0.3,
+              0.4,
+              0.5,
+              0.6,
+              0.7,
+              0.8,
+              0.9,
+              1
+            ],
+            "lastUpperInclusive": true,
+            "probabilityRounding": false
+          },
+          "probabilityMass": {
+            "tolerance": 1e-10,
+            "smallTailTolerance": 1e-10,
+            "renormalized": false,
+            "knownTailCount": 18,
+            "tailAffectedGames": 18,
+            "maxTailMass": 7.933653733971369e-13,
+            "interpretation": "Only complete vectors or known omitted mass <= tolerance enter class bins. Original probabilities are unchanged; larger or unverified missing mass is audit-excluded with its reason."
+          },
+          "composition": [
+            {
+              "league": "ucl",
+              "period": "REGULATION_HT",
+              "fold": "CALIBRATION_DEVELOPMENT_REUSED",
+              "modelHash": "a5b4e687feb7a6217d6123f708eff7d24d4480e37e84a7d1b9cb903fdae680d9",
+              "count": 18
+            }
+          ],
+          "missingMetadata": {
+            "league": 0,
+            "period": 0,
+            "fold": 0,
+            "modelHash": 0
+          },
+          "exactScoreEvidence": {
+            "available": 0,
+            "zeroModelProbability": 0,
+            "unavailable": 18,
+            "invalid": 0
+          },
+          "interpretation": "CLASSWISE_FIXED_BIN_DESCRIPTIVE_CALIBRATION_NOT_A_PROMOTION_OR_PIT_CERTIFICATE",
+          "estimator": {
+            "ECE_L1": "sum_b(n_b/N)*abs(mean_p_b-mean_y_b)",
+            "REL_L2": "sum_b(n_b/N)*(mean_p_b-mean_y_b)^2",
+            "biasCorrected": false,
+            "fullMurphyDecomposition": false,
+            "uncertaintyInterval": null,
+            "uncertaintyReason": "No independence or sampling-design guarantee; bin counts and duplicate-game evidence are reported."
+          },
+          "formalEnabled": false
+        }
+      }
+    },
+    "after": {
+      "FT": {
+        "games": 18,
+        "scoreLogLoss": 3.377396556177256,
+        "scoreLogLossState": "FINITE",
+        "logLoss": 0.8283203887234487,
+        "logLossState": "FINITE",
+        "brier": 0.46593416274972704,
+        "probabilityAudit": {
+          "version": "SOCCER-CLASSWISE-PROBABILITY-AUDIT-v1",
+          "league": null,
+          "period": "REGULATION_FT",
+          "fold": null,
+          "modelHash": "990ebdddbb2ce39610c61b6d14edadbcd158e6030c90c9715750dd7f6320830e",
+          "cohort": {
+            "unit": "INPUT_EVALUATION_RECORD",
+            "sample": 18,
+            "used": 18,
+            "excluded": 0,
+            "coverage": 1,
+            "uniqueGames": 18,
+            "usedUniqueGames": 18,
+            "duplicateRecords": 0,
+            "missingIdentityRecords": 0,
+            "reasons": [],
+            "independenceAssumed": false
+          },
+          "pooledEventCount": 54,
+          "classes": {
+            "home": {
+              "count": 18,
+              "positiveCount": 11,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.4787734505209157,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.23938672526045784,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.7060179568456767,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.35300897842283835,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 1.4259321838816255,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.4753107279605418,
+                  "observedFrequency": 0.3333333333333333
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.5655044859425253,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.5655044859425253,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 1.2721817359284158,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.6360908679642079,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 3.7480864253793023,
+                  "sumObserved": 5,
+                  "meanPredicted": 0.7496172850758605,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 2.5105505715666316,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.8368501905222105,
+                  "observedFrequency": 0.6666666666666666
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.2616090881337681,
+              "REL_L2": 0.07947454604496619
+            },
+            "draw": {
+              "count": 18,
+              "positiveCount": 3,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.17446672082174833,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.08723336041087416,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 11,
+                  "sumPredicted": 1.6570466212163688,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.1506406019287608,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 1.094848735718541,
+                  "sumObserved": 3,
+                  "meanPredicted": 0.2189697471437082,
+                  "observedFrequency": 0.6
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.20759247812886533,
+              "REL_L2": 0.05504211592999157
+            },
+            "away": {
+              "count": 18,
+              "positiveCount": 4,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 4,
+                  "sumPredicted": 0.30572174857780277,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.07643043714445069,
+                  "observedFrequency": 0.25
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 0.6989187158987132,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.13978374317974265,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.44147908759546306,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.22073954379773153,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 3,
+                  "sumPredicted": 0.9499770272144508,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.3166590090714836,
+                  "observedFrequency": 0.3333333333333333
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.8468636258098576,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.4234318129049288,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.5104760559554405,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.5104760559554405,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.6131548511194856,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.6131548511194856,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.2081069823976005,
+              "REL_L2": 0.06354632912375843
+            }
+          },
+          "binning": {
+            "method": "FIXED_WIDTH",
+            "edges": [
+              0,
+              0.1,
+              0.2,
+              0.3,
+              0.4,
+              0.5,
+              0.6,
+              0.7,
+              0.8,
+              0.9,
+              1
+            ],
+            "lastUpperInclusive": true,
+            "probabilityRounding": false
+          },
+          "probabilityMass": {
+            "tolerance": 1e-10,
+            "smallTailTolerance": 1e-10,
+            "renormalized": false,
+            "knownTailCount": 18,
+            "tailAffectedGames": 18,
+            "maxTailMass": 6.462608226343036e-13,
+            "interpretation": "Only complete vectors or known omitted mass <= tolerance enter class bins. Original probabilities are unchanged; larger or unverified missing mass is audit-excluded with its reason."
+          },
+          "composition": [
+            {
+              "league": "ucl",
+              "period": "REGULATION_FT",
+              "fold": "CALIBRATION_DEVELOPMENT_REUSED",
+              "modelHash": "990ebdddbb2ce39610c61b6d14edadbcd158e6030c90c9715750dd7f6320830e",
+              "count": 18
+            }
+          ],
+          "missingMetadata": {
+            "league": 0,
+            "period": 0,
+            "fold": 0,
+            "modelHash": 0
+          },
+          "exactScoreEvidence": {
+            "available": 0,
+            "zeroModelProbability": 0,
+            "unavailable": 18,
+            "invalid": 0
+          },
+          "interpretation": "CLASSWISE_FIXED_BIN_DESCRIPTIVE_CALIBRATION_NOT_A_PROMOTION_OR_PIT_CERTIFICATE",
+          "estimator": {
+            "ECE_L1": "sum_b(n_b/N)*abs(mean_p_b-mean_y_b)",
+            "REL_L2": "sum_b(n_b/N)*(mean_p_b-mean_y_b)^2",
+            "biasCorrected": false,
+            "fullMurphyDecomposition": false,
+            "uncertaintyInterval": null,
+            "uncertaintyReason": "No independence or sampling-design guarantee; bin counts and duplicate-game evidence are reported."
+          },
+          "formalEnabled": false
+        }
+      },
+      "HT": {
+        "games": 18,
+        "scoreLogLoss": 2.3110316422097252,
+        "scoreLogLossState": "FINITE",
+        "logLoss": 0.8913837490271178,
+        "logLossState": "FINITE",
+        "brier": 0.5541381169587121,
+        "probabilityAudit": {
+          "version": "SOCCER-CLASSWISE-PROBABILITY-AUDIT-v1",
+          "league": null,
+          "period": "REGULATION_HT",
+          "fold": null,
+          "modelHash": "23f8bbc8737c2d62600aa298704c4527bb624e804440f990b6c39a523e8ed5da",
+          "cohort": {
+            "unit": "INPUT_EVALUATION_RECORD",
+            "sample": 18,
+            "used": 18,
+            "excluded": 0,
+            "coverage": 1,
+            "uniqueGames": 18,
+            "usedUniqueGames": 18,
+            "duplicateRecords": 0,
+            "missingIdentityRecords": 0,
+            "reasons": [],
+            "independenceAssumed": false
+          },
+          "pooledEventCount": 54,
+          "classes": {
+            "home": {
+              "count": 18,
+              "positiveCount": 10,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.5485226966761976,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.2742613483380988,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.6915967303726809,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.34579836518634044,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 2.3015127029657005,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.46030254059314013,
+                  "observedFrequency": 0.4
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.5876354393545373,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.5876354393545373,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 6,
+                  "sumPredicted": 3.9255240363916517,
+                  "sumObserved": 5,
+                  "meanPredicted": 0.6542540060652753,
+                  "observedFrequency": 0.8333333333333334
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 1.4456990324283492,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.7228495162141746,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.22188515736661013,
+              "REL_L2": 0.08750766432576404
+            },
+            "draw": {
+              "count": 18,
+              "positiveCount": 8,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.19772924889179935,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.19772924889179935,
+                  "observedFrequency": 1
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 7,
+                  "sumPredicted": 1.6343943783178596,
+                  "sumObserved": 2,
+                  "meanPredicted": 0.23348491118826567,
+                  "observedFrequency": 0.2857142857142857
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 8,
+                  "sumPredicted": 2.8725166618198443,
+                  "sumObserved": 4,
+                  "meanPredicted": 0.35906458272748054,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 2,
+                  "sumPredicted": 0.8373614836091987,
+                  "sumObserved": 1,
+                  "meanPredicted": 0.41868074180459935,
+                  "observedFrequency": 0.5
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.13655545707562766,
+              "REL_L2": 0.046381204959361405
+            },
+            "away": {
+              "count": 18,
+              "positiveCount": 0,
+              "bins": [
+                {
+                  "index": 0,
+                  "lower": 0,
+                  "upper": 0.1,
+                  "upperInclusive": false,
+                  "count": 6,
+                  "sumPredicted": 0.48762551199981935,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.08127091866663656,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 1,
+                  "lower": 0.1,
+                  "upper": 0.2,
+                  "upperInclusive": false,
+                  "count": 6,
+                  "sumPredicted": 0.8888444849639197,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.14814074749398662,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 2,
+                  "lower": 0.2,
+                  "upper": 0.3,
+                  "upperInclusive": false,
+                  "count": 5,
+                  "sumPredicted": 1.2198997822522744,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.24397995645045487,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 3,
+                  "lower": 0.3,
+                  "upper": 0.4,
+                  "upperInclusive": false,
+                  "count": 1,
+                  "sumPredicted": 0.3611378099500856,
+                  "sumObserved": 0,
+                  "meanPredicted": 0.3611378099500856,
+                  "observedFrequency": 0
+                },
+                {
+                  "index": 4,
+                  "lower": 0.4,
+                  "upper": 0.5,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 5,
+                  "lower": 0.5,
+                  "upper": 0.6,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 6,
+                  "lower": 0.6,
+                  "upper": 0.7,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 7,
+                  "lower": 0.7,
+                  "upper": 0.8,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 8,
+                  "lower": 0.8,
+                  "upper": 0.9,
+                  "upperInclusive": false,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                },
+                {
+                  "index": 9,
+                  "lower": 0.9,
+                  "upper": 1,
+                  "upperInclusive": true,
+                  "count": 0,
+                  "sumPredicted": 0,
+                  "sumObserved": 0,
+                  "meanPredicted": null,
+                  "observedFrequency": null
+                }
+              ],
+              "ECE_L1": 0.1643059771758944,
+              "REL_L2": 0.03329752629207502
+            }
+          },
+          "binning": {
+            "method": "FIXED_WIDTH",
+            "edges": [
+              0,
+              0.1,
+              0.2,
+              0.3,
+              0.4,
+              0.5,
+              0.6,
+              0.7,
+              0.8,
+              0.9,
+              1
+            ],
+            "lastUpperInclusive": true,
+            "probabilityRounding": false
+          },
+          "probabilityMass": {
+            "tolerance": 1e-10,
+            "smallTailTolerance": 1e-10,
+            "renormalized": false,
+            "knownTailCount": 18,
+            "tailAffectedGames": 18,
+            "maxTailMass": 6.475930902638538e-13,
+            "interpretation": "Only complete vectors or known omitted mass <= tolerance enter class bins. Original probabilities are unchanged; larger or unverified missing mass is audit-excluded with its reason."
+          },
+          "composition": [
+            {
+              "league": "ucl",
+              "period": "REGULATION_HT",
+              "fold": "CALIBRATION_DEVELOPMENT_REUSED",
+              "modelHash": "23f8bbc8737c2d62600aa298704c4527bb624e804440f990b6c39a523e8ed5da",
+              "count": 18
+            }
+          ],
+          "missingMetadata": {
+            "league": 0,
+            "period": 0,
+            "fold": 0,
+            "modelHash": 0
+          },
+          "exactScoreEvidence": {
+            "available": 0,
+            "zeroModelProbability": 0,
+            "unavailable": 18,
+            "invalid": 0
+          },
+          "interpretation": "CLASSWISE_FIXED_BIN_DESCRIPTIVE_CALIBRATION_NOT_A_PROMOTION_OR_PIT_CERTIFICATE",
+          "estimator": {
+            "ECE_L1": "sum_b(n_b/N)*abs(mean_p_b-mean_y_b)",
+            "REL_L2": "sum_b(n_b/N)*(mean_p_b-mean_y_b)^2",
+            "biasCorrected": false,
+            "fullMurphyDecomposition": false,
+            "uncertaintyInterval": null,
+            "uncertaintyReason": "No independence or sampling-design guarantee; bin counts and duplicate-game evidence are reported."
+          },
+          "formalEnabled": false
+        }
+      }
+    }
+  },
+  "prospectiveValidation": {
+    "status": "PREPARED_REQUIRES_DURABLE_FREEZE_AND_PREGAME_CAPTURE",
+    "beginsStrictlyAfter": "2026-10-31T21:58:44.784Z",
+    "through": null,
+    "wholeGameSplit": true,
+    "baseModelsFrozen": true,
+    "parametersFrozen": true,
+    "selection": "FIRST_VALID_DURABLY_SAVED_PREGAME_PREDICTION_PER_REAL_GAME_EXACT_MODEL",
+    "scoring": [
+      "EXACT_SCORE_LOG_LOSS",
+      "CLASSWISE_1X2_FIXED_BIN_AUDIT"
+    ],
+    "usedGamesExcluded": [
+      "ucl:401858734",
+      "ucl:401858735",
+      "ucl:401858736",
+      "ucl:401858737",
+      "ucl:401858758",
+      "ucl:401858759",
+      "ucl:401858760",
+      "ucl:401858761",
+      "ucl:401858762",
+      "ucl:401858763",
+      "ucl:401858764",
+      "ucl:401858766",
+      "ucl:401858767",
+      "ucl:401858768",
+      "ucl:401858769",
+      "ucl:401862577",
+      "ucl:401862578",
+      "ucl:401862579",
+      "ucl:401862580",
+      "ucl:401862581",
+      "ucl:401862582",
+      "ucl:401862583",
+      "ucl:401862641",
+      "ucl:401862642",
+      "ucl:401862645",
+      "ucl:401862646",
+      "ucl:401862647",
+      "ucl:401862648",
+      "ucl:401862667",
+      "ucl:401862668",
+      "ucl:401862885",
+      "ucl:401862886",
+      "ucl:401862887",
+      "ucl:401862888",
+      "ucl:401862889",
+      "ucl:401862890",
+      "ucl:401862891",
+      "ucl:401862892",
+      "ucl:401862893",
+      "ucl:401862894",
+      "ucl:401862895",
+      "ucl:401862896",
+      "ucl:401915312",
+      "ucl:401915313",
+      "ucl:401915388",
+      "ucl:401915389",
+      "ucl:401915390",
+      "ucl:401915391",
+      "ucl:401915392",
+      "ucl:401915393",
+      "ucl:401915394",
+      "ucl:401915395",
+      "ucl:401915396",
+      "ucl:401915397",
+      "ucl:401915398",
+      "ucl:401915399",
+      "ucl:401915400",
+      "ucl:401915401",
+      "ucl:401915402",
+      "ucl:401915403",
+      "ucl:401915404",
+      "ucl:401915405",
+      "ucl:401915406",
+      "ucl:401915407",
+      "ucl:401915408",
+      "ucl:401915409",
+      "ucl:401915410",
+      "ucl:401915411",
+      "ucl:401915412",
+      "ucl:401915413",
+      "ucl:401915414",
+      "ucl:401915415",
+      "ucl:401915416",
+      "ucl:401915417",
+      "ucl:401915418",
+      "ucl:401915422",
+      "ucl:401915423",
+      "ucl:401915424",
+      "ucl:401915425",
+      "ucl:401915426",
+      "ucl:401915434",
+      "ucl:401915435",
+      "ucl:401915436",
+      "ucl:401915440",
+      "ucl:401915441",
+      "ucl:401915442",
+      "ucl:401915443",
+      "ucl:401915444",
+      "ucl:401915445",
+      "ucl:401915446",
+      "ucl:401915447",
+      "ucl:401915448",
+      "ucl:401915449",
+      "ucl:401915450",
+      "ucl:401915451",
+      "ucl:401915452",
+      "ucl:757761",
+      "ucl:757762",
+      "ucl:757763",
+      "ucl:757764",
+      "ucl:757765",
+      "ucl:757766",
+      "ucl:757767",
+      "ucl:757768",
+      "ucl:757769",
+      "ucl:757770",
+      "ucl:757771",
+      "ucl:757772",
+      "ucl:757773",
+      "ucl:757774",
+      "ucl:757775",
+      "ucl:757776",
+      "ucl:757777",
+      "ucl:757778",
+      "ucl:757779",
+      "ucl:757780",
+      "ucl:757781",
+      "ucl:757782",
+      "ucl:757783",
+      "ucl:757784",
+      "ucl:757785",
+      "ucl:757786",
+      "ucl:757787",
+      "ucl:757788",
+      "ucl:757789",
+      "ucl:757790",
+      "ucl:757791",
+      "ucl:757792",
+      "ucl:757793",
+      "ucl:757794",
+      "ucl:757795",
+      "ucl:757796"
+    ],
+    "observedGames": 0,
+    "untouchedVerifiedGames": 0,
+    "durableFreezeVerified": false,
+    "automaticAcceptance": false,
+    "resultRetrainingAllowed": false
+  },
+  "baselineChanged": false,
+  "historicalPitVerified": false,
+  "improvementEstablished": false,
+  "accepted": false,
+  "formalEligible": false,
+  "promotionEligible": false,
+  "executable": false,
+  "W": null,
+  "R": null,
+  "S": null,
+  "empiricalErrorMargin": null,
+  "contentHash": "52be99271805fe5dda45f814fbee52b9f0348c90b5f7b1789dd5bd2631ff3706"
+}

@@ -77,6 +77,9 @@ function authorityEvidence(input, league) {
     index: row.index, dates: [...new Set((Array.isArray(row.dates) ? row.dates : []).slice(0, 40).filter(dateValid))],
     periods: PERIODS.filter(period => Array.isArray(row.periods) && row.periods.includes(period)),
     ...Object.fromEntries(['gameCount', 'marketCount', 'invalidGameCount', 'invalidMarketCount'].map(key => [key, diagnosticCount(row[key])])),
+    ...(['EPL', 'UCL'].includes(league) && sourceValid(row.pageIndex) && sourceValid(row.frameIndex)
+      ? { pageIndex: row.pageIndex, frameIndex: row.frameIndex,
+        ...(typeof row.active === 'boolean' ? { active: row.active } : {}) } : {}),
   }));
   const pairIdentity = row => ({ leftSource: row.leftSource, rightSource: row.rightSource, period: row.period });
   const pairs = (Array.isArray(input.pairs) ? input.pairs : []).slice(0, 18).filter(pairValid).map(row => ({
@@ -113,8 +116,20 @@ export function sanitizeSeenCaptureDelivery(input) {
   const time=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
   return {state:input.state,pendingCount:count(input.pendingCount),pendingBytes:count(input.pendingBytes),
     failedCaptureCount:count(input.failedCaptureCount),savedCaptureCount:count(input.savedCaptureCount),
+    ...(['UNIDENTIFIED_CAPTURE','EXACT_FRAGMENTS','NONE'].includes(input.captureFailureScope)
+      ?{captureFailureScope:input.captureFailureScope,captureFailureAt:time(input.captureFailureAt)}:{}),
     code:input.code?(SEEN_CODES.has(input.code)?input.code:'SEEN_SAVE_FAILED'):'',
     lastPersistedAt:time(input.lastPersistedAt),updatedAt:time(input.updatedAt)};
+}
+function sanitizeSoccerConflictRecovery(input) {
+  if (input?.version !== 'SOCCER-CONFLICT-RECOVERY-v1'
+    || !['REQUESTED', 'ALREADY_ATTEMPTED', 'FAILED'].includes(input.state)
+    || !Number.isInteger(input.attemptedTabCount) || input.attemptedTabCount < 1 || input.attemptedTabCount > 100000
+    || !Number.isInteger(input.refreshedTabCount) || input.refreshedTabCount < 0 || input.refreshedTabCount > input.attemptedTabCount
+    || typeof input.attemptedAt !== 'string' || !Number.isFinite(Date.parse(input.attemptedAt))) return null;
+  return { version: 'SOCCER-CONFLICT-RECOVERY-v1', state: input.state,
+    attemptedAt: new Date(input.attemptedAt).toISOString(), attemptedTabCount: input.attemptedTabCount,
+    refreshedTabCount: input.refreshedTabCount };
 }
 export function sanitizeDiagnosticReport(input) {
   const created = typeof input?.createdAt === 'string' ? Date.parse(input.createdAt) : NaN;
@@ -125,12 +140,13 @@ export function sanitizeDiagnosticReport(input) {
     const row = input?.leagues?.[league];
     if (!row || !STATES.has(row.state)) continue;
     const authority = ['NBA', 'EPL', 'UCL'].includes(league) ? authorityEvidence(row.authority, league) : null;
+    const conflictRecovery = ['EPL', 'UCL'].includes(league) ? sanitizeSoccerConflictRecovery(row.conflictRecovery) : null;
     leagues[league] = { state: row.state, errorCode: row.errorCode ? diagnosticCode(row.errorCode) : '',
       issues: codes(row.issues), rawGameCount: diagnosticCount(row.rawGameCount), marketCount: diagnosticCount(row.marketCount),
       boards: (Array.isArray(row.boards) ? row.boards : []).slice(0, 2).map(board => ({
         diagnostics: counts(board?.diagnostics), parsedGameCount: diagnosticCount(board?.parsedGameCount),
         issues: codes(board?.issues),
-      })), ...(authority ? { authority } : {}) };
+      })), ...(authority ? { authority } : {}), ...(conflictRecovery ? { conflictRecovery } : {}) };
   }
   const seenCaptureDelivery=sanitizeSeenCaptureDelivery(input.seenCaptureDelivery);
   return { schema: DIAGNOSTIC_SCHEMA, reportId: input.reportId, readerVersion: version(input.readerVersion),
