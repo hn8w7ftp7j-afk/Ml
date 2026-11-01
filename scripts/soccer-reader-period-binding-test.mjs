@@ -6,6 +6,8 @@ import { buildSoccerMarketDirections, collectUnassignedSoccerQuotes } from '../l
 import { adaptSoccerReaderQuote } from '../lib/soccer/soccer-scoring.js';
 import { readSoccerReaderPeriodBinding, soccerMarketHasVerifiedPeriodResolution, soccerReaderPeriodBindingDiagnostics } from '../lib/soccer/reader-period-binding.js';
 
+const currentEnvBefore=process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON;
+delete process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON;
 const envBefore=process.env.SOCCER_READER_PERIOD_BINDING_JSON;
 const additionalEnvBefore=process.env.SOCCER_READER_PERIOD_BINDING_ADDITIONAL_JSON;
 const confirmedAt='2026-10-25T00:00:00.000Z',observedAt='2026-10-25T00:01:00.000Z',now=Date.parse('2026-10-25T00:01:02.000Z');
@@ -160,9 +162,31 @@ try {
   setAdditional([nextConfig]);assert.equal(nextDiagnosis().resolvedMarketCount,2,'a valid explicitly registered additional device does not depend on a primary device');
   assert.equal(nextDiagnosis().configurationStatus,'READY');assert.equal(readSoccerReaderPeriodBinding(),null);
   setConfig(config);setAdditional(null);
+  process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON=JSON.stringify(nextConfig);
+  assert.equal(nextDiagnosis().currentConfigurationStatus,'READY');
+  assert.equal(nextDiagnosis().resolvedMarketCount,2);
+  assert.equal(adaptSoccerReaderQuote({quote:nextQuote,game,now:nextAt}).ok,true);
+  assert.equal(adaptSoccerReaderQuote({quote,game,now:nextAt}).ok,true,'old signatures stay valid');
+  assert.equal(periods(matched(reader,nextAt)).includes('FT'),true);
+  for(const invalid of ['{invalid',JSON.stringify({...nextConfig,proofKey:''}),JSON.stringify(config)]) {
+    process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON=invalid;
+    assert.equal(nextDiagnosis().currentConfigurationStatus,'INVALID');
+    assert.equal(nextDiagnosis().resolvedMarketCount,0);
+    assert.equal(adaptSoccerReaderQuote({quote,game,now:nextAt}).ok,true);
+  }
+  setAdditional(additionalFixtures);
+  process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON=JSON.stringify({...nextConfig,deviceHash:'9'.repeat(64)});
+  assert.equal(nextDiagnosis().currentConfigurationStatus,'INVALID','current slot cannot exceed eight total bindings');
+  setAdditional(null);
+  process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON=JSON.stringify({...nextConfig,confirmedAt:new Date(nextAt+1).toISOString()});
+  assert.equal(nextDiagnosis().resolvedMarketCount,0,'new-device approval cannot be backdated into old captures');
+  assert.ok(!JSON.stringify(nextDiagnosis()).includes(nextConfig.proofKey));
+  delete process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON;
+  console.log('PASS current Reader registration: secret-free independent config slot, preserved old signatures, exact new device, forward-only scope, malformed/duplicate/cap rejection');
   console.log('PASS server-owned football period binding: exact profile and companion HT, current account/host/device/receipt scope, HMAC revalidation, quote hash, no retroactive promotion, immutable Reader43 wire and unchanged betting gates');
   console.log('PASS additional private device bindings: forward-only device/host/league selection, preserved original signatures, eight-binding cap, all-or-nothing invalid/duplicate isolation and secret-free diagnostic states');
 } finally {
+  if(currentEnvBefore===undefined)delete process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON;else process.env.SOCCER_READER_PERIOD_BINDING_CURRENT_JSON=currentEnvBefore;
   if(envBefore===undefined)delete process.env.SOCCER_READER_PERIOD_BINDING_JSON;else process.env.SOCCER_READER_PERIOD_BINDING_JSON=envBefore;
   if(additionalEnvBefore===undefined)delete process.env.SOCCER_READER_PERIOD_BINDING_ADDITIONAL_JSON;else process.env.SOCCER_READER_PERIOD_BINDING_ADDITIONAL_JSON=additionalEnvBefore;
 }
