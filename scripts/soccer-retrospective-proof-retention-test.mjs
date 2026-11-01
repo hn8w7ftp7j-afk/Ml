@@ -53,7 +53,10 @@ try {
     const evaluation = evaluateSoccerForwardCapture(full,protocol,result,now);
     assert.equal(evaluation.status,'EVALUATED');
     evaluation.marketReturnValidation = evaluateSoccerMarketReturnCapture({capture:full,protocol,result,now:logicalAt});
-    assert.equal(evaluation.marketReturnValidation.status,'PENDING');
+    // The current-clock quote is after the account-owner rule confirmation.
+    // Calculated market returns may now be observed; model approval and the
+    // independent DB-receipt availability checks below remain unchanged.
+    assert.equal(evaluation.marketReturnValidation.status,'OBSERVED');
     const checkId = soccerForwardHash(['retention-check',name]);
     const payload = {status:'EVALUATED',evaluation,resultEvidence:result};
     await query(`INSERT INTO sports_soccer_forward_result_checks_v1(check_id,capture_id,checked_at,payload)

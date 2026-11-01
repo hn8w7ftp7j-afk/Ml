@@ -7,7 +7,9 @@ import { evaluateSoccerQuote } from '../lib/soccer/market-payoff.js';
 import { soccerForwardAnalysisRevision, soccerForwardHash } from '../lib/soccer/forward-validation.js';
 
 // Engineering fixtures in the shipped PostgreSQL stores and durable scanner.
-// No fixture contract, approved artifact or actual account settlement is added.
+// No fixture contract, approved model artifact or actual account settlement is added.
+// Current fixtures can use the server's prospective account-owner rule policy;
+// the separate retrospective replay still cannot promote model/EV uncertainty.
 const fixture = await soccerSqlFixture(), { db } = fixture;
 const savedEnv = Object.fromEntries(['DATABASE_URL', 'DATABASE_V2_URL'].map(key => [key, process.env[key]]));
 process.env.DATABASE_URL = 'postgres://fixture.invalid/retrospective-payoff-scan';
@@ -91,8 +93,8 @@ try {
   assert.equal(first.report.scan.processedGames, 1); assert.equal(first.report.complete, false);
   assert.equal(first.report.retrospectivePayoffReplay.completeWithinRequestedScope, false);
   assert.equal(first.report.retrospectivePayoffReplay.replayedQuoteObservations, 2);
-  assert.equal(first.report.marketReturnValidation.observedQuoteReturns, 0);
-  assert.ok(first.report.marketReturnValidation.pendingReasons.SOCCER_SOURCE_CONTRACT_UNVERIFIED);
+  assert.equal(first.report.marketReturnValidation.observedQuoteReturns, 2);
+  assert.equal(first.report.marketReturnValidation.pendingReasons.SOCCER_SOURCE_CONTRACT_UNVERIFIED, undefined);
   noPromotion(first.report.retrospectivePayoffReplay);
   const second = await continueSoccerForwardScan(scope, { ...options, cursor: first.report.scan.nextCursor });
   assert.equal(second.report.scan.processedGames, 2); assert.equal(second.report.complete, false);
@@ -104,7 +106,7 @@ try {
   assert.equal(replay.selectedQuoteObservations, 4); assert.equal(replay.replayedQuoteObservations, 4);
   assert.equal(replay.uniqueReplayedGames, 2); assert.ok(replay.unpricedPredictionPeriods >= 1);
   assert.equal(replay.pendingQuoteObservations, 0); assert.equal(replay.quarantinedQuoteObservations, 0);
-  assert.equal(final.report.marketReturnValidation.observedQuoteReturns, 0);
+  assert.equal(final.report.marketReturnValidation.observedQuoteReturns, 4);
   noPromotion(replay);
   close(sumRealized(replay), expectedRealized, 'all-game hypothetical realized returns');
   close(replay.groups.reduce((sum, row) => sum + row.predictedNetReturnSum.lower, 0), expectedLower, 'all-game predicted lower returns');
