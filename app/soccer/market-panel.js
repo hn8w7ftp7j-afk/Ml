@@ -175,9 +175,23 @@ export function SoccerConditionalAnalysis({quote,result,game,now=Date.now()}){
     const reason=game?.status!=='scheduled'||Date.parse(game?.startTime)<=now?'此場已開賽，無法用目前盤口重建賽前收益；請查閱已保存版本':conditionalFailureReason(quote);
     return <p className="soccerMarketCaution" role="status">自動收益分析未完成：{reason}。</p>;
   }
-  const c=state.analysis,historical=state.status==='HISTORICAL';
+  const c=state.analysis,historical=state.status==='HISTORICAL',trial=quote?.scenarioScore;
+  const showTrial=trial?.version==='SOCCER-PARAMETER-STRESS-SCORE-v1'&&trial.status==='PARAMETER_SENSITIVITY_ONLY'
+    &&trial.formalEligible===false&&trial.executable===false&&['W','R','S'].every(key=>trial[key]===null)
+    &&trial.gameId===c.gameId&&trial.league===c.league&&trial.period===c.period&&trial.sourceQuoteKey===quote.key
+    &&trial.calculatedAt===c.calculatedAt&&trial.baselineDistributionHash===c.distributionHash
+    &&trial.artifactHash===result?.scenarioResearch?.artifactHash&&trial.protocolHash===result?.scenarioResearch?.protocolHash
+    &&finite(trial.scoreLower)&&finite(trial.scoreUpper)&&trial.scoreLower>=1&&trial.scoreUpper<=10&&trial.scoreLower<=trial.scoreUpper&&finite(trial.meanNetReturn)&&finite(trial.stressReturn)
+    &&trial.stressReturn<=trial.meanNetReturn&&trial.modelErrorMargin===null;
+
   return <section className="soccerConditionalAnalysis" aria-label="條件式收益分析">
     <strong>{historical?'歷史條件式收益分析':'條件式收益分析'}</strong>
+    {showTrial&&<section aria-label="情境試算分數" className="soccerScoringReadiness">
+      <strong>{historical?'歷史情境試算分數':'情境試算分數'} {trial.scoreLower===trial.scoreUpper?trial.scoreLower.toFixed(1):`${trial.scoreLower.toFixed(1)} ～ ${trial.scoreUpper.toFixed(1)}`}／10</strong>
+      <p>{trial.scenarioCount} 組參數情境｜平均收益下界 {returnPct(trial.meanNetReturn)}｜壓力收益下界 {returnPct(trial.stressReturn)}</p>
+      <p>沿用固定評分公式，僅比較參數變動；不是正式 S、不列正式排名。尚未計入經驗證的完整模型誤差。</p>
+      <details className="soccerDetails"><summary>試算分數計算依據</summary><p>全組情境保留原權重；平均收益為加權平均，壓力收益取平均與加權第 10 百分位較低值。此百分位不是信賴下限。未展開比分保留收益區間，兩端分數不同時顯示分數區間。</p><p>計算時間：{clock(trial.calculatedAt)}｜公式：{trial.formulaVersion}</p></details>
+    </section>}
     <p>期望淨收益：{returnPct(c.netReturnBounds.lower)} ～ {returnPct(c.netReturnBounds.upper)}（每元本金）</p>
     <p className="soccerMarketNote">依信用盤比例派彩假設試算，尚未確認本帳號適用；足球退水按實際輸贏本金的 1%，走盤不退。</p>
     <dl>{Object.entries({FULL_WIN:'全贏',PARTIAL_WIN:'部分贏',PUSH:'走盤',PARTIAL_LOSS:'部分輸',FULL_LOSS:'全輸'}).map(([key,label])=><div key={key}><dt>{label}</dt><dd>{pct(c.probabilities?.[key])}</dd></div>)}</dl>
