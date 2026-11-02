@@ -140,7 +140,8 @@ for(const value of ['沙巴','Sabah','Sabah FC Malaysia','費倫巴治 U21','巴
   assert.deepEqual(oldMatched.markets.map(m=>m.period),oldPeriods);
   assert.equal(oldChecked.payload.observedAt,oldObservedAt);assert.equal(hash(oldWire),oldHash);
 }
-// Exact public football names observed in the user's Oct 25/30 Reader diagnostics.
+// Exact public football names observed in the user's Oct 25/30 Reader diagnostics
+// and the Newcastle/Everton pair on Production's Nov 3 EPL board.
 // The official pairs and UTC kickoffs were checked against the EPL schedule;
 // the Sunderland event falls on Oct 26 in Taipei. The minimal rows below use a
 // synthetic observation clock, not a replay claiming the historical receipt.
@@ -151,6 +152,7 @@ for(const value of ['沙巴','Sabah','Sabah FC Malaysia','費倫巴治 U21','巴
     {id:'401879252',homeRaw:'曼聯[主]',awayRaw:'般尼茅夫',home:'Manchester United',away:'AFC Bournemouth',date:'2026-10-25',time:'22:00',kickoff:'2026-10-25T14:00:00.000Z'},
     {id:'401878764',homeRaw:'新特蘭[主]',awayRaw:'列斯聯',home:'Sunderland',away:'Leeds United',date:'2026-10-26',time:'00:30',kickoff:'2026-10-25T16:30:00.000Z'},
     {id:'401879250',homeRaw:'阿士東維拉[主]',awayRaw:'富咸',home:'Aston Villa',away:'Fulham',date:'2026-11-01',time:'04:00',kickoff:'2026-10-31T20:00:00.000Z'},
+    {id:'401878762',homeRaw:'紐卡素[主]',awayRaw:'愛華頓',home:'Newcastle United',away:'Everton',date:'2026-11-03',time:'04:00',kickoff:'2026-11-02T20:00:00.000Z'},
   ];
   for(const fixture of games){
     const capture={league:'EPL',pageLeagueLabel:'英超',sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/',observedAt,
@@ -184,6 +186,7 @@ for(const value of ['沙巴','Sabah','Sabah FC Malaysia','費倫巴治 U21','巴
     assert.equal(matched.officialGameId,official.id);
     assert.equal(matched.fresh,true);assert.equal(matched.prestart,true);assert.equal(matched.executable,false);
     assert.equal(matchSoccerReaderGames(checked.payload,[{...official,home:official.away,away:official.home}],syntheticNow)[0].matchStatus,'UNMATCHED');
+    assert.equal(matchSoccerReaderGames(checked.payload,[{...official,away:{name:'Chelsea'}}],syntheticNow)[0].matchStatus,'UNMATCHED','an exact home alias cannot borrow a different opponent');
     assert.equal(matchSoccerReaderGames(checked.payload,[{...official,league:'ucl'}],syntheticNow)[0].matchStatus,'UNMATCHED');
     assert.equal(matchSoccerReaderGames(checked.payload,[{...official,startTime:new Date(Date.parse(official.startTime)+60000).toISOString()}],syntheticNow)[0].matchStatus,'UNMATCHED');
     assert.equal(matchSoccerReaderGames(checked.payload,[{...official,date:'2026-10-27'}],syntheticNow)[0].matchStatus,'UNMATCHED');
