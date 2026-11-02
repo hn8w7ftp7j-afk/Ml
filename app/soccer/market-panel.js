@@ -145,7 +145,11 @@ function soccerConditionalState({quote,result,game,now=Date.now()}){
     ||game.sourceId!==saved.sourceId||Date.parse(game.startTime)!==Date.parse(saved.startTime)
     ||game.home?.sourceId!==saved.home?.sourceId||game.away?.sourceId!==saved.away?.sourceId
     ||Boolean(game.neutralSite)!==Boolean(saved.neutralSite)
-    ||c.assumption?.accountTermsVerified!==false||c.assumption?.mechanic!=='CREDIT_BOUNDARY'
+    ||![true,false].includes(c.assumption?.accountTermsVerified)||c.assumption?.mechanic!=='CREDIT_BOUNDARY'
+    ||c.assumption.accountTermsVerified===true&&!(c.ruleBinding?.accountTermsVerified===true
+      &&c.ruleBinding.periodTermsVerified===true&&c.ruleBinding.sourceQuoteKey===quote.key
+      &&c.ruleBinding.authority==='ACCOUNT_OWNER_INSTRUCTION'
+      &&Date.parse(c.ruleBinding.accountRuleConfirmation?.confirmedAt)<=Date.parse(c.quoteObservedAt))
     ||c.assumption?.rebateRate!==.01||c.assumption?.rebateBasis!=='SETTLED_PRINCIPAL'
     ||c.modelVersion!==distribution?.modelVersion||c.trainingHash!==distribution?.trainingHash
     ||c.distributionHash!==quote.scoring?.provenance?.distributionHash
@@ -193,19 +197,19 @@ export function SoccerConditionalAnalysis({quote,result,game,now=Date.now()}){
       <details className="soccerDetails"><summary>試算分數計算依據</summary><p>全組情境保留原權重；平均收益為加權平均，壓力收益取平均與加權第 10 百分位較低值。此百分位不是信賴下限。未展開比分保留收益區間，兩端分數不同時顯示分數區間。</p><p>計算時間：{clock(trial.calculatedAt)}｜公式：{trial.formulaVersion}</p></details>
     </section>}
     <p>期望淨收益：{returnPct(c.netReturnBounds.lower)} ～ {returnPct(c.netReturnBounds.upper)}（每元本金）</p>
-    <p className="soccerMarketNote">依信用盤比例派彩假設試算，尚未確認本帳號適用；足球退水按實際輸贏本金的 1%，走盤不退。</p>
+    <p className="soccerMarketNote">{c.assumption.accountTermsVerified?'依你確認的帳戶規則計算，正常全場／半場均含補時，全場不含加時及PK；':'依信用盤比例派彩假設試算，尚未確認本帳號適用；'}足球退水按實際輸贏本金的 1%，走盤不退。</p>
     {c.ruleBinding?.status==='ARITHMETIC_BOUND'&&c.ruleBinding.sourceQuoteKey===quote.key
       &&c.ruleBinding.gameId===c.gameId&&c.ruleBinding.league===c.league
       &&c.ruleBinding.quote?.period===quote.period&&c.ruleBinding.quote?.sourceLine===quote.line
       &&c.ruleBinding.quote?.direction===quote.side?.toUpperCase()&&c.ruleBinding.quote?.water===quote.water
       &&c.ruleBinding.quote?.kind===quote.kind&&c.ruleBinding.quote?.lineSide===(quote.lineSide??null)
-      &&c.ruleBinding.accountTermsVerified===false&&c.ruleBinding.formalScoringEnabled===false
+      &&c.ruleBinding.accountTermsVerified===c.assumption.accountTermsVerified&&c.ruleBinding.formalScoringEnabled===false
       &&/^[a-f0-9]{64}$/.test(c.ruleBinding.bindingHash||'')
       &&<details className="soccerDetails"><summary>已確認算式已綁定本筆原盤</summary>
         <p>球頭、方向、全場／半場、水位及原盤來源已分別綁定；退水為實際輸贏本金 × 1%，走盤不退。</p>
         <p>規則：{c.ruleBinding.ruleVersion}｜套用時間：{clock(c.ruleBinding.appliedAt)}</p>
         <p>綁定憑據：{c.ruleBinding.bindingHash}</p>
-        <p>這是計算規則綁定；帳號與期間條款仍待核對，異常賽事保留人工核對，並未取得正式評分資格。</p>
+        <p>{c.ruleBinding.accountTermsVerified?'帳戶與正常期間規則依你這次確認登錄，僅套用確認後的原盤；':'這是計算規則綁定；帳號與期間條款仍待核對，'}異常賽事保留人工核對，並未取得正式評分資格。</p>
       </details>}
     <dl>{Object.entries({FULL_WIN:'全贏',PARTIAL_WIN:'部分贏',PUSH:'走盤',PARTIAL_LOSS:'部分輸',FULL_LOSS:'全輸'}).map(([key,label])=><div key={key}><dt>{label}</dt><dd>{pct(c.probabilities?.[key])}</dd></div>)}</dl>
     <p className="soccerMarketNote">範圍僅保留未展開比分的損益界線，不包含模型誤差。正式 W／R／S 與排名資格仍待驗證。{historical?'此為已保存試算，價格已過期或比賽已開始。':''}</p>

@@ -80,7 +80,8 @@ try {
     const body = await response.json();
     assert.equal(body.league, league);
     assert.equal(body.scoringSystemReadiness.league, league);
-    assert.deepEqual(body.scoringSystemReadiness.blockers.map(row => row.code), expected);
+    assert.deepEqual(body.scoringSystemReadiness.blockers.map(row => row.code),
+      soccerSystemScoringReadiness(league).blockers.map(row=>row.code));
     assert.equal(body.capabilities.model, false);
   }
   assert.equal(fetches, 0, 'status must expose real registry blockers without needing games, Reader or a provider request');

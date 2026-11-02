@@ -77,7 +77,8 @@ try {
     WHERE capture_id=$1 AND payload->'evaluation'->'marketReturnValidation' IS NOT NULL`,[ft.captureId])).rows;
   assert.equal(returnChecks.length,1);assert.equal(returnChecks[0].evidence.version,SOCCER_MARKET_RETURN_VERSION);
   assert.match(returnChecks[0].evidence.evidenceHash,/^[a-f0-9]{64}$/);assert.equal(returnChecks[0].evidence.quoteObservations,2);
-  assert.ok(returnChecks[0].evidence.observations.every(row=>row.reason==='SOCCER_SOURCE_CONTRACT_UNVERIFIED'&&row.originalQuote.provenance.observedAt===iso(now)));
+  assert.ok(returnChecks[0].evidence.observations.every(row=>row.status==='OBSERVED'&&row.originalQuote.provenance.observedAt===iso(now)),
+    'current-clock quotes use confirmed account rules; original quote time is preserved and later corrections are still quarantined');
   assert.equal(conflict.marketReturnValidation.quarantinedPredictionPeriods,1);
   assert.equal(conflict.marketReturnValidation.observedQuoteReturns,0);assert.equal(conflict.marketReturnValidation.conflictingQuoteReturns,2);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM sports_soccer_forward_result_checks_v1 WHERE payload->'evaluation'->>'captureId'=$1`,[ft.captureId])).rows[0].n,2,'original evaluated result remains intact beside its changed result');
