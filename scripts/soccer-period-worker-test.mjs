@@ -53,7 +53,9 @@ async function execute(captures,{failPeriod=null,withDiagnostics=false,enableRec
   const tabs=captures.map((capture,index)=>({id:index+1,active:index===0,lastAccessed:index+1,...(enableRecovery?{url:'https://www.tai888.in/newapp/#/BS'}:{})}));
   const chrome={runtime:{onInstalled:event,onStartup:event,onMessage:event},alarms:{onAlarm:event},tabs:{onUpdated:event,query:async()=>tabs,reload:async id=>reloadCalls.push(id),sendMessage:async(tabId)=>({ok:true,capture:{readerVersion:version,captures:[captures[tabId-1]]}})},webNavigation:{getAllFrames:async()=>[{frameId:0}]},storage:{local:{get:async()=>structuredClone(state),set:async value=>Object.assign(state,value),remove:async keys=>{for(const key of Array.isArray(keys)?keys:[keys])delete state[key];}}}};
   const worker=vm.createContext({chrome,Date:Clock,URL,setTimeout,clearTimeout,queueMicrotask,TextEncoder,AbortController,crypto:webcrypto,
-    createDiagnosticOutbox,DIAGNOSTIC_ALARM,DIAGNOSTIC_SCHEMA,parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,selectAuthoritativeSoccerBoards,shouldSkipSuccessfulPayload,readerPayloadsByDate,
+    // Imported helpers execute outside the VM: give their outbox the same
+    // fixture clock so real calendar rollover cannot age out its reports.
+    createDiagnosticOutbox:options=>createDiagnosticOutbox({...options,now:()=>now}),DIAGNOSTIC_ALARM,DIAGNOSTIC_SCHEMA,parseTai888Capture,canonicalReaderPayload,readerMarketProperties,nhlReaderEvidencePayload,selectAuthoritativeBoard,selectAuthoritativeSoccerBoards,shouldSkipSuccessfulPayload,readerPayloadsByDate,
     fetch:async(url,options)=>{
       if(url.endsWith('/api/reader/diagnostics')){const report=JSON.parse(options.body);diagnosticReports.push(report);return{ok:true,status:200,text:async()=>JSON.stringify({ok:true,durable:true,reportId:report.reportId,receivedAt:at})};}
       assert.equal(url,'https://mlb-positive-ev.vercel.app/api/soccer/reader');
