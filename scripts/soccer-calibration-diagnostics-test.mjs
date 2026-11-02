@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { recordSoccerCalibrationFailure } from '../lib/soccer/calibration-diagnostics.js';
+const logs = [], log = (...args) => logs.push(args);
+assert.equal(recordSoccerCalibrationFailure('read', Error('CALIBRATION_SHADOW_COMPLETE_RESULT_HISTORY_EXCEEDS_READ_BUDGET'), log), 'CALIBRATION_SHADOW_COMPLETE_RESULT_HISTORY_EXCEEDS_READ_BUDGET');
+assert.deepEqual(logs[0], ['soccer.calibration.failed', { operation: 'read', code: 'CALIBRATION_SHADOW_COMPLETE_RESULT_HISTORY_EXCEEDS_READ_BUDGET' }]);
+for (const error of [Error('postgres://private:secret@database.invalid/path'), Error('CALIBRATION_FAILURE\nsecret'), { message: '<private body>', code: 'SOCCER_STORAGE_UNAVAILABLE' }, null]) recordSoccerCalibrationFailure('evaluate', error, log);
+assert.equal(logs[1][1].code, 'CALIBRATION_OPERATION_FAILED');
+assert.equal(logs[2][1].code, 'CALIBRATION_OPERATION_FAILED');
+assert.equal(logs[3][1].code, 'SOCCER_STORAGE_UNAVAILABLE');
+assert.doesNotMatch(JSON.stringify(logs), /private|secret|database\.invalid|postgres|stack/);
+console.log('PASS private calibration diagnostics: bounded machine code, fixed operation, no raw database/provider/stack leakage');

@@ -16,6 +16,10 @@ const xgSource=fs.readFileSync('app/soccer/team-xg-panel.js','utf8').replace(/^i
 const xgCode=await transform(xgSource,{filename:'soccer-personnel-xg.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const xgContext=vm.createContext({React,Date});vm.runInContext(xgCode.code,xgContext);
 const SoccerTeamXgPanel=xgContext.SoccerTeamXgPanel;
+const developmentSource=fs.readFileSync('app/soccer/model-development-panel.js','utf8').replace(/export function/g,'function');
+const developmentCode=await transform(developmentSource,{filename:'soccer-development.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+const developmentContext=vm.createContext({React});vm.runInContext(developmentCode.code,developmentContext);
+const SoccerModelDevelopmentPanel=developmentContext.SoccerModelDevelopmentPanel;
 
 const shipped=fs.readFileSync('app/soccer/analysis-panel.js','utf8');
 const source=shipped.replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
@@ -23,7 +27,7 @@ const {code}=await transform(source,{filename:'soccer-personnel-analysis.jsx',js
 let analysisContext={states:{},run:()=>{}};
 const ctx=vm.createContext({React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
   useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],useRef:initial=>({current:initial}),useEffect:()=>{},
-  SoccerManualSimulation:()=>null,SoccerMarketDirections:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel,SoccerMinutesV2Coverage,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
+  SoccerManualSimulation:()=>null,SoccerMarketDirections:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel,SoccerModelDevelopmentPanel,SoccerMinutesV2Coverage,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
 vm.runInContext(code,ctx);
 const render=props=>renderToStaticMarkup(ctx.SoccerPersonnelResearch(props));
 const artifact=soccerPersonnelArtifacts(),analysisCutoff='2026-10-20T00:00:00Z';

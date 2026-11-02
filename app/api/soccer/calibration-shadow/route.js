@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireApiAuth, checkRateLimit, rateLimitResponse, validateSameOrigin, originErrorResponse, readJsonBody } from '../../../../lib/security.js';
 import { soccerLeague } from '../../../../lib/soccer/contracts.js';
 import { readSoccerCalibrationShadowReport, evaluateSoccerCalibrationShadow } from '../../../../lib/soccer/calibration-shadow-validation.js';
+import { recordSoccerCalibrationFailure } from '../../../../lib/soccer/calibration-diagnostics.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export async function GET(request) {
   if (!league || [...params.keys()].some(key => key !== 'league' || params.getAll(key).length !== 1))
     return response({ ok: false, error: '校準保存查詢只接受英超或歐冠聯盟。' }, 400);
   try { return response({ ok: true, report: await readSoccerCalibrationShadowReport(league) }); }
-  catch { return failure(); }
+  catch (error) { recordSoccerCalibrationFailure('read', error); return failure(); }
 }
 export async function POST(request) {
   const denied = await requireApiAuth(request); if (denied) return denied;
@@ -30,5 +31,8 @@ export async function POST(request) {
     const { summary } = await evaluateSoccerCalibrationShadow({ league, limit: 3 });
     if (summary.status === 'STORAGE_UNAVAILABLE') return failure();
     return response({ ok: true, summary });
-  } catch (error) { return error.status === 400 || error.status === 413 ? response({ ok: false, error: '校準核對請求無效。' }, error.status) : failure(); }
+  } catch (error) {
+    if (error?.status === 400 || error?.status === 413) return response({ ok: false, error: '校準核對請求無效。' }, error.status);
+    recordSoccerCalibrationFailure('evaluate', error); return failure();
+  }
 }

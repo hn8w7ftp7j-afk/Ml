@@ -18,6 +18,7 @@ const realComponentCode=(await Promise.all([
   ['app/soccer/market-panel.js',['SoccerMarketDirections','SoccerHalfTimeResearch']],
   ['app/soccer/workload-panel.js',['SoccerWorkloadPanel']],
   ['app/soccer/team-xg-panel.js',['SoccerTeamXgPanel']],
+  ['app/soccer/model-development-panel.js',['SoccerModelDevelopmentPanel']],
   ['app/soccer/manual-simulation-panel.js',['SoccerManualSimulation']],
 ].map(async([file,exports])=>{
   const source=fs.readFileSync(file,'utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
