@@ -131,6 +131,13 @@ const pendingHistory = [], pendingDeps = { ...deps,
 const pending = await evaluateSoccerCalibrationShadow({ league: 'epl', limit: 1 }, pendingDeps);
 assert.equal(pending.summary.pendingGames, 1); assert.equal(pending.summary.validatedGames, 0); assert.equal(pending.summary.status, 'PENDING');
 assert.equal((await readSoccerCalibrationShadowReport('epl', pendingDeps)).untouchedValidatedGames, 0);
+const pendingDiagnostics=await readSoccerCalibrationShadowReport('epl',pendingDeps);
+assert.ok(pendingDiagnostics.validation.checkReasons.RESULT_NORMAL_FINAL_UNCONFIRMED>0);
+assert.equal(pendingDiagnostics.validation.checkReasons.CALIBRATION_NO_SAVED_RESULT_CHECK,2);
+assert.equal(pendingDiagnostics.validation.checkReasonUnit,'CHECKS_AND_VALIDATION_RECORDS_NOT_UNIQUE_GAMES');
+const privateReason=await readSoccerCalibrationShadowReport('epl',{...deps,readHistory:async(_league,{captureIds})=>[{captureId:f.records[0].captureReceipt.captureId,checkedAt:new Date(f.now).toISOString(),resultDocuments:null,reason:'sensitive provider text secret=example'}].filter(check=>captureIds.includes(check.captureId))});
+assert.ok(privateReason.validation.checkReasons.CALIBRATION_VALIDATION_CHECK_FAILED>0);
+assert.equal(JSON.stringify(privateReason).includes('secret=example'),false);
 const noFreeze = await evaluateSoccerCalibrationShadow({ league: 'epl' }, { ...deps, loadEvidence: async () => ({ ...f.context(), freezeReceipt: null }) });
 assert.equal(noFreeze.summary.checkedGames, 0); assert.equal(noFreeze.summary.status, 'NO_PENDING_CAPTURES');
 await assert.rejects(() => evaluateSoccerCalibrationShadow({ league: 'nba' }, deps), /SCOPE_INVALID/);

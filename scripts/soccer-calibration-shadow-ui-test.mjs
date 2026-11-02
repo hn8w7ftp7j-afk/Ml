@@ -94,3 +94,9 @@ for (const staleOutcome of ['error', 'success']) {
 }
 
 console.log('PASS calibration shadow UI: actual scoped counts, saved-vs-validated distinction, no invented zero on loading/error, invalid promotion rejection and request-fenced league/unmount isolation for late evaluation success and errors');
+const diagnostics=harness();diagnostics.render();diagnostics.calls[0].respond({ok:true,report:{...report(),validation:{checkReasonUnit:'CHECKS_AND_VALIDATION_RECORDS_NOT_UNIQUE_GAMES',checkReasons:{CALIBRATION_SAVED_PREDICTION_RECOMPUTE_FAILED:2,RESULT_NORMAL_FINAL_UNCONFIRMED:1,'private raw source text':99,CALIBRATION_RESULT_DOCUMENTS_UNAVAILABLE:-1}}}});await diagnostics.settle();
+assert.match(diagnostics.markup,/保存的預測與固定模型重算結果不一致/);
+assert.match(diagnostics.markup,/不等於不同賽事數/);
+assert.match(diagnostics.markup,/已核對前瞻賽果 0 場/);
+assert.doesNotMatch(diagnostics.markup,/private raw source text|來源尚未取得/);
+console.log('PASS calibration failure diagnostics: exact replay reason counts shown separately from game counts, unsafe text and malformed counts hidden, no acceptance manufactured');
