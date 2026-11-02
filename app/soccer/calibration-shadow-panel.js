@@ -5,6 +5,24 @@ const count = value => Number.isSafeInteger(value) && value >= 0;
 const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const time = value => Number.isFinite(Date.parse(value))
   ? new Date(value).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }) : '尚未取得';
+const reasonLabels = {
+  CALIBRATION_MATCH_NOT_FINISHED: '比賽尚未完成',
+  CALIBRATION_NO_SAVED_RESULT_CHECK: '尚未保存賽果查核紀錄',
+  CALIBRATION_HALF_TIME_RESULT_PENDING: '半場賽果依據尚未齊備',
+  CALIBRATION_RESULT_DOCUMENTS_UNAVAILABLE: '賽果來源尚未取得',
+  CALIBRATION_SAVED_PREDICTION_RECOMPUTE_FAILED: '保存的預測與固定模型重算結果不一致',
+  CALIBRATION_VALIDATION_RESULT_SCOPE_INVALID: '賽果與原預測的場次或球隊未通過配對',
+  CALIBRATION_DURABLE_FREEZE_NOT_VERIFIED: '模型封存憑據未通過核對',
+  CALIBRATION_PREGAME_DATABASE_RECEIPT_NOT_VERIFIED: '賽前預測保存憑據未通過核對',
+  RESULT_NORMAL_FINAL_UNCONFIRMED: '尚未確認正常完賽',
+};
+export function calibrationCheckReasons(report) {
+  const v=report?.validation;
+  if(v?.checkReasonUnit!=='CHECKS_AND_VALIDATION_RECORDS_NOT_UNIQUE_GAMES'
+    ||!v.checkReasons||typeof v.checkReasons!=='object'||Array.isArray(v.checkReasons))return [];
+  return Object.entries(v.checkReasons).filter(([code,n])=>/^(?:CALIBRATION|RESULT)_[A-Z0-9_]{1,100}$/.test(code)
+    &&count(n)&&n>0).slice(0,100).map(([code,n])=>({code,count:n,label:reasonLabels[code]||'此項校準檢查未通過'}));
+}
 export function calibrationShadowReportValid(report, league) {
   const common = report?.version === 'SOCCER-CALIBRATION-SHADOW-v1' && report.league === league
     && ['captureGames', 'fullTimeCaptures', 'halfTimeCaptures', 'untouchedValidatedGames'].every(key => count(report[key]))
@@ -91,6 +109,10 @@ export function SoccerCalibrationShadowPanel({ league }) {
     {report && <>
       {report.validationCoverage?.completeWithinRequestedScope === false && <p role="status">賽果核對尚未讀完，已讀 {report.validationCoverage.readCaptures}／{report.validationCoverage.totalCaptures} 場；核對筆數僅代表已讀範圍。</p>}
       <p>不同賽事 {report.captureGames} 場｜全場預測 {report.fullTimeCaptures} 筆｜上半場預測 {report.halfTimeCaptures} 筆｜{report.validationCoverage?.completeWithinRequestedScope === false ? '已讀範圍核對賽果' : '已核對前瞻賽果'} {report.untouchedValidatedGames} 場。</p>
+      {calibrationCheckReasons(report).length>0&&<details className="soccerDetails"><summary>校準查核尚未通過的原因</summary>
+        <p>以下計數為查核紀錄，包含歷次未通過紀錄，不等於不同賽事數，也不代表目前有效樣本已被排除。</p>
+        <ul>{calibrationCheckReasons(report).map(row=><li key={row.code}>{row.label}：{row.count} 筆（{row.code}）</li>)}</ul>
+      </details>}
       {count(report.quarantinedGames) && report.quarantinedGames > 0 && <p className="soccerAvailability">賽果衝突隔離 {report.quarantinedGames} 場，未列入已核對樣本。</p>}
       <p className="soccerAvailability">{report.freeze ? `方案封存：${time(report.freeze.frozenAt)}。` : '方案會在首次分析時封存，只保存封存後的未開賽預測。'}{report.latestCapturedAt ? `最近保存：${time(report.latestCapturedAt)}。` : '尚無符合本方案的賽前預測。'}</p>
       <p className="soccerAvailability">已保存的預測筆數不等於模型驗收通過；正式評分仍須完成原盤規則、人員模型與收益誤差驗證。</p>
