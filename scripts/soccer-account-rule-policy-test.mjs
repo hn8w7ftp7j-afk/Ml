@@ -30,6 +30,11 @@ for(const league of ['epl','ucl'])for(const period of ['FT','HT'])for(const line
    const score=scoreSoccerQuote({quote:q,game,now,distribution:{league,gameId:game.id,period:period==='FT'?'REGULATION_FT':'REGULATION_HT',modelVersion:'TEST_ONLY',trainingHash:'d'.repeat(64),retainedMass:1,tailMass:0,cells:[{home:1,away:0,probability:1}]}});
    assert.equal(score.stages.find(s=>s.stage==='SETTLEMENT_CONTRACT').status,'REGISTERED');
    assert.equal(score.conditionalPayoff.ok,true);assert.equal(score.S,null);assert.equal(score.formalScoringEnabled,false);
+   const explicit={...contract,version:'SYNTHETIC_REPLAY_ONLY',evidenceRef:'synthetic://explicit-replay'};
+   const replay=scoreSoccerQuote({quote:q,game,now,distribution:{league,gameId:game.id,period:period==='FT'?'REGULATION_FT':'REGULATION_HT',modelVersion:'TEST_ONLY',trainingHash:'d'.repeat(64),retainedMass:1,tailMass:0,cells:[{home:1,away:0,probability:1}]},contract:explicit});
+   assert.equal(replay.conditionalPayoff.contract.version,'SYNTHETIC_REPLAY_ONLY');
+   assert.equal(replay.stages.find(s=>s.stage==='SETTLEMENT_CONTRACT').status,'CONDITIONAL_ONLY');
+   assert.equal(replay.S,null,'explicit replay cannot borrow registry approval');
    if(kind==='HANDICAP'&&q.side==='home'){
     const expected={'1+20':.182,'1-20':-.198,'1平':0}[line];
     if(expected!==undefined)assert.ok(Math.abs(score.conditionalPayoff.netEV-expected)<1e-12);
