@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { normalizeSoccerPlayerMatch, normalizeSoccerPlayerWorkload, fetchSoccerPlayerWorkload } from '../lib/soccer/player-workload.js';
 import { fetchSoccerJson } from '../lib/soccer/data.js';
+import { soccerMinutesAudit, SOCCER_MINUTES_AUDIT_V2_VERSION } from '../lib/soccer/personnel-audit.js';
 
 // Repository-captured ESPN Brentford–Arsenal summary, 1 January 2025.
 const past = JSON.parse(fs.readFileSync(new URL('./fixtures/soccer/minutes-past.json', import.meta.url)));
@@ -17,6 +19,10 @@ assert.equal(match.sourceId, '359');
 assert.equal(match.teamPlayerMinutes, 990);
 assert.equal(match.teamScope, 'TEAM_ONLY');
 assert.equal(match.auditedTeamSide, 'away');
+assert.equal(match.version, 'SOCCER-OBSERVED-PLAYER-WORKLOAD-v2');
+assert.equal(match.extractorVersion, SOCCER_MINUTES_AUDIT_V2_VERSION);
+assert.equal(match.dismissalPolicy, 'EXPLICIT_ESPN_TYPE_93_RED_CARD_ONLY_VAR_REVIEW_IS_INFORMATIONAL');
+assert.equal(match.formalEligible, false);
 assert.equal(match.players.find(player => player.name === 'Oleksandr Zinchenko').regulationClockMinutes, 0);
 assert.equal(match.players.find(player => player.name === 'Oleksandr Zinchenko').appeared, true, 'added-time appearance must not disappear because its regulation-clock minutes are zero');
 assert.ok(Math.abs(match.players.find(player => player.name === 'Mikel Merino').regulationClockMinutes - 77.6) < 1e-9);
@@ -91,7 +97,17 @@ assert.equal(rejected(opponentRoleText).ok, true, 'unverified opponent substitut
 assert.equal(rejected(opponentRoleText).teamPlayerMinutes, 990);
 const ownRoleText = structuredClone(past);
 ownRoleText.keyEvents.find(event => event.type.type === 'substitution' && event.team.id === '359').text = 'Unverified own substitution role text';
-assert.equal(rejected(ownRoleText).code, 'SUBSTITUTION_ROLE_UNVERIFIED', 'target-team roles remain strict; no alias or role guessing');
+const ownRecovered = rejected(ownRoleText);
+assert.equal(ownRecovered.ok, true, 'one unique source-ID/active-state/roster-flag pair resolves changed provider name text');
+assert.equal(ownRecovered.stateResolvedSubstitutions, 1);
+assert.deepEqual(ownRecovered.players, match.players);
+const resolvedEvent = ownRecovered.participationEvents.find(event => event.roleEvidence?.method === 'UNIQUE_SOURCE_IDS_ACTIVE_STATE_AND_ROSTER_FLAGS');
+assert.ok(resolvedEvent);
+const contraryRoleText = structuredClone(ownRoleText);
+const contraryEvent = contraryRoleText.keyEvents.find(event => String(event.id) === resolvedEvent.eventId);
+const ownNames = new Map(contraryRoleText.rosters.find(team => team.team.id === '359').roster.map(player => [String(player.athlete.id), player.athlete.displayName || player.athlete.fullName]));
+contraryEvent.text = `${ownNames.get(resolvedEvent.exit)} replaces ${ownNames.get(resolvedEvent.enter)}.`;
+assert.equal(rejected(contraryRoleText).ok, false, 'contrary exact provider names still reject source-ID fallback');
 const reusedPlayer = structuredClone(past); reusedPlayer.rosters[1].roster[0].athlete.id = reusedPlayer.rosters[0].roster[0].athlete.id;
 assert.equal(rejected(reusedPlayer).code, 'SOCCER_PLAYER_ROSTER_IDENTITY_INVALID');
 assert.equal(rejected(past, { ...record, status: 'SCHEDULED' }).code, 'SOCCER_PLAYER_MATCH_SCOPE_INVALID');
@@ -103,6 +119,50 @@ const partial = normalizeSoccerPlayerWorkload(workload, [observation(), { ok: fa
 assert.equal(partial.ok, true);
 assert.equal(partial.coverage.omittedMatches, 1);
 assert.equal(partial.omissions[0].reason, 'SOCCER_SOURCE_TIMEOUT');
+
+// Actual retained ESPN Southampton–Newcastle source: the VAR review explicitly
+// reports no card change. The old live extractor incorrectly removed Bednarek.
+// This replay tests the current workload boundary, not historical PIT approval.
+const retained = JSON.parse(gunzipSync(fs.readFileSync(new URL('../research/soccer/personnel-epl-sources.json.gz', import.meta.url))));
+const noCardRecord = retained.find(item => item.eventId === '578438');
+assert.ok(noCardRecord);
+const noCard = noCardRecord.data, noCardCompetition = noCard.header.competitions[0];
+const noCardStart = noCardCompetition.date, noCardAt = Date.parse(noCardStart) + 86_400_000;
+const ownSide = noCard.rosters.find(group => group.roster.some(player => String(player.athlete.id) === '221788')).homeAway;
+const ownCompetitor = noCardCompetition.competitors.find(team => team.homeAway === ownSide);
+const opponent = noCardCompetition.competitors.find(team => team.homeAway !== ownSide);
+const actualRecord = { eventId: '578438', startTime: noCardStart,
+  competition: { id: String(noCard.header.league.id), slug: noCard.header.league.slug },
+  homeAway: ownSide, opponent: { sourceId: String(opponent.team.id) }, status: 'COMPLETED', extraTimeReported: false };
+const actualWorkload = { ok: true, sourceId: String(ownCompetitor.team.id),
+  asOf: new Date(noCardAt - 1000).toISOString(), referenceAt: new Date(noCardAt).toISOString(), recentCompleted: [actualRecord] };
+const actualSource = data => ({ provider: 'ESPN', url: `https://site.api.espn.com/apis/site/v2/sports/soccer/${actualRecord.competition.slug}/summary?event=578438`,
+  fetchedAt: new Date(noCardAt - 500).toISOString(), contentHash: createHash('sha256').update(JSON.stringify(data)).digest('hex') });
+const actualGame = { status: 'final', ...Object.fromEntries(noCardCompetition.competitors.map(team => [team.homeAway, { sourceId: String(team.team.id) }])) };
+const oldActual = soccerMinutesAudit(noCard, actualGame, { teamSide: ownSide });
+assert.ok(oldActual.teams[ownSide].players.find(player => player.id === '221788').regulationClockMinutes < 90);
+const correctedActual = normalizeSoccerPlayerMatch(noCard, actualRecord, actualWorkload, actualSource(noCard), noCardAt);
+assert.equal(correctedActual.ok, true);
+assert.equal(correctedActual.players.find(player => player.id === '221788').regulationClockMinutes, 90);
+assert.ok(correctedActual.informationalCardReviews.some(event => /No card change/.test(event.sourceText)));
+assert.equal(correctedActual.participationEvents.some(event => event.type.includes('DISMISSAL') && event.playerId === '221788'), false);
+for (const [providerType, providerTypeId] of [['var---red-card-upgrade','167'], ['var---red-card-given','168']]) {
+  const changed = structuredClone(noCard), review = changed.keyEvents.find(event => /No card change/.test(event.text || ''));
+  review.type = { ...review.type, type: providerType, id: providerTypeId };
+  const result = normalizeSoccerPlayerMatch(changed, actualRecord, actualWorkload, actualSource(changed), noCardAt);
+  assert.equal(result.ok, true);
+  assert.equal(result.players.find(player => player.id === '221788').regulationClockMinutes, 90, providerType);
+  assert.ok(result.informationalCardReviews.some(event => event.providerType === providerType));
+  assert.equal(result.formalEligible, false); assert.equal(result.modelEffectApplied, false);
+}
+const actualFetched = await fetchSoccerPlayerWorkload(actualWorkload, {
+  fetchImpl: async url => ({ ok: true, url, json: async () => structuredClone(noCard) }), now: () => noCardAt,
+});
+assert.equal(actualFetched.ok, true);
+assert.equal(actualFetched.players.find(player => player.id === '221788').regulationClockMinutesLast14Days, 90);
+assert.equal(actualFetched.matches[0].extractorVersion, SOCCER_MINUTES_AUDIT_V2_VERSION);
+assert.equal(actualFetched.pointInTimeAvailabilityVerified, false);
+assert.equal(actualFetched.formalEligible, false);
 
 // One malformed provider summary cannot erase a different verified match.
 for (const [label, mutate, expected] of [
@@ -127,6 +187,8 @@ let requests = 0;
 const fetchImpl = async url => { requests++; return { ok: true, url, json: async () => structuredClone(past) }; };
 const fetched = await fetchSoccerPlayerWorkload(workload, { fetchImpl, now: () => at });
 assert.equal(fetched.ok, true); assert.equal(requests, 1);
+assert.equal(fetched.extractorVersion, SOCCER_MINUTES_AUDIT_V2_VERSION);
+assert.equal(fetched.matches[0].extractorVersion, SOCCER_MINUTES_AUDIT_V2_VERSION);
 await fetchSoccerPlayerWorkload(workload, { fetchImpl, now: () => at });
 assert.equal(requests, 1, 'unchanged endpoint reads use the bounded source cache without changing original fetchedAt');
 const excluded = await fetchSoccerPlayerWorkload({ ...workload, recentCompleted: [{ ...record, status: 'SCHEDULED' }, { ...olderRecord, extraTimeReported: true }] }, { fetchImpl, now: () => at });
@@ -179,4 +241,4 @@ for (const limits of [
   assert.equal(later.ok, true); assert.equal(calls, 1, 'a subsequent consumer can use the intact completed cache');
 }
 
-console.log('PASS observed player workload: true ESPN minutes, zero-clock added-time appearances, 7/14-day aggregation, source/time/identity/final/ET guards, per-summary schema failures, partial omissions, no false completeness, fetch cap/cache/concurrency and independent consumer deadlines; no predicted minutes or model promotion');
+console.log('PASS observed player workload v2: actual ESPN VAR167/168 no-card regression and fetch/aggregation, source-ID active-state substitution recovery with contrary-name rejection, true minutes and zero-clock appearances, 7/14-day aggregation, identity/final/ET/schema guards, partial omissions, cache/concurrency/deadline bounds; no predicted minutes or model promotion');
