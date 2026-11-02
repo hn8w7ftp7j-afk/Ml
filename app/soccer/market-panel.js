@@ -84,6 +84,21 @@ function conditionalFailureReason(quote){
   return !c?'此歷史版本尚未保存收益分析，請重新核對賽前資料':conditionalFailures[c.reason]||'此盤口缺少可用的計算依據，須核對球頭、水位與比分模型';
 }
 
+export function SoccerCertifiedDifference({value}){
+  const b=value?.evBounds?.net;
+  if(value?.version!=='SOCCER-DC-DIFFERENCE-PAYOFF-INTERVAL-v1'||value.status!=='CERTIFIED_NUMERICAL_MODEL_LAW_INTERVAL'
+    ||value.sourceVerification!=='RECOMPUTED_GENERATOR_PMF_AND_COMPLETE_RECTANGLE'
+    ||value.formalEligible!==false||value.accepted!==false||value.executable!==false
+    ||value.infiniteSeriesRemainderIncluded!==true||value.arithmeticRoundingIncluded!==true
+    ||!finite(b?.lower)||!finite(b?.upper)||b.lower>b.upper
+    ||!finite(value.omittedProbabilityUpper)||value.omittedProbabilityUpper<0||value.omittedProbabilityUpper>1)return null;
+  return <details className="soccerDetails"><summary>讓球極端比分已納入數值核算</summary>
+    <p>依本次比分分布與派彩規則，收益數值區間約為 {b.lower.toExponential(12)} ～ {b.upper.toExponential(12)}（每元本金）。</p>
+    <p>無限比分剩餘機率上界 {value.omittedProbabilityUpper.toExponential(3)}；區間另保留浮點運算誤差。</p>
+    <p className="soccerMarketNote">這是既定模型的數值積分界線，不含模型與校準誤差，不是正式 R 或 S。</p>
+  </details>;
+}
+
 export function SoccerScenarioResearch({result,game,now=Date.now()}){
   const r=result?.scenarioResearch,saved=result?.evidence?.game;
   if(!r||r.version!=='SOCCER-SOURCE-TRAINED-SCENARIO-RESEARCH-v1'||r.formalEnabled!==false||r.executable!==false
@@ -197,6 +212,7 @@ export function SoccerConditionalAnalysis({quote,result,game,now=Date.now()}){
       <details className="soccerDetails"><summary>試算分數計算依據</summary><p>全組情境保留原權重；平均收益為加權平均，壓力收益取平均與加權第 10 百分位較低值。此百分位不是信賴下限。未展開比分保留收益區間，兩端分數不同時顯示分數區間。</p><p>計算時間：{clock(trial.calculatedAt)}｜公式：{trial.formulaVersion}</p></details>
     </section>}
     <p>期望淨收益：{returnPct(c.netReturnBounds.lower)} ～ {returnPct(c.netReturnBounds.upper)}（每元本金）</p>
+    <SoccerCertifiedDifference value={c.certifiedDifferencePayoff}/>
     <p className="soccerMarketNote">{c.assumption.accountTermsVerified?'依你確認的帳戶規則計算，正常全場／半場均含補時，全場不含加時及PK；':'依信用盤比例派彩假設試算，尚未確認本帳號適用；'}足球退水按實際輸贏本金的 1%，走盤不退。</p>
     {c.ruleBinding?.status==='ARITHMETIC_BOUND'&&c.ruleBinding.sourceQuoteKey===quote.key
       &&c.ruleBinding.gameId===c.gameId&&c.ruleBinding.league===c.league
