@@ -76,9 +76,21 @@ retrieve or independently recompute the original raw provider documents.
 
 ## Fixed research method
 
-Fit separate groups for league, period, variant, original model hash, exact
-contract hash, market kind and side. There is no pooling with NBA or across
-leagues, periods, contracts or models. Assign an entire real game by kickoff to
+Fit separate groups for league, period, variant, original model hash, settlement
+rule-family hash, market kind and side. Every row retains its exact contract
+hash and must first pass original-price/contract/result recomputation. The
+family is then derived from that exact trusted contract by excluding only its
+`line` and `quoteKey`: these identify a price observation, not new settlement
+mechanics. Every other field is retained, including authority, policy/evidence
+versions, effective interval, period, market kind, mechanics and rebate. Unknown
+future policy fields also separate families. Thus per-quote bindings do not
+prevent independent real games from accumulating in one unchanged policy.
+Old datasets without this recomputed family hash are excluded from fitting;
+their original contract hashes are never treated as a family fallback. The
+revised candidate grouping changes the protocol and fitted parameter hashes;
+it creates no acceptance or preregistration for existing artifacts.
+There is no pooling with NBA or across leagues, periods, rule families or
+models. Assign an entire real game by kickoff to
 one chronological training, calibration or test window; no random row split.
 Training and calibration also require the result check to be available before
 their respective window closes, so later scores cannot be borrowed backward.

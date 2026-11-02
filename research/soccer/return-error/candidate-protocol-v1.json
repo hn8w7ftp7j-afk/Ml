@@ -7,7 +7,7 @@
   "testBefore": null,
   "miscoverage": 0.1,
   "method": "GAME_BALANCED_SIGNED_BIAS_THEN_GAME_MAX_ABSOLUTE_RESIDUAL_ORDER_STATISTIC",
-  "grouping": "LEAGUE_PERIOD_VARIANT_MODEL_CONTRACT_MARKET_SIDE",
+  "grouping": "LEAGUE_PERIOD_VARIANT_MODEL_SETTLEMENT_RULE_FAMILY_MARKET_SIDE",
   "selection": "FIRST_VALID_SAVED_PREDICTION_PER_ECONOMIC_PRICE_MODEL",
   "splitUnit": "WHOLE_REAL_GAME_BY_KICKOFF",
   "reference": "https://proceedings.mlr.press/v313/barber26a.html",

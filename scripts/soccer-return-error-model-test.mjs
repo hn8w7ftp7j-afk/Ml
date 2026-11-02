@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildSoccerReturnErrorDataset, buildSoccerReturnErrorDatasetHydrated, fitSoccerReturnErrorResearch,
-  summarizeSoccerReturnErrorDatasets, mergeSoccerReturnErrorDiagnostics, SOCCER_RETURN_ERROR_CANDIDATE_PROTOCOL } from '../lib/soccer/return-error-model.js';
+  summarizeSoccerReturnErrorDatasets, mergeSoccerReturnErrorDiagnostics, SOCCER_RETURN_ERROR_CANDIDATE_PROTOCOL,
+  soccerReturnErrorSettlementRuleFamilyHash } from '../lib/soccer/return-error-model.js';
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
 import { evaluateSoccerMarketReturnCapture } from '../lib/soccer/market-return-validation.js';
 import { evaluateSoccerForwardCapture, soccerForwardHash } from '../lib/soccer/forward-validation.js';
@@ -10,7 +11,7 @@ import { fixtureCapture, changed, resultFor, protocol, active, observed, after, 
 // They are never written as empirical production data or accepted artifacts.
 const DAY=86400000;
 const trustedContract=record=>({provider:'TAI888',version:'SYNTHETIC_TEST_ONLY',status:'SOURCE_TERMS_VERIFIED',evidenceRef:'synthetic://test-only',
-  verifiedAt:iso(active-2000),league:record.league,period:record.period,kind:record.kind,line:record.line,type:'CREDIT_BOUNDARY',
+  verifiedAt:iso(active-2000),league:record.league,period:record.period,kind:record.kind,line:record.line,quoteKey:record.quoteKey,type:'CREDIT_BOUNDARY',
   scope:'REGULATION_FT_WITH_STOPPAGE_NO_EXTRA_TIME_OR_PENALTIES',normalFinalOnly:true,abnormalStatusPolicy:'MANUAL_REVIEW',
   bindingEvidenceRef:'synthetic://account-binding',effectiveFrom:iso(active-10000),effectiveUntil:iso(active+100*DAY),
   rebate:{rate:.01,basis:'SETTLED_PRINCIPAL',appliesTo:{FULL_WIN:true,PARTIAL_WIN:true,PUSH:false,PARTIAL_LOSS:true,FULL_LOSS:true}}});
@@ -25,7 +26,8 @@ for(let day=0;day<14;day++){
     p.inputVersions.evidenceFetchedAt=p.evidence.source.fetchedAt;
     const receipt={revision:'b'.repeat(64),observationId:'c'.repeat(64),observedAt:p.analysisCutoff,
       firstFetchedAt:p.analysisCutoff,receivedAt:p.analysisCutoff,persistedAt:p.analysisCutoff,sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/'};
-    const market={period:'FT',kind:'TOTAL',unit:'GOALS',line:'2.5',overWater:.95,underWater:.9,rawRows:['大2.5 0.95','小0.9'],
+    const line=day%2?'3.5':'2.5';
+    const market={period:'FT',kind:'TOTAL',unit:'GOALS',line,overWater:.95,underWater:.9,rawRows:[`大${line} 0.95`,'小0.9'],
       periodEvidence:{period:'FT',status:'EXPLICIT',sectionTitle:'英格蘭超級聯賽',tableHeaders:['全場'],marketHeader:'全場大小'}};
     p.directions=buildSoccerMarketDirections({reader:receipt,game:g,now:Date.parse(p.analysisCutoff),matchedGames:[{officialGameId:g.id,
       league:'EPL',boardDate:g.date,matchStatus:'MATCHED',prestart:true,markets:[market]}]});
@@ -45,6 +47,26 @@ const evidence={protocol,captures,evaluations,checks,truncated:false,readCoverag
 const dataset=buildSoccerReturnErrorDataset(evidence,{now,resolveContract:trustedContract});
 assert.equal(dataset.observedGames,14);assert.equal(dataset.observedQuoteReturns,28);
 assert.equal(dataset.R,null);assert.equal(dataset.accepted,false);
+assert.equal(new Set(dataset.observations.map(row=>row.contractHash)).size,28,
+  'production-style exact quote contracts remain distinct and independently recomputed');
+assert.equal(new Set(dataset.observations.map(row=>row.settlementRuleFamilyHash)).size,1,
+  'different original quote keys, lines and odds do not fragment one unchanged settlement policy');
+const exampleContract=trustedContract({league:'epl',period:'FT',kind:'TOTAL',line:'2.5',quoteKey:'a'.repeat(64)});
+const family=soccerReturnErrorSettlementRuleFamilyHash(exampleContract);
+assert.equal(soccerReturnErrorSettlementRuleFamilyHash({...exampleContract,line:'3.5',quoteKey:'b'.repeat(64)}),family);
+for(const mutate of [
+  value=>{value.period='HT';value.scope='REGULATION_HT_WITH_STOPPAGE';},
+  value=>{value.rebate.basis='TOTAL_PRINCIPAL';},
+  value=>{value.rebate.rate=.015;},
+  value=>{value.type='ASIAN_SPLIT';},
+  value=>{value.authority='DIFFERENT_ACCOUNT_AUTHORITY';},
+  value=>{value.evidenceRef='synthetic://different-policy';},
+  value=>{value.version='DIFFERENT_RULE_VERSION';},
+  value=>{value.effectiveFrom=iso(active-20000);},
+  value=>{value.newPolicyField='never silently ignored';},
+]){const changedPolicy=structuredClone(exampleContract);mutate(changedPolicy);
+  assert.notEqual(soccerReturnErrorSettlementRuleFamilyHash(changedPolicy),family,
+    'period, rebate, mechanics, authority and other policy terms must not pool');}
 const otherModel=changed(captures[0],value=>{
   value.captureId=soccerForwardHash('synthetic-second-legitimate-model');value.captureSequence='100';
   value.snapshot.prediction.trainingHash=soccerForwardHash('synthetic-second-training');
@@ -80,7 +102,24 @@ for(const group of fit.groups){
   assert.equal(group.calibrationRank,9);assert.ok(Number.isFinite(group.realizedReturnBandRadius));
   assert.equal(group.testUntouchedVerified,false);assert.equal(group.accepted,false);assert.equal(group.R,null);
   assert.ok(group.missing.includes('DURABLE_PRETEST_MODEL_RECEIPT_MISSING'));
+  assert.equal(group.scope.settlementRuleFamilyHash,dataset.observations[0].settlementRuleFamilyHash);
 }
+const legacyDataset=structuredClone(dataset);
+legacyDataset.observations.forEach(row=>{delete row.settlementRuleFamilyHash;});
+delete legacyDataset.contentHash;legacyDataset.contentHash=soccerForwardHash(legacyDataset);
+const legacyFit=fitSoccerReturnErrorResearch({datasets:[legacyDataset],protocol:candidate,now});
+assert.equal(legacyFit.groups.length,0,'old sealed rows without a recomputed rule-family binding are not grandfathered into pooling');
+assert.equal(legacyFit.missingReasons.RETURN_ERROR_SETTLEMENT_RULE_FAMILY_MISSING,28);
+const distinctAuthority=record=>({...trustedContract(record),authority:Number(record.gameId.split(':').at(-1))%2?'SYNTHETIC_AUTHORITY_A':'SYNTHETIC_AUTHORITY_B'});
+const authorityEvaluations=evaluations.map((value,index)=>({...value,marketReturnValidation:evaluateSoccerMarketReturnCapture({
+  capture:captures[index],protocol,result:checks[index].resultEvidence,now:Date.parse(checks[index].checkedAt),resolveContract:distinctAuthority})}));
+const authorityDataset=buildSoccerReturnErrorDataset({...evidence,evaluations:authorityEvaluations,
+  checks:checks.map((value,index)=>({...value,marketReturnEvidenceHash:authorityEvaluations[index].marketReturnValidation.evidenceHash}))},
+  {now,resolveContract:distinctAuthority});
+assert.equal(authorityDataset.observedQuoteReturns,28,'separate authorities still require valid exact per-quote recomputation');
+const authorityFit=fitSoccerReturnErrorResearch({datasets:[authorityDataset],protocol:candidate,now});
+assert.equal(authorityFit.groups.length,4,'same-market rows from different account authorities cannot share fitted cohorts');
+assert.ok(authorityFit.groups.every(group=>group.calibration.games<9&&group.realizedReturnBandRadius===null));
 assert.deepEqual(fit,fitSoccerReturnErrorResearch({datasets:[dataset],protocol:candidate,now}),'fitting is deterministic');
 assert.equal(JSON.stringify(evidence),before,'research cannot mutate archived predictions or results');
 const noData=fitSoccerReturnErrorResearch({evidence:{protocol,captures:[],evaluations:[],checks:[]},now});
