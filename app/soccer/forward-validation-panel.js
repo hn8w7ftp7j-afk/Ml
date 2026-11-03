@@ -95,6 +95,7 @@ function ForwardReport({report,league,summary}){
       <h3>原盤收益驗證</h3>
       <p>保存原盤 {count(returns.quoteObservations)} 筆｜已核對收益 {count(returns.observedQuoteReturns)} 筆｜待核對 {count(returns.pendingQuoteReturns)} 筆｜衝突排除 {count(returns.conflictingQuoteReturns)} 筆｜不同已核對賽事 {count(returns.uniqueObservedGames)} 場</p>
       {returns.boundedQuoteReturns>0&&<p>另已保存收益區間 {count(returns.boundedQuoteReturns)} 筆，來自 {count(returns.uniqueBoundedGames)} 場。原盤與賽果已核對，但比分尾端仍有未定收益；上下界分開保留，不算入上方精確收益筆數。</p>}
+      {returns.certifiedHandicapQuoteReturns>0&&<p>含讓球極端比分的數值驗證 {count(returns.certifiedHandicapQuoteReturns)} 筆，保存預測收益與誤差上下界。</p>}
       <p className="soccerAvailability">將開賽前保存的原始盤口、預測及結算結果逐筆對照。同場不同方向不是獨立賽事；這是收益觀察資料，尚未取得正式 R，也不代表模型驗收通過。</p>
       <ReasonList reasons={returns.pendingReasons} label="收益待核對原因"/>
       <ReasonList reasons={returns.predictionPeriodReasons} label="封存版本待核對原因"/>

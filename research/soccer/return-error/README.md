@@ -37,14 +37,19 @@ recompute those derived contributions from the unchanged original evidence.
 
 ## Source admission
 
-The dataset reuses the first valid database prediction per economic original
-price, model and period. It verifies the immutable snapshot, original Reader
+The dataset uses the first valid database prediction per economic original
+price, model and period whose exact contract was already available at its saved
+cutoff. An earlier same-price receipt without applicable terms remains visible
+as pending if no eligible receipt exists. The separate retrospective replay
+retains its original earliest-price cohort. The dataset verifies the immutable snapshot, original Reader
 adapter/hash and sealed return observation, then recomputes predicted and actual
 net returns using the archived two-endpoint result evidence and a trusted
 server contract resolver. Source terms must have been verified by the original
 prediction cutoff. Later terms can support separate retrospective arithmetic,
-but do not create a pre-bet return forecast in this dataset. Current empty
-contract registries produce no fitted observations.
+but do not create a pre-bet return forecast in this dataset. The selection is
+part of the compact dataset and candidate protocol hashes. Earlier derived
+datasets or interrupted scans using another selection must be rebuilt from the
+unchanged original evidence before fitting or merging new contributions.
 
 ### Bounded original-price observations
 

@@ -4,12 +4,15 @@ const number=(value,digits=2)=>finite(value)?value.toFixed(digits):'—';
 const percent=value=>finite(value)&&value>=0&&value<=1?`${(value*100).toFixed(1)}%`:'—';
 const scoped=(value,game)=>value&&value.gameId===game?.id&&value.league===game?.league&&value.formalEligible===false&&value.modelEffectApplied===false;
 
-export function SoccerModelDevelopmentPanel({minutes,conditions,matchXg,game}) {
+export function SoccerModelDevelopmentPanel({minutes,conditions,matchXg,evidence,game}) {
   const m=scoped(minutes,game)&&minutes.version==='SOCCER-PRIOR-PARTICIPATION-MINUTES-RESEARCH-v1'?minutes:null;
   const c=scoped(conditions,game)&&conditions.version==='SOCCER-SCHEDULE-CONGESTION-POISSON-RIDGE-RESEARCH-v1'?conditions:null;
   const x=scoped(matchXg,game)&&matchXg.version==='SOCCER-STATSBOMB-MATCH-XG-RESEARCH-v1'?matchXg:null;
   if(!m&&!c&&!x)return null;
   const holdout=m?.validation?.holdout;
+  const context=evidence?.game?.id===game?.id&&evidence?.game?.league===game?.league?evidence:null;
+  const venue=context?.venueObservation?.value;
+  const leaguePhase=context?.uclPhaseObservation?.value?.phase==='LEAGUE_PHASE';
   return <details className="soccerDetails"><summary>人員、逐場 xG 與賽程條件模型</summary>
     <p>以下為另行訓練的研究模型與保存結果。先發資格、傷停完整度及對進球的實際影響仍須驗證。</p>
     {m&&<section aria-label="預計上場分鐘模型"><h4>球員上場機率與預計分鐘</h4>
@@ -23,6 +26,8 @@ export function SoccerModelDevelopmentPanel({minutes,conditions,matchXg,game}) {
     {c&&<section aria-label="賽程條件模型"><h4>賽程密度條件模型</h4>
       {c.validation&&<p>2025 年回顧測試 {c.validation.test?.games??0} 場；比分 Log Loss {number(c.validation.test?.scoreLogLoss,4)}，對照 {number(c.validation.baselineTest?.scoreLogLoss,4)}。誤差越低越好。</p>}
       {c.prediction?<p>研究平均進球：主隊 {number(c.prediction.homeRate)}／客隊 {number(c.prediction.awayRate)}。使用已觀察的同賽事開球間隔、近 14 日場數與中立場標記。</p>:<p>本場尚無符合模型範圍的兩隊近期賽程，未產生條件模型預測。</p>}
+      {venue?.name&&<p>來源記載場地：{[venue.name,venue.city,venue.country].filter(Boolean).join('・')}</p>}
+      {leaguePhase&&<p>來源記載賽事階段：歐冠聯賽階段。</p>}
       <p className="soccerAvailability">開球間隔不等於實際休息；跨賽事、旅行、天氣、裁判及歐冠跨聯賽影響尚未完整建模。兩項研究結果均另行保存，正式分數仍依完整驗收判定。</p>
     </section>}
     {x&&<section aria-label="逐場非十二碼 xG 研究"><h4>逐場非十二碼 xG 模型</h4>

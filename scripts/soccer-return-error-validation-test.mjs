@@ -33,7 +33,7 @@ try {
     predictedNetReturn: .1, realizedNetReturn: number%2 ? .9 : -.99, predictionError: (number%2 ? .9 : -.99)-.1, actualScore: { home: number%2, away: 0 } });
   const observations = [makeRow(0,now-2000,now-1000),makeRow(1,now-1500,now-500),
     ...Array.from({length:9},(_,index)=>makeRow(index+2,trainingBefore+index*50,trainingBefore+index*50+1))];
-  const dataset = rows => seal({ version: SOCCER_RETURN_ERROR_VERSION, type: 'VALIDATED_RETURN_ERROR_DATASET',
+  const dataset = rows => seal({ version: SOCCER_RETURN_ERROR_VERSION, type: 'VALIDATED_RETURN_ERROR_DATASET', selection: protocol.selection,
     observations: rows, boundedObservations: [], quarantinedGameKeys: [], excludedReasons: {}, coverage: { completeWithinRequestedScope: true } });
   const datasets = [dataset(observations)];
   const premature = fitSoccerReturnErrorResearch({ datasets, protocol, now: calibrationBefore+1 });
