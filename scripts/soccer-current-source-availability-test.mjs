@@ -32,11 +32,16 @@ try {
   for (const league of ['epl', 'ucl']) {
     const evidence = fresh(league);
     assert.equal(root(audit(evidence)).status, 'BLOCKED');
+    assert.equal(evidence.venueObservation.status, 'PROVIDER_REPORTED');
+    const venueAvailability = value => soccerCurrentSourceAvailability(value.venueObservation.source,
+      { evidence: value, game: value.game, field: 'venueObservation', now: Date.now() });
+    assert.equal(venueAvailability(evidence), null);
     evidence.sourceDocumentArchive = await archiveSoccerSourceDocument(evidence);
     const now = Date.now(), verified = audit(evidence, now), proof = root(verified).currentAvailability;
     assert.equal(root(verified).status, 'PASS');
     assert.equal(proof.scope, 'CURRENT_ANALYSIS_ONLY');
     assert.equal(proof.historicalAvailabilityVerified, false);
+    assert.equal(venueAvailability(evidence)?.receiptId, proof.receiptId, 'new venue metadata binds to the same real source document');
     assert.equal(evidence.source.sourcePublishedAt, null, 'database availability never fabricates publisher time');
     assert.equal(evidence.pointInTimeAvailabilityVerified, false, 'publisher availability flag remains distinct');
     assert.ok(verified.blockers.some(check => check.field === 'teams.home.lineup'), 'source availability cannot approve a provider-only XI');
@@ -71,6 +76,11 @@ try {
     const clone = structuredClone(evidence);
     assert.equal(await restoreSoccerCurrentSourceAvailability(clone, Date.now()), true, 'default DB readback + exact normalizer restore current capability');
     assert.equal(root(audit(clone)).status, 'PASS');
+    assert.equal(venueAvailability(clone)?.receiptId, proof.receiptId);
+    const legacy = structuredClone(evidence);
+    delete legacy.venueObservation; delete legacy.uclPhaseObservation;
+    assert.equal(await restoreSoccerCurrentSourceAvailability(legacy, Date.now()), true, 'legacy snapshots restore without new context fields');
+    assert.equal(legacy.venueObservation, undefined, 'readback does not rewrite old snapshots with new metadata');
     for (const change of [
       value => { value.sourceDocumentArchive.receiptId = '0'.repeat(64); },
       value => { value.source.contentHash = '0'.repeat(64); },
@@ -78,6 +88,8 @@ try {
       value => { value.teams.home.lineup.status = 'VERIFIED'; },
       value => { value.referee = { status: 'VERIFIED', source: value.source }; },
       value => { value.source.sourcePublishedAt = iso(now - 2000); },
+      value => { value.venueObservation.value.id = '999'; },
+      value => { value.venueObservation.source.url = 'https://example.invalid/foreign'; },
     ]) {
       const changed = structuredClone(evidence); change(changed);
       assert.equal(await restoreSoccerCurrentSourceAvailability(changed, Date.now()), false, 'changed source/scope/observation is rejected against retained JSON');
@@ -170,9 +182,12 @@ try {
       fetchSoccerTeamXg: async () => ({ ok: false, reason: 'UNRELATED_TEST_SOURCE' }), loadSoccerReaderSnapshot: async () => null,
     });
     assert.equal(service.status, 200); assert.equal(service.payload.publishedCurrent, true);
+    assert.deepEqual(service.payload.evidence.venueObservation, serviceEvidence.venueObservation);
     assert.equal(root(service.payload.scoreReadiness.evidenceReadiness).status, 'PASS');
     const current = await loadSoccerCurrentAnalysis(league, game.date, game.sourceId);
     assert.ok(current.currentVersion, 'actual journal current head remains available');
+    assert.deepEqual(current.currentVersion.evidence.venueObservation, serviceEvidence.venueObservation);
+    assert.equal(venueAvailability(current.currentVersion.evidence)?.receiptId, serviceEvidence.sourceDocumentArchive.receiptId);
     assert.equal(root(audit(current.currentVersion.evidence)).status, 'PASS', 'single-game current read restores private authority from the actual stored body');
     const board = await listSoccerAnalysisBoard(league, game.date, game.date);
     const onBoard = board.find(value => value.gameId === game.id);

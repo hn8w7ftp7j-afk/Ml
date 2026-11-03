@@ -5,7 +5,8 @@ import { soccerDate } from '../lib/soccer/contracts.js';
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
 import { soccerForwardHash, soccerForwardAnalysisRevision, validateSoccerForwardCapture,
   canonicalSoccerForwardCaptures, evaluateSoccerForwardCapture, SOCCER_FORWARD_VERSION } from '../lib/soccer/forward-validation.js';
-import { evaluateSoccerMarketReturnCapture } from '../lib/soccer/market-return-validation.js';
+import { evaluateSoccerMarketReturnCapture, SOCCER_MARKET_RETURN_SELECTION,
+  SOCCER_MARKET_RETURN_SOURCE_BOUND_SELECTION } from '../lib/soccer/market-return-validation.js';
 import { buildSoccerReturnErrorDatasetHydrated } from '../lib/soccer/return-error-model.js';
 
 // Every forecast, clock shift, contract and result below is an engineering
@@ -16,7 +17,7 @@ process.env.DATABASE_URL = 'postgres://fixture.invalid/scan-history'; delete pro
 const iso = value => new Date(value).toISOString(), DAY = 86400000;
 try {
   const service = await import('../lib/soccer/forward-validation-service.js');
-  const { continueSoccerForwardScan, loadSoccerForwardScanGame } = await import('../lib/soccer/forward-validation-scan.js');
+  const { continueSoccerForwardScan, continueSoccerForwardBacklog, loadSoccerForwardScanGame } = await import('../lib/soccer/forward-validation-scan.js');
   const protocol = await service.ensureSoccerForwardProtocol(), base = Date.now();
   const query = async (sql, params = []) => (await db.query(sql, params)).rows;
   async function save({ id, league = 'epl', modelSeed = 'history-model', kickoff = base + 3600000, priced = false, marker = '' }) {
@@ -175,6 +176,24 @@ try {
   assert.equal(resumed.report.complete, true); assert.equal(resumed.report.scan.processedGames, 2);
   assert.equal(resumed.report.capturedSnapshotPeriods, 6, 'durable first-game contribution is retained exactly once across a deadline continuation');
   console.log('PASS scanner deadline: completed game survives a later-game timeout, partial cursor resumes without losing or double-counting durable progress');
+
+  const oneGame = { query, now: () => clock, gameLimit: 1, timeBudgetMs: 25000 };
+  const olderScan = await continueSoccerForwardScan(deadlineScope, { ...oneGame, purpose: 'evaluate' });
+  const olderCursor = olderScan.report.scan.nextCursor;
+  assert.ok(olderCursor);
+  await query(`UPDATE sports_soccer_forward_scans_v1 SET state=jsonb_set(state,
+    '{report,marketReturnValidation,selection}',to_jsonb($2::text)) WHERE cursor=$1`, [olderCursor, SOCCER_MARKET_RETURN_SELECTION]);
+  await assert.rejects(() => continueSoccerForwardScan(deadlineScope, { ...oneGame, purpose: 'evaluate', cursor: olderCursor }),
+    { status: 400, message: /驗證方式已更新，請重新讀取/ });
+  const oldState = (await query('SELECT processed_games,lease_owner,state FROM sports_soccer_forward_scans_v1 WHERE cursor=$1', [olderCursor]))[0];
+  assert.equal(oldState.processed_games, 1); assert.equal(oldState.lease_owner, null);
+  assert.equal(oldState.state.report.marketReturnValidation.selection, SOCCER_MARKET_RETURN_SELECTION,
+    'a prior derived contribution is neither combined with the new selection nor rewritten');
+  const restart = await continueSoccerForwardBacklog(deadlineScope, oneGame);
+  assert.notEqual(restart.report.scan.cursor, olderCursor, 'cron skips incompatible derived cursor and rebuilds from original captures');
+  assert.equal(restart.report.scan.processedGames, 1);
+  assert.equal(restart.report.marketReturnValidation.selection, SOCCER_MARKET_RETURN_SOURCE_BOUND_SELECTION);
+  console.log('PASS scanner policy release: old continuations explicitly expire and cron starts a separate current-cohort scan');
 } finally {
   if (oldDb === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = oldDb;
   if (oldDbV2 === undefined) delete process.env.DATABASE_V2_URL; else process.env.DATABASE_V2_URL = oldDbV2;

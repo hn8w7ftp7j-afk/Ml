@@ -110,6 +110,15 @@ delete legacyDataset.contentHash;legacyDataset.contentHash=soccerForwardHash(leg
 const legacyFit=fitSoccerReturnErrorResearch({datasets:[legacyDataset],protocol:candidate,now});
 assert.equal(legacyFit.groups.length,0,'old sealed rows without a recomputed rule-family binding are not grandfathered into pooling');
 assert.equal(legacyFit.missingReasons.RETURN_ERROR_SETTLEMENT_RULE_FAMILY_MISSING,28);
+const priorSelection='FIRST_VALID_SAVED_PREDICTION_PER_ECONOMIC_PRICE_MODEL';
+const priorDataset=structuredClone(dataset);priorDataset.selection=priorSelection;
+delete priorDataset.contentHash;priorDataset.contentHash=soccerForwardHash(priorDataset);
+const mixedSelectionFit=fitSoccerReturnErrorResearch({datasets:[dataset,priorDataset],protocol:candidate,now});
+assert.equal(mixedSelectionFit.groups.length,0,'sealed datasets using different cohort selection cannot mix');
+assert.equal(mixedSelectionFit.requestedScopeComplete,false);
+assert.equal(mixedSelectionFit.missingReasons.RETURN_ERROR_DATASET_SELECTION_MISMATCH,1);
+assert.equal(fitSoccerReturnErrorResearch({datasets:[dataset],protocol:{...candidate,selection:priorSelection},now}).groups.length,0,
+  'a protocol naming the previous cohort cannot fit the revised cohort');
 const distinctAuthority=record=>({...trustedContract(record),authority:Number(record.gameId.split(':').at(-1))%2?'SYNTHETIC_AUTHORITY_A':'SYNTHETIC_AUTHORITY_B'});
 const authorityEvaluations=evaluations.map((value,index)=>({...value,marketReturnValidation:evaluateSoccerMarketReturnCapture({
   capture:captures[index],protocol,result:checks[index].resultEvidence,now:Date.parse(checks[index].checkedAt),resolveContract:distinctAuthority})}));

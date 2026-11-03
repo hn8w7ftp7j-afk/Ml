@@ -3,11 +3,14 @@ import { evaluateSoccerMarketReturnCapture, summarizeSoccerMarketReturnObservati
 import { evaluateSoccerForwardCapture, canonicalSoccerForwardCaptures } from '../lib/soccer/forward-validation.js';
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
 import { predictHalfTimeDistribution, HALF_TIME_MODEL_VERSION, HALF_TIME_PROTOCOL_VERSION } from '../lib/soccer/half-time-model.js';
+import { soccerDate } from '../lib/soccer/contracts.js';
+import { SOCCER_ACCOUNT_RULE_CONFIRMATION } from '../lib/soccer/account-rule-policy.js';
+import { buildSoccerReturnErrorDataset } from '../lib/soccer/return-error-model.js';
 import { fixtureCapture, resultFor, changed, protocol, sha, iso, active, observed, start, after } from './helpers/soccer-forward-fixture.mjs';
 
 // Synthetic test inputs verify arithmetic and boundaries, never register source
 // terms or claim that production already has empirical football error evidence.
-function fixture({ league = 'epl', period = 'FT', line = '2.5', readerDelay = 0, water = .95, kind = 'TOTAL' } = {}) {
+function fixture({ league = 'epl', period = 'FT', line = '2.5', readerDelay = 0, shift = 0, water = .95, kind = 'TOTAL' } = {}) {
   return changed(fixtureCapture({ league, period: period === 'FT' ? 'REGULATION_FT' : 'REGULATION_HT' }), capture => {
     const snapshot = capture.snapshot, game = snapshot.evidence.game;
     game.home.name = '主隊甲'; game.away.name = '客隊乙';
@@ -15,13 +18,22 @@ function fixture({ league = 'epl', period = 'FT', line = '2.5', readerDelay = 0,
       version: HALF_TIME_MODEL_VERSION, protocolVersion: HALF_TIME_PROTOCOL_VERSION, league, period: 'REGULATION_HT',
       cutoff: '2026-01-01T00:00:00Z', trainedThrough: '2025-12-30T00:00:00Z', trainingHash: sha('synthetic-half-training'), shares: { home: .45, away: .43 },
     });
-    const readerAt = observed + readerDelay;
+    if (shift) {
+      game.startTime = iso(start + shift);
+      game.date = snapshot.date = capture.date = soccerDate(game.startTime);
+      snapshot.runStartedAt = iso(Date.parse(snapshot.runStartedAt) + shift);
+      for (const source of new Set([game.source, snapshot.evidence.source, snapshot.evidence.scheduleSource, snapshot.inputVersions.scheduleSourceVersion])) {
+        source.fetchedAt = iso(observed + shift);
+      }
+      snapshot.inputVersions.evidenceFetchedAt = iso(observed + shift);
+    }
+    const readerAt = observed + shift + readerDelay;
     const reader = { revision: sha(['original-reader', readerDelay]), observationId: sha(['original-reader-observation', readerDelay]), observedAt: iso(readerAt),
       firstFetchedAt: iso(readerAt), receivedAt: iso(readerAt), persistedAt: iso(readerAt), sourceHost: 'www.tai888.in', pageUrl: 'https://www.tai888.in/newapp/' };
     const markets = (Array.isArray(line) ? line : [line]).map(line => ({ period, kind, unit: 'GOALS', line, ...(kind === 'HANDICAP' ? { lineSide: 'home', homeWater: water, awayWater: .9 } : { overWater: water, underWater: .9 }), rawRows: [`大 ${line} ${water}`, '小 .9'],
       periodEvidence: { sectionTitle: league === 'epl' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽', tableHeaders: [period === 'FT' ? '全場' : '上半場'],
         marketHeader: period === 'FT' ? '全場大小' : '上半場大小', period, status: 'EXPLICIT' } }));
-    if (readerDelay) { snapshot.analysisCutoff = iso(readerAt); snapshot.observedAt = iso(readerAt); capture.capturedAt = iso(readerAt + 1); }
+    if (readerDelay || shift) { snapshot.analysisCutoff = iso(readerAt); snapshot.observedAt = iso(readerAt); capture.capturedAt = iso(readerAt + 1); }
     snapshot.directions = buildSoccerMarketDirections({ game, reader, now: readerAt,
       matchedGames: [{ officialGameId: game.id, league: league.toUpperCase(), boardDate: game.date, prestart: true, matchStatus: 'MATCHED', markets }] });
   });
@@ -170,6 +182,76 @@ assert.equal(archived.length, 1); assert.equal(archived[0].saved.captureId, late
 assert.equal(archived[0].evaluation.marketReturnValidation.quoteObservations, 12);
 assert.equal(runner.checkedGameModelPeriods, 0); assert.equal(runner.marketReturnCheckedPredictionPeriods, 1);
 assert.equal(runner.marketReturnPendingQuoteReturns, 12, 'production empty terms retain real prices and final result without inventing realized returns');
+
+// Exercise the real account-policy transition. An original observation before
+// confirmation is ineligible even if a later analysis reuses its unchanged
+// price. A genuinely new pregame Reader receipt can be selected once.
+const confirmationAt = Date.parse(SOCCER_ACCOUNT_RULE_CONFIRMATION.confirmedAt);
+const shift = confirmationAt - observed - 30000, transitionNow = after + shift;
+const beforeTerms = fixture({ shift });
+const laterCapture = (original, sequence, label) => changed(original, value => {
+  value.captureId = sha(label);
+  value.captureSequence = String(sequence);
+});
+const reusedOldReceipt = changed(laterCapture(beforeTerms, 2, 'same-receipt-after-confirmation'), value => {
+  value.snapshot.analysisCutoff = value.snapshot.observedAt = iso(confirmationAt + 10000);
+  value.capturedAt = iso(confirmationAt + 10001);
+});
+const sourceBound = laterCapture(fixture({ shift, readerDelay: 60000 }), 3, 'first-new-receipt-after-confirmation');
+const repeatedBound = laterCapture(fixture({ shift, readerDelay: 90000 }), 4, 'repeated-receipt-after-confirmation');
+const transitionCaptures = [repeatedBound, beforeTerms, sourceBound, reusedOldReceipt];
+const transitionResult = resultFor(sourceBound);
+transitionResult.observedAt = iso(transitionNow);
+transitionResult.sources = transitionResult.sources.map(source => ({ ...source, fetchedAt: iso(transitionNow) }));
+const transitionChecks = transitionCaptures.slice(1).map(capture => {
+  const result = evaluateSoccerForwardCapture(capture, protocol, transitionResult, transitionNow);
+  assert.equal(result.status, 'EVALUATED');
+  return { ...result, marketReturnValidation: run(capture, { result: transitionResult, now: transitionNow }) };
+});
+assert.ok(transitionChecks[0].marketReturnValidation.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'));
+assert.equal(transitionChecks[1].marketReturnValidation.observedQuoteReturns, 2);
+assert.ok(transitionChecks[2].marketReturnValidation.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'),
+  'moving analysis time cannot move the old original Reader observation across the contract cutoff');
+const retrospectiveSelection = canonicalSoccerMarketReturnCaptures(transitionCaptures, protocol, transitionNow);
+assert.deepEqual(retrospectiveSelection.chosen.map(row => row.captureId), [beforeTerms.captureId]);
+const boundSelection = canonicalSoccerMarketReturnCaptures(transitionCaptures, protocol, transitionNow, { preferKnownContract: true });
+assert.deepEqual(boundSelection.chosen.map(row => row.captureId), [sourceBound.captureId]);
+assert.equal(boundSelection.duplicateQuoteObservations, 6);
+assert.deepEqual(boundSelection.observations.map(row => row.observationId), retrospectiveSelection.observations.map(row => row.observationId));
+assert.deepEqual(canonicalSoccerMarketReturnCaptures(transitionCaptures, protocol, transitionNow, {
+  preferKnownContract: true, resolveContract: record => ({ ...trustedSyntheticContract(record),
+    verifiedAt: iso(transitionNow - 1), effectiveFrom: iso(confirmationAt - 60000), effectiveUntil: iso(transitionNow + 1000) }),
+}).chosen.map(row => row.captureId), [beforeTerms.captureId], 'terms established only after prediction cannot improve priority');
+const transitionEvidence = { captures: transitionCaptures, protocol, evaluations: transitionChecks, checks: transitionChecks.map(evaluation => ({
+  captureId: evaluation.captureId, checkedAt: iso(transitionNow), resultEvidence: transitionResult,
+  marketReturnEvidenceHash: evaluation.marketReturnValidation.evidenceHash,
+})) };
+assert.equal(buildSoccerMarketReturnReport(transitionEvidence, transitionNow).observedQuoteReturns, 2);
+const transitionDataset = buildSoccerReturnErrorDataset(transitionEvidence, { now: transitionNow });
+assert.equal(transitionDataset.observedQuoteReturns, 2);
+assert.equal(transitionDataset.observedGames, 1);
+assert.equal(transitionDataset.accepted, false);
+assert.equal(transitionDataset.R, null);
+assert.ok(transitionDataset.observations.every(row => row.captureId === sourceBound.captureId));
+const transitionCorrection = evaluateSoccerForwardCapture(beforeTerms, protocol, { ...transitionResult,
+  fullTime: { home: 0, away: 0, period: 'REGULATION_FT' }, resultHash: sha('transition-corrected-result'),
+}, transitionNow);
+const correctedTransition = { ...transitionEvidence, evaluations: [...transitionChecks, transitionCorrection] };
+assert.equal(buildSoccerMarketReturnReport(correctedTransition, transitionNow).conflictingQuoteReturns, 2);
+assert.equal(buildSoccerReturnErrorDataset(correctedTransition, { now: transitionNow }).observedQuoteReturns, 0);
+const incompleteTransition = { ...transitionEvidence, incompleteResultCaptureIds: [beforeTerms.captureId] };
+assert.equal(buildSoccerMarketReturnReport(incompleteTransition, transitionNow).observedQuoteReturns, 0);
+assert.equal(buildSoccerReturnErrorDataset(incompleteTransition, { now: transitionNow }).observedQuoteReturns, 0);
+const transitionArchives = [];
+await runSoccerForwardValidation({ league: sourceBound.league, date: sourceBound.date }, {
+  now: () => transitionNow, query: async () => [], loadEvidence: async () => ({ ...transitionEvidence,
+    evaluations: [transitionChecks[0]], checks: [transitionEvidence.checks[0]] }),
+  fetchResult: async () => transitionResult,
+  archive: async (saved, evaluation) => { transitionArchives.push({ saved, evaluation }); },
+});
+assert.deepEqual(transitionArchives.map(row => row.saved.captureId), [sourceBound.captureId]);
+assert.equal(transitionArchives[0].evaluation.marketReturnValidation.observedQuoteReturns, 2);
+
 // A finite generated Poisson rectangle has a nonzero unresolved handicap tail.
 // Keep verified realized returns and rigorous error intervals rather than losing
 // the entire observation or pretending that an interval midpoint is exact EV.
@@ -188,6 +270,24 @@ for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
     assert.ok(row.predictionErrorBounds.lower < row.realizedNetReturn - row.predictedReturnBounds.upper);
     assert.ok(row.predictionErrorBounds.upper > row.realizedNetReturn - row.predictedReturnBounds.lower);
     for (const flag of ['formalEligible', 'calibrationEligible', 'promotionEligible', 'executable']) assert.equal(row[flag], false);
+  }
+  // The certified law must use the bound 1% rebate, while archived
+  // observations without the certificate remain comparable.
+  const legacyBounded = structuredClone(bounded);
+  for (const row of legacyBounded.observations) delete row.certifiedDifferenceReturn;
+  for (const row of bounded.observations) {
+    const certified = row.certifiedDifferenceReturn;
+    assert.equal(certified.status, 'CERTIFIED_NUMERICAL_MODEL_LAW_INTERVAL');
+    assert.ok(certified.predictedReturnBounds.upper >= row.predictedReturnBounds.lower);
+    assert.ok(certified.predictedReturnBounds.lower <= row.predictedReturnBounds.upper);
+    assert.ok(certified.predictionErrorBounds.lower < row.realizedNetReturn - certified.predictedReturnBounds.upper);
+    assert.ok(certified.predictionErrorBounds.upper > row.realizedNetReturn - certified.predictedReturnBounds.lower);
+  }
+  for (const order of [[legacyBounded, bounded], [bounded, legacyBounded]]) {
+    const summary = summarizeSoccerMarketReturnObservations(order);
+    assert.equal(summary.certifiedHandicapQuoteReturns, 2);
+    assert.equal(summary.conflictingQuoteReturns, 0);
+    assert.equal(summary.observedQuoteReturns, 0);
   }
   const duplicate = summarizeSoccerMarketReturnObservations([bounded, noTerms, bounded]);
   assert.equal(duplicate.boundedQuoteReturns, 2); assert.equal(duplicate.observedQuoteReturns, 0);

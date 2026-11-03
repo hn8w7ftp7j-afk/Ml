@@ -253,6 +253,62 @@ await test('available injury/suspension records preserve scoped provider metadat
   assert.equal(normalize(cross).teams.home.injuries.reason,'INJURY_CROSS_TEAM_PLAYER_CONFLICT');
   assert.equal(normalize(cross).teams.away.injuries.status,'UNKNOWN');
 });
+await test('retained EPL and UCL summaries preserve exact venue and reviewed league-phase observations', () => {
+  for (const league of ['epl', 'ucl']) {
+    const payload = JSON.parse(fs.readFileSync(new URL(`./fixtures/soccer/${league}-summary.json`, import.meta.url)));
+    const competition = payload.header.competitions[0], kickoff = Date.parse(competition.date), now = kickoff - 60000;
+    const meta = { provider: 'ESPN', url: `https://site.api.espn.com/apis/site/v2/sports/soccer/${payload.header.league.slug}/summary?event=${payload.header.id}`,
+      fetchedAt: new Date(now).toISOString() };
+    const game = normalizeSoccerSchedule({ leagues: [payload.header.league], events: [{ ...payload.header, date: competition.date, status: competition.status }] }, league, meta).games[0];
+    const normalize = (body, sourcePatch = {}, cutoff = now) => normalizeSoccerPrematch(body, game,
+      { ...meta, contentHash: sourceHash(body), ...sourcePatch }, cutoff);
+    const evidence = normalize(payload), venue = evidence.venueObservation;
+    assert.equal(venue.status, 'PROVIDER_REPORTED');
+    assert.equal(venue.value.id, league === 'epl' ? '131' : '5934');
+    assert.equal(venue.value.name, league === 'epl' ? 'The City Ground' : 'Giuseppe Sinigaglia');
+    assert.equal(venue.value.city, league === 'epl' ? 'Nottingham' : 'Como');
+    assert.equal(venue.source.scope.field, 'venueObservation');
+    assert.equal(venue.source.contentHash, evidence.source.contentHash);
+    assert.equal(venue.source.sourcePublishedAt, null);
+    assert.equal(venue.formalEligible, false);
+    assert.equal(evidence.game.venue, null, 'observed metadata leaves the game/model input unchanged');
+    assert.equal(evidence.weather.status, 'UNKNOWN');
+    assert.equal(evidence.uclContext.status, 'UNKNOWN');
+    assert.equal(normalize(payload, {}, kickoff).venueObservation.status, 'POSTSTART_OBSERVATION');
+    for (const sourcePatch of [{ contentHash: '0'.repeat(64) }, { url: `${meta.url}&other=1` }, { fetchedAt: competition.date }]) {
+      const invalid = normalize(payload, sourcePatch);
+      assert.equal(invalid.venueObservation, undefined);
+      assert.equal(invalid.uclPhaseObservation, undefined);
+    }
+
+    const corroborated = structuredClone(payload);
+    corroborated.header.competitions[0].venue = structuredClone(corroborated.gameInfo.venue);
+    assert.deepEqual(normalize(corroborated).venueObservation.value, venue.value);
+    corroborated.header.competitions[0].venue.id = '999';
+    assert.equal(normalize(corroborated).venueObservation, undefined, 'conflicting source venue IDs cannot pick a winner');
+    const malformed = structuredClone(payload);
+    malformed.gameInfo.venue.id = [venue.value.id];
+    assert.equal(normalize(malformed).venueObservation, undefined, 'non-scalar identity cannot borrow its string form');
+
+    if (league === 'epl') {
+      assert.equal(evidence.uclPhaseObservation, undefined);
+      continue;
+    }
+    const phase = evidence.uclPhaseObservation;
+    assert.equal(phase.value.phase, 'LEAGUE_PHASE');
+    assert.equal(phase.value.providerSeasonType, 14534);
+    assert.equal(phase.source.scope.field, 'uclPhaseObservation');
+    assert.equal(phase.source.contentHash, evidence.source.contentHash);
+    assert.equal(phase.independentlyConfirmed, false);
+    assert.equal(phase.modelEffectApplied, false);
+    assert.equal(phase.formalEligible, false);
+    for (const fields of [{ type: 99999 }, { name: '2026-27 UEFA Champions League, Knockout Phase' }, { year: 2025 }]) {
+      const unreviewed = structuredClone(payload);
+      Object.assign(unreviewed.header.season, fields);
+      assert.equal(normalize(unreviewed).uclPhaseObservation, undefined, 'a group label or unmatched season ID never assigns a phase');
+    }
+  }
+});
 console.log(`Soccer data contracts: ${checks} checks passed. Live provider and historical model validation are separate.`);
 
 // Run with the repository's next-route-test-loader and --api to exercise the real route.
