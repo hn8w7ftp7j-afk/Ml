@@ -187,7 +187,7 @@ export function SoccerForwardValidationPanel({league}){
     auto.current.enabled=true;auto.current.retry=null;setAutomatic({enabled:true,waitingUntil:null});
     if(evaluate)auto.current.postStarts.push(Date.now());
     const token=++generation.current,controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),25000);
+    const timer=setTimeout(()=>controller.abort(),55000);
     setState(old=>({scopeKey,status:evaluate?'evaluating':'loading',report:old.scopeKey===scopeKey?old.report:null,summary:null,error:''}));
     const active={token,controller,timer,promise:null};flight.current=active;
     const promise=(async()=>{
