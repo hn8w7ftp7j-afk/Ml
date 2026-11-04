@@ -57,8 +57,15 @@ assert.doesNotMatch(h.markup, /不同賽事 0 場/, 'loading is unknown rather t
 h.calls[0].respond({ ok: true, report: report() }); await h.settle();
 assert.match(h.markup, /不同賽事 2 場/); assert.match(h.markup, /已核對前瞻賽果 0 場/);
 assert.match(h.markup, /已保存的預測筆數不等於模型驗收通過/);
+h.click('補存未開賽預測');
+assert.deepEqual(JSON.parse(h.calls[1].options.body), {league:'epl',action:'collect'});
+h.calls[1].respond({ok:true,summary:{league:'epl',capturedGames:1,alreadyCapturedGames:2,deferredGames:3,failedGames:1,scheduleFailures:1,formalEligible:false,executable:false}});
+await h.settle();
+assert.match(h.markup,/本批新增 1 場/);assert.match(h.markup,/涵蓋範圍尚未完整/);
+h.calls[2].respond({ok:true,report:report()});await h.settle();
 h.render({ league: 'ucl' }); assert.doesNotMatch(h.markup, /不同賽事 2 場/, 'a league switch hides the old league immediately');
-h.calls[1].respond({ ok: true, report: report('epl') }); await h.settle();
+assert.doesNotMatch(h.markup,/本批新增 1 場/,'collection result cannot cross leagues');
+h.calls[3].respond({ ok: true, report: report('epl') }); await h.settle();
 assert.match(h.markup, /筆數未知/); assert.doesNotMatch(h.markup, /不同賽事 2 場/);
 const e = harness(); e.render(); e.calls[0].respond({ ok: false, error: '保存紀錄無法讀取，筆數未知。' }, 503); await e.settle();
 assert.match(e.markup, /筆數未知/); assert.doesNotMatch(e.markup, /不同賽事 0 場/);
