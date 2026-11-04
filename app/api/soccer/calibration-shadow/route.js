@@ -3,10 +3,11 @@ import { requireApiAuth, checkRateLimit, rateLimitResponse, validateSameOrigin, 
 import { soccerLeague } from '../../../../lib/soccer/contracts.js';
 import { readSoccerCalibrationShadowReport, evaluateSoccerCalibrationShadow } from '../../../../lib/soccer/calibration-shadow-validation.js';
 import { recordSoccerCalibrationFailure } from '../../../../lib/soccer/calibration-diagnostics.js';
+import { collectSoccerCalibrationPredictions } from '../../../../lib/soccer/calibration-collection.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+export const maxDuration = 90;
 const response = (body, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const failure = () => response({ ok: false, error: '校準預測保存或賽果紀錄暫時無法核對，目前筆數未知。', formalEligible: false, executable: false }, 503);
 export async function GET(request) {
@@ -26,8 +27,12 @@ export async function POST(request) {
   if (!rate.allowed) return rateLimitResponse(rate);
   try {
     const body = await readJsonBody(request, 1000), league = soccerLeague(body?.league)?.id;
-    if (!league || body?.action !== 'evaluate' || Object.keys(body).some(key => !['league', 'action'].includes(key)))
+    if (!league || !['evaluate', 'collect'].includes(body?.action) || Object.keys(body).some(key => !['league', 'action'].includes(key)))
       return response({ ok: false, error: '只接受核對伺服器已保存的校準預測，不接受傳入預測、來源或賽果。' }, 400);
+    if (body.action === 'collect') {
+      const summary = await collectSoccerCalibrationPredictions({ league, limit: 2, timeBudgetMs: 50000 });
+      return response({ ok: true, summary });
+    }
     const { summary } = await evaluateSoccerCalibrationShadow({ league, limit: 3 });
     if (summary.status === 'STORAGE_UNAVAILABLE') return failure();
     return response({ ok: true, summary });

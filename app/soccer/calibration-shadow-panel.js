@@ -46,6 +46,7 @@ export function calibrationShadowReportValid(report, league) {
 
 export function SoccerCalibrationShadowPanel({ league }) {
   const supported = ['epl', 'ucl'].includes(league);
+  const [collection, setCollection] = useState(null);
   const [revision, setRevision] = useState(0);
   const [state, setState] = useState({ league: '', loading: true, report: null, error: '' });
   const [evaluating, setEvaluating] = useState(false);
@@ -54,6 +55,7 @@ export function SoccerCalibrationShadowPanel({ league }) {
     const scope = { league, active: true, request: null };
     evaluationScope.current = scope;
     setEvaluating(false);
+    setCollection(null);
     return () => {
       scope.active = false;
       if (scope.request) { clearTimeout(scope.request.timer); scope.request.controller.abort(); }
@@ -76,20 +78,29 @@ export function SoccerCalibrationShadowPanel({ league }) {
       }).finally(() => clearTimeout(timer));
     return () => { active = false; clearTimeout(timer); controller.abort(); };
   }, [league, supported, revision]);
-  async function evaluate() {
+  async function evaluate(action = 'evaluate') {
     const scope = evaluationScope.current;
     if (evaluating || !supported || !scope?.active || scope.league !== league || scope.request) return;
     setEvaluating(true);
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 28000);
+    if (action === 'collect') setCollection(null);
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), action === 'collect' ? 85000 : 28000);
     const request = { controller, timer };
     scope.request = request;
     const currentRequest = () => evaluationScope.current === scope && scope.active && scope.request === request;
     try {
       const response = await fetch('/api/soccer/calibration-shadow', { method: 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ league, action: 'evaluate' }) });
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ league, action }) });
       const body = await response.json();
       if (!response.ok || body.ok !== true) throw Error(response.status === 401 ? '登入已過期，請重新登入。' : body.error || '校準預測賽果暫時無法核對。');
-      if (currentRequest()) setRevision(value => value + 1);
+      if (currentRequest()) {
+        if (action === 'collect') {
+          if (body.summary?.league !== league || body.summary.formalEligible !== false || body.summary.executable !== false
+            || !['capturedGames','alreadyCapturedGames','deferredGames','failedGames','scheduleFailures'].every(key => count(body.summary[key])))
+            throw Error('補存結果尚未通過核對，請重新讀取保存狀態。');
+          setCollection(body.summary);
+        }
+        setRevision(value => value + 1);
+      }
     } catch (error) {
       if (currentRequest()) setState({ league, loading: false, report: null, error: error.name === 'AbortError' ? '校準預測賽果核對逾時，請重新讀取保存狀態。' : error.message });
     } finally {
@@ -101,9 +112,11 @@ export function SoccerCalibrationShadowPanel({ league }) {
   const current = state.league === league, report = current ? state.report : null;
   return <section aria-label="校準候選前瞻保存" className="soccerCalibrationShadow">
     <h3>校準候選前瞻保存</h3>
-    <p>分析本聯盟未開賽場次時，系統會另存固定校準候選的全場與上半場預測，供賽後比較。</p>
+    <p>系統每小時補存未來 24 小時內尚未開賽的全場與上半場校準預測，不需等待 Reader 盤口。每批最多兩場，後續批次接續；已保存的預測不會覆寫。手動分析也會保存預測。</p>
     <button type="button" className="secondary" disabled={!current || state.loading || evaluating} onClick={() => setRevision(value => value + 1)}>更新保存狀態</button>{' '}
-    <button type="button" className="secondary" disabled={!current || state.loading || evaluating || !report?.freeze} onClick={evaluate}>{evaluating ? '核對中…' : '核對校準預測賽果'}</button>
+    <button type="button" className="secondary" disabled={!current || state.loading || evaluating} onClick={() => evaluate('collect')}>補存未開賽預測</button>{' '}
+    <button type="button" className="secondary" disabled={!current || state.loading || evaluating || !report?.freeze} onClick={() => evaluate()}>{evaluating ? '處理中…' : '核對校準預測賽果'}</button>
+    {collection?.league === league && <p role="status">本批新增 {collection.capturedGames} 場｜原已保存 {collection.alreadyCapturedGames} 場｜待接續 {collection.deferredGames} 場｜未成功 {collection.failedGames} 場。{collection.scheduleFailures > 0 ? '部分賽程讀取失敗，涵蓋範圍尚未完整。' : ''}</p>}
     {(!current || state.loading) && <p role="status">正在讀取校準預測保存狀態…</p>}
     {current && state.error && <p role="alert">{state.error}</p>}
     {report && <>
@@ -114,7 +127,7 @@ export function SoccerCalibrationShadowPanel({ league }) {
         <ul>{calibrationCheckReasons(report).map(row=><li key={row.code}>{row.label}：{row.count} 筆（{row.code}）</li>)}</ul>
       </details>}
       {count(report.quarantinedGames) && report.quarantinedGames > 0 && <p className="soccerAvailability">賽果衝突隔離 {report.quarantinedGames} 場，未列入已核對樣本。</p>}
-      <p className="soccerAvailability">{report.freeze ? `方案封存：${time(report.freeze.frozenAt)}。` : '方案會在首次分析時封存，只保存封存後的未開賽預測。'}{report.latestCapturedAt ? `最近保存：${time(report.latestCapturedAt)}。` : '尚無符合本方案的賽前預測。'}</p>
+      <p className="soccerAvailability">{report.freeze ? `方案封存：${time(report.freeze.frozenAt)}。` : '方案會在首次補存或分析時封存，只保存封存後的未開賽預測。'}{report.latestCapturedAt ? `最近保存：${time(report.latestCapturedAt)}。` : '尚無符合本方案的賽前預測。'}</p>
       <p className="soccerAvailability">已保存的預測筆數不等於模型驗收通過；正式評分仍須完成原盤規則、人員模型與收益誤差驗證。</p>
     </>}
   </section>;

@@ -7,7 +7,7 @@
     "app/api/cron/analysis-direction-settlements/route.js": { "maxDuration": 300 },
     "app/api/cron/bet-settlements/route.js": { "maxDuration": 300 },
     "app/api/cron/nba-maintenance/route.js": { "maxDuration": 180 },
-    "app/api/cron/soccer-calibration/route.js": { "maxDuration": 90 }
+    "app/api/cron/soccer-calibration/route.js": { "maxDuration": 180 }
   },
   "crons": [
     { "path": "/api/cron/mlb-advanced-snapshots", "schedule": "0 0 * * *" },
