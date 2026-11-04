@@ -75,6 +75,7 @@ const { readFileSync } = await import('node:fs');
 const { default: vm } = await import('node:vm');
 const { transform } = await import('next/dist/build/swc/index.js');
 const rankingModule = await import('../lib/nba/shadow-ranking.js');
+const displayModule = await import('../lib/nba/analysis-job-display.js');
 const compiled = await transform(readFileSync(new URL('../app/nba/shadow-ranking.js', import.meta.url),'utf8'), {
  filename:'app/nba/shadow-ranking.js', module:{type:'commonjs'},
  jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'automatic'}},target:'es2022'},
@@ -84,6 +85,7 @@ const sandbox={exports:{},Intl,Date,require(id){
  if(id==='react') return {useState:()=>[uiHook++===0?uiView:uiFilter,()=>{}]};
  if(id==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
  if(id.endsWith('/shadow-ranking.js'))return rankingModule;
+ if(id.endsWith('/analysis-job-display.js'))return displayModule;
  if(id.endsWith('/labels.js'))return {NBA_TEAM_LABELS:{}};
  if(id.endsWith('/bet-records.js'))return {NbaBetRecordButton:'BetRecordButton'};
  throw Error(id);
@@ -105,3 +107,16 @@ uiView='order';
 const staleOrderUi=render([row],now+180001);
 assert.equal(staleOrderUi.filter(n=>n?.props?.['data-nba-rank-key']).length,buildNbaShadowOrder(previous.entries).flatMap(group=>group.entries).length);
 console.log('NBA ranking UI PASS: accepted stale results and record controls stay visible with original-price warning; fresh results are not duplicated and candidate gates remain intact');
+
+// Header-only display fixtures: legacy and composite opening results share the
+// actual 7.2 gate; no valuation is supplied or inferred from these fixtures.
+for(const modelVersion of ['nba-regular-cross-season-v1','nba-opening-composite-totals-v6-margins-v1']) {
+ const openingUi=render([{...row,result:{modelVersion}}],now);
+ const text=openingUi.filter(n=>typeof n==='string').join(' ');
+ assert.ok(text.includes('S ≥ 7.2'));
+ assert.ok(!text.includes('7.0'));
+ assert.ok(!text.includes('大小分尚待驗證'));
+ assert.ok(!text.includes('歷史季前賽球季'));
+}
+assert.ok(render([row],now).includes('候選順序｜7.0 分以上・W/R 為正'));
+console.log('NBA ranking copy PASS: both existing opening models show their unchanged 7.2 gate, preseason retains 7.0, no obsolete totals block or wrong stress-period description');
