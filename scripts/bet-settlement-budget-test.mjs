@@ -235,10 +235,14 @@ assert.match(settleFunction, /onGroupSettled:[\s\S]*await persistBetUpdates\(gro
 assert.match(settleFunction, /deferredTickets: candidates.length - updates.length/);
 for (const [path, budget] of [
   ['app/api/bets/route.js', '15_000'],
-  ['app/api/cron/bet-settlements/route.js', '240_000'],
 ]) {
   assert.match(fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'),
     new RegExp(`settleOpenCloudBets\\(\\{[^}]*timeBudgetMs: ${budget}`));
 }
+
+// The actual cron handler's elapsed budget and zero-budget deferral are covered
+// in soccer-forward-validation-cron-test, including source/DB failures.
+const cron=fs.readFileSync(new URL('../app/api/cron/bet-settlements/route.js',import.meta.url),'utf8');
+assert.match(cron,/remainingBudgetMs>0\?await settleOpenCloudBets\(\{ limit: 500, timeBudgetMs: remainingBudgetMs \}\):\[\]/);
 
 console.log('Bounded settlement, per-game persistence, fair historical candidates, immutable/race-safe writes PASS');
