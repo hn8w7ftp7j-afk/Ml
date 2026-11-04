@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 const previous = process.env.CRON_SECRET;
 process.env.CRON_SECRET = 'synthetic-calibration-cron-secret';
-const state = { calls: [], failLeague: null };
+const state = { calls: [], collections: [], failLeague: null, failCollection: null };
 globalThis.__SOCCER_CALIBRATION_CRON_TEST = state;
 const stub = 'data:text/javascript,' + encodeURIComponent(`
 export async function evaluateSoccerCalibrationShadow(options) {
@@ -13,11 +13,17 @@ export async function evaluateSoccerCalibrationShadow(options) {
   if (options.league === state.failLeague) throw Error('controlled storage failure');
   return { summary: { league: options.league, status: 'NO_PENDING_CAPTURES',
     persisted: true, checkedGames: 0, formalEligible: false, executable: false } };
+}
+export async function collectSoccerCalibrationPredictions(options) {
+  const state = globalThis.__SOCCER_CALIBRATION_CRON_TEST;
+  state.collections.push(options);
+  if (options.league === state.failCollection) throw Error('controlled collection failure');
+  return { league: options.league, status: 'NO_PENDING_GAMES', persisted: true, formalEligible: false, executable: false };
 }`);
 register('data:text/javascript,' + encodeURIComponent(`
 export async function resolve(specifier, context, next) {
   if ((context.parentURL || '').endsWith('/app/api/cron/soccer-calibration/route.js')
-    && specifier.endsWith('/calibration-shadow-validation.js'))
+    && (specifier.endsWith('/calibration-shadow-validation.js') || specifier.endsWith('/calibration-collection.js')))
     return { url: ${JSON.stringify(stub)}, shortCircuit: true };
   return next(specifier, context);
 }`), import.meta.url);
@@ -35,11 +41,13 @@ try {
   assert.equal((await GET(request())).status, 401);
   assert.equal((await GET(request('wrong-secret'))).status, 401);
   assert.equal(state.calls.length, 0, 'unauthorized requests cannot read, write or fetch results');
+  assert.equal(state.collections.length, 0);
   const response = await GET(request(process.env.CRON_SECRET));
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.deepEqual(state.calls, [{ league: 'epl', limit: 3 }, { league: 'ucl', limit: 3 }]);
+  assert.deepEqual(state.collections, ['epl','ucl'].map(league => ({league,limit:2,timeBudgetMs:50000})));
   assert.equal(body.ok, true);
   assert.equal(body.formalEligible, false);
   assert.equal(body.executable, false);
@@ -55,6 +63,14 @@ try {
   assert.equal(failure.summaries[0].checkedGames, undefined, 'a storage failure must not fabricate a zero');
   assert.equal(failure.summaries[1].persisted, true, 'one failed league cannot prevent the other check');
   assert.deepEqual(state.calls.map(call => call.league), ['epl', 'ucl']);
+
+  state.calls = []; state.collections = []; state.failLeague = null; state.failCollection = 'epl';
+  const collectionFailure = await GET(request(process.env.CRON_SECRET));
+  assert.equal(collectionFailure.status, 503);
+  const collectionBody = await collectionFailure.json();
+  assert.equal(collectionBody.collection[0].status, 'STORAGE_UNAVAILABLE');
+  assert.equal(collectionBody.collection[1].persisted, true);
+  assert.deepEqual(state.calls.map(call => call.league), ['epl','ucl'], 'failed collection must not stop existing result checks');
 
   state.calls = [];
   process.env.CRON_SECRET = '';
