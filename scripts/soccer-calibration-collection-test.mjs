@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { PGlite } from '@electric-sql/pglite';
-import { collectSoccerCalibrationPredictions } from '../lib/soccer/calibration-collection.js';
+import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
 import { soccerDate } from '../lib/soccer/contracts.js';
-const db = new PGlite(), query = async (sql, params=[]) => (await db.query(sql,params)).rows;
+const fixture = await soccerSqlFixture(), {db} = fixture, query = async (sql, params=[]) => (await db.query(sql,params)).rows;
+process.env.DATABASE_URL='postgres://fixture.invalid/calibration-collection';delete process.env.DATABASE_V2_URL;
+const { collectSoccerCalibrationPredictions } = await import('../lib/soccer/calibration-collection.js');
 await query('CREATE TABLE sports_soccer_calibration_captures_v1(freeze_id text,league text,game_id text)');
 const hash = 'a'.repeat(64), now = Date.parse('2026-11-05T10:00:00Z'), date = soccerDate(now);
 const artifacts = () => ({candidate:{contentHash:hash},plan:{contentHash:hash,beginsStrictlyAfter:'2026-11-01T00:00:00Z',usedGamesExcluded:['epl:8']}});
@@ -66,5 +67,8 @@ try {
   assert.equal((await collect({}, {now:()=>ticks++===0?now:now+60000})).checkedGames,0,'expired run budget starts no analysis');
   await assert.rejects(collect({league:'nba'}),/SCOPE_INVALID/);
   await assert.rejects(collect({}, {freeze:async()=>({...await freeze('epl'),candidateHash:'b'.repeat(64)})}),/FREEZE_INVALID/);
+  const {query:omit,...actualTransport}=deps;games=[];
+  assert.equal((await collectSoccerCalibrationPredictions({league:'epl'},actualTransport)).status,'NO_PENDING_GAMES',
+    'shipped schema creation uses the actual advisory-lock transaction and Neon transport against PostgreSQL');
   console.log('PASS calibration collection: real PostgreSQL leases, partial schedule failure, source/league/time scope, first capture dedup, starvation-free retry, concurrent claims and late-worker fencing; no formal promotion.');
-} finally { await db.close(); }
+} finally { await fixture.close(); }
