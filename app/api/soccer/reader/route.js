@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { bearerToken, readerCorsHeaders, readerOriginAllowed, verifyReaderToken } from '../../../../lib/reader-auth-v2.js';
 import { checkRateLimit, readJsonBody, requireApiAuth } from '../../../../lib/security.js';
 import { validateSoccerCapture, matchSoccerReaderGames } from '../../../../lib/soccer/reader.js';
@@ -6,8 +6,10 @@ import { loadSoccerReaderSnapshot, saveSoccerReaderSnapshot, soccerReaderStorage
 import { fetchSoccerSchedule } from '../../../../lib/soccer/data.js';
 import { soccerLeague, validSoccerDate } from '../../../../lib/soccer/contracts.js';
 import { soccerReaderPeriodBindingDiagnostics } from '../../../../lib/soccer/reader-period-binding.js';
+import { enqueueSoccerReaderAnalysis, drainSoccerReaderAnalysis } from '../../../../lib/soccer/reader-auto-analysis.js';
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
+export const maxDuration=60;
 export async function OPTIONS(request){return new Response(null,{status:readerOriginAllowed(request)?204:403,headers:readerCorsHeaders(request)});}
 export async function POST(request){
   const headers=readerCorsHeaders(request);const response=(body,status=200)=>NextResponse.json(body,{status,headers});
@@ -19,7 +21,11 @@ export async function POST(request){
     const raw=await readJsonBody(request,384000);const checked=validateSoccerCapture(raw,{headerVersion:request.headers.get('x-reader-version')});
     if(!checked.ok)return response({ok:false,error:'足球原盤核對未通過',issues:checked.errors},422);
     const saved=await saveSoccerReaderSnapshot({...checked.payload,deviceId:token.deviceId});
-    return response({ok:true,league:raw.league,...saved,rawGameCount:checked.payload.games.length,matchedGameCount:0,marketCount:checked.payload.games.reduce((n,g)=>n+g.markets.length,0),executable:false,message:'足球原盤已保存，規格及模型驗證中'});
+    let automaticCapture={status:'QUEUE_UNAVAILABLE',durable:false,executable:false};
+    try{automaticCapture=await enqueueSoccerReaderAnalysis(checked.payload.league,checked.payload.boardDate);
+      try{after(async()=>{try{await drainSoccerReaderAnalysis({league:checked.payload.league,date:checked.payload.boardDate});}catch{}});}catch{}
+    }catch{}
+    return response({ok:true,league:raw.league,...saved,automaticCapture,rawGameCount:checked.payload.games.length,matchedGameCount:0,marketCount:checked.payload.games.reduce((n,g)=>n+g.markets.length,0),executable:false,message:'足球原盤已保存，規格及模型驗證中'});
   }catch(e){return response({ok:false,error:'足球原盤未保存',code:/^[A-Z0-9_]+$/.test(e.message||'')?e.message:'SOCCER_READER_CAPTURE_FAILED',status:'BLOCKED',executable:false},e.status||503);}
 }
 export async function GET(request){
