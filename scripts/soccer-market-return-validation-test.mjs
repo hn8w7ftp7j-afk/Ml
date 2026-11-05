@@ -71,6 +71,31 @@ for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
 }
 
 const capture = fixture(), good = run(capture, { resolveContract: trustedSyntheticContract });
+const confirmedNow = Date.parse(SOCCER_ACCOUNT_RULE_CONFIRMATION.confirmedAt) + 86400000;
+for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
+  const oldCapture = fixture({ league, period });
+  const original = JSON.stringify(oldCapture);
+  const historical = run(oldCapture, { now: confirmedNow });
+  assert.equal(historical.observedQuoteReturns, 0);
+  for (const row of historical.observations) {
+    assert.equal(row.reason, 'SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED');
+    assert.equal(row.ruleConfirmation.confirmedAt, SOCCER_ACCOUNT_RULE_CONFIRMATION.confirmedAt);
+    assert.equal(row.ruleConfirmation.quoteObservedAt, iso(observed));
+    assert.equal(row.ruleConfirmation.historicalApplicability, 'UNVERIFIED');
+    assert.equal(row.realizedNetReturn, null);
+    assert.equal(row.formalEligible, false);
+  }
+  assert.equal(JSON.stringify(oldCapture), original);
+  const earlier = run(oldCapture);
+  for (const checks of [[earlier, historical], [historical, earlier]]) {
+    const summary = summarizeSoccerMarketReturnObservations(checks);
+    assert.equal(summary.pendingReasons.SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED, 2);
+    assert.equal(summary.pendingReasons.SOCCER_SOURCE_CONTRACT_UNVERIFIED, undefined);
+    assert.equal(summary.quoteObservations, 2);
+  }
+  const missingProvider = run(oldCapture, { now: confirmedNow, resolveContract: () => null });
+  assert.ok(missingProvider.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'));
+}
 for (const [line, overProfit, underProfit] of [['3+20', .192, -.198], ['3-20', -.198, .182], ['3+50', .48, -.495], ['3-50', -.495, .455], ['3平', 0, 0]]) {
   const boundary = run(fixture({ line }), { resolveContract: trustedSyntheticContract });
   assert.equal(boundary.status, 'OBSERVED');
@@ -208,9 +233,9 @@ const transitionChecks = transitionCaptures.slice(1).map(capture => {
   assert.equal(result.status, 'EVALUATED');
   return { ...result, marketReturnValidation: run(capture, { result: transitionResult, now: transitionNow }) };
 });
-assert.ok(transitionChecks[0].marketReturnValidation.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'));
+assert.ok(transitionChecks[0].marketReturnValidation.observations.every(row => row.reason === 'SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED'));
 assert.equal(transitionChecks[1].marketReturnValidation.observedQuoteReturns, 2);
-assert.ok(transitionChecks[2].marketReturnValidation.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'),
+assert.ok(transitionChecks[2].marketReturnValidation.observations.every(row => row.reason === 'SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED'),
   'moving analysis time cannot move the old original Reader observation across the contract cutoff');
 const retrospectiveSelection = canonicalSoccerMarketReturnCaptures(transitionCaptures, protocol, transitionNow);
 assert.deepEqual(retrospectiveSelection.chosen.map(row => row.captureId), [beforeTerms.captureId]);

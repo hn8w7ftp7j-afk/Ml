@@ -122,6 +122,21 @@ const returnsReport={...report('epl',[group]),marketReturnValidation:{version:'S
 const returnsUi=harness();returnsUi.render();returnsUi.calls[0].respond({ok:true,report:returnsReport});await returnsUi.settle();
 assert.match(returnsUi.markup,/保存原盤 12 筆/);assert.match(returnsUi.markup,/已核對收益 0 筆/);
 assert.match(returnsUi.markup,/尚未取得正式 R/);assert.match(returnsUi.markup,/系統尚未完成原盤適用派彩規則的綁定與正式登錄/);returnsUi.unmount();
+const historicalUi = harness();
+historicalUi.render();
+historicalUi.calls[0].respond({ ok: true, report: {
+  ...returnsReport,
+  marketReturnValidation: {
+    ...returnsReport.marketReturnValidation,
+    pendingReasons: { SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED: 12 },
+  },
+} });
+await historicalUi.settle();
+assert.match(historicalUi.markup, /舊盤早於帳戶規則確認時間/);
+assert.match(historicalUi.markup, /信用盤算法、全場／半場及 1% 比例退水已有帳戶確認/);
+assert.match(historicalUi.markup, /已核對收益 0 筆/);
+assert.doesNotMatch(historicalUi.markup, /系統須完成原盤、期間與派彩規則版本的綁定及正式登錄/);
+historicalUi.unmount();
 const forgedReturns=harness();forgedReturns.render();forgedReturns.calls[0].respond({ok:true,report:{...returnsReport,
  marketReturnValidation:{...returnsReport.marketReturnValidation,R:.01}}});await forgedReturns.settle();
 assert.match(forgedReturns.markup,/聯盟或範圍不符/);assert.doesNotMatch(forgedReturns.markup,/保存原盤 12 筆/);forgedReturns.unmount();
