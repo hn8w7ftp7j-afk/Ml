@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { soccerMinutesAudit, soccerMinutesAuditV2, SOCCER_MINUTES_AUDIT_V2_VERSION } from '../lib/soccer/personnel-audit.js';
+import { soccerMinutesAuditV2 as safeMinutesV2 } from '../lib/soccer/personnel-audit-safe.js';
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 import { normalizeSoccerPersonnelHistoryV2 } from '../lib/soccer/personnel-minutes-v2.js';
 import { soccerPersonnelHash } from '../lib/soccer/personnel-history.js';
@@ -110,6 +111,26 @@ const newBednarek=noChangeV2.teams.away.players.find(player=>player.id==='221788
 assert.ok(oldBednarek.regulationClockMinutes<90);assert.equal(newBednarek.regulationClockMinutes,90);
 assert.ok(noChangeV2.teams.away.informationalCardReviews.some(event=>/No card change/.test(event.sourceText)));
 assert.ok(!noChangeV2.teams.away.events.some(event=>event.type.includes('DISMISSAL')&&event.playerId==='221788'));
+// A recognized VAR notification is informational; the provider can omit its
+// participants without invalidating the original source-ID state replay.
+for(const kind of ['var---red-card-upgrade','var---red-card-given']){
+  const noParticipants=structuredClone(noChange.record.data);
+  const review=noParticipants.keyEvents.find(event=>event.type?.type==='var---red-card-upgrade');
+  assert.ok(review);review.type={...review.type,type:kind,id:kind==='var---red-card-upgrade'?'167':'168'};
+  delete review.participants;
+  const expected=soccerMinutesAuditV2(noParticipants,noChange.game);
+  assert.equal(expected.status,'REGULATION_CLOCK_RECONSTRUCTED');
+  assert.deepEqual(safeMinutesV2(noParticipants,noChange.game),expected);
+  for(const invalid of [{},[null]]){
+    review.participants=invalid;
+    assert.equal(safeMinutesV2(noParticipants,noChange.game).reason,'EVENT_PARTICIPANTS_SCHEMA_UNVERIFIED');
+  }
+}
+for(const kind of ['substitution','red-card']){
+  const malformed=structuredClone(noChange.record.data),event=malformed.keyEvents.find(event=>event.type?.type===kind);
+  assert.ok(event);delete event.participants;
+  assert.equal(safeMinutesV2(malformed,noChange.game).reason,'EVENT_PARTICIPANTS_NOT_PROVIDED');
+}
 const secondYellow=noChange.record.data.keyEvents.find(event=>/^Second yellow card/.test(event.text||''));
 assert.equal(secondYellow.type.id,'93');assert.equal(secondYellow.type.type,'red-card');
 assert.ok(noChangeV2.teams.home.events.some(event=>event.eventId===String(secondYellow.id)&&event.type==='ON_FIELD_DISMISSAL'),

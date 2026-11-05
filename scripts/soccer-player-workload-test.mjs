@@ -170,7 +170,7 @@ for (const [label, mutate, expected] of [
   ['null player', data => { data.rosters[0].roster[0] = null; }, 'SOCCER_PLAYER_ROSTER_IDENTITY_INVALID'],
   ['null key event', data => { data.keyEvents[0] = null; }, 'SOCCER_PLAYER_TIMELINE_SCHEMA_INVALID'],
   ['null competitor', data => { data.header.competitions[0].competitors[0] = null; }, 'SOCCER_PLAYER_SUMMARY_IDENTITY_INVALID'],
-  ['malformed target-team audit statistics', data => { data.rosters[1].roster[0].stats = {}; }, 'SOCCER_PLAYER_SUMMARY_SCHEMA_INVALID'],
+  ['malformed target-team audit statistics', data => { data.rosters[1].roster[0].stats = {}; }, 'ROSTER_STATS_SCHEMA_UNVERIFIED'],
 ]) {
   const malformed = structuredClone(older); mutate(malformed);
   const invalid = rejected(malformed, olderRecord);

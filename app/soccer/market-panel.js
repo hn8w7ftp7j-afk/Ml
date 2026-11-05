@@ -9,7 +9,7 @@ const clock=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-
 const returnPct=v=>finite(v)?`${v>0?'+':''}${(v*100).toFixed(2)}%`:'—';
 const periods={FT:'全場',HT:'上半場'};
 const directionNames={HANDICAP_HOME:'主隊讓／受讓',HANDICAP_AWAY:'客隊讓／受讓',TOTAL_OVER:'大球',TOTAL_UNDER:'小球'};
-const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'系統尚未完成原盤派彩規則綁定與正式登錄',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
+const reasonNames={MATCH_ALREADY_STARTED:'比賽已開始，僅供歷史核對',HALF_TIME_MODEL_UNVERIFIED:'上半場研究模型待驗收',SCORE_MODEL_UNAVAILABLE:'缺少適用比分分布',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期，請更新',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'正式評分所需期間、派彩及退水條款尚待登錄核對',SOCCER_MODEL_NOT_PROMOTED:'模型尚未正式驗收',PERIOD_UNVERIFIED:'期間待確認，暫不計算',SOCCER_PERIOD_UNKNOWN:'期間待確認，暫不計算',SOCCER_PERIOD_UNVERIFIED:'期間待確認，暫不計算'};
 const textValue=v=>typeof v==='string'||finite(v)?String(v):null;
 const rowText=row=>{
   const direct=textValue(row);if(direct!==null)return direct;
@@ -145,7 +145,7 @@ export function SoccerAutomaticAnalysisStatus({result,game,now=Date.now()}){
     {counts.CURRENT>0&&<p>有效原盤已自動計算條件收益，展開下方原盤即可查看；無須再手動輸入。</p>}
     {counts.HISTORICAL>0&&<p>歷史試算不代表目前價格；未開賽場次須更新 Reader 原盤並重新核對賽前資料。</p>}
     {counts.UNAVAILABLE>0&&<p>{game?.status!=='scheduled'||Date.parse(game?.startTime)<=now?'此場已開賽，現在同步的盤口不能補成當時的賽前分析；僅能查閱已保存版本。':'請查看下方盤口的來源、期間與計算核對結果；重新同步原盤可修復來源或時間問題。'}</p>}
-    {soccerScoringReadiness(result,now,game).status!=='SCORES_AVAILABLE'&&<p>正式 S 評分仍待系統完成原盤派彩規則綁定、足球情境與模型誤差驗證；更新盤口或重按分析不會自動補齊，也不需重報已確認的算法。</p>}
+    {soccerScoringReadiness(result,now,game).status!=='SCORES_AVAILABLE'&&<p>正式 S 評分資格請依上方逐項狀態核對；個別原盤的條件試算綁定不代表派彩條款已完成正式評分登錄，也不代表模型與誤差已通過驗收。</p>}
   </section>;
 }
 
@@ -221,7 +221,7 @@ export function SoccerConditionalAnalysis({quote,result,game,now=Date.now()}){
       &&c.ruleBinding.quote?.kind===quote.kind&&c.ruleBinding.quote?.lineSide===(quote.lineSide??null)
       &&c.ruleBinding.accountTermsVerified===c.assumption.accountTermsVerified&&c.ruleBinding.formalScoringEnabled===false
       &&/^[a-f0-9]{64}$/.test(c.ruleBinding.bindingHash||'')
-      &&<details className="soccerDetails"><summary>已確認算式已綁定本筆原盤</summary>
+      &&<details className="soccerDetails"><summary>{c.ruleBinding.accountTermsVerified?'已確認算式已綁定本筆原盤':'試算規則已綁定本筆原盤（帳戶條款待核對）'}</summary>
         <p>球頭、方向、全場／半場、水位及原盤來源已分別綁定；退水為實際輸贏本金 × 1%，走盤不退。</p>
         <p>規則：{c.ruleBinding.ruleVersion}｜套用時間：{clock(c.ruleBinding.appliedAt)}</p>
         <p>綁定憑據：{c.ruleBinding.bindingHash}</p>

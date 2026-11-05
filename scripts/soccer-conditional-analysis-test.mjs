@@ -93,6 +93,20 @@ const ctx=vm.createContext({React,Date,soccerScoringReadiness});vm.runInContext(
 const quote=result.directions.flatMap(d=>d.quotes)[0];
 const render=(q=quote,g=game,t=now)=>renderToStaticMarkup(React.createElement(ctx.SoccerConditionalAnalysis,{quote:q,result,game:g,now:t}));
 assert.match(render(),/期望淨收益/);assert.match(render(),/尚未確認本帳號適用/);
+// Presentation must distinguish a bound assumption from confirmed account terms.
+const binding = { status:'ARITHMETIC_BOUND', sourceQuoteKey:quote.key, gameId:quote.conditionalAnalysis.gameId,
+  league:quote.conditionalAnalysis.league, quote:{ period:quote.period, sourceLine:quote.line,
+    direction:quote.side.toUpperCase(), water:quote.water, kind:quote.kind, lineSide:quote.lineSide??null },
+  accountTermsVerified:false, formalScoringEnabled:false, bindingHash:'0'.repeat(64) };
+const unconfirmed = { ...quote, conditionalAnalysis:{ ...quote.conditionalAnalysis, ruleBinding:binding } };
+assert.match(render(unconfirmed),/試算規則已綁定本筆原盤（帳戶條款待核對）/);
+assert.doesNotMatch(render(unconfirmed),/已確認算式已綁定本筆原盤/);
+const confirmed = { ...quote, conditionalAnalysis:{ ...quote.conditionalAnalysis,
+  assumption:{ ...quote.conditionalAnalysis.assumption, accountTermsVerified:true },
+  ruleBinding:{ ...binding, accountTermsVerified:true, periodTermsVerified:true,
+    authority:'ACCOUNT_OWNER_INSTRUCTION', accountRuleConfirmation:{ confirmedAt:quote.conditionalAnalysis.quoteObservedAt } } } };
+assert.match(render(confirmed),/已確認算式已綁定本筆原盤/);
+assert.match(render(confirmed),/並未取得正式評分資格/);
 assert.match(render(),/正式 W／R／S 與排名資格仍待驗證/);
 assert.match(render(quote,game,now+180001),/歷史條件式收益分析/);
 assert.equal(render({...quote,conditionalAnalysis:{...quote.conditionalAnalysis,R:0}}),'');
@@ -104,6 +118,7 @@ console.log('PASS all eight scoped original quotes → conditional numeric retur
 const status=(r=result,g=game,t=now)=>renderToStaticMarkup(React.createElement(ctx.SoccerAutomaticAnalysisStatus,{result:r,game:g,now:t}));
 assert.match(status(),/可用試算 8 筆；歷史或過期 0 筆；未完成 0 筆/);
 assert.match(status(),/無須再手動輸入/);
+assert.match(status(),/條件試算綁定不代表派彩條款已完成正式評分登錄/);
 assert.match(status(result,game,now+180001),/可用試算 0 筆；歷史或過期 8 筆/);
 assert.match(status(result,{...game,startTime:'2026-10-18T23:00:00Z'}),/未完成 8 筆/);
 const failedQuote={...quote,conditionalAnalysis:{...quote.conditionalAnalysis,status:'UNAVAILABLE',reason:'SOCCER_SCORE_READER_TIME_INVALID'}};

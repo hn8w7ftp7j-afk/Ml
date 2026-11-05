@@ -48,7 +48,7 @@ for(const league of ['epl','ucl']){
   assert.match(markup,/重新分析會更新比分研究、資料核對與符合條件原盤的收益試算/);
   assert.match(markup,/八方向原盤 2 筆；已有 S 分數 0 筆/);
   assert.match(markup,/尚缺足球情境及模型誤差依據/);
-  assert.match(markup,/足球派彩規則尚未完成原盤綁定與正式登錄/);
+  assert.match(markup,/正式評分所需足球派彩條款尚未完成登錄/);
   assert.match(markup,/系統尚待完成的工作/);
   assert.match(markup,/異常賽事保留人工核對/);
   assert.match(markup,/已確認的信用盤算法與 1% 實際輸贏本金退水不必重報/);
