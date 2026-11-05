@@ -43,6 +43,23 @@ try {
   assert.equal(result.forecastCoverage,'NOT_VERIFIED');assert.equal(result.formalEligible,false);assert.equal(result.R,null);
   assert.equal(result.pairs[0].sourceObservationId,id);assert.equal(writes,0,'operator entry performs only reads');
   assert.ok(!JSON.stringify(result).includes('private-test-device'));
+  // DB evidence can disagree inside a single JS millisecond: preserve actual
+  // microseconds and reject an observation persisted before it was received.
+  const backwards={...payload,observedAt:iso(captured+20000)};
+  backwards.contentHash=soccerReaderHash(canonicalSoccerPayload(backwards));
+  const backwardsId=soccerJournalHash(backwards);
+  const receiptLater=backwards.observedAt.replace('Z','900Z'),persistedEarlier=backwards.observedAt.replace('Z','100Z');
+  await db.query(`INSERT INTO sports_soccer_reader_observations_v2(observation_id,league,board_date,content_hash,source_observed_at,received_at,persisted_at,payload)
+    VALUES($1,'EPL',$2,$3,$4,$5,$6,$7)`,[backwardsId,c.date,backwards.contentHash,backwards.observedAt,receiptLater,persistedEarlier,JSON.stringify(backwards)]);
+  await db.query(`INSERT INTO sports_soccer_reader_period_observations_v2(observation_id,period,content_hash) VALUES($1,'FT',$2)`,[backwardsId,periodHash]);
+  const backwardsClock=(await db.query(`SELECT to_char(received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS r,
+    to_char(persisted_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS p FROM sports_soccer_reader_observations_v2 WHERE observation_id=$1`,[backwardsId])).rows[0];
+  assert.ok(backwardsClock.r.endsWith('000900Z')&&backwardsClock.p.endsWith('000100Z'));
+  const inverted=await run(['--league','epl','--date',c.date],{now:after});
+  assert.ok(inverted.excludedReasons.READER_RECEIPT_TIME_INVALID,'a sub-millisecond backwards server receipt must be rejected');
+  assert.ok(inverted.pairs.every(pair=>pair.sourceObservationId!==backwardsId));
+  assert.deepEqual(inverted.pairs.map(pair=>pair.quoteHash),result.pairs.map(pair=>pair.quoteHash),
+    'the invalid earlier receipt cannot contaminate first-fetched provenance of the valid quote');
   assert.equal((await run(['--league','ucl','--date',c.date],{now:after})).selectedPairCount,0);
   const bounded=await run(['--league','epl','--date',c.date],{now:after,load:async()=>({truncated:true,readCoverage:{reasons:['CAPTURE_ROW_BUDGET']}})});
   assert.equal(bounded.status,'PARTIAL');assert.equal(bounded.selectedPairCount,0);
