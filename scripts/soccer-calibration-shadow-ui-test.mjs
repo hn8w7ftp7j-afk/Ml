@@ -17,7 +17,16 @@ const report = (league = 'epl') => ({ version: 'SOCCER-CALIBRATION-SHADOW-v1', l
   latestCapturedAt: '2026-11-01T00:01:00Z', accepted: false, formalEligible: false, promotionEligible: false,
   baselineChanged: false, executable: false, W: null, R: null, S: null });
 const valid = readContext.calibrationShadowReportValid;
+const schedule = (patch = {}) => ({ observedAt: '2026-11-05T00:00:00Z', startedGames: 1, upcomingGames: 1,
+  nextUpcomingKickoffAt: '2026-11-07T12:30:00Z', kickoffStatusInterpretation: 'KICKOFF_REACHED_NOT_FINISHED', ...patch });
 assert.equal(valid(report(), 'epl'), true);
+assert.equal(valid({ ...report(), ...schedule() }, 'epl'), true);
+for (const patch of [{ startedGames: -1 }, { upcomingGames: '1' }, { startedGames: 2 }, { observedAt: null },
+  { observedAt: 'invalid' }, { observedAt: '2026-10-31T00:00:00Z' }, { nextUpcomingKickoffAt: null },
+  { nextUpcomingKickoffAt: '2026-11-04T00:00:00Z' }, { upcomingGames: 0, startedGames: 2 },
+  { kickoffStatusInterpretation: 'FINISHED' }])
+  assert.equal(valid({ ...report(), ...schedule(patch) }, 'epl'), false, 'invalid or misleading kickoff counts/times fail closed');
+assert.equal(valid({ ...report(), ...schedule({ startedGames: 2, upcomingGames: 0, nextUpcomingKickoffAt: null }) }, 'epl'), true);
 assert.equal(valid({ ...report(), status: 'AWAITING_FIRST_ANALYSIS', freeze: null,
   captureGames: 0, fullTimeCaptures: 0, halfTimeCaptures: 0 }, 'epl'), true);
 for (const patch of [{ league: 'ucl' }, { captureGames: -1 }, { untouchedValidatedGames: 3 }, { formalEligible: true },
@@ -57,6 +66,11 @@ assert.doesNotMatch(h.markup, /不同賽事 0 場/, 'loading is unknown rather t
 h.calls[0].respond({ ok: true, report: report() }); await h.settle();
 assert.match(h.markup, /不同賽事 2 場/); assert.match(h.markup, /已核對前瞻賽果 0 場/);
 assert.match(h.markup, /已保存的預測筆數不等於模型驗收通過/);
+assert.doesNotMatch(h.markup, /尚未開賽 \d+ 場/, 'older responses cannot infer upcoming games from missing result checks');
+const kickoff = harness(); kickoff.render(); kickoff.calls[0].respond({ ok: true, report: { ...report(), ...schedule() } }); await kickoff.settle();
+assert.match(kickoff.markup, /已達開賽時間 1 場/); assert.match(kickoff.markup, /尚未開賽 1 場/);
+assert.match(kickoff.markup, /最近開賽：2026\/11\/7/); assert.match(kickoff.markup, /不代表已完賽或賽果已核對/);
+assert.match(kickoff.markup, /已核對前瞻賽果 0 場/);
 h.click('補存未開賽預測');
 assert.deepEqual(JSON.parse(h.calls[1].options.body), {league:'epl',action:'collect'});
 h.calls[1].respond({ok:true,summary:{league:'epl',capturedGames:1,alreadyCapturedGames:2,deferredGames:3,failedGames:1,scheduleFailures:1,formalEligible:false,executable:false}});
@@ -125,6 +139,15 @@ const merge=readContext.mergeCalibrationReportPage,one=merge(null,page(),'0'),bo
 assert.equal(both.validation.before.FT.scoreLogLoss,2);assert.equal(both.validationCoverage.readCaptures,2);
 assert.equal(both.validationCoverage.readResultCheckRows,6);assert.equal(both.validation.checkReasons.CALIBRATION_MATCH_NOT_FINISHED,2);
 assert.equal(both.formalEligible,false);assert.equal(both.S,null);
+const kickoffFirst = merge(null, { ...page(), ...schedule() }, '0');
+const kickoffLast = merge(kickoffFirst, { ...page('7'), ...schedule({ observedAt: '2026-11-05T00:01:00Z' }) }, '7');
+assert.equal(kickoffLast.startedGames, 1); assert.equal(kickoffLast.upcomingGames, 1);
+assert.equal(kickoffLast.nextUpcomingKickoffAt, schedule().nextUpcomingKickoffAt);
+assert.equal(kickoffLast.observedAt, '2026-11-05T00:01:00Z', 'global kickoff inventory uses the latest page observation, not an additive sample count');
+const kickoffReached = merge(kickoffFirst, { ...page('7'), ...schedule({ observedAt: '2026-11-08T00:00:00Z',
+  startedGames: 2, upcomingGames: 0, nextUpcomingKickoffAt: null }) }, '7');
+assert.equal(kickoffReached.startedGames, 2); assert.equal(kickoffReached.upcomingGames, 0,
+  'a kickoff can pass while pages load without inventing a history revision or double-counting the global population');
 for(const [prior,incoming,cursor]of [[one,page(),'0'],[null,page('7'),'7'],[one,page('7','ucl'),'7'],
   [one,{...page('7'),validationPage:{...page('7').validationPage,revision:'f'.repeat(64)}},'7']])
   assert.throws(()=>merge(prior,incoming,cursor),/範圍不一致/);

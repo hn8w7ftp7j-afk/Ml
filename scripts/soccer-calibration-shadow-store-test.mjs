@@ -53,6 +53,9 @@ try {
   const empty = await getSoccerCalibrationShadowReport('epl');
   assert.equal(empty.status, 'AWAITING_FIRST_ANALYSIS'); assert.equal(empty.freeze, null); assert.equal(empty.captureGames, 0);
   assert.equal(empty.validationStatus, 'NOT_EVALUATED');
+  assert.equal(empty.startedGames, 0); assert.equal(empty.upcomingGames, 0); assert.equal(empty.nextUpcomingKickoffAt, null);
+  assert.ok(Number.isFinite(Date.parse(empty.observedAt)), 'even an empty collection has a real database observation clock');
+  assert.equal(empty.kickoffStatusInterpretation, 'KICKOFF_REACHED_NOT_FINISHED');
 
   // An earlier package registry hash is provenance only. The exact EPL payload
   // stays frozen when another league/package metadata changes on redeployment.
@@ -67,6 +70,9 @@ try {
   const preexisting = await freezeSoccerCalibrationShadowCandidate('epl');
   assert.equal(preexisting.freezeId, freezeId); assert.equal(preexisting.registryHash, 'f'.repeat(64));
   assert.equal((await db.query('SELECT count(*)::int AS n FROM sports_soccer_calibration_freezes_v1 WHERE league=\'epl\'')).rows[0].n, 1);
+  const frozenEmpty = await getSoccerCalibrationShadowReport('epl');
+  assert.equal(frozenEmpty.captureGames, 0); assert.equal(frozenEmpty.startedGames, 0);
+  assert.equal(frozenEmpty.upcomingGames, 0); assert.equal(frozenEmpty.nextUpcomingKickoffAt, null);
 
   const captured = []; let fractionalSameSecondClockCases = 0;
   for (const league of ['epl', 'ucl']) {
@@ -105,6 +111,9 @@ try {
     assert.ok(retry.every(value => value.capture.captureId === receipt.capture.captureId));
     const report = await getSoccerCalibrationShadowReport(league);
     assert.equal(report.captureGames, 1); assert.equal(report.fullTimeCaptures, 1); assert.equal(report.halfTimeCaptures, 1);
+    assert.equal(report.startedGames, 0); assert.equal(report.upcomingGames, 1);
+    assert.equal(report.nextUpcomingKickoffAt, evidence.game.startTime);
+    assert.ok(Date.parse(report.observedAt) >= Date.parse(receipt.capture.capturedAt));
     assert.equal(report.untouchedValidatedGames, 0); assert.equal(report.validationStatus, 'NOT_EVALUATED');
     const read = await loadSoccerCalibrationShadowValidationEvidence(league);
     assert.equal(read.records.length, 1);
@@ -137,6 +146,29 @@ try {
   assert.equal(secondPage.completeWithinRequestedScope, true); assert.equal(secondPage.nextSequence, null);
   assert.equal(new Set([...firstPage.captureIds, ...secondPage.captureIds]).size, 2, 'sequence continuation neither skips nor duplicates a real game');
   assert.equal((await loadSoccerCalibrationShadowValidationEvidence('epl', { captureIds: secondPage.captureIds })).records.length, 1);
+  // Another frozen plan and the other league cannot inflate this plan's
+  // inventory, even though they share the same underlying capture table.
+  await db.query(`INSERT INTO sports_soccer_calibration_freezes_v1
+    SELECT repeat('0',64),league,repeat('0',64),plan_hash,model_hash,half_time_model_hash,registry_hash,artifact_hash,artifacts,frozen_at
+    FROM sports_soccer_calibration_freezes_v1 WHERE freeze_id=$1`, [freezeId]);
+  await db.query(`INSERT INTO sports_soccer_calibration_captures_v1
+    (capture_id,freeze_id,league,game_id,board_date,analysis_revision,original_analysis_cutoff,source_receipt_id,
+      source_content_hash,source_recorded_at,kickoff_at,prediction_body,prediction_body_hash,captured_at)
+    SELECT repeat('0',64),repeat('0',64),league,game_id,board_date,analysis_revision,original_analysis_cutoff,source_receipt_id,
+      source_content_hash,source_recorded_at,kickoff_at,prediction_body,prediction_body_hash,captured_at
+    FROM sports_soccer_calibration_captures_v1 WHERE capture_id=$1`, [captured[0].receipt.capture.captureId]);
+  const scoped = await getSoccerCalibrationShadowReport('epl');
+  assert.equal(scoped.captureGames, 2); assert.equal(scoped.upcomingGames, 2); assert.equal(scoped.startedGames, 0);
+  assert.equal((await getSoccerCalibrationShadowReport('ucl')).upcomingGames, 1);
+  const clockTransport = globalThis.__SOCCER_TEST_SQL;
+  globalThis.__SOCCER_TEST_SQL = (queries, transaction) => clockTransport(queries.map(value => ({ ...value,
+    query: value.query.includes('WITH observation AS MATERIALIZED')
+      ? value.query.replace('clock_timestamp() AS observed_at', "clock_timestamp()+interval '2 hours' AS observed_at") : value.query })), transaction);
+  try {
+    const reached = await getSoccerCalibrationShadowReport('epl');
+    assert.equal(reached.startedGames, 2); assert.equal(reached.upcomingGames, 0); assert.equal(reached.nextUpcomingKickoffAt, null);
+    assert.equal(reached.untouchedValidatedGames, 0, 'reaching kickoff never manufactures a verified result');
+  } finally { globalThis.__SOCCER_TEST_SQL = clockTransport; }
   assert.ok(fractionalSameSecondClockCases > 0, 'at least one actual same-second Date receipt would have been rejected by the old Date.parse(Date) truncation');
   for (const table of ['freezes', 'captures']) {
     await assert.rejects(() => db.query(`UPDATE sports_soccer_calibration_${table}_v1 SET league=league`), /SOCCER_IMMUTABLE_HISTORY/);
@@ -159,10 +191,19 @@ try {
     try { await assert.rejects(() => loadSoccerCalibrationShadowValidationEvidence('epl'), /READBACK_FAILED/); }
     finally { globalThis.__SOCCER_TEST_SQL = actualTransport; }
   }
-  for (const corruptedCount of [[], [{ games: -1 }], [{ games: 1, first_at: null, last_at: null }]]) {
+  for (const corrupt of [
+    rows => rows.splice(0), rows => { rows[0].games = -1; }, rows => { rows[0].games = '2'; },
+    rows => { rows[0].started_games = 1; }, rows => { rows[0].upcoming_games = -1; },
+    rows => { rows[0].upcoming_games = 1.5; }, rows => { rows[0].observed_at = null; },
+    rows => { rows[0].observed_at = 'invalid'; }, rows => { rows[0].observed_at = new Date(0); },
+    rows => { rows[0].first_at = null; }, rows => { rows[0].last_at = new Date(Date.now()+86400000); },
+    rows => { rows[0].next_upcoming_at = null; }, rows => { rows[0].next_upcoming_at = 'invalid'; },
+    rows => { rows[0].next_upcoming_at = new Date(0); },
+    rows => { rows[0].started_games = rows[0].games; rows[0].upcoming_games = 0; },
+  ]) {
     globalThis.__SOCCER_TEST_SQL = async (queries, transaction) => {
       const result = await actualTransport(queries, transaction);
-      if (queries.some(value => /SELECT count\(\*\)::int AS games/.test(value.query))) return [corruptedCount];
+      if (queries.some(value => value.query.includes('WITH observation AS MATERIALIZED'))) corrupt(result[0]);
       return result;
     };
     try { await assert.rejects(() => getSoccerCalibrationShadowReport('epl'), /COUNT_READBACK_FAILED/); }

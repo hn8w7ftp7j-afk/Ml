@@ -1,0 +1,1296 @@
+{
+  "version": "SOCCER-CALIBRATION-CHRONOLOGICAL-RETROSPECTIVE-v1",
+  "generatedAt": "2026-11-05T20:51:45.075Z",
+  "status": "RESEARCH_ONLY",
+  "source": {
+    "representation": "RETAINED_NORMALIZED_HISTORY_ARCHIVES",
+    "archiveBytes": {
+      "epl-history.json.gz": {
+        "sha256": "a0056a6ce6942cfc354dc87354f2350c56278a11658f797e8fd09e603bc5030f",
+        "bytes": 47706
+      },
+      "half-time-epl-history.json.gz": {
+        "sha256": "31ed3ea7ba605c8df3c21677dcc6916599a1710e32808e833e0d94c3611135a4",
+        "bytes": 221436
+      },
+      "ucl-history.json.gz": {
+        "sha256": "f033a25c8c03bd35f78a410b33d059cc44c675c1a5c49e4ead4744dee45ec25a",
+        "bytes": 21557
+      },
+      "half-time-ucl-history.json.gz": {
+        "sha256": "fe43c5c252993c41de6f06b0e9902cf69f32f7d35fc4d4ff764adb46b7d98c62",
+        "bytes": 87618
+      }
+    },
+    "baselineSha256": "5a1717d7834b67c500bc750018fc4c36b4f1b5dd13524d8a04c3a7f1bef26086",
+    "halfTimeBaselineSha256": "1deab39c68d69d31d8aea308669ef1abd7ca309f8f9c885964ebed39acf8d547",
+    "originalSourceDocumentHashesRecomputed": false,
+    "historicalPitVerified": false,
+    "providerCompletenessVerified": false
+  },
+  "accepted": false,
+  "formalEligible": false,
+  "executable": false,
+  "W": null,
+  "R": null,
+  "S": null,
+  "type": "COMPACT_REPRODUCIBLE_CALIBRATION_WALK_FORWARD_DIAGNOSTICS",
+  "fullReportContentHash": "6467127d8195649d59dc835c11f0a936e1e6eb022e58a526d75884c700454272",
+  "fullReportJSONSha256": "0a0d8c7e51dd000525ed425003f8a09692dd9e2600b648217ba5364b3f241210",
+  "traceReproduction": "Run soccer-calibration-walk-forward-build with this generatedAt and the unchanged retained source archives; --output retains the complete per-game trace.",
+  "leagues": {
+    "epl": {
+      "version": "SOCCER-CALIBRATION-CHRONOLOGICAL-RETROSPECTIVE-v1",
+      "type": "OFFLINE_CALIBRATION_WALK_FORWARD_DIAGNOSTICS",
+      "league": "epl",
+      "generatedAt": "2026-11-05T20:51:45.075Z",
+      "status": "RESEARCH_ONLY",
+      "method": {
+        "version": "SOCCER-FROZEN-MODEL-RATE-CALIBRATION-v1",
+        "fullTime": "UNWEIGHTED_POISSON_MARGINAL_RATE_SCALE_MLE_BY_HOME_AWAY",
+        "halfTime": "CONDITIONAL_BINOMIAL_GOAL_SHARE_MLE_BY_HOME_AWAY",
+        "dependence": "UNCHANGED_BASELINE_RHO_FAIL_IF_CALIBRATED_DC_FACTORS_INVALID",
+        "selection": "ALL_SOURCE_VERIFIED_NORMAL_FINAL_GAMES_IN_DECLARED_DEVELOPMENT_WINDOW",
+        "grouping": "LEAGUE_EXACT_FROZEN_FT_AND_HT_MODEL_HASHES",
+        "target": "COMPLETE_FT_SCORE_DISTRIBUTION_AND_ITS_CONDITIONAL_HT_DISTRIBUTION",
+        "interpretation": "DEVELOPMENT_FIT_NOT_UNTOUCHED_VALIDATION_OR_FORMAL_CALIBRATION_ACCEPTANCE"
+      },
+      "hyperparameters": {
+        "fullTime": {
+          "halfLifeDays": 730,
+          "penalty": 0.002
+        },
+        "halfTime": {
+          "halfLifeDays": 730
+        }
+      },
+      "protocol": {
+        "splitUnit": "WHOLE_REAL_GAME_BY_UTC_KICKOFF",
+        "resultLagHours": 24,
+        "baseRefitPolicy": "PAST_LABELS_ONLY_THEN_FIXED_THROUGH_CALIBRATION_AND_TEST",
+        "calibrationPolicy": "EXISTING_RATE_MLE_AND_HT_SHARE_METHOD_NO_TEST_LABELS",
+        "testWeighting": "ONE_WEIGHT_PER_REAL_GAME_PER_PERIOD_AND_FOLD",
+        "pairing": "INTERSECTION_REPORTED_WITH_ALL_ARM_FAILURES_AND_FULL_SOURCE_DENOMINATORS",
+        "distributionPolicy": "EXISTING_SCORE_AND_HT_FUNCTIONS_UNCHANGED_RETAINED_MASS_AND_OMITTED_TAIL_REPORTED_NO_EXTRA_RENORMALIZATION",
+        "hyperparameterProvenance": "REUSED_EXISTING_BASELINE_SELECTION_PREVIOUSLY_INSPECTED_2024_RESULTS_NOT_PAST_PREREGISTRATION",
+        "interpretation": "CHRONOLOGICAL_RETROSPECTIVE_DIAGNOSTICS_NOT_NEW_UNTOUCHED_OOS_OR_FORMAL_ACCEPTANCE"
+      },
+      "coverage": {
+        "acceptedFullTimeGames": 2190,
+        "acceptedHalfTimeGames": 2187,
+        "missingHalfTimeGames": 3,
+        "sourceExcludedRecords": 115,
+        "duplicateFullTimeRows": 0,
+        "duplicateHalfTimeRows": 0,
+        "sourcePopulationCompletenessVerified": false,
+        "normalizedHistoryHashes": {
+          "fullTime": "8f82bf4191d0149f04933d9d0bb8cb94965aa98dc7f4774859b75d1af11a8f2b",
+          "halfTime": "fd99e33cb78fafd1aacc3754619a6cfeeb084bb1a35d2234e39da73e8fc620e0"
+        },
+        "sourceHashMeaning": "RETAINED_NORMALIZED_ROW_SOURCE_REFERENCES_NOT_RECOMPUTED_ORIGINAL_HTTP_DOCUMENTS",
+        "originalSourceDocumentHashesRecomputed": false,
+        "pointInTimeAvailabilityVerified": false
+      },
+      "sourceExcludedWithoutKickoff": [],
+      "limitations": [
+        "Historical source responses were collected after these matches; label chronology is not historical availability or durable model freeze proof.",
+        "Existing hyperparameters used 2024 for selection and 2025 was previously inspected; neither window is a new untouched final test.",
+        "Unseen teams, absent HT labels, invalid calibrated dependence and fit failures retain their denominators; common-cohort comparisons do not prove improvement for omitted games.",
+        "No use of the new 18-game prospective UCL cohort, market returns, candidate authorization or formal W/R/S."
+      ],
+      "accepted": false,
+      "formalEligible": false,
+      "promotionEligible": false,
+      "executable": false,
+      "baselineChanged": false,
+      "historicalPitVerified": false,
+      "durableFreezeVerified": false,
+      "untouchedTestVerified": false,
+      "improvementEstablished": false,
+      "W": null,
+      "R": null,
+      "S": null,
+      "empiricalErrorMargin": null,
+      "fullLeagueReportHash": "509bfefbb14a8516c7a32d8135641097cfd19076ee78e2a706a9cc259a45a79c",
+      "folds": [
+        {
+          "id": "calibrate-2023-test-2024",
+          "baseBefore": "2023-01-01T00:00:00.000Z",
+          "calibrationBefore": "2024-01-01T00:00:00.000Z",
+          "testBefore": "2025-01-01T00:00:00.000Z",
+          "status": "RESEARCH_ONLY",
+          "fitStatus": "DIAGNOSTIC_AVAILABLE",
+          "fitFailures": [],
+          "accepted": false,
+          "formalEligible": false,
+          "promotionEligible": false,
+          "executable": false,
+          "baselineChanged": false,
+          "historicalPitVerified": false,
+          "durableFreezeVerified": false,
+          "untouchedTestVerified": false,
+          "improvementEstablished": false,
+          "W": null,
+          "R": null,
+          "S": null,
+          "empiricalErrorMargin": null,
+          "training": {
+            "acceptedFullTimeGames": 763,
+            "resultLagBoundaryExcludedGameIds": [
+              "soccer:epl:637993",
+              "soccer:epl:637989",
+              "soccer:epl:637994",
+              "soccer:epl:637996",
+              "soccer:epl:637998",
+              "soccer:epl:637997"
+            ],
+            "fullTime": {
+              "modelHash": "30042e0c05290d72fa5b63f8130af890174c2e6a1424574bfcdbb108bc03491b",
+              "trainingHash": "67428af1389f4d23671a08b175ee67423fc7eeac17a7c02646c2f5c73f9d52c6",
+              "cutoff": "2023-01-01T00:00:00.000Z",
+              "trainedThrough": "2022-12-30T20:00:00.000Z",
+              "trainingCount": 763,
+              "fit": {
+                "converged": true,
+                "iterations": 4821,
+                "gradientNorm": 9.845160181039756e-7,
+                "rhoScores": [
+                  {
+                    "rho": -0.15,
+                    "valid": true,
+                    "conditionalLoss": 0.005010905922742773
+                  },
+                  {
+                    "rho": -0.1,
+                    "valid": true,
+                    "conditionalLoss": 0.0019242457383639557
+                  },
+                  {
+                    "rho": -0.05,
+                    "valid": true,
+                    "conditionalLoss": 0.0002784886996477616
+                  },
+                  {
+                    "rho": 0,
+                    "valid": true,
+                    "conditionalLoss": 0
+                  },
+                  {
+                    "rho": 0.05,
+                    "valid": true,
+                    "conditionalLoss": 0.0010720693780807233
+                  },
+                  {
+                    "rho": 0.1,
+                    "valid": true,
+                    "conditionalLoss": 0.0035312810767252683
+                  },
+                  {
+                    "rho": 0.15,
+                    "valid": true,
+                    "conditionalLoss": 0.007474748668422073
+                  }
+                ],
+                "dependenceFit": "CONDITIONAL_TRAINING_GRID"
+              }
+            },
+            "halfTime": {
+              "modelHash": "d600b9f4ef43be75c8223ae79cd45f4a3c8ec686452d1e005897c73d09bbda7f",
+              "trainingHash": "b47dae5f8917cb2dafb71446da0296484157b2bd3bb1af144f910e4f6f4871a2",
+              "cutoff": "2023-01-01T00:00:00.000Z",
+              "trainedThrough": "2022-12-30T20:00:00.000Z",
+              "trainingCount": 763,
+              "fit": null,
+              "shares": {
+                "home": 0.4559783492462071,
+                "away": 0.4683921534540597
+              },
+              "excludedCount": 0,
+              "excluded": []
+            },
+            "gameIdsHash": "e6143cecdb76b173010e4758665d075ea270695b2fdc58148ae427c71b1c983c"
+          },
+          "calibration": {
+            "populationGames": 412,
+            "usedGames": 391,
+            "excludedGames": 21,
+            "excludedReasons": {
+              "SOCCER_TEAM_NOT_TRAINED": 19,
+              "WALK_FORWARD_CALIBRATION_LABEL_INSIDE_RESULT_LAG": 2
+            },
+            "totals": {
+              "games": 391,
+              "homeGoals": 649,
+              "awayGoals": 506,
+              "homeHalfGoals": 297,
+              "awayHalfGoals": 209,
+              "predictedHomeGoals": 584.0540635430232,
+              "predictedAwayGoals": 490.88222447770465
+            },
+            "parameters": {
+              "fullTimeRateScales": {
+                "home": 1.111198501150729,
+                "away": 1.0307971541205847
+              },
+              "halfTimeGoalShares": {
+                "home": 0.4576271186440678,
+                "away": 0.41304347826086957
+              },
+              "rho": 0
+            },
+            "parameterHash": "e806177a57788eda7081be8f978585f7bc4cd5b9840d085e0b9a6b331730e338",
+            "ledgerHash": "18ad2ef57b642566887492a0cb9bfece5f24a900050c44b4ae8be228a75f3748"
+          },
+          "test": {
+            "populationGames": 372,
+            "periods": {
+              "FT": {
+                "populationGames": 372,
+                "before": {
+                  "games": 334,
+                  "scoreLogLoss": 3.187109296312219,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 0.9931973882931174,
+                  "logLossState": "FINITE",
+                  "brier": 0.5892422143113369,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 334,
+                  "scoreLogLoss": 3.167008309898751,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 0.9961935869378415,
+                  "logLossState": "FINITE",
+                  "brier": 0.5907124885024357,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 334,
+                  "before": {
+                    "games": 334,
+                    "scoreLogLoss": 3.187109296312219,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.9931973882931174,
+                    "logLossState": "FINITE",
+                    "brier": 0.5892422143113369,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 334,
+                    "scoreLogLoss": 3.167008309898751,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.9961935869378415,
+                    "logLossState": "FINITE",
+                    "brier": 0.5907124885024357,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 334,
+                    "scoreLogLoss": -0.020100986413467234,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.0029961986447244095,
+                    "logLossState": "FINITE",
+                    "brier": 0.0014702741910994131,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 38
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 38
+                },
+                "missingAnyArmGames": 38
+              },
+              "HT": {
+                "populationGames": 372,
+                "before": {
+                  "games": 334,
+                  "scoreLogLoss": 2.2517364705561387,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.0721314364111374,
+                  "logLossState": "FINITE",
+                  "brier": 0.6522237735220018,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 334,
+                  "scoreLogLoss": 2.260140986436987,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.0751799718625197,
+                  "logLossState": "FINITE",
+                  "brier": 0.6540858134163993,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 334,
+                  "before": {
+                    "games": 334,
+                    "scoreLogLoss": 2.2517364705561387,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.0721314364111374,
+                    "logLossState": "FINITE",
+                    "brier": 0.6522237735220018,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 334,
+                    "scoreLogLoss": 2.260140986436987,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.0751799718625197,
+                    "logLossState": "FINITE",
+                    "brier": 0.6540858134163993,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 334,
+                    "scoreLogLoss": 0.008404515880845148,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.003048535451382899,
+                    "logLossState": "FINITE",
+                    "brier": 0.0018620398943974671,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 38
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 38
+                },
+                "missingAnyArmGames": 38
+              }
+            },
+            "ledgerHash": "a932cfc409dbc2f99d74de541804c1399bbc21489e01d9494c70bcd9e2b83583",
+            "pairedGameIdsHashes": {
+              "FT": "95a25a41d492b28783c13634231a15eae42eeb076cfcaffbd2536087d8838281",
+              "HT": "95a25a41d492b28783c13634231a15eae42eeb076cfcaffbd2536087d8838281"
+            }
+          },
+          "sourceExcluded": {
+            "training": {
+              "records": 0,
+              "reasons": {},
+              "ledgerHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            "calibration": {
+              "records": 0,
+              "reasons": {},
+              "ledgerHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            "test": {
+              "records": 0,
+              "reasons": {},
+              "ledgerHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            }
+          }
+        },
+        {
+          "id": "calibrate-2024-test-2025",
+          "baseBefore": "2024-01-01T00:00:00.000Z",
+          "calibrationBefore": "2025-01-01T00:00:00.000Z",
+          "testBefore": "2026-01-01T00:00:00.000Z",
+          "status": "RESEARCH_ONLY",
+          "fitStatus": "DIAGNOSTIC_AVAILABLE",
+          "fitFailures": [],
+          "accepted": false,
+          "formalEligible": false,
+          "promotionEligible": false,
+          "executable": false,
+          "baselineChanged": false,
+          "historicalPitVerified": false,
+          "durableFreezeVerified": false,
+          "untouchedTestVerified": false,
+          "improvementEstablished": false,
+          "W": null,
+          "R": null,
+          "S": null,
+          "empiricalErrorMargin": null,
+          "training": {
+            "acceptedFullTimeGames": 1179,
+            "resultLagBoundaryExcludedGameIds": [
+              "soccer:epl:671221",
+              "soccer:epl:671224"
+            ],
+            "fullTime": {
+              "modelHash": "be515397d20a0b37e0f7e35cabd02e551d815ee2f56a2bdb1fe040def55643ba",
+              "trainingHash": "879c45f4e7d08db171f32b36556e66356d18e20ed76a65fb49f166549517cd3e",
+              "cutoff": "2024-01-01T00:00:00.000Z",
+              "trainedThrough": "2023-12-30T17:30:00.000Z",
+              "trainingCount": 1179,
+              "fit": {
+                "converged": true,
+                "iterations": 4159,
+                "gradientNorm": 9.910477611726982e-7,
+                "rhoScores": [
+                  {
+                    "rho": -0.15,
+                    "valid": true,
+                    "conditionalLoss": 0.01103584645932115
+                  },
+                  {
+                    "rho": -0.1,
+                    "valid": true,
+                    "conditionalLoss": 0.005818056731221487
+                  },
+                  {
+                    "rho": -0.05,
+                    "valid": true,
+                    "conditionalLoss": 0.002177116758187724
+                  },
+                  {
+                    "rho": 0,
+                    "valid": true,
+                    "conditionalLoss": 0
+                  },
+                  {
+                    "rho": 0.05,
+                    "valid": true,
+                    "conditionalLoss": -0.0007623420417202618
+                  },
+                  {
+                    "rho": 0.1,
+                    "valid": true,
+                    "conditionalLoss": -0.00010195622820766755
+                  },
+                  {
+                    "rho": 0.15,
+                    "valid": true,
+                    "conditionalLoss": 0.0020501480258396376
+                  }
+                ],
+                "dependenceFit": "CONDITIONAL_TRAINING_GRID"
+              }
+            },
+            "halfTime": {
+              "modelHash": "9bf161ac6cf4bc004f0707e06a5f6100a448836236f91ce9ed768177ee4c850a",
+              "trainingHash": "ecd7b84be756f3876cf437fadc5460c375c344735f5a175b6b9f619a21c5e9e5",
+              "cutoff": "2024-01-01T00:00:00.000Z",
+              "trainedThrough": "2023-12-30T17:30:00.000Z",
+              "trainingCount": 1179,
+              "fit": null,
+              "shares": {
+                "home": 0.44987602186804226,
+                "away": 0.43820212744187037
+              },
+              "excludedCount": 0,
+              "excluded": []
+            },
+            "gameIdsHash": "bd8a1e9529a63fb89f5900c9ec8f2f0c5dc5caa99c2c5cff00f533c9c370e197"
+          },
+          "calibration": {
+            "populationGames": 372,
+            "usedGames": 353,
+            "excludedGames": 19,
+            "excludedReasons": {
+              "SOCCER_TEAM_NOT_TRAINED": 19
+            },
+            "totals": {
+              "games": 353,
+              "homeGoals": 604,
+              "awayGoals": 538,
+              "homeHalfGoals": 261,
+              "awayHalfGoals": 247,
+              "predictedHomeGoals": 559.8416886186596,
+              "predictedAwayGoals": 452.39243803587624
+            },
+            "parameters": {
+              "fullTimeRateScales": {
+                "home": 1.0788764257450987,
+                "away": 1.1892329640517438
+              },
+              "halfTimeGoalShares": {
+                "home": 0.43211920529801323,
+                "away": 0.4591078066914498
+              },
+              "rho": 0.05
+            },
+            "parameterHash": "182d17f5d0cae0fc202c067abed2d54d88f2d9b858f41c339b568b0e0d64c1ed",
+            "ledgerHash": "0a8e91d36a510bea6155e12ff90b41134f0093e4b74aa35087fdbad4c7f3bd2d"
+          },
+          "test": {
+            "populationGames": 378,
+            "periods": {
+              "FT": {
+                "populationGames": 378,
+                "before": {
+                  "games": 341,
+                  "scoreLogLoss": 2.958908951529407,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 0.9962877025540021,
+                  "logLossState": "FINITE",
+                  "brier": 0.5950592646782152,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 341,
+                  "scoreLogLoss": 2.9812095963755016,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 0.9985026148874385,
+                  "logLossState": "FINITE",
+                  "brier": 0.5968944629073736,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 341,
+                  "before": {
+                    "games": 341,
+                    "scoreLogLoss": 2.958908951529407,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.9962877025540021,
+                    "logLossState": "FINITE",
+                    "brier": 0.5950592646782152,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 341,
+                    "scoreLogLoss": 2.9812095963755016,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.9985026148874385,
+                    "logLossState": "FINITE",
+                    "brier": 0.5968944629073736,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 341,
+                    "scoreLogLoss": 0.022300644846095074,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.002214912333435941,
+                    "logLossState": "FINITE",
+                    "brier": 0.0018351982291580303,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 37
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 37
+                },
+                "missingAnyArmGames": 37
+              },
+              "HT": {
+                "populationGames": 378,
+                "before": {
+                  "games": 340,
+                  "scoreLogLoss": 2.0464479590636815,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.055988679983,
+                  "logLossState": "FINITE",
+                  "brier": 0.6386511908767637,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 340,
+                  "scoreLogLoss": 2.074432586218573,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.068476173586696,
+                  "logLossState": "FINITE",
+                  "brier": 0.6470147268427051,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 340,
+                  "before": {
+                    "games": 340,
+                    "scoreLogLoss": 2.0464479590636815,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.055988679983,
+                    "logLossState": "FINITE",
+                    "brier": 0.6386511908767637,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 340,
+                    "scoreLogLoss": 2.074432586218573,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.068476173586696,
+                    "logLossState": "FINITE",
+                    "brier": 0.6470147268427051,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 340,
+                    "scoreLogLoss": 0.027984627154891886,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.01248749360369713,
+                    "logLossState": "FINITE",
+                    "brier": 0.008363535965941303,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 37,
+                  "HALF_TIME_SCORING_TIMELINE_MISMATCH": 1
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 37,
+                  "HALF_TIME_SCORING_TIMELINE_MISMATCH": 1
+                },
+                "missingAnyArmGames": 38
+              }
+            },
+            "ledgerHash": "482ff77f281ba20b94bdd1f3295793be1da400689b58d0a57a0bd3da9b402ff3",
+            "pairedGameIdsHashes": {
+              "FT": "eabe4c066addc1e1b0cea910f2103a3b5793d0ab049391f059637cf2aa18eb64",
+              "HT": "2095aa802ea64cebc7f41b7159fae0093cc448a345cb3241a3a60be322222147"
+            }
+          },
+          "sourceExcluded": {
+            "training": {
+              "records": 0,
+              "reasons": {},
+              "ledgerHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            "calibration": {
+              "records": 0,
+              "reasons": {},
+              "ledgerHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            "test": {
+              "records": 0,
+              "reasons": {},
+              "ledgerHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            }
+          }
+        }
+      ]
+    },
+    "ucl": {
+      "version": "SOCCER-CALIBRATION-CHRONOLOGICAL-RETROSPECTIVE-v1",
+      "type": "OFFLINE_CALIBRATION_WALK_FORWARD_DIAGNOSTICS",
+      "league": "ucl",
+      "generatedAt": "2026-11-05T20:51:45.075Z",
+      "status": "RESEARCH_ONLY",
+      "method": {
+        "version": "SOCCER-FROZEN-MODEL-RATE-CALIBRATION-v1",
+        "fullTime": "UNWEIGHTED_POISSON_MARGINAL_RATE_SCALE_MLE_BY_HOME_AWAY",
+        "halfTime": "CONDITIONAL_BINOMIAL_GOAL_SHARE_MLE_BY_HOME_AWAY",
+        "dependence": "UNCHANGED_BASELINE_RHO_FAIL_IF_CALIBRATED_DC_FACTORS_INVALID",
+        "selection": "ALL_SOURCE_VERIFIED_NORMAL_FINAL_GAMES_IN_DECLARED_DEVELOPMENT_WINDOW",
+        "grouping": "LEAGUE_EXACT_FROZEN_FT_AND_HT_MODEL_HASHES",
+        "target": "COMPLETE_FT_SCORE_DISTRIBUTION_AND_ITS_CONDITIONAL_HT_DISTRIBUTION",
+        "interpretation": "DEVELOPMENT_FIT_NOT_UNTOUCHED_VALIDATION_OR_FORMAL_CALIBRATION_ACCEPTANCE"
+      },
+      "hyperparameters": {
+        "fullTime": {
+          "halfLifeDays": 365,
+          "penalty": 0.01
+        },
+        "halfTime": {
+          "halfLifeDays": 730
+        }
+      },
+      "protocol": {
+        "splitUnit": "WHOLE_REAL_GAME_BY_UTC_KICKOFF",
+        "resultLagHours": 24,
+        "baseRefitPolicy": "PAST_LABELS_ONLY_THEN_FIXED_THROUGH_CALIBRATION_AND_TEST",
+        "calibrationPolicy": "EXISTING_RATE_MLE_AND_HT_SHARE_METHOD_NO_TEST_LABELS",
+        "testWeighting": "ONE_WEIGHT_PER_REAL_GAME_PER_PERIOD_AND_FOLD",
+        "pairing": "INTERSECTION_REPORTED_WITH_ALL_ARM_FAILURES_AND_FULL_SOURCE_DENOMINATORS",
+        "distributionPolicy": "EXISTING_SCORE_AND_HT_FUNCTIONS_UNCHANGED_RETAINED_MASS_AND_OMITTED_TAIL_REPORTED_NO_EXTRA_RENORMALIZATION",
+        "hyperparameterProvenance": "REUSED_EXISTING_BASELINE_SELECTION_PREVIOUSLY_INSPECTED_2024_RESULTS_NOT_PAST_PREREGISTRATION",
+        "interpretation": "CHRONOLOGICAL_RETROSPECTIVE_DIAGNOSTICS_NOT_NEW_UNTOUCHED_OOS_OR_FORMAL_ACCEPTANCE"
+      },
+      "coverage": {
+        "acceptedFullTimeGames": 805,
+        "acceptedHalfTimeGames": 800,
+        "missingHalfTimeGames": 5,
+        "sourceExcludedRecords": 85,
+        "duplicateFullTimeRows": 0,
+        "duplicateHalfTimeRows": 0,
+        "sourcePopulationCompletenessVerified": false,
+        "normalizedHistoryHashes": {
+          "fullTime": "a9ce721c254235c7f8e78a79000614bb5585d8d456df0f4399ebddeb6c9c9a4d",
+          "halfTime": "aad997aff15a0714f3df28d5734937d74d4f42d815c8808ec4f4ada64590da33"
+        },
+        "sourceHashMeaning": "RETAINED_NORMALIZED_ROW_SOURCE_REFERENCES_NOT_RECOMPUTED_ORIGINAL_HTTP_DOCUMENTS",
+        "originalSourceDocumentHashesRecomputed": false,
+        "pointInTimeAvailabilityVerified": false
+      },
+      "sourceExcludedWithoutKickoff": [],
+      "limitations": [
+        "Historical source responses were collected after these matches; label chronology is not historical availability or durable model freeze proof.",
+        "Existing hyperparameters used 2024 for selection and 2025 was previously inspected; neither window is a new untouched final test.",
+        "Unseen teams, absent HT labels, invalid calibrated dependence and fit failures retain their denominators; common-cohort comparisons do not prove improvement for omitted games.",
+        "No use of the new 18-game prospective UCL cohort, market returns, candidate authorization or formal W/R/S."
+      ],
+      "accepted": false,
+      "formalEligible": false,
+      "promotionEligible": false,
+      "executable": false,
+      "baselineChanged": false,
+      "historicalPitVerified": false,
+      "durableFreezeVerified": false,
+      "untouchedTestVerified": false,
+      "improvementEstablished": false,
+      "W": null,
+      "R": null,
+      "S": null,
+      "empiricalErrorMargin": null,
+      "fullLeagueReportHash": "d271ec48c4e7cc07311295026065669861294b05b2bc07ffb9d2bb90844acc00",
+      "folds": [
+        {
+          "id": "calibrate-2023-test-2024",
+          "baseBefore": "2023-01-01T00:00:00.000Z",
+          "calibrationBefore": "2024-01-01T00:00:00.000Z",
+          "testBefore": "2025-01-01T00:00:00.000Z",
+          "status": "RESEARCH_ONLY",
+          "fitStatus": "DIAGNOSTIC_AVAILABLE",
+          "fitFailures": [],
+          "accepted": false,
+          "formalEligible": false,
+          "promotionEligible": false,
+          "executable": false,
+          "baselineChanged": false,
+          "historicalPitVerified": false,
+          "durableFreezeVerified": false,
+          "untouchedTestVerified": false,
+          "improvementEstablished": false,
+          "W": null,
+          "R": null,
+          "S": null,
+          "empiricalErrorMargin": null,
+          "training": {
+            "acceptedFullTimeGames": 247,
+            "resultLagBoundaryExcludedGameIds": [],
+            "fullTime": {
+              "modelHash": "a66728b309372e697a095955364830b7455d36986a10ad1964342fb9ca41c1a2",
+              "trainingHash": "6ec8785695af67d0d8080f60ef04e91deeb6043c5d800ab3093fb0e779be714a",
+              "cutoff": "2023-01-01T00:00:00.000Z",
+              "trainedThrough": "2022-11-02T20:00:00.000Z",
+              "trainingCount": 247,
+              "fit": {
+                "converged": true,
+                "iterations": 1312,
+                "gradientNorm": 9.847332842695006e-7,
+                "rhoScores": [
+                  {
+                    "rho": -0.15,
+                    "valid": true,
+                    "conditionalLoss": -0.0030885113687370426
+                  },
+                  {
+                    "rho": -0.1,
+                    "valid": true,
+                    "conditionalLoss": -0.003121993052831167
+                  },
+                  {
+                    "rho": -0.05,
+                    "valid": true,
+                    "conditionalLoss": -0.0020759606650691035
+                  },
+                  {
+                    "rho": 0,
+                    "valid": true,
+                    "conditionalLoss": 0
+                  },
+                  {
+                    "rho": 0.05,
+                    "valid": true,
+                    "conditionalLoss": 0.003094574943333447
+                  },
+                  {
+                    "rho": 0.1,
+                    "valid": true,
+                    "conditionalLoss": 0.007233018087196836
+                  },
+                  {
+                    "rho": 0.15,
+                    "valid": true,
+                    "conditionalLoss": 0.012482192070353013
+                  }
+                ],
+                "dependenceFit": "CONDITIONAL_TRAINING_GRID"
+              }
+            },
+            "halfTime": {
+              "modelHash": "9133384195314366dd2ee11b4f7de40f4202005fb62df062cf6e98c37987ba09",
+              "trainingHash": "f6a683439540d76bdca3af78e91b75d2fe06f4c6c49965a36dfd6e552a77e1fb",
+              "cutoff": "2023-01-01T00:00:00.000Z",
+              "trainedThrough": "2022-11-02T20:00:00.000Z",
+              "trainingCount": 246,
+              "fit": null,
+              "shares": {
+                "home": 0.48727709043040673,
+                "away": 0.4182378784685553
+              },
+              "excludedCount": 1,
+              "excluded": [
+                {
+                  "eventId": "618784",
+                  "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+                }
+              ]
+            },
+            "gameIdsHash": "32de2c508b4d9ef3ce08d8bca2a8435b5dc8c52923b59c7128d480ba7db788e4"
+          },
+          "calibration": {
+            "populationGames": 125,
+            "usedGames": 67,
+            "excludedGames": 58,
+            "excludedReasons": {
+              "SOCCER_TEAM_NOT_TRAINED": 58
+            },
+            "totals": {
+              "games": 67,
+              "homeGoals": 112,
+              "awayGoals": 79,
+              "homeHalfGoals": 47,
+              "awayHalfGoals": 31,
+              "predictedHomeGoals": 102.59996885778958,
+              "predictedAwayGoals": 91.10878214959403
+            },
+            "parameters": {
+              "fullTimeRateScales": {
+                "home": 1.0916182650624338,
+                "away": 0.8670953352256175
+              },
+              "halfTimeGoalShares": {
+                "home": 0.41964285714285715,
+                "away": 0.3924050632911392
+              },
+              "rho": -0.1
+            },
+            "parameterHash": "6a764adb13481912b508ffbc7358e17adf32110f5878eb1c6ea4f6a1cbc5fe6e",
+            "ledgerHash": "1ec1ca481e148014293e92b4c6e18e24cbcb8b6f9f879482703f2cfc8e0e29ed"
+          },
+          "test": {
+            "populationGames": 134,
+            "periods": {
+              "FT": {
+                "populationGames": 134,
+                "before": {
+                  "games": 63,
+                  "scoreLogLoss": 3.4720496283658857,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.126296891720324,
+                  "logLossState": "FINITE",
+                  "brier": 0.6629967763170257,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 63,
+                  "scoreLogLoss": 3.4514124925255367,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.1136452993979893,
+                  "logLossState": "FINITE",
+                  "brier": 0.6610640037407365,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 63,
+                  "before": {
+                    "games": 63,
+                    "scoreLogLoss": 3.4720496283658857,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.126296891720324,
+                    "logLossState": "FINITE",
+                    "brier": 0.6629967763170257,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 63,
+                    "scoreLogLoss": 3.4514124925255367,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.1136452993979893,
+                    "logLossState": "FINITE",
+                    "brier": 0.6610640037407365,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 63,
+                    "scoreLogLoss": -0.020637135840348726,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": -0.012651592322334393,
+                    "logLossState": "FINITE",
+                    "brier": -0.0019327725762895492,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 71
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 71
+                },
+                "missingAnyArmGames": 71
+              },
+              "HT": {
+                "populationGames": 134,
+                "before": {
+                  "games": 61,
+                  "scoreLogLoss": 2.3267068429614746,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.076232047896156,
+                  "logLossState": "FINITE",
+                  "brier": 0.657807786707261,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 61,
+                  "scoreLogLoss": 2.337179393803643,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.0656057643241212,
+                  "logLossState": "FINITE",
+                  "brier": 0.6511550626003769,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 61,
+                  "before": {
+                    "games": 61,
+                    "scoreLogLoss": 2.3267068429614746,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.076232047896156,
+                    "logLossState": "FINITE",
+                    "brier": 0.657807786707261,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 61,
+                    "scoreLogLoss": 2.337179393803643,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.0656057643241212,
+                    "logLossState": "FINITE",
+                    "brier": 0.6511550626003769,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 61,
+                    "scoreLogLoss": 0.010472550842168298,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": -0.010626283572034764,
+                    "logLossState": "FINITE",
+                    "brier": -0.00665272410688436,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 71,
+                  "HALF_TIME_TIMELINE_INCOMPLETE": 2
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 71,
+                  "HALF_TIME_TIMELINE_INCOMPLETE": 2
+                },
+                "missingAnyArmGames": 73
+              }
+            },
+            "ledgerHash": "0a26fc0bd501d0c0da71acfca3230f62740b56a0cae0e2a575c39f60310bf5a3",
+            "pairedGameIdsHashes": {
+              "FT": "af00258a4805fe2c1a314c8e375ed984a360d6ad5e7afeef51c0139746950e2e",
+              "HT": "81c1bcb0898d8f2b353e10f45eaab6738b93b8a919e387316d440247d07d3564"
+            }
+          },
+          "sourceExcluded": {
+            "training": {
+              "records": 3,
+              "reasons": {
+                "REGULATION_SCORE_UNVERIFIED": 3
+              },
+              "ledgerHash": "881df35e54f930bc84e26a93df22773329f71f030fa2ad446808f14ef7ab98d9"
+            },
+            "calibration": {
+              "records": 0,
+              "reasons": {},
+              "ledgerHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            "test": {
+              "records": 3,
+              "reasons": {
+                "REGULATION_SCORE_UNVERIFIED": 3
+              },
+              "ledgerHash": "3ad9c445f666140e7a154ec2ff0cda6f06e14dc05824c698b9172038c4d59bd4"
+            }
+          }
+        },
+        {
+          "id": "calibrate-2024-test-2025",
+          "baseBefore": "2024-01-01T00:00:00.000Z",
+          "calibrationBefore": "2025-01-01T00:00:00.000Z",
+          "testBefore": "2026-01-01T00:00:00.000Z",
+          "status": "RESEARCH_ONLY",
+          "fitStatus": "DIAGNOSTIC_AVAILABLE",
+          "fitFailures": [],
+          "accepted": false,
+          "formalEligible": false,
+          "promotionEligible": false,
+          "executable": false,
+          "baselineChanged": false,
+          "historicalPitVerified": false,
+          "durableFreezeVerified": false,
+          "untouchedTestVerified": false,
+          "improvementEstablished": false,
+          "W": null,
+          "R": null,
+          "S": null,
+          "empiricalErrorMargin": null,
+          "training": {
+            "acceptedFullTimeGames": 372,
+            "resultLagBoundaryExcludedGameIds": [],
+            "fullTime": {
+              "modelHash": "35024e6412b96565f4407ea9c241ffb7d013b7ae60cd8cf7a893345924842f3a",
+              "trainingHash": "5a17605641f8307e034f5c0eb2a4e8acaa2dfdc55a3ad4db382bd0d54a9fdf3b",
+              "cutoff": "2024-01-01T00:00:00.000Z",
+              "trainedThrough": "2023-12-13T20:00:00.000Z",
+              "trainingCount": 372,
+              "fit": {
+                "converged": true,
+                "iterations": 1301,
+                "gradientNorm": 9.631931738744993e-7,
+                "rhoScores": [
+                  {
+                    "rho": -0.15,
+                    "valid": true,
+                    "conditionalLoss": 0.003227960973006753
+                  },
+                  {
+                    "rho": -0.1,
+                    "valid": true,
+                    "conditionalLoss": 0.0010814466826709669
+                  },
+                  {
+                    "rho": -0.05,
+                    "valid": true,
+                    "conditionalLoss": 0.00002242299332423165
+                  },
+                  {
+                    "rho": 0,
+                    "valid": true,
+                    "conditionalLoss": 0
+                  },
+                  {
+                    "rho": 0.05,
+                    "valid": true,
+                    "conditionalLoss": 0.0009997500479772977
+                  },
+                  {
+                    "rho": 0.1,
+                    "valid": true,
+                    "conditionalLoss": 0.003043846218253311
+                  },
+                  {
+                    "rho": 0.15,
+                    "valid": true,
+                    "conditionalLoss": 0.00620076169589983
+                  }
+                ],
+                "dependenceFit": "CONDITIONAL_TRAINING_GRID"
+              }
+            },
+            "halfTime": {
+              "modelHash": "2bb841d24dbc66a3926e9c8ed26de3f580bf0f586f1b8d408101eb305d6604e6",
+              "trainingHash": "ecae339d104d4b10a60f10ce78d87306bd14a9485723084d3f27b3bcee316264",
+              "cutoff": "2024-01-01T00:00:00.000Z",
+              "trainedThrough": "2023-12-13T20:00:00.000Z",
+              "trainingCount": 371,
+              "fit": null,
+              "shares": {
+                "home": 0.47549870435575714,
+                "away": 0.3955662175656018
+              },
+              "excludedCount": 1,
+              "excluded": [
+                {
+                  "eventId": "618784",
+                  "reason": "HALF_TIME_EVIDENCE_UNVERIFIED"
+                }
+              ]
+            },
+            "gameIdsHash": "7f622ec28a0db7785f74730f809a700ce78f0be8ba2e28267a9c4e67b766ebf9"
+          },
+          "calibration": {
+            "populationGames": 134,
+            "usedGames": 85,
+            "excludedGames": 49,
+            "excludedReasons": {
+              "SOCCER_TEAM_NOT_TRAINED": 45,
+              "HALF_TIME_TIMELINE_INCOMPLETE": 4
+            },
+            "totals": {
+              "games": 85,
+              "homeGoals": 150,
+              "awayGoals": 123,
+              "homeHalfGoals": 67,
+              "awayHalfGoals": 55,
+              "predictedHomeGoals": 137.20789587324546,
+              "predictedAwayGoals": 111.78021607529088
+            },
+            "parameters": {
+              "fullTimeRateScales": {
+                "home": 1.0932315450604393,
+                "away": 1.100373610989908
+              },
+              "halfTimeGoalShares": {
+                "home": 0.44666666666666666,
+                "away": 0.44715447154471544
+              },
+              "rho": 0
+            },
+            "parameterHash": "44520f2c5f11f93342a136ee5457a519b8552f7e4d06ca8457bfd277a94dc0e0",
+            "ledgerHash": "5f48f3ee541cc6802e6d9fb7807cf63fa122eca1fd68a44e88291ea48e7281ac"
+          },
+          "test": {
+            "populationGames": 185,
+            "periods": {
+              "FT": {
+                "populationGames": 185,
+                "before": {
+                  "games": 115,
+                  "scoreLogLoss": 3.4551027506131673,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 0.9767663123637165,
+                  "logLossState": "FINITE",
+                  "brier": 0.578703969668491,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 115,
+                  "scoreLogLoss": 3.419021254845559,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 0.9753165459918797,
+                  "logLossState": "FINITE",
+                  "brier": 0.5779289975944111,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 115,
+                  "before": {
+                    "games": 115,
+                    "scoreLogLoss": 3.4551027506131673,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.9767663123637165,
+                    "logLossState": "FINITE",
+                    "brier": 0.578703969668491,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 115,
+                    "scoreLogLoss": 3.419021254845559,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.9753165459918797,
+                    "logLossState": "FINITE",
+                    "brier": 0.5779289975944111,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 115,
+                    "scoreLogLoss": -0.03608149576761042,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": -0.0014497663718362533,
+                    "logLossState": "FINITE",
+                    "brier": -0.0007749720740800954,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 70
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 70
+                },
+                "missingAnyArmGames": 70
+              },
+              "HT": {
+                "populationGames": 185,
+                "before": {
+                  "games": 115,
+                  "scoreLogLoss": 2.253535635275516,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.0834231661853122,
+                  "logLossState": "FINITE",
+                  "brier": 0.6562755454146134,
+                  "brierState": "FINITE"
+                },
+                "after": {
+                  "games": 115,
+                  "scoreLogLoss": 2.2470587871063596,
+                  "scoreLogLossState": "FINITE",
+                  "logLoss": 1.0874946514402328,
+                  "logLossState": "FINITE",
+                  "brier": 0.6577880901167247,
+                  "brierState": "FINITE"
+                },
+                "paired": {
+                  "games": 115,
+                  "before": {
+                    "games": 115,
+                    "scoreLogLoss": 2.253535635275516,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.0834231661853122,
+                    "logLossState": "FINITE",
+                    "brier": 0.6562755454146134,
+                    "brierState": "FINITE"
+                  },
+                  "after": {
+                    "games": 115,
+                    "scoreLogLoss": 2.2470587871063596,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 1.0874946514402328,
+                    "logLossState": "FINITE",
+                    "brier": 0.6577880901167247,
+                    "brierState": "FINITE"
+                  },
+                  "differenceAfterMinusBefore": {
+                    "games": 115,
+                    "scoreLogLoss": -0.006476848169156571,
+                    "scoreLogLossState": "FINITE",
+                    "logLoss": 0.004071485254920293,
+                    "logLossState": "FINITE",
+                    "brier": 0.001512544702110989,
+                    "brierState": "FINITE"
+                  },
+                  "interpretation": "NEGATIVE_IS_BETTER_ON_THE_SAME_REAL_GAMES_NO_SIGNIFICANCE_OR_ACCEPTANCE_CLAIM"
+                },
+                "beforeFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 70
+                },
+                "afterFailures": {
+                  "SOCCER_TEAM_NOT_TRAINED": 70
+                },
+                "missingAnyArmGames": 70
+              }
+            },
+            "ledgerHash": "3f9315b8bbf63e2986d2ea4a7aa531c6669dd36a775ce78dfde14649c8421c62",
+            "pairedGameIdsHashes": {
+              "FT": "136a624439952a53063c41decd72acd873570d9e000a8beb81e91d884808cb41",
+              "HT": "136a624439952a53063c41decd72acd873570d9e000a8beb81e91d884808cb41"
+            }
+          },
+          "sourceExcluded": {
+            "training": {
+              "records": 3,
+              "reasons": {
+                "REGULATION_SCORE_UNVERIFIED": 3
+              },
+              "ledgerHash": "881df35e54f930bc84e26a93df22773329f71f030fa2ad446808f14ef7ab98d9"
+            },
+            "calibration": {
+              "records": 3,
+              "reasons": {
+                "REGULATION_SCORE_UNVERIFIED": 3
+              },
+              "ledgerHash": "3ad9c445f666140e7a154ec2ff0cda6f06e14dc05824c698b9172038c4d59bd4"
+            },
+            "test": {
+              "records": 4,
+              "reasons": {
+                "REGULATION_SCORE_UNVERIFIED": 4
+              },
+              "ledgerHash": "f84effbf4171b27deb82cb72bce0e3f3d116fb1e2eab7cc24f86d552d5c7f40a"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "contentHash": "8cdf43d20334b5a574b293d8b26d6f98bb39afc6fb46acee843316eea02e7a64"
+}
