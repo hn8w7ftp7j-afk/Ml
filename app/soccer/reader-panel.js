@@ -43,9 +43,13 @@ export function soccerReaderPeriodBindingMessages(diagnostics){
 }
 export default function SoccerReaderPanel({league,date,showDownload=true}) {
   const [revision,setRevision]=useState(0),[state,setState]=useState({key:'',data:null,error:'',loading:false});
+  const [resume,setResume]=useState({key:'',busy:false,message:'',error:''});
   const key=`${league}:${date}`;
   const lastContent=useRef({key:'',hash:null,hasResponse:false});
+  const resumeRequest=useRef(null),resumeScope=useRef(key);
+  resumeScope.current=key;
   useEffect(()=>{const id=setInterval(()=>{if(document.visibilityState==='visible')setRevision(n=>n+1);},30000);return()=>clearInterval(id);},[]);
+  useEffect(()=>{setResume({key,busy:false,message:'',error:''});return()=>{const request=resumeRequest.current;if(request?.key===key){request.controller.abort();resumeRequest.current=null;}};},[key]);
   useEffect(()=>{
     if(!date)return;let active=true;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);
     setState(old=>({key,data:old.key===key?old.data:null,error:'',loading:true}));
@@ -66,11 +70,39 @@ export default function SoccerReaderPanel({league,date,showDownload=true}) {
   const current=state.key===key?state:null,data=current?.data,games=data?.games||[];
   const periodSources=soccerReaderPeriods(data),fresh=observedIsFresh(data?.observedAt),openMarketCount=games.reduce((count,game)=>count+game.markets.length,0);
   const periodBindingMessages=soccerReaderPeriodBindingMessages(data?.periodBindingDiagnostics);
+  const resumeCurrent=resume.key===key?resume:null;
+  async function resumeCapture(){
+    if(!date||!data||resumeRequest.current?.key===key)return;
+    resumeRequest.current?.controller.abort();
+    const controller=new AbortController(),request={key,controller};resumeRequest.current=request;
+    const active=()=>resumeRequest.current===request&&resumeScope.current===key;
+    const timer=setTimeout(()=>controller.abort(),25000);
+    setResume({key,busy:true,message:'',error:''});
+    try{
+      const response=await fetch('/api/soccer/reader-analysis',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'resume',league:league.toLowerCase(),date}),signal:controller.signal});
+      const result=await response.json();
+      if(!response.ok||result?.ok!==true)throw Error(response.status===401?'登入已過期':result?.error||'背景補存暫時無法啟動');
+      if(result.league!==league.toLowerCase()||result.date!==date||result.executable!==false
+        ||!['STARTED','FALLBACK_ONLY','UNAVAILABLE'].includes(result.continuation?.status)
+        ||result.continuation.executable!==false
+        ||(result.continuation.status==='STARTED'
+          ?result.continuation.durable!==true||!/^wrun_[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(result.continuation.runId||'')
+          :result.continuation.durable!==false))throw Error('補存回應的聯盟、日期或工作狀態未通過核對');
+      if(result.continuation.status==='UNAVAILABLE')throw Error('背景補存暫時無法啟動，原盤保存不受影響。');
+      if(active())setResume({key,busy:false,error:'',message:result.continuation.status==='STARTED'
+        ?'已啟動背景補存，是否完成仍須核對封存結果；逾期盤口不會補造預測。'
+        :'背景續跑暫時無法啟動，已安排備援處理；這不代表預測已補存完成。'});
+    }catch(error){if(active())setResume({key,busy:false,message:'',error:error.name==='AbortError'?'補存啟動回應逾時，是否已啟動仍待核對。':String(error.message||'背景補存暫時無法啟動')});}
+    finally{clearTimeout(timer);if(resumeRequest.current===request)resumeRequest.current=null;}
+  }
   return <section className="panel soccerReader" aria-label={`足球Tai888原盤 ${date}`}>
     <div className="soccerBoardHeading"><h2>Tai888 足球原盤｜{date}</h2><button type="button" className="secondary" disabled={!date||current?.loading} onClick={()=>setRevision(n=>n+1)}>{current?.loading?'讀取原盤中…':'更新原盤'}</button></div>
     <p className="soccerAvailability">{current?.error?`原盤更新失敗：${current.error}`:!data?`正在核對 ${date} 原盤保存狀態…`:games.length?`${games.length} 場｜${openMarketCount} 筆盤口${openMarketCount?'':'｜此版本沒有開放盤口'}${periodSources.length?'｜按期間分開保存':`｜同步 ${time(data.observedAt)}${fresh?'':'｜原盤已逾期，請重新同步'}`}`:periodSources.length?'原盤來源已保存，此版本沒有開放盤口。':`${date} 尚無原盤；等待 Reader ${READER_VERSION} 同步該日期分頁。其他已保存日期可在「已保存原盤」查看。`}</p>
     {periodSources.length>0&&<p className="soccerAvailability">{periodSources.map(source=>`${source.label} ${time(source.observedAt||source.sourceObservedAt)}${source.fresh?'':'（待更新）'}`).join('｜')}</p>}
     {periodBindingMessages.length>0&&<div className="soccerAvailability" role="status" aria-label="全場期間核對原因">{periodBindingMessages.map(message=><p key={message}>{message}</p>)}</div>}
+    {data&&(games.length>0||periodSources.length>0)&&<div className="soccerAvailability"><button type="button" className="secondary" disabled={resumeCurrent?.busy||current?.loading} onClick={resumeCapture}>{resumeCurrent?.busy?'正在啟動補存…':'補存盤口預測'}</button></div>}
+    {resumeCurrent&&(resumeCurrent.message||resumeCurrent.error)&&<p className="soccerAvailability" role="status" aria-label="盤口預測補存狀態">{resumeCurrent.error?`補存未確認：${resumeCurrent.error}`:resumeCurrent.message}</p>}
     {showDownload&&<a className="secondary readerDownload" href={DOWNLOAD} download>下載 Reader {READER_VERSION} 足球版</a>}
     {games.length>0&&<p className="soccerAvailability">原始盤口；足球結算規格與模型仍在驗證。</p>}
     {games.map((game,index)=><div className="soccerQuoteGame" key={`${game.boardTime}:${game.homeCode}:${game.awayCode}:${index}`}><h3>{name(game.homeRaw)}（主）對 {name(game.awayRaw)}（客）</h3><p className="soccerAvailability">{game.boardTime}｜{game.matchStatus==='MATCHED'?'官方場次已配對':'場次待核對'}{game.prestart?'':'｜非已確認賽前盤'}</p>

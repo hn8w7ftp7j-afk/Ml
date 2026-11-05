@@ -157,7 +157,7 @@ try{
   assert.ok(tables.every(row=>!row.tablename.includes('manual_records')&&!row.tablename.includes('bet_ledger')),'worker never creates or writes a wager ledger');
   const route=fs.readFileSync('app/api/soccer/reader/route.js','utf8');
   assert.ok(route.indexOf('await saveSoccerReaderSnapshot')<route.indexOf('await enqueueSoccerReaderAnalysis'));
-  assert.match(route,/after\(async\(\)=>/);assert.doesNotMatch(route,/await drainSoccerReaderAnalysis\(\);\s*return response/);
+  assert.match(route,/await launchSoccerReaderContinuation/);assert.doesNotMatch(route,/await drainSoccerReaderAnalysis\(\);\s*return response/);
   // Synthetic future fixture through the actual model, immutable analysis store,
   // forward capture service and real PostgreSQL receipt. No fabricated response.
   const {analyzeSoccerGame}=await import('../lib/soccer/analysis-service.js');
@@ -222,7 +222,7 @@ try{
     checkRateLimit:()=>({allowed:true}),readJsonBody:async()=>httpInput,validateSoccerCapture:()=>({ok:true,payload:httpInput}),
     saveSoccerReaderSnapshot:async()=>{savedUploads++;return{persisted:true,revision:'5'.repeat(64)};},
     enqueueSoccerReaderAnalysis:(league,date)=>enqueueSoccerReaderAnalysis(league,date,{query}),
-    after:callback=>{afterCallback=callback;},
+    launchSoccerReaderContinuation:async scope=>{afterCallback=()=>context.drainSoccerReaderAnalysis(scope);return{status:'STARTED',durable:true,runId:'wrun_01ARYZ6S41TSV4RRFFQ69G5FAV'};},
     drainSoccerReaderAnalysis:async options=>{drainStarted=true;return drainSoccerReaderAnalysis({...options,query,loadReader:async()=>null,schedule:async()=>({ok:true,games:[]})});},
   });
   const routeBody=route.replace(/^import .*?;\r?\n/gm,'').replace(/export const /g,'const ').replace(/export async function /g,'async function ');
