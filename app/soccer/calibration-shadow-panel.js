@@ -31,6 +31,18 @@ export function calibrationShadowReportValid(report, league) {
     && ['accepted', 'formalEligible', 'promotionEligible', 'baselineChanged', 'executable'].every(key => report[key] === false)
     && ['W', 'R', 'S'].every(key => report[key] === null);
   if (!common) return false;
+  // Optional for older API responses. When present, these are whole-population
+  // database-clock counts, independent of the paged result-validation counts.
+  const scheduleKeys = ['observedAt', 'startedGames', 'upcomingGames', 'nextUpcomingKickoffAt', 'kickoffStatusInterpretation'];
+  if (scheduleKeys.some(key => Object.hasOwn(report, key))) {
+    const observed = Date.parse(report.observedAt), next = Date.parse(report.nextUpcomingKickoffAt);
+    if (!Number.isFinite(observed) || !count(report.startedGames) || !count(report.upcomingGames)
+      || report.startedGames + report.upcomingGames !== report.captureGames
+      || report.kickoffStatusInterpretation !== 'KICKOFF_REACHED_NOT_FINISHED'
+      || report.freeze && observed < Date.parse(report.freeze.frozenAt)
+      || report.upcomingGames > 0 && (!Number.isFinite(next) || next <= observed)
+      || report.upcomingGames === 0 && report.nextUpcomingKickoffAt !== null) return false;
+  }
   if (report.validationCoverage !== undefined) {
     const coverage = report.validationCoverage;
     if (typeof coverage?.completeWithinRequestedScope !== 'boolean' || !count(coverage.readCaptures)
@@ -183,6 +195,7 @@ export function SoccerCalibrationShadowPanel({ league }) {
     {report && <>
       {report.validationCoverage?.completeWithinRequestedScope === false && <p role="status">賽果核對尚未讀完，已讀 {report.validationCoverage.readCaptures}／{report.validationCoverage.totalCaptures} 場；核對筆數僅代表已讀範圍。</p>}
       <p>不同賽事 {report.captureGames} 場｜全場預測 {report.fullTimeCaptures} 筆｜上半場預測 {report.halfTimeCaptures} 筆｜{report.validationCoverage?.completeWithinRequestedScope === false ? '已讀範圍核對賽果' : '已核對前瞻賽果'} {report.untouchedValidatedGames} 場。</p>
+      {count(report.startedGames) && count(report.upcomingGames) && <p>依伺服器時間 {time(report.observedAt)}：已達開賽時間 {report.startedGames} 場｜尚未開賽 {report.upcomingGames} 場。{report.nextUpcomingKickoffAt ? `最近開賽：${time(report.nextUpcomingKickoffAt)}。` : ''}已達開賽時間不代表已完賽或賽果已核對。</p>}
       {calibrationCheckReasons(report).length>0&&<details className="soccerDetails"><summary>校準查核尚未通過的原因</summary>
         <p>以下計數為查核紀錄，包含歷次未通過紀錄，不等於不同賽事數，也不代表目前有效樣本已被排除。</p>
         <ul>{calibrationCheckReasons(report).map(row=><li key={row.code}>{row.label}：{row.count} 筆（{row.code}）</li>)}</ul>
