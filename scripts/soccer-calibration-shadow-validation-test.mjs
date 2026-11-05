@@ -155,3 +155,28 @@ const bounded = await readSoccerCalibrationShadowReport('epl', { ...deps, now: (
 assert.equal(bounded.validationCoverage.completeWithinRequestedScope, false);
 assert.equal(bounded.validationCoverage.readCaptures, 2); assert.equal(bounded.validationStatus, 'PARTIAL_HISTORY_READ');
 console.log('PASS unfinished games stay PENDING; absent freeze, DB failure, count races and future source/receipt times remain unavailable rather than fabricated zero or PASS');
+
+const revision='a'.repeat(64), pagedDeps={...deps,
+  readRevision:async()=>({captures:3,revision}),
+  listCaptureIds:async(_league,{afterSequence,limit})=>{
+    assert.equal(limit,1);const at=Number(afterSequence);
+    return {captureIds:f.records.slice(at,at+1).map(r=>r.captureReceipt.captureId),nextSequence:at<2?String(at+1):null,completeWithinRequestedScope:at>=2};
+  },
+};
+let next='0',verifiedTotal=0,quarantinedTotal=0,readTotal=0;
+do{
+  const part=await readSoccerCalibrationShadowReport('epl',pagedDeps,{afterSequence:next,revision:next==='0'?null:revision});
+  assert.equal(part.validationPage.complete,true);assert.equal(part.validationPage.afterSequence,next);
+  assert.equal(part.validationCoverage.completeWithinRequestedScope,false,'a terminal page alone cannot claim that all preceding captures were read');
+  readTotal+=part.validationCoverage.readCaptures;verifiedTotal+=part.untouchedValidatedGames;quarantinedTotal+=part.quarantinedGames;
+  next=part.validationPage.nextSequence;
+}while(next!==null);
+const whole=await readSoccerCalibrationShadowReport('epl',deps);
+assert.equal(readTotal,3);assert.equal(verifiedTotal,whole.untouchedValidatedGames);assert.equal(quarantinedTotal,whole.quarantinedGames);
+await assert.rejects(()=>readSoccerCalibrationShadowReport('epl',pagedDeps,{afterSequence:'1',revision:null}),/SCOPE_INVALID/);
+await assert.rejects(()=>readSoccerCalibrationShadowReport('epl',pagedDeps,{afterSequence:'1',revision:'b'.repeat(64)}),e=>e.status===409);
+let revisionReads=0;
+await assert.rejects(()=>readSoccerCalibrationShadowReport('epl',{...pagedDeps,
+  readRevision:async()=>({captures:3,revision:++revisionReads===1?revision:'b'.repeat(64)})},
+  {afterSequence:'2',revision}),e=>e.status===409,'a late correction on the final page invalidates the entire paged view');
+console.log('PASS resumable calibration replay: one complete capture history per page, full-pass totals/quarantine equivalence, no isolated-page full-scan claim, revision fenced before and after each replay');

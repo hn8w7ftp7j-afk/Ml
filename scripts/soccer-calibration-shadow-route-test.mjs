@@ -14,7 +14,9 @@ const request = (method, { suffix = '', authenticated = true, requestOrigin = or
 assert.equal((await GET(request('GET', { suffix: '?league=epl', authenticated: false }))).status, 401);
 assert.equal((await POST(request('POST', { body: { league: 'epl', action: 'evaluate' }, authenticated: false }))).status, 401);
 assert.equal((await POST(request('POST', { body: { league: 'epl', action: 'evaluate' }, requestOrigin: 'https://attacker.invalid' }))).status, 403);
-for (const suffix of ['?league=nba', '?league=epl&league=ucl', '?league=epl&candidateHash=forged'])
+for (const suffix of ['?league=nba', '?league=epl&league=ucl', '?league=epl&candidateHash=forged',
+  '?league=epl&page=2','?league=epl&afterSequence=1','?league=epl&page=1&afterSequence=1',
+  '?league=epl&page=1&afterSequence=-1','?league=epl&page=1&revision=forged'])
   assert.equal((await GET(request('GET', { suffix }))).status, 400);
 assert.equal((await POST(request('POST', { body: { league: 'epl', action: 'evaluate', result: { home: 3, away: 0 } } }))).status, 400,
   'a signed-in caller still cannot supply a prediction, result, source URL or candidate approval');
