@@ -11,7 +11,7 @@ process.env.DATABASE_URL='postgres://fixture.invalid/calibration-stream';delete 
 const {analyzeSoccerGame}=await import('../lib/soccer/analysis-service.js');
 const {loadSoccerCalibrationShadowValidationEvidence}=await import('../lib/soccer/calibration-shadow-store.js');
 const {archiveSoccerCalibrationShadowEvaluation:archive,loadSoccerCalibrationShadowEvaluationHistory:whole,
-  readSoccerCalibrationShadowEvaluationHistoryPage:readPage,ensureSoccerCalibrationShadowEvaluationStore:ensure}=await import('../lib/soccer/calibration-shadow-evaluation-store.js');
+  readSoccerCalibrationShadowEvaluationHistoryPage:readPage,readSoccerCalibrationHistoryRevision:revision,ensureSoccerCalibrationShadowEvaluationStore:ensure}=await import('../lib/soccer/calibration-shadow-evaluation-store.js');
 const {readSoccerCalibrationShadowReport:report,evaluateSoccerCalibrationShadow:evaluate}=await import('../lib/soccer/calibration-shadow-validation.js');
 const f=soccerCalibrationShadowFixture(1),iso=value=>new Date(value).toISOString(),hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 try{
@@ -57,6 +57,13 @@ try{
   }while(true);
   assert.equal(count,9);assert.ok(pages>=9);
   const first=await report('epl');
+  const firstRevision=await revision('epl',context.freezeReceipt.freezeId);
+  assert.equal(firstRevision.captures,1);
+  const firstPage=await report('epl',{}, {afterSequence:'0',revision:null});
+  assert.equal(firstPage.validationPage.revision,firstRevision.revision);
+  assert.equal(firstPage.validationPage.reachedEnd,true);
+  assert.equal(firstPage.validationCoverage.completeWithinRequestedScope,true);
+  assert.equal((await revision('ucl',context.freezeReceipt.freezeId)).captures,0);
   assert.equal(first.untouchedValidatedGames,1,'stored PENDING flags do not replace full revalidation of original provider data');
   assert.equal(first.validationCoverage.completeWithinRequestedScope,true);assert.equal(first.validationCoverage.readResultCheckRows,9);
   assert.equal(first.validation.before.FT.games,1);assert.equal(first.validation.after.HT.games,1);
@@ -65,6 +72,8 @@ try{
   await archive({league:'epl',captureId,resultDocuments:documents(10,{homeScore:2}),status:'EVALUATED'});
   await archive({league:'epl',captureId,resultDocuments:documents(11),status:'EVALUATED'});
   const corrected=await report('epl');
+  assert.notEqual((await revision('epl',context.freezeReceipt.freezeId)).revision,firstRevision.revision);
+  await assert.rejects(()=>report('epl',{}, {afterSequence:'0',revision:firstRevision.revision}),e=>e.status===409);
   assert.equal(corrected.quarantinedGames,1);assert.equal(corrected.untouchedValidatedGames,0);
   assert.equal(corrected.validation.before.FT.games,0);assert.equal(corrected.validation.after.HT.games,0);
   assert.equal(corrected.validationCoverage.readResultCheckRows,11);assert.equal(corrected.accepted,false);

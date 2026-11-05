@@ -11,7 +11,7 @@ export async function evaluateSoccerCalibrationShadow(options) {
   const state = globalThis.__SOCCER_CALIBRATION_CRON_TEST;
   state.calls.push(options);
   if (options.league === state.failLeague) throw Error('controlled storage failure');
-  return { summary: { league: options.league, status: 'NO_PENDING_CAPTURES',
+  return { summary: { league: options.league, status: state.partialLeague === options.league ? 'PARTIAL_HISTORY_READ' : 'NO_PENDING_CAPTURES',
     persisted: true, checkedGames: 0, formalEligible: false, executable: false } };
 }
 export async function collectSoccerCalibrationPredictions(options) {
@@ -71,6 +71,13 @@ try {
   assert.equal(collectionBody.collection[0].status, 'STORAGE_UNAVAILABLE');
   assert.equal(collectionBody.collection[1].persisted, true);
   assert.deepEqual(state.calls.map(call => call.league), ['epl','ucl'], 'failed collection must not stop existing result checks');
+
+  state.failCollection=null;state.partialLeague='epl';state.calls=[];
+  const partial=await GET(request(process.env.CRON_SECRET)),partialBody=await partial.json();
+  assert.equal(partial.status,503,'a saved receipt with unfinished post-save replay is not a successful validation');
+  assert.equal(partialBody.ok,false);assert.equal(partialBody.summaries[0].persisted,true);
+  assert.equal(partialBody.summaries[0].status,'PARTIAL_HISTORY_READ');
+  assert.equal(partialBody.summaries[1].status,'NO_PENDING_CAPTURES');
 
   state.calls = [];
   process.env.CRON_SECRET = '';

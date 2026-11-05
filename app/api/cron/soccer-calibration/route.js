@@ -29,6 +29,8 @@ export async function GET(request) {
         accepted: false, formalEligible: false, executable: false });
     }
   }
-  const ok = [...summaries, ...collection].every(summary => summary.persisted === true && summary.status !== 'PARTIAL');
+  const ok = collection.every(summary => summary.persisted === true && summary.status !== 'PARTIAL')
+    && summaries.every(summary => summary.persisted === true
+      && ['NO_PENDING_CAPTURES', 'EVALUATED', 'PENDING'].includes(summary.status));
   return respond({ ok, summaries, collection, formalEligible: false, executable: false }, ok ? 200 : 503);
 }

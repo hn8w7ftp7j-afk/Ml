@@ -44,6 +44,51 @@ export function calibrationShadowReportValid(report, league) {
     && Number.isFinite(Date.parse(report.freeze.frozenAt));
 }
 
+// Display-only aggregation. Every page has already replayed all source history
+// for its capture. No aggregate is submitted as a model acceptance artifact.
+export function mergeCalibrationReportPage(previous, report, afterSequence) {
+  const page=report.validationPage, coverage=report.validationCoverage, value=report.validation;
+  const invalid=()=>{throw Error('校準分批核對範圍不一致，筆數未知。');};
+  if (!page || page.afterSequence!==afterSequence || !hash(page.revision)
+    || typeof page.complete!=='boolean' || typeof page.reachedEnd!=='boolean'
+    || (page.nextSequence!==null && !/^[1-9]\d{0,17}$/.test(page.nextSequence))
+    || page.reachedEnd !== (page.nextSequence===null) || page.reachedEnd && !page.complete
+    || page.complete && !page.reachedEnd && BigInt(page.nextSequence)<=BigInt(afterSequence)
+    || !coverage || !count(coverage.readResultCheckRows) || !count(report.quarantinedGames)
+    || !value || !count(value.untouchedVerifiedGames) || value.untouchedVerifiedGames!==report.untouchedValidatedGames
+    || report.quarantinedGames+report.untouchedValidatedGames>coverage.readCaptures
+    || !page.complete && coverage.readCaptures!==0) invalid();
+  if (previous ? previous.validationPage.revision!==page.revision || previous.validationPage.nextSequence!==afterSequence
+    || previous.league!==report.league || previous.captureGames!==report.captureGames
+    || JSON.stringify(previous.freeze)!==JSON.stringify(report.freeze)
+    : afterSequence!=='0') invalid();
+  const readCaptures=(previous?.validationCoverage.readCaptures||0)+coverage.readCaptures;
+  if (readCaptures>report.captureGames || page.reachedEnd && readCaptures!==report.captureGames) invalid();
+  const merged={...value,checkReasons:{...(previous?.validation.checkReasons||{})},before:{},after:{}};
+  for(const [key,n]of Object.entries(value.checkReasons||{})){
+    if(!count(n))invalid();merged.checkReasons[key]=(merged.checkReasons[key]||0)+n;
+  }
+  for(const arm of ['before','after'])for(const period of ['FT','HT']){
+    const left=previous?.validation[arm]?.[period],right=value[arm]?.[period];
+    if(!right || right.games!==report.untouchedValidatedGames)invalid();
+    const a=left?.games||0,b=right.games,games=a+b,metric={games};
+    for(const key of ['scoreLogLoss','logLoss','brier']){
+      const state=key==='brier'?null:`${key}State`,infinite=state&&[left?.[state],right[state]].includes('POSITIVE_INFINITY');
+      if(b && !(state&&right[state]==='POSITIVE_INFINITY') && !Number.isFinite(right[key]))invalid();
+      metric[key]=!games||infinite?null:((a?left[key]*a:0)+(b?right[key]*b:0))/games;
+      if(state)metric[state]=!games?'UNAVAILABLE':infinite?'POSITIVE_INFINITY':'FINITE';
+    }
+    merged[arm][period]=metric;
+  }
+  const verified=(previous?.untouchedValidatedGames||0)+report.untouchedValidatedGames;
+  const quarantined=(previous?.quarantinedGames||0)+report.quarantinedGames;
+  return {...report,untouchedValidatedGames:verified,fullTimeValidatedGames:verified,halfTimeValidatedGames:verified,
+    quarantinedGames:quarantined,pendingValidationGames:report.captureGames-verified-quarantined,
+    validationStatus:!page.reachedEnd?'PARTIAL_HISTORY_READ':quarantined?'CONFLICTS_QUARANTINED':verified?'PROSPECTIVE_OBSERVATIONS_AVAILABLE':report.captureGames?'PENDING_RESULTS':'AWAITING_PREGAME_CAPTURES',
+    validationCoverage:{...coverage,readCaptures,readResultCheckRows:(previous?.validationCoverage.readResultCheckRows||0)+coverage.readResultCheckRows,completeWithinRequestedScope:page.reachedEnd},
+    validation:{...merged,untouchedVerifiedGames:verified,quarantinedGames:quarantined,completeWithinRequestedScope:page.reachedEnd}};
+}
+
 export function SoccerCalibrationShadowPanel({ league }) {
   const supported = ['epl', 'ucl'].includes(league);
   const [collection, setCollection] = useState(null);
@@ -65,15 +110,31 @@ export function SoccerCalibrationShadowPanel({ league }) {
   useEffect(() => {
     if (!supported) return;
     let active = true;
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25000);
+    const controller = new AbortController(); let timer;
     setState({ league, loading: true, report: null, error: '' });
-    fetch(`/api/soccer/calibration-shadow?${new URLSearchParams({ league })}`, { cache: 'no-store', signal: controller.signal })
-      .then(async response => {
+    (async()=>{
+      let afterSequence='0',aggregate=null,restarts=0;
+      while(active){
+        timer=setTimeout(()=>controller.abort(),25000);
+        const params=new URLSearchParams({league,page:'1',afterSequence});
+        if(aggregate)params.set('revision',aggregate.validationPage.revision);
+        const response=await fetch(`/api/soccer/calibration-shadow?${params}`,{cache:'no-store',signal:controller.signal});
         const body = await response.json();
+        clearTimeout(timer);
+        if(!active)return;
+        if(response.status===409 && body.code==='CALIBRATION_HISTORY_CHANGED_DURING_READ' && restarts++<1){
+          afterSequence='0';aggregate=null;setState({league,loading:true,report:null,error:''});continue;
+        }
         if (!response.ok || body.ok !== true) throw Error(response.status === 401 ? '登入已過期，請重新登入。' : body.error || '校準預測保存狀態暫時無法讀取。');
         if (!calibrationShadowReportValid(body.report, league)) throw Error('校準預測保存狀態尚未通過核對，筆數未知。');
-        if (active) setState({ league, loading: false, report: body.report, error: '' });
-      }).catch(error => {
+        if(!body.report.validationPage){setState({league,loading:false,report:body.report,error:''});return;}
+        aggregate=mergeCalibrationReportPage(aggregate,body.report,afterSequence);
+        const continuing=body.report.validationPage.complete && !body.report.validationPage.reachedEnd;
+        setState({league,loading:continuing,report:aggregate,error:''});
+        if(!continuing)return;
+        afterSequence=body.report.validationPage.nextSequence;
+      }
+    })().catch(error => {
         if (active) setState({ league, loading: false, report: null, error: error.name === 'AbortError' ? '校準預測保存狀態讀取逾時，筆數未知。' : error.message });
       }).finally(() => clearTimeout(timer));
     return () => { active = false; clearTimeout(timer); controller.abort(); };
@@ -117,7 +178,7 @@ export function SoccerCalibrationShadowPanel({ league }) {
     <button type="button" className="secondary" disabled={!current || state.loading || evaluating} onClick={() => evaluate('collect')}>補存未開賽預測</button>{' '}
     <button type="button" className="secondary" disabled={!current || state.loading || evaluating || !report?.freeze} onClick={() => evaluate()}>{evaluating ? '處理中…' : '核對校準預測賽果'}</button>
     {collection?.league === league && <p role="status">本批新增 {collection.capturedGames} 場｜原已保存 {collection.alreadyCapturedGames} 場｜待接續 {collection.deferredGames} 場｜未成功 {collection.failedGames} 場。{collection.scheduleFailures > 0 ? '部分賽程讀取失敗，涵蓋範圍尚未完整。' : ''}</p>}
-    {(!current || state.loading) && <p role="status">正在讀取校準預測保存狀態…</p>}
+    {(!current || state.loading) && <p role="status">{report ? '正在接續核對下一批校準預測…' : '正在讀取校準預測保存狀態…'}</p>}
     {current && state.error && <p role="alert">{state.error}</p>}
     {report && <>
       {report.validationCoverage?.completeWithinRequestedScope === false && <p role="status">賽果核對尚未讀完，已讀 {report.validationCoverage.readCaptures}／{report.validationCoverage.totalCaptures} 場；核對筆數僅代表已讀範圍。</p>}
