@@ -84,6 +84,24 @@ try {
   assert.equal(cli.accepted,false);assert.equal(cli.formalEligible,false);assert.equal(cliCalls,1);
   await assert.rejects(()=>soccerReturnErrorValidationCommand(['evaluate','--protocol-id',receipt.protocolId,'--from',input.from],{run:async()=>{cliCalls++;}}),/COMMAND_INVALID/);
   assert.equal(cliCalls,1,'evaluation cannot narrow a preregistered scope after results are seen');
+  // PostgreSQL may issue a freeze at an exact millisecond. Two events with the
+  // same represented time have no provable ordering, so equality is not a
+  // pre-prediction freeze. Insert a separate synthetic fixture receipt at an
+  // exact DB millisecond to exercise this rare boundary deterministically.
+  const boundaryGroup=hash('synthetic-equal-time-group');
+  const boundaryParameters={...freeze.parameters,groupHash:boundaryGroup};
+  const boundaryParameterHash=hash(boundaryParameters);
+  const boundaryId=hash([store.SOCCER_RETURN_ERROR_VALIDATION_VERSION,receipt.protocolId,boundaryGroup,boundaryParameterHash]);
+  const at=iso(Math.max(calibrationBefore,Math.floor((await store.soccerReturnErrorDatabaseNow())/1000)*1000));
+  await db.query(`INSERT INTO sports_soccer_return_error_freezes_v1
+    (freeze_id,protocol_id,group_hash,parameter_hash,parameters,source_artifact_hash,frozen_at)
+    VALUES($1,$2,$3,$4,$5::jsonb,$6,$7::timestamptz)`,
+    [boundaryId,receipt.protocolId,boundaryGroup,boundaryParameterHash,JSON.stringify(boundaryParameters),fitted.contentHash,at]);
+  const boundaryAuthority=await store.loadSoccerReturnErrorFreezeVerifier(receipt.protocolId);
+  const checkBoundary=before=>boundaryAuthority.verifyFrozenModelReceipt({parameterHash:boundaryParameterHash,
+    protocolHash:receipt.protocolHash,calibrationBefore:protocol.calibrationBefore,before});
+  assert.equal(checkBoundary(at),false,'equal freeze and prediction times do not establish prior ordering');
+  assert.equal(checkBoundary(iso(Date.parse(at)+1)),true,'a strictly later prediction remains eligible');
   console.log('PASS prospective return-error receipts: actual PostgreSQL clock and JSONB, no backdating, immutable plan/parameters, exact microsecond pretest checks, fixed scope replay, unsupported/retuned/test-bearing freeze rejection, shipped fitter receives genuine receipt verifier; no model acceptance or formal R');
 } finally {
   if(old===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=old;

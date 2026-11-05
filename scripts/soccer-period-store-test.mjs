@@ -135,6 +135,57 @@ try {
   const migratedRead = await load('epl', old.boardDate);
   assert.ok(find(migratedRead, 'FT'));
   assert.equal(find(migratedRead, 'UNKNOWN').serverObservation.observationId, oldId, 'adoption of new typed scope preserves previous untyped source as UNKNOWN');
+
+  // A source clock ahead of the historical decision cutoff cannot hide an older
+  // valid observation or lend its earlier receipt to a same-content heartbeat.
+  // These are actual immutable rows with independent DB persistence timestamps.
+  const skewDate = '2026-10-25';
+  const scoped = (seconds, line, league = 'EPL') => {
+    const item = capture(['FT'], seconds, { FT: line });
+    item.league = league; item.boardDate = skewDate;
+    item.games[0].league = league; item.games[0].boardDate = skewDate;
+    item.contentHash = soccerReaderHash(canonicalSoccerPayload(item));
+    return item;
+  };
+  const validFT = await save(scoped(0, '2.5'));
+  const validHTPayload = capture(['HT'], 0, { HT: '1' });
+  validHTPayload.boardDate = skewDate; validHTPayload.games[0].boardDate = skewDate;
+  validHTPayload.contentHash = soccerReaderHash(canonicalSoccerPayload(validHTPayload));
+  const validHT = await save(validHTPayload);
+  const foreignFT = await save(scoped(110, '8', 'UCL'));
+  const futureFT = await save(scoped(7200, '5'));
+  const afterSkew = await cutoff();
+  const historical = await load('epl', skewDate, { asOf: afterSkew });
+  assert.equal(find(historical, 'FT').serverObservation.observationId, validFT.observationId,
+    'future source time must not displace an eligible older same-period receipt');
+  assert.equal(find(historical, 'FT').line, '2.5');
+  assert.equal(find(historical, 'FT').serverObservation.observedAt, ftPayload.observedAt,
+    'the selected source timestamp remains unchanged');
+  assert.equal(find(historical, 'HT').serverObservation.observationId, validHT.observationId,
+    'future FT source time does not change a separate period');
+  assert.equal(find(await load('ucl', skewDate, { asOf: afterSkew }), 'FT').serverObservation.observationId, foreignFT.observationId,
+    'historical selection remains isolated by league');
+  assert.equal(find(await load('epl', skewDate), 'FT').serverObservation.observationId, futureFT.observationId,
+    'a read without cutoff retains current-head semantics');
+
+  const receiptDate = '2026-10-26';
+  const samePrice = (seconds) => {
+    const item = capture(['FT'], seconds, { FT: '3.5' });
+    item.boardDate = receiptDate; item.games[0].boardDate = receiptDate;
+    item.contentHash = soccerReaderHash(canonicalSoccerPayload(item));
+    return item;
+  };
+  const skewReceipt = await save(samePrice(7200), { receivedAt: at(-30) });
+  assert.equal(await load('epl', receiptDate, { asOf: await cutoff() }), null,
+    'a future-only period is unavailable at the historical cutoff');
+  const normalReceipt = await save(samePrice(0), { receivedAt: at(-20) });
+  const receiptCutoff = await cutoff();
+  const receiptHistorical = find(await load('epl', receiptDate, { asOf: receiptCutoff }), 'FT').serverObservation;
+  assert.equal(receiptHistorical.observationId, normalReceipt.observationId);
+  assert.equal(receiptHistorical.firstFetchedAt, normalReceipt.receivedAt,
+    'historical first receipt excludes same-content rows with a future source clock');
+  assert.equal(find(await load('epl', receiptDate), 'FT').serverObservation.firstFetchedAt, skewReceipt.receivedAt,
+    'current reads preserve their original first-receipt semantics');
   console.log('PASS actual PostgreSQL period store: FT/HT independent replacement, closed/empty tombstones, stale scope rejection, as-of reconstruction, per-quote provenance/first receipt, heartbeat dedup, UNKNOWN legacy and global generation fencing');
 } finally {
   for (const [key, value] of Object.entries(before)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
