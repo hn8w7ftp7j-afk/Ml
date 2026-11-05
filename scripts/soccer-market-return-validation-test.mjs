@@ -86,6 +86,13 @@ for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
     assert.equal(row.formalEligible, false);
   }
   assert.equal(JSON.stringify(oldCapture), original);
+  const earlier = run(oldCapture);
+  for (const checks of [[earlier, historical], [historical, earlier]]) {
+    const summary = summarizeSoccerMarketReturnObservations(checks);
+    assert.equal(summary.pendingReasons.SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED, 2);
+    assert.equal(summary.pendingReasons.SOCCER_SOURCE_CONTRACT_UNVERIFIED, undefined);
+    assert.equal(summary.quoteObservations, 2);
+  }
   const missingProvider = run(oldCapture, { now: confirmedNow, resolveContract: () => null });
   assert.ok(missingProvider.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'));
 }
