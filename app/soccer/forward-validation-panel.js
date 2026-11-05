@@ -24,6 +24,7 @@ const reasonNames={
   RESULT_NORMAL_FINAL_UNCONFIRMED:'尚未確認正常完賽',RESULT_PERIOD_SCORE_UNVERIFIED:'缺少可核對的期間比分',RESULT_ENDPOINTS_DISAGREE:'兩個賽果端點不一致',
   RESULT_SCOREBOARD_CROSSCHECK_UNAVAILABLE:'賽程端點無法交叉核對',RESULT_EXTRA_PERIODS_REQUIRE_REVIEW:'涉及加時或其他額外期間',
   SOCCER_SOURCE_CONTRACT_UNVERIFIED:'系統尚未完成原盤適用派彩規則的綁定與正式登錄',
+  SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED:'舊盤早於帳戶規則確認時間，當時適用範圍尚無核對依據',
   MARKET_RETURN_NOT_CHECKED:'尚未核對原盤收益',NO_ORIGINAL_QUOTES:'此封存版本沒有可核對的原盤',
   MARKET_RETURN_ORIGINAL_QUOTES_UNAVAILABLE:'此封存版本未保存原盤明細',
   MARKET_RETURN_RESULT_HISTORY_INCOMPLETE:'賽果核對歷程未完整讀取',
@@ -110,6 +111,7 @@ function ForwardReport({report,league,summary}){
       <ReasonList reasons={errorResearch.excludedReasons} label="誤差研究待補與排除原因"/>
     </section>}
     {returns?.pendingReasons?.SOCCER_SOURCE_CONTRACT_UNVERIFIED>0&&<p className="soccerAvailability">下一步：系統須完成原盤、期間與派彩規則版本的綁定及正式登錄。已確認的信用盤算法與 1% 實際輸贏本金退水不需重報；異常賽事保留人工核對。</p>}
+    {returns?.pendingReasons?.SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED>0&&<p className="soccerAvailability">信用盤算法、全場／半場及 1% 比例退水已有帳戶確認。這批原盤保存於確認紀錄之前，目前缺少當時適用同一套規則的依據。上方「已確認算法收益重播」保留按現行規則計算的結果，收益驗證另保留歷史適用範圍的核對狀態。</p>}
     {returns?.pendingReasons?.MARKET_RETURN_PREDICTED_PAYOFF_UNRESOLVED>0&&<p className="soccerAvailability">下一步由系統完成收益區間與誤差樣本的計算；反覆同步 Reader 不會排除此項。</p>}
     {summary&&<p role="status">本次核對 {count(summary.checkedGameModelPeriods)} 筆｜完成評估 {count(summary.evaluated)} 筆｜待核對 {count(summary.pending)} 筆｜尚待處理 {count(summary.deferred)} 筆。</p>}
     {report.scan&&<p role="status">已處理 {count(report.scan.processedGames)}／{count(report.scan.totalGames)} 場；{report.scan.complete?(report.complete===true?'本次範圍已掃描完成':'批次已結束，但本次資料仍不完整'):'尚有後續批次；系統會自動接續，暫停後可按「繼續處理下一批」恢復'}。以上筆數為累計結果，各批次不重複加總。</p>}
