@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { soccerMinutesAudit,compareSoccerPersonnel } from '../lib/soccer/personnel-audit.js';
+import { soccerMinutesAudit,soccerMinutesAuditV2 } from '../lib/soccer/personnel-audit-safe.js';
+import { compareSoccerPersonnel,soccerMinutesAudit as frozenV1,soccerMinutesAuditV2 as frozenV2 } from '../lib/soccer/personnel-audit.js';
 import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 const read=name=>JSON.parse(fs.readFileSync(`scripts/fixtures/soccer/${name}.json`));
@@ -17,6 +18,46 @@ const swapped=structuredClone(p);for(const e of swapped.keyEvents)if(e.type.type
 const missing=structuredClone(p);missing.keyEvents=missing.keyEvents.filter(e=>e.type.type!=='substitution');assert.equal(soccerMinutesAudit(missing,g).reason,'ROSTER_EVENT_COVERAGE_INCOMPLETE');
 const bad=structuredClone(p);bad.keyEvents[0].participants[0].athlete.id='9999999';assert.equal(soccerMinutesAudit(bad,g).reason,'EVENT_PLAYER_IDENTITY_INVALID');
 const conflict=structuredClone(p);conflict.keyEvents.push({...conflict.keyEvents[0],text:'different revision'});assert.equal(soccerMinutesAudit(conflict,g).reason,'EVENT_REVISION_CONFLICT');
+// Runtime guard is outside the frozen extractor. Valid source output is unchanged;
+// malformed provider arrays fail closed without fabricating empty inputs.
+assert.deepEqual(soccerMinutesAudit(p,g),frozenV1(p,g));
+assert.deepEqual(soccerMinutesAuditV2(p,g),frozenV2(p,g));
+for(const [mutate,reason] of [
+  [value=>{value.rosters[0].roster[0]=null;},'ROSTER_PLAYERS_SCHEMA_UNVERIFIED'],
+  [value=>{value.rosters[0].roster[0].stats={};},'ROSTER_STATS_SCHEMA_UNVERIFIED'],
+  [value=>{value.rosters[0].roster[0].stats=[null];},'ROSTER_STATS_SCHEMA_UNVERIFIED'],
+  [value=>{value.keyEvents.find(event=>event.type.type==='substitution').participants={};},'EVENT_PARTICIPANTS_SCHEMA_UNVERIFIED'],
+  [value=>{value.keyEvents.find(event=>event.type.type==='substitution').participants=[null];},'EVENT_PARTICIPANTS_SCHEMA_UNVERIFIED'],
+  [value=>{value.keyEvents.find(event=>event.type.type==='substitution').participants=null;},'EVENT_PARTICIPANTS_NOT_PROVIDED'],
+]){
+  const malformed=structuredClone(p);mutate(malformed);
+  if(reason==='EVENT_PARTICIPANTS_SCHEMA_UNVERIFIED'||reason==='EVENT_PARTICIPANTS_NOT_PROVIDED'||reason==='ROSTER_STATS_SCHEMA_UNVERIFIED'){
+    const evidence=normalizeSoccerPrematch(malformed,g,{},Date.parse(g.startTime)+86400000);
+    assert.equal(evidence.ok,true);assert.equal(evidence.minutesAudit.reason,reason);
+  }
+  for(const auditFn of [soccerMinutesAudit,soccerMinutesAuditV2]){
+    const result=auditFn(malformed,g);assert.equal(result.status,'UNVERIFIED');assert.equal(result.reason,reason);
+    assert.equal(result.teamPlayerMinutes,null);
+  }
+}
+const otherMalformed=structuredClone(p);
+otherMalformed.keyEvents.find(event=>event.type.type==='substitution'&&event.team.id===g.home.sourceId).participants={};
+assert.equal(soccerMinutesAuditV2(otherMalformed,g,{teamSide:'away'}).status,'REGULATION_CLOCK_RECONSTRUCTED');
+const nullEvent=structuredClone(p);nullEvent.keyEvents=[null];
+for(const auditFn of [soccerMinutesAudit,soccerMinutesAuditV2]){
+  const invalid=auditFn(nullEvent,g);assert.equal(invalid.status,'UNVERIFIED');assert.equal(invalid.reason,'EVENT_TIMELINE_SCHEMA_UNVERIFIED');
+  for(const [rosterValue,reason] of [[null,'ROSTER_PLAYERS_NOT_PROVIDED'],[{},'ROSTER_PLAYERS_SCHEMA_UNVERIFIED']]){
+    const invalidRoster=structuredClone(p);invalidRoster.rosters[0].roster=rosterValue;
+    assert.equal(auditFn(invalidRoster,g).reason,reason);
+  }
+}
+assert.equal(normalizeSoccerPrematch(nullEvent,g,{},Date.parse(g.startTime)+86400000).minutesAudit.reason,'EVENT_TIMELINE_SCHEMA_UNVERIFIED');
+for(const [rosterValue,reason] of [[null,'ROSTER_PLAYERS_NOT_PROVIDED'],[{},'ROSTER_PLAYERS_SCHEMA_UNVERIFIED']]){
+  const invalidRoster=structuredClone(p);invalidRoster.rosters[0].roster=rosterValue;
+  const normalized=normalizeSoccerPrematch(invalidRoster,g,{},Date.parse(g.startTime)+86400000);
+  assert.equal(normalized.ok,true);assert.equal(normalized.teams.home.lineup.status,'UNKNOWN');
+  assert.equal(normalized.teams.home.lineup.reason,reason);assert.equal(normalized.minutesAudit.reason,reason);
+}
 const noEnd=structuredClone(p);noEnd.keyEvents=noEnd.keyEvents.filter(e=>e.type.type!=='end-regular-time');assert.equal(soccerMinutesAudit(noEnd,g).reason,'REGULATION_END_MISSING');
 assert.equal(soccerMinutesAudit(noEnd,g,{teamSide:'away'}).reason,'REGULATION_END_MISSING','team-scoped audits retain global timeline guards');
 const dismissed=structuredClone(p),keeper=dismissed.rosters[0].roster.find(p=>p.starter&&p.position?.abbreviation==='G');keeper.stats=[{name:'redCards',value:1}];dismissed.keyEvents.push({id:'99990001',team:{id:g.home.sourceId},type:{type:'red-card'},period:{number:2},clock:{value:3000,displayValue:"50'"},participants:[{athlete:{id:keeper.athlete.id}}]});assert.equal(soccerMinutesAudit(dismissed,g).teams.home.teamPlayerMinutes,950);
