@@ -11,6 +11,7 @@ assert.equal(report.dateCoverage,'PARTIAL_SINGLE_GAME');assert.equal(report.sele
 assert.equal(report.scope.gameId,scope.gameId);assert.equal(report.identityScope,'FULL_DATE_OFFICIAL_SCHEDULE_NOT_VERIFIED');
 assert.equal(report.crossRequestConsistency,'NOT_VERIFIED_SEPARATE_DATABASE_STATEMENTS');
 assert.equal(report.validForecastCount,1);assert.equal(report.readerObservationCount,1);assert.equal(joined,0,'never invoke pair matcher without full-date official identity evidence');
+assert.equal(report.forecastCoverage,'COMPLETE_SINGLE_GAME_CURRENT_PROTOCOL_STATEMENT');
 assert.doesNotMatch(JSON.stringify(report),/RAW_CAPTURE_MUST_NOT_LEAVE/);
 for(const gameId of ['soccer:epl:123','soccer:ucl:abc','soccer:ucl:','soccer:ucl:123/other','soccer:ucl:123&x=1'])
   await assert.rejects(()=>read({...scope,gameId},deps),error=>error.status===400);
@@ -28,5 +29,8 @@ const fullDay=await read({league:scope.league,date:scope.date},{...deps,load:asy
 assert.equal(fullDay.status,'PARTIAL');assert.equal(fullDay.selectedPairCount,null);assert.deepEqual(fullDay.pairs,[]);
 assert.ok(fullDay.reasonCodes.includes('FULL_DATE_OFFICIAL_IDENTITY_NOT_VERIFIED'));assert.equal(joined,0);
 const boundedDay=await read({league:scope.league,date:scope.date},{...deps,load:async()=>({truncated:true,readCoverage:{loadedCaptureRows:42,reasons:['CAPTURE_ROW_BUDGET']}})});
-assert.equal(boundedDay.loadedForecastCount,42);assert.equal(boundedDay.forecastCountScope,'BOUNDED_PREFIX_ONLY');assert.equal(boundedDay.selectedPairCount,null);
+assert.equal(boundedDay.loadedForecastCount,42);assert.equal(boundedDay.forecastCountScope,'LOADED_ROWS_NOT_PROVEN_COMPLETE');assert.equal(boundedDay.selectedPairCount,null);
+const checksBounded=await read({league:scope.league,date:scope.date},{...deps,load:async()=>({truncated:true,readCoverage:{loadedCaptureRows:42,reasons:['RESULT_CHECK_ROW_BUDGET']}})});
+assert.ok(checksBounded.excludedReasons.EVIDENCE_INPUT_INCOMPLETE);assert.equal(checksBounded.excludedReasons.FORECAST_INPUT_INCOMPLETE,undefined);
+assert.ok(checksBounded.reasonCodes.includes('RESULT_CHECK_ROW_BUDGET'));
 console.log('PASS game-scoped retrospective service: explicit scope, safe partial result, time-isolation label, input guards and unchanged day path');

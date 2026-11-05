@@ -61,5 +61,14 @@ try {
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[corrupt.captureId,protocol.version,corrupt.league,corrupt.gameId,corrupt.date,corrupt.period,corrupt.variant,corrupt.modelHash,corrupt.revision,iso(captured)]);
   const corrupted=await load('epl',corrupt.date,corrupt.gameId);
   assert.equal(corrupted.status,'PARTIAL');assert.deepEqual(corrupted.captures,[]);assert.deepEqual(corrupted.reasonCodes,['FORECAST_ORIGINAL_ANALYSIS_CORRUPTED']);
+  // A row-overflow read must not fetch or serialize even a single original.
+  // The deliberately throwing view proves whether payload was evaluated.
+  await db.query(`CREATE FUNCTION fixture_forbid_payload(jsonb) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'FIXTURE_PAYLOAD_READ'; END $$`);
+  await db.query(`ALTER TABLE sports_soccer_analysis_v1 RENAME TO fixture_real_soccer_analysis_v1`);
+  await db.query(`CREATE VIEW sports_soccer_analysis_v1 AS SELECT league,game_id,analysis_hash,observed_at,fixture_forbid_payload(payload) AS payload FROM fixture_real_soccer_analysis_v1`);
+  const noPayload=await load('epl',a.date,a.gameId,{maxRows:1});
+  assert.equal(noPayload.status,'PARTIAL');assert.ok(noPayload.reasonCodes.includes('FORECAST_ROW_BUDGET'));
+  assert.equal(noPayload.byteCountScope,'METADATA_ONLY_ROW_OVERFLOW');
+  await assert.rejects(()=>load('epl',a.date,a.gameId,{maxRows:2}),/FIXTURE_PAYLOAD_READ/);
   console.log('PASS single-game forecast read: one MVCC statement, exact scope, full immutable snapshots, microseconds, row/byte boundaries, missing/corrupt originals fail closed');
 } finally {for(const [key,value] of Object.entries(before)){if(value===undefined)delete process.env[key];else process.env[key]=value;}await fixture.close();}

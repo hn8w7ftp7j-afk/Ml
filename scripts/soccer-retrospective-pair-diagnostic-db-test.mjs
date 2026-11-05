@@ -150,7 +150,7 @@ try {
   const fullDayBlocked=await run(['--league','epl','--date',c.date],{now:after});
   assert.equal(fullDayBlocked.status,'PARTIAL');assert.ok(fullDayBlocked.reasonCodes.includes('CAPTURE_ROW_BUDGET'));
   const stillOneGame=await run(['--league','epl','--date',c.date,'--game-id',c.gameId],{now:after});
-  assert.equal(stillOneGame.forecastCoverage,'COMPLETE_SINGLE_GAME_STATEMENT');assert.equal(stillOneGame.status,'PARTIAL');
+  assert.equal(stillOneGame.forecastCoverage,'COMPLETE_SINGLE_GAME_CURRENT_PROTOCOL_STATEMENT');assert.equal(stillOneGame.status,'PARTIAL');
   assert.ok(stillOneGame.reasonCodes.includes('FULL_DATE_OFFICIAL_IDENTITY_NOT_VERIFIED'),'only this game is inspected despite the whole-day row budget');
   console.log('PASS read-only CLI through PostgreSQL forecast and original Reader receipts; no writes, strict scope, partial and formal-R exclusions');
 } finally {for(const [key,value] of Object.entries(before)){if(value===undefined)delete process.env[key];else process.env[key]=value;}await fixture.close();}
