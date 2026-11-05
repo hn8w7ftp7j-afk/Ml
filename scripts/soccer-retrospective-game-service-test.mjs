@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { readSoccerRetrospectivePairDiagnostic as read } from '../lib/soccer/retrospective-pair-service.js';
+const scope={league:'ucl',date:'2026-11-04',gameId:'soccer:ucl:123'};
+let joined=0;
+const deps={loadGame:async(league,date,gameId)=>{assert.deepEqual({league,date,gameId},scope);return {status:'COMPLETE',captures:[{secret:'RAW_CAPTURE_MUST_NOT_LEAVE'}]};},
+  readProtocol:async()=>({test:'protocol'}),validateForecast:()=>({ok:true}),readReader:async()=>({status:'COMPLETE',rows:[{}],observedCount:1}),diagnose:async value=>{joined++;assert.equal(value.captures[0].secret,'RAW_CAPTURE_MUST_NOT_LEAVE');
+    return {status:'RESEARCH_DIAGNOSTIC_AVAILABLE',selectedPairCount:2,uniqueGames:1,pairs:[{gameId:scope.gameId}],formalEligible:false,calibrationEligible:false,promotionEligible:false,executable:false,OOS:false,W:null,R:null,S:null};}};
+const report=await read(scope,deps);
+assert.equal(report.status,'PARTIAL');assert.equal(report.gameDiagnosticStatus,'IDENTITY_UNVERIFIED');
+assert.equal(report.dateCoverage,'PARTIAL_SINGLE_GAME');assert.equal(report.selectedPairCount,null);assert.deepEqual(report.pairs,[]);
+assert.equal(report.scope.gameId,scope.gameId);assert.equal(report.identityScope,'FULL_DATE_OFFICIAL_SCHEDULE_NOT_VERIFIED');
+assert.equal(report.crossRequestConsistency,'NOT_VERIFIED_SEPARATE_DATABASE_STATEMENTS');
+assert.equal(report.validForecastCount,1);assert.equal(report.readerObservationCount,1);assert.equal(joined,0,'never invoke pair matcher without full-date official identity evidence');
+assert.doesNotMatch(JSON.stringify(report),/RAW_CAPTURE_MUST_NOT_LEAVE/);
+for(const gameId of ['soccer:epl:123','soccer:ucl:abc','soccer:ucl:','soccer:ucl:123/other','soccer:ucl:123&x=1'])
+  await assert.rejects(()=>read({...scope,gameId},deps),error=>error.status===400);
+const partial=await read(scope,{...deps,loadGame:async()=>({status:'PARTIAL',captures:[],reasonCodes:['GAME_FORECAST_BYTE_BUDGET'],observedCount:501})});
+assert.equal(partial.status,'PARTIAL');assert.equal(partial.selectedPairCount,null);assert.ok(partial.reasonCodes.includes('GAME_FORECAST_BYTE_BUDGET'));assert.equal(joined,0);
+assert.equal(partial.observedForecastCount,501);assert.equal(partial.forecastCountScope,'BOUNDED_PREFIX_ONLY');
+const readerPartial=await read(scope,{...deps,readReader:async()=>({status:'PARTIAL',rows:[],reasonCodes:['READER_RECEIPT_BYTE_BUDGET']})});
+assert.equal(readerPartial.status,'PARTIAL');assert.equal(readerPartial.gameDiagnosticStatus,'IDENTITY_UNVERIFIED');
+assert.ok(readerPartial.reasonCodes.includes('READER_RECEIPT_BYTE_BUDGET'),'oversized original Reader history remains explicit and fails closed');
+const readerUnavailable=await read(scope,{...deps,readReader:async()=>{throw Error('sensitive database failure');}});
+assert.equal(readerUnavailable.readerCoverage,'UNAVAILABLE');assert.equal(readerUnavailable.readerObservationCount,null);
+assert.equal(readerUnavailable.validForecastCount,1);assert.ok(readerUnavailable.reasonCodes.includes('READER_RECEIPTS_UNAVAILABLE'));
+assert.doesNotMatch(JSON.stringify(readerUnavailable),/sensitive database failure/);
+const fullDay=await read({league:scope.league,date:scope.date},{...deps,load:async()=>({truncated:false,protocol:{},captures:[]})});
+assert.equal(fullDay.status,'PARTIAL');assert.equal(fullDay.selectedPairCount,null);assert.deepEqual(fullDay.pairs,[]);
+assert.ok(fullDay.reasonCodes.includes('FULL_DATE_OFFICIAL_IDENTITY_NOT_VERIFIED'));assert.equal(joined,0);
+const boundedDay=await read({league:scope.league,date:scope.date},{...deps,load:async()=>({truncated:true,readCoverage:{loadedCaptureRows:42,reasons:['CAPTURE_ROW_BUDGET']}})});
+assert.equal(boundedDay.loadedForecastCount,42);assert.equal(boundedDay.forecastCountScope,'BOUNDED_PREFIX_ONLY');assert.equal(boundedDay.selectedPairCount,null);
+console.log('PASS game-scoped retrospective service: explicit scope, safe partial result, time-isolation label, input guards and unchanged day path');
