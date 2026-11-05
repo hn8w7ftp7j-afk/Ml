@@ -114,6 +114,7 @@ function ForwardReport({report,league,summary}){
     {returns?.pendingReasons?.SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED>0&&<p className="soccerAvailability">信用盤算法、全場／半場及 1% 比例退水已有帳戶確認。這批原盤保存於確認紀錄之前，目前缺少當時適用同一套規則的依據。上方「已確認算法收益重播」保留按現行規則計算的結果，收益驗證另保留歷史適用範圍的核對狀態。</p>}
     {returns?.pendingReasons?.MARKET_RETURN_PREDICTED_PAYOFF_UNRESOLVED>0&&<p className="soccerAvailability">下一步由系統完成收益區間與誤差樣本的計算；反覆同步 Reader 不會排除此項。</p>}
     {summary&&<p role="status">本次核對 {count(summary.checkedGameModelPeriods)} 筆｜完成評估 {count(summary.evaluated)} 筆｜待核對 {count(summary.pending)} 筆｜尚待處理 {count(summary.deferred)} 筆。</p>}
+    {validCount(summary?.marketReturnCheckedPredictionPeriods)&&summary.marketReturnCheckedPredictionPeriods>0&&<p role="status">本次另核對原盤收益 {count(summary.marketReturnCheckedPredictionPeriods)} 個預測版本／期間。原盤筆數與結果見上方收益驗證。</p>}
     {report.scan&&<p role="status">已處理 {count(report.scan.processedGames)}／{count(report.scan.totalGames)} 場；{report.scan.complete?(report.complete===true?'本次範圍已掃描完成':'批次已結束，但本次資料仍不完整'):'尚有後續批次；系統會自動接續，暫停後可按「繼續處理下一批」恢復'}。以上筆數為累計結果，各批次不重複加總。</p>}
     {(report.truncated===true||report.complete===false)&&<p className="soccerAnalysisWarning" role="status">{report.scan?.nextCursor?'本次範圍尚未處理完整，累計數字不能當成完整驗收。':'本次讀取有截斷，只能查看已載入範圍，不能當成完整驗收結果；請用上方日期範圍縮小查詢。'}</p>}
     <ReasonList reasons={report.excludedReasons} label={`整體排除原因（${count(report.excludedSnapshotPeriods)} 筆）`}/>

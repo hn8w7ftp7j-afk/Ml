@@ -137,6 +137,11 @@ assert.match(historicalUi.markup, /信用盤算法、全場／半場及 1% 比�
 assert.match(historicalUi.markup, /已核對收益 0 筆/);
 assert.doesNotMatch(historicalUi.markup, /系統須完成原盤、期間與派彩規則版本的綁定及正式登錄/);
 historicalUi.unmount();
+const marketOnlyMarkup = renderReport(returnsReport, 'epl', {
+  checkedGameModelPeriods: 0, evaluated: 0, pending: 0, deferred: 0,
+  marketReturnCheckedPredictionPeriods: 3,
+});
+assert.match(marketOnlyMarkup, /本次另核對原盤收益 3 個預測版本／期間/);
 const forgedReturns=harness();forgedReturns.render();forgedReturns.calls[0].respond({ok:true,report:{...returnsReport,
  marketReturnValidation:{...returnsReport.marketReturnValidation,R:.01}}});await forgedReturns.settle();
 assert.match(forgedReturns.markup,/聯盟或範圍不符/);assert.doesNotMatch(forgedReturns.markup,/保存原盤 12 筆/);forgedReturns.unmount();

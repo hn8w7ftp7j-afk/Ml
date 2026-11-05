@@ -277,6 +277,40 @@ await runSoccerForwardValidation({ league: sourceBound.league, date: sourceBound
 assert.deepEqual(transitionArchives.map(row => row.saved.captureId), [sourceBound.captureId]);
 assert.equal(transitionArchives[0].evaluation.marketReturnValidation.observedQuoteReturns, 2);
 
+const legacyEvaluation = structuredClone(transitionChecks[1]);
+delete legacyEvaluation.marketReturnValidation.diagnosticVersion;
+const { checkedAt: legacyCheckedAt, evidenceHash: legacyHash, ...legacyBody } = legacyEvaluation.marketReturnValidation;
+legacyEvaluation.marketReturnValidation.evidenceHash = sha({ ...legacyBody,
+  observations: legacyBody.observations.map(({ checkedAt, ...row }) => row) });
+const legacyEvidence = { ...transitionEvidence, captures: [sourceBound], evaluations: [legacyEvaluation],
+  checks: [{ ...transitionEvidence.checks[1], checkedAt: iso(transitionNow) }] };
+const upgradedChecks = [];
+await runSoccerForwardValidation({ league: sourceBound.league, date: sourceBound.date }, {
+  now: () => transitionNow, query: async () => [], loadEvidence: async () => legacyEvidence,
+  fetchResult: async () => transitionResult,
+  archive: async (_saved, evaluation) => { upgradedChecks.push(evaluation); },
+});
+assert.equal(upgradedChecks.length, 1, 'recent legacy return checks must pass through the normal recheck entry');
+assert.equal(upgradedChecks[0].marketReturnValidation.diagnosticVersion, 'SOCCER-RETURN-DIAGNOSTICS-v2');
+let repeatedUpgrade = 0;
+await runSoccerForwardValidation({ league: sourceBound.league, date: sourceBound.date }, {
+  now: () => transitionNow, query: async () => [],
+  loadEvidence: async () => ({ ...legacyEvidence, evaluations: upgradedChecks }),
+  fetchResult: async () => { repeatedUpgrade++; return transitionResult; },
+  archive: async () => { throw Error('current return check unexpectedly repeated'); },
+});
+assert.equal(repeatedUpgrade, 0, 'a current check respects the existing bounded recheck interval');
+const failedCurrent = { ...legacyEvaluation, status: 'PENDING',
+  marketReturnValidation: evaluateSoccerMarketReturnCapture({ capture: sourceBound, protocol,
+    result: { ok: false, reason: 'FORWARD_RESULT_SOURCE_UNAVAILABLE' }, now: transitionNow }) };
+let recoveryFetches = 0;
+await runSoccerForwardValidation({ league: sourceBound.league, date: sourceBound.date }, {
+  now: () => transitionNow, query: async () => [],
+  loadEvidence: async () => ({ ...legacyEvidence, evaluations: [legacyEvaluation, failedCurrent] }),
+  fetchResult: async () => { recoveryFetches++; return transitionResult; }, archive: async () => {},
+});
+assert.equal(recoveryFetches, 1, 'a failed current-version result fetch cannot suppress the legacy upgrade retry');
+
 // A finite generated Poisson rectangle has a nonzero unresolved handicap tail.
 // Keep verified realized returns and rigorous error intervals rather than losing
 // the entire observation or pretending that an interval midpoint is exact EV.
