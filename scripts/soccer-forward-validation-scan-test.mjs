@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
 import { fixtureCapture, resultFor } from './helpers/soccer-forward-fixture.mjs';
 import { soccerDate } from '../lib/soccer/contracts.js';
+import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
+import { evaluateSoccerMarketReturnCapture, SOCCER_MARKET_RETURN_DIAGNOSTIC_VERSION } from '../lib/soccer/market-return-validation.js';
 import { soccerForwardHash, soccerForwardAnalysisRevision, soccerForwardModelDescriptor, compactSoccerForwardCapture, validateSoccerForwardCapture, evaluateSoccerForwardCapture } from '../lib/soccer/forward-validation.js';
 const fixture=await soccerSqlFixture(),{db}=fixture;
 const oldDb=process.env.DATABASE_URL,oldDbV2=process.env.DATABASE_V2_URL;process.env.DATABASE_URL='postgres://fixture.invalid/scan';delete process.env.DATABASE_V2_URL;
@@ -97,5 +99,57 @@ try{
  const timedOut=(await db.query('SELECT processed_games,complete,state,lease_owner,lease_until FROM sports_soccer_forward_scans_v1 WHERE cursor=$1',[deadlineCursor])).rows[0];
  assert.equal(timedOut.processed_games,0);assert.equal(timedOut.complete,false);assert.equal(timedOut.state,null);
  assert.equal(timedOut.lease_owner,null);assert.equal(timedOut.lease_until,null);
+ // A completed legacy result must still enter the real PostgreSQL scanner
+ // when its return diagnostics predate the current implementation.
+ const upgradeAt=Date.now(),kickoffAt=upgradeAt+2500;
+ const upgrade=fixtureCapture({league:'ucl',id:'902'}).snapshot;
+ upgrade.runStartedAt=upgrade.observedAt=upgrade.analysisCutoff=iso(upgradeAt);
+ upgrade.date=upgrade.evidence.game.date=soccerDate(kickoffAt);
+ upgrade.evidence.game.startTime=iso(kickoffAt);
+ for(const source of [upgrade.evidence.source,upgrade.evidence.game.source,upgrade.evidence.scheduleSource])source.fetchedAt=iso(upgradeAt);
+ upgrade.inputVersions.evidenceFetchedAt=iso(upgradeAt);
+ upgrade.inputVersions.scheduleSourceVersion={...upgrade.evidence.scheduleSource};
+ const reader={revision:soccerForwardHash('upgrade-reader'),observationId:soccerForwardHash('upgrade-observation'),
+   observedAt:iso(upgradeAt),firstFetchedAt:iso(upgradeAt),receivedAt:iso(upgradeAt),persistedAt:iso(upgradeAt),
+   sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/'};
+ const market={period:'FT',kind:'TOTAL',unit:'GOALS',line:'2.5',overWater:.95,underWater:.95,
+   rawRows:['大2.5 .95','小2.5 .95'],periodEvidence:{period:'FT',status:'EXPLICIT',
+     sectionTitle:'歐洲冠軍聯賽',tableHeaders:['全場'],marketHeader:'全場大小'}};
+ upgrade.directions=buildSoccerMarketDirections({game:upgrade.evidence.game,reader,now:upgradeAt,
+   matchedGames:[{officialGameId:upgrade.gameId,league:'UCL',boardDate:upgrade.date,prestart:true,matchStatus:'MATCHED',markets:[market]}]});
+ const upgradeRevision=soccerForwardAnalysisRevision(upgrade),upgradeScope={league:'ucl',date:upgrade.date};
+ await db.query(`INSERT INTO sports_soccer_analysis_v1(league,game_id,analysis_hash,observed_at,payload) VALUES('ucl',$1,$2,$3::timestamptz,$4::jsonb)`,
+   [upgrade.gameId,upgradeRevision,upgrade.observedAt,JSON.stringify(upgrade)]);
+ await service.captureSoccerForwardSnapshot(upgrade,upgradeRevision);
+ const upgradeCaptures=(await service.loadSoccerForwardEvidence(upgradeScope)).captures.filter(c=>c.variant==='BASELINE');
+ assert.ok(upgradeCaptures.length>0);
+ const remaining=kickoffAt-Date.now()+5;
+ if(remaining>0)await new Promise(resolve=>setTimeout(resolve,remaining));
+ const upgradeNow=Date.now(),upgradeResult=resultFor(upgradeCaptures[0]);
+ upgradeResult.observedAt=iso(upgradeNow-1);
+ upgradeResult.sources=upgradeResult.sources.map(source=>({...source,fetchedAt:iso(upgradeNow-1)}));
+ for(const capture of upgradeCaptures){
+   const oldEvaluation=evaluateSoccerForwardCapture(capture,protocol,upgradeResult,upgradeNow);
+   assert.equal(oldEvaluation.status,'EVALUATED',JSON.stringify(oldEvaluation));
+   const oldReturn=evaluateSoccerMarketReturnCapture({capture,protocol,result:upgradeResult,now:upgradeNow});
+   delete oldReturn.diagnosticVersion;
+   const {checkedAt,evidenceHash,...body}=oldReturn;
+   oldReturn.evidenceHash=soccerForwardHash({...body,observations:body.observations.map(({checkedAt,...row})=>row)});
+   oldEvaluation.marketReturnValidation=oldReturn;
+   await service.archiveSoccerForwardCheck(capture,oldEvaluation,upgradeResult);
+ }
+ let upgradeFetches=0;
+ const upgradePage=await continueSoccerForwardScan(upgradeScope,{purpose:'evaluate',timeBudgetMs:25000,
+   fetchResult:async()=>{upgradeFetches++;return upgradeResult;}});
+ assert.equal(upgradePage.report.complete,true);
+ assert.equal(upgradePage.summary.marketReturnCheckedPredictionPeriods,1);
+ assert.equal(upgradeFetches,1,'a recent legacy market check cannot suppress the current scanner');
+ const upgraded=(await service.loadSoccerForwardEvidence(upgradeScope)).evaluations;
+ assert.ok(upgraded.some(e=>e.marketReturnValidation?.diagnosticVersion===SOCCER_MARKET_RETURN_DIAGNOSTIC_VERSION));
+ let repeatedFetches=0;
+ await continueSoccerForwardScan(upgradeScope,{purpose:'evaluate',timeBudgetMs:25000,
+   fetchResult:async()=>{repeatedFetches++;return upgradeResult;}});
+ assert.equal(repeatedFetches,0,'the upgraded check respects the existing recheck interval');
+ console.log('PASS actual PostgreSQL scanner upgrades a completed legacy return check through the normal evaluate entry, appends current diagnostics once and respects the existing recheck interval');
  console.log('PASS complete durable scan: >24MiB originals/>5000 receipts and >8MiB/>25k checks, fixed manifests, bounded batches, old/new correction quarantine, scope/purpose/lease fencing, terminal idempotence, safe oversized rejection, deterministic deadline abort/lease release and source-preserving cache cleanup');
 }finally{if(oldDb===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=oldDb;if(oldDbV2===undefined)delete process.env.DATABASE_V2_URL;else process.env.DATABASE_V2_URL=oldDbV2;await fixture.close();}
