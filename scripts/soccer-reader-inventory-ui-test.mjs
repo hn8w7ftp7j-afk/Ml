@@ -31,6 +31,7 @@ function harness({initial={},throwFirst=false}={}){
  let index=0,dirty=false,tree,fetches=0,writes=0,timerId=0;
  const selected=[],hooks=[],effects=[],calls=[],timers=new Map();let props={league:'EPL',date:'2026-10-29',throughDate:'2026-11-12',onSelectDate:value=>selected.push(value),...initial};
  const context=vm.createContext({React,Date:Clock,URLSearchParams,AbortController,
+  SoccerReaderInventoryScanPanel:()=>null,
   useState:initial=>{const i=index++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],update=>{hooks[i]=typeof update==='function'?update(hooks[i]):update;dirty=true;writes++;}];},
   useRef:initial=>{const i=index++;return hooks[i]??={current:initial};},
   useEffect:(fn,deps)=>{const i=index++,previous=hooks[i];if(previous&&deps.every((value,j)=>Object.is(value,previous.deps[j])))return;hooks[i]={deps};effects.push(()=>{previous?.cleanup?.();hooks[i].cleanup=fn();});},

@@ -173,6 +173,9 @@ const currentReceipt = { analysisRunId: 'synthetic-run-123', qualificationVersio
   checkedAt: at, validUntil: new Date(now + 180000).toISOString(), publishedCurrent: true, reason: 'ACTIVE',
   analysisStatus: 'COMPLETED', selectionResult: 'RESEARCH_SHADOW', executable: false };
 const snapshot = { gameId: input.game.id, league: input.game.league, date: input.game.date, observedAt: at,
+  analysisCutoff:at, inputVersions:{scheduleSourceVersion:{contentHash:'a'.repeat(64)}},
+  readerIdentityEvidence:{version:'SOCCER-COMPLETE-SCHEDULE-IDENTITY-v1',status:'COMPLETE_SCHEDULE_IDENTITY_VERIFIED',
+    league:input.game.league,gameId:input.game.id,date:input.game.date,sourceHash:'a'.repeat(64),verifiedAt:at},
   analysisRunId: currentReceipt.analysisRunId, qualificationVersion: '1', quoteGeneration: '1', revision: currentReceipt.revision,
   validUntil: currentReceipt.validUntil, persisted: true, publishedCurrent: true, analysisStatus: 'COMPLETED', qaFlag: 'WARN',
   selectionResult: 'RESEARCH_SHADOW', executable: false, formalScoringEnabled: false, evidence: formalEvidence, prediction: input.distribution,

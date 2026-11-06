@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import { buildSoccerRanking,SOCCER_RANK_MARKETS,soccerMarketName } from '../lib/soccer/ranking.js';
 import { soccerRecordKey,soccerRecordStats } from '../lib/soccer/manual-record.js';
+import { soccerReaderIdentityVerified } from '../lib/soccer/reader-identity-proof.js';
 import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 import { soccerValidationArtifacts } from '../lib/soccer/validation-frozen.js';
 import { soccerHalfTimeArtifacts } from '../lib/soccer/half-time-frozen.js';
@@ -70,7 +71,7 @@ console.log('PASS shipped workspace JSX: six NBA-style tabs, two ranking views, 
 const recordSource=fs.readFileSync('app/soccer/bet-records.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const recordCode=await transform(recordSource,{filename:'records.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 let ledger;
-const recordCtx=vm.createContext({React,Date,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName});
+const recordCtx=vm.createContext({React,Date,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified});
 vm.runInContext(recordCode.code,recordCtx);
 const game={id:'soccer:epl:123',league:'epl',date:'2026-10-20'},quote={period:'FT',kind:'TOTAL',side:'over',line:'3+50',lineSide:null,water:.95,key:'q1',unit:'GOALS'},result={persisted:true,revision:'a'.repeat(64)};
 const record={...quote,gameId:game.id,league:'epl',date:game.date,id:'id',status:'OPEN',stake:10000,recordedAt:'2026-10-19T00:00:00Z'};
@@ -86,14 +87,18 @@ assert.match(confirmedMarkup,/正式 S 評分的模型校準與誤差驗證仍�
 assert.doesNotMatch(confirmedMarkup,/按投注金額計算|尚待核對的派彩條款|正式評分已啟用/);
 ledger.settlementPolicy.creditRuleConfirmation=soccerCreditRuleConfirmation('2026-10-30T15:01:38Z');
 assert.doesNotMatch(renderToStaticMarkup(recordCtx.SoccerBetRecords()),/已確認的信用盤派彩例子|淨損益 182 元/,'earlier receipt does not display later confirmed examples');
-ledger.records=[];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/紀錄實際下注/);
+ledger.records=[];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/自行核對後記錄已下注/);
+let selfCheckedAction;ledger.mutate=action=>{selfCheckedAction=action;};
+recordCtx.SoccerRecordButton({game,result,quote}).props.children[1].props.onClick();
+assert.equal(selfCheckedAction.identityUnverifiedAcknowledged,true,'legacy records require explicit self-check acknowledgment');
+assert.equal(selfCheckedAction.alreadyPlaced,true,'recording never places the bet');
 assert.equal(recordCtx.SoccerRecordButton({game,result,quote:{...quote,period:null}}),null);
 console.log('PASS shipped record JSX: original prices, recorded/cancelled/restore states, 1% football policy and unknown-period exclusion');
 
 // Execute the shipped provider hooks. Only React scheduling and HTTP are fixtures.
 let cursor=0,hooks=[],effects=[],dirty=false,tree,props={league:'epl',date:game.date,children:[]};
 const requests=[];
-const hookCtx=vm.createContext({React,Date,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,
+const hookCtx=vm.createContext({React,Date,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified,
   createContext:()=>({Provider:'provider'}),
   useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],v=>{hooks[i]=typeof v==='function'?v(hooks[i]):v;dirty=true;}];},
   useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},

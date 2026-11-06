@@ -48,6 +48,14 @@ const trustedSyntheticContract = record => ({ provider: 'TAI888', version: 'SYNT
 });
 const run = (capture, patch = {}) => evaluateSoccerMarketReturnCapture({ capture, protocol, result: resultFor(capture), now: after, ...patch });
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-12, `${a} != ${b}`);
+const legacy=changed(fixture(),capture=>{delete capture.snapshot.readerIdentityEvidence;});
+const legacyIdentityEvaluation=run(legacy,{resolveContract:trustedSyntheticContract});
+assert.equal(legacyIdentityEvaluation.observedQuoteReturns,0);
+assert.ok(legacyIdentityEvaluation.observations.every(row=>row.reason==='MARKET_RETURN_READER_IDENTITY_UNVERIFIED'));
+assert.equal(canonicalSoccerMarketReturnCaptures([legacy],protocol,after).observations.length,0,
+  'legacy original prices without complete schedule identity cannot become validated return samples');
+assert.equal(canonicalSoccerMarketReturnCaptures([legacy],protocol,after,{allowUnverifiedIdentity:true}).observations.length,2,
+  'explicitly labelled retrospective arithmetic may still inspect historical originals');
 
 for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
   const capture = fixture({ league, period }), before = JSON.stringify(capture);

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect,useRef,useState } from 'react';
+import { SoccerReaderInventoryScanPanel } from './reader-inventory-scan-panel.js';
 
 const VERSION='SOCCER-READER-INVENTORY-v1';
 const PERIODS={FT:'全場',HT:'上半場',UNKNOWN:'期間待確認'};
@@ -130,6 +131,7 @@ export function SoccerReaderInventoryPanel({league,date:boardDate,throughDate,on
   return <details className="soccerDetails soccerReaderInventory"><summary>已保存原盤{data?`｜收據 ${number(data.summary.boardDateCount)} 盤日${legacy.status==='AVAILABLE'?`｜舊版 ${number(legacy.boardDateCount)} 盤日`:legacy.status==='UNAVAILABLE'?'｜舊版待核對':''}${lastDate?`｜最近 ${lastDate}`:''}`:busy?'｜讀取中':'｜盤日數量待核對'}</summary>
     {scope?<p className="soccerAvailability">查詢範圍：{scope.from} ～ {scope.through}。</p>:<p className="soccerAnalysisWarning" role="alert">原盤清單的聯盟或日期範圍尚未通過核對。</p>}
     {scope&&<button type="button" className="secondary" disabled={busy} onClick={()=>load()}>重新核對清單</button>}
+    {scope&&<SoccerReaderInventoryScanPanel league={scope.league} date={boardDate||new Date(Date.now()+8*3600000).toISOString().slice(0,10)}/>}
     {busy&&<p role="status">正在讀取本聯盟已保存的盤日與收據…</p>}
     {current&&state.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}</p>}
     {data&&<>

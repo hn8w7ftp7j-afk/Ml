@@ -1,6 +1,6 @@
 'use client';
 import { createContext,useContext,useEffect,useRef,useState } from 'react';
-import { SoccerMarketDirections, SoccerHalfTimeResearch } from './market-panel.js';
+import { SoccerMarketDirections, SoccerHalfTimeResearch, SoccerProvisionalMarketResearch } from './market-panel.js';
 import { SoccerManualSimulation } from './manual-simulation-panel.js';
 import { SoccerWorkloadPanel } from './workload-panel.js';
 import { SoccerTeamXgPanel } from './team-xg-panel.js';
@@ -324,6 +324,7 @@ export default function SoccerAnalysisPanel({game}){
       {data.analysisStatus==='COMPLETED'&&!presentation.current&&<p className="soccerAnalysisWarning">目前有效狀態待重新核對；此版本僅供歷史查閱。</p>}
       {!data.persisted&&<p className="soccerAnalysisWarning">{data.persistenceError}</p>}
       <SoccerManualSimulation result={data} game={game}/>
+      <SoccerProvisionalMarketResearch value={data.provisionalReaderResearch} result={data} game={game}/>
       <SoccerMarketDirections directions={data.directions} unassignedQuotes={data.unassignedQuotes} game={game} result={{...data,publishedCurrent:data.publishedCurrent===true&&presentation.current}}/>
       <details className="soccerDetails soccerProbabilityResearch"><summary>比分與勝平負研究（不是 S 分數）</summary>
       {prediction?<><h3>研究比分分布</h3><div className="soccerResearchOutcomes"><span>主勝 <strong>{pct(prediction.outcomes.home)}</strong></span><span>和局 <strong>{pct(prediction.outcomes.draw)}</strong></span><span>客勝 <strong>{pct(prediction.outcomes.away)}</strong></span></div><p className="soccerAvailability">模型平均進球：主 {prediction.homeRate.toFixed(2)}／客 {prediction.awayRate.toFixed(2)}。僅依歷史賽果，尚未加入陣容與 xG。</p></>:<p className="soccerAvailability">{prestart?'此場無適用的已訓練球隊資料。':'比賽開始後不補算賽前機率。'}</p>}

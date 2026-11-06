@@ -14,11 +14,17 @@ export function fixtureCapture({ league = 'epl', period = 'REGULATION_FT', varia
     prediction, halfTimePrediction: halfTime,
     evidence: { phase: 'PREMATCH_OBSERVATION', game, source: source('summary'), scheduleSource: source('scoreboard'), teams: {} },
     inputVersions: { modelTrainingHash: sha(modelSeed), researchArtifactHash: sha('research'), halfTimeArtifactHash: sha('half-time'), scheduleSourceVersion: source('scoreboard'), evidenceHash: source('summary').contentHash, evidenceFetchedAt: iso(observed) } };
+  // Test-only synthetic proof. Current provider adapters do not issue this.
+  snapshot.readerIdentityEvidence={version:'SOCCER-COMPLETE-SCHEDULE-IDENTITY-v1',status:'COMPLETE_SCHEDULE_IDENTITY_VERIFIED',
+    league,gameId:game.id,date:game.date,sourceHash:snapshot.inputVersions.scheduleSourceVersion.contentHash,verifiedAt:snapshot.analysisCutoff};
   const modelHash = sha(soccerForwardModelDescriptor(snapshot, period, variant));
   return { captureId: sha([league,id,period,variant,sequence,modelSeed]), captureSequence: String(sequence), league, gameId: game.id, date: game.date, period, variant,
     modelHash, capturedAt: iso(captured), revision: soccerForwardAnalysisRevision(snapshot), snapshot };
 }
-export const changed = (original, mutate) => { const row = structuredClone(original); mutate(row); row.revision = soccerForwardAnalysisRevision(row.snapshot); row.modelHash = sha(soccerForwardModelDescriptor(row.snapshot,row.period,row.variant)); return row; };
+export const changed = (original, mutate) => { const row = structuredClone(original); mutate(row);
+  if(row.snapshot.readerIdentityEvidence){Object.assign(row.snapshot.readerIdentityEvidence,{league:row.snapshot.league,gameId:row.snapshot.gameId,date:row.snapshot.date,
+    sourceHash:row.snapshot.inputVersions?.scheduleSourceVersion?.contentHash,verifiedAt:row.snapshot.analysisCutoff});}
+  row.revision = soccerForwardAnalysisRevision(row.snapshot); row.modelHash = sha(soccerForwardModelDescriptor(row.snapshot,row.period,row.variant)); return row; };
 export function resultFor(capture) {
   const { snapshot: { evidence: { game, source, scheduleSource } } } = capture;
   return { ok: true, verified: true, status: 'NORMAL_FINAL_CROSSCHECKED', league: capture.league, gameId: capture.gameId, date: capture.date, startTime: game.startTime,

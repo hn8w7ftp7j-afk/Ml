@@ -27,7 +27,8 @@ for(const league of ['epl','ucl']){
     games:[{league:league.toUpperCase(),boardDate:game.date,boardTime:new Date(game.startTime).toLocaleTimeString('en-GB',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',hour12:false}),homeKey:globalThis.Tai888SoccerTeams.key(game.home.name),awayKey:globalThis.Tai888SoccerTeams.key(game.away.name),
       markets:[{kind:'TOTAL',unit:'GOALS',line:'3+50',overWater:.95,underWater:.91,rawRows:['大3+50 0.95','小0.91'],period:'FT',
         periodEvidence:{period:'FT',status:'EXPLICIT',sectionTitle:league==='epl'?'英超 全場':'歐冠 全場',tableHeaders:['全場大小'],marketHeader:'全場大小'}}]}]};
-  const result=buildSoccerAnalysis({evidence,reader,now});
+  const schedule={ok:true,league:{id:game.league},date:game.date,until:game.date,games:[game],coverage:{complete:true,identityComplete:true}};
+  const result=buildSoccerAnalysis({evidence,reader,schedule,now});
   assert.equal(result.scoreReadiness.status,'SCORING_BLOCKED');
   assert.equal(result.scoreReadiness.quoteCount,2);
   assert.equal(result.scoreReadiness.scoredQuoteCount,0,'real shipped path must report zero, never the synthetic test score');

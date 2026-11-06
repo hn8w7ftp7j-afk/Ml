@@ -60,7 +60,9 @@ for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) {
   assert.notEqual(later.ruleApplication.appliedAt, report.ruleApplication.appliedAt);
   const formal = evaluateSoccerMarketReturnCapture({ capture, protocol, result: resultFor(capture), now });
   assert.equal(formal.observedQuoteReturns, 0, 'retrospective replay cannot populate the formal registered-contract dataset');
-  assert.ok(formal.observations.every(row => row.reason === 'SOCCER_SOURCE_CONTRACT_UNVERIFIED'));
+  assert.equal(formal.observations.length, 2, 'both original quote sides remain accounted for');
+  assert.ok(formal.observations.every(row => row.reason === 'MARKET_RETURN_READER_IDENTITY_UNVERIFIED'),
+    'a fabricated schedule identity proof cannot authorize formal returns');
 }
 
 for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) for (const kind of ['TOTAL', 'HANDICAP']) {

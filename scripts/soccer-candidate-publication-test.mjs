@@ -17,6 +17,7 @@ assert.equal(rank(published).entries.length, 1);
 assert.equal(rank(published).order.length, 1);
 assert.equal(rank(published, game, now + 180000).entries.length, 0);
 for (const alter of [s => { s.persisted = false; }, s => { s.publishedCurrent = false; },
+  s => { delete s.readerIdentityEvidence; },
   s => { s.revision = 'a'.repeat(64); }, s => { s.currentResearch.quoteGeneration = '2'; },
   s => { s.currentResearch.qualificationVersion = '2'; }, s => { s.currentResearch.analysisRunId = 'different-run'; },
   s => { s.currentResearch.checkedAt = new Date(now + 1).toISOString(); }, s => { s.currentResearch.reason = 'QUOTE_CHANGED'; },

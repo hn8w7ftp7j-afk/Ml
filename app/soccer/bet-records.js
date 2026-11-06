@@ -3,6 +3,7 @@ import { createContext,useContext,useEffect,useRef,useState } from 'react';
 import { soccerRecordKey,soccerRecordStats } from '../../lib/soccer/manual-record.js';
 import { soccerMarketName } from '../../lib/soccer/ranking.js';
 import { summarizeSoccerHighScoreBets } from '../../lib/soccer/league-bet-status.js';
+import { soccerReaderIdentityVerified } from '../../lib/soccer/reader-identity-proof.js';
 const Ledger=createContext(null);
 const SETTLEMENT_CHECK_KEY='__settlement_check__';
 async function request(url,options={}){
@@ -41,11 +42,36 @@ export function SoccerRecordProvider({league,date,through=date,children,summaryD
   }
   return <Ledger.Provider value={{league,date,records:loadedScope===scope?records:[],status:ledgerStatus,error,pending,load,mutate,checkSettlement,settlementPolicy,settlementSummary}}>{error&&<p className="errorBox" role="alert">{error}<button className="mini secondary" onClick={load}>重新同步</button></p>}{children}</Ledger.Provider>;
 }
-export function SoccerRecordButton({game,result,quote}){
+export function SoccerRecordButton({game,result,quote,provisional=false}){
   const ledger=useContext(Ledger);if(!ledger||!game||!quote||!result?.persisted||!result.revision||!['FT','HT'].includes(quote.period)||quote.unit!=='GOALS'||!Number.isFinite(quote.water))return null;
+  provisional=provisional||!soccerReaderIdentityVerified(result);
   const key=soccerRecordKey({league:game.league,date:game.date,gameId:game.id,...quote});
   const record=ledger.records.find(r=>soccerRecordKey(r)===key),cancelled=record?.status==='CANCELLED',busy=ledger.pending.has(key);
-  return <div className="soccerRecordAction">{record&&<strong>{cancelled?'已取消紀錄':'已下注 ✓'}</strong>}<button className="mini secondary" disabled={ledger.status!=='ready'||busy} title="僅記錄你已自行完成的下注；每筆 10,000 元，不會送單" onClick={()=>ledger.mutate(record?{action:cancelled?'restore':'cancel',id:record.id,date:record.date}:{action:'record',alreadyPlaced:true,date:game.date,gameId:game.id,revision:result.revision,quoteKey:quote.key},key)}>{busy?'儲存中…':ledger.status!=='ready'?'帳本待同步':cancelled?'重新紀錄下注':record?'取消下注':'紀錄實際下注'}</button>{record&&<small>原盤 {record.line}｜水位 {record.water}｜{record.stake.toLocaleString('zh-TW')} 元</small>}</div>;
+  return <div className="soccerRecordAction">{record&&<strong>{cancelled?'已取消紀錄':'已下注 ✓'}</strong>}<button className="mini secondary" disabled={ledger.status!=='ready'||busy} title={provisional?'僅記錄你自行核對且已完成的下注；場次身分未驗證，結算待核對，不會送單':'僅記錄你已自行完成的下注；每筆 10,000 元，不會送單'} onClick={()=>ledger.mutate(record?{action:cancelled?'restore':'cancel',id:record.id,date:record.date}:{action:'record',alreadyPlaced:true,...(provisional?{identityUnverifiedAcknowledged:true}:{}),date:game.date,gameId:game.id,revision:result.revision,quoteKey:quote.key},key)}>{busy?'儲存中…':ledger.status!=='ready'?'帳本待同步':cancelled?'重新紀錄下注':record?'取消下注':provisional?'自行核對後記錄已下注':'紀錄實際下注'}</button>{record&&<small>原盤 {record.line}｜水位 {record.water}｜{record.stake.toLocaleString('zh-TW')} 元</small>}</div>;
+}
+function AccountSettlementConfirm({record,ledger}){
+  const [amount,setAmount]=useState(''),[confirmed,setConfirmed]=useState(false),[finalAmount,setFinalAmount]=useState(false);
+  const key=soccerRecordKey(record),busy=ledger.pending.has(key);
+  return <details className="soccerDetails"><summary>自行確認帳戶結算</summary>
+    <p>請先核對帳戶中這筆注單的實際淨損益，金額必須包含退水；退水尚未結算時請先不要確認。這是自行申報，不代表系統已驗證場次或派彩規則。</p>
+    <label>帳戶淨損益（元，含退水；虧損請輸入負數）<input type="number" step="0.01" value={amount} onChange={e=>{setAmount(e.target.value);setConfirmed(false);setFinalAmount(false);}}/></label>
+    <label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>我已核對這筆注單及含退水的實際淨損益</label>
+    <label><input type="checkbox" checked={finalAmount} onChange={e=>setFinalAmount(e.target.checked)}/>我再次確認金額；送出後如有錯誤須另留修正紀錄，取消或重新紀錄不會清除結算</label>
+    <button className="mini secondary" disabled={ledger.status!=='ready'||busy||!confirmed||!finalAmount||!amount} onClick={()=>ledger.mutate({action:'confirm-account-settlement',id:record.id,date:record.date,netProfit:amount,rebateTreatment:'INCLUDED',confirmedAccountSettlement:true,confirmedFinalAmount:true},key)}>確認帳戶結算</button>
+  </details>;
+}
+function AccountSettlementAmend({record,ledger}){
+  const [changeType,setChangeType]=useState('CORRECT'),[amount,setAmount]=useState(''),[reason,setReason]=useState(''),[confirmed,setConfirmed]=useState(false);
+  const key=soccerRecordKey(record),history=record.accountSettlement;
+  const reset=()=>setConfirmed(false);
+  return <details className="soccerDetails"><summary>修正或撤銷自行申報</summary>
+    <p>原始申報不會更改；每次修正或撤銷都會保留時間與原因。修正金額必須是帳戶已結算、含退水的實際淨損益。</p>
+    <label>操作<select value={changeType} onChange={e=>{setChangeType(e.target.value);reset();}}><option value="CORRECT">修正或恢復金額</option><option value="REVOKE">撤銷申報</option></select></label>
+    {changeType==='CORRECT'&&<label>帳戶淨損益（元，含退水）<input type="number" step="0.01" value={amount} onChange={e=>{setAmount(e.target.value);reset();}}/></label>}
+    <label>原因<input value={reason} maxLength={200} onChange={e=>{setReason(e.target.value);reset();}}/></label>
+    <label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>我已核對這筆注單、操作及{changeType==='CORRECT'?'含退水金額':'撤銷原因'}</label>
+    <button className="mini secondary" disabled={ledger.status!=='ready'||ledger.pending.has(key)||!confirmed||!reason.trim()||(changeType==='CORRECT'&&!amount)} onClick={()=>ledger.mutate({action:'amend-account-settlement',id:record.id,date:record.date,revision:history.revision,changeType,netProfit:amount,reason,confirmedAccountSettlement:true,confirmedFinalAmount:true},key)}>確認{changeType==='CORRECT'?'修正':'撤銷'}</button>
+  </details>;
 }
 export function SoccerBetRecords(){
   const l=useContext(Ledger);if(!l)return null;const s=soccerRecordStats(l.records);
@@ -55,16 +81,16 @@ export function SoccerBetRecords(){
   const confirmed=l.settlementPolicy?.creditRuleConfirmation;
   const examples=confirmed?.version==='SOCCER-USER-CREDIT-EXAMPLES-v1'&&confirmed.status==='USER_CONFIRMED'
     &&Array.isArray(confirmed.examples)?confirmed.examples:[];
-  return <section className="panel" aria-label="足球下注紀錄"><div className="panelHead"><h2>{l.league==='epl'?'英超':'歐冠'}｜下注紀錄</h2><button className="secondary" disabled={l.status==='loading'||l.pending.size>0} onClick={l.load}>重新讀取</button><button className="secondary" disabled={l.status!=='ready'||l.pending.size>0} onClick={l.checkSettlement}>{l.pending.has(SETTLEMENT_CHECK_KEY)?'核對中…':`核對 ${l.date} 賽果`}</button></div>
+  return <section className="panel" aria-label="足球下注紀錄"><div className="panelHead"><h2>{l.league==='epl'?'英超':'歐冠'}｜下注紀錄</h2><button className="secondary" disabled={l.status==='loading'||l.pending.size>0} onClick={l.load}>重新讀取</button><button className="secondary" disabled={l.status!=='ready'||l.pending.size>0} onClick={l.checkSettlement}>{l.pending.has(SETTLEMENT_CHECK_KEY)?'核對中…':`核對 ${l.date} 結算狀態`}</button></div>
     <p>{l.date}｜每筆 10,000 元｜{l.status==='ready'?`已下注 ${s.active} 筆｜已取消 ${s.cancelled} 筆｜投注合計 ${s.stake.toLocaleString('zh-TW')} 元`:'帳本尚未同步完成'}</p>
-    <p className="soccerAvailability">僅記錄你已自行完成的下注，不會送單。已確認足球退水為實際輸贏本金的 1%：全輸贏退 1%、半輸贏退 0.5%、輸贏 20% 退 0.2%，走盤不退。系統先核對賽果，再依原盤適用規則結算；證據與登錄尚未完成時保留待核對，損益不填零。</p>
+    <p className="soccerAvailability">僅記錄你已自行完成的下注，不會送單。已確認足球退水為實際輸贏本金的 1%：全輸贏退 1%、半輸贏退 0.5%、輸贏 20% 退 0.2%，走盤不退。原盤場次身分尚未驗證，目前不自動取得或確認賽果；可自行核對帳戶並申報結算，未確認的損益不填零。</p>
     {examples.length>0&&<details className="soccerDetails"><summary>已確認的信用盤派彩例子</summary><ul>{examples.map(example=><li key={example.line}>讓球方 {example.line}，剛好贏 {example.winningMargin} 球；本金 {money(example.stake)} 元、水位 {example.water}：毛損益 {money(example.grossProfit)} 元＋退水 {money(example.rebate)} 元＝淨損益 {money(example.netProfit)} 元。</li>)}</ul><p className="soccerAvailability">這三個例子已確認，不需重複提供。正式 S 評分的模型校準與誤差驗證仍由系統完成。</p></details>}
-    <p>已結算：{s.settled}｜待核對：{s.pending}｜正毛損益票率：{s.winRate==null?'—':`${(s.winRate*100).toFixed(1)}%`}｜損益：{money(s.profit)}｜ROI：{s.roi==null?'—':`${(s.roi*100).toFixed(2)}%`}</p>
-    <p className="soccerAvailability">票率分母為排除走盤的已結算紀錄，部分贏另列；ROI 分母為已結算本金，取消與未結算不納入。</p>
-    {l.settlementSummary&&<p role="status">本次核對 {l.settlementSummary.checked} 筆｜賽果確認 {l.settlementSummary.resultVerified} 筆｜完成結算 {l.settlementSummary.settled} 筆｜待核對 {l.settlementSummary.pending} 筆｜尚待處理 {l.settlementSummary.deferred} 筆</p>}
+    <p>已結算：{s.settled}（含自行申報 {s.selfReportedSettled} 筆）｜待核對：{s.pending}｜正毛損益票率：{s.winRate==null?'—':`${(s.winRate*100).toFixed(1)}%`}｜損益：{money(s.profit)}｜ROI：{s.roi==null?'—':`${(s.roi*100).toFixed(2)}%`}</p>
+    <p className="soccerAvailability">票率分母為有結果分類、排除走盤的已結算紀錄；未提供結果分類的自行申報不計入票率。ROI 分母為已結算本金，取消與未結算不納入；損益與 ROI 包含自行申報金額。</p>
+    {l.settlementSummary&&<p role="status">本次檢查 {l.settlementSummary.checked} 筆｜完成自動結算 {l.settlementSummary.settled} 筆｜待核對 {l.settlementSummary.pending} 筆｜尚待處理 {l.settlementSummary.deferred} 筆</p>}
     {l.settlementPolicy?.sourceEvidence?.facts?.length>0&&<details className="soccerDetails"><summary>已取得的足球派彩條文</summary><ul>{l.settlementPolicy.sourceEvidence.facts.map(t=><li key={t.field}>{t.label}</li>)}</ul><p className="soccerAvailability">公開來源取得時間：{new Date(l.settlementPolicy.sourceEvidence.capturedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}；系統另保存原下注適用版本，已確認退水不需重報。</p></details>}
     {l.settlementPolicy?.missingTerms?.length>0&&<details className="soccerDetails"><summary>系統證據與登錄待完成</summary><ul>{l.settlementPolicy.missingTerms.map(t=><li key={t.code}>{t.label}</li>)}</ul></details>}
-    {l.records.map(r=><article className="soccerSavedVersion" key={r.id}><h3>{r.home}（主）對 {r.away}（客）</h3><p>{r.date}｜{soccerMarketName(r.period,r.kind)}｜{r.label}｜水位 {r.water}</p><p>{r.stake.toLocaleString('zh-TW')} 元｜{r.status==='CANCELLED'?'已取消紀錄':'已下注 ✓'}｜{r.settlement?.status==='SETTLED'?`${outcomes[r.settlement.outcome]||'已結算'}｜損益 ${money(r.settlement.profit)}`:checkReasons[r.settlementCheck?.reason]||'結算待核對'}</p>{r.settlementCheck?.resultEvidence?.verified&&<p>賽果已核對｜全場 {r.settlementCheck.resultEvidence.fullTime?.home}：{r.settlementCheck.resultEvidence.fullTime?.away}{r.settlementCheck.resultEvidence.halfTime?`｜上半 ${r.settlementCheck.resultEvidence.halfTime.home}：${r.settlementCheck.resultEvidence.halfTime.away}`:''}</p>}<button className="mini secondary" disabled={l.status!=='ready'||l.pending.has(soccerRecordKey(r))||l.pending.has(SETTLEMENT_CHECK_KEY)} onClick={()=>l.mutate({action:r.status==='CANCELLED'?'restore':'cancel',id:r.id,date:r.date},soccerRecordKey(r))}>{r.status==='CANCELLED'?'重新紀錄下注':'取消下注'}</button><small>保存時間 {new Date(r.recordedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</small></article>)}
+    {l.records.map(r=><article className="soccerSavedVersion" key={r.id}><h3>{r.home}（主）對 {r.away}（客）</h3><p>{r.date}｜{soccerMarketName(r.period,r.kind)}｜{r.label}｜水位 {r.water}</p>{(r.sourceIdentityStatus==='SELF_ASSERTED_UNVERIFIED'||!r.settlement||r.settlement?.source==='SELF_REPORTED_USER_CONFIRMED')&&<p>來源清單完整性未驗證，場次須自行核對；不會自動結算。</p>}<p>{r.stake.toLocaleString('zh-TW')} 元｜{r.status==='CANCELLED'?'已取消紀錄':'已下注 ✓'}｜{r.settlement?.status==='SETTLED'?`${r.settlement.source==='SELF_REPORTED_USER_CONFIRMED'?'帳戶自行申報（含退水）':outcomes[r.settlement.outcome]||'已結算'}｜損益 ${money(r.settlement.profit)}`:r.accountSettlement?'自行申報已撤銷':checkReasons[r.settlementCheck?.reason]||'結算待核對'}</p>{r.settlementCheck?.resultEvidence?.verified&&<p>賽果已核對｜全場 {r.settlementCheck.resultEvidence.fullTime?.home}：{r.settlementCheck.resultEvidence.fullTime?.away}{r.settlementCheck.resultEvidence.halfTime?`｜上半 ${r.settlementCheck.resultEvidence.halfTime.home}：${r.settlementCheck.resultEvidence.halfTime.away}`:''}</p>}{r.accountSettlement&&<details className="soccerDetails"><summary>自行申報與修正紀錄</summary><p>原始申報：{money(r.accountSettlement.original.profit)} 元（含退水）｜{new Date(r.accountSettlement.original.settledAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>{r.accountSettlement.amendments.map(a=><p key={a.revision}>{a.action==='REVOKE'?'撤銷申報':`修正為 ${money(a.profit)} 元（含退水）`}｜{a.reason}｜{new Date(a.recordedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>)}</details>}{r.status==='OPEN'&&(r.accountSettlement?<AccountSettlementAmend record={r} ledger={l}/>:!r.settlement&&<AccountSettlementConfirm record={r} ledger={l}/>)}<button className="mini secondary" disabled={l.status!=='ready'||l.pending.has(soccerRecordKey(r))||l.pending.has(SETTLEMENT_CHECK_KEY)} onClick={()=>l.mutate({action:r.status==='CANCELLED'?'restore':'cancel',id:r.id,date:r.date},soccerRecordKey(r))}>{r.status==='CANCELLED'?'重新紀錄下注':'取消下注'}</button><small>保存時間 {new Date(r.recordedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</small></article>)}
     {l.status==='ready'&&!l.records.length&&<p>此日期尚無已記錄的下注。</p>}
   </section>;
 }

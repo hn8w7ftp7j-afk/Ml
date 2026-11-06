@@ -22,7 +22,10 @@ function fixture(example){
   assert.equal(normalized.ok,true);const game=normalized.games[0];
   const quote={key:'q1',period:'FT',unit:'GOALS',kind:'TOTAL',side:'over',line:`${game.home.score+game.away.score}+50`,lineSide:null,water:.95,label:'原盤',provenance:{gameId:game.id}};
   const snapshot={league,date:game.date,gameId:game.id,revision:'r1',evidence:{game},directions:[{quotes:[quote]}]};
-  const record={...soccerManualRecordFromSnapshot(snapshot,'q1'),status:'OPEN',id:'11111111-1111-4111-8111-111111111111'};
+  // Exercise a pre-existing legacy record: new unverified recordings are
+  // quarantined, while persisted historical contracts keep their old hash.
+  const record={...soccerManualRecordFromSnapshot(snapshot,'q1',{identityUnverifiedAcknowledged:true}),status:'OPEN',id:'11111111-1111-4111-8111-111111111111'};
+  delete record.sourceIdentityStatus;
   const summary={ok:true,data:payload,source:source.summary};
   const scoreboard={ok:true,games:[{...game,source:source.scoreboard}],freshness:{stale:false}};
   return{game,record,snapshot,quote,summary,scoreboard,result:normalizeSoccerSettlementResult(record,summary,scoreboard,now)};
@@ -102,18 +105,25 @@ assert.deepEqual(hydrated.identityEvidence.teamIds,base.record.teamIds);assert.e
 assert.equal((await hydrateSoccerSettlementIdentity({...legacy,water:.5},async()=>base.snapshot)).identityEvidence,undefined);
 
 try{
- const {archiveSoccerManualRecord,archiveSoccerSettlementCheck,listSoccerManualRecords,listUnsettledSoccerManualRecords,changeSoccerManualRecordStatus}=await import('../lib/soccer/manual-record-store.js');
- const saved=await archiveSoccerManualRecord(base.snapshot,'q1');const r=saved.record;
+ const {archiveSoccerManualRecord,archiveSoccerSettlementCheck,listSoccerManualRecords,listUnsettledSoccerManualRecords,changeSoccerManualRecordStatus,amendSoccerAccountSettlement}=await import('../lib/soccer/manual-record-store.js');
+ const saved=await archiveSoccerManualRecord(base.snapshot,'q1',{identityUnverifiedAcknowledged:true});
+ // Reconstruct a row created before the identity flag existed in this
+ // isolated database, so the legacy settlement contract is tested directly.
+ await fixtureDb.db.query("UPDATE sports_soccer_manual_records_v1 SET payload=payload-'sourceIdentityStatus' WHERE id=$1",[saved.record.id]);
+ const r={...saved.record};delete r.sourceIdentityStatus;
  const p=settleSoccerManualRecord(r,base.result,null,now),s=settleSoccerManualRecord(r,base.result,c,now);
  assert.equal((await archiveSoccerSettlementCheck(r,p)).created,true);assert.equal((await archiveSoccerSettlementCheck(r,p)).created,false);
  const pendingRead=(await listSoccerManualRecords(r.league,r.date))[0];assert.equal(pendingRead.settlementCheck.reason,'SOCCER_SOURCE_CONTRACT_UNVERIFIED');assert.equal(pendingRead.settlement,undefined);
  assert.equal((await listUnsettledSoccerManualRecords({league:r.league,date:r.date})).length,1);
  await changeSoccerManualRecordStatus(r.league,r.date,r.id,'cancel');
- assert.equal((await archiveSoccerSettlementCheck(r,s)).check,null,'concurrent cancellation cannot get a new settlement');
+ await assert.rejects(()=>archiveSoccerSettlementCheck(r,s),/來源身分尚未核對/,'no legacy record may acquire an unproven automatic settlement');
  assert.equal((await fixtureDb.db.query('SELECT count(*)::int n FROM sports_soccer_settlement_events_v1')).rows[0].n,1,'cancellation retains prior check');
  await changeSoccerManualRecordStatus(r.league,r.date,r.id,'restore');
- const receipts=await Promise.all([archiveSoccerSettlementCheck(r,s),archiveSoccerSettlementCheck(r,s)]);
- assert.equal(receipts.filter(x=>x.created).length,1);
+ // Pre-existing historical settlement fixture: current code cannot create it,
+ // but must keep already archived events and their old contracts readable.
+ await fixtureDb.db.query(`INSERT INTO sports_soccer_settlement_events_v1(event_id,record_id,league,board_date,event_type,payload)
+   VALUES('legacy-settlement',$1,$2,$3::date,'SETTLEMENT',$4::jsonb)`,[r.id,r.league,r.date,JSON.stringify(s)]);
+ await assert.rejects(()=>amendSoccerAccountSettlement(r.league,r.date,r.id,{revision:0,action:'CORRECT',netProfit:'20',reason:'不適用',confirmedAccountSettlement:true,confirmedFinalAmount:true}),/版本已變更|紀錄已取消/,'legacy verified settlement cannot be changed through the self-report route');
  assert.equal((await listUnsettledSoccerManualRecords({league:r.league,date:r.date})).length,0);
  await changeSoccerManualRecordStatus(r.league,r.date,r.id,'cancel');
  const cancelled=(await listSoccerManualRecords(r.league,r.date))[0];assert.equal(cancelled.settlement.profit,4850);assert.equal(soccerRecordStats([cancelled]).profit,null);
@@ -126,14 +136,14 @@ try{
 let loads=0,archives=0;
 const service=await settleOpenSoccerManualRecords({now:()=>now,list:async()=>[base.record,{...base.record,id:'other',period:'HT'}],hydrate:async r=>r,
  load:async()=>{loads++;return base.result;},archive:async(r,check)=>{archives++;return{check};}});
-assert.equal(loads,1);assert.equal(archives,2);assert.equal(service.resultVerified,2);assert.equal(service.settled,0);assert.equal(service.pending,2);assert.equal(service.reasons.SOCCER_SOURCE_CONTRACT_UNVERIFIED,2);
+assert.equal(loads,0);assert.equal(archives,2);assert.equal(service.resultVerified,0);assert.equal(service.settled,0);assert.equal(service.pending,2);assert.equal(service.reasons.RESULT_READER_IDENTITY_UNVERIFIED,2);
 const currentSummary=await settleOpenSoccerManualRecords({now:()=>Date.parse('2026-10-30T15:01:39Z'),list:async()=>[]});
 assert.equal(currentSummary.missingTerms.some(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES'),false);
 assert.equal(currentSummary.settled,0);assert.equal(currentSummary.contractApproval,'SOURCE_TERMS_UNVERIFIED');
 assert.equal(service.missingTerms.some(term=>term.code==='REBATE_ELIGIBLE_SETTLEMENT_STATES'),true,'historical checks do not inherit a later rebate confirmation');
 const identityConflict=await settleOpenSoccerManualRecords({now:()=>now,list:async()=>[base.record,{...base.record,teamIds:{...base.record.teamIds,home:'soccer:epl:team:999'}}],hydrate:async r=>r,
  load:async()=>{throw Error('conflicting original identities must not fetch or select a winner');},archive:async(r,check)=>({check})});
-assert.equal(identityConflict.resultVerified,0);assert.equal(identityConflict.reasons.ORIGINAL_RECORD_TEAM_IDENTITY_CONFLICT,2);
+assert.equal(identityConflict.resultVerified,0);assert.equal(identityConflict.reasons.RESULT_READER_IDENTITY_UNVERIFIED,2);
 const failed=await settleOpenSoccerManualRecords({now:()=>now,list:async()=>[base.record],hydrate:async r=>r,load:async()=>{throw Error('offline');},archive:async(r,check)=>({check})});
-assert.equal(failed.settled,0);assert.equal(failed.reasons.RESULT_SOURCE_UNAVAILABLE,1);
+assert.equal(failed.settled,0);assert.equal(failed.reasons.RESULT_READER_IDENTITY_UNVERIFIED,1);
 console.log('PASS soccer settlement pipeline: real EPL/UCL endpoint projections, league/team/time/source/FT/HT isolation, unknown source terms block profit, explicit synthetic per-state 1% arithmetic, legacy immutable identity, PostgreSQL append-only audit/idempotence/cancellation lock, active-only stats, grouped automatic checks; production contract registry remains empty');
