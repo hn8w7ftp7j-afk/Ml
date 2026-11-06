@@ -82,10 +82,11 @@ try {
         catch (error) { uploadError = error; throw error; }
       } });
     assert.equal((await outbox.enqueue(original, deviceId)).queued, true);
-    assert.equal(state.marketArchiveOutbox[0].captureId, identity);
-    assert.equal(state.marketArchiveOutbox[0].payload.payloadHash, original.payloadHash);
+    const pendingItem = Object.entries(state).find(([key,value]) => key.startsWith('tai888MarketArchiveV2:') && value)?.[1];
+    assert.equal(pendingItem.captureId, identity);
+    assert.equal(pendingItem.payload.payloadHash, original.payloadHash);
     await outbox.flush();
-    assert.equal(state.marketArchiveOutbox.length, 0, `${league}: old Reader48 pending capture must drain without reinstall; ${uploadError?.code || uploadError?.message || ''}`);
+    assert.equal(Object.entries(state).filter(([key,value]) => key.startsWith('tai888MarketArchiveV2:') && value).length, 0, `${league}: old Reader48 pending capture must drain without reinstall; ${uploadError?.code || uploadError?.message || ''}`);
     assert.equal(state.marketArchiveDelivery.lastCaptureId, identity);
     const first = await saveReaderCaptureArchive(wrap(storedPayload), { ...options, sql });
     const retry = await saveReaderCaptureArchive(wrap(storedPayload), { ...options, sql, now: now + 3600000 });

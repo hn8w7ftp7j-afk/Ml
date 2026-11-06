@@ -10,6 +10,7 @@ import * as auth from '../lib/reader-auth-v2.js';
 import * as security from '../lib/security.js';
 import { canonicalReaderPayload } from '../reader/parser.js';
 import { saveReaderCaptureArchive, listReaderCaptureArchives } from '../lib/reader-capture-archive.js';
+import { parseReaderArchiveQuery, queryReaderCaptureArchives } from '../lib/reader-capture-archive-query.js';
 
 const envNames = ['READER_PAIR_SECRET', 'APP_PASSWORD', 'SESSION_SECRET'];
 const before = Object.fromEntries(envNames.map(key => [key, process.env[key]]));
@@ -30,7 +31,8 @@ const token = await auth.createReaderToken({ deviceId });
 const session = await security.createSessionToken();
 let failedDatabase = false, limited = false;
 const calls = [];
-const deps = { NextResponse, ...auth, ...security,
+const deps = { NextResponse, ...auth, ...security, parseReaderArchiveQuery,
+  queryReaderCaptureArchives: query => queryReaderCaptureArchives(query, { sql }),
   checkRateLimit: (...args) => limited ? { allowed: false } : security.checkRateLimit(...args),
   saveReaderCaptureArchive: async (body, options) => {
     calls.push('save');
@@ -96,6 +98,16 @@ try {
   assert.equal(stored.includes('account=private'), false, 'query credentials never enter the archive');
   const getDenied = await route.GET(request('GET', undefined, { cookie: '' })); assert.equal(getDenied.status, 401);
   assert.equal((await route.GET(request('GET', undefined, {}, '?league=MLB'))).status, 400);
+  const recordsResponse = await route.GET(request('GET', undefined, {}, '?view=records&league=MLB'));
+  assert.equal(recordsResponse.status, 200); const records = await recordsResponse.json();
+  assert.equal(records.totalCount, 1); assert.equal(records.records[0].captureId, saved.captureId);
+  assert.equal(records.records[0].integrity.status, 'NOT_VERIFIED');
+  const detailResponse = await route.GET(request('GET', undefined, {}, `?captureId=${saved.captureId}`));
+  assert.equal(detailResponse.status, 200); const detail = await detailResponse.json();
+  assert.equal(detail.record.integrity.status, 'PASS'); assert.equal(detail.record.payload.games[0].fullTotal.line, '8+50');
+  assert.equal(detail.record.payload.pageUrl.includes('account=private'), false);
+  assert.equal((await route.GET(request('GET', undefined, { cookie: '' }, `?captureId=${saved.captureId}`))).status, 401);
+  assert.equal((await route.GET(request('GET', undefined, {}, `?captureId=${'f'.repeat(64)}`))).status, 404);
   const summaryResponse = await route.GET(request('GET')); assert.equal(summaryResponse.status, 200);
   const summary = await summaryResponse.json();
   assert.equal(summary.leagues.length, 7); assert.equal(summary.leagues.find(row => row.league === 'MLB').captureCount, 1);

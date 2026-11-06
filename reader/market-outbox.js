@@ -3,13 +3,12 @@ import { canonicalReaderPayload, sanitizeTai888PageUrl } from './parser.js';
 export const MARKET_ARCHIVE_SCHEMA = 'READER-CAPTURE-ARCHIVE-v1';
 export const MARKET_ARCHIVE_ALARM = 'tai888-reader-market-archive-retry';
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'EPL', 'UCL'];
-const DEFAULT_MAX_BYTES = 6 * 1024 * 1024;
+export const MARKET_ARCHIVE_ITEM_PREFIX = 'tai888MarketArchiveV2:';
 const clone = value => JSON.parse(JSON.stringify(value));
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, clone(value[key])]));
 const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const timestamp = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
 const bytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
-const scope = payload => [payload.league, payload.boardDate, (payload.periodsCovered || []).join('+')].join(':');
 
 // Whitelist sport fields before writing local storage. In particular, pairing
 // tokens, device identifiers, arbitrary DOM fields and URL queries never enter
@@ -71,12 +70,52 @@ function receiptMatches(receipt, item) {
 
 // Acknowledgement merges with the current queue under a short storage lock;
 // network requests never hold this lock or block a newly captured price.
-// Unlike diagnostics, markets have no expiry or eviction path.
-export function createMarketOutbox({ storage, upload, sha, now = Date.now, maxBytes = DEFAULT_MAX_BYTES }) {
+// Unlike diagnostics, markets have no expiry or eviction path. Each capture is
+// stored independently under the extension's existing unlimitedStorage permission.
+// No application-level queue byte cap may discard a newly observed price.
+export function createMarketOutbox({ storage, upload, sha, now = Date.now }) {
   let chain = Promise.resolve(), flushing;
   const locked = task => { const result = chain.then(task); chain = result.catch(() => {}); return result; };
-  const queueFrom = stored => Array.isArray(stored.marketArchiveOutbox) ? stored.marketArchiveOutbox : [];
-  const read = () => storage.get(['marketArchiveOutbox', 'marketArchiveDelivery', 'readerToken', 'deviceId']);
+  const itemKey = item => MARKET_ARCHIVE_ITEM_PREFIX + item.ownerDeviceId + ':' + item.captureId;
+  const same = (left, right) => {
+    const stable = value => Array.isArray(value) ? `[${value.map(stable).join(',')}]`
+      : value && typeof value === 'object' ? `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}` : JSON.stringify(value);
+    return stable(left) === stable(right);
+  };
+  const queueFrom = stored => {
+    const rows = new Map();
+    // Legacy array entries stay intact until their own exact server ACK. A
+    // restart during upgrade must not require one giant migration write.
+    for (const item of Array.isArray(stored.marketArchiveOutbox) ? stored.marketArchiveOutbox : []) rows.set(itemKey(item), item);
+    for (const [key, item] of Object.entries(stored)) if (key.startsWith(MARKET_ARCHIVE_ITEM_PREFIX) && item
+      && key === itemKey(item)) rows.set(key, item);
+    return [...rows.values()].sort((a, b) => Number(a.queuedAt || 0) - Number(b.queuedAt || 0)
+      || a.captureId.localeCompare(b.captureId));
+  };
+  const read = async () => {
+    // Raw seen fragments share this area and may be large. Modern Chrome can
+    // list names without cloning every unrelated board into the worker.
+    if (storage.getKeys) {
+      const keys = await storage.getKeys();
+      return storage.get([...keys.filter(key => key.startsWith(MARKET_ARCHIVE_ITEM_PREFIX)),
+        'marketArchiveOutbox', 'marketArchiveDelivery', 'readerToken', 'deviceId']);
+    }
+    return storage.get(null);
+  };
+  async function writeItem(item) {
+    const key = itemKey(item);
+    await storage.set({ [key]: item });
+    const saved = await storage.get([key]);
+    if (!same(saved[key], item)) throw Error('MARKET_ARCHIVE_LOCAL_READBACK_FAILED');
+  }
+  async function removeItem(stored, item) {
+    const key = itemKey(item);
+    if (Array.isArray(stored.marketArchiveOutbox)) {
+      await storage.set({ marketArchiveOutbox: stored.marketArchiveOutbox.filter(row => itemKey(row) !== key) });
+    }
+    if (storage.remove) await storage.remove(key);
+    else await storage.set({ [key]: null });
+  }
   const delivery = (stored, queue, extra = {}) => ({ ...stored.marketArchiveDelivery,
     state: queue.length ? 'pending' : 'sent', pendingCount: queue.length, pendingBytes: bytes(queue), ...extra });
   async function fail(code) {
@@ -96,18 +135,19 @@ export function createMarketOutbox({ storage, upload, sha, now = Date.now, maxBy
         return await locked(async () => {
           const stored = await read(), queue = queueFrom(stored);
           const exact = queue.find(item => item.ownerDeviceId === ownerDeviceId && item.captureId === captureId);
-          if (exact) return { queued: true, duplicate: true, captureId: exact.captureId };
-          const previous = queue.filter(item => item.ownerDeviceId === ownerDeviceId && scope(item.payload) === scope(payload)).at(-1);
-          if (previous?.payload.payloadHash === payload.payloadHash) return { queued: true, duplicate: true, captureId: previous.captureId };
+          if (exact) {
+            if (!same(exact.payload, payload)) throw Error('MARKET_ARCHIVE_LOCAL_CONFLICT');
+            return { queued: true, durable: true, duplicate: true, captureId: exact.captureId };
+          }
           const item = { captureId, ownerDeviceId, payload, queuedAt: now(), attempts: 0, nextAttemptAt: 0 };
-          if (bytes([...queue, item]) > maxBytes) throw Error('MARKET_ARCHIVE_QUEUE_FULL');
+          await writeItem(item);
           queue.push(item);
-          await storage.set({ marketArchiveOutbox: queue, marketArchiveDelivery: delivery(stored, queue, { code: '' }) });
-          return { queued: true, captureId };
+          await storage.set({ marketArchiveDelivery: delivery(stored, queue, { code: '' }) });
+          return { queued: true, durable: true, captureId };
         });
       } catch (error) {
-        try { await fail(error?.message === 'MARKET_ARCHIVE_QUEUE_FULL' ? 'QUEUE_FULL' : 'LOCAL_SAVE_FAILED'); } catch {}
-        return { queued: false, code: error?.message === 'MARKET_ARCHIVE_QUEUE_FULL' ? 'QUEUE_FULL' : 'LOCAL_SAVE_FAILED' };
+        try { await fail('LOCAL_SAVE_FAILED'); } catch {}
+        return { queued: false, durable: false, code: 'LOCAL_SAVE_FAILED' };
       }
     },
     flush() {
@@ -139,8 +179,9 @@ export function createMarketOutbox({ storage, upload, sha, now = Date.now, maxBy
             const latest = await read(), queue = queueFrom(latest), index = queue.findIndex(row => row.captureId === item.captureId && row.ownerDeviceId === item.ownerDeviceId);
             if (index < 0) return;
             if (!failure) {
+              await removeItem(latest, item);
               queue.splice(index, 1);
-              await storage.set({ marketArchiveOutbox: queue, marketArchiveDelivery: delivery(latest, queue, {
+              await storage.set({ marketArchiveDelivery: delivery(latest, queue, {
                 code: latest.marketArchiveDelivery?.code === 'QUEUE_FULL' ? 'QUEUE_FULL' : '',
                 savedCaptureCount: Number(latest.marketArchiveDelivery?.savedCaptureCount || 0) + 1,
                 lastCaptureId: item.captureId, lastReceivedAt: receipt.receivedAt, lastPersistedAt: receipt.persistedAt,
@@ -148,7 +189,8 @@ export function createMarketOutbox({ storage, upload, sha, now = Date.now, maxBy
             } else {
               const attempts = Math.min(Number(queue[index].attempts || 0) + 1, 20);
               queue[index] = { ...queue[index], attempts, nextAttemptAt: now() + Math.min(60000 * 2 ** (attempts - 1), 900000) };
-              await storage.set({ marketArchiveOutbox: queue, marketArchiveDelivery: delivery(latest, queue,
+              await writeItem(queue[index]);
+              await storage.set({ marketArchiveDelivery: delivery(latest, queue,
                 { code: failure.status === 401 ? 'PAIR_REQUIRED' : failure.message === 'INVALID_RECEIPT' ? 'INVALID_RECEIPT' : 'RETRY_PENDING' }) });
             }
           });

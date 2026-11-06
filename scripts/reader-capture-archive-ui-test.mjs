@@ -23,7 +23,7 @@ const nodes = value => Array.isArray(value) ? value.flatMap(nodes) : value && ty
 function harness() {
   const states = [null, '', false], ref = { current: { sequence: 0, controller: null } }, calls = [], responses = [];
   let cursor = 0, effect, timer = 0;
-  const scope = vm.createContext({ React, taipeiHistoryTime, AbortController, styles: {},
+  const scope = vm.createContext({ React, taipeiHistoryTime, AbortController, ArchiveRecords: () => null, styles: {},
     useState: () => { const index = cursor++; return [states[index], value => { states[index] = value; }]; },
     useRef: () => ref, useCallback: fn => fn, useEffect: fn => { effect = fn; },
     window: { setTimeout: () => ++timer, clearTimeout() {} },

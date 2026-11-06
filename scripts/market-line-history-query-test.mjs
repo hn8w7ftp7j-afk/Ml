@@ -49,15 +49,14 @@ const sql = async (parts, ...values) => {
   assert.doesNotMatch(statement, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE)\b/i);
   assert.match(statement, /COUNT\(DISTINCT \(league, board_date, game_key\)\)/);
   assert.match(statement, /COUNT\(DISTINCT \(board_date, game_key\)\)/);
-  assert.match(statement, /WITH filtered AS MATERIALIZED/);
+  assert.match(statement, /filtered AS MATERIALIZED/);
   assert.match(statement, /HH24:MI:SS.US/);
-  assert.match(statement, /ORDER BY observed_at, league, board_date, game_key LIMIT \?/);
-  assert.equal(values.length, 15);
+  assert.match(statement, /ORDER BY observed_at, league, board_date, game_key,record_id LIMIT \?/);
+  assert.equal(values.length, 12);
   if (databaseError) throw databaseError;
-  const [cutoff, league, repeatedLeague, from, repeatedFrom, through, repeatedThrough, gameKey, repeatedGameKey,
-    observedAt, repeatedObservedAt, afterLeague, afterDate, afterKey, limit] = values;
-  assert.equal(league, repeatedLeague); assert.equal(from, repeatedFrom); assert.equal(through, repeatedThrough);
-  assert.equal(gameKey, repeatedGameKey); assert.equal(observedAt, repeatedObservedAt);
+  const [cutoff, league, from, through, gameKey,
+    observedAt, repeatedObservedAt, afterLeague, afterDate, afterKey, afterRecordId, limit] = values;
+  assert.equal(observedAt, repeatedObservedAt);
   const canonicalCutoff = cutoff.replace(/(\.\d{3})Z$/, (_, milliseconds) => `${milliseconds}000Z`);
   const filtered = inventory.filter(row => row.observed_at <= canonicalCutoff && (!league || row.league === league)
     && (!from || row.board_date >= from) && (!through || row.board_date <= through) && (!gameKey || row.game_key === gameKey));
@@ -142,6 +141,12 @@ calls = [];
 const escaped = await queryMarketLineHistory(parse({ league: 'KBO', until, gameKey: injectionKey }), { sql });
 assert.equal(escaped.totals.savedStates, 0); assert.ok(calls[0].values.includes(injectionKey)); assert.ok(!calls[0].statement.includes(injectionKey));
 await assert.rejects(queryMarketLineHistory(parse({ until }), { env: {} }), error => error.code === 'HISTORY_DATABASE_NOT_CONFIGURED');
+for (const field of ['saved_states', 'game_date_keys', 'board_dates']) for (const invalid of [null, undefined, '', false, [], ' 0 ', '-1', '1.2']) {
+  const brokenSummary = { ...summarize([]), [field]: invalid };
+  await assert.rejects(queryMarketLineHistory(parse({ until }), { sql: async () => [{ totals: brokenSummary, leagues: [], rows: [] }] }),
+    error => error.code === 'HISTORY_READ_FAILED', `missing/invalid ${field} must never become zero`);
+}
+
 databaseError = Object.assign(new Error('fixture table missing'), { code: '42P01' });
 await assert.rejects(queryMarketLineHistory(parse({ until }), { sql }), error => error.code === 'HISTORY_TABLE_NOT_READY' && error.status === 503);
 databaseError = new Error('fixture connection failed');

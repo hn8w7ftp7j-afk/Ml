@@ -15,6 +15,8 @@ assert.equal(seenCaptureQueryUrl('NBA'), '/api/reader/seen-captures?limit=20&lea
 assert.equal(seenCaptureQueryUrl(), '/api/reader/seen-captures?limit=20');
 assert.equal(seenCaptureQueryUrl('NHL'), '/api/reader/seen-captures?limit=20&league=NHL');
 assert.throws(() => seenCaptureQueryUrl('NFL'));
+assert.equal(seenCaptureQueryUrl({ league: 'NBA', from: '2026-10-25', through: '2026-10-26', until: time, after: 'cursor' }),
+  '/api/reader/seen-captures?limit=20&league=NBA&from=2026-10-25&through=2026-10-26&until=2026-10-29T01%3A00%3A00.000Z&after=cursor');
 const one = { ...empty, leagues: [empty.leagues.find(row => row.league === 'EPL')], recent: [{ captureId: 'a'.repeat(64), evidenceHash: 'b'.repeat(64), league: 'EPL',
   observedAt: time, pageActivityAt: null, readerVersion: '2.1.51', tableCount: 0, rowCount: 0, cellCount: 0, lockedRowCount: 0,
   captureReasons: ['BEFORE_SELECTION', 'SOURCE_PARTIAL'], completeCapture: false, receivedAt: time, persistedAt: time, status: 'EVIDENCE_UNVERIFIED',
@@ -108,6 +110,10 @@ assert.match(ui, /setResult\(null\)/); assert.match(ui, /request\.current\.seque
 assert.match(ui, /不是場數、可分析盤口數或完整尾盤數/);
 assert.match(ui, /並非電腦目前的即時佇列/);
 assert.match(ui, /role="alert"/);
+assert.match(ui, /載入下一頁原始保存/);
+assert.match(ui, /來源讀取起日（台北）/);
+assert.match(ui, /until: result.until, after: result.nextAfter/);
+assert.match(ui, /日期篩選使用來源讀取的台北日期/);
 assert.doesNotMatch(ui, /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i, 'inventory panel must only read data');
 assert.match(ui,/先前回報過一筆無法對應來源的保存失敗/);
 assert.match(ui,/後續回條不代表已補齊這筆來源/);

@@ -6,7 +6,7 @@ import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
 import { createSeenCaptureOutbox, SEEN_CAPTURE_ALARM } from './seen-outbox.js';
 import { recoverNbaConflict, NBA_CONFLICT_RECOVERY_KEY } from './nba-conflict-recovery.js';
 
-const VERSION = '2.1.54';
+const VERSION = '2.1.55';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -672,6 +672,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
       const periodKey = soccer ? periodsCovered.join('+') : '';
       const baseSyncKey = `${league}:${payload.boardDate}`;
       const syncKey = soccer && periodKey !== 'UNKNOWN' ? `${baseSyncKey}:${periodKey}` : baseSyncKey;
+      let archiveSave = null;
       try {
         const payloadHash = await sha(canonicalReaderPayload(payload)); payload.payloadHash = payloadHash;
         if (shouldSkipSuccessfulPayload({ reason, payloadHash, lastSuccessfulPayloadHash: hashes[syncKey], lastSuccessfulSyncAt: times[syncKey], now: Date.now() })) {
@@ -686,7 +687,10 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         // Save selected evidence locally before the live POST can fail. A
         // quota/archive outage remains visible in its own delivery status and
         // does not change the existing live-board acceptance contract.
-        if (league !== 'NHL') await getMarketOutbox().enqueue(payload, stored.deviceId);
+        if (league !== 'NHL') archiveSave = await getMarketOutbox().enqueue(payload, stored.deviceId);
+        // Still try the live durable save when local storage fails: the server
+        // may rescue this observation. Never hide the missing local backup.
+        const archiveWarning = archiveSave && archiveSave.queued !== true ? '本機歷史補傳備份未確認' : '';
         const endpoint = ['EPL','UCL'].includes(league) ? '/api/soccer/reader' : league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
         const wirePayload = league === 'NHL' ? nhlReaderEvidencePayload(payload) : payload;
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
@@ -696,10 +700,11 @@ async function performSyncAttempt(reason, preferredTabId, context) {
           `${SOCCER_CONFLICT_RECOVERY_PREFIX}${league}:${payload.boardDate}:${period}`));
         if (league === 'NBA') { try { await chrome.storage.local.remove(NBA_CONFLICT_RECOVERY_KEY); } catch {} }
         const now = Date.now(); hashes[syncKey] = payloadHash; times[syncKey] = now;
-        accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), lastSyncAt: now, saveReceipt, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
-        results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, message: data.message });
-      } catch (error) { failures.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), error: error.message, diagnosticCode: syncExceptionCode(error) }); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: false, error: error.message }); }
+        accepted.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), archiveQueued: archiveSave?.queued ?? null, ...(archiveWarning ? { archiveWarning } : {}), lastSyncAt: now, saveReceipt, rawGameCount: data.rawGameCount, matchedGameCount: integer(data.matchedGameCount, 40), unopenedGameCount: integer(data.unopenedGameCount, 40), marketCount: integer(data.marketCount, 160), directionCount: integer(data.directionCount, 320), partialGameCount: integer(data.partialGameCount, 40), executable: soccer ? false : data.executable === true });
+        results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: true, ...(archiveWarning ? { archiveWarning } : {}), message: data.message });
+      } catch (error) { if (archiveSave && archiveSave.queued !== true) error.message += '；本機歷史補傳備份也未確認，不能視為已保存'; failures.push({ boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), error: error.message, diagnosticCode: syncExceptionCode(error) }); results.push({ league, boardDate: payload.boardDate, ...(soccer ? { periodsCovered } : {}), ok: false, error: error.message }); }
     }
+    const archiveWarnings = accepted.filter(item => item.archiveWarning).map(item => ({ boardDate: item.boardDate, warning: item.archiveWarning }));
     const sum = key => accepted.reduce((count, item) => count + Number(item[key] || 0), 0);
     const skippedAlternativeCount = soccer ? sources.reduce((count, source) => count + integer(source.selected.candidate.capture.diagnostics?.skippedAlternativeCount, 1000), 0) : 0;
     statuses[league] = { ok: failures.length === 0, state: failures.length ? 'error' : 'synced', league,
@@ -708,10 +713,12 @@ async function performSyncAttempt(reason, preferredTabId, context) {
       captureOnly: ['NBA', 'NHL', 'EPL', 'UCL'].includes(league), message: failures.length ? failures.map(item => `${item.boardDate}${soccer ? `（${item.periodsCovered.join('/')}）` : ''}：${item.error}`).join('；') : soccer ? `已同步 ${accepted.length} 筆盤面紀錄（${new Set(accepted.map(item => item.boardDate)).size} 個日期）` : `已同步 ${accepted.length} 個日期`,
       ...(soccer ? { gameCountBasis: 'BOARD_RECORDS_NOT_UNIQUE_GAMES', uniqueGameCount: new Set(payloads.flatMap(payload => payload.games).map(game => [game.boardDate,game.boardTime,game.awayCode,game.homeCode].join('|'))).size, periodsCovered: [...new Set(accepted.flatMap(item => item.periodsCovered || []))] } : {}),
       ...(skippedAlternativeCount ? { skippedAlternativeCount } : {}),
+      ...(archiveWarnings.length ? { archiveWarnings } : {}),
       lastSyncAt: accepted.length ? Math.min(...accepted.map(item => item.lastSyncAt)) : 0, lastAttemptAt: Date.now(),
       rawGameCount: sum('rawGameCount'), matchedGameCount: sum('matchedGameCount'), unopenedGameCount: sum('unopenedGameCount'), marketCount: sum('marketCount'), directionCount: sum('directionCount'), partialGameCount: sum('partialGameCount'),
       localDiagnostic: soccer ? sources.map(source => localBoardDiagnostic(source.sourcePayload, source.selected.candidate.capture)).reduce((total,item)=>({openCount:total.openCount+item.openCount,lockedCount:total.lockedCount+item.lockedCount,marketCount:total.marketCount+item.marketCount,sample:[total.sample,item.sample].filter(Boolean).join('｜').slice(0,280)}),{openCount:0,lockedCount:0,marketCount:0,sample:''}) : localBoardDiagnostic(sourcePayload, selected.candidate.capture), boardDate: sourcePayload.boardDate,
       boardDates: soccer ? [...new Set(payloads.map(item => item.boardDate))] : payloads.map(item => item.boardDate), dateStatuses: accepted, dateErrors: failures, readerVersion: VERSION };
+    if (archiveWarnings.length) statuses[league].message += '；本機歷史補傳備份未確認，即時保存回條已另外核對';
     if (skippedAlternativeCount) statuses[league].message += `；略過 ${skippedAlternativeCount} 組無法核對的盤口，已保留其餘有效盤口`;
     // Only a fully accepted live scan closes this league's incident. Partial
     // saves, failed ACKs and another league's success cannot rearm recovery.

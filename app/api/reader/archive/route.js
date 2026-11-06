@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { bearerToken, readerCorsHeaders, readerOriginAllowed, verifyReaderToken } from '../../../../lib/reader-auth-v2.js';
 import { checkRateLimit, readJsonBody, requireApiAuth } from '../../../../lib/security.js';
 import { saveReaderCaptureArchive, listReaderCaptureArchives } from '../../../../lib/reader-capture-archive.js';
+import { parseReaderArchiveQuery, queryReaderCaptureArchives } from '../../../../lib/reader-capture-archive-query.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +37,14 @@ export async function GET(request) {
   const denied = await requireApiAuth(request); if (denied) return denied;
   if (!checkRateLimit(request, { id: 'reader-archive-summary', limit: 120, windowMs: 600_000 }).allowed)
     return rejected(request, 'READER_ARCHIVE_RATE_LIMIT', 429);
-  if ([...new URL(request.url).searchParams.keys()].length) return rejected(request, 'READER_ARCHIVE_QUERY_INVALID', 400);
-  try { return response(request, await listReaderCaptureArchives()); }
-  catch { return rejected(request, 'READER_ARCHIVE_SUMMARY_UNAVAILABLE', 503); }
+  try {
+    const params = new URL(request.url).searchParams;
+    if (![...params.keys()].length) return response(request, await listReaderCaptureArchives());
+    return response(request, await queryReaderCaptureArchives(parseReaderArchiveQuery(params)));
+  } catch (error) {
+    const status = [400, 404].includes(error?.status) ? error.status : 503;
+    return response(request, { ok: false, durable: false, archiveOnly: true, currentBoardUpdated: false, historicalAvailabilityVerified: false, executable: false,
+      code: status < 500 ? error.code : 'READER_ARCHIVE_QUERY_UNAVAILABLE',
+      error: status === 404 ? '找不到這筆補傳保存資料' : status === 400 ? '補傳歸檔查詢條件無效' : '補傳歸檔暫時無法讀取，未當作零筆' }, status);
+  }
 }
