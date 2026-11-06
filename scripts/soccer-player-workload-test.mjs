@@ -206,6 +206,14 @@ assert.equal((await fetchSoccerPlayerWorkload(workload, { maxMatches: 100, now: 
 const timeout = await fetchSoccerPlayerWorkload(workload, { now: () => at, timeoutMs: 2, fetchImpl: () => new Promise(() => {}) });
 assert.equal(timeout.ok, false);
 assert.equal(timeout.omissions[0].reason, 'SOCCER_SOURCE_TIMEOUT');
+assert.equal((await fetchSoccerPlayerWorkload(workload, { now: () => at, deadline: NaN })).code, 'SOCCER_PLAYER_FETCH_OPTIONS_INVALID');
+let expiredReads = 0;
+const expired = await fetchSoccerPlayerWorkload(workload, { now: () => at, deadline: Date.now() - 1,
+  fetchImpl: async () => { expiredReads++; throw Error('an expired parent budget cannot start summaries'); } });
+assert.equal(expiredReads, 0); assert.equal(expired.coverage.attemptedMatches, 0);
+assert.equal(expired.omissions[0].reason, 'SOCCER_PLAYER_BUDGET_EXCEEDED');
+assert.equal(expired.omissions[0].source.requestedAt, null);
+assert.equal(expired.coverage.verifiedMatches, 0);
 
 // The as-of clock stays fixed while real wall time bounds this consumer. An
 // already running reader retains its own longer deadline and must not abort.

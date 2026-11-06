@@ -30,7 +30,7 @@ children[2].props.children[1].props.onChange({target:{value:'-123.46'}});tree=re
 assert.equal(tree.props.children[5].props.disabled,true,'editing the amount requires both confirmations again');
 ledger.records=[{...record,settlement:{status:'SETTLED',source:'SELF_REPORTED_USER_CONFIRMED',profit:-123.45}}];
 const markup=renderToStaticMarkup(context.SoccerBetRecords());
-assert.match(markup,/目前不自動取得或確認賽果/);assert.match(markup,/核對 2026-10-20 結算狀態/);assert.doesNotMatch(markup,/系統先核對賽果/);
+assert.match(markup,/仍須通過正常完賽及原盤規則核對才可自動結算/);assert.match(markup,/核對 2026-10-20 結算狀態/);assert.doesNotMatch(markup,/系統先核對賽果/);
 assert.match(markup,/帳戶自行申報（含退水）/);assert.match(markup,/自行申報 1 筆/);assert.match(markup,/不計入票率/);assert.doesNotMatch(markup,/自行確認帳戶結算/);
 const revoked={...record,settlement:null,accountSettlement:{original:{profit:-123.45,settledAt:'2026-10-20T00:00:00Z'},revision:2,amendments:[{revision:1,action:'CORRECT',profit:-80.5,reason:'抄錯',recordedAt:'2026-10-20T01:00:00Z'},{revision:2,action:'REVOKE',reason:'誤認',recordedAt:'2026-10-20T02:00:00Z'}]}};
 const oldOpen={...record};delete oldOpen.sourceIdentityStatus;ledger.records=[oldOpen];state=[];cursor=0;
@@ -44,4 +44,23 @@ fields[3].props.children[1].props.onChange({target:{value:'-75.25'}});cursor=0;a
 fields[4].props.children[1].props.onChange({target:{value:'重新核對'}});cursor=0;amendmentTree=context.AccountSettlementAmend({record:revoked,ledger});fields=amendmentTree.props.children;
 fields[5].props.children[0].props.onChange({target:{checked:true}});cursor=0;amendmentTree=context.AccountSettlementAmend({record:revoked,ledger});fields=amendmentTree.props.children;
 assert.equal(fields[6].props.disabled,false);fields[6].props.onClick();assert.equal(action.action,'amend-account-settlement');assert.equal(action.revision,2);assert.equal(action.netProfit,'-75.25');assert.equal(action.changeType,'CORRECT');
+// Mixed actual shipped JSX must distinguish provider-scoped identity from
+// legacy/self assertions and from the origin of the recorded settlement.
+const verified={...record,id:'provider',home:'已來源配對',sourceIdentityStatus:'PROVIDER_SCOPED_UNIQUE_MATCH',sourceIdentityEvidence:{version:'SOCCER-PROVIDER-SCOPED-IDENTITY-v1',contentHash:'a'.repeat(64)}};
+const legacyPending={...oldOpen,id:'legacy',home:'舊版未核對'};
+const selfPending={...record,id:'self',home:'自行核對'};
+const userReported={...verified,id:'reported',home:'已來源配對自行申報',settlement:{status:'SETTLED',source:'SELF_REPORTED_USER_CONFIRMED',profit:10}};
+ledger.records=[verified,legacyPending,selfPending,userReported];state=[];cursor=0;
+const mixed=renderToStaticMarkup(context.SoccerBetRecords());
+const articles=[...mixed.matchAll(/<article[^>]*>[\s\S]*?<\/article>/g)].map(match=>match[0]);
+assert.equal(articles.length,4);
+assert.match(articles[0],/供應商來源範圍內唯一配對/);assert.match(articles[0],/完整賽程及獨立來源核對仍未驗證/);
+assert.match(articles[0],/通過原分析、正常賽果與原盤規則核對後可自動結算/);assert.doesNotMatch(articles[0],/不會自動結算|身分依據，須自行核對/);
+for(const article of articles.slice(1,3)){assert.match(article,/未保存可核對的場次身分依據/);assert.match(article,/不會自動結算/);assert.doesNotMatch(article,/來源範圍內唯一配對/);}
+assert.match(articles[3],/本筆損益由帳戶自行申報/);assert.match(articles[3],/不代表系統已核對賽果或派彩/);
+assert.doesNotMatch(articles[3],/通過原分析、正常賽果與原盤規則核對後可自動結算|不會自動結算/);
+ledger.records=[{...verified,status:'CANCELLED'}];state=[];cursor=0;
+assert.doesNotMatch(renderToStaticMarkup(context.SoccerBetRecords()),/通過原分析、正常賽果與原盤規則核對後可自動結算/,'cancelled record does not imply automatic settlement readiness');
+ledger.records=[{...verified,sourceIdentityEvidence:{...verified.sourceIdentityEvidence,version:'unknown'}}];state=[];cursor=0;
+assert.match(renderToStaticMarkup(context.SoccerBetRecords()),/未保存可核對的場次身分依據/,'an unfamiliar serialized marker cannot claim provider identity');
 console.log('PASS self-reported account UI: amount, rebate scope, double confirmation, edits invalidate confirmation, immutable settlement and clearly labeled statistics');

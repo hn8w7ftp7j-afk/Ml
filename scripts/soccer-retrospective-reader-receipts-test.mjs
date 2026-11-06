@@ -8,7 +8,8 @@ try {
   const { soccerReaderHash } = await import('../lib/soccer/reader.js');
   const { canonicalSoccerPayload } = await import('../reader/soccer-parser.js');
   const { soccerJournalHash } = await import('../lib/soccer/journal.js');
-  const { loadSoccerRetrospectiveReaderReceipts: load } = await import('../lib/soccer/retrospective-reader-receipts.js');
+  const { loadSoccerRetrospectiveReaderReceipts: load, countSoccerRetrospectiveReaderMetadata: metadataCount }
+    = await import('../lib/soccer/retrospective-reader-receipts.js');
   const date = '2026-10-22';
   const capture = (league, day, observed, legacy = false) => {
     const payload = { league, boardDate: day, observedAt: observed, executable: false, deviceId: 'must-never-leak',
@@ -49,6 +50,19 @@ try {
   assert.equal((await load('ucl', date)).rows.length, 1);
   assert.equal((await load('epl', '2026-10-23')).rows.length, 1);
   assert.equal((await load('epl', '2026-10-24')).rows.length, 0);
+  const countOnly=await metadataCount('epl',date,{maxRows:2});
+  assert.equal(countOnly.status,'COMPLETE');assert.equal(countOnly.observedCount,2);
+  assert.equal(countOnly.countsDescribe,'RAW_RECEIPT_METADATA_COUNT_NOT_CONTENT_VALIDATION');assert.equal(countOnly.contentValidated,false);
+  const metadataOverflow=await metadataCount('epl',date,{maxRows:1});
+  assert.equal(metadataOverflow.status,'PARTIAL');assert.equal(metadataOverflow.observedCount,null);
+  assert.deepEqual(metadataOverflow.reasonCodes,['READER_RECEIPT_METADATA_ROW_BUDGET']);
+  assert.equal((await metadataCount('ucl',date)).observedCount,1);
+  assert.equal((await metadataCount('epl','2026-10-23')).observedCount,1);
+  assert.equal((await metadataCount('epl','2026-10-24')).observedCount,0);
+  await assert.rejects(()=>metadataCount('EPL',date),/SCOPE_INVALID/);
+  await assert.rejects(()=>metadataCount('epl',date,{maxRows:10001}),/SCOPE_INVALID/);
+  await assert.rejects(()=>metadataCount('epl',date,{query:async()=>[{n:'not-a-count'}]}),/METADATA_UNAVAILABLE/);
+  await assert.rejects(()=>metadataCount('epl',date,{query:async()=>[{n:null}]}),/METADATA_UNAVAILABLE/);
   await assert.rejects(() => load('EPL', date), /SCOPE_INVALID/);
   await assert.rejects(() => load('epl', date, { maxRows: 0 }), /SCOPE_INVALID/);
   await assert.rejects(() => load('epl', date, { maxBytes: 1 }), /SCOPE_INVALID/);

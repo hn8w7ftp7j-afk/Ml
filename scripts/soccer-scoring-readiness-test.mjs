@@ -22,6 +22,8 @@ for(const league of ['epl','ucl']){
   const c=p.header.competitions[0],source={provider:'ESPN',url:`https://site.api.espn.com/apis/site/v2/sports/soccer/${league==='epl'?'eng.1':'uefa.champions'}/summary?event=${p.header.id}`,fetchedAt:at,contentHash:'retained-provider-fixture'};
   const game=normalizeSoccerSchedule({leagues:[p.header.league],events:[{...p.header,date:c.date,status:c.status}]},league,source).games[0];
   const evidence=normalizeSoccerPrematch(p,game,source,now);
+  // Positive arithmetic fixture models the service's separately bound schedule.
+  evidence.scheduleSource={...source,url:`https://site.api.espn.com/apis/site/v2/sports/soccer/${league==='epl'?'eng.1':'uefa.champions'}/scoreboard?dates=${game.date.replaceAll('-','')}`,contentHash:'synthetic-scoreboard-source'};
   const reader={league:league.toUpperCase(),boardDate:game.date,observedAt:at,firstFetchedAt:at,receivedAt:at,persistedAt:at,
     observationId:'a'.repeat(64),revision:'b'.repeat(64),sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/fixture',
     games:[{league:league.toUpperCase(),boardDate:game.date,boardTime:new Date(game.startTime).toLocaleTimeString('en-GB',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',hour12:false}),homeKey:globalThis.Tai888SoccerTeams.key(game.home.name),awayKey:globalThis.Tai888SoccerTeams.key(game.away.name),

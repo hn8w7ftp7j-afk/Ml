@@ -206,6 +206,38 @@ try {
   const fixedComplete=await next(retryInput,{query,ensure,maxPageRows:1,maxPageBytes:1048576});
   assert.equal(fixedComplete.status,'COMPLETE');assert.equal(fixedComplete.verifiedCount,1);
 
+  // A temporary hydration outage cannot irreversibly terminalize a frozen
+  // manifest or discard progress that was already committed on a prior page.
+  const outageDate='2026-11-03';
+  await saveAt('UCL',outageDate,'19');await saveAt('UCL',outageDate,'20');
+  const outage=await start({league:'ucl',date:outageDate},{query,ensure,maxReceipts:10});
+  const outageScope={cursor:outage.cursor,league:'ucl',date:outageDate};
+  const outageOptions={query,ensure,maxPageRows:1,maxPageBytes:1048576};
+  const firstOutagePage=await next(outageScope,outageOptions);
+  assert.equal(firstOutagePage.status,'RUNNING');assert.equal(firstOutagePage.verifiedCount,1);
+  const storedJob=async()=> (await query(`SELECT started_at::text,status,verified_count,revision
+    FROM sports_soccer_reader_inventory_scans_v1 WHERE cursor=$1`,[outage.cursor]))[0];
+  const frozenBefore=await storedJob();
+  await saveAt('UCL',outageDate,'21'); // A retry must not acquire a new cutoff.
+  let sourceReads=0,updates=0;
+  const unavailable=async(sql,params=[])=>{
+    if(/m\.periods,o\.payload/.test(sql)){sourceReads++;throw Error('fixture-only database transport outage');}
+    if(/UPDATE sports_soccer_reader_inventory_scans_v1/.test(sql))updates++;
+    return query(sql,params);
+  };
+  await assert.rejects(next(outageScope,{...outageOptions,query:unavailable}),error=>
+    error.message==='READER_SOURCE_READ_UNAVAILABLE'&&error.status===503&&error.retryable===true);
+  assert.equal(sourceReads,1);assert.equal(updates,0,'a failed read must not persist terminal status or revision');
+  assert.deepEqual(await storedJob(),frozenBefore,'transient failure preserves exact cutoff, progress and revision');
+  const recovered=await next(outageScope,outageOptions);
+  neverLeak(recovered);assert.equal(recovered.status,'COMPLETE');assert.equal(recovered.totalCount,2);
+  assert.equal(recovered.verifiedCount,2,'retry uses the original two-item manifest, excluding the late receipt');
+  assert.equal((await storedJob()).started_at,frozenBefore.started_at);
+  const afterRecovery=await next(outageScope,outageOptions);
+  assert.equal(afterRecovery.verifiedCount,2,'completed retry remains idempotent');
+  assert.equal(Number((await query(`SELECT count(*) n FROM sports_soccer_reader_inventory_scans_v1
+    WHERE league='UCL' AND board_date=$1::date`,[outageDate]))[0].n),1,'recovery creates no replacement manifest');
+
   // Simulate impossible-under-normal-immutable-FK storage loss explicitly so
   // the reader still fails closed if an operator accidentally damages storage.
   const missingDate='2026-10-27',missing=capture('UCL',missingDate,'2026-10-20T08:00:12.123456Z',true);

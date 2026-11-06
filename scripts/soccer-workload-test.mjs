@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fetchSoccerWorkload, normalizeSoccerTeamWorkload } from '../lib/soccer/workload.js';
+import { fetchSoccerJson } from '../lib/soccer/data.js';
 
 const fixture = name => JSON.parse(fs.readFileSync(new URL(`./fixtures/soccer/${name}.json`, import.meta.url)));
 const results = fixture('workload-results'), fixtures = fixture('workload-fixtures');
@@ -104,7 +105,7 @@ assert.equal((await fetchSoccerWorkload(game, { timeoutMs: 0 })).code, 'SOCCER_W
 assert.equal((await fetchSoccerWorkload({ ...game, away: { sourceId: 359 } })).code, 'SOCCER_WORKLOAD_REQUEST_INVALID');
 const timeout = await fetchSoccerWorkload(game, { now: () => at, timeoutMs: 3, fetchImpl: () => new Promise(() => {}) });
 assert.equal(timeout.ok, false);
-assert.equal(timeout.teams.home.code, 'SOCCER_SOURCE_TIMEOUT');
+assert.equal(timeout.teams.home.code, 'SOCCER_WORKLOAD_BUDGET_EXCEEDED', 'timeoutMs bounds the whole workload operation');
 
 // Exercise the complete schedule -> exact source summary -> observed player path
 // with the repository's genuine Brentford/Arsenal regulation-minute fixture.
@@ -128,4 +129,76 @@ for (const side of ['home', 'away']) {
   assert.ok(withActualSummary.sources.some(source => source.url.endsWith('/summary?event=704467') && /^[a-f0-9]{64}$/.test(source.contentHash)));
 }
 
-console.log('PASS all-competition workload: actual multi-league source schema, 7/14-day observed results, future plans separated, kickoff-gap/true-rest distinction, source cutoff and identity guards, partial-source failure, cache, season boundary, concurrency and timeout bounds');
+// A previous caller's long-lived producer must not override this consumer's
+// own deadline, and this consumer must not abort or replace the shared read.
+{
+  const url = 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams/359/schedule?season=2026';
+  let release, aborted = false, sharedCalls = 0, producerFinished = false, watchdog;
+  const sharedFetch = async (requested, { signal }) => {
+    if (requested === url) {
+      sharedCalls++; signal.addEventListener('abort', () => { aborted = true; });
+      await new Promise(resolve => { release = resolve; });
+      return { ok: true, url: requested, json: async () => structuredClone(results) };
+    }
+    const parsed = new URL(requested), teamId = parsed.pathname.match(/teams\/(\d+)/)[1], season = Number(parsed.searchParams.get('season'));
+    return { ok: true, url: requested, json: async () => ({ status: 'success', team: { id: teamId }, requestedSeason: { year: season }, events: [] }) };
+  };
+  const producer = fetchSoccerJson(url, { fetchImpl: sharedFetch, now: () => at, timeoutMs: 1000 });
+  producer.then(() => { producerFinished = true; });
+  try {
+    const started = Date.now();
+    const consumer = await Promise.race([
+      fetchSoccerWorkload(game, { fetchImpl: sharedFetch, now: () => at, timeoutMs: 30, includePlayerMinutes: false }),
+      new Promise((_, reject) => { watchdog = setTimeout(() => reject(Error('shared schedule ignored workload deadline')), 500); }),
+    ]);
+    assert.ok(Date.now() - started < 450);
+    assert.equal(producerFinished, false); assert.equal(aborted, false); assert.equal(sharedCalls, 1);
+    assert.equal(consumer.teams.home.ok, true, 'the other already-acquired team observations survive');
+    const omitted = consumer.teams.home.retrievalFailures.find(row => row.kind === 'results' && row.requestedSeason === 2026);
+    assert.equal(omitted.code, 'SOCCER_WORKLOAD_BUDGET_EXCEEDED'); assert.equal(omitted.attempted, true);
+    assert.equal(omitted.source.fetchedAt, null); assert.equal(omitted.source.acquisitionStatus, 'NOT_ACQUIRED_BY_THIS_CONSUMER');
+    assert.equal(consumer.status, 'INCOMPLETE');
+  } finally { clearTimeout(watchdog); release(); }
+  assert.equal((await producer).ok, true); assert.equal(aborted, false);
+  const later = await fetchSoccerWorkload(game, { fetchImpl: sharedFetch, now: () => at, includePlayerMinutes: false });
+  assert.equal(later.teams.home.completedMatchesLast14Days, 3); assert.equal(sharedCalls, 1, 'the producer result remains reusable');
+}
+
+// Fixture acquisition and player summaries share one operation budget. The
+// unchanged shared summary producer has a longer independent lifetime.
+{
+  const summaryUrl = 'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=704467';
+  let release, aborted = false, calls = 0, finished = false, watchdog;
+  const stageFetch = async (url, { signal }) => {
+    if (url === summaryUrl) {
+      calls++; signal.addEventListener('abort', () => { aborted = true; });
+      await new Promise(resolve => { release = resolve; });
+      return { ok: true, url, json: async () => structuredClone(minutesPast) };
+    }
+    const parsed = new URL(url), teamId = parsed.pathname.match(/teams\/(\d+)/)[1], season = Number(parsed.searchParams.get('season'));
+    if (season === 2025 || parsed.searchParams.has('fixture')) await new Promise(resolve => setTimeout(resolve, 200));
+    const events = parsed.searchParams.has('fixture') || season !== 2025 ? [] : [{ id: minutesPast.header.id, uid: minutesPast.header.uid, date: prior.date, league: minutesPast.header.league, competitions: [prior] }];
+    return { ok: true, url, json: async () => ({ status: 'success', team: { id: teamId }, requestedSeason: { year: season }, events }) };
+  };
+  const producer = fetchSoccerJson(summaryUrl, { fetchImpl: stageFetch, now: () => minuteAt, timeoutMs: 1500 });
+  producer.then(() => { finished = true; });
+  try {
+    const started = Date.now();
+    const consumer = await Promise.race([
+      fetchSoccerWorkload(nextGame, { fetchImpl: stageFetch, now: () => minuteAt, timeoutMs: 350 }),
+      new Promise((_, reject) => { watchdog = setTimeout(() => reject(Error('player stage received a fresh operation budget')), 500); }),
+    ]);
+    assert.ok(Date.now() - started < 480, 'the player stage must fit inside the original 350ms budget');
+    assert.equal(finished, false); assert.equal(aborted, false); assert.equal(calls, 1);
+    for (const side of ['home', 'away']) {
+      assert.equal(consumer.teams[side].ok, true); assert.equal(consumer.teams[side].recentCompleted.length, 1);
+      const players = consumer.teams[side].playerWorkload;
+      assert.equal(players.ok, false); assert.equal(players.omissions[0].reason, 'SOCCER_PLAYER_BUDGET_EXCEEDED');
+      assert.equal(players.coverage.attemptedMatches, 1); assert.equal(players.coverage.verifiedMatches, 0);
+      assert.equal(players.omissions[0].source.fetchedAt, null);
+    }
+  } finally { clearTimeout(watchdog); release(); }
+  assert.equal((await producer).ok, true); assert.equal(aborted, false);
+}
+
+console.log('PASS all-competition workload: actual multi-league source schema, source/time/identity guards, observed fixtures retained on omissions, whole-operation schedule/player deadline, shared-producer lifetime isolation, cache reuse, partial-source failure, season boundary and concurrency bounds; no model change');

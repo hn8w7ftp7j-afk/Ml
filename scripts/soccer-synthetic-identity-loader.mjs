@@ -5,6 +5,7 @@
 // independently exercised without this loader in soccer-analysis-identity-test.
 console.error('SYNTHETIC TEST ONLY: schedule authority is mocked; no Production identity verification or acceptance.');
 const moduleUrl = 'data:text/javascript,' + encodeURIComponent(`
+export function registerSoccerScheduleIdentityBoard(board){return board;}
 export const SOCCER_READER_IDENTITY_PROOF_VERSION='SOCCER-COMPLETE-SCHEDULE-IDENTITY-v1';
 export function soccerCompleteScheduleAuthorityVerified(board,game) { return board?.coverage?.identityComplete===true; }
 export function createVerifiedSoccerScheduleIdentityEvidence(board,game,source,now) {

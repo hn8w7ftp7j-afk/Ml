@@ -1,3 +1,4 @@
+import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -16,9 +17,9 @@ const xgSource=fs.readFileSync('app/soccer/team-xg-panel.js','utf8').replace(/^i
 const xgCode=await transform(xgSource,{filename:'soccer-personnel-xg.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const xgContext=vm.createContext({React,Date});vm.runInContext(xgCode.code,xgContext);
 const SoccerTeamXgPanel=xgContext.SoccerTeamXgPanel;
-const developmentSource=fs.readFileSync('app/soccer/model-development-panel.js','utf8').replace(/export function/g,'function');
+const developmentSource=fs.readFileSync('app/soccer/model-development-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const developmentCode=await transform(developmentSource,{filename:'soccer-development.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const developmentContext=vm.createContext({React});vm.runInContext(developmentCode.code,developmentContext);
+const developmentContext=vm.createContext({React,soccerMatchContextObservations});vm.runInContext(developmentCode.code,developmentContext);
 const SoccerModelDevelopmentPanel=developmentContext.SoccerModelDevelopmentPanel;
 
 const shipped=fs.readFileSync('app/soccer/analysis-panel.js','utf8');

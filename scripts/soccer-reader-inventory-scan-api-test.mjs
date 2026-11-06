@@ -93,6 +93,21 @@ assert.deepEqual(calls.at(-1), ['start', { league: 'ucl', date: '2026-10-21', cu
 response = await expectStatus(JSON.stringify({ action: 'continue', league: 'ucl', date: '2026-10-21', cursor }), 200);
 result = await response.json(); assert.equal(result.report.cursor, cursor);
 assert.deepEqual(calls.at(-1), ['continue', { league: 'ucl', date: '2026-10-21', cursor }]);
+// Read outages remain retryable HTTP failures; a subsequent request retains the
+// exact continuation scope and cannot become a new manifest implicitly.
+const continueBody=JSON.stringify({action:'continue',league:'ucl',date:'2026-10-21',cursor});
+let outageCalls=0;
+globalThis.__inventoryContinue=async scope=>{
+  calls.push(['continue',scope]);
+  if(!outageCalls++)throw Object.assign(Error('sensitive-source-read-outage'),{status:503,retryable:true});
+  return {...report(scope),status:'COMPLETE',totalCount:2,observedCount:2,verifiedCount:2};
+};
+response=await expectStatus(continueBody,503);result=await response.json();
+assert.equal(result.ok,false);assert.equal(result.report,undefined);
+assert(!JSON.stringify(result).includes('sensitive-source-read-outage'));
+response=await expectStatus(continueBody,200);result=await response.json();
+assert.equal(result.report.status,'COMPLETE');assert.equal(result.report.verifiedCount,2);
+assert.deepEqual(calls.slice(-2),Array.from({length:2},()=>['continue',{league:'ucl',date:'2026-10-21',cursor}]));
 const list = JSON.stringify({ action: 'list', league: 'ucl', date: '2026-10-21' });
 response = await expectStatus(list, 200); result = await response.json();
 assert.equal(result.complete, true); assert.equal(result.reports.length, 1); assert.deepEqual(result.reasonCodes, []);
