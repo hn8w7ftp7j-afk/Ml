@@ -80,7 +80,12 @@ const liveSource={...source,fetchedAt:liveAt};
 const futureGame=normalizeSoccerSchedule({leagues:[future.header.league],events:[{...future.header,date:future.header.date,status:future.header.competitions[0].status}]},'epl',liveSource).games[0];
 const liveReader={...receipt,observedAt:liveAt,firstFetchedAt:liveAt,receivedAt:liveAt,persistedAt:liveAt,league:'EPL',games:[{league:'EPL',boardDate:futureGame.date,boardTime:'20:00',homeKey:globalThis.Tai888SoccerTeams.key(futureGame.home.name),awayKey:globalThis.Tai888SoccerTeams.key(futureGame.away.name),markets}]};
 const schedule={ok:true,league:{id:futureGame.league},date:futureGame.date,until:futureGame.date,games:[futureGame],coverage:{complete:true,identityComplete:true}};
-const generated=buildSoccerAnalysis({evidence:normalizeSoccerPrematch(future,futureGame,liveSource,liveNow),reader:liveReader,schedule,now:liveNow});
+// The real service binds the separately fetched scoreboard provenance before
+// invoking the builder. This positive arithmetic fixture models that boundary;
+// its authority remains explicitly synthetic through the test-only loader.
+const liveEvidence=normalizeSoccerPrematch(future,futureGame,liveSource,liveNow);
+liveEvidence.scheduleSource={...liveSource,url:`https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=${futureGame.date.replaceAll('-','')}`,contentHash:'synthetic-scoreboard-source'};
+const generated=buildSoccerAnalysis({evidence:liveEvidence,reader:liveReader,schedule,now:liveNow});
 const generatedQuotes=generated.directions.flatMap(d=>d.quotes);assert.equal(generatedQuotes.length,8);
 for(const q of generatedQuotes){
  assert.equal(q.scenarioScore.status,'PARAMETER_SENSITIVITY_ONLY',JSON.stringify(q.scenarioScore));
