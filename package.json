@@ -61,7 +61,7 @@
     "soccer:calibration-walk-forward": "node scripts/soccer-calibration-walk-forward-build.mjs"
   },
   "dependencies": {
-    "@neondatabase/serverless": "1.0.2",
+    "@neondatabase/serverless": "1.2.0",
     "@vercel/functions": "3.9.3",
     "cheerio": "1.2.0",
     "decimal.js": "10.6.0",
