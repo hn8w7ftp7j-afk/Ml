@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { taipeiHistoryTime } from './history-view.js';
 import styles from './history.module.css';
 
@@ -97,7 +96,7 @@ export default function CoveragePanel() {
           <caption>各場最新保存內容；尾盤完整性未驗證</caption>
           <thead><tr><th scope="col">場次</th><th scope="col">各市場狀態</th><th scope="col">最後讀盤觀測</th><th scope="col">最後尾盤</th></tr></thead>
           <tbody>{result.games.map(row => <tr key={`${row.league}|${row.boardDate}|${row.gameKey}`}>
-            <th scope="row">{row.league} {row.gameLabel || row.gameKey}<small className={styles.coverageSub}>{row.boardDate}</small><Link href={`/market-line-history?${new URLSearchParams({ league: row.league, from: row.boardDate, through: row.boardDate, gameKey: row.gameKey })}`}>查看這場全部保存紀錄</Link></th>
+            <th scope="row">{row.league} {row.gameLabel || row.gameKey}<small className={styles.coverageSub}>{row.boardDate}</small><a href={`/market-line-history?${new URLSearchParams({ league: row.league, from: row.boardDate, through: row.boardDate, gameKey: row.gameKey })}`}>查看這場全部保存紀錄</a></th>
             <td>{!row.lastReaderObservedAt && <small className={styles.coverageSub}>最後保存版本；讀盤回條未確認</small>}{(row.latestCaptureMarkets || row.markets || []).map((market, index) => <div key={`${market.market}|${index}`} className={market.status === 'AVAILABLE' ? undefined : styles.coverageWarning}>{market.market}：{MARKET_STATUS[market.status] || '未確認'}{['EPL', 'UCL'].includes(row.league) && market.lastObservedAt && <small className={styles.coverageSub}>觀測 {timeText(market.lastObservedAt)}</small>}</div>)}{row.integrity?.status === 'FAIL' && <div className={styles.invalid}>保存內容待核對</div>}</td>
             <td>{timeText(row.lastReaderObservedAt)}</td><td>未驗證</td>
           </tr>)}</tbody>
