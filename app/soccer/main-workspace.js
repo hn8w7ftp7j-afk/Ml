@@ -107,6 +107,11 @@ function SoccerSystemReadiness({ value, league }) {
   return <section className="soccerScoringReadiness" role="status" aria-label="足球評分系統缺項" data-system-scoring-status={value.status}>
     <strong>{value.status === 'BLOCKED' ? '正式評分尚缺系統依據' : '評分設定已登錄，仍須逐場核對'}</strong>
     {value.blockers.length > 0 && <><p>全場與上半場須補齊以下依據，重新同步盤口不會補齊這些缺項。</p><ul>{value.blockers.map(item => <li key={item.code}><strong>{item.label}</strong><p>{item.nextAction}</p></li>)}</ul></>}
+    {value.returnErrorLifecycle?.version === 'SOCCER-RETURN-ERROR-DURABLE-LIFECYCLE-v1' && value.returnErrorLifecycle.league === league && <p className="soccerMarketNote">
+      {value.returnErrorLifecycle.status === 'NOT_CONFIGURED' ? '收益誤差尚未登錄訓練、校準及測試日期；目前排程沒有可執行的驗證協定。'
+        : value.returnErrorLifecycle.status === 'CONFIGURED_RESEARCH_ONLY' ? '收益誤差協定已登錄，排程會保存續讀進度、凍結及核對；正式驗收仍須另行完成。'
+          : '收益誤差驗證協定暫時無法讀取，目前登錄狀態未知。'}
+    </p>}
     <p className="soccerMarketNote">一鍵分析可更新比分研究與符合條件原盤的收益試算。完成研究分析或保存盤口，仍須另行通過正式 S 評分核對。</p>
   </section>;
 }

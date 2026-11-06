@@ -4,6 +4,7 @@ import { SOCCER_CAPABILITIES, SOCCER_DATA_VERSION, SOCCER_LEAGUES, soccerDate, s
 import { fetchSoccerSchedule, fetchSoccerStandings } from '../../../lib/soccer/data.js';
 import { recordSoccerCohort,soccerJournalConfigured } from '../../../lib/soccer/journal.js';
 import { soccerSystemScoringReadiness } from '../../../lib/soccer/system-readiness.js';
+import { readSoccerReturnErrorLifecycleReadiness } from '../../../lib/soccer/return-error-lifecycle.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ export async function GET(request) {
   if (!league) return response({ ok: false, code: 'SOCCER_INVALID_LEAGUE', error: '只支援英超 EPL 或歐冠 UCL' }, 400);
   const view = params.get('view') || 'schedule';
   const scoringSystemReadiness = soccerSystemScoringReadiness(league.id);
+  scoringSystemReadiness.returnErrorLifecycle = await readSoccerReturnErrorLifecycleReadiness(league.id);
   if (view === 'status') return response({ ok: true, version: SOCCER_DATA_VERSION, league: league.id, leagues: Object.values(SOCCER_LEAGUES), capabilities: SOCCER_CAPABILITIES, scoringSystemReadiness });
   if (!['schedule', 'upcoming', 'standings'].includes(view)) return response({ ok: false, code: 'SOCCER_INVALID_VIEW', error: '查詢類型無效' }, 400);
   const date = params.get('date') || soccerDate();

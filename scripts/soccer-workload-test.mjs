@@ -130,6 +130,9 @@ const withActualSummary = await fetchSoccerWorkload(nextGame, { now: () => minut
   const events = parsed.searchParams.has('fixture') || season !== 2025 ? [] : [{ id: minutesPast.header.id, uid: minutesPast.header.uid, date: prior.date, league: minutesPast.header.league, competitions: [prior] }];
   return { ok: true, url, json: async () => ({ status: 'success', team: { id: teamId }, requestedSeason: { year: season }, events }) };
 } });
+assert.equal(withActualSummary.gameId,nextGame.id);
+assert.deepEqual(withActualSummary.target,{id:nextGame.id,sourceId:nextGame.sourceId,league:nextGame.league,date:nextGame.date,startTime:nextGame.startTime,
+  home:{sourceId:nextGame.home.sourceId},away:{sourceId:nextGame.away.sourceId}});
 assert.equal(playerSummaryReads, 1, 'shared historical event summaries coalesce across the two teams');
 for (const side of ['home', 'away']) {
   const observed = withActualSummary.teams[side].playerWorkload;
@@ -138,6 +141,32 @@ for (const side of ['home', 'away']) {
   assert.ok(observed.players.length >= 11); assert.equal(observed.modelEffectApplied, false); assert.equal(observed.executable, false);
   assert.equal(withActualSummary.teams[side].actualRestHours, null);
   assert.ok(withActualSummary.sources.some(source => source.url.endsWith('/summary?event=704467') && /^[a-f0-9]{64}$/.test(source.contentHash)));
+}
+
+// Verify orchestration forwards the target competition into bounded selection.
+// The real retained EPL squad remains observable behind four newer cup games.
+const crowdedAt=minuteAt+12*3600000,crowdedGame={...nextGame,startTime:'2025-01-04T17:30:00Z'};
+const cupEvents=Array.from({length:4},(_,index)=>{
+  const eventId=String(830000+index),date=new Date(crowdedAt-(index+1)*3*3600000).toISOString();
+  return{id:eventId,uid:`s:600~l:41~e:${eventId}`,date,league:{id:'41',slug:'eng.league_cup'},
+    competitions:[{...structuredClone(prior),id:eventId,uid:`s:600~l:41~e:${eventId}~c:${eventId}`,date}]};
+});
+const crowdedSummaryReads=[];
+const crowded=await fetchSoccerWorkload(crowdedGame,{now:()=>crowdedAt,fetchImpl:async url=>{
+  if(url.includes('/summary?')){crowdedSummaryReads.push(url);return url.endsWith('/eng.1/summary?event=704467')
+    ?{ok:true,url,json:async()=>structuredClone(minutesPast)}:{ok:false,status:503};}
+  const parsed=new URL(url),teamId=parsed.pathname.match(/teams\/(\d+)/)[1],season=Number(parsed.searchParams.get('season'));
+  const events=parsed.searchParams.has('fixture')||season!==2025?[]:[...cupEvents,
+    {id:minutesPast.header.id,uid:minutesPast.header.uid,date:prior.date,league:minutesPast.header.league,competitions:[prior]}];
+  return{ok:true,url,json:async()=>({status:'success',team:{id:teamId},requestedSeason:{year:season},events})};
+}});
+assert.equal(crowdedSummaryReads.length,4,'priority preserves the four-summary limit and shared team reads');
+assert.ok(crowdedSummaryReads.some(url=>url.endsWith('/eng.1/summary?event=704467')));
+for(const side of['home','away']){
+  assert.equal(crowded.teams[side].recentCompleted.length,5);
+  assert.equal(crowded.teams[side].playerWorkload.matches[0].eventId,'704467');
+  assert.equal(crowded.teams[side].playerWorkload.coverage.verifiedMatches,1);
+  assert.equal(crowded.teams[side].playerWorkload.coverage.complete,false);
 }
 
 // A previous caller's long-lived producer must not override this consumer's
