@@ -12,15 +12,21 @@ assert.equal(report.scope.gameId,scope.gameId);assert.equal(report.identityScope
 assert.equal(report.crossRequestConsistency,'NOT_VERIFIED_SEPARATE_DATABASE_STATEMENTS');
 assert.equal(report.validForecastCount,1);assert.equal(report.readerObservationCount,1);assert.equal(joined,0,'never invoke pair matcher without full-date official identity evidence');
 assert.equal(report.forecastCoverage,'COMPLETE_SINGLE_GAME_CURRENT_PROTOCOL_STATEMENT');
+assert.equal(report.readerCoverage,'COMPLETE_METADATA_COUNT_SINGLE_STATEMENT');
+assert.equal(report.readerCountScope,'RAW_RECEIPT_METADATA_COUNT_NOT_CONTENT_VALIDATION');
+assert.equal(report.readerContentValidated,false);
 assert.doesNotMatch(JSON.stringify(report),/RAW_CAPTURE_MUST_NOT_LEAVE/);
 for(const gameId of ['soccer:epl:123','soccer:ucl:abc','soccer:ucl:','soccer:ucl:123/other','soccer:ucl:123&x=1'])
   await assert.rejects(()=>read({...scope,gameId},deps),error=>error.status===400);
 const partial=await read(scope,{...deps,loadGame:async()=>({status:'PARTIAL',captures:[],reasonCodes:['GAME_FORECAST_BYTE_BUDGET'],observedCount:501})});
 assert.equal(partial.status,'PARTIAL');assert.equal(partial.selectedPairCount,null);assert.ok(partial.reasonCodes.includes('GAME_FORECAST_BYTE_BUDGET'));assert.equal(joined,0);
 assert.equal(partial.observedForecastCount,501);assert.equal(partial.forecastCountScope,'BOUNDED_PREFIX_ONLY');
-const readerPartial=await read(scope,{...deps,readReader:async()=>({status:'PARTIAL',rows:[],reasonCodes:['READER_RECEIPT_BYTE_BUDGET']})});
+assert.equal(partial.readerObservationCount,1);assert.equal(partial.readerContentValidated,false,
+  'a partial forecast read does not prevent a separate current metadata count');
+const readerPartial=await read(scope,{...deps,readReader:async()=>({status:'PARTIAL',observedCount:null,reasonCodes:['READER_RECEIPT_METADATA_ROW_BUDGET']})});
 assert.equal(readerPartial.status,'PARTIAL');assert.equal(readerPartial.gameDiagnosticStatus,'IDENTITY_UNVERIFIED');
-assert.ok(readerPartial.reasonCodes.includes('READER_RECEIPT_BYTE_BUDGET'),'oversized original Reader history remains explicit and fails closed');
+assert.equal(readerPartial.readerObservationCount,null);assert.equal(readerPartial.readerCoverage,'PARTIAL_BOUNDED_METADATA_COUNT');
+assert.ok(readerPartial.reasonCodes.includes('READER_RECEIPT_METADATA_ROW_BUDGET'),'a bounded metadata prefix cannot be called the full count');
 const readerUnavailable=await read(scope,{...deps,readReader:async()=>{throw Error('sensitive database failure');}});
 assert.equal(readerUnavailable.readerCoverage,'UNAVAILABLE');assert.equal(readerUnavailable.readerObservationCount,null);
 assert.equal(readerUnavailable.validForecastCount,1);assert.ok(readerUnavailable.reasonCodes.includes('READER_RECEIPTS_UNAVAILABLE'));
@@ -30,6 +36,7 @@ assert.equal(fullDay.status,'PARTIAL');assert.equal(fullDay.selectedPairCount,nu
 assert.ok(fullDay.reasonCodes.includes('FULL_DATE_OFFICIAL_IDENTITY_NOT_VERIFIED'));assert.equal(joined,0);
 const boundedDay=await read({league:scope.league,date:scope.date},{...deps,load:async()=>({truncated:true,readCoverage:{loadedCaptureRows:42,reasons:['CAPTURE_ROW_BUDGET']}})});
 assert.equal(boundedDay.loadedForecastCount,42);assert.equal(boundedDay.forecastCountScope,'LOADED_ROWS_NOT_PROVEN_COMPLETE');assert.equal(boundedDay.selectedPairCount,null);
+assert.equal(boundedDay.readerObservationCount,1);assert.equal(boundedDay.readerCountScope,'RAW_RECEIPT_METADATA_COUNT_NOT_CONTENT_VALIDATION');
 const checksBounded=await read({league:scope.league,date:scope.date},{...deps,load:async()=>({truncated:true,readCoverage:{loadedCaptureRows:42,reasons:['RESULT_CHECK_ROW_BUDGET']}})});
 assert.ok(checksBounded.excludedReasons.EVIDENCE_INPUT_INCOMPLETE);assert.equal(checksBounded.excludedReasons.FORECAST_INPUT_INCOMPLETE,undefined);
 assert.ok(checksBounded.reasonCodes.includes('RESULT_CHECK_ROW_BUDGET'));

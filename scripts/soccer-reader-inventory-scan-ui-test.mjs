@@ -33,6 +33,17 @@ reload.render({league:'epl',date:'2026-10-21'});assert.ok(reload.button('開始�
 const empty=harness();empty.render();const e=empty.button('開始清點').props.onClick();empty.calls[0].respond(report(empty.calls[0],{status:'COMPLETE',totalCount:0,verifiedCount:0}));await e;await empty.settle();assert.match(empty.markup,/沒有可見的已提交收據/);
 const partial=harness();partial.render();const p=partial.button('開始清點').props.onClick();partial.calls[0].respond(report(partial.calls[0],{status:'PARTIAL',totalCount:null,reasons:['READER_MANIFEST_ROW_BUDGET']}));await p;await partial.settle();assert.match(partial.markup,/超過單次清點上限/);assert.match(partial.markup,/總數 未知/);
 const error=harness();error.render();const q=error.button('開始清點').props.onClick();error.calls[0].respond({error:'private-fixture-device'},503);await q;await error.settle();assert.match(error.markup,/清點暫時無法完成/);assert.doesNotMatch(error.markup,/private-fixture-device/);assert.ok(error.button('恢復清點'));
+const outage=harness();outage.render();const outageRun=outage.button('開始清點').props.onClick();
+const outageCursor=JSON.parse(outage.calls[0].options.body).cursor;
+outage.calls[0].respond(report(outage.calls[0],{verifiedCount:1}));await outage.settle();
+assert.equal(outage.calls.length,2);outage.calls[1].respond({ok:false,error:'sensitive-source-outage'},503);
+await outageRun;await outage.settle();assert.match(outage.markup,/已核對 1 筆/);
+assert.doesNotMatch(outage.markup,/清點完成|sensitive-source-outage/);
+const outageRetry=outage.button('繼續清點').props.onClick();
+assert.deepEqual(JSON.parse(outage.calls[2].options.body),{action:'continue',league:'ucl',date:'2026-10-21',cursor:outageCursor});
+outage.calls[2].respond(report(outage.calls[2],{status:'COMPLETE',verifiedCount:2}));await outageRetry;await outage.settle();
+assert.match(outage.markup,/清點完成/);assert.equal(JSON.parse([...outage.storage.values()][0]).items.length,1,
+  'recovering a partially verified manifest must not create another cutoff');
 const race=harness();race.render();const r=race.button('開始清點').props.onClick();race.render({league:'ucl',date:'2026-10-22'});race.calls[0].respond(report(race.calls[0],{status:'COMPLETE',verifiedCount:2}));await r;await race.settle();assert.doesNotMatch(race.markup,/清點完成/);assert.ok(race.button('開始清點'));
 const history=harness();history.render();let firstHistory=history.button('開始清點').props.onClick();history.calls[0].respond(report(history.calls[0],{status:'COMPLETE',verifiedCount:2}));await firstHistory;await history.settle();
 const firstToken=JSON.parse(history.calls[0].options.body).cursor;
@@ -62,5 +73,9 @@ const raceList=harness();raceList.render();const listFlight=raceList.button('查
 const unavailable=harness();unavailable.render();const unavailableCall=unavailable.button('查詢已保存清單').props.onClick();unavailable.calls[0].respond({error:'sensitive source information'},503);await unavailableCall;await unavailable.settle();assert.match(unavailable.markup,/數量未知/);assert.doesNotMatch(unavailable.markup,/sensitive source information|目前沒有可查詢/);
 const publicEmpty=harness();publicEmpty.render();const publicList=publicEmpty.button('查詢已保存清單').props.onClick();const zeroReport=publicReport(undefined,{status:'COMPLETE',totalCount:0,observedCount:0,verifiedCount:0});publicEmpty.calls[0].respond({ok:true,reports:[zeroReport],complete:true,reasonCodes:[]});await publicList;await publicEmpty.settle();const publicView=publicEmpty.button('查看這份清單').props.onClick();publicEmpty.calls[1].respond({ok:true,report:zeroReport});await publicView;await publicEmpty.settle();assert.match(publicEmpty.markup,/此時點沒有可見的已提交收據/);
 const deniedResume=harness();deniedResume.render();const deniedList=deniedResume.button('查詢已保存清單').props.onClick();deniedResume.calls[0].respond({ok:true,reports:[publicReport()],complete:true,reasonCodes:[]});await deniedList;await deniedResume.settle();const deniedCall=deniedResume.button('繼續這份清單').props.onClick();deniedResume.calls[1].respond({ok:false,error:'sensitive-id'},404);await deniedCall;await deniedResume.settle();assert.match(deniedResume.markup,/清單暫時無法恢復/);assert.doesNotMatch(deniedResume.markup,/sensitive-id/);
+const remoteRetry=deniedResume.button('繼續這份清單').props.onClick();
+assert.deepEqual(JSON.parse(deniedResume.calls[2].options.body),{action:'resume',league:'ucl',date:'2026-10-21',scanId:publicId});
+deniedResume.calls[2].respond({ok:true,report:publicReport(undefined,{status:'COMPLETE',verifiedCount:3})});
+await remoteRetry;await deniedResume.settle();assert.match(deniedResume.markup,/已核對 3 筆/);
 
 console.log('PASS Reader inventory scan UI: explicit start, bounded continuation, persistence, scope isolation, zero, partial and errors');

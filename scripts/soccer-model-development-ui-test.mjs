@@ -1,3 +1,4 @@
+import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -7,9 +8,9 @@ import { transform } from 'next/dist/build/swc/index.js';
 import { evaluateSoccerQuote } from '../lib/soccer/market-payoff.js';
 import { scoreDistribution } from '../lib/soccer/score-model.js';
 const path='app/soccer/model-development-panel.js';
-const source=fs.readFileSync(path,'utf8').replace('export function','function');
+const source=fs.readFileSync(path,'utf8').replace(/^import .*?;\n/gm,'').replace('export function','function');
 const {code}=await transform(source,{filename:path.replace('.js','.jsx'),jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const context=vm.createContext({React});vm.runInContext(code,context);
+const context=vm.createContext({React,soccerMatchContextObservations});vm.runInContext(code,context);
 const game={id:'soccer:epl:123',league:'epl'};
 const render=(minutes,conditions,matchXg)=>renderToStaticMarkup(React.createElement(context.SoccerModelDevelopmentPanel,{minutes,conditions,matchXg,game}));
 assert.equal(render(null,null),'');
@@ -32,7 +33,7 @@ assert.match(render(null,null,xg),/本場仍缺當季/);assert.match(render(null
 assert.equal(render(null,null,{...xg,gameId:'soccer:ucl:123'}),'');
 const marketSource=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*$/gm,'').replace(/export function/g,'function');
 const compiledMarket=await transform(marketSource,{filename:'market-panel.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const marketContext=vm.createContext({React});vm.runInContext(compiledMarket.code,marketContext);
+const marketContext=vm.createContext({React,soccerMatchContextObservations});vm.runInContext(compiledMarket.code,marketContext);
 const payoff=evaluateSoccerQuote({quote:{period:'FT',kind:'HANDICAP',sourceLine:'0',direction:'HOME',lineSide:'home',water:.9,waterFormat:'PROFIT_PER_UNIT'},
  distribution:scoreDistribution(1.4,1.1,0),contract:{period:'FT',type:'CREDIT_BOUNDARY',labelMapping:{home:'Home',away:'Away'},rebate:{rate:.01,basis:'SETTLED_PRINCIPAL'},provenance:{status:'ASSUMPTION'}}});
 const certified=payoff.certifiedDifferencePayoff;

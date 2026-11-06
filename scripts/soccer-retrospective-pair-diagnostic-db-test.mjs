@@ -134,6 +134,49 @@ try {
   assert.equal(gameBody.report.selectedPairCount,null);assert.deepEqual(gameBody.report.pairs,[]);
   assert.equal((await GET(request(`?league=epl&date=${c.date}&mode=games&gameId=${encodeURIComponent(c.gameId)}`,true,'203.0.113.212'))).status,400);
   assert.equal((await GET(request(`?league=epl&date=${c.date}&gameId=soccer%3Aucl%3A123`,true,'203.0.113.213'))).status,400);
+  // The public diagnostic does not run a matcher without authoritative date
+  // identity, so it needs only a receipt metadata count. Whole-day originals
+  // larger than 16MiB must not be hydrated merely to count stored rows. These
+  // deliberately nonvalidated fixture payloads also prove count is not content
+  // validation or an automatic route into formal evidence.
+  await db.query(`INSERT INTO sports_soccer_reader_observations_v2
+    (observation_id,league,board_date,content_hash,source_observed_at,received_at,payload)
+    SELECT md5('big-original:'||i::text)||md5('big-observation:'||i::text),'EPL',$1,repeat('a',64),$2,$2,
+      jsonb_build_object('fixturePadding',repeat('x',1048576)) FROM generate_series(1,17) AS i`,[c.date,observedAt]);
+  const {loadSoccerRetrospectiveReaderReceipts:loadRaw}=await import('../lib/soccer/retrospective-reader-receipts.js');
+  const oversized=await loadRaw('epl',c.date,{maxRows:1000});
+  assert.equal(oversized.status,'PARTIAL');assert.ok(oversized.reasonCodes.includes('READER_RECEIPT_BYTE_BUDGET'));
+  const expectedMetadataCount=Number((await db.query(`SELECT count(*) n FROM sports_soccer_reader_observations_v2
+    WHERE league='EPL' AND board_date=$1::date`,[c.date])).rows[0].n);
+  let readerMetadataQueries=0;
+  globalThis.__SOCCER_TEST_SQL=async(queries,tx)=>{
+    for(const {query} of queries)if(/sports_soccer_reader_observations_v2/.test(query)){
+      readerMetadataQueries++;assert.doesNotMatch(query,/\bpayload\b|\bcontent_hash\b|\bperiods\b/,
+        'the public diagnostic must not hydrate raw Reader content just for a count');
+    }
+    return original(queries,tx);
+  };
+  const largeMetadata=await run(['--league','epl','--date',c.date,'--game-id',c.gameId],{now:after});
+  assert.equal(readerMetadataQueries,1);assert.equal(largeMetadata.readerObservationCount,expectedMetadataCount);
+  assert.equal(largeMetadata.readerCoverage,'COMPLETE_METADATA_COUNT_SINGLE_STATEMENT');
+  assert.equal(largeMetadata.readerCountScope,'RAW_RECEIPT_METADATA_COUNT_NOT_CONTENT_VALIDATION');
+  assert.equal(largeMetadata.readerContentValidated,false);assert.equal(largeMetadata.selectedPairCount,null);
+  assert.equal(largeMetadata.formalEligible,false);assert.deepEqual(largeMetadata.pairs,[]);
+  assert.ok(!largeMetadata.reasonCodes.includes('READER_RECEIPT_BYTE_BUDGET'));
+  const largeApi=await GET(request(`?league=epl&date=${c.date}&gameId=${encodeURIComponent(c.gameId)}`,true,'203.0.113.214'));
+  const largeApiBody=await largeApi.json();assert.equal(largeApi.status,200);
+  assert.equal(largeApiBody.report.readerObservationCount,expectedMetadataCount);
+  assert.equal(largeApiBody.report.readerContentValidated,false);assert.equal(largeApiBody.report.selectedPairCount,null);
+  assert.doesNotMatch(JSON.stringify(largeApiBody),/fixturePadding|rawRows|private-test-device/);
+  globalThis.__SOCCER_TEST_SQL=async(queries,tx)=>{
+    if(queries.some(({query})=>/sports_soccer_reader_observations_v2/.test(query)))throw Error('private-reader-count-failure');
+    return original(queries,tx);
+  };
+  const metadataUnavailable=await run(['--league','epl','--date',c.date,'--game-id',c.gameId],{now:after});
+  assert.equal(metadataUnavailable.readerObservationCount,null);assert.equal(metadataUnavailable.readerCoverage,'UNAVAILABLE');
+  assert.equal(metadataUnavailable.selectedPairCount,null);assert.equal(metadataUnavailable.validForecastCount,largeMetadata.validForecastCount);
+  assert.doesNotMatch(JSON.stringify(metadataUnavailable),/private-reader-count-failure/);
+  globalThis.__SOCCER_TEST_SQL=original;
   for(let i=0;i<4;i++)assert.equal((await GET(request('?league=nba&date=2026-01-01',true,'203.0.113.200'))).status,400);
   assert.equal((await GET(request('?league=nba&date=2026-01-01',true,'203.0.113.200'))).status,429);
   globalThis.__SOCCER_TEST_SQL=async()=>{throw Error('postgres://private-password@private-host');};
@@ -149,6 +192,9 @@ try {
       md5(i::text)||md5('analysis:'||i::text),$3 FROM generate_series(1,501) AS i`,[protocol.version,c.date,c.capturedAt]);
   const fullDayBlocked=await run(['--league','epl','--date',c.date],{now:after});
   assert.equal(fullDayBlocked.status,'PARTIAL');assert.ok(fullDayBlocked.reasonCodes.includes('CAPTURE_ROW_BUDGET'));
+  assert.equal(fullDayBlocked.readerObservationCount,expectedMetadataCount);
+  assert.equal(fullDayBlocked.readerCoverage,'COMPLETE_METADATA_COUNT_SINGLE_STATEMENT');
+  assert.equal(fullDayBlocked.readerContentValidated,false);assert.equal(fullDayBlocked.selectedPairCount,null);
   const stillOneGame=await run(['--league','epl','--date',c.date,'--game-id',c.gameId],{now:after});
   assert.equal(stillOneGame.forecastCoverage,'COMPLETE_SINGLE_GAME_CURRENT_PROTOCOL_STATEMENT');assert.equal(stillOneGame.status,'PARTIAL');
   assert.ok(stillOneGame.reasonCodes.includes('FULL_DATE_OFFICIAL_IDENTITY_NOT_VERIFIED'),'only this game is inspected despite the whole-day row budget');
