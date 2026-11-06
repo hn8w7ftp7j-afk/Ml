@@ -30,6 +30,17 @@ assert.equal(actual.pointInTimeAvailabilityVerified, false);
 assert.equal(actual.modelEffectApplied, false);
 assert.ok(actual.recentCompleted.every(e => e.playerMinutes === null));
 assert.ok(![...actual.recentCompleted, ...actual.scheduledAhead].some(e => e.eventId === game.sourceId), 'target match must not count as its own workload');
+// A long gap in European fixtures must survive newer domestic matches.
+const longGapInputs=observations();
+const european=longGapInputs[0].data.events.find(event=>event.league.slug==='uefa.champions');
+assert.ok(european,'fixture has a completed European match');
+european.date=european.competitions[0].date=new Date(at-21*86400000).toISOString();
+const longGap=normalize(longGapInputs);
+assert.equal(longGap.ok,true);
+assert.equal(longGap.lastKnownCompletedByCompetition['uefa.champions'].eventId,String(european.id));
+assert.notEqual(longGap.lastKnownCompleted.eventId,String(european.id));
+assert.ok(!longGap.recentCompleted.some(record=>record.eventId===String(european.id)));
+assert.equal(longGap.coverage.complete,false);
 const plansOnly = normalize(observations().filter(o => o.kind === 'fixtures'));
 assert.equal(plansOnly.completedMatchesLast7Days, null, 'fixture plans alone cannot establish zero completed workload');
 assert.equal(plansOnly.coverage.resultsObserved, false);
