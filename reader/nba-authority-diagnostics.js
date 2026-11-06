@@ -33,5 +33,6 @@ export function buildNbaAuthorityDiagnostics(candidates) {
       markets, periodsCovered, periodStates };
   };
   return buildTypedAuthorityDiagnostics(candidates, { league: 'NBA', version: NBA_AUTHORITY_DIAGNOSTICS_VERSION,
-    unit: 'POINTS', gameEvidence, teamCodeValid: value => NBA_DIAGNOSTIC_TEAM_CODES.includes(value) });
+    unit: 'POINTS', gameEvidence, includeSourceTopology: true,
+    teamCodeValid: value => NBA_DIAGNOSTIC_TEAM_CODES.includes(value) });
 }

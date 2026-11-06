@@ -49,7 +49,7 @@ export default function ReaderDiagnosticsPage() {
           {record.computedCoverage[id].missingMarketCount > 0 && <p>已解析場次另有 {record.computedCoverage[id].missingMarketCount} 個市場未收到有效盤口，可能包含鎖盤；不能據此判定莊家未開盤。</p>}
         </div>}
         {row.errorCode && <p>{reasons[row.errorCode] || row.errorCode}</p>}
-        {row.conflictRecovery && <p>自動修復：{row.conflictRecovery.state === 'REQUESTED' ? '已要求重新整理，等待新盤面核對' : row.conflictRecovery.state === 'ALREADY_ATTEMPTED' ? '本次衝突已嘗試修復，仍待來源一致' : '來源重新整理請求未成功'}｜已接受重新整理請求 {row.conflictRecovery.refreshedTabCount}／{row.conflictRecovery.attemptedTabCount} 個分頁｜{new Date(row.conflictRecovery.attemptedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>}
+        {row.conflictRecovery && <p>自動修復：{row.conflictRecovery.state === 'REQUESTED' ? '已要求重新整理，等待新盤面核對' : row.conflictRecovery.state === 'ALREADY_ATTEMPTED' ? '本次衝突已嘗試修復，仍待來源一致' : row.conflictRecovery.state === 'EXHAUSTED' ? '已達自動重整上限，仍待來源一致' : '來源重新整理請求未成功'}{id === 'NBA' && <>｜已嘗試 {row.conflictRecovery.attemptCount} 次，自動重整上限 {row.conflictRecovery.maxAutomaticAttempts} 次</>}｜已接受重新整理請求 {row.conflictRecovery.refreshedTabCount}／{row.conflictRecovery.attemptedTabCount} 個分頁｜{new Date(row.conflictRecovery.attemptedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>}
         {row.authority && <details>
           <summary>{id === 'NBA' ? 'NBA 盤面差異明細' : '足球盤面差異明細'}</summary>
           {row.authority.sources.map(source => <p key={source.index}>盤面 {source.index}：{source.pageIndex && <>分頁 {source.pageIndex}／框架 {source.frameIndex}{source.active ? '（目前使用中）' : ''}｜</>}{source.dates.join('、') || '日期無有效證據'}｜{source.periods.map(period => periods[period]).join('、') || '期間無有效證據'}｜{source.gameCount} 場</p>)}

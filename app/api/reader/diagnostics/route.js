@@ -2,6 +2,7 @@ import { bearerToken, verifyReaderToken, readerOriginAllowed, readerCorsHeaders 
 import { requireApiAuth, readJsonBody, checkRateLimit } from '../../../../lib/security.js';
 import { DIAGNOSTIC_LEAGUES } from '../../../../reader/diagnostic-schema.js';
 import { saveReaderDiagnostic, listReaderDiagnostics } from '../../../../lib/reader-diagnostic-store.js';
+import { logReaderDiagnosticReceipt } from '../../../../lib/reader-diagnostic-runtime-log.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,12 @@ export async function POST(request) {
   if (request.headers.get('x-device-id') !== identity.deviceId) return reply(request, { ok: false, error: '診斷裝置與配對不符' }, 403);
   const rate = checkRateLimit(request, { id: `reader-diagnostics:${identity.deviceId}`, limit: 90, windowMs: 600000 });
   if (!rate.allowed) return reply(request, { ok: false, error: '診斷回傳過於頻繁' }, 429);
-  try { return reply(request, await saveReaderDiagnostic(await readJsonBody(request, 49152), identity.deviceId)); }
+  try {
+    const report = await readJsonBody(request, 49152);
+    const receipt = await saveReaderDiagnostic(report, identity.deviceId);
+    logReaderDiagnosticReceipt(report, receipt);
+    return reply(request, receipt);
+  }
   catch (error) { return reply(request, { ok: false, error: error.status === 400 || error.status === 413 || error.status === 409 ? error.message : '診斷尚未保存，Reader 將自動補傳' }, error.status || 503); }
 }
 export async function GET(request) {

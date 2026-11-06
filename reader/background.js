@@ -6,7 +6,7 @@ import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
 import { createSeenCaptureOutbox, SEEN_CAPTURE_ALARM } from './seen-outbox.js';
 import { recoverNbaConflict, NBA_CONFLICT_RECOVERY_KEY } from './nba-conflict-recovery.js';
 
-const VERSION = '2.1.55';
+const VERSION = '2.1.56';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -621,11 +621,10 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     context.leagues[league] = (selection.assessed || []).map(item => ({ diagnostics: item.candidate?.capture?.diagnostics,
       parsedGameCount: item.candidate?.parsed?.games?.length || 0, issues: item.issues || [] }));
     if (!selection.ok) {
-      const refreshed = league === 'NBA' ? await recoverNbaConflict(selection, {
-        tabs, storage: chrome.storage.local, reload: id => chrome.tabs.reload(id), manual: reason === 'manual',
-      }).catch(() => []) : [];
       const conflictRecovery = soccer ? await recoverSoccerConflict(selection, {
         league, tabs, storage: chrome.storage.local, reload: id => chrome.tabs.reload(id), manual: reason === 'manual',
+      }).catch(() => null) : league === 'NBA' ? await recoverNbaConflict(selection, {
+        tabs, storage: chrome.storage.local, reload: id => chrome.tabs.reload(id), manual: reason === 'manual',
       }).catch(() => null) : null;
       if (selection.diagnosticEvidence) context.authority[league] = selection.diagnosticEvidence;
       const detail = selection.error === 'conflicting-duplicate-rows'
@@ -641,8 +640,9 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         message: conflictRecovery?.state === 'REQUESTED'
           ? `${LABELS[league]}來源盤口衝突，已要求重新整理 ${conflictRecovery.refreshedTabCount} 個來源；載入後自動重讀，核對一致前不採用衝突盤口。`
           : conflictRecovery?.state === 'ALREADY_ATTEMPTED'
-          ? `${LABELS[league]}來源盤口仍不一致；本次衝突已嘗試重新整理，已停止上傳並自動回報來源差異。請只保留一個相同日期與期間的標準盤來源。`
-          : refreshed.length ? `NBA 分頁價格衝突，已重新整理 ${refreshed.length} 個來源；載入後自動重讀，核對一致前不採用任何衝突盤口。`
+          ? `${LABELS[league]}來源盤口仍不一致；已嘗試重新整理，已停止上傳並自動回報來源差異。${league === 'NBA' ? '冷卻後會在有限次數內重試。' : '請只保留一個相同日期與期間的標準盤來源。'}`
+          : conflictRecovery?.state === 'EXHAUSTED'
+          ? `NBA 來源盤口仍不一致，已達本次衝突的自動重整上限；已停止上傳並回報差異，請只保留一個正確的 NBA 標準盤來源。`
           : `${LABELS[league]}已讀取，但檢查未通過${detail ? `：${detail}` : ''}`, readerVersion: VERSION };
       continue;
     }
