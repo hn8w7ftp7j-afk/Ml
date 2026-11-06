@@ -48,6 +48,30 @@ assert.equal(live.features.home.observedFixtures14d,1);assert.equal(live.feature
 assert.equal(live.features.home.completeCoverageVerified,false);assert.equal(live.features.home.physicalRestHours,null);assert.equal(live.features.home.travelDistanceKm,null);
 assert.equal(live.formalEligible,false);assert.equal(live.modelEffectApplied,false);assert.equal(live.appliedToMainScore,false);assert.equal(live.prediction.period,'REGULATION_FT');
 assert.ok(live.absentEffects.includes('WEATHER_FORECAST_NOT_CONNECTED'));assert.equal(JSON.stringify(evidence),before);
+// Preserve the latest same-competition game beyond the recent-history window.
+const longGap=structuredClone(evidence);
+for(const side of ['home','away']){
+  const prior={...makeTeam(side,21*86400000).lastKnownCompleted};
+  const team=longGap.workload.teams[side];
+  team.recentCompleted=[];
+  team.lastKnownCompleted={...team.lastKnownCompleted,competition:{slug:'eng.league_cup'}};
+  team.lastKnownCompletedByCompetition={'eng.1':prior};
+}
+const recovered=buildSoccerConditionsResearch({evidence:longGap,game,now});
+assert.equal(recovered.status,'RESEARCH_CHALLENGER_AVAILABLE');
+assert.equal(recovered.features.home.kickoffGapHours,22*24);
+assert.equal(recovered.features.home.observedFixtures14d,0);
+assert.equal(recovered.formalEligible,false);
+assert.equal(recovered.modelEffectApplied,false);
+const absent=structuredClone(longGap);
+delete absent.workload.teams.home.lastKnownCompletedByCompetition;
+assert.equal(buildSoccerConditionsResearch({evidence:absent,game,now}).prediction,null);
+const wrongCompetition=structuredClone(longGap);
+wrongCompetition.workload.teams.home.lastKnownCompletedByCompetition['eng.1'].competition.slug='uefa.champions';
+assert.equal(buildSoccerConditionsResearch({evidence:wrongCompetition,game,now}).prediction,null);
+const conflict=structuredClone(longGap);
+conflict.workload.teams.home.recentCompleted=[{...conflict.workload.teams.home.lastKnownCompletedByCompetition['eng.1'],startTime:iso(now-20*86400000)}];
+assert.equal(buildSoccerConditionsResearch({evidence:conflict,game,now}).prediction,null);
 const intervening=structuredClone(evidence);
 intervening.workload.teams.home.scheduledBeforeTarget=[{eventId:'9999971',startTime:iso(now+12*3600000),status:'SCHEDULED',competition:{slug:'eng.1'}}];
 const blockedPlan=buildSoccerConditionsResearch({evidence:intervening,game,now});
