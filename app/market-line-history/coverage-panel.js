@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { taipeiHistoryTime } from './history-view.js';
 import styles from './history.module.css';
 
@@ -26,26 +27,29 @@ export default function CoveragePanel() {
   const [busy, setBusy] = useState(false);
   const request = useRef({ sequence: 0, controller: null });
 
-  const load = useCallback(async (filters = {}) => {
+  const load = useCallback(async (filters = {}, pagination = null) => {
     const sequence = ++request.current.sequence;
     request.current.controller?.abort();
     const controller = new AbortController();
     request.current.controller = controller;
     setBusy(true); setError('');
     // A changed filter must never display the previous scope as its result.
-    setResult(null);
+    if (!pagination) setResult(null);
     const timeout = window.setTimeout(() => controller.abort(), 30000);
     try {
       const params = new URLSearchParams({ limit: '40' });
       if (filters.league) params.set('league', filters.league);
       if (filters.date) params.set('date', filters.date);
+      if (pagination) { params.set('until', pagination.until); params.set('after', pagination.nextAfter); }
       const response = await fetch(`/api/market-history-coverage?${params}`, {
         credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       });
       const payload = await response.json();
       if (!response.ok || payload?.ok !== true) throw new Error(payload?.error || '保存狀態暫時無法讀取；未當成零筆。');
       validateCoverage(payload);
-      if (request.current.sequence === sequence) setResult(payload);
+      if (pagination && payload.sources.some(source => source.status !== 'PASS')) throw new Error('本頁部分來源尚未讀取成功，已保留原分頁位置，請重試。');
+      if (request.current.sequence === sequence) setResult({ ...payload, appliedFilters: filters,
+        games: pagination ? [...new Map([...pagination.games, ...payload.games].map(row => [JSON.stringify([row.league, row.boardDate, row.gameKey]), row])).values()] : payload.games });
     } catch (cause) {
       if (request.current.sequence === sequence) setError(cause.name === 'AbortError' ? '保存狀態查詢逾時，請重新查詢。' : cause.message || '保存狀態讀取失敗。');
     } finally {
@@ -88,16 +92,19 @@ export default function CoveragePanel() {
       </table></div>
       <p className={styles.muted}>沒有讀盤回條的舊資料，無法回推最後確認時間。原始截圖未在此保存；未讀到的歷史盤口不補造。</p>
       {result.sources.some(source => source.status !== 'PASS') && <p role="status" className={styles.coverageWarning}>部分保存來源尚未可讀，相關時間或數量顯示「未確認」，不當作零筆。</p>}
-      <details className={styles.coverageGames}><summary>查看各場市場缺漏（{numberText(result.games.length)} 筆{result.gameRowsTruncated ? '，尚有其他場次；可指定聯盟及盤日縮小範圍' : ''}）</summary>
+      <details className={styles.coverageGames}><summary>查看各場市場缺漏（已載入 {numberText(result.games.length)} 筆{result.gameRowsTruncated ? '，可繼續載入' : ''}）</summary>
         {result.games.length === 0 ? <p>此查詢沒有可列出的保存場次，不能據此認定沒有開盤。</p> : <div className={styles.tableWrap}><table>
           <caption>各場最新保存內容；尾盤完整性未驗證</caption>
           <thead><tr><th scope="col">場次</th><th scope="col">各市場狀態</th><th scope="col">最後讀盤觀測</th><th scope="col">最後尾盤</th></tr></thead>
           <tbody>{result.games.map(row => <tr key={`${row.league}|${row.boardDate}|${row.gameKey}`}>
-            <th scope="row">{row.league} {row.gameLabel || row.gameKey}<small className={styles.coverageSub}>{row.boardDate}</small></th>
+            <th scope="row">{row.league} {row.gameLabel || row.gameKey}<small className={styles.coverageSub}>{row.boardDate}</small><Link href={`/market-line-history?${new URLSearchParams({ league: row.league, from: row.boardDate, through: row.boardDate, gameKey: row.gameKey })}`}>查看這場全部保存紀錄</Link></th>
             <td>{!row.lastReaderObservedAt && <small className={styles.coverageSub}>最後保存版本；讀盤回條未確認</small>}{(row.latestCaptureMarkets || row.markets || []).map((market, index) => <div key={`${market.market}|${index}`} className={market.status === 'AVAILABLE' ? undefined : styles.coverageWarning}>{market.market}：{MARKET_STATUS[market.status] || '未確認'}{['EPL', 'UCL'].includes(row.league) && market.lastObservedAt && <small className={styles.coverageSub}>觀測 {timeText(market.lastObservedAt)}</small>}</div>)}{row.integrity?.status === 'FAIL' && <div className={styles.invalid}>保存內容待核對</div>}</td>
             <td>{timeText(row.lastReaderObservedAt)}</td><td>未驗證</td>
           </tr>)}</tbody>
         </table></div>}
+        {result.nextAfter && <button type="button" className="secondary" disabled={busy} onClick={() => load(result.appliedFilters, result)}>{busy ? '核對中…' : '載入下一頁場次'}</button>}
+        {result.gameRowsTruncated && !result.nextAfter && <p className={styles.coverageWarning}>部分來源尚未讀取成功，請重新查詢後再繼續分頁，避免漏列場次。</p>}
+        {result.inventoryComplete && <p className={styles.muted}>此範圍的已保存場次已列完；尚未與全部官方賽程比對。</p>}
       </details>
     </>}
   </section>;

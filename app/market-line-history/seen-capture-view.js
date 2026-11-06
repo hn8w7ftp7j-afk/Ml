@@ -5,7 +5,9 @@ const nullableTimestamp = value => value === null || timestamp(value);
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
 export function validateSeenCaptureResponse(payload, expectedLeague = '') {
-  const expected = expectedLeague ? [expectedLeague] : SEEN_CAPTURE_LEAGUES;
+  const filters = typeof expectedLeague === 'object' ? expectedLeague : null;
+  const league = filters?.league || (typeof expectedLeague === 'string' ? expectedLeague : '');
+  const expected = league ? [league] : SEEN_CAPTURE_LEAGUES;
   if (payload?.ok !== true || payload.status !== 'PASS' || payload.schema !== 'reader-seen-capture-inventory-v1'
     || payload.sourceTable !== 'sports_reader_seen_captures_v1' || payload.countUnit !== 'RAW_CAPTURE_OBSERVATIONS'
     || payload.archiveOnly !== true || payload.currentBoardUpdated !== false || payload.executable !== false
@@ -17,6 +19,11 @@ export function validateSeenCaptureResponse(payload, expectedLeague = '') {
       || ['receivedPartGroups', 'completePartGroups', 'pendingPartGroups', 'conflictingPartGroups'].some(key => row[key] !== undefined && !count(row[key]))
       || row.lockedRowCount > row.rowCount
       || !['firstObservedAt', 'lastObservedAt', 'lastReceivedAt', 'lastPersistedAt'].every(key => nullableTimestamp(row[key])))
+    || (payload.hasMore !== undefined && (typeof payload.hasMore !== 'boolean'
+      || (payload.hasMore ? typeof payload.nextAfter !== 'string' || payload.nextAfter.length > 1400 : payload.nextAfter !== null)
+      || !timestamp(payload.until) || payload.dateBasis !== 'SOURCE_OBSERVATION_TAIPEI_DATE'))
+    || (filters && (payload.filters?.league !== (filters.league || null) || payload.filters?.from !== (filters.from || null)
+      || payload.filters?.through !== (filters.through || null) || filters.until && payload.until !== filters.until))
     || !Array.isArray(payload.recent) || payload.recent.length > 100
     || payload.recent.some(row => !expected.includes(row?.league) || !digest(row.captureId) || !digest(row.evidenceHash)
       || !timestamp(row.observedAt) || !nullableTimestamp(row.pageActivityAt) || !timestamp(row.receivedAt) || !timestamp(row.persistedAt)
@@ -44,10 +51,12 @@ export function validateSeenCaptureDetail(payload, expected) {
   return evidence;
 }
 
-export function seenCaptureQueryUrl(league = '') {
+export function seenCaptureQueryUrl(league = '', options = {}) {
+  if (typeof league === 'object') { options = league; league = options.league || ''; }
   if (league && !SEEN_CAPTURE_LEAGUES.includes(league)) throw new Error('請選擇支援的聯盟。');
   const params = new URLSearchParams({ limit: '20' });
   if (league) params.set('league', league);
+  for (const key of ['from', 'through', 'until', 'after']) if (options[key]) params.set(key, options[key]);
   return `/api/reader/seen-captures?${params}`;
 }
 

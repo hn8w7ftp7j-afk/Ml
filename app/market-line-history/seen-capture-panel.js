@@ -58,22 +58,25 @@ export default function SeenCapturePanel() {
   const [diagnostics, setDiagnostics] = useState(null), [diagnosticError, setDiagnosticError] = useState('');
   const request = useRef({ sequence: 0, controller: null });
 
-  const load = useCallback(async (league = '') => {
+  const load = useCallback(async (filters = {}, append = false) => {
+    const league = filters.league || '';
     const sequence = ++request.current.sequence;
     request.current.controller?.abort();
     const controller = new AbortController(); request.current.controller = controller;
-    setResult(null); setError(''); setBusy(true); setDiagnostics(null); setDiagnosticError('');
+    if (!append) { setResult(null); setDiagnostics(null); } setError(''); setBusy(true); setDiagnosticError('');
     const timeout = window.setTimeout(() => controller.abort(), 30000);
     const current = () => request.current.sequence === sequence;
     // Independent requests keep a diagnostic outage from hiding saved captures.
     const inventory = async () => {
       try {
-        const response = await fetch(seenCaptureQueryUrl(league), { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+        const response = await fetch(seenCaptureQueryUrl(filters), { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
         const payload = await response.json();
         if (!response.ok || payload?.ok !== true) throw new Error(payload?.error || (payload?.code === 'READER_SEEN_CAPTURE_TABLE_NOT_READY'
           ? '原始盤面保存尚未啟用，不能當成零筆。' : '原始盤面保存暫時無法讀取，未當成零筆。'));
-        validateSeenCaptureResponse(payload, league);
-        if (current()) setResult(payload);
+        validateSeenCaptureResponse(payload, filters);
+        if (current()) setResult(previous => append && previous
+          ? { ...payload, recent: [...previous.recent, ...payload.recent.filter(row => !previous.recent.some(old => old.captureId === row.captureId))] }
+          : payload);
       } catch (cause) {
         if (current()) setError(cause.name === 'AbortError' ? '原始盤面查詢逾時，請重新查詢；未當成零筆。' : cause.message || '原始盤面保存讀取失敗。');
       }
@@ -103,9 +106,12 @@ export default function SeenCapturePanel() {
     <p>保存 Reader 看見的盤面文字與結構。未配對、未通過解析或未採用的來源，也與可分析盤口分開保留。</p>
     <p className={styles.notice}>這裡的筆數是原始盤面觀測片段，不是場數、可分析盤口數或完整尾盤數。同一批來源可能分段保存。</p>
     <form className={styles.filters} onSubmit={event => {
-      event.preventDefault(); load(String(new FormData(event.currentTarget).get('seen-league') || ''));
+      event.preventDefault(); const form = new FormData(event.currentTarget);
+      load({ league: String(form.get('seen-league') || ''), from: String(form.get('seen-from') || ''), through: String(form.get('seen-through') || '') });
     }}>
       <label htmlFor="seen-league">原始盤面聯盟<select id="seen-league" name="seen-league" disabled={busy} defaultValue=""><option value="">八個聯盟</option>{SEEN_CAPTURE_LEAGUES.map(league => <option key={league} value={league}>{LABELS[league] || league}</option>)}</select></label>
+      <label htmlFor="seen-from">來源讀取起日（台北）<input id="seen-from" name="seen-from" type="date" disabled={busy}/></label>
+      <label htmlFor="seen-through">來源讀取迄日（台北）<input id="seen-through" name="seen-through" type="date" disabled={busy}/></label>
       <button type="submit" className="secondary" disabled={busy}>{busy ? '核對中…' : '查詢原始保存與補傳狀態'}</button>
     </form>
     {error && <p role="alert" className={styles.error}>{error}</p>}
@@ -118,7 +124,7 @@ export default function SeenCapturePanel() {
       </table></div>
       <p className={styles.muted}>「段數收齊」只表示該批來源宣告的片段已收到，不表示全部比賽、盤口或最後尾盤完整。</p>
       {result.leagues.every(row => row.captureCount === 0) && <p className={styles.notice}>此查詢尚未讀到已保存的原始盤面觀測，不能據此認定沒有開盤或沒有待補傳內容。</p>}
-      <details className={styles.details}><summary>查看最近 {countText(result.recent.length)} 筆原始保存摘要</summary>
+      <details className={styles.details}><summary>查看已載入 {countText(result.recent.length)} 筆原始保存摘要</summary>
         {result.recent.length === 0 ? <p className={styles.muted}>尚無可列出的保存摘要。</p> : <ol className={styles.observations}>{result.recent.map(row => <li key={row.captureId}>
           <strong>{LABELS[row.league] || row.league}｜來源讀取 {timeText(row.observedAt)}</strong>
           <p>{countText(row.tableCount)} 個表格／{countText(row.rowCount)} 列文字／{countText(row.lockedRowCount)} 列含鎖盤標記<span className={styles.muted}>（文字列數不等於比賽場數）</span></p>
@@ -130,6 +136,9 @@ export default function SeenCapturePanel() {
           <SeenCaptureEvidence capture={row}/>
         </li>)}</ol>}
       </details>
+      <p className={styles.notice}>依存入時間由新到舊分頁；日期篩選使用來源讀取的台北日期，並非已核對的賽事盤日。原始文字逐筆按需讀取。</p>
+      <p role="status" className={styles.muted}>已載入 {countText(result.recent.length)}／{countText(result.leagues.reduce((total, row) => total + row.captureCount, 0))} 個原始保存片段{result.hasMore ? '；尚有下一頁。' : '；本次查詢已列完。'}</p>
+      {result.hasMore && <button type="button" className="secondary" disabled={busy} onClick={() => load({ ...result.filters, until: result.until, after: result.nextAfter }, true)}>載入下一頁原始保存（最多 20 筆）</button>}
     </>}
     <div className={styles.delivery} aria-label="Reader 最近回報的待補傳狀態">
       <h3>Reader 最近回報的待補傳狀態</h3>

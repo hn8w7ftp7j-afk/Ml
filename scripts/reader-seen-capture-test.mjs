@@ -124,6 +124,36 @@ try {
   await save(mixedScope);
   assert.equal((await listReaderSeenCaptures({ league: 'UCL' }, { sql })).leagues[0].conflictingPartGroups, 1, 'different source scopes cannot be presented as one complete chunk group');
 
+  // Every retained raw fragment must be reachable without downloading all raw
+  // evidence. Freeze the server persistence cutoff, not the client's clock.
+  const pageQuery = params => parseReaderSeenCaptureQuery(new URLSearchParams(params));
+  const initialPage = await listReaderSeenCaptures(pageQuery({ limit: '2' }), { sql });
+  assert.equal(initialPage.hasMore, true); assert.ok(initialPage.nextAfter);
+  assert.equal(initialPage.dateBasis, 'SOURCE_OBSERVATION_TAIPEI_DATE');
+  let currentPage = initialPage, visited = [...initialPage.recent];
+  const total = initialPage.leagues.reduce((n, row) => n + row.captureCount, 0);
+  while (currentPage.nextAfter) {
+    currentPage = await listReaderSeenCaptures(pageQuery({ limit: '2', after: currentPage.nextAfter }), { sql });
+    assert.equal(currentPage.until, initialPage.until);
+    assert.equal(currentPage.leagues.reduce((n, row) => n + row.captureCount, 0), total);
+    visited.push(...currentPage.recent);
+    assert.ok(visited.length <= total, 'descending keyset pagination must always advance');
+  }
+  assert.equal(visited.length, total); assert.equal(new Set(visited.map(row => row.captureId)).size, total);
+  assert.ok(visited.some(row => row.observedAt.startsWith('2036-')), 'future source clocks remain raw evidence when already persisted');
+  assert.ok(visited.every(row => !Object.hasOwn(row, 'evidence')), 'list pages never ship raw sport text');
+  const taipeiDay = await listReaderSeenCaptures(pageQuery({ from: '2026-10-25', through: '2026-10-25' }), { sql });
+  assert.equal(taipeiDay.leagues.reduce((n, row) => n + row.captureCount, 0), total - 1, '22:00 UTC belongs to next Taipei date');
+  const emptyDay = await listReaderSeenCaptures(pageQuery({ from: '2026-10-24', through: '2026-10-24' }), { sql });
+  assert.equal(emptyDay.recent.length, 0);
+  for (const params of [
+    { from: '2026-02-30' }, { from: '2026-11-01', through: '2026-10-01' }, { after: 'bad' },
+    { after: initialPage.nextAfter, league: 'NBA' }, { after: initialPage.nextAfter, from: '2026-10-25' },
+    { after: initialPage.nextAfter, until: '2026-10-25T00:00:00.000Z' }, { captureId: source.captureId, from: '2026-10-25' },
+  ]) assert.throws(() => pageQuery(params), cause => cause.status === 400);
+  const [cursorBody, cursorSignature] = initialPage.nextAfter.split('.');
+  assert.throws(() => pageQuery({ after: `${cursorBody}.${cursorSignature[0] === 'a' ? 'b' : 'a'}${cursorSignature.slice(1)}` }), cause => cause.status === 400);
+
   const invalids = [
     input => { input.evidence.league = 'UNKNOWN'; },
     input => { input.evidence.account = 'private'; },

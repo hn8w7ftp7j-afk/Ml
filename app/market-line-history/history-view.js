@@ -1,5 +1,31 @@
-export const HISTORY_LEAGUES = Object.freeze(['MLB', 'NBA', 'NPB', 'KBO', 'CPBL']);
+export const HISTORY_LEAGUES = Object.freeze(['MLB', 'NBA', 'NPB', 'KBO', 'CPBL', 'EPL', 'UCL']);
 export const EMPTY_HISTORY_FILTERS = Object.freeze({ league: '', from: '', through: '', gameKey: '' });
+export const HISTORY_LEAGUE_LABELS = Object.freeze({ EPL: '英超 EPL', UCL: '歐冠 UCL' });
+const SOURCE_TABLES = ['tai888_market_line_history_v1', 'sports_soccer_reader_observations_v2'];
+
+export function historyGameKeyLimit(league) {
+  return !league || ['EPL', 'UCL'].includes(league) ? 200 : 80;
+}
+
+export function historyFiltersFromSearch(search = '') {
+  const params = new URLSearchParams(search);
+  return Object.fromEntries(Object.keys(EMPTY_HISTORY_FILTERS).map(key => [key, String(params.get(key) || '').trim()]));
+}
+
+export function historyGameFilters(game) {
+  return { league: game.league, from: game.boardDate, through: game.boardDate, gameKey: game.gameKey };
+}
+
+export function historyRecordLabel(row) {
+  return row.recordKind === 'READER_OBSERVATION' || ['EPL', 'UCL'].includes(row.league) ? '讀盤觀測' : '變盤版本';
+}
+
+export function historyMarketStatusText(status) {
+  if (status === 'LOCKED') return '來源標記鎖盤；此筆沒有可用報價。';
+  if (status === 'PERIOD_UNKNOWN') return '半場／全場期間未確認，請查看原始保存內容。';
+  if (status === 'INVALID' || status === 'AVAILABLE') return '原始紀錄格式異常，請查看保存內容。';
+  return '此筆未保存這個市場。';
+}
 
 function validDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -15,7 +41,8 @@ export function historyQueryUrl(filters, pagination = null) {
   if (league && !HISTORY_LEAGUES.includes(league)) throw new Error('請選擇支援的聯盟。');
   if ((from && !validDate(from)) || (through && !validDate(through))) throw new Error('請輸入有效的盤日。');
   if (from && through && from > through) throw new Error('起始盤日不能晚於結束盤日。');
-  if (gameKey.length > 80) throw new Error('場次識別最多 80 個字元。');
+  const maxKeyLength = historyGameKeyLimit(league);
+  if (gameKey.length > maxKeyLength) throw new Error(`場次識別最多 ${maxKeyLength} 個字元。`);
   const query = new URLSearchParams({ limit: '100' });
   if (league) query.set('league', league);
   if (from) query.set('from', from);
@@ -35,6 +62,8 @@ export function validateHistoryResponse(payload) {
   const count = value => Number.isSafeInteger(value) && value >= 0;
   if (payload?.ok !== true || payload?.schema !== 'market-line-history-query-v1'
     || payload?.sourceTable !== 'tai888_market_line_history_v1'
+    || (payload.sourceTables != null && (!Array.isArray(payload.sourceTables)
+      || payload.sourceTables.some(table => !SOURCE_TABLES.includes(table))))
     || !Array.isArray(payload.rows) || !Array.isArray(payload.leagues)
     || !count(payload.totals?.savedStates) || !count(payload.totals?.gameDateKeys)
     || !count(payload.totals?.boardDates)
@@ -47,10 +76,15 @@ export function validateHistoryResponse(payload) {
       || !validDate(row.boardDate || '') || typeof row.gameKey !== 'string' || !row.gameKey
       || !Number.isFinite(Date.parse(row.observedAt || ''))
       || (row.gameLabel != null && typeof row.gameLabel !== 'string')
+      || (row.recordId != null && typeof row.recordId !== 'string')
+      || (row.recordKind != null && !['CHANGED_STATE', 'READER_OBSERVATION'].includes(row.recordKind))
+      || (row.sourceTable != null && !SOURCE_TABLES.includes(row.sourceTable))
+      || (['EPL', 'UCL'].includes(row.league) && (row.recordKind !== 'READER_OBSERVATION'
+        || typeof row.recordId !== 'string' || !row.recordId || row.sourceTable !== 'sports_soccer_reader_observations_v2'))
       || !Array.isArray(row.markets) || row.markets.some(market => typeof market?.market !== 'string'
-        || !['AVAILABLE', 'NOT_CAPTURED', 'INVALID'].includes(market.status)
+        || !['AVAILABLE', 'NOT_CAPTURED', 'INVALID', 'LOCKED', 'PERIOD_UNKNOWN'].includes(market.status)
         || (market.status === 'AVAILABLE' && (!Array.isArray(market.directions)
-          || market.directions.length !== 2 || market.directions.some(direction => typeof direction?.pick !== 'string'
+          || market.directions.length < 2 || market.directions.length % 2 !== 0 || market.directions.some(direction => typeof direction?.pick !== 'string'
             || typeof direction.water !== 'number' || !Number.isFinite(direction.water))))))) {
     throw new Error('歷史盤口回應格式不完整，未當成成功或零筆資料。');
   }
@@ -58,7 +92,7 @@ export function validateHistoryResponse(payload) {
 }
 
 export function historyRowKey(row) {
-  return JSON.stringify([row.league, row.boardDate, row.gameKey, row.observedAt]);
+  return JSON.stringify([row.league, row.boardDate, row.gameKey, row.observedAt, row.recordId || '']);
 }
 
 export function mergeHistoryRows(previous, incoming) {

@@ -31,6 +31,7 @@ try {
     league VARCHAR(5) NOT NULL, board_date DATE NOT NULL, game_key VARCHAR(80) NOT NULL, game_pk BIGINT,
     observed_at TIMESTAMPTZ NOT NULL, state_hash CHAR(16) NOT NULL, markets TEXT NOT NULL,
     source_hash CHAR(32), reader_version VARCHAR(20), PRIMARY KEY (league, game_key, observed_at));`);
+  await db.exec(`CREATE TABLE sports_soccer_reader_observations_v2 (observation_id text PRIMARY KEY,league text,board_date date,content_hash text,source_observed_at timestamptz,received_at timestamptz,persisted_at timestamptz,payload jsonb);`);
   const original = buildMarketLineHistoryRows(capture('00:00'))[0];
   await db.query('INSERT INTO tai888_market_line_history_v1 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', Object.values(original));
   const write = snapshot => recordMarketLineHistory(snapshot, { sql });

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { taipeiHistoryTime } from './history-view.js';
 import styles from './history.module.css';
+import ArchiveRecords from './archive-records.js';
 
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'EPL', 'UCL'];
 const LABELS = { EPL: '英超 EPL', UCL: '歐冠 UCL' };
@@ -76,6 +77,7 @@ export default function ArchivePanel() {
           return <tr key={league}><th scope="row">{LABELS[league] || league}</th><td>{row.captureCount.toLocaleString('zh-TW')}</td><td>{row.captureCount ? `${row.firstBoardDate} ～ ${row.lastBoardDate}` : '尚無紀錄'}</td><td>{timeText(row.lastObservedAt)}</td><td>{timeText(row.lastPersistedAt)}</td></tr>;
         })}</tbody>
       </table></div>}
+      <ArchiveRecords/>
       <p className={styles.muted}>零筆表示尚未收到此類歸檔，不能判定未開盤。擷取筆數不等於場次或完整尾盤；這裡保存盤口資料，沒有原始畫面截圖。</p>
     </details>
   </section>;

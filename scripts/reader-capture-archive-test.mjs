@@ -9,6 +9,7 @@ import { normalizeNbaReaderPayload } from '../lib/nba/reader.js';
 import { validateTai888ReaderEnvelope } from '../lib/tai888-reader-parser-v2.js';
 import { validateSoccerCapture } from '../lib/soccer/reader.js';
 import { buildReaderCaptureArchive, saveReaderCaptureArchive, listReaderCaptureArchives } from '../lib/reader-capture-archive.js';
+import { queryReaderCaptureArchives } from '../lib/reader-capture-archive-query.js';
 
 const schema = 'READER-CAPTURE-ARCHIVE-v1';
 const table = 'sports_reader_capture_archive_v1';
@@ -96,6 +97,10 @@ try {
     assert.equal(receipt.archiveOnly, true); assert.equal(receipt.currentBoardUpdated, false);
     assert.equal(receipt.historicalAvailabilityVerified, false); assert.equal(receipt.executable, false);
     assert.equal(receipt.captureId, archive.captureId); assert.equal(receipt.payloadHash, archive.payloadHash);
+    const historical = await queryReaderCaptureArchives({ captureId: receipt.captureId }, { sql });
+    assert.equal(historical.record.integrity.status, 'PASS', `${league}: saved full detail revalidates sport-only source evidence`);
+    assert.deepEqual(historical.record.payload, archive.payload);
+    assert.equal(JSON.stringify(historical).includes(poison), false);
     assert.equal(receipt.observedAt, observedAt); assert.equal(receipt.pageActivityAt, pageActivityAt);
     assert.equal(receipt.receivedAt, new Date(clock).toISOString(), 'server receipt time remains actual arrival, not original capture time');
     assert.ok(Number.isFinite(Date.parse(receipt.persistedAt)));

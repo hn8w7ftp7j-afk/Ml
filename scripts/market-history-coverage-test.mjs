@@ -18,7 +18,7 @@ const sql = async (strings, ...values) => {
   return (await db.query(text, values)).rows;
 };
 const now = Date.parse('2026-10-27T02:00:00.000Z');
-const parse = input => parseMarketHistoryCoverageQuery(new URLSearchParams(input), { now });
+const parse = input => parseMarketHistoryCoverageQuery(new URLSearchParams(input), { now, secret: 'synthetic-coverage-pagination-secret' });
 const read = input => queryMarketHistoryCoverage(parse(input), { sql });
 const league = (result, id) => result.leagues.find(row => row.league === id);
 const state = [[0, '3+50', 0.95, 0.95], ['224平', 0.94, 0.94], null, null];
@@ -133,6 +133,23 @@ try {
   assert.equal(one.sources.length, 1); assert.equal(one.leagues.length, 1); assert.equal(one.games.length, 1); assert.equal(one.status, 'PASS');
   assert.equal(one.gameRowsTruncated, false);
   const limited = await read({ limit: '1' }); assert.equal(limited.games.length, 1); assert.equal(limited.gameRowsTruncated, true);
+  await addState('\uE000', '2026-10-27', '2026-10-26T22:00:00Z');
+  await addState('\u{10000}', '2026-10-27', '2026-10-26T22:00:00Z');
+  const allKeys = (await read({ limit: '500' })).games.map(row => JSON.stringify([row.league, row.boardDate, row.gameKey]));
+  let inventoryPage = await read({ limit: '1' }), inventoryRows = [...inventoryPage.games];
+  while (inventoryPage.nextAfter) {
+    inventoryPage = await read({ limit: '1', until: limited.until, after: inventoryPage.nextAfter });
+    inventoryRows.push(...inventoryPage.games);
+  }
+  assert.deepEqual(inventoryRows.map(row => JSON.stringify([row.league, row.boardDate, row.gameKey])), allKeys,
+    'all saved identities, including receipt-only locked/unopened/blocked games, must be reachable without duplicates across source merges');
+  assert.equal(inventoryPage.hasMore, false);
+  assert.equal(inventoryPage.inventoryComplete, true);
+  await db.query('DELETE FROM tai888_market_line_history_v1 WHERE game_key IN ($1,$2)', ['\uE000', '\u{10000}']);
+  assert.throws(() => parse({ league: 'NBA', after: limited.nextAfter }), /範圍/);
+  assert.throws(() => parse({ until: '2026-10-26T00:00:00.000Z', after: limited.nextAfter }), /截點/);
+  const [cursorBody, cursorSignature] = limited.nextAfter.split('.');
+  assert.throws(() => parse({ after: `${cursorBody}.${cursorSignature[0] === 'a' ? 'b' : 'a'}${cursorSignature.slice(1)}` }), /無效/);
   const empty = await read({ date: '2020-01-01' }); assert.ok(empty.leagues.every(row => row.savedCount === 0));
   assert.equal(empty.games.length, 0); assert.equal(empty.coverageComplete, false);
   const noSoccer = await read({ league: 'NBA' }); assert.ok(noSoccer.sources.every(row => row.sourceTable !== 'sports_soccer_reader_observations_v2'));
@@ -154,6 +171,8 @@ try {
   // An unavailable source cannot turn other successfully read sources into zero data.
   await db.exec('DROP TABLE sports_soccer_reader_observations_v2');
   result = await read({}); assert.equal(result.status, 'PARTIAL'); assert.equal(league(result, 'NBA').savedCount, 3);
+  assert.equal(result.inventoryComplete, false, 'an unreadable source cannot claim all stored game identities were listed');
+  assert.equal(result.hasMore, null); assert.equal(result.nextAfter, null);
   assert.equal(league(result, 'EPL').savedCount, null); assert.equal(league(result, 'EPL').status, 'NOT_VERIFIED');
   assert.equal(result.sources.find(row => row.sourceTable === 'sports_soccer_reader_observations_v2').status, 'NOT_READY');
   const onlyMissing = await read({ league: 'EPL' }); assert.equal(onlyMissing.ok, false); assert.equal(onlyMissing.status, 'FAIL');
