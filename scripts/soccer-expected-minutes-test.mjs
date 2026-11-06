@@ -99,17 +99,23 @@ for(const league of['epl','ucl']){
 
 const now=Math.max(Date.parse(artifact.createdAt)+DAY,Date.parse('2026-11-04T00:00:00Z'));
 const game={id:'soccer:epl:777',sourceId:'777',league:'epl',date:iso(now+DAY).slice(0,10),startTime:iso(now+DAY),status:'scheduled',home:{sourceId:'363'},away:{sourceId:'360'}};
-const workload=sourceId=>({ok:true,version:'SOCCER-OBSERVED-PLAYER-WORKLOAD-v2',extractorVersion:SOCCER_MINUTES_AUDIT_V2_VERSION,
-  sourceId,asOf:iso(now),matches:[{eventId:'100',sourceId,startTime:iso(now-3*DAY),players:players(sourceId==='363'?0:100),
+const workload=sourceId=>({ok:true,version:'SOCCER-ALL-COMPETITION-WORKLOAD-v2',sourceId,asOf:iso(now-1000),referenceAt:iso(now-1000),
+  playerWorkload:{ok:true,version:'SOCCER-OBSERVED-PLAYER-WORKLOAD-v2',extractorVersion:SOCCER_MINUTES_AUDIT_V2_VERSION,
+  sourceId,asOf:iso(now),referenceAt:iso(now-1000),matches:[{eventId:'100',sourceId,startTime:iso(now-3*DAY),players:players(sourceId==='363'?0:100),
     competition:{slug:'eng.1'},extractorVersion:SOCCER_MINUTES_AUDIT_V2_VERSION,
-    source:{provider:'ESPN',fetchedAt:iso(now-1000),contentHash:'a'.repeat(64),url:'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=100'}}]});
-const evidence={ok:true,game,phase:'PREMATCH_OBSERVATION',workload:{teams:{home:{playerWorkload:workload('363')},away:{playerWorkload:workload('360')}}}};
+    source:{provider:'ESPN',fetchedAt:iso(now-1000),contentHash:'a'.repeat(64),url:'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=100'}}]}});
+const evidence={ok:true,game,phase:'PREMATCH_OBSERVATION',workload:{gameId:game.id,target:structuredClone(game),teams:{home:workload('363'),away:workload('360')}}};
 const live=buildSoccerExpectedMinutesResearch({evidence,game,now});
 assert.equal(live.status,'RESEARCH_FORECAST_AVAILABLE');assert.equal(live.teams.home.players.length,13);
 assert.equal(live.teams.home.eligibilityStatus,'UNKNOWN');assert.equal(live.teams.home.coverage.complete,false);
 assert.equal(live.formalEligible,false);assert.equal(live.modelEffectApplied,false);
 for(const change of[
   value=>{value.workload.teams.home.playerWorkload.sourceId='999';},
+  value=>{value.workload.teams.home.sourceId='999';},
+  value=>{value.workload.teams.home.asOf=iso(now+1);},
+  value=>{value.workload.teams.home.referenceAt=iso(now-2000);},
+  value=>{delete value.workload.teams.home.playerWorkload.referenceAt;},
+  value=>{value.workload.teams.home.playerWorkload.referenceAt=iso(now-2000);},
   value=>{value.workload.teams.home.playerWorkload.matches[0].source.fetchedAt=iso(now+1000);},
   value=>{value.workload.teams.home.playerWorkload.asOf=iso(now-2000);},
   value=>{value.workload.teams.home.playerWorkload.matches[0].startTime=iso(now);},
@@ -117,6 +123,27 @@ for(const change of[
   value=>{value.workload.teams.home.playerWorkload.matches[0].source.url+='&other=1';},
 ]){const copy=structuredClone(evidence);change(copy);const result=buildSoccerExpectedMinutesResearch({evidence:copy,game,now});
   assert.equal(result.teams.home.status,'INSUFFICIENT_PRIOR_OBSERVATIONS');assert.equal(result.teams.away.status,'RESEARCH_FORECAST_AVAILABLE');}
+// Identical teams do not make another fixture's workload interchangeable.
+const otherFixture={...structuredClone(game),id:'soccer:epl:778',sourceId:'778'};
+const borrowedFixture={...structuredClone(evidence),game:otherFixture};
+assert.equal(buildSoccerExpectedMinutesResearch({evidence:borrowedFixture,game:otherFixture,now}).teams.home.reason,'EXPECTED_MINUTES_WORKLOAD_SCOPE_MISMATCH');
+// The same event can be rescheduled; an old target snapshot must not silently
+// satisfy the replacement date/kickoff just because the club and event IDs match.
+const rescheduled={...structuredClone(game),date:iso(now+2*DAY).slice(0,10),startTime:iso(now+2*DAY)};
+assert.equal(buildSoccerExpectedMinutesResearch({evidence:{...structuredClone(evidence),game:rescheduled},game:rescheduled,now}).teams.home.reason,'EXPECTED_MINUTES_WORKLOAD_SCOPE_MISMATCH');
+for(const change of[
+  value=>{delete value.workload.gameId;},
+  value=>{value.workload.gameId=otherFixture.id;},
+  value=>{delete value.workload.target;},
+  ...['id','sourceId','league','date','startTime'].map(field=>value=>{value.workload.target[field]='foreign';}),
+  value=>{value.workload.target.home.sourceId='999';},
+  value=>{value.workload.target.away.sourceId='999';},
+]){const copy=structuredClone(evidence);change(copy);const result=buildSoccerExpectedMinutesResearch({evidence:copy,game,now});
+  assert.equal(result.teams.home.reason,'EXPECTED_MINUTES_WORKLOAD_SCOPE_MISMATCH');assert.equal(result.teams.away.reason,'EXPECTED_MINUTES_WORKLOAD_SCOPE_MISMATCH');}
+for(const field of['sourceId','league','date','startTime','status']){
+  const copy=structuredClone(evidence);copy.game[field]='foreign';
+  assert.equal(buildSoccerExpectedMinutesResearch({evidence:copy,game,now}).teams.home.reason,'CURRENT_GAME_SCOPE_INVALID');
+}
 assert.equal(buildSoccerExpectedMinutesResearch({evidence,game,now:Date.parse(artifact.createdAt)-1}).status,'MODEL_NOT_AVAILABLE_AT_CUTOFF');
 assert.equal(buildSoccerExpectedMinutesResearch({evidence,game,now:NaN}).status,'MODEL_NOT_AVAILABLE_AT_CUTOFF');
 const altered=structuredClone(artifact);altered.leagues.epl.model.shrinkage++;

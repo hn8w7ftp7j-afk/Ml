@@ -4,6 +4,8 @@ import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
 import { fixtureCapture, changed, protocol, iso, captured, after } from './helpers/soccer-forward-fixture.mjs';
 import '../reader/soccer-teams.js';
 const fixture=await soccerSqlFixture(),{db}=fixture;
+const originalFetch=globalThis.fetch;
+globalThis.fetch=async()=>({ok:false,status:503});
 const before={DATABASE_URL:process.env.DATABASE_URL,DATABASE_V2_URL:process.env.DATABASE_V2_URL,
   APP_PASSWORD:process.env.APP_PASSWORD,SESSION_SECRET:process.env.SESSION_SECRET};
 process.env.DATABASE_URL='postgres://fixture.invalid/retro-pair';delete process.env.DATABASE_V2_URL;
@@ -199,4 +201,4 @@ try {
   assert.equal(stillOneGame.forecastCoverage,'COMPLETE_SINGLE_GAME_CURRENT_PROTOCOL_STATEMENT');assert.equal(stillOneGame.status,'PARTIAL');
   assert.ok(stillOneGame.reasonCodes.includes('FULL_DATE_OFFICIAL_IDENTITY_NOT_VERIFIED'),'only this game is inspected despite the whole-day row budget');
   console.log('PASS read-only CLI through PostgreSQL forecast and original Reader receipts; no writes, strict scope, partial and formal-R exclusions');
-} finally {for(const [key,value] of Object.entries(before)){if(value===undefined)delete process.env[key];else process.env[key]=value;}await fixture.close();}
+} finally {globalThis.fetch=originalFetch;for(const [key,value] of Object.entries(before)){if(value===undefined)delete process.env[key];else process.env[key]=value;}await fixture.close();}

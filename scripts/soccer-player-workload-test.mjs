@@ -202,6 +202,39 @@ assert.equal(boundedRequests, 4);
 assert.ok(maxActive <= 2);
 assert.equal(bounded.coverage.omittedMatches, 6);
 assert.equal(bounded.omissions.filter(value => value.reason === 'SOCCER_PLAYER_MATCH_LIMIT').length, 2);
+// Four newer cup fixtures used to consume every read before the genuine EPL
+// summary was considered. Keep the same four-read limit while preserving a
+// usable same-competition prior squad, with failed cup observations still missing.
+const cupRecords=Array.from({length:4},(_,index)=>({...record,eventId:String(810000+index),
+  competition:{id:'41',slug:'eng.league_cup'},startTime:new Date(at-(index+1)*3*3600000).toISOString()}));
+const priorityAt=at+12*3600000;
+const crowded={...workload,asOf:new Date(priorityAt-1000).toISOString(),referenceAt:new Date(priorityAt).toISOString(),recentCompleted:[...cupRecords,record]};
+const acquire=async priority=>{
+  const reads=[];
+  const result=await fetchSoccerPlayerWorkload(crowded,{now:()=>priorityAt,
+    ...(priority?{expectedMinutesTarget:{league:'epl',startTime:new Date(priorityAt+86400000).toISOString()}}:{}),
+    fetchImpl:async url=>{reads.push(url);return url===source(past).url
+      ?{ok:true,url,json:async()=>structuredClone(past)}:{ok:false,status:503};}});
+  return{result,reads};
+};
+const ordinary=await acquire(false),prioritized=await acquire(true);
+assert.equal(ordinary.reads.length,4);assert.equal(ordinary.result.coverage.verifiedMatches,0);
+assert.equal(ordinary.result.omissions.find(row=>row.eventId===record.eventId).reason,'SOCCER_PLAYER_MATCH_LIMIT');
+assert.equal(prioritized.reads.length,4);assert.equal(prioritized.result.coverage.verifiedMatches,1);
+assert.equal(prioritized.result.matches[0].eventId,record.eventId);
+assert.equal(prioritized.result.matches[0].teamPlayerMinutes,990);
+assert.equal(prioritized.result.coverage.complete,false);assert.equal(prioritized.result.formalEligible,false);
+assert.equal(prioritized.result.omissions.filter(row=>row.reason==='SOCCER_PLAYER_MATCH_LIMIT').length,1);
+// Exactly three same-competition candidates fit the declared model history;
+// the remaining slot continues to acquire the newest all-competition match.
+const mixedRecords=many.map((row,index)=>({...row,eventId:String(820000+index),
+  ...(index<3?{competition:{id:'41',slug:'eng.league_cup'}}:{})}));
+const mixedReads=[];
+await fetchSoccerPlayerWorkload({...workload,recentCompleted:mixedRecords},{now:()=>at,
+  expectedMinutesTarget:{league:'epl',startTime:new Date(at+86400000).toISOString()},
+  fetchImpl:async url=>{mixedReads.push(new URL(url).searchParams.get('event'));return{ok:false,status:503};}});
+assert.deepEqual(mixedReads.sort(),['820000','820003','820004','820005']);
+assert.equal((await fetchSoccerPlayerWorkload(workload,{now:()=>at,expectedMinutesTarget:{league:'nba',startTime:new Date(at).toISOString()}})).code,'SOCCER_PLAYER_FETCH_OPTIONS_INVALID');
 assert.equal((await fetchSoccerPlayerWorkload(workload, { maxMatches: 100, now: () => at })).code, 'SOCCER_PLAYER_FETCH_OPTIONS_INVALID');
 const timeout = await fetchSoccerPlayerWorkload(workload, { now: () => at, timeoutMs: 2, fetchImpl: () => new Promise(() => {}) });
 assert.equal(timeout.ok, false);

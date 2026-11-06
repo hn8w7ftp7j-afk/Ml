@@ -56,6 +56,10 @@ export function SoccerScoringReadiness({result,game,now=Date.now()}){
     {Object.entries(owners).map(([owner,label])=>{const items=blockers.filter(item=>item.owner===owner);return items.length?<section key={owner} aria-label={label}><strong>{label}</strong><ul>{items.map(item=><li key={item.code}>{item.label}<p>{item.nextAction}</p></li>)}</ul></section>:null;})}
     {readiness.evidenceReadiness?.blockers?.length>0&&<details className="soccerDetails" aria-label="本次分析的正式資料缺項"><summary>正式模型資料尚缺 {readiness.evidenceReadiness.blockers.length} 項</summary>
       <p>依本次保存資料逐項核對；更新 Reader 不會補齊下列模型資料。已收到來源回報，也不代表已完成正式模型驗證。</p>
+      {readiness.evidenceReadiness.currentProviderFacts?.length>0&&<section aria-label="已核對的本次來源觀測"><strong>來源內容已保存並核對</strong>
+        <ul>{readiness.evidenceReadiness.currentProviderFacts.map(fact=><li key={fact.field}>{fact.field==='teams.home.lineup'?'主隊十一人先發':fact.field==='teams.away.lineup'?'客隊十一人先發':'具名裁判名單'}（{fact.count} {fact.field==='referee'?'名':'人'}）{fact.field==='referee'?'；裁判職務尚未驗證':''}</li>)}</ul>
+        <p>這些是本次賽前保存的來源回報；獨立確認、人員效果與正式模型驗收仍依下列結果判定。</p>
+      </section>}
       <ul>{readiness.evidenceReadiness.blockers.map(item=><li key={item.code}>{item.label}<ul>{item.details.map(detail=><li key={detail.code}>{detail.label}</li>)}</ul></li>)}</ul>
     </details>}
     {readiness.unpublishedScoreCount>0&&<p>分數已計算，系統仍須核對目前原盤及發布資格；尚不列排名。</p>}
