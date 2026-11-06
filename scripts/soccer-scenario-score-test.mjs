@@ -79,7 +79,8 @@ future.header.competitions[0].date='2026-11-02T12:00:00Z';future.header.date=fut
 const liveSource={...source,fetchedAt:liveAt};
 const futureGame=normalizeSoccerSchedule({leagues:[future.header.league],events:[{...future.header,date:future.header.date,status:future.header.competitions[0].status}]},'epl',liveSource).games[0];
 const liveReader={...receipt,observedAt:liveAt,firstFetchedAt:liveAt,receivedAt:liveAt,persistedAt:liveAt,league:'EPL',games:[{league:'EPL',boardDate:futureGame.date,boardTime:'20:00',homeKey:globalThis.Tai888SoccerTeams.key(futureGame.home.name),awayKey:globalThis.Tai888SoccerTeams.key(futureGame.away.name),markets}]};
-const generated=buildSoccerAnalysis({evidence:normalizeSoccerPrematch(future,futureGame,liveSource,liveNow),reader:liveReader,now:liveNow});
+const schedule={ok:true,league:{id:futureGame.league},date:futureGame.date,until:futureGame.date,games:[futureGame],coverage:{complete:true,identityComplete:true}};
+const generated=buildSoccerAnalysis({evidence:normalizeSoccerPrematch(future,futureGame,liveSource,liveNow),reader:liveReader,schedule,now:liveNow});
 const generatedQuotes=generated.directions.flatMap(d=>d.quotes);assert.equal(generatedQuotes.length,8);
 for(const q of generatedQuotes){
  assert.equal(q.scenarioScore.status,'PARAMETER_SENSITIVITY_ONLY',JSON.stringify(q.scenarioScore));
@@ -90,4 +91,4 @@ for(const q of generatedQuotes){
  const view=renderToStaticMarkup(ctx.SoccerConditionalAnalysis({quote:q,result:generated,game:futureGame,now:liveNow}));
  assert.match(view,/情境試算分數/);
 }
-console.log('PASS actual frozen 16-scenario FT/HT production analysis: all eight real adapted markets get bound-preserving numeric scores and real JSX, formal S and eligibility remain unchanged');
+console.log('PASS frozen 16-scenario FT/HT analysis under synthetic mocked schedule authority (not Production acceptance): all eight real adapted markets get bound-preserving numeric scores and real JSX, formal S and eligibility remain unchanged');

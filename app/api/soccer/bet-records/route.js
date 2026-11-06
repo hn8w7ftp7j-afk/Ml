@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireApiAuth,validateSameOrigin,originErrorResponse,checkRateLimit,rateLimitResponse,readJsonBody } from '../../../../lib/security.js';
 import { loadSoccerAnalysisRevision } from '../../../../lib/soccer/analysis-store.js';
-import { listSoccerManualRecords,archiveSoccerManualRecord,changeSoccerManualRecordStatus } from '../../../../lib/soccer/manual-record-store.js';
+import { listSoccerManualRecords,archiveSoccerManualRecord,changeSoccerManualRecordStatus,confirmSoccerAccountSettlement,amendSoccerAccountSettlement } from '../../../../lib/soccer/manual-record-store.js';
 import { settleOpenSoccerManualRecords } from '../../../../lib/soccer/manual-settlement-service.js';
 import { soccerSettlementMissingTerms,SOCCER_PUBLIC_TERM_EVIDENCE } from '../../../../lib/soccer/settlement-contract.js';
 import { soccerProviderPolicy } from '../../../../lib/soccer/provider-policy.js';
@@ -10,7 +10,7 @@ import { validSoccerDate } from '../../../../lib/soccer/contracts.js';
 export const dynamic='force-dynamic';
 export const maxDuration=30;
 const response=(body,status=200)=>NextResponse.json(body,{status,headers:{'Cache-Control':'no-store'}});
-const fail=e=>response({ok:false,error:e.status===400?e.message:'永久帳本暫時無法讀寫，請重試。'},e.status||503);
+const fail=e=>response({ok:false,error:e.status>=400&&e.status<500?e.message:'永久帳本暫時無法讀寫，請重試。'},e.status||503);
 export async function GET(request){
   const denied=await requireApiAuth(request);if(denied)return denied;
   const rate=checkRateLimit(request,{id:'soccer-record-read',limit:90,windowMs:60000});if(!rate.allowed)return rateLimitResponse(rate);
@@ -33,10 +33,12 @@ export async function POST(request){
       return response({ok:true,league:b.league,date:b.date,summary:await settleOpenSoccerManualRecords({league:b.league,date:b.date,limit:50,timeBudgetMs:18000})});
     }
     if(['cancel','restore'].includes(b.action))return response({ok:true,...await changeSoccerManualRecordStatus(b.league,b.date,b.id,b.action)});
+    if(b.action==='confirm-account-settlement')return response({ok:true,...await confirmSoccerAccountSettlement(b.league,b.date,b.id,{netProfit:b.netProfit,rebateTreatment:b.rebateTreatment,confirmedAccountSettlement:b.confirmedAccountSettlement,confirmedFinalAmount:b.confirmedFinalAmount})});
+    if(b.action==='amend-account-settlement')return response({ok:true,...await amendSoccerAccountSettlement(b.league,b.date,b.id,{revision:b.revision,action:b.changeType,netProfit:b.netProfit,reason:b.reason,confirmedAccountSettlement:b.confirmedAccountSettlement,confirmedFinalAmount:b.confirmedFinalAmount})});
     if(b.action!=='record')return response({ok:false,error:'不支援的紀錄操作。'},400);
     if(b.alreadyPlaced!==true)return response({ok:false,error:'僅可記錄你已自行完成的下注。'},400);
     // Client submits identifiers only; price, period, stake and teams come from the immutable server snapshot.
     const snapshot=await loadSoccerAnalysisRevision(b.league,b.gameId,b.date,b.revision);
-    return response({ok:true,...await archiveSoccerManualRecord(snapshot,b.quoteKey)});
+    return response({ok:true,...await archiveSoccerManualRecord(snapshot,b.quoteKey,{identityUnverifiedAcknowledged:b.identityUnverifiedAcknowledged===true})});
   }catch(e){return fail(e);}
 }

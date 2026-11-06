@@ -83,13 +83,30 @@ console.log('PASS conditional rebate confirmation: exact rate/basis/fractional r
 // Exercise the real retained provider fixture through the production analysis.
 const reader={...receipt,league:'EPL',games:[{league:'EPL',boardDate:game.date,boardTime:'23:30',homeKey:globalThis.Tai888SoccerTeams.key(game.home.name),awayKey:globalThis.Tai888SoccerTeams.key(game.away.name),markets}]};
 const evidence=normalizeSoccerPrematch(payload,game,source,now);
-const result=buildSoccerAnalysis({evidence,reader,now});
-assert.equal(result.directions.flatMap(d=>d.quotes).length,8);
-assert.ok(result.directions.flatMap(d=>d.quotes).every(q=>q.conditionalAnalysis.status==='CONDITIONAL_RESEARCH'));
-assert.ok(result.directions.every(d=>d.score===null&&d.W===null&&d.R===null&&d.eligible===false));
+const schedule={ok:true,league:{id:game.league},date:game.date,until:game.date,games:[game],coverage:{complete:true,identityComplete:true}};
+const liveResult=buildSoccerAnalysis({evidence,reader,schedule,now});
+assert.equal(liveResult.directions.flatMap(d=>d.quotes).length,0,'a serializable coverage flag is not a completeness proof');
+assert.equal(liveResult.provisionalReaderResearch.quotes.length,8);
+assert.ok(liveResult.provisionalReaderResearch.quotes.every(q=>q.conditionalAnalysis.status==='CONDITIONAL_RESEARCH'));
+// Old immutable snapshots can still contain the previously saved direction
+// shape. Exercise its display only; this does not authorize or create one.
+const legacyQuotes=liveResult.provisionalReaderResearch.quotes.map(q=>({...q,scoring:{provenance:{distributionHash:q.provisionalDistributionHash}}}));
+const result={...liveResult,directions:['FT','HT'].map(period=>({period,quotes:legacyQuotes.filter(q=>q.period===period),score:null,W:null,R:null,eligible:false}))};
 const code=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const built=await transform(code,{filename:'conditional.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({React,Date,soccerScoringReadiness});vm.runInContext(built.code,ctx);
+const ctx=vm.createContext({React,Date,soccerScoringReadiness,
+  SoccerRecordButton:({provisional})=>React.createElement('button',{'data-provisional':String(provisional)},'自行核對後記錄已下注')});vm.runInContext(built.code,ctx);
+const provisional=buildSoccerAnalysis({evidence,reader,schedule:{...schedule,coverage:{complete:true}},now});
+assert.equal(provisional.directions.flatMap(d=>d.quotes).length,0);
+assert.equal(provisional.provisionalReaderResearch.quotes.length,8);
+const provisionalMarkup=renderToStaticMarkup(React.createElement(ctx.SoccerProvisionalMarketResearch,
+  {value:provisional.provisionalReaderResearch,result:provisional,game,now}));
+assert.match(provisionalMarkup,/來源清單完整性尚未驗證/);
+assert.match(provisionalMarkup,/自行核對場次並實際下注/);
+assert.match(provisionalMarkup,/假設期望淨收益/);
+assert.equal((provisionalMarkup.match(/data-provisional="true"/g)||[]).length,8,'each provisional quote is explicitly sent through the manual self-confirmed record button');
+assert.equal(renderToStaticMarkup(React.createElement(ctx.SoccerProvisionalMarketResearch,
+  {value:{...provisional.provisionalReaderResearch,formalEligible:true},result:provisional,game,now})), '');
 const quote=result.directions.flatMap(d=>d.quotes)[0];
 const render=(q=quote,g=game,t=now)=>renderToStaticMarkup(React.createElement(ctx.SoccerConditionalAnalysis,{quote:q,result,game:g,now:t}));
 assert.match(render(),/期望淨收益/);assert.match(render(),/尚未確認本帳號適用/);

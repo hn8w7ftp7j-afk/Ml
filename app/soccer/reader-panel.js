@@ -105,7 +105,7 @@ export default function SoccerReaderPanel({league,date,showDownload=true}) {
     {resumeCurrent&&(resumeCurrent.message||resumeCurrent.error)&&<p className="soccerAvailability" role="status" aria-label="盤口預測補存狀態">{resumeCurrent.error?`補存未確認：${resumeCurrent.error}`:resumeCurrent.message}</p>}
     {showDownload&&<a className="secondary readerDownload" href={DOWNLOAD} download>下載 Reader {READER_VERSION} 足球版</a>}
     {games.length>0&&<p className="soccerAvailability">原始盤口；足球結算規格與模型仍在驗證。</p>}
-    {games.map((game,index)=><div className="soccerQuoteGame" key={`${game.boardTime}:${game.homeCode}:${game.awayCode}:${index}`}><h3>{name(game.homeRaw)}（主）對 {name(game.awayRaw)}（客）</h3><p className="soccerAvailability">{game.boardTime}｜{game.matchStatus==='MATCHED'?'官方場次已配對':'場次待核對'}{game.prestart?'':'｜非已確認賽前盤'}</p>
+    {games.map((game,index)=><div className="soccerQuoteGame" key={`${game.boardTime}:${game.homeCode}:${game.awayCode}:${index}`}><h3>{name(game.homeRaw)}（主）對 {name(game.awayRaw)}（客）</h3><p className="soccerAvailability">{game.boardTime}｜{game.matchStatus==='MATCHED'?'來源賽程初步配對，完整性待核對':'場次待核對'}{game.prestart?'':'｜非已確認賽前盤'}</p>
       {game.markets.length===0&&<p className="soccerAvailability">此版本沒有開放盤口；已保留來源場次紀錄。</p>}
       {game.markets.map((m,i)=><div className="soccerQuote" key={`${m.period}:${m.kind}:${m.line||''}:${i}`}><span>{periodName[m.period]||'期間待確認'}</span>{m.kind==='HANDICAP'?<><strong>讓球 {m.line}｜{m.lineSide==='home'?'主隊':'客隊'}讓球</strong><span>主 {m.homeWater}｜客 {m.awayWater}</span></>:m.kind==='TOTAL'?<><strong>大小 {m.line}</strong><span>大 {m.overWater}｜小 {m.underWater}</span></>:<><strong>獨贏</strong><span>主 {m.homeWater}｜和 {m.drawWater}｜客 {m.awayWater}</span></>}</div>)}
     </div>)}

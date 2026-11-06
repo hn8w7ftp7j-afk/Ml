@@ -25,6 +25,7 @@ const reasonNames={
   RESULT_SCOREBOARD_CROSSCHECK_UNAVAILABLE:'賽程端點無法交叉核對',RESULT_EXTRA_PERIODS_REQUIRE_REVIEW:'涉及加時或其他額外期間',
   SOCCER_SOURCE_CONTRACT_UNVERIFIED:'系統尚未完成原盤適用派彩規則的綁定與正式登錄',
   SOCCER_HISTORICAL_RULE_APPLICABILITY_UNVERIFIED:'舊盤早於帳戶規則確認時間，當時適用範圍尚無核對依據',
+  MARKET_RETURN_READER_IDENTITY_UNVERIFIED:'舊盤缺少完整賽程身份證據，不能列為已驗證收益樣本',
   MARKET_RETURN_NOT_CHECKED:'尚未核對原盤收益',NO_ORIGINAL_QUOTES:'此封存版本沒有可核對的原盤',
   MARKET_RETURN_ORIGINAL_QUOTES_UNAVAILABLE:'此封存版本未保存原盤明細',
   MARKET_RETURN_RESULT_HISTORY_INCOMPLETE:'賽果核對歷程未完整讀取',
@@ -81,7 +82,7 @@ function RetrospectivePayoffReplay({value}){
     <p>有效原盤 {count(value.selectedQuoteObservations)} 筆｜已重播 {count(value.replayedQuoteObservations)} 筆｜待核對 {count(value.pendingQuoteObservations)} 筆｜衝突隔離 {count(value.quarantinedQuoteObservations)} 筆｜不同賽事 {count(value.uniqueReplayedGames)} 場。</p>
     <p>預測收益可精確計算 {count(value.exactPredictedQuoteReturns)} 筆；保留收益區間 {count(value.boundedPredictedQuoteReturns)} 筆。另有原始盤口未通過核對 {count(value.invalidOriginalQuotes)} 筆，不列入有效原盤。</p>
     <p>{value.completeWithinRequestedScope===true?'本次範圍已完成重播核對。':'本次重播範圍尚未完整，請繼續處理或重新讀取範圍。'}</p>
-    <p className="soccerAvailability">用現在已確認的信用盤算法與 1% 比例退水，對照已保存的預測、原盤及賽果試算。這些是假設收益，尚未確認為帳戶實際派彩；同場多盤不當成多場獨立樣本，也不直接作為正式 R 或 S。</p>
+    <p className="soccerAvailability">用現在已確認的信用盤算法與 1% 比例退水，對照已保存的預測、原盤及賽果試算。舊版原盤可能缺完整賽程身份證據，不能視為已驗證配對。這些是假設收益，尚未確認為帳戶實際派彩；同場多盤不當成多場獨立樣本，也不直接作為正式 R 或 S。</p>
   </section>;
 }
 function ForwardReport({report,league,summary}){

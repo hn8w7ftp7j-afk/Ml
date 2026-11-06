@@ -26,14 +26,18 @@ const reader=league=>({league:league.toUpperCase(),boardDate:date,...source,
     {period:'FT',kind:'TOTAL',unit:'GOALS',line:'2.5',overWater:.9,underWater:.95,rawRows:['大2.5 0.90 小0.95'],serverObservation:source,
       periodEvidence:{period:'FT',status:'EXPLICIT',sectionTitle:league==='epl'?'英格蘭超級聯賽':'歐洲冠軍聯賽',tableHeaders:['全場'],marketHeader:'全場大小'}}]}]});
 let r=reader('epl'),g=game('epl'),calls=0;
-const board=()=>({ok:true,games:[g]});
+const board=()=>({ok:true,league:{id:g.league},date,until:date,coverage:{complete:true},games:[g]});
 const candidates=()=>soccerReaderAnalysisCandidates(r,board(),{league:g.league,date,now});
 function success({reader=r,game=g,cutoff=now}={}){
   const r=reader,g=game,now=cutoff,at=new Date(now).toISOString();
   const shadow=soccerCalibrationShadowArtifacts(g.league);
   const directions=buildSoccerMarketDirections({reader:r,game:g,matchedGames:matchSoccerReaderGames(r,[g],now),now});
+  const provisionalReaderResearch={status:'UNVERIFIED_SCHEDULE_SCOPE',league:g.league,gameId:g.id,date:g.date,
+    identityScope:'UNIQUE_AMONG_FETCHED_SCHEDULE_ONLY',scheduleCompletenessVerified:false,
+    formalEligible:false,calibrationEligible:false,promotionEligible:false,executable:false,W:null,R:null,S:null,
+    quotes:directions.flatMap(d=>d.quotes.map(q=>({...q,formalEligible:false,eligible:false,executable:false,W:null,R:null,S:null})))};
   return{status:200,payload:{ok:true,persisted:true,journalPersisted:true,executable:false,analysisStatus:'COMPLETED',status:'RESEARCH_ONLY',
-    evidence:{game:g},directions,revision:'c'.repeat(64),prediction:soccerResearchArtifacts().leagues[g.league].liveModel,
+    evidence:{game:g},readerEvidence:{status:'NO_MATCHED_QUOTE',games:[]},directions:[],provisionalReaderResearch,revision:'c'.repeat(64),prediction:soccerResearchArtifacts().leagues[g.league].liveModel,
     inputVersions:{readerSourceObservations:r.sourceObservations||[]},
     halfTimePrediction:soccerHalfTimeArtifacts().leagues[g.league].liveModel,
     calibrationShadowCapture:{persisted:true,status:'SHADOW_PREDICTION_SAVED',fullTimeCaptured:true,halfTimeCaptured:true,
@@ -54,6 +58,13 @@ try{
   r.games[0].homeKey=globalThis.Tai888SoccerTeams.key('Arsenal');r.games[0].awayKey=globalThis.Tai888SoccerTeams.key('Chelsea');
   assert.equal(candidates().length,1);
   const original=candidates()[0];
+  assert.equal(soccerReaderAnalysisCandidates(r,{...board(),coverage:{complete:false}},{league:'epl',date,now}).length,0,'partial board cannot create an unfulfillable background claim');
+  const claimedComplete={ok:true,league:{id:'epl'},date,until:date,games:[g],coverage:{complete:true,identityComplete:true}};
+  const claimedCompleteCandidate=soccerReaderAnalysisCandidates(r,claimedComplete,{league:'epl',date,now})[0];
+  assert.equal(claimedCompleteCandidate.identityStatus,'PROVISIONAL_SCHEDULE_IDENTITY_UNVERIFIED',
+    'a provider completeness claim cannot independently verify schedule identity');
+  assert.equal(claimedCompleteCandidate.identity,original.identity,
+    'an untrusted completeness flag cannot change the durable capture scope');
   assert.equal(original.shadow.required,true);assert.equal(original.shadow.candidateHash,soccerCalibrationShadowArtifacts('epl').candidate.contentHash);
   const heartbeat=structuredClone(r);heartbeat.games[0].markets[0].serverObservation.observationId='e'.repeat(64);
   assert.equal(soccerReaderAnalysisCandidates(heartbeat,board(),{league:'epl',date,now})[0].identity,original.identity,'receipt-only heartbeat is not a new economic price');
@@ -78,10 +89,32 @@ try{
     value=>value.league='UCL']){
     const bad=structuredClone(r);change(bad);assert.equal(soccerReaderAnalysisCandidates(bad,board(),{league:'epl',date,now}).length,0);
   }
-  for(const state of ['live','finished','postponed'])assert.equal(soccerReaderAnalysisCandidates(r,{ok:true,games:[{...g,status:state}]},{league:'epl',date,now}).length,0);
+  for(const state of ['live','finished','postponed'])assert.equal(soccerReaderAnalysisCandidates(r,{...board(),games:[{...g,status:state}]},{league:'epl',date,now}).length,0);
+  const competing={...structuredClone(g),id:'soccer:epl:456',sourceId:'456',status:'postponed'};
+  assert.equal(soccerReaderAnalysisCandidates(r,{...board(),games:[g,competing]},{league:'epl',date,now}).length,0,
+    'a competing same-day game cannot be ignored just because it is not scheduled');
   assert.equal(soccerReaderAnalysisCandidates(r,board(),{league:'epl',date,now:Date.parse(g.startTime)}).length,0);
   await assert.rejects(()=>enqueueSoccerReaderAnalysis('nba',date,{query}),/SCOPE/);
   await enqueueSoccerReaderAnalysis('epl',date,{query});
+  const incomplete=await drainSoccerReaderAnalysis({...deps,schedule:async()=>({...board(),coverage:{complete:false}})});
+  assert.equal(incomplete.retryable,1);assert.equal(incomplete.checked,0);
+  const incompleteQueue=(await query("SELECT last_reason,retry_at='infinity'::timestamptz AS dormant FROM sports_soccer_reader_analysis_queue_v1 WHERE league='epl' AND board_date=$1::date",[date]))[0];
+  assert.deepEqual(incompleteQueue,{last_reason:'SCHEDULE_INCOMPLETE',dormant:false},'partial schedule retries slowly and does not need a new Reader upload');
+  await release();
+  const malformed=await drainSoccerReaderAnalysis({...deps,schedule:async()=>({...board(),games:[g,structuredClone(g)]})});
+  assert.equal(malformed.retryable,1);assert.equal(malformed.checked,0);
+  const malformedQueue=(await query("SELECT last_reason,retry_at='infinity'::timestamptz AS dormant FROM sports_soccer_reader_analysis_queue_v1 WHERE league='epl' AND board_date=$1::date",[date]))[0];
+  assert.deepEqual(malformedQueue,{last_reason:'SCHEDULE_INCOMPLETE',dormant:false},'malformed identities also retry when the schedule is corrected');
+  await release();
+  const expiredReader=structuredClone(r);expiredReader.games[0].markets[0].serverObservation.observedAt=new Date(now-181000).toISOString();
+  const expired=await drainSoccerReaderAnalysis({...deps,loadReader:async()=>expiredReader,schedule:async()=>{throw Error('provider down');}});
+  assert.equal(expired.deferred,1);assert.equal(expired.retryable,0);
+  const expiredQueue=(await query("SELECT last_reason,retry_at='infinity'::timestamptz AS dormant FROM sports_soccer_reader_analysis_queue_v1 WHERE league='epl' AND board_date=$1::date",[date]))[0];
+  assert.deepEqual(expiredQueue,{last_reason:'NO_FRESH_ELIGIBLE_QUOTES',dormant:true},'expired prices stop retries even during a schedule outage');
+  await release();
+  const tampered=await drainSoccerReaderAnalysis({...deps,analyze:async()=>{const out=success();out.payload.provisionalReaderResearch.formalEligible=true;return out;}});
+  assert.equal(tampered.captured,0,'mislabelled provisional research cannot acknowledge a durable capture');
+  assert.equal(tampered.retryable,1);await release();
   const concurrent=await Promise.all([drainSoccerReaderAnalysis(deps),drainSoccerReaderAnalysis(deps)]);
   assert.equal(concurrent.reduce((n,x)=>n+x.captured,0),1);assert.equal(calls,1,'SQL scope lease admits one concurrent worker');
   await enqueueSoccerReaderAnalysis('epl',date,{query});
@@ -143,7 +176,7 @@ try{
   const setPolicyReceipt=()=>{for(const key of ['observedAt','firstFetchedAt','receivedAt','persistedAt']){
     policyReader[key]=new Date(policyNow).toISOString();policyReader.games[0].markets[0].serverObservation[key]=policyReader[key];}};
   setPolicyReceipt();
-  const policyBoard=()=>({ok:true,games:[policyGame]}),policyCandidate=()=>soccerReaderAnalysisCandidates(policyReader,policyBoard(),{league:'epl',date:policyDate,now:policyNow})[0];
+  const policyBoard=()=>({ok:true,league:{id:'epl'},date:policyDate,until:policyDate,coverage:{complete:true},games:[policyGame]}),policyCandidate=()=>soccerReaderAnalysisCandidates(policyReader,policyBoard(),{league:'epl',date:policyDate,now:policyNow})[0];
   const priorPolicy=policyCandidate();assert.ok(priorPolicy);
   const policyDeps={query,now:()=>policyNow,league:'epl',date:policyDate,loadReader:async()=>policyReader,schedule:async()=>policyBoard(),
     analyze:async()=>{policyCalls++;return success({reader:policyReader,game:policyGame,cutoff:policyNow});}};
@@ -183,7 +216,8 @@ try{
   for(const key of ['observedAt','firstFetchedAt','receivedAt','persistedAt']){
     liveReader[key]=freshAt;rawGame.markets[0].serverObservation[key]=freshAt;
   }
-  const schedule=async()=>({ok:true,games:[liveGame]});let actualResponse;
+  const schedule=async()=>({ok:true,league:{id:'epl'},date:liveGame.date,until:liveGame.date,
+    coverage:{complete:true},games:[liveGame]});let actualResponse;
   await enqueueSoccerReaderAnalysis('epl',liveGame.date,{query});
   const actualDeps={query,loadReader:async()=>liveReader,schedule,
     analyze:async(input,overrides)=>{
@@ -197,8 +231,12 @@ try{
   assert.equal(actual.captured,1,JSON.stringify({actual,response:actualResponse?.payload?.forwardCapture,status:actualResponse?.payload?.status}));
   const claim=(await query("SELECT receipt FROM sports_soccer_reader_analysis_claims_v1 WHERE game_id=$1 AND state='CAPTURED'",[liveGame.id]))[0];
   assert.ok(claim);assert.equal(claim.receipt.revision,actualResponse.payload.revision);
+  assert.equal(claim.receipt.identityStatus,'PROVISIONAL_SCHEDULE_IDENTITY_UNVERIFIED');
+  assert.equal(claim.receipt.formalScoringEnabled,false);assert.equal(claim.receipt.executable,false);
   const saved=(await query('SELECT payload FROM sports_soccer_analysis_v1 WHERE analysis_hash=$1',[claim.receipt.revision]))[0];
-  assert.ok(saved.payload.directions.some(direction=>direction.quotes.length));assert.equal(saved.payload.formalScoringEnabled,false);
+  assert.equal(saved.payload.directions.flatMap(direction=>direction.quotes).length,0,'unverified board cannot create formal original directions');
+  assert.ok(saved.payload.provisionalReaderResearch?.quotes.length,'actual persisted analysis preserves unverified research prices');
+  assert.equal(saved.payload.formalScoringEnabled,false);
   const savedCapture=(await query('SELECT capture_id FROM sports_soccer_forward_captures_v1 WHERE capture_id=$1',[claim.receipt.captures[0].captureId]))[0];
   assert.equal(savedCapture.capture_id,claim.receipt.captures[0].captureId);
   const shadowReceipt=claim.receipt.calibrationShadow.capture;

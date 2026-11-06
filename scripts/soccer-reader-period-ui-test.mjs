@@ -52,7 +52,7 @@ await ui.load({...body,contentHash:'b'.repeat(64)});await ui.load(body);
 assert.equal(ui.events.length,2,'a later real content change emits exactly one scoped notification');
 markup=renderToStaticMarkup(ui.render());
 assert.match(markup,/全場 [\d:]+（待更新）/);assert.match(markup,/上半場 [\d:]+(?:｜|<\/p>)/);assert.doesNotMatch(markup,/上半場 [\d:]+（待更新）/,'a fresh HT quote is not called stale because the FT aggregate timestamp is older');
-assert.match(markup,/按期間分開保存/);assert.match(markup,/白禮頓（主）對 水晶宮（客）/);assert.match(markup,/大 0\.84/);assert.match(markup,/大 0\.92/);assert.match(markup,/官方場次已配對/);
+assert.match(markup,/按期間分開保存/);assert.match(markup,/白禮頓（主）對 水晶宮（客）/);assert.match(markup,/大 0\.84/);assert.match(markup,/大 0\.92/);assert.match(markup,/來源賽程初步配對，完整性待核對/);
 assert.doesNotMatch(markup,/原盤已逾期，請重新同步|undefined|NaN|已通過正式驗收|可直接下注/);
 assert.match(markup,new RegExp(`下載 Reader ${escapePattern(manifest.version)} 足球版`));assert.match(markup,new RegExp(`href="${escapePattern(downloadHref)}"`));
 const closed={...body,games:[{...game,marketStatus:'locked',markets:[],periodStates:{FT:'locked',HT:'locked'}}]};

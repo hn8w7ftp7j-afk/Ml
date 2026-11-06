@@ -27,6 +27,8 @@ try {
     p.fixtureContextMarker = marker;
     for (const source of [p.evidence.source, p.evidence.game.source, p.evidence.scheduleSource]) source.fetchedAt = iso(base);
     p.inputVersions.evidenceFetchedAt = iso(base); p.inputVersions.scheduleSourceVersion = { ...p.evidence.scheduleSource };
+    // Test-loader-only simulated authority, never a real complete-board receipt.
+    Object.assign(p.readerIdentityEvidence,{date:p.date,verifiedAt:p.analysisCutoff,sourceHash:p.inputVersions.scheduleSourceVersion.contentHash});
     if (priced) {
       p.directions = buildSoccerMarketDirections({ game: p.evidence.game, now: base,
         reader: { revision: soccerForwardHash('reader'), observationId: soccerForwardHash('observation'), observedAt: iso(base),
@@ -96,7 +98,7 @@ try {
   assert.ok(dataset.observations.every(row => row.checkedAt === iso(after + 4999)
     && row.returnCalculatedAt === iso(after + 2000) && row.resultPersistedAt === iso(after + 4999)));
   assert.equal(dataset.R, null); assert.equal(dataset.accepted, false);
-  console.log('PASS scanner history: legacy archived payloads preserve earliest max(calc, DB) availability and latest immutable UI proof with exact result/check identities');
+  console.log('PASS synthetic mocked identity scanner history: legacy archived payloads preserve earliest max(calc, DB) availability and latest immutable UI proof with exact result/check identities');
 
   // A malformed historical proof must not displace the first usable archived
   // result. It has identical returns/outcome/terms but cannot be recomputed.

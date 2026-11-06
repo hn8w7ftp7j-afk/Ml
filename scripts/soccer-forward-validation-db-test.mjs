@@ -10,7 +10,7 @@ import { soccerForwardAnalysisRevision, soccerForwardHash, soccerForwardModelDes
   evaluateSoccerForwardCapture, buildSoccerForwardReport, SOCCER_FORWARD_POLICY } from '../lib/soccer/forward-validation.js';
 import { soccerDate } from '../lib/soccer/contracts.js';
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
-import { SOCCER_MARKET_RETURN_VERSION } from '../lib/soccer/market-return-validation.js';
+import { SOCCER_MARKET_RETURN_VERSION, canonicalSoccerMarketReturnCaptures, evaluateSoccerMarketReturnCapture } from '../lib/soccer/market-return-validation.js';
 const fixture=await soccerSqlFixture(),{db}=fixture;
 const oldDatabase=process.env.DATABASE_URL,oldDatabaseV2=process.env.DATABASE_V2_URL;
 process.env.DATABASE_URL='postgres://fixture.invalid/soccer-forward';delete process.env.DATABASE_V2_URL;
@@ -25,6 +25,8 @@ try {
   for(const source of [original.evidence.source,original.evidence.game.source,original.evidence.scheduleSource])source.fetchedAt=iso(now);
   original.inputVersions.evidenceFetchedAt=iso(now);
   original.inputVersions.scheduleSourceVersion={...original.evidence.scheduleSource};
+  Object.assign(original.readerIdentityEvidence,{date:original.date,verifiedAt:original.analysisCutoff,
+    sourceHash:original.inputVersions.scheduleSourceVersion.contentHash});
   original.directions=buildSoccerMarketDirections({game:original.evidence.game,now,
     reader:{revision:soccerForwardHash('synthetic-reader'),observationId:soccerForwardHash('synthetic-observation'),
       observedAt:iso(now),firstFetchedAt:iso(now),receivedAt:iso(now),persistedAt:iso(now),sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/'},
@@ -274,6 +276,20 @@ try {
     WHERE EXISTS (SELECT 1 FROM sports_soccer_forward_captures_v1 c WHERE c.league=a.league AND c.game_id=a.game_id AND c.analysis_revision=a.analysis_hash
       AND c.league='epl' AND c.board_date=$1::date)`,[original.date])).rows[0].n;
   assert.equal(scopedRead.readCoverage.loadedCapturePayloadBytes,Number(physicalBytes),'bytes are charged once per immutable composite revision');
+  // Actual DB round-trip of a pre-gate style immutable snapshot. Only the
+  // missing evidence field distinguishes it; its original data is not edited.
+  const legacySnapshot=structuredClone(original);delete legacySnapshot.readerIdentityEvidence;legacySnapshot.readBudgetFixture='legacy-no-identity-proof';
+  const identityLegacyRevision=soccerForwardAnalysisRevision(legacySnapshot);
+  await db.query(`INSERT INTO sports_soccer_analysis_v1 (league,game_id,analysis_hash,observed_at,payload) VALUES ('epl',$1,$2,$3::timestamptz,$4::jsonb)`,
+    [legacySnapshot.gameId,identityLegacyRevision,legacySnapshot.observedAt,JSON.stringify(legacySnapshot)]);
+  await captureSoccerForwardSnapshot(legacySnapshot,identityLegacyRevision);
+  const legacyRead=(await loadSoccerForwardEvidence(scope)).captures.find(row=>row.revision===identityLegacyRevision&&row.period==='REGULATION_FT');
+  assert.ok(legacyRead);assert.equal(validateSoccerForwardCapture(legacyRead,protocol,after).ok,true,'legacy goal prediction remains usable');
+  const selectedLegacy=canonicalSoccerMarketReturnCaptures([legacyRead],protocol,after);
+  assert.equal(selectedLegacy.observations.length,0);assert.ok(selectedLegacy.excluded.some(row=>row.reason==='MARKET_RETURN_READER_IDENTITY_UNVERIFIED'));
+  const oldReturn=evaluateSoccerMarketReturnCapture({capture:legacyRead,protocol,result,now:after});
+  assert.ok(oldReturn.observations.every(row=>row.reason==='MARKET_RETURN_READER_IDENTITY_UNVERIFIED'));
+  assert.deepEqual(legacyRead.snapshot,legacySnapshot,'read-time quarantine never rewrites the original');
   console.log('PASS PostgreSQL soccer forward chain: DB-clock capture after actual immutable analysis, fixed/idempotent receipts, separate absent challenger, source/league isolation, append-only results/protocol, corrections quarantined, historical backfill rejected, bounded result work and uncompressed snapshot/check read budgets without hiding correction history; retained EPL/UCL normalizer→actual service→DB→forward report with separately bound summary/scoreboard provenance and real lineup source fields.');
 } finally {
   if(oldDatabase===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=oldDatabase;

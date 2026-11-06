@@ -12,6 +12,10 @@ export function candidateFixture(input, now = Date.now()) {
   Object.assign(s, { executable: false, selectionResult: 'RESEARCH_SHADOW', qaFlag: 'WARN',
     revision: hash(game.id), analysisRunId: 'synthetic-run-123', qualificationVersion: '1', quoteGeneration: '1',
     validUntil: new Date(now + 180000).toISOString() });
+  s.analysisCutoff=new Date(now).toISOString();
+  s.inputVersions={...s.inputVersions,scheduleSourceVersion:{contentHash:hash('synthetic-schedule')}};
+  s.readerIdentityEvidence={version:'SOCCER-COMPLETE-SCHEDULE-IDENTITY-v1',status:'COMPLETE_SCHEDULE_IDENTITY_VERIFIED',
+    league:s.league,gameId:s.gameId,date:s.date,sourceHash:s.inputVersions.scheduleSourceVersion.contentHash,verifiedAt:s.analysisCutoff};
   const receipt = { revision: s.revision, analysisRunId: s.analysisRunId, qualificationVersion: '1', quoteGeneration: '1',
     checkedAt: new Date(now).toISOString(), validUntil: s.validUntil, publishedCurrent: true, reason: 'ACTIVE',
     analysisStatus: 'COMPLETED', selectionResult: 'RESEARCH_SHADOW', executable: false };

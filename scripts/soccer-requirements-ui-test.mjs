@@ -14,7 +14,7 @@ const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
 // Compile the shipped child components in isolated lexical scopes. Rendering
 // the parent must execute the real JSX, including legacy/missing-data paths.
 const realComponentCode=(await Promise.all([
-  ['app/soccer/market-panel.js',['SoccerMarketDirections','SoccerHalfTimeResearch']],
+  ['app/soccer/market-panel.js',['SoccerMarketDirections','SoccerHalfTimeResearch','SoccerProvisionalMarketResearch']],
   ['app/soccer/workload-panel.js',['SoccerWorkloadPanel']],
   ['app/soccer/team-xg-panel.js',['SoccerTeamXgPanel']],
   ['app/soccer/model-development-panel.js',['SoccerModelDevelopmentPanel']],

@@ -44,6 +44,9 @@ try {
     for (const source of [snapshot.evidence.source, snapshot.evidence.game.source, snapshot.evidence.scheduleSource]) source.fetchedAt = iso(base);
     snapshot.inputVersions.evidenceFetchedAt = iso(base);
     snapshot.inputVersions.scheduleSourceVersion = { ...snapshot.evidence.scheduleSource };
+    // Exercise a real legacy shape: its original quote has no independently
+    // verified full-schedule identity receipt. Do not synthesize one on replay.
+    delete snapshot.readerIdentityEvidence;
     snapshot.directions = priced ? buildSoccerMarketDirections({ game: snapshot.evidence.game, now: base,
       reader: { revision: soccerForwardHash(['reader', id]), observationId: soccerForwardHash(['observation', id]),
         observedAt: iso(base), firstFetchedAt: iso(base), receivedAt: iso(base), persistedAt: iso(base),
@@ -93,7 +96,9 @@ try {
   assert.equal(first.report.scan.processedGames, 1); assert.equal(first.report.complete, false);
   assert.equal(first.report.retrospectivePayoffReplay.completeWithinRequestedScope, false);
   assert.equal(first.report.retrospectivePayoffReplay.replayedQuoteObservations, 2);
-  assert.equal(first.report.marketReturnValidation.observedQuoteReturns, 2);
+  assert.equal(first.report.marketReturnValidation.observedQuoteReturns, 0,
+    'a priced legacy snapshot without identity authority cannot yield validated returns');
+  assert.equal(first.report.marketReturnValidation.predictionPeriodReasons.MARKET_RETURN_READER_IDENTITY_UNVERIFIED, 1);
   assert.equal(first.report.marketReturnValidation.pendingReasons.SOCCER_SOURCE_CONTRACT_UNVERIFIED, undefined);
   noPromotion(first.report.retrospectivePayoffReplay);
   const second = await continueSoccerForwardScan(scope, { ...options, cursor: first.report.scan.nextCursor });
@@ -106,7 +111,9 @@ try {
   assert.equal(replay.selectedQuoteObservations, 4); assert.equal(replay.replayedQuoteObservations, 4);
   assert.equal(replay.uniqueReplayedGames, 2); assert.ok(replay.unpricedPredictionPeriods >= 1);
   assert.equal(replay.pendingQuoteObservations, 0); assert.equal(replay.quarantinedQuoteObservations, 0);
-  assert.equal(final.report.marketReturnValidation.observedQuoteReturns, 4);
+  assert.equal(final.report.marketReturnValidation.observedQuoteReturns, 0);
+  assert.equal(final.report.marketReturnValidation.predictionPeriodReasons.MARKET_RETURN_READER_IDENTITY_UNVERIFIED, 2,
+    'each priced legacy game remains quarantined while its retrospective replay stays visible');
   noPromotion(replay);
   close(sumRealized(replay), expectedRealized, 'all-game hypothetical realized returns');
   close(replay.groups.reduce((sum, row) => sum + row.predictedNetReturnSum.lower, 0), expectedLower, 'all-game predicted lower returns');

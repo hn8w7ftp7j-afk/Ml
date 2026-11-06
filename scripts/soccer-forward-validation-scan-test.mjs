@@ -109,6 +109,8 @@ try{
  for(const source of [upgrade.evidence.source,upgrade.evidence.game.source,upgrade.evidence.scheduleSource])source.fetchedAt=iso(upgradeAt);
  upgrade.inputVersions.evidenceFetchedAt=iso(upgradeAt);
  upgrade.inputVersions.scheduleSourceVersion={...upgrade.evidence.scheduleSource};
+ Object.assign(upgrade.readerIdentityEvidence,{date:upgrade.date,verifiedAt:upgrade.analysisCutoff,
+   sourceHash:upgrade.inputVersions.scheduleSourceVersion.contentHash});
  const reader={revision:soccerForwardHash('upgrade-reader'),observationId:soccerForwardHash('upgrade-observation'),
    observedAt:iso(upgradeAt),firstFetchedAt:iso(upgradeAt),receivedAt:iso(upgradeAt),persistedAt:iso(upgradeAt),
    sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/'};

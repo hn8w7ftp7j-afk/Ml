@@ -34,7 +34,7 @@ assert.equal(summarizeSoccerHighScoreBets(research.candidates,{league,date,ledge
 assert.equal(soccerHighScoreCandidates([game],states,{league,date:'2026-10-21',now}).candidates.length,0,'upcoming games on other dates cannot populate this board reminder');
 assert.equal(soccerHighScoreCandidates([game],states,{league:'ucl',date,now}).candidates.length,0);
 assert.equal(soccerHighScoreCandidates([game],states,{league,date,now:now+180000}).analysisReady,false,'expired current research cannot keep the previous all-bet summary');
-console.log('PASS soccer card summary: actual ranking candidates, research exclusion, exact date/league/FT/HT/side/line isolation, unloaded/failed/expired analysis, pending ledger, cancel and restore');
+console.log('PASS soccer card summary with mocked synthetic schedule authority: ranking candidates, research exclusion, exact date/league/FT/HT/side/line isolation, unloaded/failed/expired analysis, pending ledger, cancel and restore');
 
 const workspaceSource=fs.readFileSync('app/soccer/workspace.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
 const workspaceCode=await transform(workspaceSource,{filename:'soccer-card-workspace.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});

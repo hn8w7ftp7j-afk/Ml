@@ -29,6 +29,8 @@ try {
   for (const source of [snapshot.evidence.source, snapshot.evidence.game.source, snapshot.evidence.scheduleSource]) source.fetchedAt = iso(base);
   snapshot.inputVersions.evidenceFetchedAt = iso(base);
   snapshot.inputVersions.scheduleSourceVersion = {...snapshot.evidence.scheduleSource};
+  Object.assign(snapshot.readerIdentityEvidence,{date:snapshot.date,verifiedAt:snapshot.analysisCutoff,
+    sourceHash:snapshot.inputVersions.scheduleSourceVersion.contentHash});
   snapshot.directions = buildSoccerMarketDirections({game:snapshot.evidence.game,now:base,
     reader:{revision:soccerForwardHash('retention-reader'),observationId:soccerForwardHash('retention-observation'),
       observedAt:iso(base),firstFetchedAt:iso(base),receivedAt:iso(base),persistedAt:iso(base),
@@ -53,10 +55,13 @@ try {
     const evaluation = evaluateSoccerForwardCapture(full,protocol,result,now);
     assert.equal(evaluation.status,'EVALUATED');
     evaluation.marketReturnValidation = evaluateSoccerMarketReturnCapture({capture:full,protocol,result,now:logicalAt});
-    // The current-clock quote is after the account-owner rule confirmation.
-    // Calculated market returns may now be observed; model approval and the
-    // independent DB-receipt availability checks below remain unchanged.
-    assert.equal(evaluation.marketReturnValidation.status,'OBSERVED');
+    // The fixture's fabricated identity fields do not establish a verified
+    // complete schedule. Hypothetical payoff replay is independent of formal
+    // source-bound returns, even after account-rule confirmation.
+    assert.equal(evaluation.marketReturnValidation.status,'PENDING');
+    assert.equal(evaluation.marketReturnValidation.observedQuoteReturns,0);
+    assert.equal(evaluation.marketReturnValidation.observations.length,2);
+    assert.ok(evaluation.marketReturnValidation.observations.every(row=>row.reason==='MARKET_RETURN_READER_IDENTITY_UNVERIFIED'));
     const checkId = soccerForwardHash(['retention-check',name]);
     const payload = {status:'EVALUATED',evaluation,resultEvidence:result};
     await query(`INSERT INTO sports_soccer_forward_result_checks_v1(check_id,capture_id,checked_at,payload)

@@ -30,11 +30,13 @@ assert.equal(ordered.entries[0].game.id,game.id);assert.equal(ordered.order[0].g
 assert.deepEqual(ordered.entries.map(e=>e.stableKey).sort(),ordered.order.map(e=>e.stableKey).sort(),'both views contain the same eligible candidates');
 console.log('PASS football ranking: both views exclude research, low scores and nonpositive W/R, retain inclusive S threshold, formal QA, currentness, original research quotes and score/time sorting');
 
-const record=soccerManualRecordFromSnapshot({...result,revision:'r1'},'q1');
+assert.throws(()=>soccerManualRecordFromSnapshot({...result,revision:'r1'},'q1'),/原盤識別/,'legacy source identity requires explicit self-check acknowledgment');
+const record=soccerManualRecordFromSnapshot({...result,revision:'r1'},'q1',{identityUnverifiedAcknowledged:true});
+assert.equal(record.sourceIdentityStatus,'SELF_ASSERTED_UNVERIFIED');
 assert.equal(record.stake,10000);assert.equal(record.rebateRate,.01);assert.equal(record.calibrationEligible,false);assert.equal(record.executable,false);
 const originalSnapshot=JSON.stringify(result),policyCutoff=Date.parse('2026-10-20T09:11:48Z');
-const earlierPolicy=soccerManualRecordFromSnapshot(result,'q1',{now:policyCutoff-1});
-const confirmedPolicy=soccerManualRecordFromSnapshot(result,'q1',{now:policyCutoff});
+const earlierPolicy=soccerManualRecordFromSnapshot(result,'q1',{now:policyCutoff-1,identityUnverifiedAcknowledged:true});
+const confirmedPolicy=soccerManualRecordFromSnapshot(result,'q1',{now:policyCutoff,identityUnverifiedAcknowledged:true});
 assert.equal(earlierPolicy.rebateBasis,'TOTAL_PRINCIPAL');
 assert.equal(confirmedPolicy.rebateBasis,'SETTLED_PRINCIPAL');
 assert.equal(confirmedPolicy.rebatePolicyAsOf,'2026-10-20T09:11:48.000Z');
@@ -42,8 +44,8 @@ assert.equal(confirmedPolicy.rebatePolicyScope,'RECORD_CREATION_METADATA_NOT_ORI
 assert.equal(confirmedPolicy.formalEligible,false);assert.equal(confirmedPolicy.settlementStatus,'UNVERIFIED');
 assert.equal(confirmedPolicy.sourceQuote,quote);assert.equal(JSON.stringify(result),originalSnapshot);
 assert.equal(earlierPolicy.rebateBasis,'TOTAL_PRINCIPAL','later record creation cannot rewrite an earlier policy snapshot');
-for(const patch of [{period:null},{unit:'CORNERS'},{water:NaN},{provenance:{gameId:'soccer:ucl:123'}}])assert.throws(()=>soccerManualRecordFromSnapshot({...result,directions:[{quotes:[{...quote,...patch}]}]},'q1'));
-assert.throws(()=>soccerManualRecordFromSnapshot(result,'forged'));
+for(const patch of [{period:null},{unit:'CORNERS'},{water:NaN},{provenance:{gameId:'soccer:ucl:123'}}])assert.throws(()=>soccerManualRecordFromSnapshot({...result,directions:[{quotes:[{...quote,...patch}]}]},'q1',{identityUnverifiedAcknowledged:true}));
+assert.throws(()=>soccerManualRecordFromSnapshot(result,'forged',{identityUnverifiedAcknowledged:true}));
 const fixture=await soccerSqlFixture();process.env.DATABASE_URL='postgres://fixture.invalid/workspace';delete process.env.DATABASE_V2_URL;
 try{
   const {archiveSoccerManualRecord,listSoccerManualRecords,changeSoccerManualRecordStatus}=await import('../lib/soccer/manual-record-store.js');
@@ -56,8 +58,8 @@ try{
   await finishSoccerAnalysisRun(run,{analysisStatus:'COMPLETED',qaFlag:'WARN',selectionResult:'RESEARCH_SHADOW',revision:saved.revision,validUntil:new Date(now+120000).toISOString()});
   assert.equal((await listSoccerAnalysisBoard('epl',date,date))[0].publishedCurrent,true);
   const original=await loadSoccerAnalysisRevision('epl',game.id,date,saved.revision);
-  const first=await archiveSoccerManualRecord(original,'q1');
-  const duplicate=await archiveSoccerManualRecord({...original,directions:[{...result.directions[0],quotes:[{...quote,water:1.3,key:'new'}]}]},'new');
+  const first=await archiveSoccerManualRecord(original,'q1',{identityUnverifiedAcknowledged:true});
+  const duplicate=await archiveSoccerManualRecord({...original,directions:[{...result.directions[0],quotes:[{...quote,water:1.3,key:'new'}]}]},'new',{identityUnverifiedAcknowledged:true});
   assert.equal(first.record.id,duplicate.record.id);assert.equal(duplicate.record.water,.95,'new analysis cannot overwrite recorded water');
   assert.equal((await listSoccerManualRecords('epl',date)).length,1);assert.equal((await listSoccerManualRecords('ucl',date)).length,0);
   await assert.rejects(()=>changeSoccerManualRecordStatus('ucl',date,first.record.id,'cancel'),/不存在/);
@@ -70,6 +72,6 @@ try{
   await fixture.db.query(`UPDATE sports_soccer_analysis_heads_v2 SET valid_until=now()-interval '1 second'`);
   assert.equal((await listSoccerAnalysisBoard('epl',date,date))[0].publishedCurrent,false,'restored history does not authorize expired projection');
   await assert.rejects(()=>loadSoccerAnalysisRevision('ucl','soccer:ucl:123',date,saved.revision),/找不到/);
-  await assert.rejects(()=>archiveSoccerManualRecord(original,'q1',{db:{query:async()=>{throw Error('offline');}}}),/offline/);
+  await assert.rejects(()=>archiveSoccerManualRecord(original,'q1',{identityUnverifiedAcknowledged:true,db:{query:async()=>{throw Error('offline');}}}),/offline/);
   console.log('PASS real PostgreSQL: durable quote-bound records, double-click replay, scoped cancel/restore, immutable price/stake, unknown settlement metrics, revision validation and publication expiry');
 }finally{await fixture.close();}

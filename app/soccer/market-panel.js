@@ -22,6 +22,8 @@ const scoreStages={READER_QUOTE:'原盤來源與期間',SETTLEMENT_CONTRACT:'實
 const scoreStageStatuses={PASS:'已核對',REGISTERED:'已登錄核對依據',CALCULATED_CONDITIONALLY:'已完成條件試算',CONDITIONAL_ONLY:'僅供條件試算',CONDITIONAL_PROTOCOL_ARITHMETIC:'已完成情境算術核對',DIAGNOSTIC_ONLY:'研究分數',MISSING:'尚未完成規則登錄',NOT_CALCULABLE:'尚缺計算依據',BLOCKED:'尚未通過',PENDING:'尚待核對',NOT_AUTHORIZED:'尚未授權'};
 const readerDiagnosticNames={SOCCER_READER_STORAGE_UNAVAILABLE:'原盤暫時讀取失敗，無法確認是否缺盤。',SOCCER_READER_CAPTURE_MISSING:'此分析版本建立時尚無可用原盤；目前保存狀態請看上方原盤與「已保存原盤」。',SOCCER_READER_CAPTURE_SCOPE_MISMATCH:'原盤的聯盟或日期與本場不符。',SOCCER_READER_GAME_UNMATCHED:'已收到原盤，但本場隊名或開賽時間尚未配對。',SOCCER_READER_NO_OPEN_GOAL_MARKET:'本場已配對，目前沒有開放的讓球或大小盤。',SOCCER_READER_PERIOD_UNCONFIRMED:'本場原盤已配對，但全場／上半場標示尚未確認。',SOCCER_READER_CAPTURE_UNUSABLE_AT_CUTOFF:'本場原盤尚未通過分析時間核對。',SOCCER_READER_MATCH_STARTED:'比賽已開始；原盤僅供歷史核對。',SOCCER_READER_QUOTES_STALE:'本場原盤已配對，但已逾期，請更新原盤。',SOCCER_READER_CAPTURE_READY:'本場已有配對成功的賽前原盤。'};
 const readerDiagnosticStatuses={SOCCER_READER_STORAGE_UNAVAILABLE:'UNAVAILABLE',SOCCER_READER_CAPTURE_MISSING:'MISSING',SOCCER_READER_CAPTURE_SCOPE_MISMATCH:'SCOPE_MISMATCH',SOCCER_READER_GAME_UNMATCHED:'UNMATCHED',SOCCER_READER_NO_OPEN_GOAL_MARKET:'NO_OPEN_GOALS',SOCCER_READER_PERIOD_UNCONFIRMED:'PERIOD_UNCONFIRMED',SOCCER_READER_CAPTURE_UNUSABLE_AT_CUTOFF:'UNUSABLE_CAPTURE',SOCCER_READER_MATCH_STARTED:'POSTSTART',SOCCER_READER_QUOTES_STALE:'STALE',SOCCER_READER_CAPTURE_READY:'READY'};
+readerDiagnosticNames.SOCCER_READER_SCHEDULE_IDENTITY_UNVERIFIED='賽程來源清單完整性尚未驗證，無法確認原盤唯一身分。';
+readerDiagnosticStatuses.SOCCER_READER_SCHEDULE_IDENTITY_UNVERIFIED='UNAVAILABLE';
 function readerDiagnostic(result,game){
   const d=result?.readerDiagnostics;
   return d?.version==='SOCCER-READER-DIAGNOSTICS-v1'&&d.executable===false&&d.gameId===result?.gameId&&d.league===result?.league&&d.date===result?.date
@@ -149,7 +151,7 @@ export function SoccerAutomaticAnalysisStatus({result,game,now=Date.now()}){
   </section>;
 }
 
-function soccerConditionalState({quote,result,game,now=Date.now()}){
+function soccerConditionalState({quote,result,game,now=Date.now(),provisional=false}){
   const c=quote?.conditionalAnalysis,saved=result?.evidence?.game;
   const distribution=quote?.period==='FT'?result?.prediction:result?.halfTimePrediction;
   if(result?.qaFlag==='BLOCKED'||c?.version!=='SOCCER-CREDIT-ASSUMPTION-RETURN-v1'||c.status!=='CONDITIONAL_RESEARCH'
@@ -167,7 +169,7 @@ function soccerConditionalState({quote,result,game,now=Date.now()}){
       &&Date.parse(c.ruleBinding.accountRuleConfirmation?.confirmedAt)<=Date.parse(c.quoteObservedAt))
     ||c.assumption?.rebateRate!==.01||c.assumption?.rebateBasis!=='SETTLED_PRINCIPAL'
     ||c.modelVersion!==distribution?.modelVersion||c.trainingHash!==distribution?.trainingHash
-    ||c.distributionHash!==quote.scoring?.provenance?.distributionHash
+    ||c.distributionHash!==(provisional?quote.provisionalDistributionHash:quote.scoring?.provenance?.distributionHash)
     ||c.quoteObservedAt!==quote.provenance?.observedAt
     ||c.assumption?.period!==quote.period||c.assumption?.extraTimeIncluded!==false
     ||quote.period!==({REGULATION_FT:'FT',REGULATION_HT:'HT'})[distribution?.period]
@@ -255,6 +257,24 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
     {!periodConfirmed?<p className="soccerMarketCaution">期間待確認，暫不計算</p>:<details className="soccerDetails"><summary>比分門檻研究（不是 S 分數）</summary><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</details>}
     {periodConfirmed&&<SoccerRecordButton game={game} result={result} quote={q}/>}
   </article>;
+}
+
+export function SoccerProvisionalMarketResearch({value,result,game,now=Date.now()}){
+  if(value?.status!=='UNVERIFIED_SCHEDULE_SCOPE'||value.identityScope!=='UNIQUE_AMONG_FETCHED_SCHEDULE_ONLY'
+    ||value.scheduleCompletenessVerified!==false||value.formalEligible!==false||value.calibrationEligible!==false
+    ||value.promotionEligible!==false||value.executable!==false||['W','R','S'].some(key=>value[key]!==null)
+    ||value.gameId!==game?.id||value.league!==game?.league||value.date!==game?.date||!Array.isArray(value.quotes))return null;
+  return <section className="soccerScoringReadiness" aria-label="賽程範圍未驗證原盤研究">
+    <h3>來源範圍內的原盤條件試算</h3>
+    <p className="soccerMarketCaution">僅在本次取回的賽程中找到唯一對應，來源清單完整性尚未驗證，不能確認此原盤必屬本場。以下僅供研究，不列正式方向、收益驗證、W／R／S 或候選。</p>
+    <p>如已自行核對場次並實際下注，可手動記錄；不會送單，身分及結算仍待核對。</p>
+    {value.quotes.map((quote,index)=>{const state=soccerConditionalState({quote,result,game,now,provisional:true}),c=state.analysis;
+      return <article key={`${quote.key||index}:${index}`}><strong>{textValue(quote.label)||'原盤'}｜{periods[quote.period]||'期間待確認'}</strong>
+        <p>球頭 {textValue(quote.line)||'未提供'}｜水位 {textValue(quote.water)||'未提供'}</p>
+        {state.status==='UNAVAILABLE'?<p>條件試算尚不可用。</p>:<p>{state.status==='HISTORICAL'?'歷史':''}假設期望淨收益 {returnPct(c.netReturnBounds.lower)} ～ {returnPct(c.netReturnBounds.upper)}（每元本金）</p>}
+        <SoccerRecordButton game={game} result={result} quote={quote} provisional/>
+      </article>;})}
+  </section>;
 }
 
 export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,result,now=Date.now()}){
