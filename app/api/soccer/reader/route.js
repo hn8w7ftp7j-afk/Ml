@@ -8,6 +8,7 @@ import { soccerLeague, validSoccerDate } from '../../../../lib/soccer/contracts.
 import { soccerReaderPeriodBindingDiagnostics } from '../../../../lib/soccer/reader-period-binding.js';
 import { enqueueSoccerReaderAnalysis } from '../../../../lib/soccer/reader-auto-analysis.js';
 import { launchSoccerReaderContinuation } from '../../../../lib/soccer/reader-analysis-launcher.js';
+import { registerSoccerReaderPeriodDevice } from '../../../../lib/soccer/reader-period-device-registry.js';
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
 export const maxDuration=60;
@@ -21,12 +22,16 @@ export async function POST(request){
   try{
     const raw=await readJsonBody(request,384000);const checked=validateSoccerCapture(raw,{headerVersion:request.headers.get('x-reader-version')});
     if(!checked.ok)return response({ok:false,error:'足球原盤核對未通過',issues:checked.errors},422);
-    const saved=await saveSoccerReaderSnapshot({...checked.payload,deviceId:token.deviceId});
+    const payload={...checked.payload,deviceId:token.deviceId};
+    const saved=await saveSoccerReaderSnapshot(payload);
+    let periodContinuation={status:'NOT_VERIFIED',reason:'REGISTRATION_UNAVAILABLE'};
+    try {periodContinuation=await registerSoccerReaderPeriodDevice({payload,authenticatedDeviceId:token.deviceId,observationId:saved.observationId});}
+    catch { /* Original observations remain saved; the next valid capture retries registration. */ }
     let automaticCapture={status:'QUEUE_UNAVAILABLE',durable:false,executable:false};
     try{automaticCapture=await enqueueSoccerReaderAnalysis(checked.payload.league,checked.payload.boardDate);
       automaticCapture={...automaticCapture,continuation:await launchSoccerReaderContinuation({league:checked.payload.league.toLowerCase(),date:checked.payload.boardDate})};
     }catch{}
-    return response({ok:true,league:raw.league,...saved,automaticCapture,rawGameCount:checked.payload.games.length,matchedGameCount:0,marketCount:checked.payload.games.reduce((n,g)=>n+g.markets.length,0),executable:false,message:'足球原盤已保存，規格及模型驗證中'});
+    return response({ok:true,league:raw.league,...saved,periodContinuation,automaticCapture,rawGameCount:checked.payload.games.length,matchedGameCount:0,marketCount:checked.payload.games.reduce((n,g)=>n+g.markets.length,0),executable:false,message:'足球原盤已保存，規格及模型驗證中'});
   }catch(e){return response({ok:false,error:'足球原盤未保存',code:/^[A-Z0-9_]+$/.test(e.message||'')?e.message:'SOCCER_READER_CAPTURE_FAILED',status:'BLOCKED',executable:false},e.status||503);}
 }
 export async function GET(request){
@@ -44,6 +49,7 @@ export async function GET(request){
       firstFetchedAt:capture.firstFetchedAt,receivedAt:capture.receivedAt||null,observationId:capture.observationId,
       isPeriodAggregate:capture.isPeriodAggregate===true,sourceObservations:capture.sourceObservations||[],periodsCovered:capture.periodsCovered||[],
       timeEvidence:capture.timeEvidence,historicalAvailabilityVerified:false,revision:capture.revision,contentHash:capture.contentHash,games,
+      periodContinuationStatus:capture.periodContinuationStatus||'NOT_VERIFIED',
       periodBindingDiagnostics:soccerReaderPeriodBindingDiagnostics(games,capture),officialAvailable:official.ok,executable:false});
   }catch{return response({ok:false,error:'足球原盤暫時無法讀取',executable:false},503);}
 }

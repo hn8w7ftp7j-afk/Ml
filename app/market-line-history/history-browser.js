@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { EMPTY_HISTORY_FILTERS, HISTORY_LEAGUES, HISTORY_LEAGUE_LABELS, groupHistoryRows, historyFilterLabel, historyQueryUrl,
   historyFiltersFromSearch, historyGameFilters, historyGameKeyLimit, historyMarketStatusText, historyRecordLabel,
-  historyRowKey, historyWater, mergeHistoryRows, taipeiHistoryTime, validateHistoryResponse } from './history-view.js';
+  historyRowKey, historyWater, mergeHistoryRows, taipeiHistoryTime, validateHistoryResponse, historyDisplayMarkets,
+  historyIntegrityNotice, historyInterpretationSummary, historyMarketHasDirections } from './history-view.js';
 import styles from './history.module.css';
 import CoveragePanel from './coverage-panel.js';
 import SeenCapturePanel from './seen-capture-panel.js';
@@ -12,9 +13,9 @@ import SeenCapturePanel from './seen-capture-panel.js';
 const countText = value => value.toLocaleString('zh-TW');
 
 function SavedMarket({ market }) {
-  const available = market.status === 'AVAILABLE' && Array.isArray(market.directions) && market.directions.length >= 2 && market.directions.length % 2 === 0;
+  const available = historyMarketHasDirections(market);
   return <div className={styles.market}>
-    <h4>{market.market}</h4>
+    <h4>{market.market}{market.status === 'RETROSPECTIVE_INTERPRETATION' ? '｜查閱時辨識' : ''}</h4>
     {available ? market.directions.map((direction, index) => <div className={styles.direction} key={`${direction.side || index}:${index}`}>
       <strong>{direction.pick || '方向文字未保存'}</strong><span>水位 {historyWater(direction.water)}</span>
     </div>) : <p className={market.status === 'INVALID' ? styles.invalid : styles.muted}>
@@ -33,14 +34,16 @@ function SavedGame({ game, partial, busy, onInspect }) {
         {game.rows.map(row => <li key={historyRowKey(row)}>
           <div className={styles.observation}><time dateTime={row.observedAt}>{taipeiHistoryTime(row.observedAt)}</time><small>{historyRecordLabel(row)}｜台北時間{row.readerVersion ? `｜Reader ${row.readerVersion}` : ''}</small></div>
           {row.recordKind === 'READER_OBSERVATION' && <p className={styles.muted}>伺服器接收 {taipeiHistoryTime(row.receivedAt)}｜存入 {taipeiHistoryTime(row.persistedAt)}</p>}
-          {row.integrity?.ok === false && <p className={styles.invalid} role="alert">這筆保存內容或期間尚未通過核對；不要把缺失的市場當成完整盤口。</p>}
-          <div className={styles.markets}>{row.markets.map((market, index) => <SavedMarket key={`${market.market}:${index}`} market={market}/>)}</div>
+          {row.integrity?.ok === false && historyIntegrityNotice(row) && <p className={styles.invalid} role="alert">{historyIntegrityNotice(row)}</p>}
+          {historyInterpretationSummary(row) && <p className={styles.muted}>{historyInterpretationSummary(row)}</p>}
+          <div className={styles.markets}>{historyDisplayMarkets(row).map((market, index) => <SavedMarket key={`${market.market}:${index}`} market={market}/>)}</div>
           <details className={styles.raw}><summary>原始保存內容</summary><pre>{JSON.stringify({ league: row.league, boardDate: row.boardDate, gameKey: row.gameKey,
             observedAt: row.observedAt, recordKind: row.recordKind || 'CHANGED_STATE', recordId: row.recordId,
             sourceTable: row.sourceTable || 'tai888_market_line_history_v1', observationId: row.observationId,
             receivedAt: row.receivedAt, persistedAt: row.persistedAt, identityBasis: row.identityBasis,
             stateHash: row.stateHash, sourceHash: row.sourceHash, contentHash: row.contentHash,
-            integrity: row.integrity, rawMarkets: row.rawMarkets, rawGame: row.rawGame }, null, 2)}</pre></details>
+            integrity: row.integrity, rawMarkets: row.rawMarkets, rawGame: row.rawGame,
+            historyInterpretation: row.historyInterpretation, displayMarkets: row.displayMarkets }, null, 2)}</pre></details>
         </li>)}
       </ol>
     </div>
@@ -121,6 +124,7 @@ export default function HistoryBrowser({ children } = {}) {
     {children}
     <section className={`panel ${styles.scope}`} aria-label="資料範圍說明">
       <p>這裡整合五聯盟「變盤歸檔」與英超、歐冠「讀盤觀測」，不是舊分析快照庫。每筆最多包含全場／上半讓分與大小、雙邊方向；足球觀測筆數不等於變盤次數。</p>
+      <p>足球另外列出已保存的勝平負。依同一筆主盤與明示上半場完成的全場辨識，會標示「查閱時辨識」及辨識時間，原始時段與內容仍保留。</p>
       <p>盤日是 Reader 的盤面日期；下方觀測時間一律顯示台北時間。只列實際保存內容，未保存的市場不補值；筆數不代表全部歷史都已收齊。</p>
     </section>
     <form ref={filterForm} className={`panel ${styles.filters}`} onSubmit={submit} aria-label="歷史盤口篩選">

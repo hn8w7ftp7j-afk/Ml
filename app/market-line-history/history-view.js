@@ -2,6 +2,70 @@ export const HISTORY_LEAGUES = Object.freeze(['MLB', 'NBA', 'NPB', 'KBO', 'CPBL'
 export const EMPTY_HISTORY_FILTERS = Object.freeze({ league: '', from: '', through: '', gameKey: '' });
 export const HISTORY_LEAGUE_LABELS = Object.freeze({ EPL: '英超 EPL', UCL: '歐冠 UCL' });
 const SOURCE_TABLES = ['tai888_market_line_history_v1', 'sports_soccer_reader_observations_v2'];
+const HISTORY_INTERPRETATION_VERSION = 'SOCCER-HISTORY-PERIOD-INTERPRETATION-v1';
+const HISTORY_INTERPRETATION_BASIS = 'SAME_OBSERVATION_PRIMARY_AND_EXPLICIT_HT';
+
+export function historyMarketHasDirections(market) {
+  if (!['AVAILABLE', 'RETROSPECTIVE_INTERPRETATION'].includes(market?.status) || !Array.isArray(market.directions)) return false;
+  const directions = market.directions;
+  const valid = directions.every(direction => typeof direction?.pick === 'string'
+    && typeof direction.water === 'number' && Number.isFinite(direction.water));
+  return valid && (market.kind === 'MONEYLINE'
+    ? directions.length === 3 && ['away', 'draw', 'home'].every(side => directions.filter(direction => direction.side === side).length === 1)
+    : directions.length >= 2 && directions.length % 2 === 0);
+}
+
+export function historyDisplayMarkets(row) {
+  return Array.isArray(row.displayMarkets) ? row.displayMarkets : row.markets;
+}
+
+export function historyInterpretationSummary(row) {
+  const interpretation = row.historyInterpretation;
+  if (!interpretation || !historyDisplayMarkets(row).some(market => market.status === 'RETROSPECTIVE_INTERPRETATION')) return '';
+  return `全場盤口已於 ${taipeiHistoryTime(interpretation.interpretedAt)} 依同一筆主盤與明示上半場辨識。原始時段仍保留 UNKNOWN；這是查閱時辨識，不代表當時已可分析或下注。`;
+}
+
+export function historyIntegrityNotice(row) {
+  if (row.integrity?.ok !== false) return '';
+  const issues = Array.isArray(row.integrity.issues) ? row.integrity.issues : [];
+  if (!issues.length || issues.some(issue => issue !== 'PERIOD_UNKNOWN')) return '這筆保存內容尚未通過完整性核對，請查看原始保存內容。';
+  if (row.historyInterpretation && !historyDisplayMarkets(row).some(market => market.status === 'PERIOD_UNKNOWN')) return '';
+  return '部分市場的全場／上半場尚未辨識，請查看各市場狀態。';
+}
+
+function validHistoryInterpretation(value, row) {
+  return value?.version === HISTORY_INTERPRETATION_VERSION && value.basis === HISTORY_INTERPRETATION_BASIS
+    && value.observationId === row.observationId && value.historicalAvailabilityVerified === false && value.executable === false
+    && typeof value.interpretedAt === 'string' && Number.isFinite(Date.parse(value.interpretedAt))
+    && Date.parse(value.interpretedAt) >= Date.parse(row.persistedAt || row.observedAt);
+}
+
+function validDisplayMarkets(row) {
+  if (row.displayMarkets == null) return row.historyInterpretation == null;
+  if (!['EPL', 'UCL'].includes(row.league) || !Array.isArray(row.displayMarkets) || !row.displayMarkets.length) return false;
+  let count = 0;
+  for (const market of row.displayMarkets) {
+    if (typeof market?.market !== 'string' || !['FT', 'HT', 'UNKNOWN'].includes(market.period)
+      || !['HANDICAP', 'TOTAL', 'MONEYLINE'].includes(market.kind)
+      || !['AVAILABLE', 'NOT_CAPTURED', 'INVALID', 'LOCKED', 'PERIOD_UNKNOWN', 'RETROSPECTIVE_INTERPRETATION'].includes(market.status)) return false;
+    if (['AVAILABLE', 'RETROSPECTIVE_INTERPRETATION'].includes(market.status) && !historyMarketHasDirections(market)) return false;
+    if (market.status !== 'RETROSPECTIVE_INTERPRETATION') continue;
+    if (market.period !== 'FT' || !Array.isArray(market.contracts) || !market.contracts.length) return false;
+    let marketCount = 0;
+    for (const contract of market.contracts) {
+      const proof = contract?.historyPeriodInterpretation;
+      if (proof == null) continue;
+      if (!validHistoryInterpretation(proof, row) || proof.originalPeriod !== 'UNKNOWN' || proof.displayPeriod !== 'FT') return false;
+      count++; marketCount++;
+    }
+    if (!marketCount) return false;
+  }
+  const summary = row.historyInterpretation;
+  return count === 0 ? summary == null : validHistoryInterpretation(summary, row)
+    && summary.status === 'RETROSPECTIVE_INTERPRETATION' && summary.interpretedContractCount === count
+    && Array.isArray(summary.originalPeriods) && summary.originalPeriods.length === 1 && summary.originalPeriods[0] === 'UNKNOWN'
+    && Array.isArray(summary.displayPeriods) && summary.displayPeriods.length === 1 && summary.displayPeriods[0] === 'FT';
+}
 
 export function historyGameKeyLimit(league) {
   return !league || ['EPL', 'UCL'].includes(league) ? 200 : 80;
@@ -81,6 +145,7 @@ export function validateHistoryResponse(payload) {
       || (row.sourceTable != null && !SOURCE_TABLES.includes(row.sourceTable))
       || (['EPL', 'UCL'].includes(row.league) && (row.recordKind !== 'READER_OBSERVATION'
         || typeof row.recordId !== 'string' || !row.recordId || row.sourceTable !== 'sports_soccer_reader_observations_v2'))
+      || !validDisplayMarkets(row)
       || !Array.isArray(row.markets) || row.markets.some(market => typeof market?.market !== 'string'
         || !['AVAILABLE', 'NOT_CAPTURED', 'INVALID', 'LOCKED', 'PERIOD_UNKNOWN'].includes(market.status)
         || (market.status === 'AVAILABLE' && (!Array.isArray(market.directions)

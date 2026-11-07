@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { taipeiHistoryTime } from './history-view.js';
+import { coverageMarketsForDisplay, validateCoverageDisplay } from './coverage-display.js';
 import styles from './history.module.css';
 
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'EPL', 'UCL'];
 const LABELS = { EPL: '英超 EPL', UCL: '歐冠 UCL' };
-const MARKET_STATUS = { AVAILABLE: '有保存', NOT_CAPTURED: '未保存', INVALID: '內容異常', LOCKED: '鎖盤', PERIOD_UNKNOWN: '期間未確認' };
+const MARKET_STATUS = { AVAILABLE: '有保存', NOT_CAPTURED: '未保存', INVALID: '內容異常', LOCKED: '鎖盤', PERIOD_UNKNOWN: '期間未確認', RETROSPECTIVE_INTERPRETATION: '有原盤，查閱時辨識為全場' };
 const numberText = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('zh-TW') : '未確認';
 const timeText = value => value && Number.isFinite(Date.parse(value)) ? taipeiHistoryTime(value) : '未確認';
 
@@ -17,6 +18,7 @@ function validateCoverage(payload) {
     || new Set(payload.leagues.map(row => row.league)).size !== payload.leagues.length) {
     throw new Error('保存狀態回應不完整，尚未確認覆蓋範圍。');
   }
+  validateCoverageDisplay(payload.games);
   return payload;
 }
 
@@ -97,7 +99,7 @@ export default function CoveragePanel() {
           <thead><tr><th scope="col">場次</th><th scope="col">各市場狀態</th><th scope="col">最後讀盤觀測</th><th scope="col">最後尾盤</th></tr></thead>
           <tbody>{result.games.map(row => <tr key={`${row.league}|${row.boardDate}|${row.gameKey}`}>
             <th scope="row">{row.league} {row.gameLabel || row.gameKey}<small className={styles.coverageSub}>{row.boardDate}</small><a href={`/market-line-history?${new URLSearchParams({ league: row.league, from: row.boardDate, through: row.boardDate, gameKey: row.gameKey })}`}>查看這場全部保存紀錄</a></th>
-            <td>{!row.lastReaderObservedAt && <small className={styles.coverageSub}>最後保存版本；讀盤回條未確認</small>}{(row.latestCaptureMarkets || row.markets || []).map((market, index) => <div key={`${market.market}|${index}`} className={market.status === 'AVAILABLE' ? undefined : styles.coverageWarning}>{market.market}：{MARKET_STATUS[market.status] || '未確認'}{['EPL', 'UCL'].includes(row.league) && market.lastObservedAt && <small className={styles.coverageSub}>觀測 {timeText(market.lastObservedAt)}</small>}</div>)}{row.integrity?.status === 'FAIL' && <div className={styles.invalid}>保存內容待核對</div>}</td>
+            <td>{!row.lastReaderObservedAt && <small className={styles.coverageSub}>最後保存版本；讀盤回條未確認</small>}{coverageMarketsForDisplay(row).map((market, index) => <div key={`${market.market}|${index}`} className={['AVAILABLE', 'RETROSPECTIVE_INTERPRETATION'].includes(market.status) ? undefined : styles.coverageWarning}>{market.market}：{MARKET_STATUS[market.status] || '未確認'}{['EPL', 'UCL'].includes(row.league) && market.lastObservedAt && <small className={styles.coverageSub}>觀測 {timeText(market.lastObservedAt)}</small>}{market.status === 'RETROSPECTIVE_INTERPRETATION' && <small className={styles.coverageSub}>辨識 {timeText(market.historyPeriodInterpretation.interpretedAt)}｜原始時段 UNKNOWN 保留；不代表當時已可分析或下注</small>}</div>)}{row.integrity?.status === 'FAIL' && <div className={styles.invalid}>保存內容待核對</div>}</td>
             <td>{timeText(row.lastReaderObservedAt)}</td><td>未驗證</td>
           </tr>)}</tbody>
         </table></div>}
