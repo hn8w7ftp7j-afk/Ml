@@ -10,6 +10,22 @@ const validCount=value=>Number.isSafeInteger(value)&&value>=0;
 const count=value=>validCount(value)?value.toLocaleString('zh-TW'):'未知';
 const metric=(value,n)=>validCount(n)&&n>0&&Number.isFinite(value)&&value>=0?value.toFixed(4):'—';
 const clock=value=>Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'尚未取得';
+function checkedCollection(value,league,range){
+  if(value==null)return null;
+  if(value.version!=='SOCCER-FORWARD-CAPTURE-RESULT-COLLECTOR-v1'
+    ||value.sampleCountScope!=='PHYSICAL_ORIGINAL_CAPTURE_RECEIPTS_NOT_CANONICAL_GAMES'
+    ||value.persistence!=='DURABLE_APPEND_ONLY_DATABASE'||value.formalEligible!==false||value.executable!==false||value.complete!==false
+    ||value.requestedScope?.league!==league||range.from&&(value.requestedScope?.from!==range.from||value.requestedScope?.through!==range.through)
+    ||!['from','through'].every(key=>typeof value.requestedScope?.[key]==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value.requestedScope[key])&&Number.isFinite(Date.parse(value.requestedScope[key])))
+    ||value.requestedScope.from>value.requestedScope.through
+    ||!['checkedCaptureReceipts','evaluatedCaptureReceipts','pendingCaptureReceipts','failedCaptureReceipts'].every(key=>validCount(value[key]))
+    ||value.checkedCaptureReceipts!==value.evaluatedCaptureReceipts+value.pendingCaptureReceipts
+    ||value.checkedCaptureReceipts+value.failedCaptureReceipts>25)throw Error('逐筆核對回應的範圍、筆數或資格狀態不符。');
+  return value;
+}
+function CollectionProgress({value}){
+  return value?<p role="status">本次原始封存逐筆核對：保存核對紀錄 {count(value.checkedCaptureReceipts)} 筆，待確認 {count(value.pendingCaptureReceipts)} 筆，保存失敗 {count(value.failedCaptureReceipts)} 筆（不等於有效樣本）。</p>:null;
+}
 const retryDelay=(value,now)=>{
   const seconds=Number(value),at=typeof value==='string'?Date.parse(value):NaN;
   return value!==null&&String(value).trim()!==''&&Number.isFinite(seconds)&&seconds>=0
@@ -157,7 +173,7 @@ function checkedReport(value,league,range={from:'',through:''}){
 }
 export function SoccerForwardValidationPanel({league}){
   const supported=['epl','ucl'].includes(league);
-  const [state,setState]=useState({scopeKey:null,status:'loading',report:null,summary:null,error:''});
+  const [state,setState]=useState({scopeKey:null,status:'loading',report:null,summary:null,collection:null,error:''});
   const [range,setRange]=useState({from:'',through:''}),[draft,setDraft]=useState({from:'',through:''}),[filterError,setFilterError]=useState('');
   const [automatic,setAutomatic]=useState({enabled:true,waitingUntil:null});
   const scopeKey=`${league}|${range.from}|${range.through}`;
@@ -192,9 +208,10 @@ export function SoccerForwardValidationPanel({league}){
     if(evaluate)auto.current.postStarts.push(Date.now());
     const token=++generation.current,controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),55000);
-    setState(old=>({scopeKey,status:evaluate?'evaluating':'loading',report:old.scopeKey===scopeKey?old.report:null,summary:null,error:''}));
+    setState(old=>({scopeKey,status:evaluate?'evaluating':'loading',report:old.scopeKey===scopeKey?old.report:null,summary:null,collection:cursor&&old.scopeKey===scopeKey?old.collection:null,error:''}));
     const active={token,controller,timer,promise:null};flight.current=active;
     const promise=(async()=>{
+      let collection=null;
       try{
         const query={league,...(cursor?{from:previousScan.scope.from,through:previousScan.scope.through,cursor}:range.from&&range.through?range:{})};
         const options={cache:'no-store',credentials:'same-origin',signal:controller.signal,...(evaluate?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'evaluate',...query,limit:25})}:{})};
@@ -205,6 +222,7 @@ export function SoccerForwardValidationPanel({league}){
           auto.current.retry={evaluate,cursor};
           setState(old=>({...old,scopeKey,status:'waiting',error:''}));return;
         }
+        if(evaluate)collection=checkedCollection(body.collection,league,range);
         if(!response.ok||body.ok!==true)throw Error(response.status===401?'登入已過期，請重新登入網站。':body.error||'前瞻驗證暫時無法讀取。');
         const report=checkedReport(body.report,league,range);
         if(report.scan&&report.scan.purpose!==(evaluate?'evaluate':'read'))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
@@ -213,11 +231,11 @@ export function SoccerForwardValidationPanel({league}){
         continuation.current=report.scan?{scopeKey,scan:report.scan}:null;
         if(cursor&&report.scan?.nextCursor&&report.scan.processedGames===previousScan.processedGames){
           auto.current.enabled=false;setAutomatic({enabled:false,waitingUntil:null});
-          setState({scopeKey,status:'failed',report,summary:evaluate?body.summary||null:null,error:'本批尚未取得新進度，已暫停自動處理；已完成結果保留，可稍後從同一進度重試。'});return;
+          setState(old=>({scopeKey,status:'failed',report,summary:evaluate?body.summary||null:null,collection:collection??(cursor?old.collection:null),error:'本批尚未取得新進度，已暫停自動處理；已完成結果保留，可稍後從同一進度重試。'}));return;
         }
-        setState({scopeKey,status:'ready',report,summary:evaluate?body.summary||null:null,error:''});
+        setState(old=>({scopeKey,status:'ready',report,summary:evaluate?body.summary||null:null,collection:collection??(cursor?old.collection:null),error:''}));
       }catch(error){
-        if(mounted.current&&scope.current===scopeKey&&token===generation.current){auto.current.enabled=false;setAutomatic({enabled:false,waitingUntil:null});setState(old=>({...old,scopeKey,status:'failed',error:error.name==='AbortError'?'核對逾時，請重試；尚未確認的結果不列入評分。':error.message||'前瞻驗證暫時無法讀取。'}));}
+        if(mounted.current&&scope.current===scopeKey&&token===generation.current){auto.current.enabled=false;setAutomatic({enabled:false,waitingUntil:null});setState(old=>({...old,scopeKey,status:'failed',collection:collection??old.collection,error:error.name==='AbortError'?'核對逾時，請重試；尚未確認的結果不列入評分。':error.message||'前瞻驗證暫時無法讀取。'}));}
       }finally{
         clearTimeout(timer);if(flight.current?.token===token)flight.current=null;
         if(mounted.current&&scope.current===scopeKey&&token===generation.current&&auto.current.enabled){
@@ -254,6 +272,7 @@ export function SoccerForwardValidationPanel({league}){
       {automatic.enabled&&busy&&<button className="secondary" onClick={pauseAutomatic}>暫停自動處理</button>}
       {current&&state.status==='paused'&&<p role="status">已暫停，已完成結果保留。可接續目前批次，或重新讀取範圍。</p>}
       {current&&state.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}</p>}
+      {current&&<CollectionProgress value={state.collection}/>}
       {current&&state.report&&<>{state.status==='failed'&&<p className="soccerAvailability">以下為上次成功讀取的資料，本次更新尚未完成。</p>}<ForwardReport report={state.report} league={league} summary={state.summary}/>{state.report.scan?.nextCursor&&<button className="secondary" disabled={busy} onClick={()=>load(state.report.scan.purpose==='evaluate',state.report.scan.nextCursor)}>繼續處理下一批</button>}</>}
     </>}
   </section>;

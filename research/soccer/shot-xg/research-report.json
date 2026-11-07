@@ -1,0 +1,1165 @@
+{
+  "version": "SOCCER-WYSCOUT-XY-SHOT-RESEARCH-v1",
+  "type": "AGGREGATE_SHOT_XG_RESEARCH_ARTIFACT",
+  "createdAt": "2026-11-07T12:46:00.758Z",
+  "provider": "WYSCOUT_OPEN_DATA",
+  "reports": {
+    "epl": {
+      "version": "SOCCER-WYSCOUT-XY-SHOT-RESEARCH-v1",
+      "type": "AGGREGATE_SHOT_XG_RESEARCH_REPORT",
+      "status": "RETROSPECTIVE_RESEARCH_FIT_NOT_ACCEPTED",
+      "provider": "WYSCOUT_OPEN_DATA",
+      "league": "epl",
+      "coordinateContract": "WYSCOUT_ATTACK_RIGHT_UNIT_SQUARE-v1",
+      "synthetic": false,
+      "sourceAuthenticationVerified": true,
+      "availableAt": "2026-11-07T12:46:00.735Z",
+      "createdAt": "2026-11-07T12:46:00.735Z",
+      "season": "2017/2018",
+      "sourceAttribution": {
+        "name": "Wyscout public event dataset",
+        "authors": "Pappalardo et al. (2019)",
+        "paperUrl": "https://doi.org/10.1038/s41597-019-0247-7",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "changes": "Origin coordinates changed from percentages to fractions; regulation non-penalty shots selected under the reviewed source contract; a new XY-only shot-goal model is fitted. These are not Wyscout xG values."
+      },
+      "sourceCollection": {
+        "sourceMatches": 380,
+        "eligibleMatches": 378,
+        "quarantinedMatches": 2,
+        "sourceEvents": 643150,
+        "retainedNativeEvents": 9929,
+        "fullPublishedCohortVerified": true,
+        "currentSeasonCoverage": false,
+        "uclCoverage": false,
+        "shotUniverse": {
+          "standardShots": 8451,
+          "directFreeKickShots": 350,
+          "penaltyShots": 80,
+          "ownGoals": 29,
+          "goalkeeperGoalTagsIgnored": 1019
+        }
+      },
+      "protocol": {
+        "version": "SOCCER-WYSCOUT-XY-SHOT-PROTOCOL-2017-18-v1",
+        "provider": "WYSCOUT_OPEN_DATA",
+        "league": "epl",
+        "coordinateContract": "WYSCOUT_ATTACK_RIGHT_UNIT_SQUARE-v1",
+        "trainingBefore": "2018-01-01",
+        "calibrationBefore": "2018-03-01",
+        "testBefore": "2018-06-01",
+        "splitUnit": "WHOLE_MATCH_PROVIDER_DATE_WITH_VERIFIED_UTC_KICKOFF_BUFFER",
+        "embargoHours": 48,
+        "strictEmbargo": true,
+        "candidate": "DEPTH_LATERAL_DEPTH_SQUARED_LATERAL_SQUARED_LOGIT",
+        "locationBaseline": "DEPTH_ONLY_LOGIT",
+        "constantBaseline": "TRAINING_NONPENALTY_SHOT_GOAL_RATE",
+        "objective": "MEAN_TRAINING_LOG_LOSS_PLUS_HALF_L2_TIMES_NONINTERCEPT_SLOPE_NORM",
+        "l2": 0.01,
+        "calibration": "FROZEN_TRAINED_LOGIT_PLUS_CALIBRATION_ONLY_INTERCEPT_SHIFT",
+        "featureSelection": "FIXED_BEFORE_CORPUS_METRICS_NO_TEST_TUNING",
+        "featureScaling": "TRAINING_ONLY_POPULATION_MEAN_STD_NONINTERCEPT",
+        "interpretation": "RETROSPECTIVE_CHRONOLOGICAL_HOLDOUT_NOT_PREREGISTERED_PREMATCH_OOS"
+      },
+      "protocolHash": "ed96ade0ff5741e76f79a3d7194d36c82863fb9724bddad7633ee1e94d592ecf",
+      "sourceManifestHash": "61bff8c37c3d64c1ef187b6f855dc558710b429ed4ca36149adcc38f5947106d",
+      "sourceHashes": [
+        "627c31f38e33e90dd0cfeff07ba5527e69c191f31801dce2b6b504c83f38480c",
+        "620725c2e6a58b4db3e574ed6c559136477451d81af543f8a06bd85c3da3fe29",
+        "ce7bafb341b36ab4c6093bf1c09c967e9cea10d4223724a1fc679086e5d16842",
+        "e0bc1bd8ff6ea5339586fdfc3e8e9b285a4a18f1ae2f5868ccc9ec9cecc8a922"
+      ],
+      "calibrationStatus": "CALIBRATION_FIT_RESEARCH_ONLY",
+      "coverage": {
+        "sourceMatches": 378,
+        "sourceShots": 8838,
+        "includedMatches": 369,
+        "includedNonPenaltyShots": 8569,
+        "penaltyShotsExcluded": 80,
+        "excludedMatches": 9,
+        "excludedReasons": {
+          "STRICT_48H_FIT_BOUNDARY_EMBARGO": 9
+        },
+        "independentSampleUnit": "REAL_MATCH_NOT_SHOT_OR_QUOTE"
+      },
+      "evaluation": {
+        "training": {
+          "candidate": {
+            "games": 199,
+            "shots": 4694,
+            "observedShotGoals": 494,
+            "brier": 0.08525449614708686,
+            "logLoss": 0.29623636123621877,
+            "predictedShotGoals": 494.00000001040155,
+            "observedGoalRate": 0.10524073285044738,
+            "predictedMean": 0.1052407328526633,
+            "calibrationError": 0.009898549707089773,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 2584,
+                "predictedMean": 0.045142770813407285,
+                "observedRate": 0.03715170278637771
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 1416,
+                "predictedMean": 0.14377328840811843,
+                "observedRate": 0.1419491525423729
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 615,
+                "predictedMean": 0.24061270658970346,
+                "observedRate": 0.24227642276422764
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 79,
+                "predictedMean": 0.32647201632902667,
+                "observedRate": 0.6075949367088608
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.2709028561840354,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "calibratedCandidate": {
+            "games": 199,
+            "shots": 4694,
+            "observedShotGoals": 494,
+            "brier": 0.0852127004240383,
+            "logLoss": 0.2964850055629429,
+            "predictedShotGoals": 525.5421208808261,
+            "observedGoalRate": 0.10524073285044738,
+            "predictedMean": 0.11196040069894038,
+            "calibrationError": 0.017556838631491056,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 2454,
+                "predictedMean": 0.045493805411888966,
+                "observedRate": 0.036267318663406684
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 1439,
+                "predictedMean": 0.1446828487374684,
+                "observedRate": 0.12856150104239056
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 662,
+                "predictedMean": 0.24189810104914014,
+                "observedRate": 0.22507552870090636
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 139,
+                "predictedMean": 0.32780690771441934,
+                "observedRate": 0.5107913669064749
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.285355323040736,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "locationBaseline": {
+            "games": 199,
+            "shots": 4694,
+            "observedShotGoals": 494,
+            "brier": 0.08743746530786622,
+            "logLoss": 0.30305883167174197,
+            "predictedShotGoals": 494.0000000000171,
+            "observedGoalRate": 0.10524073285044738,
+            "predictedMean": 0.10524073285045102,
+            "calibrationError": 0.011101036710506851,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 2314,
+                "predictedMean": 0.04663356901702486,
+                "observedRate": 0.03889369057908384
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 1799,
+                "predictedMean": 0.14015789574995846,
+                "observedRate": 0.1356309060589216
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 572,
+                "predictedMean": 0.22934094385559167,
+                "observedRate": 0.2692307692307692
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 9,
+                "predictedMean": 0.3069829950059128,
+                "observedRate": 0.6666666666666666
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.284313096067787,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "constantBaseline": {
+            "games": 199,
+            "shots": 4694,
+            "observedShotGoals": 494,
+            "brier": 0.09416512099955535,
+            "logLoss": 0.3364477638351462,
+            "predictedShotGoals": 494.00000000004866,
+            "observedGoalRate": 0.10524073285044738,
+            "predictedMean": 0.10524073285045775,
+            "calibrationError": 1.0365992020633077e-14,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 4694,
+                "predictedMean": 0.10524073285045775,
+                "observedRate": 0.10524073285044738
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.3815776796209418,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          }
+        },
+        "calibration": {
+          "candidate": {
+            "games": 70,
+            "shots": 1634,
+            "observedShotGoals": 180,
+            "brier": 0.08923217560007424,
+            "logLoss": 0.30568208137186337,
+            "predictedShotGoals": 169.11383811499365,
+            "observedGoalRate": 0.11015911872705018,
+            "predictedMean": 0.1034968409516485,
+            "calibrationError": 0.013906244858356455,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 898,
+                "predictedMean": 0.04667964488504912,
+                "observedRate": 0.0400890868596882
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 529,
+                "predictedMean": 0.1427520898782225,
+                "observedRate": 0.15122873345935728
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 187,
+                "predictedMean": 0.2415092937279044,
+                "observedRate": 0.28342245989304815
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 20,
+                "predictedMean": 0.3258711767760922,
+                "observedRate": 0.55
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.152137607057185,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "calibratedCandidate": {
+            "games": 70,
+            "shots": 1634,
+            "observedShotGoals": 180,
+            "brier": 0.08906055145060407,
+            "logLoss": 0.30543134631793045,
+            "predictedShotGoals": 180.0000000000855,
+            "observedGoalRate": 0.11015911872705018,
+            "predictedMean": 0.1101591187271025,
+            "calibrationError": 0.010673909619617816,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 845,
+                "predictedMean": 0.046717396907988866,
+                "observedRate": 0.03905325443786982
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 535,
+                "predictedMean": 0.14251286686358858,
+                "observedRate": 0.1383177570093458
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 216,
+                "predictedMean": 0.24013063907808746,
+                "observedRate": 0.25925925925925924
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 38,
+                "predictedMean": 0.3266104684196862,
+                "observedRate": 0.4473684210526316
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.1598438245751697,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "locationBaseline": {
+            "games": 70,
+            "shots": 1634,
+            "observedShotGoals": 180,
+            "brier": 0.09197388921591544,
+            "logLoss": 0.3163373111283652,
+            "predictedShotGoals": 168.0306457540361,
+            "observedGoalRate": 0.11015911872705018,
+            "predictedMean": 0.10283393253000986,
+            "calibrationError": 0.016729474026155693,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 806,
+                "predictedMean": 0.04723897998124055,
+                "observedRate": 0.038461538461538464
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 666,
+                "predictedMean": 0.13951080311286568,
+                "observedRate": 0.15615615615615616
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 160,
+                "predictedMean": 0.22770717327800302,
+                "observedRate": 0.28125
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 2,
+                "predictedMean": 0.30434264575377157,
+                "observedRate": 0
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.1399832986138698,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "constantBaseline": {
+            "games": 70,
+            "shots": 1634,
+            "observedShotGoals": 180,
+            "brier": 0.0980482778079627,
+            "logLoss": 0.34697460621236187,
+            "predictedShotGoals": 171.9633574776367,
+            "observedGoalRate": 0.11015911872705018,
+            "predictedMean": 0.10524073285045085,
+            "calibrationError": 0.004918385876599332,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 1634,
+                "predictedMean": 0.10524073285045085,
+                "observedRate": 0.11015911872705018
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.1308539777223203,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          }
+        },
+        "test": {
+          "candidate": {
+            "games": 100,
+            "shots": 2241,
+            "observedShotGoals": 240,
+            "brier": 0.08589752406910324,
+            "logLoss": 0.2986031353815938,
+            "predictedShotGoals": 237.97206956522174,
+            "observedGoalRate": 0.107095046854083,
+            "predictedMean": 0.1061901247502105,
+            "calibrationError": 0.016851063653524588,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 1211,
+                "predictedMean": 0.046859924703068115,
+                "observedRate": 0.03963666391412056
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 719,
+                "predictedMean": 0.14342181194849782,
+                "observedRate": 0.13073713490959665
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 273,
+                "predictedMean": 0.23964111628401097,
+                "observedRate": 0.27472527472527475
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 38,
+                "predictedMean": 0.3337471898237321,
+                "observedRate": 0.6052631578947368
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.152204462436797,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "calibratedCandidate": {
+            "games": 100,
+            "shots": 2241,
+            "observedShotGoals": 240,
+            "brier": 0.08579397270686442,
+            "logLoss": 0.29878713477741126,
+            "predictedShotGoals": 253.2067025365716,
+            "observedGoalRate": 0.107095046854083,
+            "predictedMean": 0.11298826529967497,
+            "calibrationError": 0.01985615893232218,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 1137,
+                "predictedMean": 0.046763592407049595,
+                "observedRate": 0.032541776605101144
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 735,
+                "predictedMean": 0.14366816075701022,
+                "observedRate": 0.12789115646258503
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 308,
+                "predictedMean": 0.24053855398940063,
+                "observedRate": 0.237012987012987
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 61,
+                "predictedMean": 0.3336807407314637,
+                "observedRate": 0.5901639344262295
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.1526132160336622,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "locationBaseline": {
+            "games": 100,
+            "shots": 2241,
+            "observedShotGoals": 240,
+            "brier": 0.08885875547990602,
+            "logLoss": 0.3071394100046897,
+            "predictedShotGoals": 235.26289483057212,
+            "observedGoalRate": 0.107095046854083,
+            "predictedMean": 0.10498121143711385,
+            "calibrationError": 0.013227734295916938,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 1070,
+                "predictedMean": 0.04727967553594624,
+                "observedRate": 0.04299065420560748
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 937,
+                "predictedMean": 0.1385953797976502,
+                "observedRate": 0.13020277481323372
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 231,
+                "predictedMean": 0.2333192346296516,
+                "observedRate": 0.30303030303030304
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 3,
+                "predictedMean": 0.30434264575377157,
+                "observedRate": 0.6666666666666666
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.1717323187550361,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          },
+          "constantBaseline": {
+            "games": 100,
+            "shots": 2241,
+            "observedShotGoals": 240,
+            "brier": 0.09562913627383322,
+            "logLoss": 0.34041656004672005,
+            "predictedShotGoals": 235.84448231786678,
+            "observedGoalRate": 0.107095046854083,
+            "predictedMean": 0.10524073285045371,
+            "calibrationError": 0.0018543140036292828,
+            "calibrationBins": [
+              {
+                "lower": 0,
+                "upper": 0.1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.1,
+                "upper": 0.2,
+                "count": 2241,
+                "predictedMean": 0.10524073285045371,
+                "observedRate": 0.107095046854083
+              },
+              {
+                "lower": 0.2,
+                "upper": 0.3,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.3,
+                "upper": 0.4,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.4,
+                "upper": 0.5,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.5,
+                "upper": 0.6,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.6,
+                "upper": 0.7,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.7,
+                "upper": 0.8,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.8,
+                "upper": 0.9,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              },
+              {
+                "lower": 0.9,
+                "upper": 1,
+                "count": 0,
+                "predictedMean": null,
+                "observedRate": null
+              }
+            ],
+            "gameGoalCountMae": 1.221060928845334,
+            "interpretation": "SHOT_OUTCOME_HOLDOUT_DIAGNOSTICS_GAME_GOAL_RESIDUAL_INCLUDES_OUTCOME_NOISE_NOT_TRUE_NPXG_ERROR"
+          }
+        }
+      },
+      "interpretation": "RETROSPECTIVE_CHRONOLOGICAL_HOLDOUT_NOT_PREREGISTERED_PREMATCH_OOS",
+      "limitations": [
+        "The source files were fetched after the historical games; this is not a prospectively frozen independent test.",
+        "Only one provider and league are fitted. No undocumented ESPN or other-provider coordinate mapping is allowed.",
+        "The model predicts shot goals from origin XY only; it is not the provider xG, a prematch team model or a complete score distribution.",
+        "Penalties, extra time and shootouts cannot enter regulation non-penalty totals.",
+        "Calibration bins and realized game-goal residuals do not establish true npxG accuracy or conditional expected-return uncertainty.",
+        "Source completeness, current-season transfer, injuries, personnel effects, football calibration and formal W/R/S remain separate checks."
+      ],
+      "accepted": false,
+      "formalEligible": false,
+      "calibrationEligible": false,
+      "promotionEligible": false,
+      "modelEffectApplied": false,
+      "executable": false,
+      "independentUntouchedTestVerified": false,
+      "historicalAvailabilityVerified": false,
+      "providerXgReconstructed": false,
+      "currentSeasonCoverageVerified": false,
+      "uclCoverageVerified": false,
+      "formalExpectedReturnErrorEstimate": null,
+      "W": null,
+      "R": null,
+      "S": null,
+      "modelHashes": {
+        "candidate": "7527152012ce91ce7f1cb7ce26d0fa86096d0d3425c8b4b0fe14956ad749f3a3",
+        "calibratedCandidate": "73ae75a7ca40da4396bdef5ac1284a7dcc31694dfc4d75f517e7230cdedd7370",
+        "locationBaseline": "0c3d9d9a0a16567e5bca14f65eede696962ec9c9fb40d7ffd035d4cf694beb0a",
+        "constantBaseline": "4128e1de14d64b4fb8a34e0009fd273b80c22d2a29af0528d3c383c66744b74c"
+      },
+      "privateReportHash": "c88eb6edcfa955d3c4a9501ef46b45eeb08838e6acf63b42cba6baa807bcbe15",
+      "rawRowsIncluded": false,
+      "fittedCoefficientsIncluded": false,
+      "contentHash": "7b15608d7e1b2aef2c3774c65efbd13c4c044f9a45cc97fc7e0dd560d9b4068f"
+    }
+  },
+  "synthetic": false,
+  "accepted": false,
+  "formalEligible": false,
+  "calibrationEligible": false,
+  "promotionEligible": false,
+  "modelEffectApplied": false,
+  "executable": false,
+  "historicalAvailabilityVerified": false,
+  "independentUntouchedTestVerified": false,
+  "currentSeasonCoverageVerified": false,
+  "uclCoverageVerified": false,
+  "W": null,
+  "R": null,
+  "S": null,
+  "contentHash": "e518ccda3aeda68711b6d3748cd63b45c8607930904344f16e89ea8c4a8bbec8"
+}

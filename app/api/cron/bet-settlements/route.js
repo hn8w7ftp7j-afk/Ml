@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { settleOpenCloudBets } from '../../../../lib/cloud-bet-store.js';
 import { settleOpenNbaManualRecords } from '../../../../lib/nba/manual-bet-settlement-service.js';
 import { settleOpenSoccerManualRecords } from '../../../../lib/soccer/manual-settlement-service.js';
-import { continueSoccerForwardBacklog } from '../../../../lib/soccer/forward-validation-scan.js';
-import { soccerDate, shiftSoccerDate } from '../../../../lib/soccer/contracts.js';
+import { collectSoccerForwardBacklog } from '../../../../lib/soccer/forward-result-collector.js';
 import { drainSoccerReaderAnalysis } from '../../../../lib/soccer/reader-auto-analysis.js';
 
 export const runtime = 'nodejs';
@@ -32,10 +31,8 @@ export async function GET(request) {
     catch { soccer={status:'unavailable',settled:0}; }
     let soccerForward;
     try {
-      const today=soccerDate();
-      const page=await continueSoccerForwardBacklog({from:shiftSoccerDate(today,-7),through:today},{gameLimit:5,timeBudgetMs:8000});
-      soccerForward=page.summary;
-    } catch { soccerForward={status:'unavailable',evaluated:0,formalEligible:false}; }
+      soccerForward=await collectSoccerForwardBacklog({receiptLimit:12,timeBudgetMs:8000});
+    } catch { soccerForward={status:'unavailable',checkedCaptureReceipts:0,formalEligible:false}; }
     let soccerReaderCapture;
     try{soccerReaderCapture=await drainSoccerReaderAnalysis({timeBudgetMs:10000,maxGames:1});}
     catch{soccerReaderCapture={status:'unavailable',captured:0,executable:false};}

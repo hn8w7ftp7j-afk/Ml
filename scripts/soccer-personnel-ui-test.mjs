@@ -1,3 +1,4 @@
+import { loadSoccerShotXgResearchUiForTest } from './helpers/soccer-shot-xg-ui-fixture.mjs';
 import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -5,6 +6,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
+const shotXgUi=await loadSoccerShotXgResearchUiForTest(React);
 import { soccerPersonnelArtifacts } from '../lib/soccer/personnel-frozen.js';
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
@@ -19,7 +21,7 @@ const xgContext=vm.createContext({React,Date});vm.runInContext(xgCode.code,xgCon
 const SoccerTeamXgPanel=xgContext.SoccerTeamXgPanel;
 const developmentSource=fs.readFileSync('app/soccer/model-development-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const developmentCode=await transform(developmentSource,{filename:'soccer-development.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const developmentContext=vm.createContext({React,soccerMatchContextObservations});vm.runInContext(developmentCode.code,developmentContext);
+const developmentContext=vm.createContext({...shotXgUi,React,soccerMatchContextObservations});vm.runInContext(developmentCode.code,developmentContext);
 const SoccerModelDevelopmentPanel=developmentContext.SoccerModelDevelopmentPanel;
 
 const shipped=fs.readFileSync('app/soccer/analysis-panel.js','utf8');
