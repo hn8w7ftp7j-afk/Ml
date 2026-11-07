@@ -1,15 +1,17 @@
 'use client';
 import { soccerMatchContextObservations } from '../../lib/soccer/match-context-observations.js';
+import { SoccerShotXgResearchPanel, soccerShotXgViewRenderable } from './shot-xg-research-panel.js';
 const finite=value=>typeof value==='number'&&Number.isFinite(value);
 const number=(value,digits=2)=>finite(value)?value.toFixed(digits):'—';
 const percent=value=>finite(value)&&value>=0&&value<=1?`${(value*100).toFixed(1)}%`:'—';
 const scoped=(value,game)=>value&&value.gameId===game?.id&&value.league===game?.league&&value.formalEligible===false&&value.modelEffectApplied===false;
 
-export function SoccerModelDevelopmentPanel({minutes,conditions,matchXg,evidence,game}) {
+export function SoccerModelDevelopmentPanel({minutes,conditions,matchXg,shotXg,evidence,game,analysisCutoff}) {
   const m=scoped(minutes,game)&&minutes.version==='SOCCER-PRIOR-PARTICIPATION-MINUTES-RESEARCH-v1'?minutes:null;
   const c=scoped(conditions,game)&&conditions.version==='SOCCER-SCHEDULE-CONGESTION-POISSON-RIDGE-RESEARCH-v1'?conditions:null;
   const x=scoped(matchXg,game)&&matchXg.version==='SOCCER-STATSBOMB-MATCH-XG-RESEARCH-v1'?matchXg:null;
-  if(!m&&!c&&!x)return null;
+  const s=shotXg&&soccerShotXgViewRenderable(shotXg,game,analysisCutoff)?shotXg:null;
+  if(!m&&!c&&!x&&!s)return null;
   const holdout=m?.validation?.holdout;
   const context=soccerMatchContextObservations(evidence,game);
   const venue=context.venue;
@@ -31,6 +33,7 @@ export function SoccerModelDevelopmentPanel({minutes,conditions,matchXg,evidence
       {leaguePhase&&<p>{context.poststart?'賽後來源':'來源'}記載賽事階段：歐冠聯賽階段。</p>}
       <p className="soccerAvailability">開球間隔不等於實際休息；跨賽事、旅行、天氣、裁判及歐冠跨聯賽影響尚未完整建模。兩項研究結果均另行保存，正式分數仍依完整驗收判定。</p>
     </section>}
+    {s&&<SoccerShotXgResearchPanel view={s} game={game} analysisCutoff={analysisCutoff}/>}
     {x&&<section aria-label="逐場非十二碼 xG 研究"><h4>逐場非十二碼 xG 模型</h4>
       {x.researchAvailable&&x.researchCoverage?<><p>StatsBomb 開放資料：{x.researchCoverage.firstMatchDate} ～ {x.researchCoverage.lastMatchDate}，共 {x.researchCoverage.games} 場。逐射門計算全場／半場 xG，另排除十二碼計算 npxG。</p>
         <p>保留期測試 {x.researchMetrics?.test?.games??0} 場；球隊 npxG 均方誤差 {number(x.researchMetrics?.test?.candidate?.mse,4)}，聯盟均值對照 {number(x.researchMetrics?.test?.leagueMeanBaseline?.mse,4)}。</p>

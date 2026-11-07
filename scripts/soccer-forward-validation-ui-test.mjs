@@ -170,6 +170,23 @@ const scanToken='a'.repeat(64);
 const scanned=(purpose='read',complete=false,n=1)=>({...report('epl',[{...group,capturedGames:n,evaluatedGames:n}]),complete,truncated:!complete,
  scan:{version:'SOCCER-FORWARD-SCAN-v1',purpose,scope:{league:'epl',from:'2026-10-20',through:'2026-10-21'},cursor:scanToken,nextCursor:complete?null:scanToken,
  complete,processedGames:complete?2:1,totalGames:2,frozenAt:'2026-10-21T00:00:00Z'}});
+const collection={version:'SOCCER-FORWARD-CAPTURE-RESULT-COLLECTOR-v1',sampleCountScope:'PHYSICAL_ORIGINAL_CAPTURE_RECEIPTS_NOT_CANONICAL_GAMES',
+ persistence:'DURABLE_APPEND_ONLY_DATABASE',requestedScope:{league:'epl',from:'2026-10-20',through:'2026-10-21'},
+ checkedCaptureReceipts:3,evaluatedCaptureReceipts:2,pendingCaptureReceipts:1,failedCaptureReceipts:1,complete:false,formalEligible:false,executable:false};
+const collectedUi=harness();collectedUi.render();collectedUi.calls[0].respond({ok:true,report:report()});await collectedUi.settle();
+collectedUi.button('核對已封存賽果').props.onClick();collectedUi.calls[1].respond({ok:true,report:scanned('evaluate'),collection});await collectedUi.settle();
+assert.match(collectedUi.markup,/本次原始封存逐筆核對：保存核對紀錄 3 筆，待確認 1 筆，保存失敗 1 筆（不等於有效樣本）/);
+collectedUi.button('繼續處理下一批').props.onClick();collectedUi.calls[2].respond({ok:true,report:scanned('evaluate',true)});await collectedUi.settle();
+assert.match(collectedUi.markup,/本次原始封存逐筆核對：保存核對紀錄 3 筆/,'automatic/report continuation retains the separate first-page receipt progress');
+collectedUi.unmount();
+const collectedFailure=harness();collectedFailure.render();collectedFailure.calls[0].respond({ok:true,report:report()});await collectedFailure.settle();
+collectedFailure.button('核對已封存賽果').props.onClick();collectedFailure.calls[1].respond({ok:false,error:'完整報表尚未讀完',collection},503);await collectedFailure.settle();
+assert.match(collectedFailure.markup,/完整報表尚未讀完/);assert.match(collectedFailure.markup,/本次原始封存逐筆核對：保存核對紀錄 3 筆/,'durable collector progress remains visible when the independent full report times out');collectedFailure.unmount();
+for(const patch of [{checkedCaptureReceipts:30},{formalEligible:true},{requestedScope:{...collection.requestedScope,league:'ucl'}},{pendingCaptureReceipts:4}]){
+ const forgedCollection=harness();forgedCollection.render();forgedCollection.calls[0].respond({ok:true,report:report()});await forgedCollection.settle();
+ forgedCollection.button('核對已封存賽果').props.onClick();forgedCollection.calls[1].respond({ok:true,report:scanned('evaluate'),collection:{...collection,...patch}});await forgedCollection.settle();
+ assert.match(forgedCollection.markup,/逐筆核對回應的範圍、筆數或資格狀態不符/);assert.doesNotMatch(forgedCollection.markup,/本次原始封存逐筆核對：/);forgedCollection.unmount();
+}
 const continuation=harness();continuation.render();continuation.calls[0].respond({ok:true,report:scanned()});await continuation.settle();
 assert.match(continuation.markup,/已處理 1／2 場/);assert.match(continuation.markup,/尚有後續批次/);
 assert.match(continuation.markup,/各批次不重複加總/);assert.match(continuation.markup,/累計數字不能當成完整驗收/);

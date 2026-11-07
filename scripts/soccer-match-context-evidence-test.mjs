@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
+import { loadSoccerShotXgResearchUiForTest } from './helpers/soccer-shot-xg-ui-fixture.mjs';
+const shotXgUi=await loadSoccerShotXgResearchUiForTest(React);
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
 import { buildSoccerAnalysis } from '../lib/soccer/analysis.js';
@@ -22,7 +24,7 @@ function fixture(league, poststart=false) {
 }
 const src=fs.readFileSync('app/soccer/model-development-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const compiled=await transform(src,{filename:'model-development.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({React,soccerMatchContextObservations});vm.runInContext(compiled.code,ctx);
+const ctx=vm.createContext({...shotXgUi,React,soccerMatchContextObservations});vm.runInContext(compiled.code,ctx);
 function render(evidence) {
   const game=evidence.game,conditions={version:'SOCCER-SCHEDULE-CONGESTION-POISSON-RIDGE-RESEARCH-v1',gameId:game.id,league:game.league,formalEligible:false,modelEffectApplied:false};
   return renderToStaticMarkup(React.createElement(ctx.SoccerModelDevelopmentPanel,{conditions,evidence,game}));

@@ -28,6 +28,8 @@ try {
   assert.equal(first.report.status,'AWAITING_PROSPECTIVE_RESULTS');assert.equal(first.report.promotionEligible,false);
   const run=await POST(request('POST',{body:{action:'evaluate',league:'epl',date:soccerDate(),limit:1}}));
   assert.equal(run.status,200);const payload=await run.json();assert.equal(payload.summary.evaluated,0);assert.equal(payload.report.capturedSnapshotPeriods,0);
+  assert.equal(payload.collection.checkedCaptureReceipts,0);assert.equal(payload.collection.formalEligible,false);
+  assert.equal(payload.collection.sampleCountScope,'PHYSICAL_ORIGINAL_CAPTURE_RECEIPTS_NOT_CANONICAL_GAMES');
   assert.equal(externalCalls,0,'authenticated GET never fetches results; empty POST neither injects source data nor calls provider');
   console.log('PASS soccer forward API: authenticated no-store reports, same-origin/rate-limited bounded POST, strict date/league/duplicate-key validation, no client forecast/result injection, actual fixture DB empty prospective report stays unapproved.');
 } finally {
