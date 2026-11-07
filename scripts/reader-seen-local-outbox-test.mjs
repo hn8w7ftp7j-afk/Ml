@@ -92,6 +92,38 @@ try {
   const restarted = createSeenCaptureOutbox({ storage, upload: async () => { throw Error('SHOULD_NOT_UPLOAD'); } });
   await restarted.flush(); assert.equal((await restarted.status()).savedCaptureCount, 8);
 
+  // Modern Chrome can enumerate names without cloning all stored values. A
+  // growing unrelated archive must not be materialized by raw/ACK/failure
+  // status reads, while every exact ACK and source retry remains intact.
+  const scopedStorage=store(storage.data), scopedGet=scopedStorage.get.bind(scopedStorage), scopedReads=[];
+  Object.defineProperty(scopedStorage.data,'unrelated-large-reader-archive',{enumerable:true,
+    get(){throw Error('UNRELATED_ARCHIVE_MUST_NOT_BE_READ');}});
+  scopedStorage.getKeys=async()=>Object.keys(scopedStorage.data);
+  scopedStorage.get=async keys=>{
+    assert.notEqual(keys,null,'modern storage reads must stay within requested prefixes');
+    const names=Array.isArray(keys)?keys:[keys];
+    assert.ok(!names.includes('unrelated-large-reader-archive'));
+    scopedReads.push(names);return scopedGet(keys);
+  };
+  const scopedSource=source('UCL','2026-10-24T22:00:03.000Z');
+  const scopedQueued=await local.persist(scopedSource,{storage:scopedStorage});
+  const scopedBox=createSeenCaptureOutbox({storage:scopedStorage,upload:validAck});
+  const scopedBefore=await scopedBox.status();
+  assert.equal(scopedBefore.pendingCount,1);assert.equal(scopedBefore.savedCaptureCount,8);
+  await scopedBox.flush();
+  const scopedAfter=await scopedBox.status();
+  assert.equal(scopedAfter.pendingCount,0);assert.equal(scopedAfter.savedCaptureCount,9);
+  assert.equal((await local.entries(scopedStorage,local.ACK_PREFIX)).length,9,'prefix reads do not prune old exact ACKs');
+  await local.persist(scopedSource,{storage:scopedStorage});
+  assert.equal((await queued(scopedStorage)).length,0,'retained ACK still prevents a source replay');
+  assert.ok(scopedReads.some(keys=>keys.includes(local.ACK_PREFIX+device+':'+scopedQueued.captureIds[0])));
+  const enumerate=scopedStorage.getKeys;
+  scopedStorage.getKeys=async()=>{throw Error('STORAGE_ENUMERATION_UNAVAILABLE');};
+  const scopedUnavailable=await scopedBox.status();
+  assert.equal(scopedUnavailable.state,'error');assert.equal(scopedUnavailable.pendingCount,null);
+  scopedStorage.getKeys=enumerate;
+  assert.equal((await scopedBox.status()).savedCaptureCount,9,'enumeration failure keeps all source/ACK evidence');
+
   const newer = source('MLB', '2026-10-24T22:00:02.000Z');
   await local.persist(newer, { storage }); assert.equal((await queued(storage)).length, 1, 'same prices at a new observation time still persist');
   const newerId = (await queued(storage))[0].captureId;

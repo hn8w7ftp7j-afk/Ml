@@ -14,6 +14,7 @@ const aliases=[
   ['PSV燕豪芬','PSV Eindhoven'],['AEK雅典','AEK Athens'],['維拉利爾','Villarreal'],
   ['加拉塔沙雷','Galatasaray'],['寧斯','LASK Linz'],
   ['巴迪斯拉華','Slovan Bratislava'],['巴黎聖日門','Paris Saint-Germain'],['巴塞隆拿','Barcelona'],
+  ['葡萄牙士砵亭','Sporting CP'],['薩克達','Shakhtar Donetsk'],['利爾','Lille'],
 ];
 const key=value=>globalThis.Tai888SoccerTeams.key(value);
 const hash=value=>createHash('sha256').update(canonicalSoccerPayload(value)).digest('hex');
@@ -197,4 +198,52 @@ for(const value of ['沙巴','Sabah','Sabah FC Malaysia','費倫巴治 U21','巴
     assert.equal(JSON.stringify(wire),before);assert.equal(canonicalSoccerPayload(wire),canonical);assert.equal(hash(wire),originalHash);
   }
 }
-console.log('PASS exact EPL/UCL board aliases → legacy-key server matching: old Reader wire/hash unchanged, both teams/date/kickoff/league exact, duplicate/prop/conflicting identities fail closed; stale/final quotes stay ineligible and no scoring promotion');
+// The two saved Production identity pairs below failed the Nov 2–8 schedule
+// audit. Event/team IDs, home/away and kickoff were cross-checked against the
+// returned ESPN schedule and UEFA's Nov 3 fixture roster. Quotes and the
+// observation clock are synthetic; this does not claim a historical receipt.
+{
+  const observedAt='2026-11-03T16:00:00.000Z',clock=Date.parse(observedAt);
+  const fixtures=[
+    {id:'401915310',time:'01:45',kickoff:'2026-11-03T17:45:00.000Z',awayRaw:'葡萄牙士砵亭',homeRaw:'薩克達[主]',away:'Sporting CP',home:'Shakhtar Donetsk',awayId:'2250',homeId:'493'},
+    {id:'401915384',time:'04:00',kickoff:'2026-11-03T20:00:00.000Z',awayRaw:'利爾',homeRaw:'波杜基林特[主]',away:'Lille',home:'Bodo/Glimt',awayId:'166',homeId:'2980'},
+  ];
+  for(const fixture of fixtures){
+    const row={cells:[{pair:['11-04',fixture.time]},{pair:[fixture.awayRaw,fixture.homeRaw]},
+      {pair:['1+50 0.910','0.970']},{pair:['大3+50 0.850','小 1.010']},{pair:['主勝 -','和 -','客勝 -']}]};
+    const capture={league:'UCL',pageLeagueLabel:'歐洲冠軍聯賽',sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/',observedAt,
+      tables:[
+        {sectionTitle:'歐洲冠軍聯賽',headers:['時間','主客隊伍','讓球','大小','獨贏'],rows:[row]},
+        {sectionTitle:'歐洲冠軍聯賽 上半場',headers:['時間','主客隊伍','上半場讓球','上半場大小','上半場獨贏'],rows:[row]},
+      ]};
+    const wire={...parseSoccerCapture(capture,new Date(clock)),readerVersion:'2.1.56',pageActivityAt:observedAt};
+    assert.deepEqual(wire.parseIssues,[]);
+    const before=JSON.stringify(wire),canonical=canonicalSoccerPayload(wire),originalHash=hash(wire);
+    const checked=validateSoccerCapture(wire,{now:clock,headerVersion:'2.1.56'});
+    assert.equal(checked.ok,true,JSON.stringify(checked));
+    const raw=checked.payload.games[0];
+    const official={id:`soccer:ucl:${fixture.id}`,sourceId:fixture.id,league:'ucl',date:'2026-11-04',startTime:fixture.kickoff,status:'scheduled',
+      away:{id:`soccer:ucl:team:${fixture.awayId}`,sourceId:fixture.awayId,name:fixture.away},
+      home:{id:`soccer:ucl:team:${fixture.homeId}`,sourceId:fixture.homeId,name:fixture.home}};
+    const matched=matchSoccerReaderGames(checked.payload,[official],clock)[0];
+    assert.equal(matched.matchStatus,'MATCHED');assert.equal(matched.officialGameId,official.id);
+    assert.deepEqual(matched.markets,raw.markets,'identity repair preserves the exact original quote and period evidence');
+    assert.deepEqual([...new Set(matched.markets.map(m=>m.period))].sort(),['HT','UNKNOWN'],'a new alias cannot promote an unlabelled quote to FT');
+    for(const side of ['away','home']){
+      assert.equal(matched[`${side}Raw`],fixture[`${side}Raw`]);
+      assert.equal(matched[`${side}Key`],key(fixture[`${side}Raw`]));
+      assert.equal(soccerReaderMatchTeamKey(matched[`${side}Key`]),key(fixture[side]));
+      assert.equal(matchSoccerReaderGames(checked.payload,[{...official,[side]:{...official[side],name:`${fixture[side]} U21`}}],clock)[0].matchStatus,'UNMATCHED');
+    }
+    for(const other of [
+      {...official,league:'epl'}, {...official,home:official.away,away:official.home},
+      {...official,startTime:new Date(Date.parse(fixture.kickoff)+60000).toISOString()},
+      {...official,date:'2026-11-05'}, {...official,away:{name:'Arsenal'}},
+    ])assert.equal(matchSoccerReaderGames(checked.payload,[other],clock)[0].matchStatus,'UNMATCHED');
+    assert.equal(matchSoccerReaderGames(checked.payload,[official,{...official,id:`soccer:ucl:${Number(fixture.id)+1}`}],clock)[0].matchStatus,'AMBIGUOUS');
+    const postgame=matchSoccerReaderGames(checked.payload,[{...official,status:'final'}],Date.parse('2026-11-08T00:00:00.000Z'))[0];
+    assert.equal(postgame.matchStatus,'MATCHED');assert.equal(postgame.fresh,false);assert.equal(postgame.prestart,false);assert.equal(postgame.executable,false);
+    assert.equal(JSON.stringify(wire),before);assert.equal(canonicalSoccerPayload(wire),canonical);assert.equal(hash(wire),originalHash);
+  }
+}
+console.log('PASS exact EPL/UCL board aliases → legacy-key server matching: old Reader wire/hash unchanged, both teams/date/kickoff/league exact, duplicate/prop/conflicting identities fail closed; two saved Nov 4 UCL identity pairs match without period/scoring promotion; stale/final quotes stay ineligible');

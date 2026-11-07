@@ -115,7 +115,12 @@
     }));
   }
   async function entries(storage, prefix=PREFIX) {
-    const all=await storage.get(null);
+    // Pending sport fragments, retained ACKs and other Reader archives share
+    // one storage area. Enumerate names before reading only this scope so a
+    // status check does not clone every unrelated original board repeatedly.
+    const keys=typeof storage.getKeys==='function'
+      ? (await storage.getKeys()).filter(key=>key.startsWith(prefix)) : null;
+    const all=await storage.get(keys);
     return Object.entries(all||{}).filter(([key])=>key.startsWith(prefix)).map(([key,value])=>({...value,key}));
   }
   async function failureScope(input, storage) {

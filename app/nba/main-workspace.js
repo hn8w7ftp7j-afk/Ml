@@ -24,6 +24,7 @@ const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球�
 const num = value => Number.isFinite(value) ? value.toFixed(2) : '—';
 const localTime = value => Number.isFinite(Date.parse(value || '')) ? new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—';
 const statusText = value => ({ queued: '排隊中', running: '分析中', ready: '已分析', reference: '跨季基準', insufficient: '資料不足', blocked: '核對未通過', failed: '分析失敗' }[value] || '尚未分析');
+const nbaRowReadOnly = row => row?.readOnly === true || row?.scheduleVerified === false;
 const openingMarketLabels = { fullTotal: '全場大小', fullRunline: '全場讓分', firstHalfTotal: '上半大小', firstHalfRunline: '上半讓分' };
 const openingCheckLabels = { samples: '驗證場數', earlySamples: '開季驗證場數', modelMAE: '全季平均誤差（MAE）', earlyModelMAE: '開季平均誤差（MAE）', modelBrier: '機率誤差（Brier）', modelLogLoss: '機率誤差（Log Loss）', acceptanceFlag: '市場驗證狀態' };
 function openingValidationView(value, market) {
@@ -76,6 +77,7 @@ async function api(url, options = {}, timeout = 30000) {
 
 export function NbaGameCard({ row, now, onAnalyze, busy }) {
   const result = row.result;
+  const readOnly = nbaRowReadOnly(row);
   const assessment = result?.assessment;
   const prediction = result?.prediction;
   const preseason = result?.preseasonAnalysis;
@@ -83,17 +85,18 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
   const opening = result?.openingAnalysis;
   const validationPending = opening ? Object.entries(result?.marketAnalyses || {}).filter(([key, market]) => market?.status === 'insufficient' && openingValidationView(market?.validationDiagnostics, key)?.status === 'FAIL').map(([key]) => openingMarketLabels[key]) : [];
   const estimatedMarkets = opening ? Object.entries(result?.marketAnalyses || {}).filter(([key, market]) => openingMarketLabels[key] && market?.status === 'ready').map(([key]) => openingMarketLabels[key]) : [];
-  const pendingMarkets = Object.entries(openingMarketLabels).filter(([key]) => row.quote?.[key] && nbaMarketDisplayState(row, key).label === '待補分析').map(([, label]) => label);
+  const pendingMarkets = readOnly ? [] : Object.entries(openingMarketLabels).filter(([key]) => row.quote?.[key] && nbaMarketDisplayState(row, key).label === '待補分析').map(([, label]) => label);
   const hasMarketEstimate = Object.values(result?.marketAnalyses || {}).some(market => market?.status === 'ready');
   const pendingAnalysis = pendingMarkets.length > 0 && !['queued', 'running', 'failed', 'blocked'].includes(row.jobState);
   const noOpeningMarket = opening && result.status === 'insufficient' && !validationPending.length;
   const reference = result?.status === 'reference' ? result.referencePrediction : null;
-  const current = nbaResultQuoteCurrent(row, now);
-  const canAnalyze = row.canAnalyze && now - Date.parse(row.observedAt) < 180000
+  const current = !readOnly && nbaResultQuoteCurrent(row, now);
+  const canAnalyze = !readOnly && row.canAnalyze && now - Date.parse(row.observedAt) < 180000
     && now - Date.parse(row.pageActivityAt || row.observedAt) < 180000 && Date.parse(row.game.startTime) > now;
   return <section className="gameCard" data-nba-game={row.game.id}>
     <div className="gameHead"><div><h2>{name(row.game.away)}（客）@ {name(row.game.home)}（主）</h2><p>{localTime(row.game.startTime)}（台灣）｜{row.game.season?.label}｜{({ preseason: '季前賽', regular: '例行賽', postseason: '季後賽' })[row.game.seasonType] || '賽事類型待核對'}</p></div>
-      <span className={`state ${pendingAnalysis || validationPending.length ? 'unopened' : row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{pendingAnalysis ? hasMarketEstimate ? '部分市場已分析' : '待補分析' : validationPending.length ? estimatedMarkets.length ? '部分市場已分析' : '市場驗證未通過' : noOpeningMarket ? '尚無可分析市場' : statusText(row.jobState)}</span></div>
+      <span className={`state ${readOnly || pendingAnalysis || validationPending.length ? 'unopened' : row.jobState === 'ready' ? 'done' : row.jobState === 'insufficient' || row.jobState === 'blocked' ? 'unopened' : row.jobState || 'queued'}`}>{readOnly ? '已保存分析｜賽程待核對' : pendingAnalysis ? hasMarketEstimate ? '部分市場已分析' : '待補分析' : validationPending.length ? estimatedMarkets.length ? '部分市場已分析' : '市場驗證未通過' : noOpeningMarket ? '尚無可分析市場' : statusText(row.jobState)}</span></div>
+    {readOnly && <p className="noticeBox" role="status">以下為已保存分析，目前賽程與盤口尚未核對；僅供查閱，暫不開放重新分析或新增下注紀錄。</p>}
     <p className="nbaQuoteTime">{row.observedAt ? `盤口 ${localTime(row.observedAt)}` : '盤口待同步'}{result?.generatedAt && `｜分析 ${localTime(result.generatedAt)}`}</p>
     {pendingMarkets.length > 0 && <p className="muted">{pendingMarkets.join('、')}待補分析。請按「分析全部 NBA」或本場分析按鈕補齊。</p>}
     {opening && <p className="muted">開季分析｜上一季基準＋本季表現。{estimatedMarkets.length > 0 && `${estimatedMarkets.join('、')}已產生估計。`}{validationPending.length > 0 ? `${validationPending.join('、')}待驗證，暫不計分。` : '未開盤或核對未完成的市場不產生估計。'}</p>}
@@ -105,7 +108,7 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
     {preseason && <><div className="detailGrid"><div><span>主隊預估得分</span><b>{num(prediction.home)}</b></div><div><span>客隊預估得分</span><b>{num(prediction.away)}</b></div><div><span>全場預估總分</span><b>{num(preseason.fullTotal)}</b></div><div><span>上半預估總分</span><b>{num(preseason.halfTotal)}</b></div></div><p className="muted">季前賽校正 {preseason.trainingSamples} 場；誤差樣本 {preseason.distributionSamples} 筆。左側為 S 分數；勝率與 W／R 列於明細。</p></>}
     {reference && <><div className="noticeBox">跨季基準，尚未校正。</div><div className="detailGrid"><div><span>主隊基準得分</span><b>{num(reference.homePoints)}</b></div><div><span>客隊基準得分</span><b>{num(reference.awayPoints)}</b></div><div><span>基準總分</span><b>{num(reference.total)}</b></div><div><span>來源球季</span><b>{reference.sourceSeasonYear - 1}–{String(reference.sourceSeasonYear).slice(-2)} 例行賽</b></div></div></>}
     </details>}
-    {['ready', 'reference'].includes(result?.status) && !current && <p className="muted">舊分析｜盤口已更新、過期或已開賽。</p>}
+    {['ready', 'reference'].includes(result?.status) && !current && <p className="muted">{readOnly ? '已保存分析｜目前賽程與盤口尚未核對。' : '舊分析｜盤口已更新、過期或已開賽。'}</p>}
     {result?.status === 'insufficient' && <div className="noticeBox">{opening ? validationPending.length ? '開季市場驗證未通過｜原盤口已保留，請查看各市場的驗證原因。' : '目前沒有可分析的開季市場｜請查看各市場狀態與原因。' : <>資料不足｜{result.training?.availableGames ?? 0}／{result.training?.minimumResiduals ?? 50} 筆同季樣本。</>}</div>}
     {(row.reason || row.jobError) && <p className="muted">{row.jobError || row.reason}</p>}
     <div className="nbaMarketList">{[['fullTotal', '全場大小'], ['fullRunline', '全場讓分'], ['firstHalfTotal', '上半大小'], ['firstHalfRunline', '上半讓分']].map(([key, label]) => {
@@ -116,14 +119,14 @@ export function NbaGameCard({ row, now, onAnalyze, busy }) {
       const choices = total ? [['over', '大分', market?.overWater, assessment?.positiveExpectedNet], ['under', '小分', market?.underWater, assessment?.negativeExpectedNet]] : [['away', `${name(row.game.away)}（客）${market?.lineSide === 'away' ? '讓分' : '受讓'}`, market?.awayWater], ['home', `${name(row.game.home)}（主）${market?.lineSide === 'home' ? '讓分' : '受讓'}`, market?.homeWater]];
       return <div className={`marketBlock actualMarket ${market ? '' : 'nbaUnavailableMarket'}`} key={key}><h3>{label}｜{market?.line || '—'}{market && !total ? `｜${market.lineSide === 'home' ? '主隊' : '客隊'}讓分` : ''}</h3>
         {marketDisplay.message && <p className="muted">{marketDisplay.message}</p>}
-        {analyzed && !current && <p className="muted">目前 Reader 盤口：{row.quote?.[key]?.line || '等待開盤'}；以下估計對應上次分析的盤口與水位。</p>}
+        {analyzed && !current && <p className="muted">{readOnly ? '以下為保存時的盤口、水位與估計；目前 Reader 盤口尚未核對。' : <>目前 Reader 盤口：{row.quote?.[key]?.line || '等待開盤'}；以下估計對應上次分析的盤口與水位。</>}</p>}
         {modelMarket?.status === 'insufficient' && openingValidationView(modelMarket.validationDiagnostics, key)?.status === 'FAIL' && <NbaMarketValidation diagnostics={modelMarket.validationDiagnostics} market={key}/>}
         {market && choices.map(([side, pick, water, legacyEstimate]) => {
           const estimate = modelMarket?.status === 'ready' ? modelMarket.sides[side] : null;
           const scoring = nbaMarketScore(estimate);
           return <div className="scoreRow" key={pick}><div className={`score ${scoring?.score >= 8.5 ? 'strongest' : 'pass'}`} title="S 分數"><small>S 分數</small>{scoring ? scoring.score.toFixed(1) : '—'}</div><div className="scoreBody"><div className="scorePick">{pick}</div><div className="scorePrice">水位 {num(water)}</div><div className="scoreMeta">{estimate ? `估計勝率 ${(estimate.winProbability * 100).toFixed(2)}%` : marketDisplay.label}</div>{estimate ? <div className="scoreMeta">W {num(estimate.expectedNet)}%｜R {num(estimate.robustExpectedNet)}%{!scoring ? '｜S 待核對' : ''}</div> : analyzed ? <div className="scoreMeta">每 100 元淨額 {num(legacyEstimate)} 元</div> : null}
             {estimate && <details className="rankingDetails"><summary>估計明細</summary><p>模型估計勝率 {(estimate.winProbability * 100).toFixed(2)}%｜走水 {(estimate.pushProbability * 100).toFixed(2)}%。W／R 為每 100 元含退水淨額。{!scoring && '壓力樣本不足，暫不產生 S。'}</p></details>}
-          </div><div className="rowActions"><NbaBetRecordButton entry={{ game: row.game, marketKey: key, side, line: market.line, lineSide: total ? null : market.lineSide, water, away: name(row.game.away), home: name(row.game.home) }}/></div></div>;
+          </div>{!readOnly && <div className="rowActions"><NbaBetRecordButton entry={{ game: row.game, marketKey: key, side, line: market.line, lineSide: total ? null : market.lineSide, water, away: name(row.game.away), home: name(row.game.home) }}/></div>}</div>;
         })}
       </div>;
     })}</div>
@@ -156,6 +159,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
   const [reconnectRevision, setReconnectRevision] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [readerStatus, setReaderStatus] = useState('waiting');
+  const [readOnlyBoard, setReadOnlyBoard] = useState(false);
   const [readerCoverage, setReaderCoverage] = useState(null);
   const [readerFailure, setReaderFailure] = useState(null);
   const notification = useRef(null);
@@ -205,6 +209,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         setRows([]); setProgress(null); setSelected('');
       }
       setReaderStatus(board.readerStatus);
+      setReadOnlyBoard(board.readOnly === true || board.scheduleStatus === 'unavailable');
       setReaderCoverage(board.readerCoverage ? { ...board.readerCoverage, boardDate: board.date } : null);
       setRows(current => board.rows.map(row => {
         const previous = current.find(old => old.game.id === row.game.id);
@@ -212,7 +217,17 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
         return previous && !newerSaved ? { ...row, result: previous.result, resultRunId: previous.resultRunId, jobState: previous.jobState, jobError: previous.jobError } : row;
       }));
       return board;
-    } catch (cause) { if (revision === requestRevision.current && target === dateRef.current) setError(cause.message); return null; }
+    } catch (cause) {
+      if (revision === requestRevision.current && target === dateRef.current) {
+        setError(cause.message);
+        if (cause.code === 'NBA_SCHEDULE_UNAVAILABLE') {
+          setReadOnlyBoard(true); setReaderStatus('unverified');
+          setRows(current => current.map(row => ({ ...row, readOnly: true, scheduleVerified: false,
+            canAnalyze: false, quote: null, observedAt: null, pageActivityAt: null })));
+        }
+      }
+      return null;
+    }
     finally { if (revision === requestRevision.current) setLoading(false); }
   }
   useEffect(() => { if (trackBoard && !operation.current) void load(date); }, [trackBoard, date]);
@@ -284,6 +299,9 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       prepareNbaNotification(notification.current);
       const board = await load(dateRef.current, { followLatest: !id });
       if (!board) { setMessage(''); return; }
+      if (board.readOnly === true || board.scheduleStatus === 'unavailable') {
+        setMessage('NBA 賽程暫時無法核對，已保存分析僅供查閱。'); return;
+      }
       const tasks = board.tasks.filter(task => !id || task.nbaQuery.id === id);
       if (!tasks.length) { setMessage(board.readerStatus === 'stale' && readerFailure ? `目前盤口已過期。最近同步紀錄：${readerFailure.message}` : '目前無可分析盤口，請查看各場狀態。'); return; }
       const requestId = `nba-analysis-${crypto.randomUUID()}`;
@@ -322,17 +340,17 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       <div className="heroControls">
         <label>台灣日期<input type="date" value={date} disabled={busy} onInput={event => changeDate(event.currentTarget.value)} onChange={event => changeDate(event.target.value)}/></label>
         <button className="secondary" disabled={loading || busy} onClick={() => load()}>{loading ? '讀取中…' : '更新盤口'}</button>
-        <button className="primary giant" disabled={busy} onClick={() => start()}>{starting ? '送出中…' : running ? '分析中…' : '分析全部 NBA'}</button>
+        <button className="primary giant" disabled={busy || readOnlyBoard} onClick={() => start()}>{starting ? '送出中…' : running ? '分析中…' : '分析全部 NBA'}</button>
         <button className="secondary allLeagueAnalyzeButton" disabled={busy} onClick={() => { prepareNbaNotification(notification.current); onAnalyzeAll(); }}>一鍵分析全部聯盟</button>
         <details className="nbaMoreControls"><summary>單場分析與其他操作</summary><div className="heroControls">
         <label>選擇單場比賽<select value={selected} disabled={busy} onChange={event => setSelected(event.target.value)}><option value="">請選擇一場</option>{rows.map(row => <option key={row.game.id} value={row.game.sourceId}>{name(row.game.away)} @ {name(row.game.home)}｜{localTime(row.game.startTime)}</option>)}</select></label>
-        <button className="primary" disabled={busy || !selected} onClick={() => start(selected)}>只分析這一場</button>
+        <button className="primary" disabled={busy || readOnlyBoard || !selected} onClick={() => start(selected)}>只分析這一場</button>
         <button className="secondary" disabled={busy || loading} onClick={() => { explicitDate.current = false; onDateChange(dateRef.current, false); void load(); }}>跟隨最新盤日</button>
         <button className="secondary" disabled={starting || !job} onClick={() => { setDate(job.date); setReconnectRevision(value => value + 1); }}>載入先前分析</button>
-        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.56-EPL-UCL.zip" download>下載 Reader v2.1.56</a>
+        <a className="secondary readerDownload" href="/downloads/Tai888-Reader-v2.1.57-EPL-UCL.zip" download>下載 Reader v2.1.57</a>
         </div></details>
         <details className="nbaMoreControls"><summary>完成通知設定</summary><AnalysisNotificationControl ref={notification}/></details>
-      </div><div className={`providerState ${readerStatus === 'fresh' && !partialReader ? 'ready' : 'missing'}`}><strong>{readerStatus === 'fresh' ? partialReader ? '已同步部分盤口｜缺漏待查' : '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>
+      </div><div className={`providerState ${!readOnlyBoard && readerStatus === 'fresh' && !partialReader ? 'ready' : 'missing'}`}><strong>{readOnlyBoard ? '已保存分析｜賽程暫時無法核對' : readerStatus === 'fresh' ? partialReader ? '已同步部分盤口｜缺漏待查' : '盤口已同步' : readerStatus === 'stale' ? '盤口已過期，請同步 Reader' : '盤口待同步'}</strong></div><AllLeagueProgress run={allRun} betStatuses={allLeagueBetStatuses} onSelectSoccer={onSelectSoccer}/></section>
       {readerStatus === 'fresh' && partialReader && <div className="noticeBox" role="status" aria-label="NBA 盤口缺漏">
         <strong>已收到的盤口可查看與分析，以下缺漏仍待查</strong>
         {missingQuoteRows.length > 0 && <p>{missingQuoteRows.map(row => `${name(row.game.away)}／${name(row.game.home)}`).join('、')}：未配對到目前盤口。</p>}
@@ -341,7 +359,7 @@ export default function NbaMainWorkspace({ active, allRun, preparedScope, notifi
       </div>}
       {readerStatus === 'stale' && readerFailure && <div className="errorBox" role="alert"><strong>最近 NBA 同步失敗｜{localTime(readerFailure.at)}</strong><p>{readerFailure.message}</p><p>這是已保存的同步紀錄；目前盤口仍未取得更新確認。</p><a href="/reader-diagnostics">查看同步診斷紀錄</a></div>}
       {progress && <div className="progressBox" role="status">{progress.summary}</div>}
-      {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy}/>}
+      {view === 'ranking' && <NbaShadowRanking rows={rows} date={date} now={now} onAnalyze={start} busy={busy} readOnly={readOnlyBoard}/>}
       {(view === 'ranking' || view === 'records' ? [] : view === 'results' ? rows.filter(row => row.result || row.jobState) : rows).map(row => <NbaGameCard key={row.game.id} row={row} now={now} onAnalyze={start} busy={busy}/>)}
       {!rows.length && <section className="emptyBoard"><div>🏀</div><h2>{loading ? '讀取 NBA 賽程與盤口中…' : error ? 'NBA 賽程核對失敗，請更新盤口重試' : '此日期沒有 NBA 賽事'}</h2></section>}
     </>}

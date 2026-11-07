@@ -8,14 +8,18 @@ const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球�
 const num = value => Number.isFinite(value) ? value.toFixed(2) : '—';
 const pct = value => Number.isFinite(value) ? `${(value * 100).toFixed(2)}%` : '—';
 const time = value => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
-export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
+export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy, readOnly = false }) {
   const [view, setView] = useState('ranking');
   const [filter, setFilter] = useState('all');
-  const ranking = buildNbaShadowRanking(rows, date, now, filter);
-  const previous = buildNbaPreviousRanking(rows, date, now, filter);
+  const displayRows = readOnly ? rows.map(row => ({ ...row, readOnly: true })) : rows;
+  const ranking = buildNbaShadowRanking(displayRows, date, now, filter);
+  const previous = buildNbaPreviousRanking(displayRows, date, now, filter);
   const hasOpening = rows.some(row => isNbaOpeningModelVersion(row.result?.modelVersion));
   const groups = buildNbaShadowOrder(ranking.entries);
   const previousGroups = buildNbaShadowOrder(previous.entries);
+  const unverified = row => row.readOnly === true || row.scheduleVerified === false;
+  const hasReadOnlyRows = readOnly || rows.some(unverified);
+  const entryReadOnly = entry => readOnly || rows.some(row => row.game.id === entry.game.id && unverified(row));
   const renderEntry = (entry, index) => <div className="rankRow nbaRankRow" key={entry.stableKey} data-nba-rank-key={entry.stableKey}>
       <b>{view === 'order' ? entry.betOrderIndex : index + 1}</b><strong className={`rankScore nbaRankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定 S 分數">{entry.score == null ? '—' : entry.score.toFixed(1)}<small>S 分數</small></strong>
       <div><span>{name(entry.game.away)}（客）@ {name(entry.game.home)}（主）</span><div className="scorePick">{entry.market}｜{entry.side === 'home' || entry.side === 'away' ? `${name(entry.game[entry.side])} ${entry.role}` : entry.role}｜{entry.line}</div>
@@ -24,24 +28,25 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy }) {
         {entry.score == null && <div className="scoreMeta">需重新分析以產生 W／R 評分</div>}
         <div className="scoreMeta">估計勝率 {pct(entry.winProbability)}｜水位 {num(entry.water)}</div>
         <small>{time(entry.game.startTime)}（台灣）</small><details className="rankingDetails"><summary>估計明細</summary><p>盤口 {time(entry.observedAt)}｜走水 {pct(entry.pushProbability)}｜誤差樣本 {entry.samples ?? '—'} 筆。W／R 為每 100 元含退水淨額。</p></details>
-      </div><div className="rankActionStack"><NbaBetRecordButton entry={{ ...entry, away: name(entry.game.away), home: name(entry.game.home) }}/><button className="mini secondary" disabled={busy} onClick={() => onAnalyze(entry.game.sourceId)}>重新分析</button></div>
+      </div>{!entryReadOnly(entry) && <div className="rankActionStack"><NbaBetRecordButton entry={{ ...entry, away: name(entry.game.away), home: name(entry.game.home) }}/><button className="mini secondary" disabled={busy} onClick={() => onAnalyze(entry.game.sourceId)}>重新分析</button></div>}
     </div>;
   return <section className="panel nbaShadowRanking" aria-label="NBA 影子排名">
     <div className="rankingViewTabs" aria-label="影子排名檢視"><button className={view === 'ranking' ? 'active' : ''} onClick={() => setView('ranking')}>全部方向</button><button className={view === 'order' ? 'active' : ''} onClick={() => setView('order')}>候選順序</button></div>
     <div className="panelHead"><h2>{view === 'order' ? hasOpening ? '候選順序｜通過門檻・W/R 為正' : '候選順序｜7.0 分以上・W/R 為正' : '全部方向'}</h2><span className="state shadow">模型估計</span></div>
+    {hasReadOnlyRows && <p className="noticeBox" role="status">賽程待核對的賽事僅供查閱已保存分析，不代表目前盤口；暫不開放新增下注紀錄或重新分析。</p>}
     {hasOpening && <p className="muted">開季跨季模型：S ≥ 7.2、W &gt; 0、R &gt; 0 才列入候選順序。各市場須通過對應驗證才產生評分。</p>}
     <div className="rankingViewTabs" aria-label="NBA 排名盤口篩選">
       {[['all', '全部方向'], ...NBA_RANK_MARKETS].map(([key, label]) => <button key={key} className={filter === key ? 'active' : ''} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}
     </div>
     <p className="rankingMeta">{date}｜{ranking.currentGames} 場分析｜{ranking.entries.length} 個方向｜{view === 'order' ? '依開賽時間｜非推薦' : '依 S 分數由高到低'}</p>
-    {ranking.outdatedGames > 0 && <p className="muted">{ranking.outdatedGames} 場分析已失效，請更新盤口並重新分析。</p>}
+    {!hasReadOnlyRows && ranking.outdatedGames > 0 && <p className="muted">{ranking.outdatedGames} 場分析已失效，請更新盤口並重新分析。</p>}
     {ranking.pendingGames > 0 && <p className="muted">{ranking.pendingGames} 場待分析。</p>}
     {view === 'ranking' ? ranking.entries.map(renderEntry) : groups.map((group, index) => <div className="betOrderGame" key={group.key}>
       <div className="betOrderGameHead"><div><span>第 {index + 1} 場</span><strong>{name(group.entries[0].game.away)}（客）@ {name(group.entries[0].game.home)}（主）</strong></div><time>{time(group.gameDate)}（台灣）</time></div>
       {group.entries.map(renderEntry)}
     </div>)}
     {previous.entries.length > 0 && <section aria-label="NBA 上次分析排名">
-      <h3>上次分析｜盤口待更新</h3>
+      <h3>{hasReadOnlyRows ? '已保存分析｜賽程待核對' : '上次分析｜盤口待更新'}</h3>
       <p className="muted">{previous.gameCount} 場保留上次分析。以下分數、W／R、盤口與水位均屬當時快照；請更新盤口並重新分析後確認目前候選。投注狀態依已儲存紀錄顯示。</p>
       {view === 'ranking' ? previous.entries.map(renderEntry) : previousGroups.map((group, index) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>上次分析第 {index + 1} 場</span><strong>{name(group.entries[0].game.away)}（客）@ {name(group.entries[0].game.home)}（主）</strong></div><time>{time(group.gameDate)}（台灣）</time></div>

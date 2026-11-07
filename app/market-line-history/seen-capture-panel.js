@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { taipeiHistoryTime } from './history-view.js';
 import { SEEN_CAPTURE_LEAGUES, SEEN_CAPTURE_REASON_LABELS, latestSeenDeliveryReports, seenCaptureQueryUrl, validateSeenCaptureDetail, validateSeenCaptureResponse } from './seen-capture-view.js';
 import styles from './seen-capture.module.css';
+import RawSeenReplay from './raw-seen-replay.js';
 
 const LABELS = { NHL: '冰球 NHL', EPL: '英超 EPL', UCL: '歐冠 UCL' };
 const countText = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('zh-TW') : '未確認';
@@ -134,6 +135,7 @@ export default function SeenCapturePanel() {
           {row.captureReasons.length > 0 && <p>擷取註記：{row.captureReasons.map(reason => SEEN_CAPTURE_REASON_LABELS[reason] || reason).join('、')}</p>}
           <small className={styles.id}>保存識別 {row.captureId}</small>
           <SeenCaptureEvidence capture={row}/>
+          {['EPL', 'UCL'].includes(row.league) && <RawSeenReplay capture={row}/>}
         </li>)}</ol>}
       </details>
       <p className={styles.notice}>依存入時間由新到舊分頁；日期篩選使用來源讀取的台北日期，並非已核對的賽事盤日。原始文字逐筆按需讀取。</p>
