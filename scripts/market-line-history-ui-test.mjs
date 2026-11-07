@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { EMPTY_HISTORY_FILTERS, HISTORY_LEAGUES, groupHistoryRows, historyFilterLabel, historyQueryUrl,
   historyFiltersFromSearch, historyGameFilters, historyGameKeyLimit, historyMarketStatusText, historyRecordLabel,
-  historyRowKey, historyWater, mergeHistoryRows, taipeiHistoryTime, validateHistoryResponse } from '../app/market-line-history/history-view.js';
+  historyRowKey, historyWater, mergeHistoryRows, taipeiHistoryTime, validateHistoryResponse,
+  historyDisplayMarkets, historyIntegrityNotice, historyInterpretationSummary, historyMarketHasDirections } from '../app/market-line-history/history-view.js';
 
 const first = { league: 'CPBL', boardDate: '2026-10-08', gameKey: '777', observedAt: '2026-10-08T10:00:00.000Z',
   stateHash: 'aaaaaaaaaaaaaaaa', gameLabel: '場次 777', integrity: { ok: true, issues: [] },
@@ -59,6 +60,43 @@ assert.throws(() => validateHistoryResponse({ ...soccerPayload, rows: [{ ...socc
 assert.throws(() => validateHistoryResponse({ ...soccerPayload, rows: [{ ...soccer, recordId: '' }] }), /格式不完整/, 'missing observation identity must not silently collapse saved observations');
 assert.equal(historyRecordLabel(soccer), '讀盤觀測');
 assert.equal(historyRecordLabel(first), '變盤版本');
+const interpretation = { version: 'SOCCER-HISTORY-PERIOD-INTERPRETATION-v1',
+  basis: 'SAME_OBSERVATION_PRIMARY_AND_EXPLICIT_HT', interpretedAt: '2026-11-08T00:00:00.000Z',
+  observationId: soccer.observationId, historicalAvailabilityVerified: false, executable: false };
+const interpreted = { ...soccer, integrity: { ok: false, issues: ['PERIOD_UNKNOWN'] },
+  markets: [{ market: '全場讓分', period: 'FT', kind: 'HANDICAP', status: 'PERIOD_UNKNOWN', directions: [], contracts: [] }],
+  historyInterpretation: { ...interpretation, status: 'RETROSPECTIVE_INTERPRETATION', interpretedContractCount: 2,
+    originalPeriods: ['UNKNOWN'], displayPeriods: ['FT'] },
+  displayMarkets: [{ market: '全場讓分', period: 'FT', kind: 'HANDICAP', status: 'RETROSPECTIVE_INTERPRETATION',
+    directions: soccer.markets[0].directions,
+    contracts: [{ period: 'FT', line: '1+50', historyPeriodInterpretation: { ...interpretation, originalPeriod: 'UNKNOWN', displayPeriod: 'FT' } },
+      { period: 'FT', line: '1.5' }] },
+  { market: '全場勝平負', period: 'FT', kind: 'MONEYLINE', status: 'RETROSPECTIVE_INTERPRETATION',
+    directions: [{ side: 'away', pick: 'Arsenal勝', water: 1.5 }, { side: 'draw', pick: '和局', water: 2.5 }, { side: 'home', pick: 'Manchester City勝', water: 1.2 }],
+    contracts: [{ period: 'FT', historyPeriodInterpretation: { ...interpretation, originalPeriod: 'UNKNOWN', displayPeriod: 'FT' } }] }] };
+const originalBeforeDisplay = JSON.stringify(interpreted.markets);
+assert.equal(validateHistoryResponse({ ...soccerPayload, rows: [interpreted] }).rows[0], interpreted,
+  'a retrospective display can include both derived and originally explicit contracts without replacing saved market states');
+assert.equal(historyDisplayMarkets(interpreted), interpreted.displayMarkets);
+assert.equal(historyDisplayMarkets(soccer), soccer.markets, 'older responses remain readable');
+assert.equal(JSON.stringify(interpreted.markets), originalBeforeDisplay, 'display selection does not mutate original saved markets');
+assert.equal(historyMarketHasDirections(interpreted.displayMarkets[1]), true, 'three-way prices are displayed without being rejected as an unpaired two-way market');
+assert.equal(historyMarketHasDirections({ ...interpreted.displayMarkets[1], directions: interpreted.displayMarkets[1].directions.slice(0, 2) }), false);
+assert.equal(historyIntegrityNotice(interpreted), '', 'a retained original UNKNOWN marker does not become a blanket data-integrity warning after display recognition');
+assert.match(historyInterpretationSummary(interpreted), /UNKNOWN.*查閱時辨識.*不代表當時已可分析或下注/);
+assert.match(historyInterpretationSummary(interpreted), /2026\/11\/08\s08:00:00/, 'interpretation timestamp uses Taipei separately from observation time');
+assert.match(historyIntegrityNotice({ ...interpreted, integrity: { ok: false, issues: ['SOURCE_PAYLOAD_HASH_MISMATCH'] } }), /完整性核對/);
+assert.match(historyIntegrityNotice({ ...interpreted, historyInterpretation: null, displayMarkets: undefined }), /部分市場/);
+for (const change of [{ executable: true }, { historicalAvailabilityVerified: true }, { observationId: 'b'.repeat(64) },
+  { interpretedAt: '2026-10-08T10:00:00.000Z' }, { version: 'caller-approved' }]) {
+  const invalid = structuredClone(interpreted);
+  Object.assign(invalid.displayMarkets[0].contracts[0].historyPeriodInterpretation, change);
+  assert.throws(() => validateHistoryResponse({ ...soccerPayload, rows: [invalid] }), /格式不完整/,
+    `invalid retrospective provenance must be rejected: ${JSON.stringify(change)}`);
+}
+assert.throws(() => validateHistoryResponse({ ...soccerPayload, rows: [{ ...interpreted, historyInterpretation: { ...interpreted.historyInterpretation, interpretedContractCount: 99 } }] }), /格式不完整/);
+assert.throws(() => validateHistoryResponse({ ...payload, rows: [{ ...first, displayMarkets: interpreted.displayMarkets, historyInterpretation: interpreted.historyInterpretation }] }), /格式不完整/,
+  'soccer interpretation cannot leak into another league');
 assert.match(historyMarketStatusText('PERIOD_UNKNOWN'), /期間未確認/);
 assert.match(historyMarketStatusText('LOCKED'), /鎖盤/);
 assert.match(historyMarketStatusText('NOT_CAPTURED'), /未保存/);
@@ -98,6 +136,9 @@ assert.match(ui, /不是舊分析快照庫/);
 assert.match(ui, /這不代表當時沒有比賽或沒有開盤/);
 assert.match(ui, /載入下一頁/);
 assert.match(ui, /row\.integrity\?\.ok === false/);
+assert.match(ui, /historyDisplayMarkets\(row\)\.map/);
+assert.match(ui, /查閱時辨識/);
+assert.match(ui, /historyInterpretation: row.historyInterpretation/);
 assert.match(ui, /cache: 'no-store'/);
 assert.match(ui, /AbortController/);
 assert.match(ui, /只查這一場/);
