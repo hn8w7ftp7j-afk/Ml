@@ -1,0 +1,508 @@
+{
+  "fixtureFormat": "public-source-projection-v1",
+  "note": "Relevant public response fields only. provenance sha256 values describe original complete HTTP response bodies, not the JSON projections or deterministic test HTML wrappers.",
+  "capturedAt": "2026-11-07T22:31:06.048Z",
+  "provenance": [
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=401909090",
+      "sha256": "29ef535ad775ce70557481e032142ae62108b9ef10b85f11d72920260463a257"
+    },
+    {
+      "provider": "NBA",
+      "url": "https://www.nba.com/games?date=2026-10-20",
+      "sha256": "033cb8ecce60f6224572d42435b9783f92284ff906ddb7391c7b2bd6260b160a"
+    },
+    {
+      "provider": "NBA",
+      "url": "https://www.nba.com/game/okc-vs-sas-0022600003/box-score",
+      "sha256": "22b69e3eeb513ca7f6ea3ff37485b86c27aa2c1680a71fe28e7e75bf517d224b"
+    }
+  ],
+  "game": {
+    "id": "nba:espn:game:401909090",
+    "sourceId": "401909090",
+    "league": "NBA",
+    "provider": "ESPN",
+    "name": "Oklahoma City Thunder @ San Antonio Spurs",
+    "startTime": "2026-10-21T01:50:00.000Z",
+    "taipeiDate": "2026-10-21",
+    "season": {
+      "year": 2027,
+      "label": "2026–27",
+      "type": "regular"
+    },
+    "seasonType": "regular",
+    "status": "final",
+    "statusText": "Final",
+    "completed": true,
+    "home": {
+      "id": "nba:espn:team:24",
+      "sourceId": "24",
+      "league": "NBA",
+      "provider": "ESPN",
+      "name": "San Antonio Spurs",
+      "abbreviation": "SA",
+      "identityStatus": "provider_verified_official_unverified",
+      "score": 104,
+      "periodScores": [
+        {
+          "period": 1,
+          "score": 28
+        },
+        {
+          "period": 2,
+          "score": 16
+        },
+        {
+          "period": 3,
+          "score": 36
+        },
+        {
+          "period": 4,
+          "score": 24
+        }
+      ],
+      "statistics": []
+    },
+    "away": {
+      "id": "nba:espn:team:25",
+      "sourceId": "25",
+      "league": "NBA",
+      "provider": "ESPN",
+      "name": "Oklahoma City Thunder",
+      "abbreviation": "OKC",
+      "identityStatus": "provider_verified_official_unverified",
+      "score": 116,
+      "periodScores": [
+        {
+          "period": 1,
+          "score": 34
+        },
+        {
+          "period": 2,
+          "score": 31
+        },
+        {
+          "period": 3,
+          "score": 28
+        },
+        {
+          "period": 4,
+          "score": 23
+        }
+      ],
+      "statistics": []
+    },
+    "venue": null,
+    "neutralSite": false,
+    "timeConfirmed": true,
+    "identityStatus": "provider_verified_official_unverified"
+  },
+  "contract": {
+    "alreadyPlaced": true,
+    "gameId": "nba:espn:game:401909090",
+    "date": "2026-10-21",
+    "startTime": "2026-10-21T01:30:00.000Z",
+    "away": "奧克拉荷馬雷霆",
+    "home": "聖安東尼奧馬刺",
+    "marketKey": "fullRunline",
+    "side": "away",
+    "line": "3+50",
+    "lineSide": "home",
+    "water": 0.95,
+    "stake": 10000
+  },
+  "schedule": {
+    "selectedDate": "2026-10-20",
+    "gameCardFeed": {
+      "modules": [
+        {
+          "cards": [
+            {
+              "cardData": {
+                "gameId": "0022600003",
+                "leagueId": "00",
+                "seasonYear": "2026-27",
+                "seasonType": "Regular Season",
+                "gameTimeUtc": "2026-10-21T01:30:00Z",
+                "gameTimeEastern": "2026-10-20T21:30:00Z",
+                "actualStartTimeUTC": "2026-10-21T01:52:14Z",
+                "actualEndTimeUTC": "2026-10-21T04:24:05Z",
+                "gameStatus": 3,
+                "shareUrl": "https://www.nba.com/game/okc-vs-sas-0022600003",
+                "homeTeam": {
+                  "teamId": 1610612759,
+                  "teamTricode": "SAS",
+                  "score": 104,
+                  "periods": [
+                    {
+                      "period": 1,
+                      "score": 28
+                    },
+                    {
+                      "period": 2,
+                      "score": 16
+                    },
+                    {
+                      "period": 3,
+                      "score": 36
+                    },
+                    {
+                      "period": 4,
+                      "score": 24
+                    }
+                  ]
+                },
+                "awayTeam": {
+                  "teamId": 1610612760,
+                  "teamTricode": "OKC",
+                  "score": 116,
+                  "periods": [
+                    {
+                      "period": 1,
+                      "score": 34
+                    },
+                    {
+                      "period": 2,
+                      "score": 31
+                    },
+                    {
+                      "period": 3,
+                      "score": 28
+                    },
+                    {
+                      "period": 4,
+                      "score": 23
+                    }
+                  ]
+                },
+                "broadcasters": {
+                  "nationalBroadcasters": [
+                    {
+                      "broadcasterVideoLink": "https://peacocktv.app.link/HJcxWCqZc7b"
+                    },
+                    {
+                      "broadcasterVideoLink": ""
+                    }
+                  ],
+                  "homeTvBroadcasters": [],
+                  "homeRadioBroadcasters": [
+                    {
+                      "broadcasterVideoLink": ""
+                    }
+                  ],
+                  "awayTvBroadcasters": [],
+                  "awayRadioBroadcasters": [
+                    {
+                      "broadcasterVideoLink": ""
+                    }
+                  ],
+                  "intlRadioBroadcasters": [],
+                  "intlTvBroadcasters": [],
+                  "homeOttBroadcasters": [],
+                  "awayOttBroadcasters": [],
+                  "intlOttBroadcasters": [],
+                  "nationalOttBroadcasters": [],
+                  "nationalRadioBroadcasters": [],
+                  "subscriptionBroadcasters": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "box": {
+    "game": {
+      "gameId": "0022600003",
+      "gameTimeUTC": "2026-10-21T01:30:00Z",
+      "gameStatus": 3,
+      "homeTeamId": 1610612759,
+      "awayTeamId": 1610612760,
+      "homeTeam": {
+        "teamId": 1610612759,
+        "teamTricode": "SAS",
+        "score": 104,
+        "periods": [
+          {
+            "period": 1,
+            "periodType": "REGULAR",
+            "score": 28
+          },
+          {
+            "period": 2,
+            "periodType": "REGULAR",
+            "score": 16
+          },
+          {
+            "period": 3,
+            "periodType": "REGULAR",
+            "score": 36
+          },
+          {
+            "period": 4,
+            "periodType": "REGULAR",
+            "score": 24
+          }
+        ],
+        "players": [
+          {
+            "personId": 1642264,
+            "firstName": "Stephon",
+            "familyName": "Castle",
+            "statistics": {
+              "points": 24
+            }
+          },
+          {
+            "personId": 1630170,
+            "firstName": "Devin",
+            "familyName": "Vassell",
+            "statistics": {
+              "points": 7
+            }
+          },
+          {
+            "personId": 1641705,
+            "firstName": "Victor",
+            "familyName": "Wembanyama",
+            "statistics": {
+              "points": 12
+            }
+          },
+          {
+            "personId": 1642844,
+            "firstName": "Dylan",
+            "familyName": "Harper",
+            "statistics": {
+              "points": 18
+            }
+          },
+          {
+            "personId": 1628368,
+            "firstName": "De'Aaron",
+            "familyName": "Fox",
+            "statistics": {
+              "points": 14
+            }
+          },
+          {
+            "personId": 1630577,
+            "firstName": "Julian",
+            "familyName": "Champagnie",
+            "statistics": {
+              "points": 8
+            }
+          },
+          {
+            "personId": 1629640,
+            "firstName": "Keldon",
+            "familyName": "Johnson",
+            "statistics": {
+              "points": 10
+            }
+          },
+          {
+            "personId": 1628436,
+            "firstName": "Luke",
+            "familyName": "Kornet",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1642868,
+            "firstName": "Carter",
+            "familyName": "Bryant",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 203084,
+            "firstName": "Harrison",
+            "familyName": "Barnes",
+            "statistics": {
+              "points": 3
+            }
+          },
+          {
+            "personId": 1642357,
+            "firstName": "David",
+            "familyName": "Jones Garcia",
+            "statistics": {
+              "points": 2
+            }
+          },
+          {
+            "personId": 1643551,
+            "firstName": "Ja'Kobi",
+            "familyName": "Gillespie",
+            "statistics": {
+              "points": 2
+            }
+          },
+          {
+            "personId": 1643542,
+            "firstName": "Tarris",
+            "familyName": "Reed Jr.",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1643576,
+            "firstName": "Maliq",
+            "familyName": "Brown",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1629162,
+            "firstName": "Jordan",
+            "familyName": "McLaughlin",
+            "statistics": {
+              "points": 0
+            }
+          }
+        ]
+      },
+      "awayTeam": {
+        "teamId": 1610612760,
+        "teamTricode": "OKC",
+        "score": 116,
+        "periods": [
+          {
+            "period": 1,
+            "periodType": "REGULAR",
+            "score": 34
+          },
+          {
+            "period": 2,
+            "periodType": "REGULAR",
+            "score": 31
+          },
+          {
+            "period": 3,
+            "periodType": "REGULAR",
+            "score": 28
+          },
+          {
+            "period": 4,
+            "periodType": "REGULAR",
+            "score": 23
+          }
+        ],
+        "players": [
+          {
+            "personId": 1631114,
+            "firstName": "Jalen",
+            "familyName": "Williams",
+            "statistics": {
+              "points": 12
+            }
+          },
+          {
+            "personId": 1631096,
+            "firstName": "Chet",
+            "familyName": "Holmgren",
+            "statistics": {
+              "points": 14
+            }
+          },
+          {
+            "personId": 1628392,
+            "firstName": "Isaiah",
+            "familyName": "Hartenstein",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1641717,
+            "firstName": "Cason",
+            "familyName": "Wallace",
+            "statistics": {
+              "points": 6
+            }
+          },
+          {
+            "personId": 1628983,
+            "firstName": "Shai",
+            "familyName": "Gilgeous-Alexander",
+            "statistics": {
+              "points": 32
+            }
+          },
+          {
+            "personId": 1643530,
+            "firstName": "Aday",
+            "familyName": "Mara",
+            "statistics": {
+              "points": 7
+            }
+          },
+          {
+            "personId": 1642272,
+            "firstName": "Jared",
+            "familyName": "McCain",
+            "statistics": {
+              "points": 20
+            }
+          },
+          {
+            "personId": 1627936,
+            "firstName": "Alex",
+            "familyName": "Caruso",
+            "statistics": {
+              "points": 9
+            }
+          },
+          {
+            "personId": 1642349,
+            "firstName": "Ajay",
+            "familyName": "Mitchell",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1629026,
+            "firstName": "Kenrich",
+            "familyName": "Williams",
+            "statistics": {
+              "points": 3
+            }
+          },
+          {
+            "personId": 1631119,
+            "firstName": "Jaylin",
+            "familyName": "Williams",
+            "statistics": {
+              "points": 5
+            }
+          },
+          {
+            "personId": 1642892,
+            "firstName": "Bennett",
+            "familyName": "Stirtz",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1642964,
+            "firstName": "Brooks",
+            "familyName": "Barnhizer",
+            "statistics": {
+              "points": 0
+            }
+          }
+        ]
+      }
+    }
+  }
+}

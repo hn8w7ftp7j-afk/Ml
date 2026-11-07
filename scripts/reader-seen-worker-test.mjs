@@ -15,11 +15,12 @@ import { buildReaderSeenCapture, READER_SEEN_CAPTURE_SCHEMA as SCHEMA } from '..
 const host = 'www1.tai888.in', pageUrl = `https://${host}/newapp/#/BS`;
 const deviceId = 'real-seen-worker-fixture-device';
 const observedAt = '2026-10-30T00:00:01.000Z';
+const readerVersion = JSON.parse(readFileSync('reader/manifest.json', 'utf8')).version;
 const clone = value => structuredClone(value);
 const ordered = value => Array.isArray(value) ? value.map(ordered) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, ordered(value[key])])) : value;
 function evidence(league = 'NBA') {
-  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', league, readerVersion: '2.1.56',
+  return { version: 'TAI888-DOM-CAPTURE-v2.2.0', league, readerVersion,
     sourceHost: host, pageUrl, observedAt, pageActivityAt: observedAt,
     captureReasons: ['PRE_NORMALIZATION', 'SOURCE_PARTIAL'], completeCapture: false,
     tables: [{ sectionTitle: `聯盟：${league}`, headers: ['時間', '主客隊伍', '讓分', '大小盤'], rows: [
@@ -28,7 +29,7 @@ function evidence(league = 'NBA') {
       { marketLocked: true, cells: [{ pair: ['封盤', ''] }] },
     ] }] };
 }
-function setup({ capture = null, captureVersion = '2.1.56', autoEnabled = true, parseThrows = false, tabs = [1] } = {}) {
+function setup({ capture = null, captureVersion = readerVersion, autoEnabled = true, parseThrows = false, tabs = [1] } = {}) {
   const state = { readerToken: 'synthetic-signed-token', deviceId, pairedAt: Date.now(), autoEnabled };
   const writes = [], uploads = [], diagnostics = [], listeners = [];
   const flags = { online: false, statusReadFails: false };
@@ -45,7 +46,7 @@ function setup({ capture = null, captureVersion = '2.1.56', autoEnabled = true, 
   const event = { addListener() {} };
   const chrome = {
     runtime: { id: 'seen-worker-test-extension', onMessage: { addListener(listener) { listeners.push(listener); } },
-      onInstalled: event, onStartup: event, getManifest: () => ({ version: '2.1.56' }) },
+      onInstalled: event, onStartup: event, getManifest: () => ({ version: readerVersion }) },
     storage: { local: storage }, alarms: { onAlarm: event, create: async () => {}, clear: async () => {} },
     tabs: { onUpdated: event, reload: async () => {}, query: async () => tabs.map(id => ({ id, url: pageUrl })),
       sendMessage: async () => ({ ok: true, capture: { readerVersion: captureVersion, captures: capture ? [clone(capture)] : [] } }) },

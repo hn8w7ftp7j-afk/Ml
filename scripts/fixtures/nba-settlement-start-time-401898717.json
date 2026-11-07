@@ -1,0 +1,601 @@
+{
+  "fixtureFormat": "public-source-projection-v1",
+  "note": "Relevant public response fields only. provenance sha256 values describe original complete HTTP response bodies, not the JSON projections or deterministic test HTML wrappers.",
+  "capturedAt": "2026-11-07T22:31:11.836Z",
+  "provenance": [
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=401898717",
+      "sha256": "8b14a3ad8447a5ada349e7fbcc9c0d1be7df251a4af87b1cf087ad325f08ecee"
+    },
+    {
+      "provider": "NBA",
+      "url": "https://www.nba.com/games?date=2026-10-08",
+      "sha256": "14569d9b487f11833954f1151f5769fc3b6c3fe1f3414b55b15f7e653783dbfa"
+    },
+    {
+      "provider": "NBA",
+      "url": "https://www.nba.com/game/sac-vs-lal-0012600036/box-score",
+      "sha256": "82ee27fbd7db5997d3a500909be5c3221da033c62b2571e0907929db8704f2f5"
+    }
+  ],
+  "game": {
+    "id": "nba:espn:game:401898717",
+    "sourceId": "401898717",
+    "league": "NBA",
+    "provider": "ESPN",
+    "name": "Sacramento Kings @ Los Angeles Lakers",
+    "startTime": "2026-10-09T02:45:00.000Z",
+    "taipeiDate": "2026-10-09",
+    "season": {
+      "year": 2027,
+      "label": "2026–27",
+      "type": "preseason"
+    },
+    "seasonType": "preseason",
+    "status": "final",
+    "statusText": "Final",
+    "completed": true,
+    "home": {
+      "id": "nba:espn:team:13",
+      "sourceId": "13",
+      "league": "NBA",
+      "provider": "ESPN",
+      "name": "Los Angeles Lakers",
+      "abbreviation": "LAL",
+      "identityStatus": "provider_verified_official_unverified",
+      "score": 114,
+      "periodScores": [
+        {
+          "period": 1,
+          "score": 21
+        },
+        {
+          "period": 2,
+          "score": 36
+        },
+        {
+          "period": 3,
+          "score": 29
+        },
+        {
+          "period": 4,
+          "score": 28
+        }
+      ],
+      "statistics": []
+    },
+    "away": {
+      "id": "nba:espn:team:23",
+      "sourceId": "23",
+      "league": "NBA",
+      "provider": "ESPN",
+      "name": "Sacramento Kings",
+      "abbreviation": "SAC",
+      "identityStatus": "provider_verified_official_unverified",
+      "score": 110,
+      "periodScores": [
+        {
+          "period": 1,
+          "score": 20
+        },
+        {
+          "period": 2,
+          "score": 23
+        },
+        {
+          "period": 3,
+          "score": 27
+        },
+        {
+          "period": 4,
+          "score": 40
+        }
+      ],
+      "statistics": []
+    },
+    "venue": null,
+    "neutralSite": false,
+    "timeConfirmed": true,
+    "identityStatus": "provider_verified_official_unverified"
+  },
+  "contract": {
+    "alreadyPlaced": true,
+    "gameId": "nba:espn:game:401898717",
+    "date": "2026-10-09",
+    "startTime": "2026-10-09T02:30:00.000Z",
+    "away": "沙加緬度國王",
+    "home": "洛杉磯湖人",
+    "marketKey": "fullRunline",
+    "side": "away",
+    "line": "10.5",
+    "lineSide": "home",
+    "water": 0.95,
+    "stake": 10000
+  },
+  "schedule": {
+    "selectedDate": "2026-10-08",
+    "gameCardFeed": {
+      "modules": [
+        {
+          "cards": [
+            {
+              "cardData": {
+                "gameId": "0012600036",
+                "leagueId": "00",
+                "seasonYear": "2026-27",
+                "seasonType": "Preseason",
+                "gameTimeUtc": "2026-10-09T02:30:00Z",
+                "gameTimeEastern": "2026-10-08T22:30:00Z",
+                "actualStartTimeUTC": "2026-10-09T02:48:25Z",
+                "actualEndTimeUTC": "2026-10-09T05:20:43Z",
+                "gameStatus": 3,
+                "shareUrl": "https://www.nba.com/game/sac-vs-lal-0012600036",
+                "homeTeam": {
+                  "teamId": 1610612747,
+                  "teamTricode": "LAL",
+                  "score": 114,
+                  "periods": [
+                    {
+                      "period": 1,
+                      "score": 21
+                    },
+                    {
+                      "period": 2,
+                      "score": 36
+                    },
+                    {
+                      "period": 3,
+                      "score": 29
+                    },
+                    {
+                      "period": 4,
+                      "score": 28
+                    }
+                  ]
+                },
+                "awayTeam": {
+                  "teamId": 1610612758,
+                  "teamTricode": "SAC",
+                  "score": 110,
+                  "periods": [
+                    {
+                      "period": 1,
+                      "score": 20
+                    },
+                    {
+                      "period": 2,
+                      "score": 23
+                    },
+                    {
+                      "period": 3,
+                      "score": 27
+                    },
+                    {
+                      "period": 4,
+                      "score": 40
+                    }
+                  ]
+                },
+                "broadcasters": {
+                  "nationalBroadcasters": [
+                    {
+                      "broadcasterVideoLink": "https://espn.smart.link/b4uxwf8ow?ex_cid=NBA&gameId=401898717&referringapp=nba"
+                    }
+                  ],
+                  "homeTvBroadcasters": [],
+                  "homeRadioBroadcasters": [
+                    {
+                      "broadcasterVideoLink": ""
+                    }
+                  ],
+                  "awayTvBroadcasters": [],
+                  "awayRadioBroadcasters": [
+                    {
+                      "broadcasterVideoLink": ""
+                    }
+                  ],
+                  "intlRadioBroadcasters": [],
+                  "intlTvBroadcasters": [],
+                  "homeOttBroadcasters": [],
+                  "awayOttBroadcasters": [],
+                  "intlOttBroadcasters": [],
+                  "nationalOttBroadcasters": [],
+                  "nationalRadioBroadcasters": [],
+                  "subscriptionBroadcasters": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "box": {
+    "game": {
+      "gameId": "0012600036",
+      "gameTimeUTC": "2026-10-09T02:30:00Z",
+      "gameStatus": 3,
+      "homeTeamId": 1610612747,
+      "awayTeamId": 1610612758,
+      "homeTeam": {
+        "teamId": 1610612747,
+        "teamTricode": "LAL",
+        "score": 114,
+        "periods": [
+          {
+            "period": 1,
+            "periodType": "REGULAR",
+            "score": 21
+          },
+          {
+            "period": 2,
+            "periodType": "REGULAR",
+            "score": 36
+          },
+          {
+            "period": 3,
+            "periodType": "REGULAR",
+            "score": 29
+          },
+          {
+            "period": 4,
+            "periodType": "REGULAR",
+            "score": 28
+          }
+        ],
+        "players": [
+          {
+            "personId": 1642876,
+            "firstName": "Adou",
+            "familyName": "Thiero",
+            "statistics": {
+              "points": 6
+            }
+          },
+          {
+            "personId": 1629656,
+            "firstName": "Quentin",
+            "familyName": "Grimes",
+            "statistics": {
+              "points": 12
+            }
+          },
+          {
+            "personId": 1626172,
+            "firstName": "Kevon",
+            "familyName": "Looney",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1630559,
+            "firstName": "Austin",
+            "familyName": "Reaves",
+            "statistics": {
+              "points": 8
+            }
+          },
+          {
+            "personId": 1629029,
+            "firstName": "Luka",
+            "familyName": "Dončić",
+            "statistics": {
+              "points": 23
+            }
+          },
+          {
+            "personId": 1631222,
+            "firstName": "Jake",
+            "familyName": "LaRavia",
+            "statistics": {
+              "points": 17
+            }
+          },
+          {
+            "personId": 1630572,
+            "firstName": "Sandro",
+            "familyName": "Mamukelashvili",
+            "statistics": {
+              "points": 19
+            }
+          },
+          {
+            "personId": 1629680,
+            "firstName": "Matisse",
+            "familyName": "Thybulle",
+            "statistics": {
+              "points": 3
+            }
+          },
+          {
+            "personId": 1642355,
+            "firstName": "Bronny",
+            "familyName": "James",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1643024,
+            "firstName": "Chris",
+            "familyName": "Mañon",
+            "statistics": {
+              "points": 2
+            }
+          },
+          {
+            "personId": 1629020,
+            "firstName": "Jarred",
+            "familyName": "Vanderbilt",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1630702,
+            "firstName": "Jaden",
+            "familyName": "Hardy",
+            "statistics": {
+              "points": 6
+            }
+          },
+          {
+            "personId": 1643758,
+            "firstName": "AK",
+            "familyName": "Okereke",
+            "statistics": {
+              "points": 3
+            }
+          },
+          {
+            "personId": 1643759,
+            "firstName": "William",
+            "familyName": "Kyle",
+            "statistics": {
+              "points": 2
+            }
+          },
+          {
+            "personId": 1631306,
+            "firstName": "Cole",
+            "familyName": "Swider",
+            "statistics": {
+              "points": 1
+            }
+          },
+          {
+            "personId": 1643418,
+            "firstName": "Cameron",
+            "familyName": "Carr",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1641751,
+            "firstName": "Arthur",
+            "familyName": "Kaluma",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1631117,
+            "firstName": "Walker",
+            "familyName": "Kessler",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1642261,
+            "firstName": "Dalton",
+            "familyName": "Knecht",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1629012,
+            "firstName": "Collin",
+            "familyName": "Sexton",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1630533,
+            "firstName": "Ziaire",
+            "familyName": "Williams",
+            "statistics": {
+              "points": 0
+            }
+          }
+        ]
+      },
+      "awayTeam": {
+        "teamId": 1610612758,
+        "teamTricode": "SAC",
+        "score": 110,
+        "periods": [
+          {
+            "period": 1,
+            "periodType": "REGULAR",
+            "score": 20
+          },
+          {
+            "period": 2,
+            "periodType": "REGULAR",
+            "score": 23
+          },
+          {
+            "period": 3,
+            "periodType": "REGULAR",
+            "score": 27
+          },
+          {
+            "period": 4,
+            "periodType": "REGULAR",
+            "score": 40
+          }
+        ],
+        "players": [
+          {
+            "personId": 1629631,
+            "firstName": "De'Andre",
+            "familyName": "Hunter",
+            "statistics": {
+              "points": 3
+            }
+          },
+          {
+            "personId": 1630173,
+            "firstName": "Precious",
+            "familyName": "Achiuwa",
+            "statistics": {
+              "points": 18
+            }
+          },
+          {
+            "personId": 1642875,
+            "firstName": "Maxime",
+            "familyName": "Raynaud",
+            "statistics": {
+              "points": 13
+            }
+          },
+          {
+            "personId": 203897,
+            "firstName": "Zach",
+            "familyName": "LaVine",
+            "statistics": {
+              "points": 11
+            }
+          },
+          {
+            "personId": 1643411,
+            "firstName": "Darius",
+            "familyName": "Acuff Jr.",
+            "statistics": {
+              "points": 12
+            }
+          },
+          {
+            "personId": 1643567,
+            "firstName": "Emanuel",
+            "familyName": "Sharp",
+            "statistics": {
+              "points": 11
+            }
+          },
+          {
+            "personId": 1642928,
+            "firstName": "Dylan",
+            "familyName": "Cardwell",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1642284,
+            "firstName": "Alex",
+            "familyName": "Karaban",
+            "statistics": {
+              "points": 7
+            }
+          },
+          {
+            "personId": 1642367,
+            "firstName": "Jonathan",
+            "familyName": "Mogbo",
+            "statistics": {
+              "points": 12
+            }
+          },
+          {
+            "personId": 203901,
+            "firstName": "Elfrid",
+            "familyName": "Payton",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1642363,
+            "firstName": "Nique",
+            "familyName": "Clifford",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1641778,
+            "firstName": "Leaky",
+            "familyName": "Black",
+            "statistics": {
+              "points": 4
+            }
+          },
+          {
+            "personId": 1641745,
+            "firstName": "Adam",
+            "familyName": "Flagler",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1631342,
+            "firstName": "Daeqwon",
+            "familyName": "Plowden",
+            "statistics": {
+              "points": 15
+            }
+          },
+          {
+            "personId": 1628370,
+            "firstName": "Malik",
+            "familyName": "Monk",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1631099,
+            "firstName": "Keegan",
+            "familyName": "Murray",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1641803,
+            "firstName": "Tristen",
+            "familyName": "Newton",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1627734,
+            "firstName": "Domantas",
+            "familyName": "Sabonis",
+            "statistics": {
+              "points": 0
+            }
+          },
+          {
+            "personId": 1627732,
+            "firstName": "Ben",
+            "familyName": "Simmons",
+            "statistics": {
+              "points": 0
+            }
+          }
+        ]
+      }
+    }
+  }
+}

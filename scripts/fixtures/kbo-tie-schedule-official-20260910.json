@@ -1,0 +1,576 @@
+{
+  "provenance": "Selected fields from actual official GetScheduleList September/October 2026 responses, plus October 4 daily/scoreboard responses. Original table strings retained. Source endpoints match the postseason result fixture. No financial values.",
+  "cases": [
+    {
+      "date": "2026-10-04",
+      "providerGameId": "20261004LTKT0",
+      "monthly": {
+        "rows": [
+          {
+            "row": [
+              {
+                "Text": "10.04(일)",
+                "Class": "day"
+              },
+              {
+                "Text": "<b>14:00</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>KIA</span><em><span class=\"win\">6</span><span>vs</span><span class=\"lose\">5</span></em><span>LG</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004HTLG0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004HTLG0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SS-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "잠실",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>14:00</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>두산</span><em><span class=\"win\">12</span><span>vs</span><span class=\"lose\">0</span></em><span>삼성</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004OBSS0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004OBSS0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "KN-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "대구",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>14:00</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>SSG</span><em><span class=\"win\">6</span><span>vs</span><span class=\"lose\">2</span></em><span>NC</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004SKNC0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004SKNC0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SPO-2T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "창원",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>14:00</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>키움</span><em><span class=\"win\">9</span><span>vs</span><span class=\"lose\">3</span></em><span>한화</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004WOHH0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004WOHH0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "MS-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "대전",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>17:00</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>롯데</span><em><span class=\"same\">2</span><span>vs</span><span class=\"same\">2</span></em><span>KT</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004LTKT0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20261004&gameId=20261004LTKT0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SPO-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "수원",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          }
+        ]
+      },
+      "daily": {
+        "game": [
+          {
+            "LE_ID": 1,
+            "SR_ID": 0,
+            "SEASON_ID": 2026,
+            "G_DT": "20261004",
+            "G_ID": "20261004HTLG0",
+            "HEADER_NO": 0,
+            "G_TM": "14:00",
+            "AWAY_ID": "HT",
+            "HOME_ID": "LG"
+          },
+          {
+            "LE_ID": 1,
+            "SR_ID": 0,
+            "SEASON_ID": 2026,
+            "G_DT": "20261004",
+            "G_ID": "20261004OBSS0",
+            "HEADER_NO": 0,
+            "G_TM": "14:00",
+            "AWAY_ID": "OB",
+            "HOME_ID": "SS"
+          },
+          {
+            "LE_ID": 1,
+            "SR_ID": 0,
+            "SEASON_ID": 2026,
+            "G_DT": "20261004",
+            "G_ID": "20261004SKNC0",
+            "HEADER_NO": 0,
+            "G_TM": "14:00",
+            "AWAY_ID": "SK",
+            "HOME_ID": "NC"
+          },
+          {
+            "LE_ID": 1,
+            "SR_ID": 0,
+            "SEASON_ID": 2026,
+            "G_DT": "20261004",
+            "G_ID": "20261004WOHH0",
+            "HEADER_NO": 0,
+            "G_TM": "14:00",
+            "AWAY_ID": "WO",
+            "HOME_ID": "HH"
+          },
+          {
+            "LE_ID": 1,
+            "SR_ID": 0,
+            "SEASON_ID": 2026,
+            "G_DT": "20261004",
+            "G_ID": "20261004LTKT0",
+            "HEADER_NO": 0,
+            "G_TM": "17:00",
+            "AWAY_ID": "LT",
+            "HOME_ID": "KT"
+          }
+        ]
+      },
+      "scoreboard": {
+        "code": "100",
+        "END_TM": "21:04",
+        "A_INITIAL_LK": "//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/emblem/regular/2026/initial_LT_s.png",
+        "H_INITIAL_LK": "//6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/emblem/regular/2026/initial_KT_s.png",
+        "table2": "{\r\n  \"colgroup\": [],\r\n  \"headers\": [\r\n    {\r\n      \"row\": [\r\n        {\r\n          \"Text\": \"1\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"2\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"3\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"4\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"5\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"6\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"7\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"8\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"9\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"10\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"11\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        },\r\n        {\r\n          \"Text\": \"12\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": \"th\"\r\n        }\r\n      ],\r\n      \"Class\": null,\r\n      \"OnClick\": null,\r\n      \"Style\": null,\r\n      \"Value\": null,\r\n      \"Id\": null\r\n    }\r\n  ],\r\n  \"rows\": [\r\n    {\r\n      \"row\": [\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"1\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"1\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"-\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        }\r\n      ],\r\n      \"Class\": null,\r\n      \"OnClick\": null,\r\n      \"Style\": null,\r\n      \"Value\": null,\r\n      \"Id\": null\r\n    },\r\n    {\r\n      \"row\": [\r\n        {\r\n          \"Text\": \"1\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"1\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"-\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        }\r\n      ],\r\n      \"Class\": null,\r\n      \"OnClick\": null,\r\n      \"Style\": null,\r\n      \"Value\": null,\r\n      \"Id\": null\r\n    }\r\n  ],\r\n  \"tfoot\": [],\r\n  \"totalCnt\": null,\r\n  \"headerClass\": null,\r\n  \"tbodyClass\": null,\r\n  \"tfootClass\": null,\r\n  \"title\": null,\r\n  \"caption\": null,\r\n  \"result_cd\": null,\r\n  \"result_msg\": null,\r\n  \"code\": null,\r\n  \"msg\": null\r\n}",
+        "table3": "{\r\n  \"colgroup\": [],\r\n  \"headers\": [],\r\n  \"rows\": [\r\n    {\r\n      \"row\": [\r\n        {\r\n          \"Text\": \"2\",\r\n          \"Class\": \"run_T\",\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"13\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"3\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        }\r\n      ],\r\n      \"Class\": null,\r\n      \"OnClick\": null,\r\n      \"Style\": null,\r\n      \"Value\": null,\r\n      \"Id\": null\r\n    },\r\n    {\r\n      \"row\": [\r\n        {\r\n          \"Text\": \"2\",\r\n          \"Class\": \"run_B\",\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"10\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"0\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        },\r\n        {\r\n          \"Text\": \"3\",\r\n          \"Class\": null,\r\n          \"Scope\": null,\r\n          \"RowSpan\": null,\r\n          \"ColSpan\": null,\r\n          \"Width\": null,\r\n          \"TypeObj\": null\r\n        }\r\n      ],\r\n      \"Class\": null,\r\n      \"OnClick\": null,\r\n      \"Style\": null,\r\n      \"Value\": null,\r\n      \"Id\": null\r\n    }\r\n  ],\r\n  \"tfoot\": [],\r\n  \"totalCnt\": null,\r\n  \"headerClass\": null,\r\n  \"tbodyClass\": null,\r\n  \"tfootClass\": null,\r\n  \"title\": null,\r\n  \"caption\": null,\r\n  \"result_cd\": null,\r\n  \"result_msg\": null,\r\n  \"code\": null,\r\n  \"msg\": null\r\n}"
+      }
+    },
+    {
+      "date": "2026-09-18",
+      "providerGameId": "20260918WOOB0",
+      "monthly": {
+        "rows": [
+          {
+            "row": [
+              {
+                "Text": "09.18(금)",
+                "Class": "day"
+              },
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>키움</span><em><span class=\"same\">6</span><span>vs</span><span class=\"same\">6</span></em><span>두산</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918WOOB0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918WOOB0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SPO-T<br />KN-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "잠실",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>NC</span><em><span class=\"lose\">6</span><span>vs</span><span class=\"win\">9</span></em><span>롯데</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918NCLT0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918NCLT0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "MS-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "사직",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>LG</span><em><span class=\"win\">12</span><span>vs</span><span class=\"lose\">1</span></em><span>KT</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918LGKT0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918LGKT0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SPO-2T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "수원",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>삼성</span><em><span class=\"win\">10</span><span>vs</span><span class=\"lose\">4</span></em><span>한화</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918SSHH0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260918&gameId=20260918SSHH0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SS-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "대전",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "date": "2026-09-16",
+      "providerGameId": "20260916KTHH0",
+      "monthly": {
+        "rows": [
+          {
+            "row": [
+              {
+                "Text": "09.16(수)",
+                "Class": "day"
+              },
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>삼성</span><em><span class=\"lose\">1</span><span>vs</span><span class=\"win\">3</span></em><span>두산</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916SSOB0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916SSOB0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "MS-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "잠실",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>SSG</span><em><span class=\"win\">4</span><span>vs</span><span class=\"lose\">1</span></em><span>롯데</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916SKLT0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916SKLT0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SPO-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "사직",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>LG</span><em><span class=\"win\">9</span><span>vs</span><span class=\"lose\">2</span></em><span>NC</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916LGNC0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916LGNC0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "SPO-2T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "창원",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          },
+          {
+            "row": [
+              {
+                "Text": "<b>18:30</b>",
+                "Class": "time"
+              },
+              {
+                "Text": "<span>KT</span><em><span class=\"same\">4</span><span>vs</span><span class=\"same\">4</span></em><span>한화</span>",
+                "Class": "play"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916KTHH0&section=REVIEW' class='btn2 mr5' id='btnReview'>리뷰</a>",
+                "Class": "relay"
+              },
+              {
+                "Text": "<a href='/Schedule/GameCenter/Main.aspx?gameDate=20260916&gameId=20260916KTHH0&section=HIGHLIGHT' class='btn2' id='btnHighlight' style='width:65px;'>하이라이트</a>",
+                "Class": null
+              },
+              {
+                "Text": "KN-T<br />SS-T",
+                "Class": null
+              },
+              {
+                "Text": "",
+                "Class": null
+              },
+              {
+                "Text": "대전",
+                "Class": null
+              },
+              {
+                "Text": "-",
+                "Class": null
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

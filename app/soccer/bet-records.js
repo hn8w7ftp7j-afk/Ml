@@ -16,11 +16,11 @@ async function request(url,options={}){
 export function SoccerRecordProvider({league,date,through=date,children,summaryDate=date,candidates=[],analysisReady=true,onHighScoreStatusChange}){
   const [records,setRecords]=useState([]),[status,setStatus]=useState('loading'),[error,setError]=useState(''),[pending,setPending]=useState(new Set());
   const [loadedScope,setLoadedScope]=useState('');
-  const [settlementPolicy,setSettlementPolicy]=useState(null),[settlementSummary,setSettlementSummary]=useState(null);
+  const [settlementPolicy,setSettlementPolicy]=useState(null),[settlementSummary,setSettlementSummary]=useState(null),[settlementError,setSettlementError]=useState('');
   const generation=useRef(0),flights=useRef(new Set());
   const scope=`${league}|${date}|${through}`,ledgerStatus=loadedScope===scope?status:'loading';
   async function load(){if(flights.current.size)return;const token=++generation.current;setStatus('loading');setError('');try{const d=await request(`/api/soccer/bet-records?${new URLSearchParams({league,date,through})}`);if(token!==generation.current)return;if(d.league!==league||d.date!==date||d.through!==through||!Array.isArray(d.records)||d.records.some(r=>r.league!==league||r.date<date||r.date>through))throw Error('帳本識別不符。');setRecords(d.records);setSettlementPolicy(d.settlementPolicy||null);setLoadedScope(scope);setStatus('ready');}catch(e){if(token===generation.current){setLoadedScope(scope);setStatus('failed');setError(e.message);}}}
-  useEffect(()=>{flights.current.clear();setPending(new Set());setRecords([]);setSettlementPolicy(null);setSettlementSummary(null);setLoadedScope('');void load();return()=>{generation.current++;};},[league,date,through]);
+  useEffect(()=>{flights.current.clear();setPending(new Set());setRecords([]);setSettlementPolicy(null);setSettlementSummary(null);setSettlementError('');setLoadedScope('');void load();return()=>{generation.current++;};},[league,date,through]);
   const summary=onHighScoreStatusChange?summarizeSoccerHighScoreBets(candidates,{records,league,date:summaryDate,ledgerReady:ledgerStatus==='ready',analysisReady}):null;
   const callback=useRef(onHighScoreStatusChange);callback.current=onHighScoreStatusChange;
   const published=useRef('');
@@ -34,16 +34,17 @@ export function SoccerRecordProvider({league,date,through=date,children,summaryD
   }
   async function checkSettlement(){
     if(ledgerStatus!=='ready'||flights.current.size)return;
-    const token=generation.current;flights.current.add(SETTLEMENT_CHECK_KEY);setPending(new Set(flights.current));setError('');
+    const token=generation.current;flights.current.add(SETTLEMENT_CHECK_KEY);setPending(new Set(flights.current));setError('');setSettlementError('');setSettlementSummary(null);
     try{const d=await request('/api/soccer/bet-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'check-settlement',league,date})});
       if(token!==generation.current)return;
       if(d.league!==league||d.date!==date||!d.summary||!['checked','resultVerified','settled','pending','deferred'].every(k=>Number.isSafeInteger(d.summary[k])&&d.summary[k]>=0))throw Error('賽果核對回應不完整。');
       setSettlementSummary(d.summary);
-    }catch(e){if(token===generation.current)setError(e.message);}
+    }catch(e){if(token===generation.current)setSettlementError(['AbortError','TimeoutError'].includes(e.name)?'結算核對逾時，結果尚未確認。':e.message||'結算核對未完成。');}
     finally{if(token===generation.current){flights.current.delete(SETTLEMENT_CHECK_KEY);setPending(new Set(flights.current));}}
     if(token===generation.current)await load();
   }
-  return <Ledger.Provider value={{league,date,records:loadedScope===scope?records:[],status:ledgerStatus,error,pending,load,mutate,checkSettlement,settlementPolicy,settlementSummary}}>{error&&<p className="errorBox" role="alert">{error}<button className="mini secondary" onClick={load}>重新同步</button></p>}{children}</Ledger.Provider>;
+  const scopeMatches=loadedScope===scope,ledgerError=scopeMatches?error:'',checkError=scopeMatches?settlementError:'';
+  return <Ledger.Provider value={{league,date,records:scopeMatches?records:[],status:ledgerStatus,error:[ledgerError,checkError].filter(Boolean).join('；'),pending,load,mutate,checkSettlement,settlementPolicy,settlementSummary:scopeMatches?settlementSummary:null}}>{ledgerError&&<p className="errorBox" role="alert">{ledgerError}<button className="mini secondary" onClick={load}>重新同步</button></p>}{checkError&&<p className="errorBox" role="alert">{checkError}<button className="mini secondary" disabled={ledgerStatus!=='ready'||pending.size>0} onClick={checkSettlement}>重新核對結算</button></p>}{children}</Ledger.Provider>;
 }
 export function SoccerRecordButton({game,result,quote,provisional=false}){
   const ledger=useContext(Ledger);if(!ledger||!game||!quote||!result?.persisted||!result.revision||!['FT','HT'].includes(quote.period)||quote.unit!=='GOALS'||!Number.isFinite(quote.water))return null;

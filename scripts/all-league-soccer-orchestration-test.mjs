@@ -38,7 +38,11 @@ function harness({ failure = '', empty = '', nbaReaderStatus = '' } = {}) {
     publishAllLeagueRun: value => { ctx.run = value; }, setBackgroundJobRevision() {},
     allLeagueTargetDate: async (_id, date) => date,
     prepareAllLeagueBatch: async (league, date) => { calls.push(league); return batch(league, date); },
-    prepareNbaBatch: async date => { calls.push('NBA'); return batch('NBA', date); },
+    prepareNbaBatch: async date => {
+      calls.push('NBA');
+      if (failure === 'NBA') throw Object.assign(new Error('NBA 賽程來源暫時無法核對，已保存分析可查看。'), { code: 'NBA_SCHEDULE_UNAVAILABLE' });
+      return batch('NBA', date);
+    },
     requestJSON: async url => {
       const query = new URL(url, 'https://fixture.invalid').searchParams;
       const league = query.get('league'); calls.push(league);
@@ -79,6 +83,14 @@ const partial = harness({ failure: 'EPL' });
 assert.equal(await partial.ctx.oneClickAnalyzeAll(), true);
 assert.equal(partial.ctx.run.leagues.EPL.status, 'failed');
 assert.equal(partial.jobs[0].batches.some(b => b.league === 'UCL'), true, 'EPL preflight failure cannot drop UCL');
+const unavailableNba = harness({ failure: 'NBA' });
+assert.equal(await unavailableNba.ctx.oneClickAnalyzeAll(), true);
+assert.equal(unavailableNba.ctx.run.leagues.NBA.status, 'failed');
+assert.equal(unavailableNba.ctx.run.leagues.NBA.code, 'NBA_SCHEDULE_UNAVAILABLE');
+assert.equal(unavailableNba.jobs[0].batches.some(b => b.league === 'NBA'), false, 'unverified saved NBA analysis cannot become a new task');
+assert.equal(unavailableNba.jobs[0].batches.length, ids.length - 1, 'NBA source failure cannot drop healthy league batches');
+assert.equal(unavailableNba.ctx.run.leagues.EPL.status, 'queued');
+assert.equal(unavailableNba.ctx.run.leagues.UCL.status, 'queued');
 const empty = harness({ empty: 'UCL' });
 assert.equal(await empty.ctx.oneClickAnalyzeAll(), true);
 assert.equal(empty.ctx.run.leagues.UCL.status, 'no_games', 'an empty football slate is explicit');
