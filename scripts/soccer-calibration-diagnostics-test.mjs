@@ -7,5 +7,10 @@ for (const error of [Error('postgres://private:secret@database.invalid/path'), E
 assert.equal(logs[1][1].code, 'CALIBRATION_OPERATION_FAILED');
 assert.equal(logs[2][1].code, 'CALIBRATION_OPERATION_FAILED');
 assert.equal(logs[3][1].code, 'SOCCER_STORAGE_UNAVAILABLE');
+recordSoccerCalibrationFailure('read', Object.assign(Error('CALIBRATION_SHADOW_SOURCE_RECOMPUTE_FAILED'), {
+  mismatchFields: ['teams.home.lineup.reason', 'teams.home.lineup.reason', 'rawSource', 'teams.private.secret', 'postgres://secret', '<private body>'],
+}), log);
+assert.deepEqual(logs.at(-1)[1], { operation: 'read', code: 'CALIBRATION_SHADOW_SOURCE_RECOMPUTE_FAILED',
+  mismatchFields: ['teams.home.lineup.reason', 'rawSource'] });
 assert.doesNotMatch(JSON.stringify(logs), /private|secret|database\.invalid|postgres|stack/);
 console.log('PASS private calibration diagnostics: bounded machine code, fixed operation, no raw database/provider/stack leakage');

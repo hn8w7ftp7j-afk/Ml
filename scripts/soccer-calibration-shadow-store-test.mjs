@@ -20,13 +20,16 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 const canonical = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
   ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 let serial = 991000000;
-function fresh(league = 'epl', { eventId = String(++serial), kickoff = Date.now() + 3600000 } = {}) {
+function fresh(league = 'epl', { eventId = String(++serial), kickoff = Date.now() + 3600000, withPlayer = false } = {}) {
   const raw = JSON.parse(fs.readFileSync(new URL(`./fixtures/soccer/${league}-summary.json`, import.meta.url)));
   raw.header.id = eventId; raw.header.uid = raw.header.uid.replace(/~e:\d+/, `~e:${eventId}`);
   const competition = raw.header.competitions[0]; competition.id = eventId;
   competition.uid = competition.uid.replace(/~e:\d+/, `~e:${eventId}`).replace(/~c:\d+/, `~c:${eventId}`);
   raw.header.date = iso(kickoff); competition.date = raw.header.date;
   competition.status = { type: { state: 'pre', completed: false, name: 'STATUS_SCHEDULED' } };
+  if (withPlayer) raw.rosters.find(roster => roster.homeAway === 'home').roster = [
+    { athlete: { id: '12345678', displayName: 'Retained fixture player' }, starter: true },
+  ];
   const now = Date.now(), source = { provider: 'ESPN',
     url: `https://site.api.espn.com/apis/site/v2/sports/soccer/${league === 'epl' ? 'eng.1' : 'uefa.champions'}/summary?event=${eventId}`,
     requestedAt: iso(now - 25), fetchedAt: iso(now - 20), contentHash: hash(raw) };
@@ -240,7 +243,43 @@ try {
   assert.equal(lateResult.payload.calibrationShadowCapture.reason, 'CALIBRATION_SHADOW_ORIGINAL_ANALYSIS_INVALID', 'true DB clock after kickoff cannot be made pregame by supplied fake time');
   assert.equal((await getSoccerCalibrationShadowReport('epl')).captureGames, 2);
   assert.equal((await getSoccerCalibrationShadowReport('ucl')).captureGames, 1);
-  console.log('PASS shadow calibration PostgreSQL: actual analysis save hook, true freeze/capture clocks and fractional Date transport, FT/HT atomic first-game capture, immutable exact models and original/source readback, per-league registry continuity, concurrent dedup, fixed trusted receipt adapters, late/fake cutoff/source/scope rejection; baseline and formal W/R/S unchanged');
+  // Before 11.10.85 the same retained missing-roster document emitted
+  // NOT_PUBLISHED without the later diagnostic reason/recentMissing fields.
+  // A deploy must still replay that immutable historical prediction exactly.
+  for (const league of ['epl', 'ucl']) {
+    const legacy = fresh(league);
+    assert.equal(legacy.teams.home.lineup.reason, 'ROSTER_PLAYERS_NOT_PROVIDED');
+    delete legacy.recentMissing;
+    for (const side of ['home', 'away']) delete legacy.teams[side].lineup.reason;
+    const result = await run(legacy);
+    assert.equal(result.payload.calibrationShadowCapture.persisted, true, JSON.stringify(result.payload.calibrationShadowCapture));
+    const receipt = result.payload.calibrationShadowCapture.capture;
+    const read = await loadSoccerCalibrationShadowValidationEvidence(league, { captureIds: [receipt.captureId] });
+    assert.equal(read.records.length, 1);
+    assert.equal((await original(result.payload.revision)).evidence.teams.home.lineup.reason, undefined,
+      'legacy read compatibility never rewrites the immutable original analysis');
+  }
+  for (const mutate of [
+    evidence => { delete evidence.teams.home.lineup.reason; }, // current schema cannot omit a diagnostic
+    evidence => { delete evidence.recentMissing; evidence.teams.home.lineup.reason = 'VERIFIED'; },
+    evidence => { delete evidence.recentMissing; evidence.teams.home.lineup.reason = null; },
+    evidence => { delete evidence.recentMissing; delete evidence.teams.home.lineup.reason; evidence.teams.home.lineup.status = 'UNKNOWN'; },
+    evidence => { delete evidence.recentMissing; delete evidence.teams.home.lineup.reason; evidence.teams.home.name = 'changed'; },
+    evidence => { delete evidence.recentMissing; delete evidence.teams.home.lineup.reason; evidence.teams.home.lineup.starters = [{ id: '9' }]; },
+  ]) {
+    const invalidLegacy = fresh('epl'); mutate(invalidLegacy);
+    const result = await run(invalidLegacy);
+    assert.equal(result.payload.calibrationShadowCapture.reason, 'CALIBRATION_SHADOW_SOURCE_RECOMPUTE_FAILED',
+      'legacy replay may ignore only the one absent historical diagnostic, never a changed source/player/status');
+  }
+  const suppliedPlayers = fresh('epl', { withPlayer: true });
+  assert.equal(suppliedPlayers.teams.home.lineup.starters.length, 1);
+  delete suppliedPlayers.recentMissing;
+  suppliedPlayers.teams.home.lineup.starters = [];
+  const erasedPlayer = await run(suppliedPlayers);
+  assert.equal(erasedPlayer.payload.calibrationShadowCapture.reason, 'CALIBRATION_SHADOW_SOURCE_RECOMPUTE_FAILED',
+    'a raw source that actually supplied a player cannot use the missing-roster legacy projection');
+  console.log('PASS shadow calibration PostgreSQL: actual analysis save hook, true freeze/capture clocks and fractional Date transport, FT/HT atomic first-game capture, immutable exact models and original/source readback, per-league registry continuity, concurrent dedup, fixed trusted receipt adapters, exact historical missing-roster replay and corruption rejection, late/fake cutoff/source/scope rejection; baseline and formal W/R/S unchanged');
 } finally {
   for (const key of Object.keys(previous)) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; }
   await fixture.close();

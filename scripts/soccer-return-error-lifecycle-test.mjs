@@ -149,6 +149,10 @@ try {
   const unchanged=await run({league:'epl'},{sourceWatermark,scan:async()=>{repeatedScans++;throw Error('unchanged source must not rescan');}});
   assert.equal(unchanged.status,'UNCHANGED_SOURCE',JSON.stringify(unchanged));assert.equal(repeatedScans,0);
   assert.equal((await db.query("SELECT count(*)::int AS n FROM sports_soccer_return_error_lifecycle_v1 WHERE protocol_id=$1 AND operation='evaluate'",[epl.protocolId])).rows[0].n,1);
+  await db.query("UPDATE sports_soccer_return_error_lifecycle_v1 SET replay_revision='SYNTHETIC_OLDER_RETURN_REPLAY' WHERE protocol_id=$1 AND operation='evaluate' AND status='COMPLETE'",[epl.protocolId]);
+  assert.equal((await evaluation(eplRows)).status,'RESEARCH_EVALUATED','the same source watermark cannot reuse an older implementation result');
+  const replayed=(await db.query("SELECT replay_revision FROM sports_soccer_return_error_lifecycle_v1 WHERE protocol_id=$1 AND operation='evaluate' ORDER BY last_attempt_at DESC,run_id DESC LIMIT 1",[epl.protocolId])).rows[0];
+  assert.equal(replayed.replay_revision,SOCCER_RETURN_ERROR_REPLAY_REVISION);
   evaluationWatermark=2;
   await new Promise(resolve=>setTimeout(resolve,10));
   const available=await store.soccerReturnErrorDatabaseNow();
