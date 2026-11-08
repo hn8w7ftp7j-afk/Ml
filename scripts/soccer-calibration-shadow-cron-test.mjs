@@ -4,11 +4,22 @@ import fs from 'node:fs';
 
 const previous = process.env.CRON_SECRET,previousDateNow=Date.now;
 process.env.CRON_SECRET = 'synthetic-calibration-cron-secret';
-const state = { timeline: [], calls: [], collections: [], lifecycle: [], failLeague: null, failCollection: null, failLifecycle: null };
+const state = { timeline: [], calls: [], collections: [], bootstrap: [], registered: new Set(), lifecycle: [],
+  failLeague: null, failCollection: null, failLifecycle: null, failBootstrap: null, throwBootstrap: null };
 globalThis.__SOCCER_CALIBRATION_CRON_TEST = state;
 Date.now=()=>state.clock ?? previousDateNow();
 const stub = 'data:text/javascript,' + encodeURIComponent(`
 function spend(state,phase,options){state.timeline.push({phase,...options});if(state.clock!==undefined)state.clock+=state.advance?.[phase]||0;}
+export async function bootstrapSoccerReturnErrorProtocol(options) {
+  const state = globalThis.__SOCCER_CALIBRATION_CRON_TEST;
+  state.bootstrap.push(options);spend(state,'bootstrap',options);
+  if (options.league === state.throwBootstrap) throw Error('controlled unexpected bootstrap failure');
+  const failed=options.league===state.failBootstrap,existing=state.registered.has(options.league);
+  if(!failed)state.registered.add(options.league);
+  return {league:options.league,status:failed?'NOT_VERIFIED':existing?'ALREADY_REGISTERED_RESEARCH_ONLY':'REGISTERED_RESEARCH_ONLY',
+    configured:!failed,persisted:!failed,protocolId:failed?null:'a'.repeat(64),registeredAt:failed?null:'2026-11-08T08:00:00.000Z',
+    manifestHash:'b'.repeat(64),planHash:'c'.repeat(64),accepted:false,formalEligible:false,executable:false,W:null,R:null,S:null};
+}
 export async function evaluateSoccerCalibrationShadow(options) {
   const state = globalThis.__SOCCER_CALIBRATION_CRON_TEST;
   state.calls.push(options);spend(state,'evaluate',options);
@@ -32,7 +43,7 @@ export async function collectSoccerCalibrationPredictions(options) {
 register('data:text/javascript,' + encodeURIComponent(`
 export async function resolve(specifier, context, next) {
   if ((context.parentURL || '').endsWith('/app/api/cron/soccer-calibration/route.js')
-    && (specifier.endsWith('/calibration-shadow-validation.js') || specifier.endsWith('/calibration-collection.js') || specifier.endsWith('/return-error-lifecycle.js')))
+    && (specifier.endsWith('/calibration-shadow-validation.js') || specifier.endsWith('/calibration-collection.js') || specifier.endsWith('/return-error-lifecycle.js') || specifier.endsWith('/return-error-bootstrap.js')))
     return { url: ${JSON.stringify(stub)}, shortCircuit: true };
   return next(specifier, context);
 }`), import.meta.url);
@@ -52,6 +63,7 @@ try {
   assert.equal(state.calls.length, 0, 'unauthorized requests cannot read, write or fetch results');
   assert.equal(state.collections.length, 0);
   assert.equal(state.lifecycle.length, 0);
+  assert.equal(state.bootstrap.length, 0);
   const response = await GET(request(process.env.CRON_SECRET));
   const body = await response.json();
   assert.equal(response.status, 200);
@@ -59,12 +71,36 @@ try {
   assert.deepEqual(state.calls, [{ league: 'epl', limit: 3, timeBudgetMs:18000 }, { league: 'ucl', limit: 3, timeBudgetMs:18000 }]);
   assert.deepEqual(state.collections, ['epl','ucl'].map(league => ({league,limit:2,timeBudgetMs:50000})));
   assert.deepEqual(state.lifecycle, ['epl','ucl'].map(league => ({league,limit:1,timeBudgetMs:9000})));
+  assert.deepEqual(state.bootstrap, ['epl','ucl'].map(league => ({league,timeBudgetMs:1500})));
+  assert.deepEqual(body.returnErrorBootstrap.map(value=>value.status),['REGISTERED_RESEARCH_ONLY','REGISTERED_RESEARCH_ONLY']);
+  assert.ok(body.returnErrorBootstrap.every(value=>value.configured&&value.persisted&&value.accepted===false&&value.formalEligible===false&&value.W===null&&value.R===null&&value.S===null));
   assert.deepEqual(body.returnErrorLifecycle.map(value => value.status), ['NOT_CONFIGURED','NOT_CONFIGURED']);
-  assert.deepEqual(state.timeline.map(value=>`${value.phase}:${value.league}`),['lifecycle:epl','lifecycle:ucl','collection:epl','collection:ucl','evaluate:epl','evaluate:ucl'],'each stage gives both leagues a turn before moving on');
+  assert.deepEqual(state.timeline.map(value=>`${value.phase}:${value.league}`),['bootstrap:epl','bootstrap:ucl','lifecycle:epl','lifecycle:ucl','collection:epl','collection:ucl','evaluate:epl','evaluate:ucl'],'each stage gives both leagues a turn before moving on');
   assert.equal(body.ok, true);
   assert.equal(body.formalEligible, false);
   assert.equal(body.executable, false);
   assert.ok(2 * 18000 < maxDuration * 1000, 'both bounded batches leave time for database and route overhead');
+
+  const repeated=await GET(request(process.env.CRON_SECRET)),repeatedBody=await repeated.json();
+  assert.equal(repeated.status,200);
+  assert.deepEqual(repeatedBody.returnErrorBootstrap.map(value=>value.status),['ALREADY_REGISTERED_RESEARCH_ONLY','ALREADY_REGISTERED_RESEARCH_ONLY'],'subsequent cron runs retain the same server research registration');
+  state.calls=[];state.collections=[];state.lifecycle=[];state.bootstrap=[];state.failBootstrap='epl';
+  const bootstrapFailed=await GET(request(process.env.CRON_SECRET)),bootstrapBody=await bootstrapFailed.json();
+  assert.equal(bootstrapFailed.status,503);assert.equal(bootstrapBody.ok,false);
+  assert.equal(bootstrapBody.returnErrorBootstrap[0].configured,false);
+  assert.equal(bootstrapBody.returnErrorBootstrap[0].persisted,false);
+  assert.equal(bootstrapBody.returnErrorBootstrap[1].configured,true);
+  assert.deepEqual(state.bootstrap.map(call=>call.league),['epl','ucl']);
+  assert.deepEqual(state.lifecycle.map(call=>call.league),['epl','ucl']);
+  assert.deepEqual(state.collections.map(call=>call.league),['epl','ucl']);
+  assert.deepEqual(state.calls.map(call=>call.league),['epl','ucl'],'a failed research registration cannot stop existing collection or result checks');
+  state.failBootstrap=null;state.throwBootstrap='epl';
+  const unexpected=await GET(request(process.env.CRON_SECRET)),unexpectedBody=await unexpected.json();
+  assert.equal(unexpected.status,503);
+  assert.equal(unexpectedBody.returnErrorBootstrap[0].status,'NOT_VERIFIED');
+  assert.equal(unexpectedBody.returnErrorBootstrap[0].reason,'RETURN_ERROR_BOOTSTRAP_UNAVAILABLE');
+  assert.equal(unexpectedBody.returnErrorBootstrap[1].persisted,true);
+  state.throwBootstrap=null;
 
   state.calls = [];
   state.failLeague = 'epl';
@@ -104,11 +140,11 @@ try {
   assert.deepEqual(state.lifecycle.map(call=>call.league),['epl','ucl']);
 
   state.calls=[];state.collections=[];state.lifecycle=[];state.timeline=[];state.failLifecycle=null;
-  state.clock=1000000;state.advance={lifecycle:9000,collection:60000,evaluate:18000};
+  state.clock=1000000;state.advance={bootstrap:1500,lifecycle:9000,collection:60000,evaluate:18000};
   const dynamic=await GET(request(process.env.CRON_SECRET));
   assert.equal(dynamic.status,200);
-  assert.deepEqual(state.collections.map(value=>value.timeBudgetMs),[50000,46000],'slow source/DB overhead shrinks the second league collection budget');
-  assert.deepEqual(state.calls.map(value=>value.timeBudgetMs),[11000,4000],'the final stage receives only its remaining fair share');
+  assert.deepEqual(state.collections.map(value=>value.timeBudgetMs),[50000,43000],'bootstrap and slow source/DB overhead shrink the second league collection budget');
+  assert.deepEqual(state.calls.map(value=>value.timeBudgetMs),[9500,1000],'the final stage receives only its remaining fair share');
   assert.ok(state.clock-1000000<maxDuration*1000,'global scheduling leaves the handler within the platform duration in the slow-overhead counterexample');
 
   state.calls=[];state.collections=[];state.lifecycle=[];state.timeline=[];
@@ -121,12 +157,24 @@ try {
   assert.deepEqual(exhaustedBody.summaries.map(value=>value.status),['BUDGET_DEFERRED','BUDGET_DEFERRED']);
   assert.ok(exhaustedBody.collection.every(value=>value.checkedGames===undefined),'deferred work must not invent a zero result count');
 
+  state.calls=[];state.collections=[];state.lifecycle=[];state.bootstrap=[];state.timeline=[];
+  state.clock=3000000;state.advance={bootstrap:170000};
+  const bootstrapExhausted=await GET(request(process.env.CRON_SECRET)),bootstrapExhaustedBody=await bootstrapExhausted.json();
+  assert.equal(bootstrapExhausted.status,503);
+  assert.equal(state.bootstrap.length,1);
+  assert.equal(state.lifecycle.length,0);assert.equal(state.collections.length,0);assert.equal(state.calls.length,0);
+  assert.equal(bootstrapExhaustedBody.returnErrorBootstrap[1].status,'NOT_VERIFIED');
+  assert.equal(bootstrapExhaustedBody.returnErrorBootstrap[1].configured,false);
+  assert.equal(bootstrapExhaustedBody.returnErrorBootstrap[1].persisted,false);
+  assert.equal(bootstrapExhaustedBody.returnErrorBootstrap[1].reason,'RETURN_ERROR_BOOTSTRAP_BUDGET_DEFERRED');
+
   state.clock=undefined;state.advance=undefined;
-  state.calls = [];state.collections=[];state.lifecycle=[];
+  state.calls = [];state.collections=[];state.lifecycle=[];state.bootstrap=[];
   process.env.CRON_SECRET = '';
   assert.equal((await GET(request('synthetic-calibration-cron-secret'))).status, 401);
   assert.equal(state.calls.length, 0, 'a missing server secret fails closed');
   assert.equal(state.collections.length,0);assert.equal(state.lifecycle.length,0);
+  assert.equal(state.bootstrap.length,0);
   const config = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url)));
   assert.equal(config.crons.filter(cron => cron.path === '/api/cron/soccer-calibration').length, 1);
   assert.equal(config.functions['app/api/cron/soccer-calibration/route.js'].maxDuration, maxDuration);

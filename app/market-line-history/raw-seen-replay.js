@@ -71,7 +71,15 @@ export function rawSeenMarketText(market) {
   return `主 ${market.homeWater}／和 ${market.drawWater}／客 ${market.awayWater}`;
 }
 
-export default function RawSeenReplay({ capture }) {
+export function rawSeenSelectedGames(result, gameFilter) {
+  if (!gameFilter) return result.games;
+  const selected = result.games.filter(game => game.boardDate === gameFilter.boardDate
+    && [game.boardTime, game.awayKey, game.homeKey].join('|') === gameFilter.gameKey);
+  if (selected.length !== 1) throw new Error('這場對戰未通過來源核對，請重新查詢歷史索引。');
+  return selected;
+}
+
+export default function RawSeenReplay({ capture, gameFilter }) {
   const [result, setResult] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const request = useRef({ sequence: 0, controller: null, seed: capture.captureId });
   request.current.seed = capture.captureId;
@@ -79,7 +87,7 @@ export default function RawSeenReplay({ capture }) {
     ++request.current.sequence; request.current.controller?.abort();
     setResult(null); setError(''); setBusy(false);
     return () => { ++request.current.sequence; request.current.controller?.abort(); };
-  }, [capture.captureId, capture.league]);
+  }, [capture.captureId, capture.league, gameFilter?.boardDate, gameFilter?.gameKey]);
   async function replay() {
     const sequence = ++request.current.sequence, seed = capture.captureId;
     request.current.controller?.abort();
@@ -94,6 +102,7 @@ export default function RawSeenReplay({ capture }) {
         ? '這批原文的表格格式尚未支援辨識，原始保存仍可查看；不能據此認定沒有盤口。'
         : '這批來源目前無法重播；片段或盤口仍待核對，原始保存可繼續查看。');
       const checked = validateRawSeenReplay(payload, capture);
+      rawSeenSelectedGames(checked, gameFilter);
       if (current()) setResult(checked);
     } catch (cause) {
       if (current()) setError(cause.name === 'AbortError' ? '歷史盤口讀取逾時，請重試；原始保存仍保留。' : cause.message || '歷史盤口暫時無法讀取。');
@@ -104,11 +113,11 @@ export default function RawSeenReplay({ capture }) {
     <button type="button" className="secondary" disabled={busy} onClick={replay}>{busy ? '核對整批歷史盤口…' : '重播歷史盤口'}</button>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {result && <section className={styles.result}>
-      <h4>這批來源辨識出 {result.games.length} 場進球盤</h4>
+      <h4>這批來源辨識出 {rawSeenSelectedGames(result, gameFilter).length} 場進球盤</h4>
       <p className={styles.notice}>以下由保存原文重新辨識，供歷史查閱，尚未核對官方場次。來源時間保持原值；未確認當時可分析資格或尾盤完整度。</p>
       <p className={styles.meta}>來源讀取 {time(result.observedAt)}｜頁面活動 {time(result.pageActivityAt)}<br/>接收 {time(result.receivedAt)}｜存入 {time(result.persistedAt)}<br/>本次重播 {time(result.recoveredAt)}</p>
       {result.games.length === 0 && <p className={styles.notice}>這批原文未辨識出可列示的進球市場，不能據此認定沒有開盤。</p>}
-      {result.games.map(game => <article className={styles.game} key={[game.boardDate, game.boardTime, game.awayKey, game.homeKey].join('|')}>
+      {rawSeenSelectedGames(result, gameFilter).map(game => <article className={styles.game} key={[game.boardDate, game.boardTime, game.awayKey, game.homeKey].join('|')}>
         <h5>{game.boardDate} {game.boardTime}｜{game.awayRaw} → {game.homeRaw}</h5>
         {game.markets.length === 0 ? <p className={styles.notice}>此場沒有可列示的進球盤口。</p> : <div className={styles.tableWrap}><table>
           <caption>原盤盤口、水位與文字位置</caption>

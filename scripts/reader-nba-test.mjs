@@ -227,7 +227,7 @@ for (const sections of [specialFixture.sections, [...specialFixture.sections].re
   const selection = selectAuthoritativeBoard([candidate(input)], { league: 'NBA', now: +now });
   assert.equal(selection.ok, true);
   assert.equal(selection.selected.detectedGameCount, 11, 'upload count uses deduplicated parsed event identities');
-  const payload = { ...parsed, readerVersion: '2.1.57', deviceId: 'nba-diagnostic-fixture', pageActivityAt: now.toISOString(), expectedGameCount: 11, detectedGameCount: 11 };
+  const payload = { ...parsed, readerVersion: '2.1.58', deviceId: 'nba-diagnostic-fixture', pageActivityAt: now.toISOString(), expectedGameCount: 11, detectedGameCount: 11 };
   payload.payloadHash = createHash('sha256').update(canonicalReaderPayload(payload)).digest('hex');
   const received = normalizeNbaReaderPayload(payload, { deviceId: payload.deviceId, headerVersion: payload.readerVersion, now: +now });
   assert.equal(received.gameCount, 11);
@@ -292,11 +292,11 @@ vm.runInContext(background.replace(/^import .*?;\n/gm, line => line.includes('./
 let scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 0, 'stale content scripts cannot masquerade as the new installed Reader');
 assert.deepEqual([...scanned.silentTabIds], [7]);
-contentVersion = '2.1.57';
+contentVersion = '2.1.58';
 scanned = await vm.runInContext('collectCandidates([{ id: 7 }])', backgroundContext);
 assert.equal(scanned.candidates.length, 1);
 const report = await vm.runInContext('readerDiagnostics()', backgroundContext);
-assert.equal(report.report.readerVersion, '2.1.57');
+assert.equal(report.report.readerVersion, '2.1.58');
 assert.equal(report.report.boards[0].league, 'NBA');
 assert.equal(Object.hasOwn(report.report, 'readerToken'), false);
 assert.equal(Object.hasOwn(report.report.boards[0], 'pageUrl'), false);

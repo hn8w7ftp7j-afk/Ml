@@ -7,13 +7,15 @@
     "app/api/cron/analysis-direction-settlements/route.js": { "maxDuration": 300 },
     "app/api/cron/bet-settlements/route.js": { "maxDuration": 300 },
     "app/api/cron/nba-maintenance/route.js": { "maxDuration": 180 },
-    "app/api/cron/soccer-calibration/route.js": { "maxDuration": 180 }
+    "app/api/cron/soccer-calibration/route.js": { "maxDuration": 180 },
+    "app/api/cron/soccer-raw-history-index/route.js": { "maxDuration": 60 }
   },
   "crons": [
     { "path": "/api/cron/mlb-advanced-snapshots", "schedule": "0 0 * * *" },
     { "path": "/api/cron/analysis-direction-settlements", "schedule": "30 21 * * *" },
     { "path": "/api/cron/bet-settlements", "schedule": "15 * * * *" },
     { "path": "/api/cron/nba-maintenance", "schedule": "35 * * * *" },
-    { "path": "/api/cron/soccer-calibration", "schedule": "45 * * * *" }
+    { "path": "/api/cron/soccer-calibration", "schedule": "45 * * * *" },
+    { "path": "/api/cron/soccer-raw-history-index", "schedule": "45 * * * *" }
   ]
 }

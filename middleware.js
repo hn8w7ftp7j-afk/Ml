@@ -15,6 +15,8 @@ PUBLIC_PATHS.add('/api/reader/seen-captures');
 PUBLIC_PATHS.add('/api/cron/nba-maintenance');
 // Calibration cron authenticates with its own CRON_SECRET, without a browser session.
 PUBLIC_PATHS.add('/api/cron/soccer-calibration');
+// Independent raw-history indexing has its own CRON_SECRET and bounded budget.
+PUBLIC_PATHS.add('/api/cron/soccer-raw-history-index');
 
 export async function middleware(request) {
   const { pathname, search } = request.nextUrl;

@@ -129,8 +129,8 @@ function buildArchive(workRoot, outputFile) {
 
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.name, 'Tai888 Reader');
-assert.equal(manifest.version, '2.1.57');
-assert.equal(manifest.version_name, '2.1.57 EPL-UCL');
+assert.equal(manifest.version, '2.1.58');
+assert.equal(manifest.version_name, '2.1.58 EPL-UCL');
 assert.deepEqual([...manifest.permissions].sort(), ['alarms', 'storage', 'unlimitedStorage', 'webNavigation'].sort());
 assert.deepEqual([...manifest.host_permissions].sort(), [
   'https://*.tai888.in/*',
