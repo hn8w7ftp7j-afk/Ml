@@ -101,6 +101,6 @@ assert.equal(mounted.states[0], null, 'unmounted fetch cannot set a result');
 
 const page = fs.readFileSync('app/market-line-history/page.js', 'utf8');
 const history = fs.readFileSync('app/market-line-history/history-browser.js', 'utf8');
-assert.match(page, /<HistoryBrowser><ArchivePanel\/><\/HistoryBrowser>/);
+assert.match(page, /<HistoryBrowser>[\s\S]*<ArchivePanel\s*\/>[\s\S]*<\/HistoryBrowser>/);
 assert.match(history, /<CoveragePanel\/>\s*\{children\}/, 'archive slot follows existingcoveragewithoutchangingitscounts');
 console.log('Reader capture archive UI: sevenleague receipt validation, source versus persistence time, failures distinct from zero, stale response suppression, andunmount abort PASS');
