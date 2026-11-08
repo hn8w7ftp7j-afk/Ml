@@ -554,7 +554,11 @@ export function selectAuthoritativeSoccerBoards(candidates, { now = Date.now(), 
     if (!scope.periodsCovered.includes(period)) scope.periodsCovered.push(period);
   }
   const selections = [...selectedSources.values()];
-  return selections.length ? { ok: true, selections, scopeSelections, assessed }
+  // A saved subset is not proof that every scheduled match was captured.
+  // Keep the bounded, read-only source dates/topology even when selection
+  // succeeds so automatic diagnostics can explain a missing future board.
+  return selections.length ? { ok: true, selections, scopeSelections, assessed,
+    diagnosticEvidence: soccerConflictEvidence(sources, league, null) }
     : { ok: false, error: 'no-complete-tab', assessed, selections: [] };
 }
 

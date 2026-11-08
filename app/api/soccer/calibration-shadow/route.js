@@ -4,12 +4,14 @@ import { soccerLeague } from '../../../../lib/soccer/contracts.js';
 import { readSoccerCalibrationShadowReport, evaluateSoccerCalibrationShadow } from '../../../../lib/soccer/calibration-shadow-validation.js';
 import { recordSoccerCalibrationFailure } from '../../../../lib/soccer/calibration-diagnostics.js';
 import { collectSoccerCalibrationPredictions } from '../../../../lib/soccer/calibration-collection.js';
+import { bootstrapSoccerReturnErrorProtocol } from '../../../../lib/soccer/return-error-bootstrap.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
 const response = (body, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-const failure = () => response({ ok: false, error: '校準預測保存或賽果紀錄暫時無法核對，目前筆數未知。', formalEligible: false, executable: false }, 503);
+const failure = (returnErrorBootstrap = null) => response({ ok: false, error: '校準預測保存或賽果紀錄暫時無法核對，目前筆數未知。',
+  ...(returnErrorBootstrap ? { returnErrorBootstrap } : {}), formalEligible: false, executable: false }, 503);
 export async function GET(request) {
   const denied = await requireApiAuth(request); if (denied) return denied;
   const rate = checkRateLimit(request, { id: 'soccer-calibration-shadow-read', limit: 60, windowMs: 60000 });
@@ -39,8 +41,18 @@ export async function POST(request) {
     if (!league || !['evaluate', 'collect'].includes(body?.action) || Object.keys(body).some(key => !['league', 'action'].includes(key)))
       return response({ ok: false, error: '只接受核對伺服器已保存的校準預測，不接受傳入預測、來源或賽果。' }, 400);
     if (body.action === 'collect') {
-      const summary = await collectSoccerCalibrationPredictions({ league, limit: 2, timeBudgetMs: 50000 });
-      return response({ ok: true, summary });
+      let returnErrorBootstrap;
+      try { returnErrorBootstrap = await bootstrapSoccerReturnErrorProtocol({ league, timeBudgetMs: 5000 }); }
+      catch { returnErrorBootstrap = { league, status: 'NOT_VERIFIED', configured: false, persisted: false,
+        protocolId: null, registeredAt: null, manifestHash: null, planHash: null, accepted: false,
+        formalEligible: false, executable: false, W: null, R: null, S: null, reason: 'RETURN_ERROR_BOOTSTRAP_UNAVAILABLE' }; }
+      try {
+        const summary = await collectSoccerCalibrationPredictions({ league, limit: 2, timeBudgetMs: 50000 });
+        return response({ ok: true, summary, returnErrorBootstrap });
+      } catch (error) {
+        recordSoccerCalibrationFailure('evaluate', error);
+        return failure(returnErrorBootstrap);
+      }
     }
     const { summary } = await evaluateSoccerCalibrationShadow({ league, limit: 3 });
     if (summary.status === 'STORAGE_UNAVAILABLE') return failure();
