@@ -3,7 +3,7 @@ import { buildSoccerReturnErrorDataset, buildSoccerReturnErrorDatasetHydrated, f
   summarizeSoccerReturnErrorDatasets, mergeSoccerReturnErrorDiagnostics, SOCCER_RETURN_ERROR_CANDIDATE_PROTOCOL,
   soccerReturnErrorSettlementRuleFamilyHash } from '../lib/soccer/return-error-model.js';
 import { buildSoccerMarketDirections } from '../lib/soccer/market-directions.js';
-import { evaluateSoccerMarketReturnCapture } from '../lib/soccer/market-return-validation.js';
+import { evaluateSoccerMarketReturnCapture, buildSoccerMarketReturnReport } from '../lib/soccer/market-return-validation.js';
 import { evaluateSoccerForwardCapture, soccerForwardHash } from '../lib/soccer/forward-validation.js';
 import { fixtureCapture, changed, resultFor, protocol, active, observed, after, iso } from './helpers/soccer-forward-fixture.mjs';
 
@@ -171,6 +171,62 @@ assert.equal(duplicated.observedQuoteReturns,28);assert.equal(duplicated.observe
 const duplicateCapture={...captures[0],captureId:soccerForwardHash('synthetic-heartbeat-receipt'),captureSequence:'1000'};
 const heartbeat=buildSoccerReturnErrorDataset({...evidence,captures:[...captures,duplicateCapture]},{now,resolveContract:trustedContract});
 assert.equal(heartbeat.observedQuoteReturns,28);assert.equal(heartbeat.duplicateEconomicObservations,2,'unchanged economic prices are not independent return samples');
+// A real later Reader receipt binds the same economic price to new quote keys.
+// Its exact per-quote contract hash is therefore different. Only the canonical
+// original capture is in this cohort; those later terms cannot overwrite or
+// falsely conflict with the selected original. Real result corrections still
+// quarantine the whole game, including corrections on the unselected receipt.
+const pricedHeartbeat=changed(captures[0],value=>{
+  value.captureId=soccerForwardHash('synthetic-priced-heartbeat');value.captureSequence='1001';
+  const snapshot=value.snapshot,game=snapshot.evidence.game;
+  const reader={revision:'e'.repeat(64),observationId:'f'.repeat(64),observedAt:snapshot.analysisCutoff,
+    firstFetchedAt:snapshot.analysisCutoff,receivedAt:snapshot.analysisCutoff,persistedAt:snapshot.analysisCutoff,
+    sourceHost:'www.tai888.in',pageUrl:'https://www.tai888.in/newapp/'};
+  const market={period:'FT',kind:'TOTAL',unit:'GOALS',line:'2.5',overWater:.95,underWater:.9,
+    rawRows:['大2.5 0.95','小0.9'],periodEvidence:{period:'FT',status:'EXPLICIT',sectionTitle:'英格蘭超級聯賽',tableHeaders:['全場'],marketHeader:'全場大小'}};
+  snapshot.directions=buildSoccerMarketDirections({reader,game,now:Date.parse(snapshot.analysisCutoff),
+    matchedGames:[{officialGameId:game.id,league:'EPL',boardDate:game.date,matchStatus:'MATCHED',prestart:true,markets:[market]}]});
+});
+const heartbeatResult=resultFor(pricedHeartbeat);
+const pricedHeartbeatEvaluation=evaluateSoccerForwardCapture(pricedHeartbeat,protocol,heartbeatResult,after);
+pricedHeartbeatEvaluation.marketReturnValidation=evaluateSoccerMarketReturnCapture({capture:pricedHeartbeat,protocol,
+  result:heartbeatResult,now:after,resolveContract:trustedContract});
+const originalReturn=evaluations[0].marketReturnValidation.observations[0],laterReturn=pricedHeartbeatEvaluation.marketReturnValidation.observations[0];
+assert.equal(laterReturn.observationId,originalReturn.observationId);
+assert.notEqual(laterReturn.quoteKey,originalReturn.quoteKey);
+assert.notEqual(laterReturn.contractHash,originalReturn.contractHash);
+const heartbeatCheck={captureId:pricedHeartbeat.captureId,checkedAt:iso(after),resultEvidence:heartbeatResult,
+  marketReturnEvidenceHash:pricedHeartbeatEvaluation.marketReturnValidation.evidenceHash};
+const originalOnly={...evidence,captures:[captures[0]],evaluations:[evaluations[0]],checks:[checks[0]]};
+const originalOnlyDataset=buildSoccerReturnErrorDataset(originalOnly,{now,resolveContract:trustedContract});
+const pricedHeartbeatEvidence={...evidence,captures:[captures[0],pricedHeartbeat],
+  evaluations:[evaluations[0],pricedHeartbeatEvaluation],checks:[checks[0],heartbeatCheck]};
+for(const input of [pricedHeartbeatEvidence,{...pricedHeartbeatEvidence,captures:[...pricedHeartbeatEvidence.captures].reverse(),
+  evaluations:[...pricedHeartbeatEvidence.evaluations].reverse(),checks:[...pricedHeartbeatEvidence.checks].reverse()}]){
+  const selected=buildSoccerReturnErrorDataset(input,{now,resolveContract:trustedContract});
+  assert.equal(selected.observedQuoteReturns,2);assert.equal(selected.observedGames,1);assert.equal(selected.quarantinedGames,0);
+  assert.equal(selected.duplicateEconomicObservations,2);
+  assert.deepEqual(selected.observations,originalOnlyDataset.observations,'unselected heartbeat cannot replace the original quote, contract, prediction or availability time');
+  const market=buildSoccerMarketReturnReport(input,now);
+  assert.equal(market.observedQuoteReturns,selected.observedQuoteReturns);assert.equal(market.conflictingQuoteReturns,0);
+}
+const heartbeatCorrection=structuredClone(heartbeatResult);
+heartbeatCorrection.fullTime={home:0,away:0,period:'REGULATION_FT'};
+heartbeatCorrection.resultHash=soccerForwardHash('synthetic-unselected-heartbeat-score-correction');
+const heartbeatCorrectionEvaluation=evaluateSoccerForwardCapture(pricedHeartbeat,protocol,heartbeatCorrection,after);
+heartbeatCorrectionEvaluation.marketReturnValidation=evaluateSoccerMarketReturnCapture({capture:pricedHeartbeat,protocol,
+  result:heartbeatCorrection,now:after,resolveContract:trustedContract});
+const heartbeatCorrectedDataset=buildSoccerReturnErrorDataset({...pricedHeartbeatEvidence,
+  evaluations:[evaluations[0],heartbeatCorrectionEvaluation],checks:[checks[0],{...heartbeatCheck,
+    resultEvidence:heartbeatCorrection,marketReturnEvidenceHash:heartbeatCorrectionEvaluation.marketReturnValidation.evidenceHash}]},{now,resolveContract:trustedContract});
+assert.equal(heartbeatCorrectedDataset.observedQuoteReturns,0);assert.equal(heartbeatCorrectedDataset.quarantinedGames,1,
+  'a genuine score correction on an unselected duplicate still quarantines the entire real game');
+const changedSelectedTerms={...evaluations[0],marketReturnValidation:evaluateSoccerMarketReturnCapture({capture:captures[0],protocol,
+  result:checks[0].resultEvidence,now:after,resolveContract:record=>({...trustedContract(record),version:'SYNTHETIC_CHANGED_SELECTED_TERMS'})})};
+const selectedTermsConflict=buildSoccerReturnErrorDataset({...originalOnly,evaluations:[evaluations[0],changedSelectedTerms],
+  checks:[checks[0],{...checks[0],marketReturnEvidenceHash:changedSelectedTerms.marketReturnValidation.evidenceHash}]},{now,resolveContract:trustedContract});
+assert.equal(selectedTermsConflict.observedQuoteReturns,0);assert.equal(selectedTermsConflict.quarantinedGames,1,
+  'different settlement terms on the selected original remain a whole-game conflict');
 const alteredTest=structuredClone(dataset);
 alteredTest.observations.filter(row=>Date.parse(row.kickoff)>=Date.parse(candidate.calibrationBefore)).forEach(row=>{row.realizedNetReturn+=10;row.predictionError+=10;});
 delete alteredTest.contentHash;alteredTest.contentHash=soccerForwardHash(alteredTest);

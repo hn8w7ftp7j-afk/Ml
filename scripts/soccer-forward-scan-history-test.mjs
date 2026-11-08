@@ -7,7 +7,7 @@ import { soccerForwardHash, soccerForwardAnalysisRevision, validateSoccerForward
   canonicalSoccerForwardCaptures, evaluateSoccerForwardCapture, SOCCER_FORWARD_VERSION } from '../lib/soccer/forward-validation.js';
 import { evaluateSoccerMarketReturnCapture, SOCCER_MARKET_RETURN_SELECTION,
   SOCCER_MARKET_RETURN_SOURCE_BOUND_SELECTION } from '../lib/soccer/market-return-validation.js';
-import { buildSoccerReturnErrorDatasetHydrated } from '../lib/soccer/return-error-model.js';
+import { buildSoccerReturnErrorDatasetHydrated, SOCCER_RETURN_ERROR_REPLAY_REVISION } from '../lib/soccer/return-error-model.js';
 
 // Every forecast, clock shift, contract and result below is an engineering
 // fixture in an isolated PostgreSQL engine, never production model evidence.
@@ -195,6 +195,22 @@ try {
   assert.notEqual(restart.report.scan.cursor, olderCursor, 'cron skips incompatible derived cursor and rebuilds from original captures');
   assert.equal(restart.report.scan.processedGames, 1);
   assert.equal(restart.report.marketReturnValidation.selection, SOCCER_MARKET_RETURN_SOURCE_BOUND_SELECTION);
+  const replayScan = await continueSoccerForwardScan(deadlineScope, { ...oneGame, purpose: 'evaluate' });
+  const replayCursor = replayScan.report.scan.nextCursor;
+  assert.ok(replayCursor);
+  const currentState = (await query('SELECT state FROM sports_soccer_forward_scans_v1 WHERE cursor=$1', [replayCursor]))[0].state;
+  assert.equal(currentState.returnErrorReplayRevision, SOCCER_RETURN_ERROR_REPLAY_REVISION);
+  await query(`UPDATE sports_soccer_forward_scans_v1 SET state=jsonb_set(state,
+    '{returnErrorReplayRevision}',to_jsonb($2::text)) WHERE cursor=$1`, [replayCursor, 'SYNTHETIC_OLDER_RETURN_REPLAY']);
+  await assert.rejects(() => continueSoccerForwardScan(deadlineScope, { ...oneGame, purpose: 'evaluate', cursor: replayCursor }),
+    { status: 400, code: 'SOCCER_FORWARD_SCAN_SELECTION_CHANGED' });
+  // The backlog must skip both old selection and old implementation summaries.
+  await query('UPDATE sports_soccer_forward_scans_v1 SET complete=true WHERE cursor=$1', [restart.report.scan.cursor]);
+  const replayRestart = await continueSoccerForwardBacklog(deadlineScope, oneGame);
+  assert.notEqual(replayRestart.report.scan.cursor, replayCursor);
+  const restartedState = (await query('SELECT state FROM sports_soccer_forward_scans_v1 WHERE cursor=$1', [replayRestart.report.scan.cursor]))[0].state;
+  assert.equal(restartedState.returnErrorReplayRevision, SOCCER_RETURN_ERROR_REPLAY_REVISION);
+  assert.equal(replayRestart.report.scan.processedGames, 1, 'old derived return counts rebuild from original captures instead of mixing revisions');
   console.log('PASS scanner policy release: old continuations explicitly expire and cron starts a separate current-cohort scan');
 } finally {
   if (oldDb === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = oldDb;
