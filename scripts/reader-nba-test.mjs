@@ -274,7 +274,7 @@ assert.equal(createHash('sha256').update(canonicalReaderPayload(baseball)).diges
 assert.deepEqual(readerMarketProperties('NBA'), ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']);
 const background = fs.readFileSync(new URL('../reader/background.js', import.meta.url), 'utf8');
 assert.match(background, /league === 'NHL' \? '\/api\/nhl\/reader' : league === 'NBA' \? '\/api\/nba\/reader' : '\/api\/reader\/ingest'/);
-assert.match(background, /const VERSION = '2\.1\.57'/);
+assert.match(background, /const VERSION = '2\.1\.58'/);
 // Execute v2.1.26 recovery behaviors against a stale and then current tab.
 let contentVersion = '2.1.26';
 const reloaded = [];
