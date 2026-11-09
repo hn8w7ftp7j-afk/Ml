@@ -43,8 +43,9 @@ export function soccerAnalysisPresentation(state,now=Date.now()){
   else if(state?.status==='done')analysisStatus=state.data?.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':soccerResearchIsCurrent(state,now)?'COMPLETED':'UNVERIFIED';
   const current=analysisStatus==='COMPLETED';
   const selectionResult=current&&analysisStatus==='COMPLETED'&&state.data?.selectionResult==='RESEARCH_SHADOW'?'RESEARCH_SHADOW':null;
-  const predictionMode=current&&state?.data?.predictionContext?.mode==='PREDICTION';
-  return{analysisStatus,analysisLabel:predictionMode?'預測完成':analysisLabels[analysisStatus],selectionResult,selectionLabel:predictionMode?'依現有資料預測':selectionResult?'研究中':'尚無結果',current};
+  const poststartAudit=current&&state?.data?.status==='POSTSTART_AUDIT';
+  const predictionMode=current&&state?.data?.status==='RESEARCH_ONLY'&&state.data.predictionContext?.mode==='PREDICTION';
+  return{analysisStatus,analysisLabel:poststartAudit?'賽後核對完成':predictionMode?'預測完成':analysisLabels[analysisStatus],selectionResult,selectionLabel:poststartAudit?'歷史查閱':predictionMode?'依現有資料預測':selectionResult?'研究中':'尚無結果',current};
 }
 export function soccerAnalysisCounts(games,states,now=Date.now()){
   const counts={total:games.length,candidates:0,waiting:0,processing:0,completed:0,insufficient:0,failed:0,research:0};
