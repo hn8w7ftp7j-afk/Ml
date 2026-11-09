@@ -32,6 +32,7 @@ export function marketArchivePayload(input) {
   payload.games = input.games.map(game => {
     const result = pick(game, ['league', 'awayCode', 'homeCode', 'awayRaw', 'homeRaw', 'awayKey', 'homeKey', 'boardDate', 'boardTime',
       'marketStatus', 'marketStates', 'periodsCovered', 'periodStates', 'executable']);
+    if (input.league === 'NBA' && Object.hasOwn(game, 'availabilityEvidence')) result.availabilityEvidence = clone(game.availabilityEvidence);
     for (const key of ['fullRunline', 'fullTotal', 'first5Runline', 'first5Total', 'firstHalfRunline', 'firstHalfTotal']) {
       if (game[key] !== undefined) result[key] = market(game[key]);
     }

@@ -1,11 +1,74 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { transform } from 'next/dist/build/swc/index.js';
 import { PGlite } from '@electric-sql/pglite';
 import { parseSoccerCapture, canonicalSoccerPayload } from '../reader/soccer-parser.js';
 import { validateSoccerCapture } from '../lib/soccer/reader.js';
 import { soccerJournalHash } from '../lib/soccer/journal.js';
 import { parseMarketHistoryCoverageQuery, queryMarketHistoryCoverage } from '../lib/market-history-coverage.js';
-import { coverageMarketsForDisplay, validateCoverageDisplay } from '../app/market-line-history/coverage-display.js';
+import { coverageMarketsForDisplay, nbaHistoricalAvailabilityLabel, validateCoverageDisplay } from '../app/market-line-history/coverage-display.js';
+import { taipeiHistoryTime } from '../app/market-line-history/history-view.js';
+
+for (const [capture, expected] of [
+  [{ status: 'LOCKED', availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' }, '來源明示鎖盤'],
+  [{ status: 'NOT_CAPTURED', availabilityEvidence: 'NO_PARSED_MARKETS' }, '未讀到價格'],
+  [{ status: 'LOCKED' }, '來源標記鎖盤，實際狀態未確認'],
+  [{ status: 'NOT_CAPTURED' }, null],
+  [{ status: 'INVALID', availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' }, null],
+  [{ status: 'AVAILABLE', availabilityEvidence: 'NO_PARSED_MARKETS' }, null],
+]) {
+  const before = JSON.stringify(capture);
+  assert.equal(nbaHistoricalAvailabilityLabel('NBA', capture), expected);
+  assert.equal(nbaHistoricalAvailabilityLabel('MLB', capture), null, 'NBA evidence labels cannot change other leagues');
+  assert.equal(JSON.stringify(capture), before);
+}
+
+// Render the real coverage panel: new read labels coexist with original
+// statuses, immutable quote evidence and the older soccer interpretation UI.
+const marketNames = ['全場讓分', '全場大小', '上半讓分', '上半大小'];
+const fixtureAt = '2026-11-08T01:00:00.000Z';
+const fixtureMarkets = [
+  { status: 'LOCKED', availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' },
+  { status: 'NOT_CAPTURED', availabilityEvidence: 'NO_PARSED_MARKETS' },
+  { status: 'LOCKED' },
+  { status: 'INVALID', availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' },
+].map((market, index) => ({ market: marketNames[index], lastObservedAt: fixtureAt, ...market }));
+const fixtureGame = { league: 'NBA', boardDate: '2026-11-08', gameKey: '09:00|LAL|GSW',
+  lastReaderObservedAt: fixtureAt, captureStatus: 'NOT_CAPTURED', integrity: { status: 'PASS' },
+  markets: fixtureMarkets, latestCaptureMarkets: fixtureMarkets,
+  retainedHistoryComplete: false, retainedLookupBasis: 'LATEST_STATE_AND_PER_MARKET_RECEIPT_REFERENCES',
+  retainedMarkets: marketNames.map((market, index) => index === 1 ? { market, status: 'AVAILABLE', lastObservedAt: fixtureAt,
+    evidence: { observedAt: fixtureAt, gameKey: '09:00|LAL|GSW', sourceTable: 'tai888_market_line_history_v1',
+      stateHash: 'b'.repeat(16), directions: [{ pick: '大220平', water: 0.95 }, { pick: '小220平', water: 0.94 }] } }
+    : { market, status: 'NOT_VERIFIED', lastObservedAt: null }) };
+const fixture = { ok: true, schema: 'market-history-coverage-v1', status: 'PASS', until: fixtureAt, leagues: [], sources: [],
+  games: [fixtureGame, { league: 'MLB', boardDate: '2026-11-08', gameKey: '123', integrity: { status: 'PASS' },
+    markets: [{ market: '全場讓分', status: 'LOCKED', availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' }] }] };
+const fixtureBefore = JSON.stringify(fixture);
+const panelSource = fs.readFileSync('app/market-line-history/coverage-panel.js', 'utf8');
+const { code: panelCode } = await transform(panelSource.replace(/^import .*?;\n/gm, '').replace(/export default function/g, 'function'), {
+  filename: 'coverage-panel.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } },
+});
+let stateIndex = 0;
+const panelScope = vm.createContext({ React, URLSearchParams, styles: {}, taipeiHistoryTime, coverageMarketsForDisplay, nbaHistoricalAvailabilityLabel, validateCoverageDisplay,
+  useState: () => [[fixture, '', false][stateIndex++], () => {}], useRef: value => ({ current: value }),
+  useCallback: fn => fn, useEffect: () => {} });
+vm.runInContext(panelCode, panelScope);
+assert.equal(panelScope.validateCoverage(fixture), fixture);
+const panelHtml = renderToStaticMarkup(panelScope.CoveragePanel());
+assert.match(panelHtml, /全場讓分｜最近讀盤：來源明示鎖盤/);
+assert.match(panelHtml, /全場大小｜最近讀盤：未讀到價格/);
+assert.match(panelHtml, /上半讓分｜最近讀盤：來源標記鎖盤，實際狀態未確認/);
+assert.match(panelHtml, /上半大小｜最近讀盤：內容異常/);
+assert.match(panelHtml, /全場讓分｜最近版本：鎖盤/, 'non-NBA labels retain existing semantics');
+assert.match(panelHtml, /歷來有保存｜原盤觀測/);
+assert.match(panelHtml, /最新觀測狀態不代表舊盤遺失/);
+assert.equal(coverageMarketsForDisplay(fixtureGame), fixtureGame.latestCaptureMarkets);
+assert.equal(JSON.stringify(fixture), fixtureBefore, 'UI labels cannot mutate original market/capture statuses or retained source evidence');
 
 const db = new PGlite();
 const now = Date.parse('2026-11-08T02:00:00.000Z');

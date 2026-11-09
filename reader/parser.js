@@ -412,12 +412,14 @@ export function parseTai888Capture(capture, now = new Date()) {
         } : {}),
       };
       const markets = readerMarketProperties(league).map(property => game[property]);
-      // A complete date/time/team identity with zero captured market values is
-      // non-executable by definition. Tai888 renders some locked games without
-      // textual lock metadata, so retain it only as an unopened game. Partial
-      // markets remain open and will fail the strict 4-market/8-direction gate.
+      // Preserve the legacy zero-market non-executable partition so one empty
+      // identity cannot discard its valid siblings. That internal partition
+      // does not establish a source lock: NBA carries the distinction through
+      // its hash, archive and receipt independently of executable eligibility.
       if (!markets.some(Boolean) && !(league === 'NHL' && game.rawMarketEvidence.some(value => value.rawRows.some(Boolean)))) game.marketStatus = 'locked';
       if (game.marketStatus === 'locked' && markets.some(Boolean)) game.marketStatus = 'open';
+      if (league === 'NBA' && !markets.some(Boolean)) game.availabilityEvidence = row?.marketLocked === true
+        ? 'EXPLICIT_SOURCE_LOCK' : 'NO_PARSED_MARKETS';
       if (row?.marketLocked === true) explicitLockedGames.add(game);
       games.push(game);
     }
@@ -527,6 +529,8 @@ export function canonicalReaderPayload(payload) {
       boardDate: game.boardDate,
       boardTime: game.boardTime,
       marketStatus: game.marketStatus === 'locked' ? 'locked' : 'open',
+      ...(payload?.league === 'NBA' && Object.hasOwn(game, 'availabilityEvidence')
+        ? { availabilityEvidence: game.availabilityEvidence } : {}),
       ...(payload?.version === 'TAI888-READER-DOM-v2.2.0'
         && game.marketStates && Object.keys(game.marketStates).length ? { marketStates: game.marketStates } : {}),
       fullRunline: canonicalRunline(game.fullRunline),

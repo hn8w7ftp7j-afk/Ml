@@ -129,6 +129,41 @@ try {
   for (const key of Object.keys(locked.games[0].marketStates)) locked.games[0].marketStates[key] = 'UNAVAILABLE';
   locked.games[0].marketStatus = 'locked';
   assert.equal(build(wrap(locked)).payload.games[0].marketStatus, 'locked', 'explicitly locked sources preserve absent markets');
+  const zeroNba = evidence => {
+    const value = standard('NBA'), row = value.games[0];
+    for (const key of ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal']) row[key] = null;
+    row.marketStatus = 'locked';
+    row.marketStates = Object.fromEntries(Object.keys(row.marketStates).map(key => [key, evidence === 'NO_PARSED_MARKETS' ? 'BLOCKED' : 'UNAVAILABLE']));
+    if (evidence !== undefined) row.availabilityEvidence = evidence;
+    return value;
+  };
+  assert.equal(Object.hasOwn(build(wrap(zeroNba())).payload.games[0], 'availabilityEvidence'), false, 'legacy zero captures retain their original wire identity');
+  for (const evidence of ['EXPLICIT_SOURCE_LOCK', 'NO_PARSED_MARKETS']) {
+    const value = zeroNba(evidence), archived = build(wrap(value));
+    assert.equal(archived.payload.games[0].availabilityEvidence, evidence);
+    assert.equal(canonicalReaderPayload(archived.payload), canonicalReaderPayload(value));
+    const changed = wrap(value); changed.payload.games[0].availabilityEvidence = evidence === 'EXPLICIT_SOURCE_LOCK' ? 'NO_PARSED_MARKETS' : 'EXPLICIT_SOURCE_LOCK';
+    assert.throws(() => build(changed), error => error.code === 'READER_ARCHIVE_HASH_MISMATCH', 'availability classification is part of the source hash');
+    const priced = standard('NBA'); priced.games[0].availabilityEvidence = evidence;
+    assert.throws(() => build(wrap(priced)), 'a missing/lock marker cannot hide an available quote');
+    priced.games[0].marketStatus = 'locked';
+    assert.throws(() => build(wrap(priced)), 'a locked row with prices is still rejected');
+    const open = zeroNba(evidence); open.games[0].marketStatus = 'open';
+    assert.throws(() => build(wrap(open)), 'the marker cannot relabel an open row');
+  }
+  const unknownNba = zeroNba('NO_PARSED_MARKETS');
+  const siblings = standard('NBA'); siblings.games.unshift({ ...unknownNba.games[0], boardTime: '07:55' });
+  siblings.detectedGameCount = siblings.expectedGameCount = 2;
+  const archivedSiblings = build(wrap(siblings)).payload.games;
+  assert.equal(archivedSiblings[0].marketStates.fullTotal, 'BLOCKED');
+  assert.equal(archivedSiblings[1].fullTotal.line, '224+50', 'an unparsed sibling does not discard a validated price');
+  assert.throws(() => build(wrap(zeroNba('LOCKED'))), 'unsupported availability values are rejected');
+  const blockedExplicit = zeroNba('NO_PARSED_MARKETS'); blockedExplicit.games[0].availabilityEvidence = 'EXPLICIT_SOURCE_LOCK';
+  assert.throws(() => build(wrap(blockedExplicit)), 'explicit source locks still require unavailable states');
+  const blockedLegacy = zeroNba('NO_PARSED_MARKETS'); delete blockedLegacy.games[0].availabilityEvidence;
+  assert.throws(() => build(wrap(blockedLegacy)), 'legacy rows cannot bypass BLOCKED guards');
+  const pricedBlocked = standard('NBA'); pricedBlocked.games[0].marketStates.firstHalfTotal = 'BLOCKED';
+  assert.throws(() => build(wrap(pricedBlocked)), 'priced partial BLOCKED captures retain their existing rejection');
   const newer = clone(bodies.MLB); newer.payload.observedAt = '2026-10-24T22:01:01.000Z';
   newer.payload.pageActivityAt = '2026-10-24T22:01:00.000Z';
   assert.notEqual(build(newer).captureId, build(bodies.MLB).captureId, 'same price with a distinct original observation has its own capture identity');
@@ -224,6 +259,17 @@ try {
   await assert.rejects(() => db.query(`UPDATE ${table} SET payload_json='{}' WHERE league='MLB'`), 'immutable archive refuses later payload changes');
   await assert.rejects(() => db.query(`DELETE FROM ${table} WHERE league='MLB'`), 'immutable archive refuses deletion');
   assert.equal(await count(), 9);
+  for (const evidence of ['EXPLICIT_SOURCE_LOCK', 'NO_PARSED_MARKETS']) {
+    const body = wrap(zeroNba(evidence)), saved = await save(body);
+    const detail = await queryReaderCaptureArchives({ captureId: saved.captureId }, { sql });
+    assert.equal(detail.record.integrity.status, 'PASS');
+    assert.equal(detail.record.payload.games[0].availabilityEvidence, evidence);
+    assert.equal(detail.record.payload.payloadHash, body.payload.payloadHash);
+    assert.equal(saved.executable, false);
+  }
+  assert.equal(await count(), 11);
+  assert.deepEqual((await db.query(`SELECT * FROM ${table} WHERE capture_id=$1`, [stored.capture_id])).rows[0], stored,
+    'new availability evidence cannot rewrite an original archived payload');
   const corruptSql = (strings, ...values) => {
     const query = strings.join('');
     const original = sql(strings, ...values);

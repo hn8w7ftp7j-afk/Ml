@@ -29,8 +29,11 @@ assert.deepEqual(buildNbaAuthorityDiagnostics([left, changedDate]).differences.m
 const changedLine = candidate(); changedLine.parsed.games[0].firstHalfRunline.line = '1平';
 const lines = buildNbaAuthorityDiagnostics([left, changedLine]);
 assert.deepEqual(lines.differences.map(row => [row.period, row.type, row.line]), [['HT', 'CONTRACT_ONLY_LEFT', '1.5'], ['HT', 'CONTRACT_ONLY_RIGHT', '1平']]);
-const locked = candidate(); locked.parsed.games[0] = { awayCode: 'WSH', homeCode: 'CHA', boardDate: '2026-10-30', boardTime: '07:00', marketStatus: 'locked' };
+const locked = candidate(); locked.parsed.games[0] = { awayCode: 'WSH', homeCode: 'CHA', boardDate: '2026-10-30', boardTime: '07:00', marketStatus: 'locked', availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' };
 assert.equal(buildNbaAuthorityDiagnostics([left, locked]).differences[0].type, 'STATE');
+const unknown = structuredClone(locked); delete unknown.parsed.games[0].availabilityEvidence;
+assert.equal(buildNbaAuthorityDiagnostics([left, unknown]).differences.some(value => value.type === 'STATE'), false,
+  'legacy or unparsed zero-price sources cannot claim a verified locked period');
 
 const malicious = candidate(); malicious.parsed.games[0].awayCode = 'password=secret';
 assert.equal(buildNbaAuthorityDiagnostics([malicious]).sources[0].invalidGameCount, 1);

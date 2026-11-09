@@ -5,6 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import { taipeiHistoryTime } from '../app/market-line-history/history-view.js';
+import { nbaHistoricalAvailabilityLabel } from '../app/market-line-history/coverage-display.js';
 
 const source = fs.readFileSync('app/market-line-history/archive-records.js', 'utf8');
 const { code } = await transform(source.replace(/^import .*?;\n/gm, '').replace(/export default function/g, 'function').replace(/export function/g, 'function'), {
@@ -25,7 +26,7 @@ const response = payload => ({ ok: true, json: async () => payload });
 function harness() {
   const states = [], refs = [], calls = [], responses = [];
   let stateIndex = 0, refIndex = 0, cleanup;
-  const scope = vm.createContext({ React, taipeiHistoryTime, AbortController, URLSearchParams, styles: {},
+  const scope = vm.createContext({ React, taipeiHistoryTime, nbaHistoricalAvailabilityLabel, AbortController, URLSearchParams, styles: {},
     useState: initial => { const index = stateIndex++; if (states.length <= index) states[index] = initial; return [states[index], value => { states[index] = value; }]; },
     useRef: initial => { const index = refIndex++; return refs[index] ||= { current: initial }; },
     useEffect: fn => { cleanup = fn(); },
@@ -67,6 +68,25 @@ assert.match(html, /3\+50/); assert.match(html, /224-50/); assert.match(html, /0
 assert.match(html, /這筆擷取未保存此市場/); assert.match(html, /完整原始保存 JSON/);
 assert.match(html, /沒有官方賽事配對保證/);
 assert.doesNotMatch(html, /已完整|可下注|完整尾盤已保存/);
+
+const classified = detail();
+classified.record.payload.games = ['EXPLICIT_SOURCE_LOCK', 'NO_PARSED_MARKETS', undefined].map((availabilityEvidence, index) => ({
+  awayCode: 'LAL', homeCode: 'GSW', boardTime: `08:0${index}`, marketStatus: 'locked',
+  fullRunline: null, fullTotal: null, firstHalfRunline: null, firstHalfTotal: null,
+  ...(availabilityEvidence === undefined ? {} : { availabilityEvidence }),
+}));
+const originalClassified = JSON.stringify(classified);
+const classifiedHtml = renderToStaticMarkup(h.scope.ArchiveDetail({ record: classified.record }));
+assert.match(classifiedHtml, /08:00｜來源明示鎖盤<\/h4>/);
+assert.match(classifiedHtml, /08:01｜未讀到價格<\/h4>/);
+assert.match(classifiedHtml, /08:02｜來源標記鎖盤，實際狀態未確認<\/h4>/);
+assert.equal(JSON.stringify(classified), originalClassified, 'display labels cannot change original statuses, payload JSON or source hash');
+const baseballHtml = renderToStaticMarkup(h.scope.ArchiveDetail({ record: { ...classified.record, league: 'MLB' } }));
+assert.match(baseballHtml, /08:00｜鎖盤<\/h4>/);
+assert.doesNotMatch(baseballHtml, /來源明示鎖盤|實際狀態未確認/);
+const corruptClassifiedHtml = renderToStaticMarkup(h.scope.ArchiveDetail({ record: { ...classified.record, integrity: { status: 'FAIL' } } }));
+assert.match(corruptClassifiedHtml, /保存內容雜湊核對失敗/);
+assert.doesNotMatch(corruptClassifiedHtml, /來源明示鎖盤|08:00｜|完整原始保存 JSON/);
 
 h.responses.push(async () => response({ ...detail(), record: { ...metadata('a'), integrity: { status: 'FAIL' }, payload: null } }));
 await h.click('查看原盤與水位');

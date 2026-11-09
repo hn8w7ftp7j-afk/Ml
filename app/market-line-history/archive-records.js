@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { taipeiHistoryTime } from './history-view.js';
+import { nbaHistoricalAvailabilityLabel } from './coverage-display.js';
 import styles from './history.module.css';
 
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'EPL', 'UCL'];
@@ -57,7 +58,7 @@ function ArchiveDetail({ record }) {
     <p className={styles.muted}>擷取識別 <code>{record.captureId}</code></p>
     {record.integrity.status === 'FAIL' ? <p className={styles.invalid} role="alert">保存內容雜湊核對失敗，未當成有效盤口，原始內容暫不顯示。</p> : <>
       {record.payload.games.map((game, index) => <div key={index} className={styles.game}>
-        <h4>{game.awayCode || game.awayKey || '客隊未確認'} @ {game.homeCode || game.homeKey || '主隊未確認'} {game.boardTime}｜{game.marketStatus === 'locked' ? '鎖盤' : '原始盤面'}</h4>
+        <h4>{game.awayCode || game.awayKey || '客隊未確認'} @ {game.homeCode || game.homeKey || '主隊未確認'} {game.boardTime}｜{nbaHistoricalAvailabilityLabel(record.league, game) || (game.marketStatus === 'locked' ? '鎖盤' : '原始盤面')}</h4>
         <div className={styles.markets}>{archiveGameMarkets(game).map(market => <div className={styles.market} key={market.key}>
           <h4>{market.label}</h4>{market.value ? <dl>{Object.entries(market.value).filter(([key]) => ['line', 'lineSide', 'awayWater', 'homeWater', 'overWater', 'underWater'].includes(key)).map(([key, value]) => <div className={styles.direction} key={key}><dt>{{ line: '原盤', lineSide: '讓分方', awayWater: '客水', homeWater: '主水', overWater: '大水', underWater: '小水' }[key]}</dt><dd>{key === 'lineSide' ? value === 'away' ? '客隊' : value === 'home' ? '主隊' : String(value) : String(value)}</dd></div>)}</dl> : <p className={styles.muted}>這筆擷取未保存此市場</p>}
         </div>)}</div>

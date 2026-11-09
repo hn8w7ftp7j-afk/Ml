@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   const liveNormalizerAvailable = Boolean(policy?.shouldKeepRecord && normalizer?.normalizeRowRecords);
   const clean = policy?.clean || (value => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim());
-  const READER_VERSION = '2.1.59';
+  const READER_VERSION = '2.1.60';
   const pendingSeenCaptures = new Map();
   const lastSeenFingerprint = new Map();
   let seenSequence = 0;
@@ -258,28 +258,40 @@
   function hasExplicitMarketLock(element) {
     const text = clean(element?.innerText || element?.textContent || '');
     if (/(?:未開盤|未开盘|封盤|封盘|鎖盤|锁盘|暫停受注|暂停受注|🔒)/u.test(text)) return true;
-    const selector = [
-      '[class*="lock" i]', '[id*="lock" i]', '[title*="lock" i]',
-      '[aria-label*="lock" i]', '[alt*="lock" i]', 'img[src*="lock" i]',
-      '[title*="鎖" i]', '[title*="锁" i]', '[aria-label*="鎖" i]', '[aria-label*="锁" i]',
-      '[aria-disabled="true"]', '[data-disabled="true"]',
-      '[class*="disabled" i]', '[class*="closed" i]', '[class*="suspend" i]',
-      '[class*="unavailable" i]', '[class*="seal" i]',
-    ].join(',');
+    // Match a lock's meaning, never a substring: ordinary clock/block layout
+    // classes and lock-open/unlocked icons are not a closed betting market.
+    const closedToken = /(?:^|[\s_\-])(?:lock|locked|padlock|closed|suspend|suspended|seal|sealed)(?=$|[\s_\-])/i;
+    const openToken = /(?:^|[\s_\-])(?:unlock|unlocked|lock[\s_\-]+open)(?=$|[\s_\-])/i;
+    const attribute = (node, name) => String(node?.getAttribute?.(name) || '');
+    const semanticLock = value => !openToken.test(value) && closedToken.test(value);
+    const lockImage = value => /\.(?:png|gif|svg|webp)(?:[?#"')\s]|$)/i.test(value)
+      && /(?:^|[/_.\s\-])(?:lock|locked|padlock|closed|suspend|suspended|seal|sealed)(?=$|[/_.\s\-])/i.test(value)
+      && !/(?:^|[/_.\s\-])(?:unlock|unlocked|lock[_.\s\-]+open)(?=$|[/_.\s\-])/i.test(value);
+    const knownLockFont = value => String(value || '').split(',').some(font =>
+      /^(?:FontAwesome|Font Awesome [56] (?:Free|Pro))$/i.test(font.trim().replace(/^['"]|['"]$/g, '')));
     try {
-      if (element?.matches?.(selector) || element?.querySelector?.(selector)) return true;
+      // A disabled row is direct evidence. A disabled favourite/control inside
+      // an otherwise unknown row is not evidence that its odds are locked.
+      if (attribute(element, 'aria-disabled') === 'true' || attribute(element, 'data-disabled') === 'true') return true;
 
       // Tai888 sometimes draws its padlock from an icon-font pseudo element or
       // a shared CSS sprite.  Neither form contributes textContent, title or
       // an image URL, so inspect rendered styles without reading page secrets.
-      const nodes = [element, ...element.querySelectorAll('*')].slice(0, 160);
+      const nodes = [element, ...(element?.querySelectorAll?.('*') || [])].slice(0, 160);
       for (const node of nodes) {
+        const labels = ['class', 'id', 'title', 'aria-label', 'alt'].map(name => attribute(node, name));
+        if (labels.some(value => openToken.test(value))) continue;
+        if (labels.some(value => semanticLock(value) || /(?:鎖盤|锁盘|封盤|封盘)/u.test(value))
+          || lockImage(attribute(node, 'src'))) return true;
         const styles = [getComputedStyle(node), getComputedStyle(node, '::before'), getComputedStyle(node, '::after')];
         for (const style of styles) {
           const content = String(style?.content || '').replace(/^['"]|['"]$/g, '');
           const image = `${style?.backgroundImage || ''} ${style?.maskImage || ''}`;
-          if (/[🔒🔐]|\\f023|\\f3c1|\\e033/i.test(content)) return true;
-          if (/(?:lock|padlock|closed|suspend|seal)[^)]*\.(?:png|gif|svg|webp)/i.test(image)) return true;
+          if (/[🔒🔐]/u.test(content)) return true;
+          // Private-use glyphs have no universal meaning. Only the closed-lock
+          // codepoint of a known font profile establishes this evidence.
+          if (knownLockFont(style?.fontFamily) && /^(?:\uf023|\\f023\s*)$/i.test(content)) return true;
+          if (lockImage(image)) return true;
         }
       }
       return false;

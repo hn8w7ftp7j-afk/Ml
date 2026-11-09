@@ -51,7 +51,8 @@ try {
   let result = await read({ limit: '500' });
   let row = result.games.find(item => item.boardDate === '2026-11-08' && item.gameKey === '09:05|NY|CLE');
   assert.deepEqual(row.markets.map(market => market.status), ['AVAILABLE', 'AVAILABLE', 'NOT_CAPTURED', 'NOT_CAPTURED'], 'latest immutable state remains unchanged');
-  assert.ok(row.latestCaptureMarkets.every(market => market.status === 'LOCKED'), 'latest capture remains locked');
+  assert.ok(row.latestCaptureMarkets.every(market => market.status === 'NOT_CAPTURED'),
+    'a new zero-quote receipt without source lock proof remains unconfirmed');
   assert.ok(row.retainedMarkets.every(market => market.status === 'AVAILABLE'), 'later partial/locked captures cannot hide previously retained half markets');
   assert.deepEqual(row.retainedMarkets.map(market => market.lastObservedAt), [
     '2026-11-08T00:01:00.000Z', '2026-11-08T00:01:00.000Z', '2026-11-08T00:00:00.000Z', '2026-11-08T00:00:00.000Z']);
@@ -118,7 +119,7 @@ try {
   assert.deepEqual(row.retainedMarkets.map(market => market.status), ['AVAILABLE', 'AVAILABLE', 'NOT_VERIFIED', 'NOT_VERIFIED']);
   assert.equal(row.retainedEvidenceIntegrity.status, 'PARTIAL');
   assert.ok(row.retainedEvidenceIntegrity.issues.includes('CAPTURE_STATE_REFERENCE_INVALID'));
-  assert.ok(row.latestCaptureMarkets.every(market => market.status === 'LOCKED'));
+  assert.ok(row.latestCaptureMarkets.every(market => market.status === 'NOT_CAPTURED'));
   assert.equal((await db.query('SELECT count(*)::int AS count FROM tai888_market_line_history_v1')).rows[0].count, 4);
   assert.equal((await db.query('SELECT count(*)::int AS count FROM tai888_market_capture_receipts_v1')).rows[0].count, 5);
   console.log('PASS: per-market retained quote evidence survives later partial/locked captures; verifies exact receipt/state hash, times, line/water, read-only identity/date/page isolation, UI proof and corrupted old evidence; NOT Production');
