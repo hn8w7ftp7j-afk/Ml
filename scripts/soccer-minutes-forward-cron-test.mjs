@@ -11,9 +11,18 @@ export async function collectSoccerMinutesForward(v){const s=globalThis.__MINUTE
 register('data:text/javascript,'+encodeURIComponent(`export async function resolve(s,c,n){if((c.parentURL||'').endsWith('/app/api/cron/soccer-minutes-forward/route.js')
   &&/minutes-forward-(collection|validation)\\.js$/.test(s))return {url:${JSON.stringify(stub)},shortCircuit:true};return n(s,c);}`),import.meta.url);
 const {GET}=await import('../app/api/cron/soccer-minutes-forward/route.js');
+const {middleware}=await import('../middleware.js');
 const request=secret=>new Request('https://mlb-positive-ev.vercel.app/api/cron/soccer-minutes-forward',{headers:secret?{authorization:'Bearer '+secret}:{}});
 const oldSecret=process.env.CRON_SECRET,realNow=Date.now;
+const oldPassword=process.env.APP_PASSWORD,oldSession=process.env.SESSION_SECRET;
 try{
+  process.env.APP_PASSWORD='test-only-minutes-password';process.env.SESSION_SECRET='test-only-minutes-session';
+  const cronRequest=request();cronRequest.nextUrl=new URL(cronRequest.url);
+  assert.equal((await middleware(cronRequest)).headers.get('x-middleware-next'),'1','native scheduler reaches the separate cron-secret guard without a site cookie');
+  for(const path of ['/api/soccer/minutes-forward?league=epl','/api/cron/soccer-minutes-forward/extra']){
+    const privateRequest=new Request('https://mlb-positive-ev.vercel.app'+path);privateRequest.nextUrl=new URL(privateRequest.url);
+    assert.equal((await middleware(privateRequest)).status,401,'private and neighboring endpoints retain site-session authentication');
+  }
   delete process.env.CRON_SECRET;assert.equal((await GET(request('anything'))).status,401);
   process.env.CRON_SECRET='test-only-minutes-cron';assert.equal((await GET(request('wrong'))).status,401);assert.equal(state.calls.length,0);
   state.clock=realNow();Date.now=()=>state.clock;
@@ -31,4 +40,9 @@ try{
   assert.ok(config.crons.some(x=>x.path==='/api/cron/soccer-minutes-forward'&&x.schedule==='10 * * * *'));
   assert.ok(config.crons.some(x=>x.path==='/api/cron/soccer-calibration'&&x.schedule==='45 * * * *'));
   console.log('PASS independent minutes cron: authenticated only, both-league evaluation before collection, source/error/deadline isolation, no false partial success and separate scheduled budget (synthetic transport only)');
-}finally{Date.now=realNow;if(oldSecret===undefined)delete process.env.CRON_SECRET;else process.env.CRON_SECRET=oldSecret;}
+}finally{
+  Date.now=realNow;
+  for(const [key,value]of Object.entries({CRON_SECRET:oldSecret,APP_PASSWORD:oldPassword,SESSION_SECRET:oldSession})){
+    if(value===undefined)delete process.env[key];else process.env[key]=value;
+  }
+}
