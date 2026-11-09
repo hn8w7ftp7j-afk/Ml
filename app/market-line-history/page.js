@@ -4,9 +4,10 @@ import RawSeenHistoryIndexPanel from './raw-seen-history-index-panel.js';
 import RawHistoryMaintenancePanel from './raw-history-maintenance-panel.js';
 import RawSeenHistoryAuditPanel from './raw-seen-history-audit-panel.js';
 import LegacyHistoryPanel from './legacy-history-panel.js';
+import RawMarketCoveragePanel from './raw-market-coverage-panel.js';
 
 export const metadata = { title: '歷史盤口｜Sports Analysis' };
 
 export default function MarketLineHistoryPage() {
-  return <HistoryBrowser><RawHistoryMaintenancePanel/><RawSeenHistoryAuditPanel/><RawSeenHistoryIndexPanel/><LegacyHistoryPanel/><ArchivePanel/></HistoryBrowser>;
+  return <HistoryBrowser><RawHistoryMaintenancePanel/><RawMarketCoveragePanel/><RawSeenHistoryAuditPanel/><RawSeenHistoryIndexPanel/><LegacyHistoryPanel/><ArchivePanel/></HistoryBrowser>;
 }
