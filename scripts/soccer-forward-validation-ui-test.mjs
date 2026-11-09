@@ -83,6 +83,7 @@ function harness({league='epl',throwFirst=false,deferUpdaters=false}={}){
  };
 }
 const h=harness();h.render();assert.equal(h.calls.length,1);assert.equal(h.calls[0].url,'/api/soccer/forward-validation?league=epl');
+assert.equal([...h.timers.values()][0].at-h.now,110000,'client deadline must outlast a complete 60-second server scan and source collection');
 assert.match(h.markup,/ESPN 兩個端點交叉核對，並非獨立官方來源確認/);assert.match(h.markup,/模型放行維持關閉/);assert.match(h.markup,/不會新增下注/);
 const first=h.calls[0];h.button('核對已封存賽果').props.onClick();h.button('重新讀取').props.onClick();assert.equal(h.calls.length,1,'GET and POST cannot overlap even when old handlers are invoked before re-render');
 first.respond({ok:true,report:report('epl',[group])});await h.settle();assert.equal(h.button('核對已封存賽果').props.disabled,false);

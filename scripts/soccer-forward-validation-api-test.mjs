@@ -10,7 +10,8 @@ process.env.DATABASE_URL='postgres://fixture.invalid/soccer-forward-api';delete 
 const originalFetch=globalThis.fetch;let externalCalls=0,ip=0;
 globalThis.fetch=async()=>{externalCalls++;throw Error('API fixture must not access external services');};
 try {
-  const {GET,POST}=await import('../app/api/soccer/forward-validation/route.js');
+  const {GET,POST,maxDuration}=await import('../app/api/soccer/forward-validation/route.js');
+  assert.equal(maxDuration,120,'route allows the complete scan, collection, cleanup and response to finish');
   const cookie=`mlb_session=${await createSessionToken()}`;
   const request=(method,{auth=true,origin='http://localhost',body={},query='?league=epl&date='+soccerDate()}={})=>new Request(`http://localhost/api/soccer/forward-validation${query}`,{
     method,headers:{...(auth?{cookie}:{}),origin,'x-forwarded-for':`203.0.113.${++ip}`},...(method==='POST'?{body:JSON.stringify(body)}:{})});
@@ -37,3 +38,4 @@ try {
   for(const key of keys){if(before[key]===undefined)delete process.env[key];else process.env[key]=before[key];}
   await fixture.close();
 }
+
