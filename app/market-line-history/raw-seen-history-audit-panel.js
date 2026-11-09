@@ -11,6 +11,20 @@ const league = value => typeof value === 'string' && Object.hasOwn(leagues, valu
 const nullableInteger = value => value === null || auditInteger(value);
 const nullableCode = value => value === null || auditCode(value);
 const partial = value => auditReadonly(value, undefined, false);
+const scopeCounts = ['matchingStandardTables', 'matchingStandardRows', 'excludedTables', 'excludedRows', 'unknownTables', 'unknownRows'];
+
+function validSectionScope(sample) {
+  if (sample.status === 'UNKNOWN') return sample.sectionScopeSummary === null;
+  const scope = sample.sectionScopeSummary;
+  if (!scope || scope.basis !== 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY' || !partial(scope)
+    || !scopeCounts.every(key => auditInteger(scope[key]))) return false;
+  if (['matchingStandard', 'excluded', 'unknown'].some(key => scope[`${key}Rows`] > 0 && scope[`${key}Tables`] === 0)) return false;
+  const tables = scope.matchingStandardTables + scope.excludedTables + scope.unknownTables;
+  const rows = scope.matchingStandardRows + scope.excludedRows + scope.unknownRows;
+  const shownTables = sample.headers.reduce((sum, header) => sum + header.tables, 0);
+  return auditInteger(tables) && auditInteger(rows) && rows === sample.rowCount
+    && (sample.headersTruncated ? tables >= shownTables : tables === shownTables);
+}
 
 export function validateRawSeenHistoryAudit(value, expectedFilters = { league: null, limit: 4 }) {
   const invalid = () => { throw new Error('抽樣結果未通過核對'); };
@@ -60,6 +74,7 @@ export function validateRawSeenHistoryAudit(value, expectedFilters = { league: n
       if (!header || !Array.isArray(header.values) || !header.values.every(auditText) || !auditInteger(header.tables) || header.tables < 1
         || !auditHash(header.contentHash) || typeof header.truncated !== 'boolean' || !partial(header)) invalid();
     }
+    if (!validSectionScope(sample)) invalid();
     for (const width of sample.rowWidths) {
       if (!width || !auditInteger(width.cells) || !auditInteger(width.rows) || width.rows < 1 || widths.has(width.cells)) invalid();
       widths.add(width.cells);
@@ -106,6 +121,10 @@ export default function RawSeenHistoryAuditPanel() {
           <h3>樣本 {index + 1} · {leagues[sample.league]} · {sample.status === 'UNKNOWN' ? '未確認' : sample.classification === 'FLAT_TEXT_ONLY' ? '僅有平面文字' : sample.classification === 'STRUCTURED_ROWS' ? '有結構化資料列' : '版面分類未確認'}</h3>
           <p className={styles.meta}>來源觀察時間 {taipeiHistoryTime(sample.sourceObservedAt)}；片段 {auditNumber(sample.fragmentCount)}、資料列 {auditNumber(sample.rowCount)}、儲存格 {auditNumber(sample.cellCount)}。</p>
           <p>重播：{replayText(sample.replay)}。{sample.status === 'UNKNOWN' && '本筆來源內容尚未完成核對。'}</p>
+          {sample.sectionScopeSummary && <div>
+            <p>來源區段標題：符合既定範圍 {auditNumber(sample.sectionScopeSummary.matchingStandardTables)} 表／{auditNumber(sample.sectionScopeSummary.matchingStandardRows)} 列；明確排除 {auditNumber(sample.sectionScopeSummary.excludedTables)} 表／{auditNumber(sample.sectionScopeSummary.excludedRows)} 列；未確認 {auditNumber(sample.sectionScopeSummary.unknownTables)} 表／{auditNumber(sample.sectionScopeSummary.unknownRows)} 列。</p>
+            <p className={styles.notice}>這是保存標題的診斷，未核對官方場次身分；標題符合範圍也不代表盤口已通過解析。</p>
+          </div>}
           <details><summary>查看原始表頭與列寬</summary>
             <p className={styles.meta}>保存識別：<code>{sample.captureId}</code></p>
             {sample.headers.length ? sample.headers.map((header, n) => <p key={`${header.contentHash}-${n}`} className={styles.strings}>表頭 {n + 1}（{auditNumber(header.tables)} 個表格）：<code>{header.values.join(' ｜ ')}</code>{header.truncated && '（部分顯示）'}</p>) : <p>{sample.status === 'UNKNOWN' ? '原始表頭：未確認' : '本次樣本未包含表頭'}</p>}

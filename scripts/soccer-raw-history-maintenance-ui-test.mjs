@@ -104,7 +104,9 @@ for (const mutate of [
 
 h.calls[0].respond(progress()); await h.settle();
 assert.match(h.markup, /已保存來源/); assert.match(h.markup, /英超 EPL/); assert.match(h.markup, /歐冠 UCL/);
-assert.match(h.markup, /來源版面尚待支援 9 批/); assert.match(h.markup, /來源片段仍待核對 6 批/);
+assert.match(h.markup, /尚未轉成可查盤口 9 批/); assert.match(h.markup, /來源片段仍待核對 6 批/);
+assert.match(h.markup, /可能包含附加文字、其他賽事與未支援格式/); assert.match(h.markup, /批次數不等於缺失場次/);
+assert.doesNotMatch(h.markup, /來源版面尚待支援/);
 assert.match(h.markup, /與賽事盤日不同/); assert.match(h.markup, /一批可能包含多場/); assert.equal(h.calls.length, 1, 'pending counts do not start an automatic write loop');
 const drain = h.click('整理已保存盤口'); h.click('整理已保存盤口'); h.click('重新查詢'); await h.settle();
 assert.equal(h.calls.length, 2, 'a synchronous in-flight guard prevents both double clicks and overlapping refreshes');
@@ -123,7 +125,7 @@ const partial = h.click('整理已保存盤口'); await h.settle(); h.calls[4].r
 assert.equal(h.calls.length, 6); h.calls[5].respond(progress(1)); await partial; await h.settle();
 assert.match(h.markup, /本輪已建立 1 批查閱資料，部分整理結果尚未確認/); assert.doesNotMatch(h.markup, /全部完成/);
 const failedProgress = h.click('重新查詢'); await h.settle(); h.calls[6].respond({ error: 'private-db-error' }, 503); await failedProgress; await h.settle();
-assert.match(h.markup, /數量仍未確認/); assert.doesNotMatch(h.markup, /private-db-error/); assert.doesNotMatch(h.markup, /來源版面尚待支援 9 批/);
+assert.match(h.markup, /數量仍未確認/); assert.doesNotMatch(h.markup, /private-db-error/); assert.doesNotMatch(h.markup, /尚未轉成可查盤口 9 批/);
 const noSchema = h.click('重新查詢'); await h.settle(); h.calls[7].respond(absent); await noSchema; await h.settle();
 assert.match(h.markup, /整理進度尚未建立/); assert.doesNotMatch(h.markup, /<td>0<\/td>/);
 

@@ -19,6 +19,8 @@ function fixture() {
       fragmentCount: 1, fragmentManifest: [{ captureId, evidenceHash: 'c'.repeat(64), partIndex: null, partCount: null, receivedAt: instant, persistedAt: instant }],
       headers: [{ values: ['全場', '上半', '<script>raw header</script>'], tables: 1, contentHash: 'd'.repeat(64), truncated: false }], headersTruncated: false,
       rowWidths: [{ cells: 10, rows: 3 }], rowCount: 3, cellCount: 30,
+      sectionScopeSummary: { basis: 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY', matchingStandardTables: 1, matchingStandardRows: 3,
+        excludedTables: 0, excludedRows: 0, unknownTables: 0, unknownRows: 0 },
       replay: { status: 'RECOVERABLE', reason: null, gameCount: 3, marketCount: 12 },
       siblings: [{ captureId: siblingId, observedAt: instant, rowCount: 4, cellCount: 40, partCount: null, partIndex: null }],
       siblingStatus: 'VERIFIED_METADATA_ONLY',
@@ -28,6 +30,7 @@ function unknownFixture() {
   const value = fixture(), sample = value.samples[0];
   Object.assign(sample, { status: 'UNKNOWN', reason: 'RAW_HISTORY_AUDIT_BUDGET_EXHAUSTED', classification: 'UNKNOWN',
     fragmentCount: null, fragmentManifest: [], headers: [], rowWidths: [], rowCount: null, cellCount: null,
+    sectionScopeSummary: null,
     siblings: [], siblingStatus: 'UNKNOWN',
     replay: { status: 'UNKNOWN', reason: 'RAW_HISTORY_AUDIT_BUDGET_EXHAUSTED', gameCount: null, marketCount: null } });
   return value;
@@ -49,6 +52,17 @@ for (const mutate of [
   value => { value.samples[0].fragmentManifest[0].evidenceHash = null; }, value => { value.samples[0].headers[0].values = [1]; },
   value => { value.samples[0].headers[0].contentHash = 'missing'; }, value => { value.samples[0].rowWidths[0].rows = -1; },
   value => { value.samples[0].rowCount++; }, value => { value.samples[0].cellCount++; },
+  value => { delete value.samples[0].sectionScopeSummary; }, value => { value.samples[0].sectionScopeSummary = null; },
+  value => { value.samples[0].sectionScopeSummary.basis = 'VERIFIED_OFFICIAL_GAMES'; },
+  value => { value.samples[0].sectionScopeSummary.matchingStandardTables = 0; },
+  value => { value.samples[0].sectionScopeSummary.matchingStandardTables = 2; },
+  value => { value.samples[0].sectionScopeSummary.matchingStandardRows--; },
+  value => { value.samples[0].sectionScopeSummary.unknownRows = 1; },
+  value => { value.samples[0].sectionScopeSummary.excludedTables = -1; },
+  value => { value.samples[0].sectionScopeSummary.excludedRows = '0'; },
+  value => { value.samples[0].sectionScopeSummary.unknownTables = 0.5; },
+  value => { value.samples[0].sectionScopeSummary.formalEligible = true; },
+  value => { value.samples[0].sectionScopeSummary.excludedTables = Number.MAX_SAFE_INTEGER; },
   value => { value.samples[0].fragmentManifest.push(structuredClone(value.samples[0].fragmentManifest[0])); value.samples[0].fragmentCount++; },
   value => { value.samples[0].rowWidths.push(structuredClone(value.samples[0].rowWidths[0])); value.samples[0].rowCount *= 2; value.samples[0].cellCount *= 2; },
   value => { value.samples[0].replay.gameCount = null; }, value => { value.samples[0].sameCaptureVerified = true; },
@@ -64,6 +78,22 @@ const falseZero = unknownFixture(); falseZero.samples[0].rowCount = 0;
 assert.throws(() => h.scope.validateRawSeenHistoryAudit(falseZero), /未通過核對/);
 const inferredRows = unknownFixture(); inferredRows.samples[0].rowWidths = [{ cells: 0, rows: 0 }];
 assert.throws(() => h.scope.validateRawSeenHistoryAudit(inferredRows), /未通過核對/);
+for (const scope of [undefined, {}, fixture().samples[0].sectionScopeSummary]) {
+  const unverifiedScope = unknownFixture(); unverifiedScope.samples[0].sectionScopeSummary = scope;
+  assert.throws(() => h.scope.validateRawSeenHistoryAudit(unverifiedScope), /未通過核對/, 'unverified source cannot publish scope counts');
+}
+const truncatedHeaders = fixture(); truncatedHeaders.samples[0].headersTruncated = true;
+truncatedHeaders.samples[0].sectionScopeSummary.unknownTables = 2;
+assert.equal(h.scope.validateRawSeenHistoryAudit(truncatedHeaders).samples[0].sectionScopeSummary.unknownTables, 2);
+truncatedHeaders.samples[0].headers[0].tables = 4;
+assert.throws(() => h.scope.validateRawSeenHistoryAudit(truncatedHeaders), /未通過核對/, 'summary cannot contain fewer tables than exposed header groups');
+const emptySource = fixture(), emptySample = emptySource.samples[0];
+Object.assign(emptySample, { classification: 'UNKNOWN', headers: [], rowWidths: [], rowCount: 0, cellCount: 0,
+  sectionScopeSummary: { basis: 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY', matchingStandardTables: 0, matchingStandardRows: 0,
+    excludedTables: 0, excludedRows: 0, unknownTables: 0, unknownRows: 0 },
+  replay: { status: 'SOURCE_UNINDEXED', reason: 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT', gameCount: null, marketCount: null } });
+assert.equal(h.scope.validateRawSeenHistoryAudit(emptySource).samples[0].sectionScopeSummary.unknownTables, 0,
+  'a hash-verified capture with no tables remains a known empty layout, not official coverage');
 
 const query = h.click('抽查尚未辨識來源'); h.click('抽查尚未辨識來源');
 assert.equal(h.calls.length, 1, 'synchronous in-flight guard prevents double click');
@@ -75,12 +105,15 @@ assert.match(h.markup, /本次返回 1 筆樣本/); assert.match(h.markup, /英�
 assert.match(h.markup, /10 欄 × 3 列/); assert.match(h.markup, /3 場、12 個盤口/);
 assert.match(h.markup, /&lt;script&gt;raw header&lt;\/script&gt;/); assert.doesNotMatch(h.markup, /<script>/);
 assert.match(h.markup, /同次擷取與同一頁框皆未確認/); assert.match(h.markup, /不能替代本筆/);
+assert.match(h.markup, /來源區段標題：符合既定範圍 1 表／3 列；明確排除 0 表／0 列；未確認 0 表／0 列/);
+assert.match(h.markup, /未核對官方場次身分/); assert.match(h.markup, /標題符合範圍也不代表盤口已通過解析/);
 assert.equal(h.calls.length, 1, 'no automatic follow-up or pagination');
 
 const unknownQuery = h.click('抽查尚未辨識來源'); h.calls[1].respond(unknownFixture()); await unknownQuery; await h.settle();
 assert.match(h.markup, /片段 未確認、資料列 未確認、儲存格 未確認/); assert.match(h.markup, /原始表頭：未確認/);
 assert.match(h.markup, /列寬：未確認/); assert.match(h.markup, /重播可用性：未確認/);
 assert.doesNotMatch(h.markup, /片段 0、資料列 0/);
+assert.doesNotMatch(h.markup, /來源區段標題：符合既定範圍/);
 const emptyQuery = h.click('抽查尚未辨識來源'); const empty = fixture(); empty.samples = [];
 h.calls[2].respond(empty); await emptyQuery; await h.settle(); assert.match(h.markup, /本次沒有返回樣本，不能據此判定沒有缺漏/);
 
@@ -99,6 +132,16 @@ const freshMarkup = h.markup; stale.respond(fixture()); await timed; await h.set
 const unresolved = h.click('抽查尚未辨識來源'); const last = h.calls.at(-1); h.unmount();
 assert.equal(last.options.signal.aborted, true); last.respond(fixture()); await unresolved; await h.settle();
 assert.equal(h.afterUnmountMutations, 0); assert.equal(h.timers.size, 0);
+
+const excluded = factory(); excluded.render();
+const excludedBody = fixture(), excludedSample = excludedBody.samples[0];
+excludedSample.sectionScopeSummary = { basis: 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY', matchingStandardTables: 0, matchingStandardRows: 0,
+  excludedTables: 1, excludedRows: 3, unknownTables: 0, unknownRows: 0 };
+excludedSample.replay = { status: 'SOURCE_UNINDEXED', reason: 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT', gameCount: null, marketCount: null };
+const excludedQuery = excluded.click('抽查尚未辨識來源'); excluded.calls[0].respond(excludedBody); await excludedQuery; await excluded.settle();
+assert.match(excluded.markup, /有結構化資料列/); assert.match(excluded.markup, /符合既定範圍 0 表／0 列；明確排除 1 表／3 列/);
+assert.match(excluded.markup, /本次仍未辨識出可查閱盤口/); assert.doesNotMatch(excluded.markup, /可產生查閱內容|已確認成人|可下注|來源版面尚待支援/);
+excluded.unmount();
 
 const aborted = factory(); aborted.render(); const abortedQuery = aborted.click('抽查尚未辨識來源');
 aborted.calls[0].reject(Object.assign(new Error('private abort'), { name: 'AbortError' })); await abortedQuery; await aborted.settle();
