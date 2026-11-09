@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { SoccerCalibrationPanel } from './calibration-panel.js';
+import { mergeSoccerProbabilityAudits } from '../../lib/soccer/probability-audit-aggregation.js';
 
 const count = value => Number.isSafeInteger(value) && value >= 0;
 const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -16,6 +18,38 @@ const reasonLabels = {
   CALIBRATION_PREGAME_DATABASE_RECEIPT_NOT_VERIFIED: '賽前預測保存憑據未通過核對',
   RESULT_NORMAL_FINAL_UNCONFIRMED: '尚未確認正常完賽',
 };
+function calibrationProbabilityScope(report) {
+  const scope = report?.validation?.probabilityAuditScope, freeze = report?.freeze;
+  return scope?.version === 'SOCCER-PROSPECTIVE-CALIBRATION-AUDIT-SCOPE-v1'
+    && scope.league === report.league && scope.fold === 'CALIBRATION_PROSPECTIVE_FROZEN'
+    && freeze?.status === 'DATABASE_FROZEN' && hash(scope.candidateHash) && scope.candidateHash === freeze.candidateHash
+    && hash(scope.planHash) && scope.planHash === freeze.planHash
+    && ['before', 'after'].every(arm => ['FT', 'HT'].every(period => hash(scope.modelHashes?.[arm]?.[period])))
+    && scope.modelHashes.before.FT === freeze.modelHash ? scope : null;
+}
+export function calibrationShadowProbabilityAudit(report, arm, period) {
+  const metric = report?.validation?.[arm]?.[period], audit = metric?.probabilityAudit, scope = calibrationProbabilityScope(report);
+  if (!audit || !['before', 'after'].includes(arm) || !['FT', 'HT'].includes(period)
+    || !scope || !count(metric.games) || metric.games !== report.untouchedValidatedGames || !hash(audit.modelHash)) return null;
+  try {
+    const normalized = mergeSoccerProbabilityAudits(null, audit, { league: report.league, period: `REGULATION_${period}`,
+      fold: scope.fold, modelHash: scope.modelHashes[arm][period] });
+    return normalized.cohort.sample === metric.games ? normalized : null;
+  } catch { return null; }
+}
+function calibrationProbabilityArmsValid(report) {
+  if (report.validation?.probabilityAuditScope != null && !calibrationProbabilityScope(report)) return false;
+  let sampleKeys = null;
+  for (const arm of ['before', 'after']) for (const period of ['FT', 'HT']) {
+    if (report.validation?.[arm]?.[period]?.probabilityAudit == null) continue;
+    const audit = calibrationShadowProbabilityAudit(report, arm, period);
+    if (!audit) return false;
+    const keys = JSON.stringify([...audit.sampleGameKeys].sort());
+    if (sampleKeys !== null && sampleKeys !== keys) return false;
+    sampleKeys = keys;
+  }
+  return true;
+}
 export function calibrationCheckReasons(report) {
   const v=report?.validation;
   if(v?.checkReasonUnit!=='CHECKS_AND_VALIDATION_RECORDS_NOT_UNIQUE_GAMES'
@@ -31,6 +65,7 @@ export function calibrationShadowReportValid(report, league) {
     && ['accepted', 'formalEligible', 'promotionEligible', 'baselineChanged', 'executable'].every(key => report[key] === false)
     && ['W', 'R', 'S'].every(key => report[key] === null);
   if (!common) return false;
+  if (!calibrationProbabilityArmsValid(report)) return false;
   // Optional for older API responses. When present, these are whole-population
   // database-clock counts, independent of the paged result-validation counts.
   const scheduleKeys = ['observedAt', 'startedGames', 'upcomingGames', 'nextUpcomingKickoffAt', 'kickoffStatusInterpretation'];
@@ -61,6 +96,7 @@ export function calibrationShadowReportValid(report, league) {
 export function mergeCalibrationReportPage(previous, report, afterSequence) {
   const page=report.validationPage, coverage=report.validationCoverage, value=report.validation;
   const invalid=()=>{throw Error('校準分批核對範圍不一致，筆數未知。');};
+  if (!calibrationProbabilityArmsValid(report)) invalid();
   if (!/^(?:0|[1-9]\d{0,17})$/.test(afterSequence) || !page || page.afterSequence!==afterSequence || !hash(page.revision)
     || typeof page.complete!=='boolean' || typeof page.reachedEnd!=='boolean'
     || (page.nextSequence!==null && !/^(?:0|[1-9]\d{0,17})$/.test(page.nextSequence))
@@ -75,6 +111,7 @@ export function mergeCalibrationReportPage(previous, report, afterSequence) {
   if (previous ? previous.validationPage.revision!==page.revision || previous.validationPage.nextSequence!==afterSequence
     || previous.league!==report.league || previous.captureGames!==report.captureGames
     || JSON.stringify(previous.freeze)!==JSON.stringify(report.freeze)
+    || JSON.stringify(previous.validation.probabilityAuditScope??null)!==JSON.stringify(value.probabilityAuditScope??null)
     : afterSequence!=='0') invalid();
   const readCaptures=(previous?.validationCoverage.readCaptures||0)+coverage.readCaptures;
   if (readCaptures>report.captureGames || page.reachedEnd && readCaptures!==report.captureGames) invalid();
@@ -92,6 +129,15 @@ export function mergeCalibrationReportPage(previous, report, afterSequence) {
       metric[key]=!games||infinite?null:((a?left[key]*a:0)+(b?right[key]*b:0))/games;
       if(state)metric[state]=!games?'UNAVAILABLE':infinite?'POSITIVE_INFINITY':'FINITE';
     }
+    const incomingAudit = calibrationShadowProbabilityAudit(report, arm, period);
+    if (right.probabilityAudit != null && !incomingAudit) invalid();
+    const previousAudit = left?.probabilityAudit;
+    if (incomingAudit && (!a || previousAudit)) {
+      try { metric.probabilityAudit = mergeSoccerProbabilityAudits(previousAudit || null, incomingAudit,
+        { league: report.league, period: `REGULATION_${period}`, fold: 'CALIBRATION_PROSPECTIVE_FROZEN',
+          modelHash: calibrationProbabilityScope(report).modelHashes[arm][period] }); }
+      catch { invalid(); }
+    } else metric.probabilityAudit = !b && previousAudit ? previousAudit : null;
     merged[arm][period]=metric;
   }
   const verified=(previous?.untouchedValidatedGames||0)+report.untouchedValidatedGames;
@@ -101,6 +147,16 @@ export function mergeCalibrationReportPage(previous, report, afterSequence) {
     validationStatus:!page.reachedEnd?'PARTIAL_HISTORY_READ':quarantined?'CONFLICTS_QUARANTINED':verified?'PROSPECTIVE_OBSERVATIONS_AVAILABLE':report.captureGames?'PENDING_RESULTS':'AWAITING_PREGAME_CAPTURES',
     validationCoverage:{...coverage,readCaptures,readResultCheckRows:(previous?.validationCoverage.readResultCheckRows||0)+coverage.readResultCheckRows,completeWithinRequestedScope:page.reachedEnd},
     validation:{...merged,untouchedVerifiedGames:verified,quarantinedGames:quarantined,completeWithinRequestedScope:page.reachedEnd}};
+}
+
+function CalibrationProbabilityArm({ report, arm, period }) {
+  const audit = calibrationShadowProbabilityAudit(report, arm, period), label = arm === 'before' ? '封存基準' : '校準候選';
+  const metric = value => Number.isFinite(value) && value >= 0 ? value.toFixed(4) : '—';
+  return <div className="soccerCalibrationProspectiveArm">
+    <SoccerCalibrationPanel audit={audit} period={period} league={report.league} label={label} evidenceMode="PROSPECTIVE"/>
+    {audit?.cohort.used === 0 && <p className="soccerAvailability">{label}{period === 'FT' ? '全場' : '上半場'}目前可評估 0 場；尚無分箱指標樣本。</p>}
+    {audit && <p className="soccerAvailability">最大非空分箱絕對差 MCE：主勝 {metric(audit.classes.home.MCE_Linf)}｜和局 {metric(audit.classes.draw.MCE_Linf)}｜客勝 {metric(audit.classes.away.MCE_Linf)}。以 0–1 機率差表示；空分箱不算作已校準。</p>}
+  </div>;
 }
 
 export function SoccerCalibrationShadowPanel({ league }) {
@@ -203,6 +259,10 @@ export function SoccerCalibrationShadowPanel({ league }) {
         <ul>{calibrationCheckReasons(report).map(row=><li key={row.code}>{row.label}：{row.count} 筆（{row.code}）</li>)}</ul>
       </details>}
       {count(report.quarantinedGames) && report.quarantinedGames > 0 && <p className="soccerAvailability">賽果衝突隔離 {report.quarantinedGames} 場，未列入已核對樣本。</p>}
+      <div aria-label="前瞻四組勝平負校準核對">
+        <p>全場、上半場各自比較封存基準與校準候選；每組保留主勝、和局、客勝的固定分箱。未提供的資料保持未知，0 樣本不代表校準通過。</p>
+        {['before', 'after'].flatMap(arm => ['FT', 'HT'].map(period => <CalibrationProbabilityArm key={`${arm}-${period}`} report={report} arm={arm} period={period}/>))}
+      </div>
       <p className="soccerAvailability">{report.freeze ? `方案封存：${time(report.freeze.frozenAt)}。` : '方案會在首次補存或分析時封存，只保存封存後的未開賽預測。'}{report.latestCapturedAt ? `最近保存：${time(report.latestCapturedAt)}。` : '尚無符合本方案的賽前預測。'}</p>
       <p className="soccerAvailability">已保存的預測筆數不等於模型驗收通過；正式評分仍須完成原盤規則、人員模型與收益誤差驗證。</p>
     </>}
