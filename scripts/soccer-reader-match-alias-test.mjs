@@ -10,6 +10,7 @@ const now=Date.parse('2026-10-20T00:00:00Z'),at=new Date(now).toISOString();
 // club's own https://sabahfc.az/contact identify the Azerbaijani/Baku identity.
 const aliases=[
   ['費倫巴治','Fenerbahce'],['沙巴巴庫','Sabah FK'],['多蒙特','Borussia Dortmund'],['拿玻里','Napoli'],
+  ['皇家貝迪斯','Real Betis'],['科木','Como'],['朗斯','Lens'],['維京','Viking FK'],
   ['波杜基林特','Bodo/Glimt'],['史特加','VfB Stuttgart'],['馬德里體育會','Atlético Madrid'],['波圖','FC Porto'],
   ['PSV燕豪芬','PSV Eindhoven'],['AEK雅典','AEK Athens'],['維拉利爾','Villarreal'],
   ['加拉塔沙雷','Galatasaray'],['寧斯','LASK Linz'],
