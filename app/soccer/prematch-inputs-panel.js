@@ -8,7 +8,7 @@ const status = value => value?.status === 'PROVIDER_REPORTED' ? '已取得來源
 const time = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }) : '尚未提供';
 function Receipt({ value }) {
   const receipt = value?.observationArchive;
-  return <p className="soccerSource">取得時間 {time(value?.source?.fetchedAt)}｜{receipt?.persisted === true ? '原始文件已保存並讀回核對' : '原始文件保存尚未確認'}</p>;
+  return <p className="soccerSource">取得時間 {time(value?.source?.fetchedAt || receipt?.fetchedAt)}｜{receipt?.persisted === true ? '原始文件已保存並讀回核對' : '原始文件保存尚未確認'}</p>;
 }
 
 export function SoccerPrematchInputsPanel({ evidence }) {

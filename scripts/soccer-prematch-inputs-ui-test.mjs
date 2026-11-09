@@ -16,4 +16,7 @@ assert.match(html, /0\.0°C/); assert.match(html, /0\.0 mm/); assert.match(html,
 assert.match(html, /原始文件已保存並讀回核對/); assert.match(html, /模型效果與正式評分仍須獨立驗證/);
 assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html, /<script>/);
 assert.match(html, /尚未提供/); assert.match(html, /Open-Meteo/);
+const derived = render({ prematchInputConnection: {}, teams: { home: { minutes: { players: [],
+  observationArchive: { persisted: true, fetchedAt: '2026-11-09T02:01:02Z' } } } } });
+assert.match(derived, /取得時間 2026\/11\/9\s+10:01:02/, 'derived forecasts show the archived input acquisition time when no single provider source exists');
 console.log('PASS prematch input display: measured zero, missing values, escaped names, attribution and no formal-scoring claim');
