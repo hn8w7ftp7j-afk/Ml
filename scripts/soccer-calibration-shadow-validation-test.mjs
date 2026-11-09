@@ -163,6 +163,15 @@ const revision='a'.repeat(64), pagedDeps={...deps,
     return {captureIds:f.records.slice(at,at+1).map(r=>r.captureReceipt.captureId),nextSequence:at<2?String(at+1):null,completeWithinRequestedScope:at>=2};
   },
 };
+let interruptedClock=f.now;
+const interruptedFirst=await readSoccerCalibrationShadowReport('epl',{...pagedDeps,now:()=>interruptedClock,
+  readHistoryPage:async(...args)=>{
+    const checks=await deps.readHistory(...args);interruptedClock+=20000;
+    return {checks,totalCheckRows:checks.length,completeWithinRequestedScope:true,nextCheckId:null};
+  }},{afterSequence:'0',revision:null});
+assert.deepEqual(interruptedFirst.validationPage,{afterSequence:'0',nextSequence:'0',complete:false,reachedEnd:false,revision});
+assert.equal(interruptedFirst.validationCoverage.readCaptures,0);
+assert.equal(interruptedFirst.untouchedValidatedGames,0,'a first-page deadline preserves its exact retry cursor and does not admit a partial capture');
 let next='0',verifiedTotal=0,quarantinedTotal=0,readTotal=0;
 do{
   const part=await readSoccerCalibrationShadowReport('epl',pagedDeps,{afterSequence:next,revision:next==='0'?null:revision});

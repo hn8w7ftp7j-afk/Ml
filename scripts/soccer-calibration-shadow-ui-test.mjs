@@ -139,6 +139,23 @@ const merge=readContext.mergeCalibrationReportPage,one=merge(null,page(),'0'),bo
 assert.equal(both.validation.before.FT.scoreLogLoss,2);assert.equal(both.validationCoverage.readCaptures,2);
 assert.equal(both.validationCoverage.readResultCheckRows,6);assert.equal(both.validation.checkReasons.CALIBRATION_MATCH_NOT_FINISHED,2);
 assert.equal(both.formalEligible,false);assert.equal(both.S,null);
+const unfinished=(after='0')=>({...page(after),untouchedValidatedGames:0,
+  validationCoverage:{readCaptures:0,totalCaptures:2,readResultCheckRows:3,completeWithinRequestedScope:false},
+  validationPage:{...page(after).validationPage,afterSequence:after,nextSequence:after,complete:false,reachedEnd:false},
+  validation:{untouchedVerifiedGames:0,quarantinedGames:0,checkReasons:{},before:{FT:{games:0},HT:{games:0}},after:{FT:{games:0},HT:{games:0}}}});
+const firstInterrupted=merge(null,unfinished(),'0');
+assert.equal(firstInterrupted.validationCoverage.readCaptures,0);assert.equal(firstInterrupted.captureGames,2);
+assert.equal(firstInterrupted.validationPage.nextSequence,'0');assert.equal(firstInterrupted.validationCoverage.completeWithinRequestedScope,false);
+const laterInterrupted=merge(one,unfinished('7'),'7');
+assert.equal(laterInterrupted.validationCoverage.readCaptures,1);assert.equal(laterInterrupted.untouchedValidatedGames,1);
+const unfinishedUi=harness();unfinishedUi.render();unfinishedUi.calls[0].respond({ok:true,report:unfinished()});await unfinishedUi.settle();
+assert.match(unfinishedUi.markup,/已讀 0／2 場/);assert.doesNotMatch(unfinishedUi.markup,/範圍不一致/);
+assert.equal(unfinishedUi.calls.length,1,'unfinished first capture retains cursor 0 without launching an unbounded retry loop');
+unfinishedUi.click('更新保存狀態');assert.match(unfinishedUi.calls[1].url,/afterSequence=0/);unfinishedUi.unmount();
+for(const malformed of [{...unfinished(),validationPage:{...unfinished().validationPage,nextSequence:'7'}},
+  {...unfinished(),validationCoverage:{...unfinished().validationCoverage,readCaptures:1}},
+  {...page(),validationPage:{...page().validationPage,nextSequence:'0'}}])
+  assert.throws(()=>merge(null,malformed,'0'),/範圍不一致/,'only an incomplete capture may keep the exact input cursor; completed pages still advance');
 const kickoffFirst = merge(null, { ...page(), ...schedule() }, '0');
 const kickoffLast = merge(kickoffFirst, { ...page('7'), ...schedule({ observedAt: '2026-11-05T00:01:00Z' }) }, '7');
 assert.equal(kickoffLast.startedGames, 1); assert.equal(kickoffLast.upcomingGames, 1);

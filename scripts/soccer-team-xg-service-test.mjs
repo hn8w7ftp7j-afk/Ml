@@ -30,6 +30,7 @@ try{
   const game=freshEvidence().game,query={league:'epl',date:game.date,eventId:game.sourceId};
   let buildCount=0;
   const dependencies={
+    enrichSoccerPrematchInputs:async evidence=>evidence,
     fetchSoccerSchedule:async()=>({ok:true,games:[game]}),fetchSoccerPrematch:async()=>freshEvidence(),
     fetchSoccerWorkload:async()=>({ok:false,status:'INCOMPLETE',teams:{},sources:[],modelEffectApplied:false,executable:false}),
     loadSoccerReaderSnapshot:async()=>null,

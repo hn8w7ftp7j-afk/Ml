@@ -7,6 +7,9 @@ import { soccerFormalEvidenceReadiness } from '../lib/soccer/formal-evidence-rea
 import { soccerScoringReadiness } from '../lib/soccer/scoring-readiness.js';
 import { scoreSoccerQuote } from '../lib/soccer/soccer-scoring.js';
 import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
+import { fetchSoccerWorkload } from '../lib/soccer/workload.js';
+import { fetchSoccerMatchConditionsEvidence } from '../lib/soccer/match-conditions-evidence.js';
+import { soccerCurrentObservationAvailability, restoreSoccerObservationAvailability } from '../lib/soccer/observation-store.js';
 
 const fixture = await soccerSqlFixture();
 const before = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_V2_URL: process.env.DATABASE_V2_URL };
@@ -126,10 +129,63 @@ try {
     assert.equal(audit(forgedField).checks.find(check => check.field === 'weather').status, 'BLOCKED',
       'copying the document hash into a field absent from the original normalizer never grants authority');
     const forgedFieldClone = structuredClone(forgedField);
-    assert.equal(await restoreSoccerCurrentSourceAvailability(forgedFieldClone), false,
-      'default restore rejects an invented field claiming the retained document');
+    assert.equal(await restoreSoccerCurrentSourceAvailability(forgedFieldClone), true,
+      'an invented external field cannot erase original summary availability');
+    assert.equal(root(audit(forgedFieldClone)).status, 'PASS');
+    assert.equal(soccerCurrentSourceAvailability(forgedFieldClone.weather.source,
+      { evidence: forgedFieldClone, game: forgedFieldClone.game, field: 'weather' }), null,
+      'the original summary receipt never grants the invented weather scope');
     assert.equal(audit(forgedFieldClone).checks.find(check => check.field === 'weather').status, 'BLOCKED',
       'default restore only rebinds fields actually reconstructed from the retained document');
+    assert.equal(soccerCurrentObservationAvailability(forgedFieldClone.weather.source,
+      { evidence: forgedFieldClone, field: 'weather' }), null,
+      'an external verifier also rejects copied summary metadata without its own source proof');
+
+    // A real later producer may reuse the summary hash while its independent
+    // DB archive is temporarily unavailable. Reload retains the raw summary's
+    // own authority, without turning that receipt into authority for the field.
+    const partial = fresh(league); partial.sourceDocumentArchive = await archiveSoccerSourceDocument(partial);
+    const workload = await fetchSoccerWorkload(partial.game, { includePlayerMinutes: false, fetchImpl: async url => {
+      const parsed = new URL(url), teamId = parsed.pathname.match(/teams\/(\d+)/)[1], year = Number(parsed.searchParams.get('season'));
+      return { ok: true, url, json: async () => ({ status: 'success', team: { id: teamId }, requestedSeason: { year }, events: [] }) };
+    } });
+    const conditions = await fetchSoccerMatchConditionsEvidence({ game: partial.game, evidence: partial, workload },
+      { fetchVenueGeography: async () => ({ ok: false }) });
+    const externalFields = league === 'ucl' ? ['travel', 'uclContext'] : ['travel'];
+    for (const field of externalFields) {
+      assert.ok(conditions[field].value, `${league} ${field}: actual producer emitted a partial observation`);
+      partial[field] = conditions[field];
+      partial[field].observationArchive = { status: 'UNAVAILABLE', persisted: false, reason: 'OBSERVATION_SOURCE_STORAGE_UNAVAILABLE' };
+    }
+    for (const receipt of [null, { status: 'UNAVAILABLE', persisted: false }, { status: 'ARCHIVED', persisted: true, receiptId: 'a'.repeat(64) }]) {
+      const savedPartial = structuredClone(partial);
+      for (const field of externalFields) {
+        if (receipt) savedPartial[field].observationArchive = receipt;
+        else delete savedPartial[field].observationArchive;
+      }
+      assert.equal(await restoreSoccerCurrentSourceAvailability(savedPartial), true,
+        'missing or forged derived receipts do not erase independently reconstructed raw summary facts');
+      assert.equal(root(audit(savedPartial)).status, 'PASS');
+      assert.ok(soccerCurrentSourceAvailability(savedPartial.teams.home.lineup.source,
+        { evidence: savedPartial, game: savedPartial.game, field: 'teams.home.lineup' }));
+      for (const field of externalFields) {
+        const context = { evidence: savedPartial, game: savedPartial.game, field };
+        assert.equal(soccerCurrentSourceAvailability(savedPartial[field].source, context), null);
+        assert.equal(soccerCurrentObservationAvailability(savedPartial[field].source, context), null);
+        assert.equal(await restoreSoccerObservationAvailability(savedPartial, { field }), false);
+      }
+    }
+    const missingMinutes = structuredClone(partial);
+    missingMinutes.teams.home.minutes = { status: 'VERIFIED', value: 90, source: { ...missingMinutes.source,
+      scope: { ...missingMinutes.source.scope, field: 'teams.home.minutes' } } };
+    assert.equal(await restoreSoccerCurrentSourceAvailability(missingMinutes), true,
+      'the original summary replay independently supplies its baseline when a later minutes field has no valid archive');
+    const minuteContext = { evidence: missingMinutes, game: missingMinutes.game, field: 'teams.home.minutes' };
+    assert.equal(soccerCurrentSourceAvailability(missingMinutes.teams.home.minutes.source, minuteContext), null);
+    assert.equal(soccerCurrentObservationAvailability(missingMinutes.teams.home.minutes.source, minuteContext), null);
+    assert.equal(await restoreSoccerObservationAvailability(missingMinutes, { field: 'teams.home.minutes' }), false);
+    assert.equal(audit(missingMinutes).checks.find(check => check.field === 'teams.home.minutes').status, 'BLOCKED',
+      'a forged VERIFIED minutes label remains blocked after independent raw-summary restoration');
     const changedObservation = fresh(league); changedObservation.teams.home.lineup.status = 'VERIFIED';
     changedObservation.sourceDocumentArchive = await archiveSoccerSourceDocument(changedObservation);
     assert.equal(soccerCurrentSourceAvailability(changedObservation.teams.home.lineup.source,
@@ -176,6 +232,7 @@ try {
     const { listSoccerAnalysisBoard } = await import('../lib/soccer/analysis-store.js');
     const serviceEvidence = fresh(league), game = serviceEvidence.game;
     const service = await analyzeSoccerGame({ league, date: game.date, eventId: game.sourceId }, {
+      enrichSoccerPrematchInputs: async evidence => evidence,
       ensureSoccerForwardProtocol: async () => { throw Error('unrelated forward capture disabled'); },
       fetchSoccerSchedule: async () => ({ ok: true, games: [game] }), fetchSoccerPrematch: async () => serviceEvidence,
       fetchSoccerWorkload: async () => ({ ok: false, status: 'INCOMPLETE', teams: {}, sources: [] }),
@@ -195,7 +252,7 @@ try {
     assert.equal(root(audit(onBoard.evidence)).status, 'PASS', 'board read restores private authority before current publication');
     assert.equal(onBoard.formalScoringEnabled, false);
   }
-  console.log('PASS current source availability: real PostgreSQL receipt + normalized JSON readback, current-only source timing, no publisher-time fabrication, private capability/clone/input/transport/cutoff/league guards, restore after current read and saved display separation; model and formal score gates remain blocked');
+  console.log('PASS current source availability: real PostgreSQL receipt + normalized JSON readback, current-only source timing, partial external archive failures isolated from original summary/XI, copied-field and forged-minutes authority denied, private capability/clone/input/transport/cutoff/league guards, current read and saved display separation; model and formal score gates remain blocked');
 } finally {
   for (const key of Object.keys(before)) { if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key]; }
   await fixture.close();

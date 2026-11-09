@@ -49,6 +49,7 @@ try{
   for(const [value,code,throws]of [[reader,'SCHEDULE_IDENTITY_UNVERIFIED',false],[null,'CAPTURE_MISSING',false],[unmatched,'SCHEDULE_IDENTITY_UNVERIFIED',false],[unknown,'SCHEDULE_IDENTITY_UNVERIFIED',false],[null,'STORAGE_UNAVAILABLE',true]]){
     let persisted=null;
     const response=await analyzeSoccerGame({league:'epl',date:game.date,eventId:game.sourceId},{
+      enrichSoccerPrematchInputs:async evidence=>evidence,
       ensureSoccerForwardProtocol:async()=>{throw Error('forward capture not part of fixture');},
       beginSoccerAnalysisRun:async()=>({runId:'diagnostic-fixture-run',requestSeq:'1',quoteGeneration:'1',startedAt:at}),
       fetchSoccerSchedule:async()=>schedule,recordSoccerCohort:async()=>{},

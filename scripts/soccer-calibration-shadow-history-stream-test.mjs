@@ -25,6 +25,7 @@ try{
   const game=normalizeSoccerSchedule({leagues:[raw.header.league],events:[raw.header]},'epl',source).games[0];
   const evidence=normalizeSoccerPrematch(raw,game,source,Date.now());
   const saved=await analyzeSoccerGame({league:'epl',date:game.date,eventId:id},{
+    enrichSoccerPrematchInputs:async evidence=>evidence,
     fetchSoccerSchedule:async()=>({ok:true,games:[game]}),fetchSoccerPrematch:async()=>evidence,
     fetchSoccerWorkload:async()=>({ok:false}),fetchSoccerTeamXg:async()=>({ok:false}),loadSoccerReaderSnapshot:async()=>null,
   });

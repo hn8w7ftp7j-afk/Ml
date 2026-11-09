@@ -24,9 +24,15 @@ function evidenceFor({ payload = structuredClone(raw), kickoff = now + 3600000, 
   return { evidence, payload, source };
 }
 try {
-  const { archiveSoccerSourceDocument, loadSoccerSourceDocument, SOCCER_SOURCE_DOCUMENT_MAX_BYTES } = await import('../lib/soccer/source-document-store.js');
+  const { archiveSoccerSourceDocument, loadSoccerSourceDocument, soccerSourceDocumentProof, SOCCER_SOURCE_DOCUMENT_MAX_BYTES } = await import('../lib/soccer/source-document-store.js');
   const first = evidenceFor(), serialized = JSON.stringify(first.evidence);
   assert.equal(serialized.includes('lastFiveGames'), false, 'the private document never serializes into normalized evidence');
+  const privateDocument = soccerSourceDocumentProof(first.evidence);
+  assert.deepEqual(JSON.parse(privateDocument.text), first.payload);
+  assert.equal(privateDocument.binding.contentHash, hash(first.payload));
+  assert.equal(soccerSourceDocumentProof(structuredClone(first.evidence)), null, 'public copies cannot recover a private source document');
+  privateDocument.binding.contentHash = '0'.repeat(64);
+  assert.equal(soccerSourceDocumentProof(first.evidence).binding.contentHash, hash(first.payload), 'document getters are detached from private bindings');
   const receipt = await archiveSoccerSourceDocument(first.evidence);
   assert.equal(receipt.status, 'ARCHIVED'); assert.equal(receipt.persisted, true); assert.equal(receipt.prematchReceipt, true);
   assert.equal(receipt.representation, 'NORMALIZED_JSON_DOCUMENT');
@@ -97,6 +103,7 @@ try {
   const { analyzeSoccerGame } = await import('../lib/soccer/analysis-service.js');
   let builtReceipt, savedBody;
   const makeDeps = value => ({
+    enrichSoccerPrematchInputs: async evidence => evidence,
     ensureSoccerForwardProtocol: async () => { throw Error('unrelated forward capture disabled'); },
     beginSoccerAnalysisRun: async () => ({ runId: 'source-archive-fixture', requestSeq: '1', quoteGeneration: '0', startedAt: iso(now) }),
     fetchSoccerSchedule: async () => ({ ok: true, games: [value.evidence.game] }), recordSoccerCohort: async () => {},

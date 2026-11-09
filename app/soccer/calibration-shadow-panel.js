@@ -61,12 +61,14 @@ export function calibrationShadowReportValid(report, league) {
 export function mergeCalibrationReportPage(previous, report, afterSequence) {
   const page=report.validationPage, coverage=report.validationCoverage, value=report.validation;
   const invalid=()=>{throw Error('校準分批核對範圍不一致，筆數未知。');};
-  if (!page || page.afterSequence!==afterSequence || !hash(page.revision)
+  if (!/^(?:0|[1-9]\d{0,17})$/.test(afterSequence) || !page || page.afterSequence!==afterSequence || !hash(page.revision)
     || typeof page.complete!=='boolean' || typeof page.reachedEnd!=='boolean'
-    || (page.nextSequence!==null && !/^[1-9]\d{0,17}$/.test(page.nextSequence))
+    || (page.nextSequence!==null && !/^(?:0|[1-9]\d{0,17})$/.test(page.nextSequence))
     || page.reachedEnd !== (page.nextSequence===null) || page.reachedEnd && !page.complete
     || page.complete && !page.reachedEnd && BigInt(page.nextSequence)<=BigInt(afterSequence)
-    || !coverage || !count(coverage.readResultCheckRows) || !count(report.quarantinedGames)
+    || !page.complete && page.nextSequence!==afterSequence
+    || !coverage || !count(coverage.readCaptures) || coverage.totalCaptures!==report.captureGames
+    || !count(coverage.readResultCheckRows) || !count(report.quarantinedGames)
     || !value || !count(value.untouchedVerifiedGames) || value.untouchedVerifiedGames!==report.untouchedValidatedGames
     || report.quarantinedGames+report.untouchedValidatedGames>coverage.readCaptures
     || !page.complete && coverage.readCaptures!==0) invalid();
