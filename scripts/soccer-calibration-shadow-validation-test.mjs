@@ -215,7 +215,8 @@ const chronologyForgedWithdrawal = structuredClone(chronologyWithdrawal);
 chronologyForgedWithdrawal.resultDocuments.summaries[0].source.contentHash = '0'.repeat(64);
 async function chronologyReport(checks, boundedHistory) {
   const chronologyDeps = { ...deps, now: () => chronologyNow,
-    baseReport: async () => ({ captureGames: 1, freeze: f.freezeReceipt }),
+    baseReport: async () => ({ captureGames: 1, freeze: { ...f.freezeReceipt,
+      modelHash: f.artifacts.candidate.modelHash, halfTimeModelHash: f.artifacts.candidate.halfTimeModelHash } }),
     loadEvidence: async () => f.context([chronologyRecord.captureReceipt.captureId]),
     listCaptureIds: async () => ({ captureIds: [chronologyRecord.captureReceipt.captureId], nextSequence: null, completeWithinRequestedScope: true }),
     readRevision: async () => ({ captures: 1, revision }),

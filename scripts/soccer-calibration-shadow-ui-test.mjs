@@ -4,12 +4,19 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
+import { buildSoccerProbabilityAudit } from '../lib/soccer/probability-audit.js';
+import { mergeSoccerProbabilityAudits } from '../lib/soccer/probability-audit-aggregation.js';
 
 const compiled = await transform(fs.readFileSync('app/soccer/calibration-shadow-panel.js', 'utf8')
   .replace(/^import .*?;\n/gm, '').replace(/export function/g, 'function'), {
   filename: 'calibration-shadow-panel.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } },
 });
-const readContext = vm.createContext({ React }); vm.runInContext(compiled.code, readContext);
+const calibrationCompiled = await transform(fs.readFileSync('app/soccer/calibration-panel.js', 'utf8').replace(/export function/g, 'function'), {
+  filename: 'calibration-panel.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } },
+});
+const calibrationContext = vm.createContext({ React }); vm.runInContext(calibrationCompiled.code, calibrationContext);
+const componentGlobals = { React, SoccerCalibrationPanel: calibrationContext.SoccerCalibrationPanel, mergeSoccerProbabilityAudits };
+const readContext = vm.createContext(componentGlobals); vm.runInContext(compiled.code, readContext);
 const report = (league = 'epl') => ({ version: 'SOCCER-CALIBRATION-SHADOW-v1', league,
   status: 'SHADOW_COLLECTION_ACTIVE', freeze: { status: 'DATABASE_FROZEN', frozenAt: '2026-11-01T00:00:00Z',
     candidateHash: 'a'.repeat(64), planHash: 'b'.repeat(64), modelHash: 'c'.repeat(64), halfTimeModelHash: 'd'.repeat(64) },
@@ -36,7 +43,7 @@ for (const patch of [{ league: 'ucl' }, { captureGames: -1 }, { untouchedValidat
 function harness() {
   let index = 0, dirty = false, tree, mounted = true, updatesAfterUnmount = 0, props = { league: 'epl' };
   const hooks = [], effects = [], calls = [], timers = new Map(); let timerId = 0;
-  const context = vm.createContext({ React, URLSearchParams, AbortController,
+  const context = vm.createContext({ ...componentGlobals, URLSearchParams, AbortController,
     useState: initial => { const at = index++; if (!(at in hooks)) hooks[at] = initial;
       return [hooks[at], value => { if (!mounted) { updatesAfterUnmount++; return; }
         hooks[at] = typeof value === 'function' ? value(hooks[at]) : value; dirty = true; }]; },
@@ -180,3 +187,128 @@ moving.calls[1].respond({ok:true,report:page('7')});await moving.settle();
 assert.equal(moving.calls.length,3);assert.doesNotMatch(moving.markup,/已核對前瞻賽果 2 場/);
 moving.unmount();
 console.log('PASS automatic calibration continuation: cumulative counts and weighted metrics, exact cursor/revision chain, incomplete-to-complete transition, bounded snapshot restart, duplicate/gap/cross-league rejection and cancellation');
+
+const auditModels = { before: { FT: 'c'.repeat(64), HT: '1'.repeat(64) }, after: { FT: '2'.repeat(64), HT: '3'.repeat(64) } };
+const probabilityAuditScope = () => ({ version: 'SOCCER-PROSPECTIVE-CALIBRATION-AUDIT-SCOPE-v1', league: 'epl',
+  candidateHash: 'a'.repeat(64), planHash: 'b'.repeat(64), fold: 'CALIBRATION_PROSPECTIVE_FROZEN',
+  modelHashes: structuredClone(auditModels) });
+const forecasts = { before: { FT: { home: .6, draw: .2, away: .2 }, HT: { home: .2, draw: .6, away: .2 } },
+  after: { FT: { home: .8, draw: .1, away: .1 }, HT: { home: .2, draw: .2, away: .6 } } };
+function probabilityAudit(arm, period, outcomes, league = 'epl') {
+  const scope = { league, period: `REGULATION_${period}`, fold: 'CALIBRATION_PROSPECTIVE_FROZEN', modelHash: auditModels[arm][period] };
+  const records = outcomes.map(([eventId, actualOutcome]) => ({ ...scope, eventId, actualOutcome, status: 'EVALUATED',
+    probabilities: forecasts[arm][period], retainedMass: 1, tailMass: 0 }));
+  return buildSoccerProbabilityAudit(records, { ...scope, includeGameIdentities: true });
+}
+function auditedPage(cursor = '0') {
+  const value = page(cursor), outcome = cursor === '0' ? ['101', 'home'] : ['102', 'draw'];
+  value.validation.probabilityAuditScope = probabilityAuditScope();
+  for (const arm of ['before', 'after']) for (const period of ['FT', 'HT'])
+    value.validation[arm][period].probabilityAudit = probabilityAudit(arm, period, [outcome]);
+  return value;
+}
+const firstAuditPage = merge(null, auditedPage(), '0'), joinedAuditPages = merge(firstAuditPage, auditedPage('7'), '7');
+const compositionScopedPage = auditedPage();
+for (const arm of ['before', 'after']) for (const period of ['FT', 'HT']) {
+  compositionScopedPage.validation[arm][period].probabilityAudit.league = null;
+  compositionScopedPage.validation[arm][period].probabilityAudit.fold = null;
+}
+assert.equal(valid(compositionScopedPage, 'epl'), true, 'the actual producer can leave top-level optional scope null only when every composition row proves the expected exact scope');
+assert.equal(merge(null, compositionScopedPage, '0').validation.after.HT.probabilityAudit.league, 'epl');
+for (const arm of ['before', 'after']) for (const period of ['FT', 'HT']) {
+  const actual = joinedAuditPages.validation[arm][period].probabilityAudit;
+  const expected = probabilityAudit(arm, period, [['101', 'home'], ['102', 'draw']]);
+  assert.equal(actual.league, 'epl'); assert.equal(actual.period, `REGULATION_${period}`);
+  assert.equal(actual.modelHash, auditModels[arm][period]); assert.equal(actual.cohort.sample, 2);
+  for (const key of ['home', 'draw', 'away']) {
+    assert.ok(Math.abs(actual.classes[key].ECE_L1 - expected.classes[key].ECE_L1) < 1e-12);
+    assert.ok(Math.abs(actual.classes[key].REL_L2 - expected.classes[key].REL_L2) < 1e-12);
+    assert.deepEqual(JSON.parse(JSON.stringify(actual.classes[key].bins)), expected.classes[key].bins);
+  }
+}
+const combinedHome = joinedAuditPages.validation.before.FT.probabilityAudit.classes.home;
+assert.ok(Math.abs(combinedHome.ECE_L1 - .1) < 1e-12, 'opposite residuals in the same bin cancel after sufficient-statistic merge; averaging page ECE would be .5');
+assert.ok(Math.abs(combinedHome.REL_L2 - .01) < 1e-12); assert.ok(Math.abs(combinedHome.MCE_Linf - .1) < 1e-12);
+const auditedUi = harness(); auditedUi.render(); auditedUi.calls[0].respond({ ok: true, report: auditedPage() }); await auditedUi.settle();
+auditedUi.calls[1].respond({ ok: true, report: auditedPage('7') }); await auditedUi.settle();
+for (const label of ['封存基準｜全場', '封存基準｜上半場', '校準候選｜全場', '校準候選｜上半場'])
+  assert.match(auditedUi.markup, new RegExp(`${label}勝平負校準核對`));
+assert.match(auditedUi.markup, /最大非空分箱絕對差 MCE：主勝 0\.1000/);
+assert.match(auditedUi.markup, /<th scope="row">主勝<\/th><td>2<\/td><td>0\.1000<\/td><td>0\.0100<\/td>/);
+assert.match(auditedUi.markup, /開賽前已封存的預測與賽後核對/);
+assert.match(auditedUi.markup, /同一場的三種結果不計為三場比賽/);
+assert.match(auditedUi.markup, /0 樣本不代表校準通過/);
+assert.doesNotMatch(auditedUi.markup, /NaN|undefined|Infinity|資料為事後回補/);
+const legacyAuditPage = page('7'); legacyAuditPage.validation.probabilityAuditScope = probabilityAuditScope();
+const legacyMerged = merge(firstAuditPage, legacyAuditPage, '7');
+assert.equal(legacyMerged.validation.before.FT.probabilityAudit, null, 'a missing nonempty page audit cannot be silently treated as empty');
+const interruptedAuditPage = unfinished('7'); interruptedAuditPage.validation.probabilityAuditScope = probabilityAuditScope();
+const partialAudit = merge(firstAuditPage, interruptedAuditPage, '7');
+assert.equal(partialAudit.validation.before.FT.probabilityAudit.cohort.sample, 1, 'an incomplete zero-capture page preserves already replayed bins');
+const zero = report(); zero.validation = { before: {}, after: {}, probabilityAuditScope: probabilityAuditScope() };
+for (const arm of ['before', 'after']) for (const period of ['FT', 'HT']) zero.validation[arm][period] = {
+  games: 0, probabilityAudit: probabilityAudit(arm, period, []) };
+const emptyAuditUi = harness(); emptyAuditUi.render(); emptyAuditUi.calls[0].respond({ ok: true, report: zero }); await emptyAuditUi.settle();
+assert.match(emptyAuditUi.markup, /目前可評估 0 場；尚無分箱指標樣本/);
+assert.match(emptyAuditUi.markup, /<th scope="row">主勝<\/th><td>0<\/td><td>—<\/td><td>—<\/td>/);
+assert.doesNotMatch(emptyAuditUi.markup, /主勝 0\.0000|可評估 0／0 筆（100/);
+for (const mutate of [
+  value => { value.validation.before.FT.probabilityAudit.league = 'ucl'; },
+  value => { value.validation.before.FT.probabilityAudit.period = 'REGULATION_HT'; },
+  value => { value.validation.before.FT.probabilityAudit.fold = 'CALIBRATION_DEVELOPMENT_REUSED'; },
+  value => { value.validation.before.FT.probabilityAudit.modelHash = '9'.repeat(64); },
+  value => { value.validation.before.FT.probabilityAudit.classes.home.bins[6].count++; },
+  value => { value.validation.after.HT.probabilityAudit = probabilityAudit('after', 'HT', [['999', 'home']]); },
+]) {
+  const bad = auditedPage(); mutate(bad); assert.equal(valid(bad, 'epl'), false, 'mis-scoped or inconsistent audit data cannot be labelled prospective');
+  assert.throws(() => merge(null, bad, '0'), /範圍不一致/);
+}
+const duplicateAuditPage = auditedPage('7');
+for (const arm of ['before', 'after']) for (const period of ['FT', 'HT'])
+  duplicateAuditPage.validation[arm][period].probabilityAudit = probabilityAudit(arm, period, [['101', 'draw']]);
+assert.throws(() => merge(firstAuditPage, duplicateAuditPage, '7'), /範圍不一致/, 'the same real game cannot be counted again on a later page');
+for (const arm of ['before', 'after']) for (const period of ['FT', 'HT']) {
+  const arbitraryModel = auditedPage(), audit = arbitraryModel.validation[arm][period].probabilityAudit;
+  audit.modelHash = '9'.repeat(64); audit.composition.forEach(row => { row.modelHash = audit.modelHash; });
+  assert.equal(valid(arbitraryModel, 'epl'), false, `${arm}.${period}: an internally consistent arbitrary model cannot stand in for the frozen arm`);
+  assert.throws(() => merge(null, arbitraryModel, '0'), /範圍不一致/);
+}
+for (const period of ['FT', 'HT']) {
+  const swapped = auditedPage(), before = swapped.validation.before[period].probabilityAudit;
+  swapped.validation.before[period].probabilityAudit = swapped.validation.after[period].probabilityAudit;
+  swapped.validation.after[period].probabilityAudit = before;
+  assert.equal(valid(swapped, 'epl'), false, `${period}: baseline and candidate model audits cannot exchange arm labels`);
+  assert.throws(() => merge(null, swapped, '0'), /範圍不一致/);
+}
+for (const arm of ['before', 'after']) {
+  const swappedPeriods = auditedPage(), fullTime = swappedPeriods.validation[arm].FT.probabilityAudit;
+  swappedPeriods.validation[arm].FT.probabilityAudit = swappedPeriods.validation[arm].HT.probabilityAudit;
+  swappedPeriods.validation[arm].HT.probabilityAudit = fullTime;
+  for (const period of ['FT', 'HT']) {
+    const audit = swappedPeriods.validation[arm][period].probabilityAudit;
+    audit.period = `REGULATION_${period}`; audit.composition.forEach(row => { row.period = audit.period; });
+  }
+  assert.equal(valid(swappedPeriods, 'epl'), false, `${arm}: relabelling the period cannot move a model into the other frozen period slot`);
+}
+for (const mutate of [
+  value => { delete value.validation.probabilityAuditScope; },
+  value => { value.validation.probabilityAuditScope.version = 'UNVERIFIED'; },
+  value => { value.validation.probabilityAuditScope.league = 'ucl'; },
+  value => { value.validation.probabilityAuditScope.candidateHash = '9'.repeat(64); },
+  value => { value.validation.probabilityAuditScope.planHash = '9'.repeat(64); },
+  value => { value.validation.probabilityAuditScope.modelHashes.before.HT = value.freeze.halfTimeModelHash; },
+  value => { value.validation.probabilityAuditScope.modelHashes.after.FT = null; },
+]) {
+  const unbound = auditedPage(); mutate(unbound);
+  assert.equal(valid(unbound, 'epl'), false, 'all four hashes require an exact frozen candidate/plan-bound server descriptor');
+  assert.throws(() => merge(null, unbound, '0'), /範圍不一致/);
+}
+const changedMappingPage = auditedPage('7'), changedMappingAudit = changedMappingPage.validation.after.HT.probabilityAudit;
+changedMappingPage.validation.probabilityAuditScope.modelHashes.after.HT = changedMappingAudit.modelHash = '8'.repeat(64);
+changedMappingAudit.composition.forEach(row => { row.modelHash = changedMappingAudit.modelHash; });
+assert.throws(() => merge(firstAuditPage, changedMappingPage, '7'), /範圍不一致/,
+  'an internally consistent replacement descriptor cannot change frozen arm mappings midway through the same revision');
+assert.notEqual(auditModels.before.HT, report().freeze.halfTimeModelHash,
+  'the joint baseline HT distribution hash is not confused with its component half-time model hash');
+assert.equal(joinedAuditPages.accepted, false); assert.equal(joinedAuditPages.formalEligible, false); assert.equal(joinedAuditPages.S, null);
+console.log('PASS prospective four-arm classwise UI: exact fixed-bin sufficient-statistic merge, ECE/REL/MCE recomputation, each arm bound to trusted frozen candidate/plan model mapping, arbitrary self-consistent hash and arm/period swaps rejected, duplicate and malformed audit rejection, legacy unknown, zero samples and existing page fences preserved');
