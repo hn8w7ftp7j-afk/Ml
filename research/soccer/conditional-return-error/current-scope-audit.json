@@ -1,0 +1,46 @@
+{
+  "version": "CONDITIONAL-RETURN-RESEARCH-CURRENT-SCOPE-AUDIT-v1",
+  "clientDate": "2026-11-10",
+  "sourceCommit": "11956a087eb733f88310a1d39457306602d842de",
+  "sourceVersion": "11.10.108",
+  "inspectionScope": "READ_ONLY_REPOSITORY_AND_PRODUCTION_DEPLOYMENT_AND_ENVIRONMENT_METADATA_NOT_A_FULL_PRODUCTION_DB_OR_UI_AUDIT",
+  "productionDeploymentAtInspection": {
+    "id": "dpl_EHurdYVoMJEMuauRL61eo92t4DqT",
+    "commit": "11956a087eb733f88310a1d39457306602d842de",
+    "state": "READY"
+  },
+  "findings": [
+    {
+      "stage": "TOTAL_CONDITIONAL_EXPECTED_RETURN_ERROR",
+      "status": "BLOCKED",
+      "source": "lib/soccer/scoring-input-preparation.js",
+      "reason": "NO_ACCEPTED_TOTAL_ERROR_VALIDATION_ARTIFACT",
+      "candidateWork": "Isolated estimator, original-evidence bridge, dependency/conditional-error counterexamples and reproducible engineering report in this directory.",
+      "notEstablished": ["accepted statistical method", "conditional dependency assumptions", "target and historical numerical error allowances", "transfer/drift/omitted-context bounds", "new untouched validation"]
+    },
+    {
+      "stage": "CURRENT_MATCH_NPXG",
+      "status": "NO_CURRENT_USABLE_REPOSITORY_ARTIFACT_IDENTIFIED",
+      "sources": ["lib/soccer/team-xg.js", "lib/soccer/match-xg.js", "lib/soccer/match-xg-frozen.js", "lib/soccer/striker-source-archive.js"],
+      "reason": "Existing Opta adapter covers team-season xG aggregates; pinned StatsBomb match data covers 2015/16 EPL, not current EPL/UCL.",
+      "providerEnvironmentMetadata": "No matching Striker/Sportmonks/Wyscout/StatsBomb/npxG provider key names in the returned 47 metadata entries; hiddenProductionEnvCount was 0. No values decrypted or retained.",
+      "limitation": "This does not prove that every possible provider or Production database row lacks useful data. The database was not enumerated and no new data entitlement was acquired."
+    },
+    {
+      "stage": "PERSONNEL_AND_CALIBRATION_ACCEPTANCE",
+      "status": "NOT_ACCEPTED",
+      "reason": "Minute/model diagnostics do not establish complete personnel inputs, goal-distribution impact or new untouched calibration acceptance.",
+      "limitation": "Existing minute-model metrics are mixed; a saved minute prediction is not proof of model superiority."
+    },
+    {
+      "stage": "PRODUCTION_MODEL_BEHAVIOR",
+      "status": "NO_CHANGE_REQUESTED_BY_THIS_RESEARCH",
+      "reason": "Research files are not imported by application/runtime or added to accepted registries. Existing rules and S eligibility remain unchanged."
+    }
+  ],
+  "accepted": false,
+  "formalEligible": false,
+  "formalMargin": null,
+  "R": null,
+  "S": null
+}

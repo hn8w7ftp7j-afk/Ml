@@ -1,0 +1,54 @@
+{
+  "version": "CONDITIONAL-RETURN-ERROR-ASSUMPTION-STUDY-v1",
+  "status": "RESEARCH_PROPOSAL_NOT_REGISTERED_OR_ACCEPTED",
+  "registeredAt": null,
+  "calibrationFrom": null,
+  "calibrationBefore": null,
+  "modelTrainedThrough": null,
+  "alpha": 0.1,
+  "alphaInterpretation": "Single prespecified target under the stated unverified assumptions; this is a research proposal parameter, not an approved production threshold.",
+  "scope": {
+    "league": null,
+    "period": null,
+    "variant": null,
+    "modelHash": null,
+    "settlementRuleFamilyHash": null,
+    "kind": null,
+    "side": null,
+    "lineSide": null
+  },
+  "selectionPolicy": "DECLARED_WITHOUT_OUTCOMES",
+  "weightNormalization": "NORMALIZE_DECLARED_WEIGHTS",
+  "dependencyPolicy": "DECLARED_BLOCKS_NOT_AUTOMATICALLY_VERIFIED",
+  "featureDescriptor": {
+    "version": "CONDITIONAL_RETURN_FEATURES-v1",
+    "metric": "WEIGHTED_L1",
+    "dimensions": [
+      {"name": "homeRate", "scale": 1, "weight": 1},
+      {"name": "awayRate", "scale": 1, "weight": 1},
+      {"name": "rho", "scale": 1, "weight": 1},
+      {"name": "lineMagnitude", "scale": 1, "weight": 1},
+      {"name": "lineBoundary", "scale": 1, "weight": 1},
+      {"name": "water", "scale": 1, "weight": 1}
+    ]
+  },
+  "featureInterpretation": "Minimal saved score-model and original-quote projection. It does not contain full npxG, personnel or match conditions, and does not establish full conditioning sufficiency.",
+  "contextOmissionInterpretation": "Total allowance for the target and weighted-neighbor full-context versus reduced-feature conditioning gaps, not only a target gap.",
+  "numericalTailInterpretation": "Total allowance for target and weighted-neighbor source arithmetic and forecast tails; calculator rounding is separately enclosed.",
+  "assumptions": {
+    "commonDesignFixedBeforeOutcomes": false,
+    "conditionalBlockIndependence": false,
+    "outcomeIndependentInclusion": false,
+    "requestedScopeComplete": false,
+    "singlePrespecifiedTarget": false,
+    "transferLipschitzBound": null,
+    "timeShiftBound": null,
+    "contextOmissionBound": null,
+    "numericalTailBound": null
+  },
+  "accepted": false,
+  "formalEligible": false,
+  "formalMargin": null,
+  "R": null,
+  "S": null
+}

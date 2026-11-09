@@ -1,0 +1,80 @@
+{
+  "version": "CONDITIONAL-RETURN-ERROR-ENGINEERING-REPLAY-v1",
+  "status": "ENGINEERING_TESTS_PASS_RESEARCH_NOT_ACCEPTED",
+  "baseCommit": "11956a087eb733f88310a1d39457306602d842de",
+  "baseTree": "979b494265222e15418598fd250b576ba75843d5",
+  "productFilesChanged": false,
+  "productionDeploymentMutationAttempted": false,
+  "productionDataLoadedByReplay": false,
+  "newUntouchedOosValidation": false,
+  "verifiedConditionalIndependence": false,
+  "verifiedTransferOrOmittedContextBounds": false,
+  "accepted": false,
+  "formalEligible": false,
+  "formalMargin": null,
+  "R": null,
+  "S": null,
+  "checks": [
+    {
+      "command": "node research/soccer/conditional-return-error/test.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "evidence": "ISOLATED_SYNTHETIC_ENGINEERING_TESTS_ONLY"
+    },
+    {
+      "command": "node --experimental-loader=./scripts/soccer-synthetic-identity-loader.mjs research/soccer/conditional-return-error/bridge-test.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "evidence": "ISOLATED_SYNTHETIC_ENGINEERING_TESTS_ONLY"
+    }
+  ],
+  "sourceHashes": {
+    "research/soccer/conditional-return-error/README.md": "470d039faddeaa4c1e5ae9a0698568901872c2e46f0d46b2a42a068b14c099a1",
+    "research/soccer/conditional-return-error/bridge-test.mjs": "2f188e0121c61a75a47229fa94f0f52d52872b957557befae62e49af2b626d90",
+    "research/soccer/conditional-return-error/bridge.mjs": "a109f8fde0f1415ff67b52926a632c8f11b2a541f4d8d86825d0c7ea83d5922a",
+    "research/soccer/conditional-return-error/current-scope-audit.json": "b301956392823d409269121245a5fce8a48dbab99c1c446cbd17256fdcdb263e",
+    "research/soccer/conditional-return-error/estimator.mjs": "5bffae489a72d84bb91173fc91b531efa0182cc8cc79c4a158241a056bff9ee2",
+    "research/soccer/conditional-return-error/protocol.json": "e31b0912d069bbd4b7ee999a73d8eee8a8400b8ef920d465a8d25879be42c600",
+    "research/soccer/conditional-return-error/replay.mjs": "fd6a2cdd42618ab7ef8d61c7456830c13893ceb88282d5b6ed339cd1f3e89d0e",
+    "research/soccer/conditional-return-error/synthetic-fixture.mjs": "3c6eac2bf5a33178c9aed097d2653498e6a0467759687d6576c888b8d9d30102",
+    "research/soccer/conditional-return-error/test.mjs": "7dd65c815ed86a81964eea978f00dd84d35712fd48d2adb21be644d8666dbf87"
+  },
+  "dependencyHashes": {
+    "package.json": "cdc4d4ad883f0ae8666c909effd613c1842b412b7e6019f861a117b30623579f",
+    "package-lock.json": "04f630f9d371419321ecb0d3cc1d5516e7f91cc9062b5db93137f859cc7cb4e1",
+    "lib/soccer/return-error-model.js": "02b4a511fdfe8cc98cd92dec58c73cae3cf87ae06e01ced03d830740b9dbee5d",
+    "lib/soccer/market-return-validation.js": "567b1189d9b324f19efa3d4928740f8345503236864baa08182b5d07e4d8f4d3",
+    "lib/soccer/forward-validation.js": "63a3822a680e4918b4e3a84450fa299e12338825aad028828dbf35aed31217a6",
+    "lib/soccer/soccer-scoring.js": "6f86dcdb873665e9b851e6c6951cab41a156275828137d3743923c9167af2a33",
+    "lib/soccer/market-payoff.js": "5eb6297b912a9a260ae2d7f73cf7a5c00633c119ac1e0d51e62485673968aca9",
+    "lib/soccer/settlement-contract.js": "d84e0f4441fca0d91ce4da2c4e59ce163e2539af36675b569b59d4a03266bfc9",
+    "lib/soccer/scoring-input-preparation.js": "c3339076d6c14cc164991d2689bf0fa148700638e5c58705e3ae12dd58283e73",
+    "lib/soccer/scoring-bundle-registry.js": "1b00b0c3b14be36105585f5f2d1b6cd59dd38a13b88009b5d3166c364ec7dc3f",
+    "scripts/helpers/soccer-forward-fixture.mjs": "cf9c60fb91c397fc9f22ac9df77a31f4a2d1956128d95d40acee35f36e04618a",
+    "scripts/soccer-synthetic-identity-loader.mjs": "8882ea83c31cac6647bf71db908fa48db8759ea528146dfbd838bec95c2bc1f8"
+  },
+  "syntheticDemonstration": {
+    "provenance": "DETERMINISTIC_INVENTED_CALCULATOR_INPUT_NOT_PRODUCTION_DATA_OR_OOS",
+    "declaredGames": 2,
+    "withAllUnverifiedAssumptions": {
+      "status": "ASSUMPTION_CONDITIONAL_RESEARCH",
+      "conditionalTotalBound": 1.9308183826022856,
+      "formalMargin": null,
+      "R": null,
+      "S": null
+    },
+    "withUnknownContextNumericsAndIndependence": {
+      "status": "COMPONENTS_ONLY_MISSING_ASSUMPTIONS",
+      "conditionalTotalBound": null,
+      "reasons": [
+        "OMITTED_CONTEXT_BOUND_UNKNOWN",
+        "NUMERICAL_OR_TAIL_BOUND_UNKNOWN",
+        "CONDITIONAL_BLOCK_INDEPENDENCE_NOT_ESTABLISHED"
+      ],
+      "formalMargin": null,
+      "R": null,
+      "S": null
+    }
+  },
+  "interpretation": "Test execution and content reproducibility only; no real-game precision, source completeness, OOS improvement or formal R/S acceptance is established."
+}
