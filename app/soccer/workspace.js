@@ -7,6 +7,7 @@ import { soccerValidationArtifacts } from '../../lib/soccer/validation-frozen.js
 import { soccerHalfTimeArtifacts } from '../../lib/soccer/half-time-frozen.js';
 import { SoccerCalibrationPanel } from './calibration-panel.js';
 import { SoccerForwardValidationPanel } from './forward-validation-panel.js';
+import { SoccerModelFamilyPanel } from './model-family-panel.js';
 import { soccerHighScoreCandidates } from '../../lib/soccer/league-bet-status.js';
 const num=v=>Number.isFinite(v)?v.toFixed(2):'—';
 const time=v=>Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
@@ -17,6 +18,7 @@ export function SoccerValidationPanel({league}){
     <div className="soccerCalibrationGroup"><h3>全場｜逐年分事件校準</h3>{(research?.folds||[]).map(f=><SoccerCalibrationPanel key={f.testYear} league={league} period="FT" label={`${f.testYear} 年診斷`} audit={f.metrics?.probabilityAudit}/>)}</div>
     <div className="soccerCalibrationGroup"><h3>上半場｜分事件校準</h3><SoccerCalibrationPanel league={league} period="HT" label={halfTime?.period?`${halfTime.period} 年診斷`:'研究診斷'} audit={halfTime?.metrics?.probabilityAudit}/></div>
     <SoccerForwardValidationPanel league={league}/>
+    <SoccerModelFamilyPanel league={league}/>
     <p>目前正式評分與候選資格維持待驗證。球員、原盤與分析版本的依據可在各場分析結果內查閱。</p><a href="/soccer/specification">完整分析規格 2.2</a></section>;
 }
 export function SoccerRanking({games,states,run,now,externalBusy=false}){
