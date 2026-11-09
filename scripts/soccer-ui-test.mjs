@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { transform } from 'next/dist/build/swc/index.js';
 import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 
 const source = await readFile(new URL('../app/soccer/main-workspace.js', import.meta.url), 'utf8');
@@ -119,6 +122,31 @@ await test('successful empty source data is accepted separately from failed data
   const upcoming = { ...location, view: 'upcoming' };
   assert.equal(api.validateBoard({ ...board(upcoming), games: [game('epl', '2026-10-19')] }, upcoming).games[0].date, '2026-10-19');
 });
+await test('actual empty-board render limits absence claims to the returned source scope', async () => {
+  const branch = /\{!games\.length&&(<section className="emptyBoard soccerEmpty">.*?<\/section>)\}/s.exec(source);
+  assert.ok(branch, 'render the actual production empty-board branch');
+  const { code } = await transform(`function renderEmpty({ games, location, dateLabel, league, navigate }) { return !games.length && (${branch[1]}); }`, {
+    filename: 'soccer-empty-board.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } },
+  });
+  const ctx = vm.createContext({ React }); vm.runInContext(code, ctx);
+  for (const [leagueId, name] of [['EPL', '英超'], ['UCL', '歐冠 UCL']]) {
+    for (const view of ['schedule', 'upcoming']) {
+      const args = { games: [], location: { league: leagueId, date: '2026-11-10', view }, dateLabel: '2026-11-10', league: { name }, navigate() {} };
+      const markup = renderToStaticMarkup(ctx.renderEmpty(args));
+      assert.match(markup, view === 'schedule' ? /<h2>來源未列出當日賽事<\/h2>/ : /<h2>來源未列出近期賽事<\/h2>/);
+      assert.match(markup, /完整賽程仍未確認/);
+      assert.doesNotMatch(markup, /當日無賽事|未安排[^<]*賽事|確認沒有比賽/);
+      if (view === 'schedule') {
+        assert.ok(markup.includes(`2026-11-10（台灣時間）的${name}賽事`), 'preserve the selected league and date');
+        assert.match(markup, /查看近期賽程/);
+      } else {
+        assert.match(markup, /來源在目前查詢範圍沒有列出賽事/);
+        assert.doesNotMatch(markup, /查看近期賽程/);
+      }
+      assert.equal(renderToStaticMarkup(ctx.renderEmpty({ ...args, games: [game(leagueId.toLowerCase(), args.dateLabel)] })), '', 'a returned fixture cannot render the empty-source state');
+    }
+  }
+});
 await test('actual request sends league and date, rejects source errors and expired sessions', async () => {
   let captured;
   const ctx = context({ fetch: async (url, options) => { captured = { url, options }; return { ok: true, status: 200, json: async () => board() }; } });
@@ -209,7 +237,7 @@ await test('page exposes navigation, source evidence, empty/error states and mob
   assert.match(source, /正式評分尚未完成，有盤口仍不代表已有 S 分數/);
   assert.match(source, /role="alert"/);
   assert.match(source, /aria-busy=\{busy\}/);
-  assert.match(source, /當日無賽事/);
+  assert.match(source, /來源未列出當日賽事/);
   assert.match(css, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.soccerTableWrap\{overflow-x:auto/);
   assert.match(css, /min-height:44px/);
