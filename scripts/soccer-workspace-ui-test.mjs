@@ -20,6 +20,9 @@ let states=[],si=0;
 const ctx=vm.createContext({React,Date,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerTeamLabel,soccerValidationArtifacts,soccerHalfTimeArtifacts,
   SoccerRecordProvider:({children})=>children,SoccerRecordButton:()=>null,SoccerBetRecords:()=>React.createElement('p',null,'實際下注帳本'),
   SoccerForwardValidationPanel:({league})=>React.createElement('p',null,`${league} 前瞻封存與賽果核對`),
+  // Child request/state behavior is exercised by soccer-model-family-panel-test;
+  // this workspace test isolates that boundary and verifies its league wiring.
+  SoccerModelFamilyPanel:({league})=>React.createElement('p',null,`${league} 模型誤差核對`),
   useEffect:()=>{},useState:initial=>[states[si++]??(typeof initial==='function'?initial():initial),()=>{}]});
 vm.runInContext(`Object.assign(globalThis,(()=>{${calibrationCompiled.code};return {SoccerCalibrationPanel};})());`,ctx);
 vm.runInContext(compiled.code,ctx);
@@ -31,6 +34,8 @@ for(const view of ['board','results','ranking','records','data','validation']){
 assert.match(render('ranking'),/全部排名/);assert.match(render('ranking'),/時間順序排名/);
 assert.match(render('validation','epl'),/epl 前瞻封存與賽果核對/);
 assert.match(render('validation','ucl'),/ucl 前瞻封存與賽果核對/);
+assert.match(render('validation','epl'),/epl 模型誤差核對/);
+assert.match(render('validation','ucl'),/ucl 模型誤差核對/);
 const rankingNow=Date.parse('2026-10-20T00:00:00Z');
 for(const league of ['epl','ucl']){
   const fixtures=[

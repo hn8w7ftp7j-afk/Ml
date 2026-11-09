@@ -180,3 +180,69 @@ await assert.rejects(()=>readSoccerCalibrationShadowReport('epl',{...pagedDeps,
   readRevision:async()=>({captures:3,revision:++revisionReads===1?revision:'b'.repeat(64)})},
   {afterSequence:'2',revision}),e=>e.status===409,'a late correction on the final page invalidates the entire paged view');
 console.log('PASS resumable calibration replay: one complete capture history per page, full-pass totals/quarantine equivalence, no isolated-page full-scan claim, revision fenced before and after each replay');
+
+// A final result can be withdrawn without a reschedule, or corrected while
+// half-time detail is missing. Replay must inspect these full source payloads
+// before deciding whether they contain an admissible paired FT/HT result.
+const chronologyNow = f.now + 120000, chronologyRecord = f.records[0];
+function chronologyCheck(index, { sourceOffset, receiptOffset, live = false, homeScore = null, missingHalfTime = false } = {}) {
+  const resultDocuments = f.resultDocuments(chronologyRecord, { live, homeScore });
+  if (missingHalfTime) for (const team of resultDocuments.summaries[0].data.header.competitions[0].competitors)
+    delete team.linescores;
+  for (const document of [resultDocuments.scoreboard, ...resultDocuments.summaries]) {
+    document.source.fetchedAt = new Date(chronologyNow + sourceOffset).toISOString();
+    document.source.requestedAt = document.source.fetchedAt;
+    document.source.contentHash = createHash('sha256').update(JSON.stringify(document.data)).digest('hex');
+  }
+  return { checkId: index.toString(16).padStart(64, '0'), captureId: chronologyRecord.captureReceipt.captureId,
+    checkedAt: new Date(chronologyNow + receiptOffset).toISOString(), resultDocuments };
+}
+const chronologyFinal = chronologyCheck(2, { sourceOffset: -120000, receiptOffset: -110000 });
+const chronologyWithdrawal = chronologyCheck(1, { sourceOffset: -60000, receiptOffset: -50000, live: true, homeScore: 4 });
+const chronologyCorrection = chronologyCheck(1, { sourceOffset: -60000, receiptOffset: -50000, homeScore: 3, missingHalfTime: true });
+const chronologyEarlyPending = chronologyCheck(3, { sourceOffset: -180000, receiptOffset: -170000, live: true });
+const chronologyStaleLateReceipt = chronologyCheck(3, { sourceOffset: -180000, receiptOffset: -1000, live: true });
+const chronologyForgedWithdrawal = structuredClone(chronologyWithdrawal);
+chronologyForgedWithdrawal.resultDocuments.summaries[0].source.contentHash = '0'.repeat(64);
+async function chronologyReport(checks, boundedHistory) {
+  const chronologyDeps = { ...deps, now: () => chronologyNow,
+    baseReport: async () => ({ captureGames: 1, freeze: f.freezeReceipt }),
+    loadEvidence: async () => f.context([chronologyRecord.captureReceipt.captureId]),
+    listCaptureIds: async () => ({ captureIds: [chronologyRecord.captureReceipt.captureId], nextSequence: null, completeWithinRequestedScope: true }),
+    readRevision: async () => ({ captures: 1, revision }),
+    readHistory: async () => checks,
+  };
+  if (boundedHistory) chronologyDeps.readHistoryPage = async (_league, { afterCheckId }) => {
+    const sorted = [...checks].sort((left, right) => left.checkId.localeCompare(right.checkId));
+    const at = sorted.findIndex(check => check.checkId > afterCheckId), row = at < 0 ? null : sorted[at];
+    const complete = !row || at === sorted.length - 1;
+    return { checks: row ? [row] : [], totalCheckRows: sorted.length,
+      nextCheckId: complete ? null : row.checkId, completeWithinRequestedScope: complete };
+  };
+  return readSoccerCalibrationShadowReport('epl', chronologyDeps,
+    boundedHistory ? { afterSequence: '0', revision: null } : null);
+}
+for (const boundedHistory of [false, true]) {
+  for (const changed of [chronologyWithdrawal, chronologyCorrection]) for (const checks of [
+    [chronologyFinal, changed], [changed, chronologyFinal],
+  ]) {
+    const changedReport = await chronologyReport(checks, boundedHistory);
+    assert.equal(changedReport.untouchedValidatedGames, 0,
+      'strictly later coherent provider final withdrawal or FT correction removes the old outcome regardless of replay/check-ID order or HT availability');
+    assert.equal(changedReport.quarantinedGames, 1);
+    assert.equal(changedReport.validation.before.FT.games, 0);
+    assert.equal(changedReport.validation.after.HT.games, 0);
+    assert.equal(changedReport.validationCoverage.completeWithinRequestedScope, true);
+  }
+  for (const other of [chronologyEarlyPending, chronologyStaleLateReceipt, chronologyForgedWithdrawal]) for (const checks of [
+    [other, chronologyFinal], [chronologyFinal, other],
+  ]) {
+    const unchanged = await chronologyReport(checks, boundedHistory);
+    assert.equal(unchanged.untouchedValidatedGames, 1,
+      'early pending, a late DB receipt of older provider state, and invalid hashes cannot withdraw a later trusted final');
+    assert.equal(unchanged.quarantinedGames, 0);
+    assert.equal(unchanged.validation.before.FT.games, 1);
+    assert.equal(unchanged.validation.after.HT.games, 1);
+  }
+}
+console.log('PASS source chronology in legacy and bounded histories: later coherent final withdrawal and FT correction without HT remove paired metrics; early pending, stale late receipts and forged hashes do not');
