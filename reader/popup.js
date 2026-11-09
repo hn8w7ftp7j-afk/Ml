@@ -94,9 +94,15 @@ function render(statuses) {
     const title = document.createElement('b'); title.textContent = `${label} ${id}`;
     const local = item.localDiagnostic || {};
     const serverOpen = Number(item.matchedGameCount || 0), serverLocked = Number(item.unopenedGameCount || 0);
+    const localDetail = id === 'NBA'
+      ? `本機有價${local.openCount ?? '—'} 來源鎖盤${local.unconfirmedCount === undefined ? '—' : local.lockedCount ?? '—'} 未確認${local.unconfirmedCount ?? local.lockedCount ?? '—'} 市場${local.marketCount ?? '—'}`
+      : `本機開${local.openCount ?? '—'} 鎖${local.lockedCount ?? '—'} 市場${local.marketCount ?? '—'}`;
+    const serverDetail = id === 'NBA'
+      ? `後端有價${item.openGameCount ?? '—'} 來源鎖盤${item.lockedGameCount ?? '—'} 未確認${item.unconfirmedGameCount ?? '—'} 市場${item.marketCount ?? 0}`
+      : `後端${['NHL', 'EPL', 'UCL'].includes(id) ? '配對' : '開'}${serverOpen} 未開${serverLocked} 市場${item.marketCount ?? 0}`;
     const detail = document.createElement('span');
     detail.textContent = ok
-      ? `${['NHL','EPL','UCL'].includes(id) ? '原盤已保存，規則待驗證' : id === 'NBA' ? '盤口已同步' : serverOpen > 0 ? '可分析' : '尚無可分析盤'}｜本機開${local.openCount ?? '—'} 鎖${local.lockedCount ?? '—'} 市場${local.marketCount ?? '—'}｜後端${['NBA', 'NHL', 'EPL', 'UCL'].includes(id) ? '配對' : '開'}${serverOpen} 未開${serverLocked} 市場${item.marketCount ?? 0}${item.partialGameCount ? ` 部分開${item.partialGameCount}場` : ''}｜${age(last)}${serverOpen === 0 && local.sample ? `｜樣本：${local.sample}` : ''}`
+      ? `${['NHL','EPL','UCL'].includes(id) ? '原盤已保存，規則待驗證' : id === 'NBA' ? '盤口已同步' : serverOpen > 0 ? '可分析' : '尚無可分析盤'}｜${localDetail}｜${serverDetail}${item.partialGameCount ? ` 部分開${item.partialGameCount}場` : ''}｜${age(last)}${serverOpen === 0 && local.sample ? `｜樣本：${local.sample}` : ''}`
       : (item.message || '尚未偵測');
     card.append(title, detail); leagueGrid.append(card);
   }

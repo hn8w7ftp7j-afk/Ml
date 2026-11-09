@@ -374,7 +374,8 @@ assert.match(contentSource, /每\\s\*60\\s\*秒更新/, 'refresh evidence must t
 assert.doesNotMatch(contentSource, /capture\(\)[\s\S]{0,200}verifiedBoardRefreshAt/, 'popup capture must not manufacture board refresh evidence');
 assert.doesNotMatch(contentSource, /document\.body\?\.innerText/);
 assert.match(contentSource, /hasExplicitMarketLock/);
-assert.match(contentSource, /img\[src\*="lock" i\]/);
+assert.doesNotMatch(contentSource, /\[(?:class|id|src)\*="lock" i\]/,
+  'clock/block layout and image names must not count as explicit lock evidence');
 assert.match(contentSource, /marketLocked: hasExplicitMarketLock\(element\)/);
 
 console.log('Tai888 Reader 2.0.3 hardening: strict contracts, multiframes, completeness, liveness and retry semantics PASS');

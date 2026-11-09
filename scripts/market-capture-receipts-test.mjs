@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { buildMarketCaptureReceipt, recordMarketCaptureReceipt } from '../lib/market-capture-receipts.js';
 import { buildMarketLineHistoryRows, recordMarketLineHistory } from '../lib/market-line-history-v1.js';
@@ -77,6 +78,44 @@ try {
   const nbaNext = await recordMarketCaptureReceipt({ ...nba, boardDate: '2026-10-28' }, { sql });
   assert.notEqual(nbaFirst.receiptId, nbaNext.receiptId, 'NBA repeat team/time is isolated by board date');
   assert.equal(buildMarketCaptureReceipt(nba).games[0].gameKey, '07:00|LAL|GS');
+  const zero = { boardTime: '08:00', awayCode: 'LAL', homeCode: 'GS', marketStatus: 'locked',
+    fullRunline: null, fullTotal: null, firstHalfRunline: null, firstHalfTotal: null };
+  const zeroCapture = { ...nba, games: [zero] };
+  const legacyZero = buildMarketCaptureReceipt(zeroCapture);
+  assert.equal(legacyZero.games[0].captureStatus, 'NOT_CAPTURED', 'a legacy zero row has no proof the source was locked');
+  assert.equal(Object.hasOwn(legacyZero.games[0], 'availabilityEvidence'), false);
+  for (const [availabilityEvidence, captureStatus] of [['EXPLICIT_SOURCE_LOCK', 'LOCKED'], ['NO_PARSED_MARKETS', 'NOT_CAPTURED']]) {
+    const value = { ...nba, games: [...nba.games, { ...zero, availabilityEvidence }] };
+    const receipt = buildMarketCaptureReceipt(value);
+    assert.equal(receipt.games[0].captureStatus, 'CAPTURED');
+    assert.equal(receipt.games[0].markets[1], true, 'a missing row cannot discard a priced sibling');
+    assert.equal(receipt.games[1].captureStatus, captureStatus);
+    assert.equal(receipt.games[1].availabilityEvidence, availabilityEvidence);
+    assert.ok(receipt.games[1].markets.every(value => value === false));
+    assert.equal(receipt.games[1].stateHash, null);
+    assert.equal((await recordMarketCaptureReceipt(value, { sql })).persisted, true);
+    assert.throws(() => buildMarketCaptureReceipt({ ...nba, games: [{ ...nba.games[0], availabilityEvidence }] }), /INVALID/);
+    assert.throws(() => buildMarketCaptureReceipt({ ...nba, games: [{ ...nba.games[0], marketStatus: 'locked', availabilityEvidence }] }), /INVALID/);
+  }
+  assert.throws(() => buildMarketCaptureReceipt({ ...nba, games: [{ ...zero, availabilityEvidence: 'LOCKED' }] }), /INVALID/);
+
+  // A pre-change LOCKED receipt remains historical evidence exactly as stored.
+  // New captures add their corrected classification instead of rewriting it.
+  const historical = structuredClone(legacyZero);
+  historical.games[0].captureStatus = 'LOCKED';
+  const canonical = value => Array.isArray(value) ? `[${value.map(canonical).join(',')}]`
+    : value && typeof value === 'object' ? `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}` : JSON.stringify(value);
+  const historicalIdentity = Object.fromEntries(Object.entries(historical).filter(([key]) => !['receiptId', 'receivedAt'].includes(key)));
+  historical.receiptId = createHash('sha256').update(canonical(historicalIdentity)).digest('hex');
+  await db.query(`INSERT INTO tai888_market_capture_receipts_v1
+    (receipt_id,league,board_date,source_observed_at,page_activity_at,received_at,source_hash,reader_version,games_format,games)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`, [historical.receiptId, historical.league, historical.boardDate,
+    historical.sourceObservedAt, historical.pageActivityAt, historical.receivedAt, historical.sourceHash, historical.readerVersion,
+    historical.gamesFormat, JSON.stringify(historical.games)]);
+  const oldRow = (await db.query('SELECT * FROM tai888_market_capture_receipts_v1 WHERE receipt_id=$1', [historical.receiptId])).rows[0];
+  const corrected = await recordMarketCaptureReceipt(zeroCapture, { sql });
+  assert.notEqual(corrected.receiptId, historical.receiptId);
+  assert.deepEqual((await db.query('SELECT * FROM tai888_market_capture_receipts_v1 WHERE receipt_id=$1', [historical.receiptId])).rows[0], oldRow);
   await recordMarketLineHistory({ ...first, league: 'KBO' }, { sql });
   await recordMarketCaptureReceipt({ ...first, league: 'KBO' }, { sql });
   assert.equal((await db.query("SELECT count(*)::int AS n FROM tai888_market_capture_receipts_v1 WHERE league='KBO'")).rows[0].n, 1);

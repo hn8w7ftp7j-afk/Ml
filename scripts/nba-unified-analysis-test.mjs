@@ -28,6 +28,20 @@ assert.equal(board.tasks.length, 1); assert.equal(board.tasks[0].nbaQuery.date, 
 assert.equal(buildNbaAnalysisBoard(date, schedule, { ...reader, observedAt: new Date(now - 180001).toISOString() }, now).tasks.length, 0);
 assert.equal(buildNbaAnalysisBoard(date, schedule, { ...reader, games: [{ ...quote, fullTotal: null, firstHalfTotal: quote.fullTotal }] }, now).tasks.length, 1);
 assert.equal(buildNbaAnalysisBoard(date, schedule, { ...reader, games: [{ ...quote, marketStatus: 'locked' }] }, now).tasks.length, 0);
+for (const [availabilityEvidence, reason] of [
+  ['EXPLICIT_SOURCE_LOCK', '來源標記鎖盤'],
+  ['NO_PARSED_MARKETS', '尚未讀到有效盤口，來源是否鎖盤未確認'],
+  [undefined, '來源標記鎖盤，是否真鎖未確認'],
+]) {
+  const locked = { ...quote, marketStatus: 'locked', fullTotal: null,
+    ...(availabilityEvidence === undefined ? {} : { availabilityEvidence }) };
+  const classified = buildNbaAnalysisBoard(date, schedule, { ...reader, games: [locked] }, now);
+  assert.equal(classified.rows[0].reason, reason);
+  assert.equal(classified.rows[0].canAnalyze, false); assert.equal(classified.tasks.length, 0);
+}
+const absentMarkets = buildNbaAnalysisBoard(date, schedule, { ...reader, games: [{ ...quote, fullTotal: null }] }, now);
+assert.equal(absentMarkets.rows[0].reason, '等待有效盤口同步');
+assert.equal(absentMarkets.tasks.length, 0, 'status wording cannot change analysis eligibility');
 assert.equal(buildNbaAnalysisBoard(date, { ...schedule, data: { games: [{ ...game, status: 'live' }] } }, reader, now).emptyReason, 'no_games');
 assert.equal(buildNbaAnalysisBoard(date, schedule, null, now).emptyReason, 'no_open_markets');
 assert.throws(() => buildNbaAnalysisBoard(date, { ...schedule, qa: { status: 'BLOCK' } }, reader, now));
