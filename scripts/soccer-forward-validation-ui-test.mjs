@@ -207,7 +207,7 @@ assert.equal(evalPages.calls[2].options.method,'POST');
 assert.deepEqual(JSON.parse(evalPages.calls[2].options.body),{action:'evaluate',league:'epl',from:'2026-10-20',through:'2026-10-21',cursor:scanToken,limit:25});
 evalPages.calls[2].respond({ok:true,report:scanned('read',true)});await evalPages.settle();
 assert.match(evalPages.markup,/接續工作已改變/,'read tokens cannot replace an evaluation continuation');evalPages.unmount();
-for(const patch of [{scope:{league:'ucl',from:'2026-10-20',through:'2026-10-21'}},{nextCursor:'<invalid>'},{processedGames:3},{complete:true}]){
+for(const patch of [{scope:{league:'ucl',from:'2026-10-20',through:'2026-10-21'}},{nextCursor:'<invalid>'},{processedGames:3},{complete:true},{resultCheckRows:-1},{resultCheckRows:'3'}]){
  const malformedScan=harness();malformedScan.render();const r=scanned();malformedScan.calls[0].respond({ok:true,report:{...r,scan:{...r.scan,...patch}}});await malformedScan.settle();
  assert.match(malformedScan.markup,/接續資料的範圍或處理狀態不符/);assert.equal(malformedScan.button('繼續處理下一批'),undefined);malformedScan.unmount();
 }
@@ -283,6 +283,24 @@ pausedReturn.calls[3].respond({ok:true,report:page('evaluate',7)});await pausedR
 const stuck=harness();stuck.render();stuck.calls[0].respond({ok:true,report:page('read',1)});await stuck.settle();await stuck.fireNextTimer();
 stuck.calls[1].respond({ok:true,report:page('read',1)});await stuck.settle();assert.equal(stuck.timers.size,0);assert.match(stuck.markup,/尚未取得新進度，已暫停/);assert.match(stuck.markup,/已處理 1／7 場/);assert.ok(stuck.button('繼續處理下一批'));stuck.unmount();
 
+const inGame=harness();inGame.render();inGame.calls[0].respond({ok:true,report:report()});await inGame.settle();
+inGame.button('核對已封存賽果').props.onClick();
+const receiptPage=n=>{const value=page('evaluate',1,3);value.scan.resultCheckRows=n;return value;};
+inGame.calls[1].respond({ok:true,report:receiptPage(5)});await inGame.settle();await inGame.fireNextTimer();
+inGame.calls[2].respond({ok:true,report:receiptPage(6)});await inGame.settle();
+assert.match(inGame.markup,/已處理 1／3 場/,'committed in-game checks do not invent another completed game');
+assert.doesNotMatch(inGame.markup,/尚未取得新進度/);
+assert.ok(inGame.timers.size,'a newly committed check keeps the same frozen evaluation moving');
+await inGame.fireNextTimer();
+inGame.calls[3].respond({ok:true,report:receiptPage(6)});await inGame.settle();
+assert.equal(inGame.timers.size,0,'unchanged receipt and game counts still stop a real stall');
+assert.match(inGame.markup,/尚未取得新進度/);inGame.unmount();
+
+const regressed=harness();regressed.render();regressed.calls[0].respond({ok:true,report:report()});await regressed.settle();
+regressed.button('核對已封存賽果').props.onClick();regressed.calls[1].respond({ok:true,report:receiptPage(6)});await regressed.settle();await regressed.fireNextTimer();
+regressed.calls[2].respond({ok:true,report:receiptPage(5)});await regressed.settle();
+assert.match(regressed.markup,/接續工作已改變/);assert.equal(regressed.timers.size,0);regressed.unmount();
+
 const switchAuto=harness();switchAuto.render();switchAuto.calls[0].respond({ok:true,report:page('read',1)});await switchAuto.settle();
 const staleTimer=[...switchAuto.timers.values()][0];switchAuto.render({league:'ucl'});assert.equal(switchAuto.calls.length,2);
 staleTimer.fn();await switchAuto.settle();assert.equal(switchAuto.calls.length,2,'an old league timer cannot start another request after a scope change');
@@ -290,3 +308,4 @@ switchAuto.calls[1].respond({ok:true,report:report('ucl')});await switchAuto.set
 const unmountAuto=harness();unmountAuto.render();unmountAuto.calls[0].respond({ok:true,report:page('read',1)});await unmountAuto.settle();
 const unmountedTimer=[...unmountAuto.timers.values()][0];unmountAuto.unmount();assert.equal(unmountAuto.timers.size,0);unmountedTimer.fn();await unmountAuto.settle();assert.equal(unmountAuto.calls.length,1,'an unmounted pending continuation never starts a request');
 console.log('PASS automatic forward scan: complete cumulative GET/POST flow, 4/minute rolling admission, Retry-After seconds/date/fallback, same-cursor retry, pause/abort/resume, no-progress stop, scope invalidation and timer cleanup');
+

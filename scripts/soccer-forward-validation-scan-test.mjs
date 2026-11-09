@@ -51,6 +51,7 @@ try{
  assert.equal(page.report.returnErrorResearch.completeWithinRequestedScope,false);
  assert.equal(page.report.conflictingResultCaptures,1,'contradictory result evidence from opposite ends of 25k history remains quarantined');
  assert.equal(page.report.readCoverage.loadedResultCheckRows,25002);
+ assert.equal(page.report.scan.resultCheckRows,25002,'durable receipt progress is counted from the frozen scan manifest');
  const cursor=page.report.scan.nextCursor;
  await assert.rejects(()=>capacityScan({...scope,league:'ucl'},{cursor}),/聯盟、日期/);
  await assert.rejects(()=>capacityScan(scope,{cursor,purpose:'evaluate'}),/核對方式/);
@@ -65,6 +66,7 @@ try{
  page=await capacityScan(scope,{cursor,gameLimit:1,timeBudgetMs:25000,readOptions:{captureRows:37,resultCheckRows:701}});
  assert.equal(page.report.scan.processedGames,2);assert.equal(page.report.scan.totalGames,2);assert.equal(page.report.scan.nextCursor,null);assert.equal(page.report.complete,true);
  assert.equal(page.report.capturedSnapshotPeriods,before,'all >5000 sealed receipts counted once; late game excluded');
+ assert.equal(page.report.scan.resultCheckRows,25002,'unrelated late checks do not manufacture scan progress');
  assert.equal(page.report.readCoverage.loadedCaptureRows,before);assert.equal(page.report.readCoverage.loadedUniqueAnalysisRows,1702);
  assert.equal(page.report.readCoverage.loadedCapturePayloadBytes,Number(physical));assert.equal(page.report.readCoverage.loadedResultCheckRows,25002);
  assert.equal(page.report.conflictingResultCaptures,1);assert.equal(page.report.formalEligible,false);assert.equal(page.report.marketReturnValidation.S,null);
@@ -155,3 +157,4 @@ try{
  console.log('PASS actual PostgreSQL scanner upgrades a completed legacy return check through the normal evaluate entry, appends current diagnostics once and respects the existing recheck interval');
  console.log('PASS complete durable scan: >24MiB originals/>5000 receipts and >8MiB/>25k checks, fixed manifests, bounded batches, old/new correction quarantine, scope/purpose/lease fencing, terminal idempotence, safe oversized rejection, deterministic deadline abort/lease release and source-preserving cache cleanup');
 }finally{if(oldDb===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=oldDb;if(oldDbV2===undefined)delete process.env.DATABASE_V2_URL;else process.env.DATABASE_V2_URL=oldDbV2;await fixture.close();}
+
