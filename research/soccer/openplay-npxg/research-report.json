@@ -1,7 +1,7 @@
 {
   "version": "SOCCER-OPENPLAY-HISTORICAL-NPXG-v1",
   "status": "RETROSPECTIVE_SOURCE_AND_NPXG_RESEARCH",
-  "createdAt": "2026-11-09T21:39:10.858728Z",
+  "createdAt": "2026-11-09T21:41:58.589969Z",
   "sourceCollectedAt": "2026-11-09T21:34:00Z",
   "provider": "OPENPLAY",
   "xgModel": "openplay_xg_v1",
@@ -2016,6 +2016,6 @@
   "R": null,
   "S": null,
   "retainedObservationsSha256": "94b4eeee4400f52e3aa7fb8046b3fca14d7b13197133d3d8356b6b6805dda0b3",
-  "normalizerImplementationSha256": "c517f5675fd249be5d7db10d394de9943a877d36370f20e3be70a130b1dbfae9",
-  "contentHash": "76c964ece2dd63963c030aabe5e0e9b05754712e3eae9e666f80de000a7d650c"
+  "normalizerImplementationSha256": "220e9e0a67b366a79e57d285e407b14a4b85d4987ab2efaeb7c4c4442b38a65e",
+  "contentHash": "992bc4b0c18e18591de04cd2756abcb5010ef88e1a33c5d247b8195bf6012a96"
 }

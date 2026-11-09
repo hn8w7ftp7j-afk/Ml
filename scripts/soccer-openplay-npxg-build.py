@@ -134,8 +134,8 @@ def fit(rows, period, before, prior=8):
     selected = [r for r in rows if r["matchDate"] < before]
     if len(selected) < 30:
         raise ValueError("OPENPLAY_TRAINING_INSUFFICIENT")
-    mean_home = sum(r["periods"][period]["home"]["npxg"] for r in selected) / len(selected)
-    mean_away = sum(r["periods"][period]["away"]["npxg"] for r in selected) / len(selected)
+    mean_home = math.fsum(r["periods"][period]["home"]["npxg"] for r in selected) / len(selected)
+    mean_away = math.fsum(r["periods"][period]["away"]["npxg"] for r in selected) / len(selected)
     global_mean = (mean_home + mean_away) / 2
     if global_mean <= 0:
         raise ValueError("OPENPLAY_TRAINING_TARGET_EMPTY")
@@ -168,7 +168,7 @@ def evaluate(model, rows):
             delta, base = prediction - target, mean - target
             absolute.append(abs(delta)); squared.append(delta * delta)
             baseline_absolute.append(abs(base)); baseline_squared.append(base * base)
-    avg = lambda values: sum(values) / len(values) if values else None
+    avg = lambda values: math.fsum(values) / len(values) if values else None
     return dict(games=len(rows), teamTargets=len(absolute), coldStartTeamTargets=cold,
                 candidate=dict(mae=avg(absolute), mse=avg(squared)),
                 leagueMeanBaseline=dict(mae=avg(baseline_absolute), mse=avg(baseline_squared)))
