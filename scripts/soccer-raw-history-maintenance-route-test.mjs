@@ -32,7 +32,7 @@ let progress = { ok: true, schema, ...flags, status: 'PENDING', until,
   { league: 'UCL', counts: zero, days: [], reasons: [] }] };
 let drained = { ok: true, schema, ...flags, status: 'WINDOW_EXHAUSTED', until,
   budgetKind: 'SOFT_DEADLINE', hardDeadlineEnforced: false, completeWithinWindow: false,
-  maxBatches: 24, timeBudgetMs: 40000, processedBatches: 2, indexedBatches: 1,
+  maxBatches: 64, timeBudgetMs: 40000, processedBatches: 2, indexedBatches: 1,
   stableAttemptBatches: 1, retryableBatches: 0, results: [
     { league: 'EPL', mode: 'BUCKET_OLDEST', status: 'INDEXED', captureId: 'a'.repeat(64), indexedGames: 4 },
     { league: 'UCL', mode: 'BUCKET_NEWEST', status: 'SOURCE_UNINDEXED', captureId: 'b'.repeat(64), reason: 'RAW_SEEN_RECOVERY_INCOMPLETE' },
@@ -121,8 +121,28 @@ try {
   response = await POST(request('POST', { action: 'drain' }, { headers: { origin: 'https://fixture.invalid', 'sec-fetch-site': 'same-origin' } }));
   assert.equal(response.status, 200); assertPrivate(response); result = await response.json();
   assert.deepEqual(result, drained); assertFlags(result);
-  assert.deepEqual(calls, [{ operation: 'drain', args: [{ maxBatches: 24, timeBudgetMs: 40000 }] }]);
+  assert.deepEqual(calls, [{ operation: 'drain', args: [{ maxBatches: 64, timeBudgetMs: 40000 }] }]);
   assert.equal(rates[0].limit, 12); assert.equal(rates[0].windowMs, 600000); assert.notEqual(rates[0].id, getRateId);
+
+  const shortReceipt = drained;
+  drained = { ...drained, status: 'BATCH_LIMIT_REACHED', processedBatches: 64,
+    indexedBatches: 32, stableAttemptBatches: 32, results: Array.from({ length: 64 }, (_, index) => ({
+      league: index % 2 ? 'UCL' : 'EPL', mode: index % 2 ? 'LATEST' : 'BACKLOG',
+      captureId: (index + 1).toString(16).padStart(64, '0'),
+      ...(index < 32 ? { status: 'INDEXED', indexedGames: 1 }
+        : { status: 'SOURCE_UNINDEXED', reason: 'RAW_SEEN_RECOVERY_INCOMPLETE' }),
+    })) };
+  response = await POST(request('POST', { action: 'drain' })); assert.equal(response.status, 200);
+  result = await response.json(); assertFlags(result); assert.deepEqual(result, drained);
+  assert.equal(result.results.length, 64, 'owner route preserves every completed batch at the new default limit');
+  assert.deepEqual(calls.at(-1), { operation: 'drain', args: [{ maxBatches: 64, timeBudgetMs: 40000 }] });
+  drained = { ...drained, ok: false, status: 'RETRYABLE', stableAttemptBatches: 31, retryableBatches: 1,
+    results: drained.results.map((row, index) => index === 63
+      ? { ...row, status: 'RETRYABLE', reason: 'RAW_HISTORY_INDEX_UNAVAILABLE' } : row) };
+  response = await POST(request('POST', { action: 'drain' })); assert.equal(response.status, 503);
+  result = await response.json(); assertFlags(result); assert.deepEqual(result, drained);
+  assert.equal(result.processedBatches, 64); assert.equal(result.indexedBatches, 32, 'partial 64-batch receipt retains successful sibling work');
+  drained = shortReceipt;
 
   drained = { ...drained, status: 'BUDGET_DEFERRED' };
   response = await POST(request('POST', { action: 'drain' })); assert.equal(response.status, 200);

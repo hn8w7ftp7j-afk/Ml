@@ -27,6 +27,6 @@ export async function POST(request){
     if([...new URL(request.url).searchParams].length)throw invalid();
     const body=await readJsonBody(request,4096);
     if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length!==1||body.action!=='drain')throw invalid();
-    const result=await drainRawSeenHistoryIndex({maxBatches:24,timeBudgetMs:40000});return NextResponse.json(result,{status:result.ok?200:503,headers});
+    const result=await drainRawSeenHistoryIndex({maxBatches:64,timeBudgetMs:40000});return NextResponse.json(result,{status:result.ok?200:503,headers});
   }catch(error){return failure(error);}
 }
