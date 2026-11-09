@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { NextResponse } from 'next/server.js';
 import { createSessionToken, requireApiAuth, rateLimitResponse } from '../lib/security.js';
+import { canonicalSoccerPayload } from '../reader/soccer-parser.js';
+import { soccerJournalHash } from '../lib/soccer/journal.js';
 import { MARKET_LINE_HISTORY_QUERY_HEADERS, parseMarketLineHistoryQuery, createMarketLineHistoryCursor,
   expandMarketLineHistoryRow, queryMarketLineHistory } from '../lib/market-line-history-query.js';
 
@@ -77,6 +79,15 @@ assert.equal(second.until, until); assert.equal(second.rows.length, 2); assert.e
 assert.equal(second.totals.savedStates, 502, 'whole-filter total must remain independent of pagination');
 assert.equal(new Set([...first.rows, ...second.rows].map(row => JSON.stringify([row.league, row.boardDate, row.gameKey, row.observedAt]))).size, 502);
 assert.notEqual(first.rows[0].observedAt, first.rows[1].observedAt, 'microsecond cursors must not truncate to JavaScript milliseconds');
+const compactSecond = await queryMarketLineHistory(parse({ league: 'KBO', after: first.nextAfter, limit: '500', format: 'compact' }), { sql });
+assert.deepEqual(compactSecond.rows, second.rows, 'switching only representation preserves an existing cursor and exact non-soccer credits');
+assert.deepEqual(compactSecond.totals, second.totals); assert.equal(compactSecond.until, second.until);
+assert.equal(compactSecond.format, 'compact'); assert.equal(Object.hasOwn(second, 'format'), false, 'default response shape stays unchanged');
+assert.deepEqual(parse({ league: 'KBO', until, format: 'compact' }).filters, parse({ league: 'KBO', until }).filters);
+const compactFirst = await queryMarketLineHistory(parse({ league: 'KBO', until, limit: '500', format: 'compact' }), { sql });
+assert.equal(compactFirst.nextAfter, first.nextAfter, 'representation has no effect on signed cursor identity');
+const fullAfterCompact = await queryMarketLineHistory(parse({ league: 'KBO', after: compactFirst.nextAfter, limit: '500' }), { sql });
+assert.deepEqual(fullAfterCompact, second, 'compact cursors also resume in the unchanged default representation');
 
 const allQuery = { until, limit: '2' };
 let page = await queryMarketLineHistory(parse(allQuery), { sql }), collected = [...page.rows];
@@ -118,6 +129,59 @@ assert.ok(expandMarketLineHistoryRow(modified).integrity.issues.includes('STATE_
 const empty = await queryMarketLineHistory(parse({ date: '2020-01-01', until }), { sql });
 assert.equal(empty.totals.savedStates, 0); assert.equal(empty.rows.length, 0); assert.equal(empty.leagues.length, 0); assert.equal(empty.totals.firstBoardDate, null);
 
+// Compact soccer is an original-source export, not a filtered or reinterpreted
+// set of four core markets. Keep alternative lines, UNKNOWN, ML and unknown fields.
+function soccerRow(change = () => {}) {
+  const game = { league: 'EPL', boardDate: '2026-10-08', boardTime: '19:30', awayKey: '利物浦', homeKey: '愛華頓',
+    awayCode: 'LIV', homeCode: 'EVE', awayRaw: '利物浦', homeRaw: '愛華頓[主]',
+    periodsCovered: ['FT', 'HT', 'UNKNOWN'], periodStates: { FT: 'open', HT: 'open', UNKNOWN: 'open' },
+    marketStatus: 'open', untouchedSourceField: { original: ['保留', 0, null] }, markets: [
+      { period: 'FT', kind: 'HANDICAP', unit: 'GOALS', lineSide: 'home', line: '1+50', awayWater: 1.05, homeWater: 0.75, rawRows: ['1.050', '1+50 0.750'] },
+      { period: 'FT', kind: 'HANDICAP', unit: 'GOALS', lineSide: 'home', line: '2-20', awayWater: 0.91, homeWater: 0.97 },
+      { period: 'FT', kind: 'TOTAL', unit: 'GOALS', line: '3平', overWater: 0.93, underWater: 0.89 },
+      { period: 'HT', kind: 'HANDICAP', unit: 'GOALS', lineSide: 'away', line: '0-50', awayWater: 1.08, homeWater: 0.8 },
+      { period: 'HT', kind: 'TOTAL', unit: 'GOALS', line: '1.5', overWater: 1.11, underWater: 0.76 },
+      { period: 'UNKNOWN', kind: 'MONEYLINE', unit: 'GOALS', awayWater: 3.7, drawWater: 3.05, homeWater: 0.55, sourceExtension: ['not a model input'] },
+    ] };
+  const payload = { league: 'EPL', boardDate: game.boardDate, observedAt: '2026-10-08T10:00:00.123Z',
+    readerVersion: '2.1.59', executable: false, periodsCovered: [...game.periodsCovered], games: [game] };
+  change(game, payload);
+  payload.contentHash = createHash('sha256').update(canonicalSoccerPayload(payload)).digest('hex');
+  const observationId = soccerJournalHash(payload);
+  return { league: 'EPL', board_date: payload.boardDate, game_key: '19:30|利物浦|愛華頓',
+    observed_at: '2026-10-08T10:00:00.123000Z', received_at: '2026-10-08T10:00:01.123456Z',
+    persisted_at: '2026-10-08T10:00:02.654321Z', observation_id: observationId,
+    record_id: `${observationId}:1`, content_hash: payload.contentHash, payload, game };
+}
+const soccerSource = soccerRow(), originalSoccerBytes = JSON.stringify(soccerSource);
+const soccerSql = row => async (parts) => {
+  assert.doesNotMatch(parts.join('?'), /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE)\b/i);
+  return [{ totals: summarize([row]), leagues: [{ league: 'EPL', ...summarize([row]) }], rows: [row] }];
+};
+const fullSoccer = await queryMarketLineHistory(parse({ league: 'EPL', until }), { sql: soccerSql(soccerSource) });
+const compactSoccer = await queryMarketLineHistory(parse({ league: 'EPL', until, format: 'compact' }), { sql: soccerSql(soccerSource) });
+const { markets: ignoredMarkets, displayMarkets: ignoredDisplay, rawMarkets: ignoredRaw, historyInterpretation: ignoredInterpretation, ...originalMetadata } = fullSoccer.rows[0];
+assert.deepEqual(compactSoccer.rows[0], originalMetadata, 'metadata, clocks, complete raw game and original integrity match the default view');
+assert.equal(compactSoccer.rows[0].rawGame.markets.length, 6);
+assert.equal(compactSoccer.rows[0].rawGame.markets[0].line, '1+50');
+assert.equal(compactSoccer.rows[0].rawGame.markets.at(-1).period, 'UNKNOWN');
+assert.equal(compactSoccer.rows[0].rawGame.markets.at(-1).kind, 'MONEYLINE');
+assert.ok(JSON.stringify(compactSoccer).length < JSON.stringify(fullSoccer).length * 0.7, 'avoid repeated contracts and direction payload copies');
+assert.match(compactSoccer.coverageNote, /精簡格式.*原始時段/);
+assert.equal(JSON.stringify(soccerSource), originalSoccerBytes, 'both representations preserve the immutable source');
+for (const broken of [
+  { ...soccerRow(), content_hash: 'f'.repeat(64) },
+  { ...soccerRow(), game_key: '19:30|wrong|愛華頓' },
+  soccerRow(game => { game.markets[0].awayWater = null; }),
+  soccerRow(game => { game.markets = null; }),
+]) {
+  const normal = await queryMarketLineHistory(parse({ league: 'EPL', until }), { sql: soccerSql(broken) });
+  const compact = await queryMarketLineHistory(parse({ league: 'EPL', until, format: 'compact' }), { sql: soccerSql(broken) });
+  assert.equal(compact.rows[0].integrity.ok, false);
+  assert.deepEqual(compact.rows[0].integrity, normal.rows[0].integrity, 'compact must not hide corrupt source, identity, contracts or shape');
+  assert.deepEqual(compact.rows[0].rawGame, broken.game);
+}
+
 for (const invalid of [
   { league: '' }, { league: 'kbo' }, { league: 'NHL' }, { league: "KBO';DROP TABLE x;--" },
   { date: '2026-02-30' }, { from: '' }, { through: '2026-13-01' }, { from: '2026-10-09', through: '2026-10-08' },
@@ -125,8 +189,10 @@ for (const invalid of [
   { gameKey: 'x\u0000' }, { limit: '0' }, { limit: '501' }, { limit: '1.5' }, { limit: '01' },
   { until: '2026-02-30T00:00:00.000Z' }, { until: '2026-10-14T02:00:00.000Z' }, { until: '2026-10-08T00:00:00Z' },
   { after: '' }, { after: 'bad' }, { after: 'x'.repeat(1500) }, { unknown: '1' },
+  { format: '' }, { format: 'full' }, { format: 'COMPACT' }, { format: 'compact ' },
 ]) assert.throws(() => parse({ until, ...invalid }), error => error.status === 400);
 assert.throws(() => parseMarketLineHistoryQuery(new URLSearchParams('league=KBO&league=NBA'), { now }), error => error.status === 400);
+assert.throws(() => parseMarketLineHistoryQuery(new URLSearchParams('format=compact&format=compact'), { now }), error => error.status === 400);
 assert.throws(() => parse({ league: 'NBA', until, after: first.nextAfter }), /範圍不一致/);
 assert.throws(() => parse({ league: 'KBO', until, gameKey: '1', after: first.nextAfter }), /範圍不一致/);
 assert.throws(() => parse({ league: 'KBO', until: '2026-10-13T00:00:00.000Z', after: first.nextAfter }), /截止時間/);
@@ -171,6 +237,10 @@ assert.equal((await GET(request({ league: 'NHL', until }))).status, 400); assert
 const success = await GET(request({ league: 'CPBL', until }));
 assert.equal(success.status, 200); assert.equal(success.headers.get('cache-control'), 'private, no-store');
 assert.equal(success.headers.get('x-content-type-options'), 'nosniff'); assert.equal((await success.json()).totals.savedStates, 2);
+const compactRoute = await GET(request({ league: 'CPBL', until, format: 'compact' }));
+assert.equal(compactRoute.status, 200); assert.equal((await compactRoute.json()).format, 'compact');
+assert.equal((await GET(request({ league: 'CPBL', until, format: 'compact' }, false))).status, 401);
+assert.equal((await GET(request({ until, format: 'full' }))).status, 400);
 databaseError = Object.assign(new Error('table not found'), { code: '42P01' });
 const failure = await GET(request({ until })); assert.equal(failure.status, 503); assert.equal((await failure.json()).code, 'HISTORY_TABLE_NOT_READY');
 assert.equal(failure.headers.get('cache-control'), 'private, no-store'); databaseError = null;
