@@ -83,6 +83,26 @@ function distanceUpper(left, right, descriptor) {
     return total.plus(new Up(difference).times(input(dimension.weight).hi).div(input(dimension.scale).lo));
   }, new Up(0));
 }
+function forecastFor(row, target = false) {
+  const support = row.payoffSupport;
+  if (!finite(support?.lower) || !finite(support?.upper) || support.lower > support.upper) return null;
+  const typed = row.forecast;
+  if (typed != null) {
+    if (!['POINT', 'INTERVAL'].includes(typed.type) || !finite(typed.lower) || !finite(typed.upper)
+      || typed.lower > typed.upper || typed.lower < support.lower || typed.upper > support.upper
+      || !text(typed.method) || !sha(typed.certificateHash) || typed.modelHash !== row.modelHash
+      || (typed.type === 'POINT' ? !finite(typed.point) || typed.lower !== typed.point || typed.upper !== typed.point
+        : typed.point !== null)
+      || row.predictedNetReturn != null && (!finite(row.predictedNetReturn) || typed.type === 'INTERVAL'
+        || row.predictedNetReturn !== typed.point)) return null;
+    return { ...typed };
+  }
+  if (!finite(row.predictedNetReturn) || row.predictedNetReturn < support.lower || row.predictedNetReturn > support.upper
+    || (target && row.tailError !== 0) || row.status === 'OBSERVED_BOUNDED' || row.predictedReturnBounds != null
+    || row.unresolvedTailMass > 0) return null;
+  return { type: 'POINT', lower: row.predictedNetReturn, upper: row.predictedNetReturn, point: row.predictedNetReturn,
+    method: 'LEGACY_DECLARED_POINT_RESEARCH_INPUT', modelHash: row.modelHash, certificateHash: null };
+}
 
 /** Research calculator only. JSON scope, hashes, times and assumption fields are
  * declarations, not authenticated source evidence, durable registration or
@@ -90,9 +110,9 @@ function distanceUpper(left, right, descriptor) {
 export function estimateConditionalReturnError({ protocol, target, observations = [], assumptions = {}, now = Date.now() } = {}) {
   const base = { version: VERSION, ...restrictions, status: 'INVALID_RESEARCH_INPUT',
     protocolHash: conditionalReturnResearchHash(protocol ?? null), targetHash: conditionalReturnResearchHash(target ?? null),
-    interpretation: 'SINGLE_PRESPECIFIED_TARGET_CONDITIONAL_ON_UNVERIFIED_ASSUMPTIONS_NOT_FORMAL_R',
-    estimand: 'ABSOLUTE_ORIGINAL_FORECAST_MINUS_FULL_CONTEXT_CONDITIONAL_EXPECTED_NET_RETURN_PER_UNIT_STAKE',
-    reasons: [], components: null, conditionalTotalBound: null };
+    interpretation: 'SINGLE_PRESPECIFIED_TARGET_FORECAST_INTERVAL_CONDITIONAL_ON_UNVERIFIED_ASSUMPTIONS_NOT_FORMAL_R',
+    estimand: 'SUP_ABSOLUTE_TARGET_FORECAST_INTERVAL_MINUS_FULL_CONTEXT_CONDITIONAL_EXPECTED_NET_RETURN_PER_UNIT_STAKE',
+    reasons: [], components: null, conditionalTotalBound: null, actualFrozenForecastConditionalBound: null };
   const fail = reason => ({ ...base, reasons: [reason] });
   if (!protocol || protocol.version !== VERSION || !validScope(protocol.scope)
     || protocol.weightNormalization !== 'NORMALIZE_DECLARED_WEIGHTS'
@@ -109,9 +129,8 @@ export function estimateConditionalReturnError({ protocol, target, observations 
   if (!matches(target, protocol.scope) || !new RegExp(`^soccer:${target.league}:\\d{1,16}$`).test(target.gameId)
     || !text(target.quoteIdentity) || !validFeatures(target, protocol.featureDescriptor, descriptorHash) || !validHashList(target.sourceHashes))
     return fail('TARGET_SCOPE_OR_FEATURES_INVALID');
-  if (!finite(target.predictedNetReturn) || !finite(target.payoffSupport?.lower) || !finite(target.payoffSupport?.upper)
-    || target.payoffSupport.lower > target.payoffSupport.upper || target.predictedNetReturn < target.payoffSupport.lower
-    || target.predictedNetReturn > target.payoffSupport.upper || target.tailError !== 0 || target.unresolvedTailMass > 0)
+  const targetForecast = forecastFor(target, true);
+  if (!targetForecast)
     return fail('TARGET_POINT_FORECAST_OR_FULL_SUPPORT_UNAVAILABLE');
   if (!Array.isArray(observations)) return fail('OBSERVATIONS_MUST_BE_ARRAY');
   if (!observations.length) return { ...base, status: 'NO_OBSERVATIONS', reasons: ['NO_INDEPENDENT_SOURCE_OBSERVATIONS'] };
@@ -128,13 +147,14 @@ export function estimateConditionalReturnError({ protocol, target, observations 
       || !(from <= analysis && analysis <= prediction && prediction < start && from <= start && start < before
         && start < firstKnown && firstKnown <= available && available <= checked && checked < before
         && registered <= declared && declared < firstKnown)) return fail('OBSERVATION_OR_WEIGHT_TIME_ORDER_INVALID');
-    if (!finite(row.predictedNetReturn) || !finite(row.realizedNetReturn)
+    if (!finite(row.realizedNetReturn)
       || !finite(row.payoffSupport?.lower) || !finite(row.payoffSupport?.upper) || row.payoffSupport.lower > row.payoffSupport.upper
       || row.realizedNetReturn < row.payoffSupport.lower || row.realizedNetReturn > row.payoffSupport.upper
-      || row.predictedNetReturn < row.payoffSupport.lower || row.predictedNetReturn > row.payoffSupport.upper)
+      || row.forecast == null && !finite(row.predictedNetReturn))
       return fail('EXACT_RETURN_OR_PAYOFF_SUPPORT_INVALID');
-    if (row.status === 'OBSERVED_BOUNDED' || row.predictedReturnBounds != null || row.unresolvedTailMass > 0)
+    if (row.forecast == null && (row.status === 'OBSERVED_BOUNDED' || row.predictedReturnBounds != null || row.unresolvedTailMass > 0))
       return fail('INTERVAL_FORECAST_CANNOT_BECOME_POINT_RESIDUAL');
+    if (!forecastFor(row)) return fail('FORECAST_INTERVAL_OR_POINT_OUTSIDE_SUPPORT_OR_MODEL_SCOPE');
     const economicKey = `${row.gameId}:${row.economicPriceHash}`, signature = conditionalReturnResearchHash(row);
     if (ids.has(row.observationId) && ids.get(row.observationId) !== economicKey) return fail('OBSERVATION_ID_CONFLICT');
     ids.set(row.observationId, economicKey);
@@ -155,7 +175,10 @@ export function estimateConditionalReturnError({ protocol, target, observations 
     const totalWeight = sum(rows.map(row => input(row.weight)));
     if (totalWeight.lo.lte(0)) return fail('POSITIVE_TOTAL_WEIGHT_REQUIRED');
     const weighted = rows.map(row => ({ row, weight: divPositive(input(row.weight), totalWeight) }));
-    const bias = sum(weighted.map(({ row, weight }) => mul(weight, sub(input(row.realizedNetReturn), input(row.predictedNetReturn)))));
+    const bias = sum(weighted.map(({ row, weight }) => {
+      const forecast = forecastFor(row), enclosure = { lo: input(forecast.lower).lo, hi: input(forecast.upper).hi };
+      return mul(weight, sub(input(row.realizedNetReturn), enclosure));
+    }));
     const blocks = new Map(); let weightedDistance = new Up(0);
     for (const { row, weight } of weighted) {
       const width = sub(input(row.payoffSupport.upper), input(row.payoffSupport.lower));
@@ -181,13 +204,23 @@ export function estimateConditionalReturnError({ protocol, target, observations 
       if (assumptions[key] !== true) need.push(reason);
     const transfer = lipschitz === null ? null : new Up(lipschitz).times(weightedDistance);
     const magnitude = absUpper(bias);
+    const targetWidth = targetForecast.upper === targetForecast.lower ? new Up(0)
+      : sub(input(targetForecast.upper), input(targetForecast.lower)).hi;
     const components = { weightedSignedResidual: publicInterval(bias), absoluteResidualUpper: upperNumber(magnitude),
       blockSamplingUpper: upperNumber(sampling), weightedDistanceUpper: upperNumber(weightedDistance),
+      targetForecastIntervalWidthUpper: upperNumber(targetWidth),
       transferUpper: transfer === null ? null : upperNumber(transfer), timeShiftUpper: drift === null ? null : upperNumber(drift),
       contextOmissionUpper: omitted === null ? null : upperNumber(omitted), numericalTailUpper: numerical === null ? null : upperNumber(numerical) };
-    const bound = need.length ? null : [magnitude, sampling, transfer, drift, omitted, numerical].reduce((value, term) => value.plus(term), new Up(0));
+    const actualBound = need.length ? null : [magnitude, sampling, transfer, drift, omitted, numerical].reduce((value, term) => value.plus(term), new Up(0));
+    // The transport assumption applies to the SAME actual frozen P function,
+    // which is enclosed by each interval. Adding target width additionally
+    // covers every alternative point in its interval, without choosing one.
+    const uniformBound = actualBound === null ? null : new Up(actualBound).plus(targetWidth);
     return { ...base, status: need.length ? 'COMPONENTS_ONLY_MISSING_ASSUMPTIONS' : 'ASSUMPTION_CONDITIONAL_RESEARCH',
-      reasons: need, components, conditionalTotalBound: bound === null ? null : upperNumber(bound),
+      reasons: need, components, conditionalTotalBound: uniformBound === null ? null : upperNumber(uniformBound),
+      actualFrozenForecastConditionalBound: actualBound === null ? null : upperNumber(actualBound),
+      targetForecast, arithmeticRevision: 'INTERVAL_NATIVE_ORIGINAL_MODEL_EXPECTATION_v2',
+      intervalForecastObservations: rows.filter(row => forecastFor(row).type === 'INTERVAL').length,
       observations: rows.length, duplicateEconomicPricesIgnored: duplicates, realGames: gameBlocks.size,
       positiveWeightGames: new Set(rows.filter(row => row.weight > 0).map(row => row.gameId)).size,
       positiveWeightDependencyBlocks: new Set(rows.filter(row => row.weight > 0).map(row => row.blockId)).size,
@@ -201,6 +234,8 @@ export function estimateConditionalReturnError({ protocol, target, observations 
         'Each match frozen before kickoff does not establish one common design sigma-field independent of all included outcomes.',
         'contextOmissionBound is a total allowance covering target and weighted-neighbor conditioning gaps, not only the target gap.',
         'numericalTailBound is a total allowance covering target and weighted-neighbor source arithmetic/forecast tails, not only calculator rounding.',
+        'Forecast intervals must enclose the SAME identified original frozen model expectation, not an unspecified set of models.',
+        'transferLipschitzBound applies to the true residual bias of that original expectation, not to a selected interval endpoint or midpoint.',
         'An observed outcome is not the true conditional expected return; ordinary OOS outcome coverage cannot verify this estimand.',
         'Provided declarations and content hashes create no source, preregistration, OOS or acceptance authority.'] };
   } catch {

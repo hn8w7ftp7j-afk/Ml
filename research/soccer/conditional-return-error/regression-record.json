@@ -1,0 +1,49 @@
+{
+  "version": "CONDITIONAL-RETURN-RESEARCH-REGRESSION-RECORD-v1",
+  "recordedAt": "2026-11-09T20:46:16.015073+00:00",
+  "sourceBaseCommit": "11956a087eb733f88310a1d39457306602d842de",
+  "sourceBaseTree": "979b494265222e15418598fd250b576ba75843d5",
+  "node": "v24.22.1",
+  "productTrackedFilesUnchanged": true,
+  "productRegressionScope": "FULL_UNMODIFIED_11.10.108_APP_SOURCE; npm test DOES NOT IMPORT THE NEW RESEARCH MODULE. FINAL RESEARCH SUITES ARE SEPARATELY EXECUTED BY replay.mjs.",
+  "commands": [
+    {
+      "command": "npm test",
+      "status": "PASS",
+      "exitCode": 0,
+      "logSha256": "df692521df8f977c42e202094c83437926733cab5679c911d3791b0c766f3e22",
+      "logBytes": 215121
+    },
+    {
+      "command": "npm run build",
+      "status": "PASS",
+      "exitCode": 0,
+      "logSha256": "eb8df2cf6487a98837301f743613c54faacb504752e48c0885fc2967c3dba441",
+      "logBytes": 15499
+    }
+  ],
+  "buildWarnings": "Existing CSS autoprefixer mixed-support warnings were present; build, lint/type checking and page generation completed successfully.",
+  "productionReadback": {
+    "version": "11.10.108",
+    "eplCalibrationCaptures": 13,
+    "eplCalibrationEvaluated": 12,
+    "eplMinuteCaptures": 1,
+    "eplMinuteEvaluated": 0,
+    "eplMinutePending": 1,
+    "uclMinuteCaptures": 0,
+    "researchCandidateDeployed": false
+  },
+  "notVerified": [
+    "new research method Production execution",
+    "formal R/S/model acceptance",
+    "current match npxG coverage",
+    "all target-specific statistical applicability assumptions",
+    "physical mobile interaction",
+    "real financial writes or settlement mutations"
+  ],
+  "accepted": false,
+  "formalEligible": false,
+  "formalMargin": null,
+  "R": null,
+  "S": null
+}

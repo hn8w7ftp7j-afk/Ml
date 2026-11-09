@@ -76,7 +76,7 @@ for (const [key, expected] of [['commonDesignFixedBeforeOutcomes', 'COMMON_FIXED
 
 // Full finite support remains intact; an observed return cannot redefine it.
 reason(run([row(1, { realizedNetReturn: 2 })]), 'EXACT_RETURN_OR_PAYOFF_SUPPORT_INVALID');
-reason(run([row(1, { predictedNetReturn: 2 })]), 'EXACT_RETURN_OR_PAYOFF_SUPPORT_INVALID');
+reason(run([row(1, { predictedNetReturn: 2 })]), 'FORECAST_INTERVAL_OR_POINT_OUTSIDE_SUPPORT_OR_MODEL_SCOPE');
 reason(run([row(1, { predictedNetReturn: null })]), 'EXACT_RETURN_OR_PAYOFF_SUPPORT_INVALID');
 reason(run([row(1, { status: 'OBSERVED_BOUNDED', predictedReturnBounds: { lower: 0.1, upper: 0.3 } })]), 'INTERVAL_FORECAST_CANNOT_BECOME_POINT_RESIDUAL');
 reason(run([row(1, { unresolvedTailMass: 0.01 })]), 'INTERVAL_FORECAST_CANNOT_BECOME_POINT_RESIDUAL');
@@ -118,6 +118,42 @@ const empty = run([]); restrictions(empty); assert.equal(empty.status, 'NO_OBSER
 const template = JSON.parse(await fs.readFile(new URL('./protocol.json', import.meta.url), 'utf8'));
 reason(run([row(1)], { protocol: template }), 'INVALID_PROTOCOL_OR_DESCRIPTOR');
 assert.equal(hash({ b: [1, 2], a: { y: 3, x: 4 } }), hash({ a: { x: 4, y: 3 }, b: [1, 2] }));
+
+// A certified original-model interval is propagated, never replaced by its midpoint.
+const forecast = (lower, upper, extra = {}) => ({ type: 'INTERVAL', lower, upper, point: null,
+  method: 'SYNTHETIC_ORIGINAL_MODEL_ENCLOSURE_ONLY', certificateHash: sha('f'), modelHash: scope.modelHash, ...extra });
+const intervalRow = row(1, { predictedNetReturn: null, status: 'OBSERVED_BOUNDED',
+  predictedReturnBounds: { lower: -.1, upper: .1 }, forecast: forecast(-.1, .1), unresolvedTailMass: .01 });
+const intervalTarget = { ...target, predictedNetReturn: null, tailError: null, forecast: forecast(-.05, .05) };
+const intervals = run([intervalRow], { target: intervalTarget });
+assert.equal(intervals.status, 'ASSUMPTION_CONDITIONAL_RESEARCH'); restrictions(intervals);
+assert.equal(intervals.intervalForecastObservations, 1); assert.equal(intervals.targetForecast.point, null);
+assert.ok(intervals.components.weightedSignedResidual.lower <= .1 && intervals.components.weightedSignedResidual.upper >= .3);
+assert.equal(intervals.components.blockSamplingUpper, one.components.blockSamplingUpper,
+  'forecast uncertainty is fixed under the common design, not another stochastic label range');
+assert.ok(intervals.actualFrozenForecastConditionalBound >= .3 + Math.sqrt(2 * Math.log(20)));
+assert.ok(intervals.conditionalTotalBound >= .4 + Math.sqrt(2 * Math.log(20)));
+assert.ok(intervals.conditionalTotalBound > intervals.actualFrozenForecastConditionalBound);
+const zeroInterval = run([row(1, { predictedNetReturn: null, forecast: forecast(0, 0) })],
+  { target: { ...target, predictedNetReturn: null, tailError: null, forecast: forecast(0, 0) } });
+assert.deepEqual(zeroInterval.components, one.components); assert.equal(zeroInterval.conditionalTotalBound, one.conditionalTotalBound);
+const narrower = run([row(1, { predictedNetReturn: null, forecast: forecast(-.01, .01) })],
+  { target: { ...intervalTarget, forecast: forecast(-.01, .01) } });
+assert.ok(narrower.conditionalTotalBound < intervals.conditionalTotalBound);
+reason(run([intervalRow], { target: intervalTarget, assumptions: { ...assumptions, numericalTailBound: null } }), 'NUMERICAL_OR_TAIL_BOUND_UNKNOWN');
+for (const bad of [forecast(-Infinity, .1), forecast(.2, .1), forecast(-2, .1), forecast(-.1, .1, { point: 0 }),
+  forecast(-.1, .1, { modelHash: sha('e') }), forecast(-.1, .1, { certificateHash: null })])
+  reason(run([row(1, { predictedNetReturn: null, forecast: bad })]), 'FORECAST_INTERVAL_OR_POINT_OUTSIDE_SUPPORT_OR_MODEL_SCOPE');
+reason(run([intervalRow], { target: { ...intervalTarget, forecast: forecast(-.1, Infinity) } }), 'TARGET_POINT_FORECAST_OR_FULL_SUPPORT_UNAVAILABLE');
+const typedPoint = forecast(.1, .1, { type: 'POINT', point: .1 });
+for (const legacy of [0, .9, '0.1'])
+  reason(run([row(1, { predictedNetReturn: legacy, forecast: typedPoint })]), 'FORECAST_INTERVAL_OR_POINT_OUTSIDE_SUPPORT_OR_MODEL_SCOPE');
+reason(run([row(1, { predictedNetReturn: 0, forecast: forecast(-.1, .1) })]), 'FORECAST_INTERVAL_OR_POINT_OUTSIDE_SUPPORT_OR_MODEL_SCOPE');
+reason(run([intervalRow], { target: { ...intervalTarget, predictedNetReturn: 0 } }), 'TARGET_POINT_FORECAST_OR_FULL_SUPPORT_UNAVAILABLE');
+const pointTyped = run([row(1, { predictedNetReturn: null, forecast: typedPoint })],
+  { target: { ...target, predictedNetReturn: null, forecast: typedPoint } });
+assert.equal(pointTyped.components.targetForecastIntervalWidthUpper, 0);
 console.log(JSON.stringify({ ok: true, suite: VERSION, syntheticOnly: true, formalEligible: false,
   checked: ['block concentration', 'no quote pseudo-replication', 'dependent-game counterexample', 'conditional cancellation',
-    'context omission', 'unknown components remain null', 'time/weight leakage', 'scope isolation', 'outward numeric bounds', 'authority never promoted'] }));
+    'context omission', 'unknown components remain null', 'time/weight leakage', 'scope isolation', 'outward numeric bounds',
+    'interval residual propagation', 'uniform target interval bound', 'zero-width point equivalence', 'authority never promoted'] }));

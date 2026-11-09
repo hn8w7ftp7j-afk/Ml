@@ -56,14 +56,24 @@ const fixture = conditionalReturnSyntheticFixture();
 const conditional = estimateConditionalReturnError(fixture);
 const missing = estimateConditionalReturnError({ ...fixture, assumptions: { ...fixture.assumptions,
   contextOmissionBound: null, numericalTailBound: null, conditionalBlockIndependence: false } });
+const inventedForecast = (lower, upper) => ({ type: 'INTERVAL', lower, upper, point: null,
+  modelHash: fixture.target.modelHash, certificateHash: digest('INVENTED_CALCULATOR_INTERVAL_NOT_SOURCE_EVIDENCE'),
+  method: 'INVENTED_CALCULATOR_INPUT_ONLY' });
+const intervalResult = estimateConditionalReturnError({ ...fixture,
+  target: { ...fixture.target, predictedNetReturn: null, tailError: null, forecast: inventedForecast(-.05, .05) },
+  observations: fixture.observations.map(row => ({ ...row, predictedNetReturn: null, forecast: inventedForecast(-.1, .1) })),
+});
 assert.equal(conditional.status, 'ASSUMPTION_CONDITIONAL_RESEARCH');
 assert.equal(missing.status, 'COMPONENTS_ONLY_MISSING_ASSUMPTIONS');
-for (const value of [conditional, missing]) {
+assert.equal(intervalResult.status, 'ASSUMPTION_CONDITIONAL_RESEARCH');
+assert.equal(intervalResult.targetForecast.point, null);
+assert.ok(intervalResult.conditionalTotalBound > intervalResult.actualFrozenForecastConditionalBound);
+for (const value of [conditional, missing, intervalResult]) {
   assert.equal(value.formalEligible, false); assert.equal(value.formalMargin, null);
   assert.equal(value.R, null); assert.equal(value.S, null);
 }
 const report = {
-  version: 'CONDITIONAL-RETURN-ERROR-ENGINEERING-REPLAY-v1',
+  version: 'CONDITIONAL-RETURN-ERROR-ENGINEERING-REPLAY-v2',
   status: 'ENGINEERING_TESTS_PASS_RESEARCH_NOT_ACCEPTED',
   baseCommit: base,
   baseTree: run('git', ['rev-parse', `${base}^{tree}`]).trim(),
@@ -82,6 +92,13 @@ const report = {
       conditionalTotalBound: conditional.conditionalTotalBound, formalMargin: null, R: null, S: null },
     withUnknownContextNumericsAndIndependence: { status: missing.status,
       conditionalTotalBound: missing.conditionalTotalBound, reasons: missing.reasons,
+      formalMargin: null, R: null, S: null },
+    intervalArithmeticWithAllUnverifiedAssumptions: { status: intervalResult.status,
+      forecastPoint: intervalResult.targetForecast.point,
+      targetForecastInterval: { lower: intervalResult.targetForecast.lower, upper: intervalResult.targetForecast.upper },
+      weightedResidualInterval: intervalResult.components.weightedSignedResidual,
+      actualFrozenForecastConditionalBound: intervalResult.actualFrozenForecastConditionalBound,
+      uniformTargetIntervalBound: intervalResult.conditionalTotalBound,
       formalMargin: null, R: null, S: null },
   },
   interpretation: 'Test execution and content reproducibility only; no real-game precision, source completeness, OOS improvement or formal R/S acceptance is established.',

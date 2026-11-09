@@ -1,5 +1,5 @@
 {
-  "version": "CONDITIONAL-RETURN-ERROR-ENGINEERING-REPLAY-v1",
+  "version": "CONDITIONAL-RETURN-ERROR-ENGINEERING-REPLAY-v2",
   "status": "ENGINEERING_TESTS_PASS_RESEARCH_NOT_ACCEPTED",
   "baseCommit": "11956a087eb733f88310a1d39457306602d842de",
   "baseTree": "979b494265222e15418598fd250b576ba75843d5",
@@ -29,15 +29,16 @@
     }
   ],
   "sourceHashes": {
-    "research/soccer/conditional-return-error/README.md": "470d039faddeaa4c1e5ae9a0698568901872c2e46f0d46b2a42a068b14c099a1",
-    "research/soccer/conditional-return-error/bridge-test.mjs": "2f188e0121c61a75a47229fa94f0f52d52872b957557befae62e49af2b626d90",
-    "research/soccer/conditional-return-error/bridge.mjs": "a109f8fde0f1415ff67b52926a632c8f11b2a541f4d8d86825d0c7ea83d5922a",
+    "research/soccer/conditional-return-error/README.md": "73378db820c4ac0696734d9963a5772ea61358badd4f3969dfb959b73dab67bc",
+    "research/soccer/conditional-return-error/bridge-test.mjs": "a438dff3ab474004d0f081efdd406960b6f86a109f994dcdfe0000b27779ce5b",
+    "research/soccer/conditional-return-error/bridge.mjs": "ce1b86d1415f764cb9ee62c9407b8a36d17aefd39b94810730cc184b1710adae",
     "research/soccer/conditional-return-error/current-scope-audit.json": "b301956392823d409269121245a5fce8a48dbab99c1c446cbd17256fdcdb263e",
-    "research/soccer/conditional-return-error/estimator.mjs": "5bffae489a72d84bb91173fc91b531efa0182cc8cc79c4a158241a056bff9ee2",
-    "research/soccer/conditional-return-error/protocol.json": "e31b0912d069bbd4b7ee999a73d8eee8a8400b8ef920d465a8d25879be42c600",
-    "research/soccer/conditional-return-error/replay.mjs": "fd6a2cdd42618ab7ef8d61c7456830c13893ceb88282d5b6ed339cd1f3e89d0e",
+    "research/soccer/conditional-return-error/estimator.mjs": "b3e6008fdc25f55765163e2309725ccaeb910658b685e5a4d0f974b1e138b379",
+    "research/soccer/conditional-return-error/protocol.json": "338c945936a7508d47c34f0ada932ecfc401cad595504ca550e697ed061542ad",
+    "research/soccer/conditional-return-error/regression-record.json": "36175d26766af99a5a5893904367596fe149c483d0e77e214a4ea6a4f0291bbe",
+    "research/soccer/conditional-return-error/replay.mjs": "7512c4f148a5c749fc9a009fdcfe10b38d8cbdb57190481190a7eb19e8452641",
     "research/soccer/conditional-return-error/synthetic-fixture.mjs": "3c6eac2bf5a33178c9aed097d2653498e6a0467759687d6576c888b8d9d30102",
-    "research/soccer/conditional-return-error/test.mjs": "7dd65c815ed86a81964eea978f00dd84d35712fd48d2adb21be644d8666dbf87"
+    "research/soccer/conditional-return-error/test.mjs": "762b46b76d82a8806dbacf262ed21ca80b6aab4e906b1d3bc384920cd7f83a23"
   },
   "dependencyHashes": {
     "package.json": "cdc4d4ad883f0ae8666c909effd613c1842b412b7e6019f861a117b30623579f",
@@ -71,6 +72,23 @@
         "NUMERICAL_OR_TAIL_BOUND_UNKNOWN",
         "CONDITIONAL_BLOCK_INDEPENDENCE_NOT_ESTABLISHED"
       ],
+      "formalMargin": null,
+      "R": null,
+      "S": null
+    },
+    "intervalArithmeticWithAllUnverifiedAssumptions": {
+      "status": "ASSUMPTION_CONDITIONAL_RESEARCH",
+      "forecastPoint": null,
+      "targetForecastInterval": {
+        "lower": -0.05,
+        "upper": 0.05
+      },
+      "weightedResidualInterval": {
+        "lower": 0.09999999999999999,
+        "upper": 0.3000000000000001
+      },
+      "actualFrozenForecastConditionalBound": 2.030818382602286,
+      "uniformTargetIntervalBound": 2.130818382602286,
       "formalMargin": null,
       "R": null,
       "S": null

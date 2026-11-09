@@ -35,6 +35,7 @@
   "featureInterpretation": "Minimal saved score-model and original-quote projection. It does not contain full npxG, personnel or match conditions, and does not establish full conditioning sufficiency.",
   "contextOmissionInterpretation": "Total allowance for the target and weighted-neighbor full-context versus reduced-feature conditioning gaps, not only a target gap.",
   "numericalTailInterpretation": "Total allowance for target and weighted-neighbor source arithmetic and forecast tails; calculator rounding is separately enclosed.",
+  "forecastIntervalInterpretation": "POINT or INTERVAL must identify the same original frozen model expectation. Historical interval residuals are propagated outward without a midpoint. The primary target-uniform candidate additionally includes the entire target interval width; the actual-original-forecast candidate is reported separately. Single-target alpha does not establish simultaneous eight-direction coverage.",
   "assumptions": {
     "commonDesignFixedBeforeOutcomes": false,
     "conditionalBlockIndependence": false,

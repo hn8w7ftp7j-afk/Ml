@@ -7,6 +7,8 @@ import { buildSoccerMarketDirections } from '../../../lib/soccer/market-directio
 import { evaluateSoccerMarketReturnCapture } from '../../../lib/soccer/market-return-validation.js';
 import { evaluateSoccerForwardCapture, soccerForwardHash } from '../../../lib/soccer/forward-validation.js';
 import { fixtureCapture, changed, resultFor, protocol, active, after, iso } from '../../../scripts/helpers/soccer-forward-fixture.mjs';
+import { predictHalfTimeDistribution, HALF_TIME_MODEL_VERSION, HALF_TIME_PROTOCOL_VERSION } from '../../../lib/soccer/half-time-model.js';
+import { scoreDistribution } from '../../../lib/soccer/score-model.js';
 
 // Synthetic source/identity/contract fixtures only. The documented test command
 // explicitly enables the repository's existing test-only schedule authority.
@@ -23,13 +25,18 @@ const resolveContract = record => ({ provider: 'TAI888', version: 'SYNTHETIC_TES
     FULL_WIN: true, PARTIAL_WIN: true, PUSH: false, PARTIAL_LOSS: true, FULL_LOSS: true } } });
 
 function priced(day, { line = '2.5', league = 'epl', period = 'FT', kind = 'TOTAL', lineSide = null,
-  sequence = day + 1, id = String(1000 + day) } = {}) {
+  canonicalHt = false, sequence = day + 1, id = String(1000 + day) } = {}) {
   return changed(fixtureCapture({ league, id, sequence, period: period === 'FT' ? 'REGULATION_FT' : 'REGULATION_HT' }), value => {
     const p = value.snapshot, game = p.evidence.game, shift = time => iso(Date.parse(time) + day * DAY);
     for (const key of ['runStartedAt', 'observedAt', 'analysisCutoff']) p[key] = shift(p[key]);
     value.capturedAt = shift(value.capturedAt); game.startTime = shift(game.startTime);
     game.date = game.startTime.slice(0, 10); p.date = game.date; value.date = game.date;
     game.home.name = 'Synthetic home'; game.away.name = 'Synthetic away';
+    if (canonicalHt) p.halfTimePrediction = predictHalfTimeDistribution(p.prediction, {
+      version: HALF_TIME_MODEL_VERSION, protocolVersion: HALF_TIME_PROTOCOL_VERSION,
+      league, period: 'REGULATION_HT', cutoff: '2026-01-01T00:00:00.000Z',
+      shares: { home: .45, away: .43 }, trainingHash: soccerForwardHash('HT:synthetic-training'),
+      trainedThrough: '2025-12-30T00:00:00.000Z' });
     for (const source of [p.evidence.source, p.evidence.scheduleSource, p.inputVersions.scheduleSourceVersion, game.source])
       source.fetchedAt = shift(source.fetchedAt);
     p.inputVersions.evidenceFetchedAt = p.evidence.source.fetchedAt;
@@ -53,6 +60,7 @@ function observations(captures) {
     const result = resultFor(capture);
     result.observedAt = iso(at); result.sources.forEach((source, sourceIndex) => { source.fetchedAt = iso(at - (sourceIndex ? 0 : 60000)); });
     result.fullTime = { home: index % 2 ? 0 : 2, away: index % 2 ? 0 : 1, period: 'REGULATION_FT' };
+    result.halfTime = { home: Math.min(1, result.fullTime.home), away: 0, period: 'REGULATION_HT', verified: true };
     result.resultHash = soccerForwardHash(['synthetic-result', capture.gameId, result.fullTime]);
     const evaluation = evaluateSoccerForwardCapture(capture, protocol, result, at);
     evaluation.marketReturnValidation = evaluateSoccerMarketReturnCapture({ capture, protocol, result, now: at, resolveContract });
@@ -145,6 +153,8 @@ if (process.argv.includes('--real-policy')) {
   assert.notEqual(giving.target.quoteIdentity, receiving.target.quoteIdentity,
     'opposite giving-team orientation is retained in categorical scope, never a zero-distance interchangeable price');
   assert.equal(giving.target.predictedNetReturn, null, 'unresolved handicap tail does not acquire a midpoint point protocol');
+  assert.equal(giving.target.forecast.type, 'INTERVAL'); assert.equal(giving.target.forecast.point, null);
+  assert.ok(giving.target.forecast.lower < giving.target.forecast.upper);
   const ht = priced(3, { period: 'HT' });
   const halfTime = build({ target: { capture: ht, quoteKey: quote(ht).key } });
   assert.equal(halfTime.target.period, 'HT'); assert.equal(halfTime.rows.length, 0);
@@ -162,7 +172,92 @@ if (process.argv.includes('--real-policy')) {
   const unsupported = changed(targetCapture, value => { value.snapshot.prediction.distributionFamily = 'CALLER_UNSUPPORTED'; });
   assert.equal(build({ target: { capture: unsupported, quoteKey: quote(unsupported).key } }).status, 'NOT_COMPUTABLE');
 
+  // Every direction of both leagues goes through original capture/result
+  // admission, exact contract/payoff replay and the shipped research consumer.
+  // Each invocation is one hypothetical target, NOT simultaneous 8-way coverage.
+  let directionCases = 0;
+  for (const league of ['epl', 'ucl']) for (const period of ['FT', 'HT']) for (const kind of ['TOTAL', 'HANDICAP']) {
+    const options = { league, period, kind, line: kind === 'HANDICAP' ? '1-80' : '2.5',
+      lineSide: kind === 'HANDICAP' ? 'home' : null, canonicalHt: period === 'HT' };
+    const history = observations([priced(0, options), priced(1, options)]), next = priced(3, options);
+    for (const side of kind === 'TOTAL' ? ['over', 'under'] : ['home', 'away']) {
+      const originalQuote = next.snapshot.directions.flatMap(value => value.quotes).find(value => value.side === side);
+      const replay = buildConditionalReturnResearchBridge({ evidence: history,
+        target: { capture: next, quoteKey: originalQuote.key }, now }, { resolveContract });
+      assert.equal(replay.rows.length, 2, `${league}/${period}/${kind}/${side}: ${JSON.stringify(replay)}`);
+      assert.equal(replay.target.forecast.type, kind === 'HANDICAP' ? 'INTERVAL' : 'POINT');
+      assert.equal(replay.target.forecast.modelHash, replay.target.modelHash);
+      if (kind === 'HANDICAP') {
+        assert.equal(replay.target.predictedNetReturn, null);
+        assert.equal(replay.target.forecast.point, null);
+        assert.ok(replay.rows.every(row => row.status === 'OBSERVED_BOUNDED' && row.predictedNetReturn === null
+          && row.forecast.type === 'INTERVAL' && row.forecastCertificate.arithmeticRoundingIncluded === true));
+        if (league === 'epl' && period === 'FT' && side === 'home') {
+          const forged = structuredClone(history);
+          for (const [index, evaluation] of forged.evaluations.entries()) {
+            const check = evaluation.marketReturnValidation;
+            check.observations.forEach(row => { if (row.certifiedDifferenceReturn) {
+              row.certifiedDifferenceReturn.predictedReturnBounds = { lower: 998, upper: 999 };
+              row.certifiedDifferenceReturn.status = 'CERTIFIED_NUMERICAL_MODEL_LAW_INTERVAL';
+            } });
+            const { evidenceHash, checkedAt, ...body } = check;
+            check.evidenceHash = soccerForwardHash({ ...body,
+              observations: check.observations.map(({ checkedAt, ...row }) => row) });
+            forged.checks[index].marketReturnEvidenceHash = check.evidenceHash;
+          }
+          const rebuilt = buildConditionalReturnResearchBridge({ evidence: forged,
+            target: { capture: next, quoteKey: originalQuote.key }, now }, { resolveContract });
+          assert.deepEqual(rebuilt.rows.map(row => row.forecast), replay.rows.map(row => row.forecast),
+            'even a resealed derived legacy certificate is ignored; original model/contract arithmetic is rerun');
+          const noncanonical = changed(next, value => {
+            value.snapshot.prediction.cells[0].probability += 1e-14;
+            value.snapshot.prediction.cells[1].probability -= 1e-14;
+            value.snapshot.certifiedDifferenceReturn = { status: 'CERTIFIED_NUMERICAL_MODEL_LAW_INTERVAL',
+              predictedReturnBounds: { lower: 998, upper: 999 } };
+          });
+          const unknown = buildConditionalReturnResearchBridge({ evidence: history,
+            target: { capture: noncanonical, quoteKey: quote(noncanonical).key }, now }, { resolveContract });
+          assert.equal(unknown.target.forecast, null, 'noncanonical PMF does not borrow an attached certificate label');
+          assert.equal(unknown.target.numericalTailError, null);
+        }
+      }
+      const scoped = { ...study, scope: Object.fromEntries(Object.keys(study.scope).map(key => [key, replay.target[key]])) };
+      const estimated = estimateConditionalReturnError({ protocol: scoped, target: replay.target,
+        observations: replay.rows.map(row => ({ ...row, weight: 1, weightDeclaredAt: iso(active - 1000),
+          blockId: 'WHOLE_SYNTHETIC_COHORT_NOT_PROVEN_INDEPENDENT' })), now });
+      assert.equal(estimated.status, 'COMPONENTS_ONLY_MISSING_ASSUMPTIONS', JSON.stringify(estimated));
+      assert.equal(estimated.conditionalTotalBound, null); assert.equal(estimated.formalMargin, null);
+      assert.equal(estimated.R, null); assert.equal(estimated.S, null);
+      assert.ok(estimated.reasons.includes('NUMERICAL_OR_TAIL_BOUND_UNKNOWN'));
+      directionCases++;
+    }
+  }
+  assert.equal(directionCases, 16);
+  // Tiny canonical rates can make the legacy retained mass round to one.
+  // Its scalar receipt must not conflict with the separately certified
+  // infinite-series interval selected by this research protocol.
+  const lowRate = capture => changed(capture, value => {
+    value.snapshot.prediction = { ...value.snapshot.prediction, ...scoreDistribution(1e-18, 1e-18, 0) };
+  });
+  const lowOptions = { kind: 'HANDICAP', line: '0', lineSide: 'home' };
+  const lowHistory = observations([lowRate(priced(0, lowOptions)), lowRate(priced(1, lowOptions))]);
+  const lowTarget = lowRate(priced(3, lowOptions));
+  assert.equal(lowTarget.snapshot.prediction.tailMass, 0, 'regression actually reaches the rounded-zero legacy tail');
+  const low = buildConditionalReturnResearchBridge({ evidence: lowHistory,
+    target: { capture: lowTarget, quoteKey: quote(lowTarget).key }, now }, { resolveContract });
+  assert.equal(low.rows.length, 2);
+  assert.equal(low.target.forecast.type, 'INTERVAL'); assert.equal(low.target.predictedNetReturn, null);
+  assert.equal(typeof low.target.legacyOriginalPredictedNetReturn, 'number');
+  assert.ok(low.rows.every(row => row.forecast.type === 'INTERVAL' && row.predictedNetReturn === null
+    && typeof row.legacyOriginalPredictedNetReturn === 'number' && row.predictionError === null));
+  const lowStudy = { ...study, scope: Object.fromEntries(Object.keys(study.scope).map(key => [key, low.target[key]])) };
+  const lowEstimate = estimateConditionalReturnError({ protocol: lowStudy, target: low.target,
+    observations: low.rows.map(row => ({ ...row, weight: 1, weightDeclaredAt: iso(active - 1000),
+      blockId: 'WHOLE_SYNTHETIC_COHORT_NOT_PROVEN_INDEPENDENT' })), now });
+  assert.equal(lowEstimate.status, 'COMPONENTS_ONLY_MISSING_ASSUMPTIONS', JSON.stringify(lowEstimate));
+  assert.equal(lowEstimate.formalMargin, null); assert.equal(lowEstimate.R, null); assert.equal(lowEstimate.S, null);
+
   const real = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--real-policy'], { encoding: 'utf8' });
   assert.equal(real.status, 0, real.stdout + real.stderr);
-  console.log('Conditional-return original-evidence bridge: PASS (synthetic research fixtures only)');
+  console.log('Conditional-return original-evidence bridge: PASS, both leagues x 8 point/interval directions (synthetic research fixtures only)');
 }
