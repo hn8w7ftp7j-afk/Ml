@@ -1,0 +1,2021 @@
+{
+  "version": "SOCCER-OPENPLAY-HISTORICAL-NPXG-v1",
+  "status": "RETROSPECTIVE_SOURCE_AND_NPXG_RESEARCH",
+  "createdAt": "2026-11-09T21:39:10.858728Z",
+  "sourceCollectedAt": "2026-11-09T21:34:00Z",
+  "provider": "OPENPLAY",
+  "xgModel": "openplay_xg_v1",
+  "sourceAttribution": "openplay (Noah Bair)",
+  "license": "CC-BY-4.0",
+  "sourceRelease": "https://github.com/nlbair/openplay/releases/download/data-v0.1.0/",
+  "sourcePublishedAt": "2026-11-03T06:57:53Z",
+  "sourceFiles": [
+    {
+      "name": "matches.parquet",
+      "url": "https://github.com/nlbair/openplay/releases/download/data-v0.1.0/matches.parquet",
+      "sha256": "99017d55a38c1c03eda15ffc500e23be7c6e5a380839809732f48e531f8526ac"
+    },
+    {
+      "name": "shots.parquet",
+      "url": "https://github.com/nlbair/openplay/releases/download/data-v0.1.0/shots.parquet",
+      "sha256": "1b8f5750af5fcce93a1c4dc6b14026b5df6c038463fb792f2764e9b27478e4c5"
+    },
+    {
+      "name": "coverage.csv",
+      "url": "https://github.com/nlbair/openplay/releases/download/data-v0.1.0/coverage.csv",
+      "sha256": "0007ce546378948574ea656a9d0fd814b03373666e2f7fe910439e54835ede0d"
+    },
+    {
+      "name": "known_gaps.csv",
+      "url": "https://github.com/nlbair/openplay/releases/download/data-v0.1.0/known_gaps.csv",
+      "sha256": "d653a1e13257601615d28493cbbf5e7e47597d8e552a54009469501a741da305"
+    },
+    {
+      "name": "data_issues.csv",
+      "url": "https://github.com/nlbair/openplay/releases/download/data-v0.1.0/data_issues.csv",
+      "sha256": "d2e61f67a60547b1fd47d35f1bac9282a591fa63d4a189b6f8b81e388b2dced3"
+    }
+  ],
+  "sourceModelTrainingProvenanceVerified": false,
+  "sourceDeclaredCompletenessOnly": true,
+  "currentSeasonCoverage": false,
+  "sourceIdentityMappingToEspnVerified": false,
+  "reports": {
+    "epl": {
+      "declaredPlayedGames": 4560,
+      "acquiredMatchRows": 4556,
+      "sourceMissingGames": 4,
+      "usableGames": 4424,
+      "sourceMissingMatchIds": [
+        "1376255",
+        "1549586",
+        "1549627",
+        "1549733"
+      ],
+      "excludedGames": 132,
+      "excludedReasons": {
+        "OPENPLAY_REGULATION_XG_MISSING_OR_INVALID": 130,
+        "OPENPLAY_PUBLISHED_DATA_ISSUE": 2
+      },
+      "firstMatchDate": "2014-08-16",
+      "lastMatchDate": "2026-05-24",
+      "seasons": [
+        "1415",
+        "1516",
+        "1617",
+        "1718",
+        "1819",
+        "1920",
+        "2021",
+        "2122",
+        "2223",
+        "2324",
+        "2425",
+        "2526"
+      ],
+      "periods": {
+        "FT": {
+          "protocol": {
+            "trainingBefore": "2024-07-01",
+            "calibrationBefore": "2025-07-01",
+            "testBefore": "2026-07-01",
+            "priorGames": 8,
+            "parameterSelection": "FIXED_PRIOR_NO_HOLDOUT_TUNING",
+            "target": "OBSERVED_PROVIDER_NONPENALTY_XG_NOT_FUTURE_GOALS",
+            "splitUnit": "WHOLE_PROVIDER_LOCAL_MATCH_DATE"
+          },
+          "model": {
+            "period": "FT",
+            "beforeDate": "2024-07-01",
+            "priorGames": 8,
+            "trainingGames": 3693,
+            "trainingHash": "a8a7f461ca9a07bb915c308d5cae55e0b4f36f9d3a624d9b2c2f89b7338b7da3",
+            "meanHome": 1.3775636239974536,
+            "meanAway": 1.1000431966268065,
+            "teams": {
+              "13": {
+                "matches": 372,
+                "npxgFor": 573.6256348751485,
+                "npxgAgainst": 381.14787309715757,
+                "attack": 1.239600410703918,
+                "defence": 0.8307216317829496
+              },
+              "162": {
+                "matches": 375,
+                "npxgFor": 403.84512318091583,
+                "npxgAgainst": 474.4838249471504,
+                "attack": 0.8720525705250511,
+                "defence": 1.0209343471798988
+              },
+              "14": {
+                "matches": 334,
+                "npxgFor": 405.4684348324081,
+                "npxgAgainst": 413.47611320682336,
+                "attack": 0.9804284249212316,
+                "defence": 0.9993291351209046
+              },
+              "31": {
+                "matches": 372,
+                "npxgFor": 430.40993858943693,
+                "npxgAgainst": 468.5005351676373,
+                "attack": 0.9353685946297045,
+                "defence": 1.0162841064966273
+              },
+              "32": {
+                "matches": 374,
+                "npxgFor": 486.42871977807954,
+                "npxgAgainst": 431.9942956924788,
+                "attack": 1.0488485324516954,
+                "defence": 0.9338193912784575
+              },
+              "259": {
+                "matches": 149,
+                "npxgFor": 140.8201050311327,
+                "npxgAgainst": 212.10209391487297,
+                "attack": 0.7749955132576606,
+                "defence": 1.1414987074879763
+              },
+              "171": {
+                "matches": 38,
+                "npxgFor": 42.25629994738847,
+                "npxgAgainst": 61.50093011488207,
+                "attack": 0.915447340688599,
+                "defence": 1.253161559020372
+              },
+              "214": {
+                "matches": 74,
+                "npxgFor": 69.17889601935167,
+                "npxgAgainst": 104.42956688685808,
+                "attack": 0.7785770806543508,
+                "defence": 1.125594393097192
+              },
+              "96": {
+                "matches": 144,
+                "npxgFor": 153.61037209816277,
+                "npxgAgainst": 184.37189429358114,
+                "attack": 0.8684144100769312,
+                "defence": 1.0317804726914843
+              },
+              "24": {
+                "matches": 262,
+                "npxgFor": 296.15536008263007,
+                "npxgAgainst": 342.41148383024847,
+                "attack": 0.9150580155051354,
+                "defence": 1.0533519331816015
+              },
+              "175": {
+                "matches": 182,
+                "npxgFor": 178.78050405014073,
+                "npxgAgainst": 235.43789613980334,
+                "attack": 0.8016688981009465,
+                "defence": 1.0423824754043658
+              },
+              "16": {
+                "matches": 113,
+                "npxgFor": 108.14563495188486,
+                "npxgAgainst": 162.50742761953734,
+                "attack": 0.7875906117948992,
+                "defence": 1.1502559144913562
+              },
+              "29": {
+                "matches": 368,
+                "npxgFor": 449.9746174638858,
+                "npxgAgainst": 516.3706606846536,
+                "attack": 0.9873225348592506,
+                "defence": 1.1298675261483337
+              },
+              "30": {
+                "matches": 357,
+                "npxgFor": 485.4806623336626,
+                "npxgAgainst": 414.95787395874504,
+                "attack": 1.0956022970748127,
+                "defence": 0.9396347583781695
+              },
+              "26": {
+                "matches": 360,
+                "npxgFor": 611.6114200477605,
+                "npxgAgainst": 322.9912266586325,
+                "attack": 1.363346314143499,
+                "defence": 0.7302402076813018
+              },
+              "18": {
+                "matches": 336,
+                "npxgFor": 400.153574936965,
+                "npxgAgainst": 409.5872417577775,
+                "attack": 0.9622564065911657,
+                "defence": 0.9843934541906647
+              },
+              "23": {
+                "matches": 330,
+                "npxgFor": 391.83781598648056,
+                "npxgAgainst": 436.73271891102195,
+                "attack": 0.9594777186858722,
+                "defence": 1.0666982473636362
+              },
+              "167": {
+                "matches": 371,
+                "npxgFor": 690.8982047892059,
+                "npxgAgainst": 273.31088617103524,
+                "attack": 1.4926495016665144,
+                "defence": 0.6032319424177657
+              },
+              "184": {
+                "matches": 298,
+                "npxgFor": 305.59433523600455,
+                "npxgAgainst": 447.84379705553874,
+                "attack": 0.8323042274804142,
+                "defence": 1.2075595088401345
+              },
+              "15": {
+                "matches": 370,
+                "npxgFor": 547.5348678245209,
+                "npxgAgainst": 353.7127571083838,
+                "attack": 1.1904415104548722,
+                "defence": 0.7765284533966481
+              },
+              "183": {
+                "matches": 263,
+                "npxgFor": 295.84616010740865,
+                "npxgAgainst": 383.41854117356706,
+                "attack": 0.9107604004055626,
+                "defence": 1.1716131837425736
+              },
+              "27": {
+                "matches": 221,
+                "npxgFor": 228.78841213823762,
+                "npxgAgainst": 290.11599775904324,
+                "attack": 0.8414192291481194,
+                "defence": 1.0576004638110101
+              },
+              "168": {
+                "matches": 112,
+                "npxgFor": 107.37772407056764,
+                "npxgAgainst": 176.33560806605965,
+                "attack": 0.7889881906518744,
+                "defence": 1.2528624652238
+              },
+              "21": {
+                "matches": 38,
+                "npxgFor": 31.486077106790617,
+                "npxgAgainst": 53.84960097982548,
+                "attack": 0.7264461826400926,
+                "defence": 1.1188922789377977
+              },
+              "211": {
+                "matches": 260,
+                "npxgFor": 316.7054573430796,
+                "npxgAgainst": 322.5009327073931,
+                "attack": 0.9837848178847034,
+                "defence": 1.0012411050532606
+              },
+              "166": {
+                "matches": 76,
+                "npxgFor": 65.85982693452388,
+                "npxgAgainst": 102.1376290738117,
+                "attack": 0.728143649273326,
+                "defence": 1.0767692611349102
+              },
+              "188": {
+                "matches": 37,
+                "npxgFor": 45.394824851711746,
+                "npxgAgainst": 54.16327004565392,
+                "attack": 0.9920909102702229,
+                "defence": 1.1493832909830461
+              },
+              "170": {
+                "matches": 143,
+                "npxgFor": 152.19227195193525,
+                "npxgAgainst": 204.86551891895942,
+                "attack": 0.8665844802841353,
+                "defence": 1.1481702809115744
+              },
+              "161": {
+                "matches": 223,
+                "npxgFor": 241.6238319883123,
+                "npxgAgainst": 280.1263518682681,
+                "attack": 0.8789876490587578,
+                "defence": 1.0135348854083153
+              },
+              "163": {
+                "matches": 107,
+                "npxgFor": 101.94852803403046,
+                "npxgAgainst": 163.8575579058379,
+                "attack": 0.7851823460227039,
+                "defence": 1.219746366196001
+              },
+              "19": {
+                "matches": 110,
+                "npxgFor": 136.97639108728617,
+                "npxgAgainst": 162.75137487694155,
+                "attack": 1.0048434926353613,
+                "defence": 1.1811685367834013
+              },
+              "189": {
+                "matches": 110,
+                "npxgFor": 138.09553990641143,
+                "npxgAgainst": 133.5046879235888,
+                "attack": 1.0124995193685262,
+                "defence": 0.981093789488952
+              },
+              "174": {
+                "matches": 73,
+                "npxgFor": 76.48197303432971,
+                "npxgAgainst": 102.99177808500826,
+                "attack": 0.8609702189541759,
+                "defence": 1.1251618906198806
+              },
+              "95": {
+                "matches": 34,
+                "npxgFor": 39.21444795560092,
+                "npxgAgainst": 71.31204196461476,
+                "attack": 0.9441690884001332,
+                "defence": 1.5610776490518095
+              }
+            }
+          },
+          "calibration": {
+            "games": 366,
+            "teamTargets": 732,
+            "coldStartTeamTargets": 72,
+            "candidate": {
+              "mae": 0.5432919915531205,
+              "mse": 0.5239716007126767
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.551886467233285,
+              "mse": 0.5443037923988028
+            }
+          },
+          "test": {
+            "games": 365,
+            "teamTargets": 730,
+            "coldStartTeamTargets": 0,
+            "candidate": {
+              "mae": 0.5249467179188073,
+              "mse": 0.4627392685412858
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.5528183329706773,
+              "mse": 0.5183454744823015
+            }
+          }
+        },
+        "HT": {
+          "protocol": {
+            "trainingBefore": "2024-07-01",
+            "calibrationBefore": "2025-07-01",
+            "testBefore": "2026-07-01",
+            "priorGames": 8,
+            "parameterSelection": "FIXED_PRIOR_NO_HOLDOUT_TUNING",
+            "target": "OBSERVED_PROVIDER_NONPENALTY_XG_NOT_FUTURE_GOALS",
+            "splitUnit": "WHOLE_PROVIDER_LOCAL_MATCH_DATE"
+          },
+          "model": {
+            "period": "HT",
+            "beforeDate": "2024-07-01",
+            "priorGames": 8,
+            "trainingGames": 3693,
+            "trainingHash": "a8a7f461ca9a07bb915c308d5cae55e0b4f36f9d3a624d9b2c2f89b7338b7da3",
+            "meanHome": 0.6256083528925726,
+            "meanAway": 0.4924951589472534,
+            "teams": {
+              "13": {
+                "matches": 372,
+                "npxgFor": 269.18927985196933,
+                "npxgAgainst": 166.71727309923153,
+                "attack": 1.2881854761043292,
+                "defence": 0.8058273172941991
+              },
+              "162": {
+                "matches": 375,
+                "npxgFor": 170.19120119162835,
+                "npxgAgainst": 212.2584659261629,
+                "attack": 0.8157398058942968,
+                "defence": 1.0122085571113124
+              },
+              "14": {
+                "matches": 334,
+                "npxgFor": 179.164247856359,
+                "npxgAgainst": 193.59931127063464,
+                "attack": 0.9604643901502433,
+                "defence": 1.035963281467716
+              },
+              "31": {
+                "matches": 372,
+                "npxgFor": 198.6376479868777,
+                "npxgAgainst": 208.64734612818575,
+                "attack": 0.956083506738081,
+                "defence": 1.00320134622118
+              },
+              "32": {
+                "matches": 374,
+                "npxgFor": 224.31121604610234,
+                "npxgAgainst": 193.99293939041672,
+                "attack": 1.071296208411286,
+                "defence": 0.9293286436273376
+              },
+              "259": {
+                "matches": 149,
+                "npxgFor": 60.15597608173266,
+                "npxgAgainst": 87.24212090147194,
+                "attack": 0.7363286004230996,
+                "defence": 1.0449283205482376
+              },
+              "171": {
+                "matches": 38,
+                "npxgFor": 17.321154995821416,
+                "npxgAgainst": 26.556138014420867,
+                "attack": 0.8474586387615543,
+                "defence": 1.206567609046402
+              },
+              "214": {
+                "matches": 74,
+                "npxgFor": 28.483277116552927,
+                "npxgAgainst": 46.82588499004487,
+                "attack": 0.7188934986338026,
+                "defence": 1.1190180623292583
+              },
+              "96": {
+                "matches": 144,
+                "npxgFor": 71.50593721156474,
+                "npxgAgainst": 77.75734220864251,
+                "attack": 0.8941168125826904,
+                "defence": 0.9676836407322306
+              },
+              "24": {
+                "matches": 262,
+                "npxgFor": 140.4377140585566,
+                "npxgAgainst": 146.9156989917392,
+                "attack": 0.9600259233367734,
+                "defence": 1.0029424092175585
+              },
+              "175": {
+                "matches": 182,
+                "npxgFor": 77.7048089884338,
+                "npxgAgainst": 109.87359006190673,
+                "attack": 0.7736523418599982,
+                "defence": 1.0765033252941054
+              },
+              "16": {
+                "matches": 113,
+                "npxgFor": 46.09506690769922,
+                "npxgAgainst": 68.62835385929793,
+                "attack": 0.7475391344699639,
+                "defence": 1.0806487437766226
+              },
+              "29": {
+                "matches": 368,
+                "npxgFor": 200.32179223874118,
+                "npxgAgainst": 232.98277318151668,
+                "attack": 0.9742665799412915,
+                "defence": 1.1296445214255924
+              },
+              "30": {
+                "matches": 357,
+                "npxgFor": 211.02519934857264,
+                "npxgAgainst": 193.19651182676898,
+                "attack": 1.0560818636394833,
+                "defence": 0.9687094178496599
+              },
+              "26": {
+                "matches": 360,
+                "npxgFor": 274.92491383105516,
+                "npxgAgainst": 141.3568256777362,
+                "attack": 1.3580708068531417,
+                "defence": 0.7088343856403119
+              },
+              "18": {
+                "matches": 336,
+                "npxgFor": 182.50676393858157,
+                "npxgAgainst": 189.5562338961754,
+                "attack": 0.9722608261157474,
+                "defence": 1.0089169049287778
+              },
+              "23": {
+                "matches": 330,
+                "npxgFor": 187.97690392431105,
+                "npxgAgainst": 194.8145758213941,
+                "attack": 1.0184686379397105,
+                "defence": 1.0546545514939791
+              },
+              "167": {
+                "matches": 371,
+                "npxgFor": 330.4407700992888,
+                "npxgAgainst": 124.21798899938585,
+                "attack": 1.5806692998618839,
+                "defence": 0.6073722352888096
+              },
+              "184": {
+                "matches": 298,
+                "npxgFor": 137.93553100596182,
+                "npxgAgainst": 199.27277620672248,
+                "attack": 0.8324550212438497,
+                "defence": 1.191005927497852
+              },
+              "15": {
+                "matches": 370,
+                "npxgFor": 249.61875279713422,
+                "npxgAgainst": 155.15335817541927,
+                "attack": 1.2023910970100908,
+                "defence": 0.7553690659836846
+              },
+              "183": {
+                "matches": 263,
+                "npxgFor": 129.87256109854206,
+                "npxgAgainst": 172.90466417273274,
+                "attack": 0.8867478018234679,
+                "defence": 1.1707824132217615
+              },
+              "27": {
+                "matches": 221,
+                "npxgFor": 103.09436383913271,
+                "npxgAgainst": 129.0015289816074,
+                "attack": 0.8402154468306549,
+                "defence": 1.042579046112859
+              },
+              "168": {
+                "matches": 112,
+                "npxgFor": 47.35161801986396,
+                "npxgAgainst": 82.13276295363903,
+                "attack": 0.772499020565449,
+                "defence": 1.2909534773825868
+              },
+              "21": {
+                "matches": 38,
+                "npxgFor": 14.443634036928415,
+                "npxgAgainst": 25.56290304567665,
+                "attack": 0.73556416245987,
+                "defence": 1.167944951467251
+              },
+              "211": {
+                "matches": 260,
+                "npxgFor": 144.58717915258603,
+                "npxgAgainst": 157.3522438396467,
+                "attack": 0.994885546911281,
+                "defence": 1.0800848828943668
+              },
+              "166": {
+                "matches": 76,
+                "npxgFor": 31.816786899697036,
+                "npxgAgainst": 43.83420303184539,
+                "attack": 0.7727626152929107,
+                "defence": 1.028668220183213
+              },
+              "188": {
+                "matches": 37,
+                "npxgFor": 15.293101931398269,
+                "npxgAgainst": 23.48955198843032,
+                "attack": 0.7856762522712789,
+                "defence": 1.1114838947157564
+              },
+              "170": {
+                "matches": 143,
+                "npxgFor": 67.4544229558669,
+                "npxgAgainst": 93.9584829400992,
+                "attack": 0.8520439545203315,
+                "defence": 1.166010549197593
+              },
+              "161": {
+                "matches": 223,
+                "npxgFor": 103.06198394671082,
+                "npxgAgainst": 126.72779891081154,
+                "attack": 0.832690121270081,
+                "defence": 1.0159458115423137
+              },
+              "163": {
+                "matches": 107,
+                "npxgFor": 43.3474469933426,
+                "npxgAgainst": 77.81091288244352,
+                "attack": 0.7438039040420583,
+                "defence": 1.2798585875409318
+              },
+              "19": {
+                "matches": 110,
+                "npxgFor": 58.70823094667867,
+                "npxgAgainst": 78.3698518872261,
+                "attack": 0.9577453056804842,
+                "defence": 1.2557926769862915
+              },
+              "189": {
+                "matches": 110,
+                "npxgFor": 63.13322394154966,
+                "npxgAgainst": 66.736054985784,
+                "attack": 1.0248230676898251,
+                "defence": 1.0794378080126086
+              },
+              "174": {
+                "matches": 73,
+                "npxgFor": 33.95708103105426,
+                "npxgAgainst": 48.8945981208235,
+                "attack": 0.8486481006824305,
+                "defence": 1.178517006877472
+              },
+              "95": {
+                "matches": 34,
+                "npxgFor": 15.086478954181075,
+                "npxgAgainst": 32.81520285643637,
+                "attack": 0.8329960932540501,
+                "defence": 1.588046890239099
+              }
+            }
+          },
+          "calibration": {
+            "games": 366,
+            "teamTargets": 732,
+            "coldStartTeamTargets": 72,
+            "candidate": {
+              "mae": 0.3182916564076755,
+              "mse": 0.17758218637542736
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.3259856846300703,
+              "mse": 0.18690310130800916
+            }
+          },
+          "test": {
+            "games": 365,
+            "teamTargets": 730,
+            "coldStartTeamTargets": 0,
+            "candidate": {
+              "mae": 0.31907871410462485,
+              "mse": 0.1967744348502985
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.3330851988837365,
+              "mse": 0.21373532293493364
+            }
+          }
+        }
+      }
+    },
+    "ucl": {
+      "declaredPlayedGames": 1622,
+      "acquiredMatchRows": 1622,
+      "sourceMissingGames": 0,
+      "usableGames": 1573,
+      "sourceMissingMatchIds": [],
+      "excludedGames": 49,
+      "excludedReasons": {
+        "OPENPLAY_REGULATION_XG_MISSING_OR_INVALID": 49
+      },
+      "firstMatchDate": "2014-09-16",
+      "lastMatchDate": "2026-05-30",
+      "seasons": [
+        "1415",
+        "1516",
+        "1617",
+        "1718",
+        "1819",
+        "1920",
+        "2021",
+        "2122",
+        "2223",
+        "2324",
+        "2425",
+        "2526"
+      ],
+      "periods": {
+        "FT": {
+          "protocol": {
+            "trainingBefore": "2024-07-01",
+            "calibrationBefore": "2025-07-01",
+            "testBefore": "2026-07-01",
+            "priorGames": 8,
+            "parameterSelection": "FIXED_PRIOR_NO_HOLDOUT_TUNING",
+            "target": "OBSERVED_PROVIDER_NONPENALTY_XG_NOT_FUTURE_GOALS",
+            "splitUnit": "WHOLE_PROVIDER_LOCAL_MATCH_DATE"
+          },
+          "model": {
+            "period": "FT",
+            "beforeDate": "2024-07-01",
+            "priorGames": 8,
+            "trainingGames": 1206,
+            "trainingHash": "34d6d0397abd1ea5bcde052b5ec1c64fcdf540171a54299408e74c0cefe8cc70",
+            "meanHome": 1.3665181263749584,
+            "meanAway": 1.0890954150957293,
+            "teams": {
+              "87": {
+                "matches": 83,
+                "npxgFor": 106.72518909932114,
+                "npxgAgainst": 79.63791099062655,
+                "attack": 1.0431147336136697,
+                "defence": 0.8006804973041818
+              },
+              "493": {
+                "matches": 18,
+                "npxgFor": 11.286330003291368,
+                "npxgAgainst": 37.08866003504954,
+                "attack": 0.6612411118345316,
+                "defence": 1.4695094261715023
+              },
+              "843": {
+                "matches": 30,
+                "npxgFor": 25.379051996860653,
+                "npxgAgainst": 46.79023595061153,
+                "attack": 0.7544798150775391,
+                "defence": 1.213389329782184
+              },
+              "63": {
+                "matches": 86,
+                "npxgFor": 108.83675204287283,
+                "npxgAgainst": 82.1467319028452,
+                "attack": 1.0281194166963155,
+                "defence": 0.7968644739512717
+              },
+              "26": {
+                "matches": 66,
+                "npxgFor": 105.85596084734425,
+                "npxgAgainst": 65.77457091549877,
+                "attack": 1.2731822806017277,
+                "defence": 0.8320376172928543
+              },
+              "9449": {
+                "matches": 12,
+                "npxgFor": 8.180414943024516,
+                "npxgAgainst": 22.519881921820343,
+                "attack": 0.733131203459857,
+                "defence": 1.31707760775472
+              },
+              "52": {
+                "matches": 113,
+                "npxgFor": 193.6968170683831,
+                "npxgAgainst": 123.21202681702562,
+                "attack": 1.3699040340115758,
+                "defence": 0.8954654321228649
+              },
+              "401": {
+                "matches": 22,
+                "npxgFor": 20.420693997759372,
+                "npxgAgainst": 27.536265042144805,
+                "attack": 0.8210615569291154,
+                "defence": 1.0142399194636873
+              },
+              "248": {
+                "matches": 33,
+                "npxgFor": 30.579726162948646,
+                "npxgAgainst": 40.09128602105193,
+                "attack": 0.8025847844285352,
+                "defence": 0.991530855065405
+              },
+              "36": {
+                "matches": 34,
+                "npxgFor": 40.810709010344,
+                "npxgAgainst": 29.87357804272324,
+                "attack": 0.9818739665964377,
+                "defence": 0.7697820589866708
+              },
+              "299": {
+                "matches": 67,
+                "npxgFor": 73.492329018889,
+                "npxgAgainst": 85.50722810381558,
+                "attack": 0.9047545609572188,
+                "defence": 1.035230021985784
+              },
+              "560": {
+                "matches": 32,
+                "npxgFor": 31.753673045081086,
+                "npxgAgainst": 34.90275509888306,
+                "attack": 0.8465527353718603,
+                "defence": 0.9106728015105241
+              },
+              "294": {
+                "matches": 30,
+                "npxgFor": 29.563577989581972,
+                "npxgAgainst": 46.66612010169774,
+                "attack": 0.8441674660143901,
+                "defence": 1.2107291338717094
+              },
+              "240": {
+                "matches": 12,
+                "npxgFor": 11.134002976119518,
+                "npxgAgainst": 19.057565044611692,
+                "attack": 0.8534102287712289,
+                "defence": 1.1760816074176703
+              },
+              "44": {
+                "matches": 73,
+                "npxgFor": 99.15118571685161,
+                "npxgAgainst": 83.75453117548022,
+                "attack": 1.0957372209256073,
+                "defence": 0.9409228320801182
+              },
+              "13": {
+                "matches": 33,
+                "npxgFor": 43.32777910178993,
+                "npxgAgainst": 37.47214591037482,
+                "attack": 1.055823427405985,
+                "defence": 0.9395019302893863
+              },
+              "37": {
+                "matches": 103,
+                "npxgFor": 195.06812102464028,
+                "npxgAgainst": 94.19911513861734,
+                "attack": 1.5033807287501422,
+                "defence": 0.7632563016689023
+              },
+              "167": {
+                "matches": 104,
+                "npxgFor": 167.72458623722196,
+                "npxgAgainst": 80.20700799580663,
+                "attack": 1.2911163791849458,
+                "defence": 0.6546913592153342
+              },
+              "84": {
+                "matches": 33,
+                "npxgFor": 40.50691590097267,
+                "npxgAgainst": 48.78076589619741,
+                "attack": 0.9997872960510963,
+                "defence": 1.1641463989699252
+              },
+              "847": {
+                "matches": 29,
+                "npxgFor": 25.498456907924265,
+                "npxgAgainst": 42.292162018828094,
+                "attack": 0.7774995552755185,
+                "defence": 1.1471700382330974
+              },
+              "65": {
+                "matches": 92,
+                "npxgFor": 144.63283398374915,
+                "npxgAgainst": 98.80202214885503,
+                "attack": 1.257977165715802,
+                "defence": 0.8847033499390272
+              },
+              "692": {
+                "matches": 12,
+                "npxgFor": 6.659765030257404,
+                "npxgAgainst": 23.87130597885698,
+                "attack": 0.6712057462539002,
+                "defence": 1.3721116770092516
+              },
+              "130": {
+                "matches": 42,
+                "npxgFor": 52.91472795291338,
+                "npxgAgainst": 54.805531944613904,
+                "attack": 1.0219390153911974,
+                "defence": 1.0527387150958682
+              },
+              "304": {
+                "matches": 94,
+                "npxgFor": 138.85121911088936,
+                "npxgAgainst": 99.02187108329963,
+                "attack": 1.1871452958776705,
+                "defence": 0.8691116984915019
+              },
+              "15": {
+                "matches": 64,
+                "npxgFor": 99.56937689939514,
+                "npxgAgainst": 54.0300639445195,
+                "attack": 1.2374349313188822,
+                "defence": 0.7222964968502382
+              },
+              "39": {
+                "matches": 15,
+                "npxgFor": 13.628257901407778,
+                "npxgAgainst": 16.007401019800454,
+                "attack": 0.8304207153280918,
+                "defence": 0.9146693182947916
+              },
+              "595": {
+                "matches": 11,
+                "npxgFor": 7.324898048769683,
+                "npxgAgainst": 24.849117836914957,
+                "attack": 0.735044180676168,
+                "defence": 1.4862432938056827
+              },
+              "296": {
+                "matches": 30,
+                "npxgFor": 31.171250986866653,
+                "npxgAgainst": 32.15098805073649,
+                "attack": 0.8786249923511542,
+                "defence": 0.8996238619834848
+              },
+              "297": {
+                "matches": 68,
+                "npxgFor": 80.9915589876473,
+                "npxgAgainst": 69.65208499936853,
+                "attack": 0.973216025668839,
+                "defence": 0.8516955969945682
+              },
+              "569": {
+                "matches": 12,
+                "npxgFor": 6.907842984423041,
+                "npxgAgainst": 22.836098928935826,
+                "attack": 0.6813082298074425,
+                "defence": 1.329954919342035
+              },
+              "53": {
+                "matches": 6,
+                "npxgFor": 5.4782370161265135,
+                "npxgAgainst": 7.342723009176552,
+                "attack": 0.8901290814238716,
+                "defence": 0.9985969398087741
+              },
+              "1706": {
+                "matches": 56,
+                "npxgFor": 55.937023957725614,
+                "npxgAgainst": 84.74088194896467,
+                "attack": 0.8368514249730087,
+                "defence": 1.2034077038926676
+              },
+              "33": {
+                "matches": 16,
+                "npxgFor": 15.498699055751786,
+                "npxgAgainst": 17.583700999617577,
+                "attack": 0.8592948630423026,
+                "defence": 0.9300511767107618
+              },
+              "129": {
+                "matches": 27,
+                "npxgFor": 25.99953202623874,
+                "npxgAgainst": 44.77482009225059,
+                "attack": 0.8335882682597733,
+                "defence": 1.2704948032879002
+              },
+              "32": {
+                "matches": 44,
+                "npxgFor": 53.58888598438352,
+                "npxgAgainst": 51.87032098823693,
+                "attack": 0.9931928037123008,
+                "defence": 0.96627543557531
+              },
+              "7121": {
+                "matches": 6,
+                "npxgFor": 3.7849880047142506,
+                "npxgAgainst": 9.369214965030551,
+                "attack": 0.7916230617139599,
+                "defence": 1.1164896154872532
+              },
+              "67": {
+                "matches": 49,
+                "npxgFor": 58.26256301673129,
+                "npxgAgainst": 52.39994786470197,
+                "attack": 0.972851766361017,
+                "defence": 0.8890821538653768
+              },
+              "134": {
+                "matches": 20,
+                "npxgFor": 17.83842206466943,
+                "npxgAgainst": 35.859753996133804,
+                "attack": 0.804596016532618,
+                "defence": 1.3287982060732657
+              },
+              "684": {
+                "matches": 24,
+                "npxgFor": 17.90854902099818,
+                "npxgAgainst": 42.6963370218873,
+                "attack": 0.7058063778806325,
+                "defence": 1.336702373480868
+              },
+              "350": {
+                "matches": 25,
+                "npxgFor": 21.527242132113315,
+                "npxgAgainst": 28.77084405440837,
+                "attack": 0.7737298893864336,
+                "defence": 0.9525064638330244
+              },
+              "1268": {
+                "matches": 5,
+                "npxgFor": 3.375727000646293,
+                "npxgAgainst": 8.809277981519699,
+                "attack": 0.82687661390691,
+                "defence": 1.1672929318726937
+              },
+              "55": {
+                "matches": 18,
+                "npxgFor": 21.833489024080336,
+                "npxgAgainst": 25.543664915603586,
+                "attack": 0.9916350891336501,
+                "defence": 1.1078578337479597
+              },
+              "231": {
+                "matches": 8,
+                "npxgFor": 7.200802978128195,
+                "npxgAgainst": 10.175885036587715,
+                "attack": 0.8665480569580777,
+                "defence": 1.0179909656352772
+              },
+              "228": {
+                "matches": 28,
+                "npxgFor": 31.590730028459802,
+                "npxgAgainst": 37.68925797380507,
+                "attack": 0.9369277438759052,
+                "defence": 1.0749002311394438
+              },
+              "276": {
+                "matches": 43,
+                "npxgFor": 59.34723616170231,
+                "npxgAgainst": 51.542164046783,
+                "attack": 1.1046269414066718,
+                "defence": 0.9799814081256957
+              },
+              "133": {
+                "matches": 19,
+                "npxgFor": 14.147186967544258,
+                "npxgAgainst": 35.89562297333032,
+                "attack": 0.7230490233341301,
+                "defence": 1.3790949493241855
+              },
+              "562": {
+                "matches": 6,
+                "npxgFor": 2.4076950028538704,
+                "npxgAgainst": 10.278094924986362,
+                "attack": 0.7114980176872551,
+                "defence": 1.169364382663215
+              },
+              "124": {
+                "matches": 37,
+                "npxgFor": 29.483000940759666,
+                "npxgAgainst": 51.3189681195654,
+                "attack": 0.7113941531714048,
+                "defence": 1.106605945979776
+              },
+              "14": {
+                "matches": 9,
+                "npxgFor": 8.650394979864359,
+                "npxgAgainst": 9.418122995644808,
+                "attack": 0.8850237764963218,
+                "defence": 0.9218051924266559
+              },
+              "10": {
+                "matches": 20,
+                "npxgFor": 17.97869697958231,
+                "npxgAgainst": 25.610675990581512,
+                "attack": 0.8086763152483071,
+                "defence": 1.0306743408830836
+              },
+              "30": {
+                "matches": 41,
+                "npxgFor": 53.29101295536384,
+                "npxgAgainst": 47.37727393768728,
+                "attack": 1.0490493878597187,
+                "defence": 0.9507533413988631
+              },
+              "1030": {
+                "matches": 6,
+                "npxgFor": 5.118197983130813,
+                "npxgAgainst": 17.415708019398153,
+                "attack": 0.8691835430880592,
+                "defence": 1.5846003293084336
+              },
+              "103": {
+                "matches": 23,
+                "npxgFor": 20.14254698343575,
+                "npxgAgainst": 35.31560402177274,
+                "attack": 0.7872679670284635,
+                "defence": 1.1859084245627076
+              },
+              "2569": {
+                "matches": 6,
+                "npxgFor": 2.2787099685519934,
+                "npxgAgainst": 11.690075985621661,
+                "attack": 0.7039942174513837,
+                "defence": 1.2515074302903064
+              },
+              "840": {
+                "matches": 6,
+                "npxgFor": 5.61128796543926,
+                "npxgAgainst": 9.036702995654196,
+                "attack": 0.8978694192874045,
+                "defence": 1.0971454845363957
+              },
+              "256": {
+                "matches": 11,
+                "npxgFor": 11.494898984907195,
+                "npxgAgainst": 11.820953998714685,
+                "attack": 0.9137968465777225,
+                "defence": 0.9277736307178821
+              },
+              "7614": {
+                "matches": 44,
+                "npxgFor": 57.29309680312872,
+                "npxgAgainst": 52.383846127428114,
+                "attack": 1.0512107468734584,
+                "defence": 0.9743186258242691
+              },
+              "75": {
+                "matches": 47,
+                "npxgFor": 66.240335987648,
+                "npxgAgainst": 49.77430795272812,
+                "attack": 1.1263660161647586,
+                "defence": 0.882530964067488
+              },
+              "579": {
+                "matches": 18,
+                "npxgFor": 14.727020064834505,
+                "npxgAgainst": 45.343236030079424,
+                "attack": 0.7690221049764887,
+                "defence": 1.7280873226970204
+              },
+              "668": {
+                "matches": 18,
+                "npxgFor": 14.526654995046556,
+                "npxgAgainst": 28.001676930114627,
+                "attack": 0.7627455889792828,
+                "defence": 1.1848560437988946
+              },
+              "587": {
+                "matches": 18,
+                "npxgFor": 18.647257030941546,
+                "npxgAgainst": 32.26772299781442,
+                "attack": 0.8918250968185749,
+                "defence": 1.3184916441411718
+              },
+              "842": {
+                "matches": 6,
+                "npxgFor": 4.627595999278128,
+                "npxgAgainst": 10.160170948598534,
+                "attack": 0.8406424080480295,
+                "defence": 1.1625040676923875
+              },
+              "1211": {
+                "matches": 5,
+                "npxgFor": 7.114899990148842,
+                "npxgAgainst": 7.482952994294465,
+                "attack": 1.061138794533209,
+                "defence": 1.0841976098325472
+              },
+              "1076": {
+                "matches": 12,
+                "npxgFor": 11.163125007296912,
+                "npxgAgainst": 21.489364005625248,
+                "attack": 0.8545961658368777,
+                "defence": 1.2751118057752315
+              },
+              "361": {
+                "matches": 30,
+                "npxgFor": 36.868203036952764,
+                "npxgAgainst": 40.1295100832358,
+                "attack": 1.0007287259068436,
+                "defence": 1.0706288695488488
+              },
+              "140": {
+                "matches": 6,
+                "npxgFor": 6.092225010506809,
+                "npxgAgainst": 14.364312019199133,
+                "attack": 0.9258482893303506,
+                "defence": 1.4070830991122387
+              },
+              "349": {
+                "matches": 6,
+                "npxgFor": 7.868691996671259,
+                "npxgAgainst": 10.499704916030169,
+                "attack": 1.0291955765714451,
+                "defence": 1.1822567085990603
+              },
+              "607": {
+                "matches": 14,
+                "npxgFor": 15.407445944845676,
+                "npxgAgainst": 14.106004972010851,
+                "attack": 0.9340343030604974,
+                "defence": 0.8858537511478384
+              },
+              "300": {
+                "matches": 22,
+                "npxgFor": 30.038018927909434,
+                "npxgAgainst": 27.933554103598,
+                "attack": 1.0821592355806773,
+                "defence": 1.0250257931294395
+              },
+              "313": {
+                "matches": 6,
+                "npxgFor": 6.577538980636746,
+                "npxgAgainst": 8.053153963759542,
+                "attack": 0.9540817902418568,
+                "defence": 1.0399267886042058
+              },
+              "7164": {
+                "matches": 6,
+                "npxgFor": 5.748560975305736,
+                "npxgAgainst": 10.241663027787581,
+                "attack": 0.9058553786616065,
+                "defence": 1.1672449299664498
+              },
+              "77": {
+                "matches": 16,
+                "npxgFor": 16.148726996965706,
+                "npxgAgainst": 19.821885007433593,
+                "attack": 0.8813541138919773,
+                "defence": 1.0060058539573136
+              },
+              "994": {
+                "matches": 6,
+                "npxgFor": 5.219385989941657,
+                "npxgAgainst": 8.60752397403121,
+                "attack": 0.8750702305900954,
+                "defence": 1.0721776759753776
+              },
+              "2201": {
+                "matches": 6,
+                "npxgFor": 4.673731986898929,
+                "npxgAgainst": 9.525196964852512,
+                "attack": 0.8433264034174526,
+                "defence": 1.125563984257171
+              },
+              "249": {
+                "matches": 10,
+                "npxgFor": 6.865640981821343,
+                "npxgAgainst": 10.813092006370425,
+                "attack": 0.7550995964449798,
+                "defence": 0.933713072053873
+              },
+              "395": {
+                "matches": 6,
+                "npxgFor": 5.4817160167731345,
+                "npxgAgainst": 8.070559041574597,
+                "attack": 0.8903314748721813,
+                "defence": 1.0409393419420474
+              },
+              "839": {
+                "matches": 11,
+                "npxgFor": 13.010707990266383,
+                "npxgAgainst": 12.858282007277012,
+                "attack": 0.9787740264045722,
+                "defence": 0.9722400828325471
+              },
+              "80": {
+                "matches": 24,
+                "npxgFor": 27.152462020749226,
+                "npxgAgainst": 28.562093049520627,
+                "attack": 0.9410814131121226,
+                "defence": 0.9769591837019718
+              },
+              "2097": {
+                "matches": 6,
+                "npxgFor": 3.8110959716141224,
+                "npxgAgainst": 12.57136703375727,
+                "attack": 0.7931419120925463,
+                "defence": 1.302777192016261
+              },
+              "705": {
+                "matches": 6,
+                "npxgFor": 5.243143996223807,
+                "npxgAgainst": 7.913770024199039,
+                "attack": 0.8764523702631881,
+                "defence": 1.0318180243261508
+              },
+              "306": {
+                "matches": 6,
+                "npxgFor": 3.1892740577459335,
+                "npxgAgainst": 9.188927018083632,
+                "attack": 0.7569669600974666,
+                "defence": 1.1060012301784672
+              },
+              "45": {
+                "matches": 8,
+                "npxgFor": 6.527057980187237,
+                "npxgAgainst": 9.697144015692174,
+                "attack": 0.8322518929565627,
+                "defence": 0.9936212402687595
+              },
+              "752": {
+                "matches": 6,
+                "npxgFor": 5.092648008372635,
+                "npxgAgainst": 9.624360952526331,
+                "attack": 0.8676971543170315,
+                "defence": 1.131332922941602
+              },
+              "23": {
+                "matches": 5,
+                "npxgFor": 5.115305010229349,
+                "npxgAgainst": 9.655813957331702,
+                "attack": 0.9358625685654824,
+                "defence": 1.2203290883246891
+              },
+              "796": {
+                "matches": 6,
+                "npxgFor": 5.218848023563623,
+                "npxgAgainst": 12.637888044118881,
+                "attack": 0.8750389339962212,
+                "defence": 1.3066471012343617
+              },
+              "288": {
+                "matches": 6,
+                "npxgFor": 8.864213016815484,
+                "npxgAgainst": 8.481451010913588,
+                "attack": 1.0871107518179772,
+                "defence": 1.0648432876449847
+              },
+              "309": {
+                "matches": 6,
+                "npxgFor": 5.082201019162312,
+                "npxgAgainst": 6.177387984469533,
+                "attack": 0.8670893929552205,
+                "defence": 0.9308027086361854
+              },
+              "68": {
+                "matches": 8,
+                "npxgFor": 10.413339033722878,
+                "npxgAgainst": 7.14837893191725,
+                "attack": 1.0300782705554639,
+                "defence": 0.8638794750881295
+              }
+            }
+          },
+          "calibration": {
+            "games": 182,
+            "teamTargets": 364,
+            "coldStartTeamTargets": 126,
+            "candidate": {
+              "mae": 0.5439071550926867,
+              "mse": 0.5049164018467984
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.5971648536385054,
+              "mse": 0.606943239377077
+            }
+          },
+          "test": {
+            "games": 185,
+            "teamTargets": 370,
+            "coldStartTeamTargets": 70,
+            "candidate": {
+              "mae": 0.5761792520917974,
+              "mse": 0.5983351396956065
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.6286968500960879,
+              "mse": 0.6922985234974134
+            }
+          }
+        },
+        "HT": {
+          "protocol": {
+            "trainingBefore": "2024-07-01",
+            "calibrationBefore": "2025-07-01",
+            "testBefore": "2026-07-01",
+            "priorGames": 8,
+            "parameterSelection": "FIXED_PRIOR_NO_HOLDOUT_TUNING",
+            "target": "OBSERVED_PROVIDER_NONPENALTY_XG_NOT_FUTURE_GOALS",
+            "splitUnit": "WHOLE_PROVIDER_LOCAL_MATCH_DATE"
+          },
+          "model": {
+            "period": "HT",
+            "beforeDate": "2024-07-01",
+            "priorGames": 8,
+            "trainingGames": 1206,
+            "trainingHash": "34d6d0397abd1ea5bcde052b5ec1c64fcdf540171a54299408e74c0cefe8cc70",
+            "meanHome": 0.6286813814163472,
+            "meanAway": 0.49579916965530313,
+            "teams": {
+              "87": {
+                "matches": 83,
+                "npxgFor": 51.50234913267195,
+                "npxgAgainst": 35.48239905585069,
+                "attack": 1.0945277737760057,
+                "defence": 0.7814171427920839
+              },
+              "493": {
+                "matches": 18,
+                "npxgFor": 5.286782013718039,
+                "npxgAgainst": 16.68727504555136,
+                "attack": 0.6693486646023521,
+                "defence": 1.449229651972883
+              },
+              "843": {
+                "matches": 30,
+                "npxgFor": 11.224669044837356,
+                "npxgAgainst": 21.619022013619542,
+                "attack": 0.7358996132008192,
+                "defence": 1.2224097697009955
+              },
+              "63": {
+                "matches": 86,
+                "npxgFor": 49.68268811609596,
+                "npxgAgainst": 36.52856690622866,
+                "attack": 1.0251657459866639,
+                "defence": 0.776273118104258
+              },
+              "26": {
+                "matches": 66,
+                "npxgFor": 51.80616510473192,
+                "npxgAgainst": 30.970873929094523,
+                "attack": 1.3532755973259785,
+                "defence": 0.8524968358051414
+              },
+              "9449": {
+                "matches": 12,
+                "npxgFor": 4.736428973264992,
+                "npxgAgainst": 9.23965700622648,
+                "attack": 0.8212103952132467,
+                "defence": 1.2216822422958689
+              },
+              "52": {
+                "matches": 113,
+                "npxgFor": 80.67750718002208,
+                "npxgAgainst": 61.12361294985749,
+                "attack": 1.2520077253350512,
+                "defence": 0.9645817996483104
+              },
+              "401": {
+                "matches": 22,
+                "npxgFor": 7.591525978408754,
+                "npxgAgainst": 15.430986060295254,
+                "attack": 0.7167426874671979,
+                "defence": 1.1815178866715688
+              },
+              "248": {
+                "matches": 33,
+                "npxgFor": 14.359808061388321,
+                "npxgAgainst": 19.997159033082426,
+                "attack": 0.8180570845585228,
+                "defence": 1.062607984140084
+              },
+              "36": {
+                "matches": 34,
+                "npxgFor": 20.167130906134844,
+                "npxgAgainst": 13.322323030792177,
+                "attack": 1.0445056941822184,
+                "defence": 0.7546445384258605
+              },
+              "299": {
+                "matches": 67,
+                "npxgFor": 31.812557986471802,
+                "npxgAgainst": 37.95386506605428,
+                "attack": 0.8610904571277552,
+                "defence": 1.0067294267237985
+              },
+              "560": {
+                "matches": 32,
+                "npxgFor": 13.144351995666511,
+                "npxgAgainst": 14.283550065942109,
+                "attack": 0.7844632876548958,
+                "defence": 0.8351177017837094
+              },
+              "294": {
+                "matches": 30,
+                "npxgFor": 13.395874977577478,
+                "npxgAgainst": 20.42417103983462,
+                "attack": 0.8375234219462006,
+                "defence": 1.1664844864249362
+              },
+              "240": {
+                "matches": 12,
+                "npxgFor": 4.703718016855419,
+                "npxgAgainst": 6.676749031059444,
+                "attack": 0.8183014114715182,
+                "defence": 0.9937629623470483
+              },
+              "44": {
+                "matches": 73,
+                "npxgFor": 48.73478089028504,
+                "npxgAgainst": 36.30565210443456,
+                "attack": 1.1688843612968929,
+                "defence": 0.8959653957407896
+              },
+              "13": {
+                "matches": 33,
+                "npxgFor": 22.04973411746323,
+                "npxgAgainst": 15.98689489532262,
+                "attack": 1.1516496432215264,
+                "defence": 0.8886408660072714
+              },
+              "37": {
+                "matches": 103,
+                "npxgFor": 90.44684393308125,
+                "npxgAgainst": 42.30690208962187,
+                "attack": 1.5213393467314817,
+                "defence": 0.7499731023841198
+              },
+              "167": {
+                "matches": 104,
+                "npxgFor": 77.1361481603235,
+                "npxgAgainst": 38.726303935283795,
+                "attack": 1.29637747413384,
+                "defence": 0.6864157679989747
+              },
+              "84": {
+                "matches": 33,
+                "npxgFor": 18.06450191757176,
+                "npxgAgainst": 18.729010932613164,
+                "attack": 0.9787684221624827,
+                "defence": 1.0075951314137601
+              },
+              "847": {
+                "matches": 29,
+                "npxgFor": 11.477754948660731,
+                "npxgAgainst": 21.496138979680836,
+                "attack": 0.7679546929936251,
+                "defence": 1.2495408542046313
+              },
+              "65": {
+                "matches": 92,
+                "npxgFor": 67.18445393862203,
+                "npxgAgainst": 40.3842919660965,
+                "attack": 1.2749420356731653,
+                "defence": 0.7982746189359975
+              },
+              "692": {
+                "matches": 12,
+                "npxgFor": 2.747060026973486,
+                "npxgAgainst": 10.950904997065663,
+                "attack": 0.6442959128421997,
+                "defence": 1.373863441802462
+              },
+              "130": {
+                "matches": 42,
+                "npxgFor": 26.02097298298031,
+                "npxgAgainst": 22.725901979021728,
+                "attack": 1.0856175380955004,
+                "defence": 0.9684053372862176
+              },
+              "304": {
+                "matches": 94,
+                "npxgFor": 62.31370500125922,
+                "npxgAgainst": 47.23723701934796,
+                "attack": 1.1650107285026945,
+                "defence": 0.9021186589409456
+              },
+              "15": {
+                "matches": 64,
+                "npxgFor": 44.584903011564165,
+                "npxgAgainst": 23.42729289154522,
+                "attack": 1.2124814522154734,
+                "defence": 0.6898300006962372
+              },
+              "39": {
+                "matches": 15,
+                "npxgFor": 5.559758977033198,
+                "npxgAgainst": 8.396973023656756,
+                "attack": 0.7777644277219261,
+                "defence": 0.9971673019545347
+              },
+              "595": {
+                "matches": 11,
+                "npxgFor": 3.1056339987553656,
+                "npxgAgainst": 10.895703906193376,
+                "attack": 0.7117725036680635,
+                "defence": 1.441004643695922
+              },
+              "296": {
+                "matches": 30,
+                "npxgFor": 14.994890014640987,
+                "npxgAgainst": 15.543236036784947,
+                "attack": 0.9123657000816763,
+                "defence": 0.9380311657292952
+              },
+              "297": {
+                "matches": 68,
+                "npxgFor": 38.70593696786091,
+                "npxgAgainst": 30.675595993292518,
+                "attack": 1.0110834387854968,
+                "defence": 0.8231524316309083
+              },
+              "569": {
+                "matches": 12,
+                "npxgFor": 3.554915993940085,
+                "npxgAgainst": 9.918066987767816,
+                "attack": 0.7161385041788572,
+                "defence": 1.2820132085268812
+              },
+              "53": {
+                "matches": 6,
+                "npxgFor": 1.6139350230805576,
+                "npxgAgainst": 3.2199559984728694,
+                "attack": 0.7764673743982052,
+                "defence": 0.9805007546950321
+              },
+              "1706": {
+                "matches": 56,
+                "npxgFor": 26.738360993098468,
+                "npxgAgainst": 39.081421982264146,
+                "attack": 0.8680753517595393,
+                "defence": 1.2110965410045011
+              },
+              "33": {
+                "matches": 16,
+                "npxgFor": 7.7267780234105885,
+                "npxgAgainst": 6.524562026839703,
+                "attack": 0.9059516574154195,
+                "defence": 0.8168574829671115
+              },
+              "129": {
+                "matches": 27,
+                "npxgFor": 11.260145984590054,
+                "npxgAgainst": 23.664607023005374,
+                "attack": 0.8007795586204001,
+                "defence": 1.4311384780136966
+              },
+              "32": {
+                "matches": 44,
+                "npxgFor": 24.829210998956114,
+                "npxgAgainst": 24.319050015881658,
+                "attack": 1.0031001964313289,
+                "defence": 0.9856507383207421
+              },
+              "7121": {
+                "matches": 6,
+                "npxgFor": 1.3094219956547022,
+                "npxgAgainst": 4.796441973187029,
+                "attack": 0.7377811907915804,
+                "defence": 1.1807819261989692
+              },
+              "67": {
+                "matches": 49,
+                "npxgFor": 27.065359996864572,
+                "npxgAgainst": 23.39352996996604,
+                "attack": 0.9848846073414542,
+                "defence": 0.8703106903698338
+              },
+              "134": {
+                "matches": 20,
+                "npxgFor": 10.124580036848783,
+                "npxgAgainst": 14.065555051900446,
+                "attack": 0.9288417170043459,
+                "defence": 1.1791779412214392
+              },
+              "684": {
+                "matches": 24,
+                "npxgFor": 8.491310006938875,
+                "npxgAgainst": 17.56214904319495,
+                "attack": 0.7219573628266904,
+                "defence": 1.2261256556670714
+              },
+              "350": {
+                "matches": 25,
+                "npxgFor": 9.266777097829618,
+                "npxgAgainst": 13.519996027462184,
+                "attack": 0.7418751701247522,
+                "defence": 0.971110654877686
+              },
+              "1268": {
+                "matches": 5,
+                "npxgFor": 1.8230139911174774,
+                "npxgAgainst": 4.8702060068026185,
+                "attack": 0.8648008375450285,
+                "defence": 1.2817033541755687
+              },
+              "55": {
+                "matches": 18,
+                "npxgFor": 10.150331998243928,
+                "npxgAgainst": 12.296788981300779,
+                "attack": 1.002052711126209,
+                "defence": 1.1488867986187878
+              },
+              "231": {
+                "matches": 8,
+                "npxgFor": 3.659385995939374,
+                "npxgAgainst": 4.464313021861017,
+                "attack": 0.9067862703863478,
+                "defence": 0.9962639213286577
+              },
+              "228": {
+                "matches": 28,
+                "npxgFor": 15.665148003259674,
+                "npxgAgainst": 17.32247703243047,
+                "attack": 0.996167133365145,
+                "defence": 1.0780483494219144
+              },
+              "276": {
+                "matches": 43,
+                "npxgFor": 28.479303143918514,
+                "npxgAgainst": 24.151031093206257,
+                "attack": 1.1500639314984666,
+                "defence": 0.9991176490663697
+              },
+              "133": {
+                "matches": 19,
+                "npxgFor": 6.668748968280852,
+                "npxgAgainst": 17.93390604108572,
+                "attack": 0.7355937164135831,
+                "defence": 1.4776750967200505
+              },
+              "562": {
+                "matches": 6,
+                "npxgFor": 1.4117510057985783,
+                "npxgAgainst": 4.7798729399219155,
+                "attack": 0.7507813534058846,
+                "defence": 1.178676950039174
+              },
+              "124": {
+                "matches": 37,
+                "npxgFor": 13.331024898332544,
+                "npxgAgainst": 24.425667100585997,
+                "attack": 0.7046788388204013,
+                "defence": 1.143188165210363
+              },
+              "14": {
+                "matches": 9,
+                "npxgFor": 4.151240004226565,
+                "npxgAgainst": 4.009837005287409,
+                "attack": 0.9049053753303727,
+                "defence": 0.8901113027088727
+              },
+              "10": {
+                "matches": 20,
+                "npxgFor": 7.224441010504961,
+                "npxgAgainst": 12.232887983322144,
+                "attack": 0.7446208450661278,
+                "defence": 1.0627643754305667
+              },
+              "30": {
+                "matches": 41,
+                "npxgFor": 23.167467978782952,
+                "npxgAgainst": 21.819530024193227,
+                "attack": 1.0041966472722128,
+                "defence": 0.9552692775234816
+              },
+              "1030": {
+                "matches": 6,
+                "npxgFor": 2.46841699257493,
+                "npxgAgainst": 9.340483057312667,
+                "attack": 0.8850231450325453,
+                "defence": 1.758069568644196
+              },
+              "103": {
+                "matches": 23,
+                "npxgFor": 9.324695945717394,
+                "npxgAgainst": 16.357271016575396,
+                "attack": 0.7930611296739689,
+                "defence": 1.1965492293730862
+              },
+              "2569": {
+                "matches": 6,
+                "npxgFor": 1.4485919689759612,
+                "npxgAgainst": 5.675318970810622,
+                "attack": 0.755461732034586,
+                "defence": 1.2924369091897514
+              },
+              "840": {
+                "matches": 6,
+                "npxgFor": 2.3518609842285514,
+                "npxgAgainst": 2.9666030048392713,
+                "attack": 0.8702155449194723,
+                "defence": 0.9483140843517284
+              },
+              "256": {
+                "matches": 11,
+                "npxgFor": 3.918520988896489,
+                "npxgAgainst": 7.376644974574447,
+                "attack": 0.787867240488772,
+                "defence": 1.1115838674923113
+              },
+              "7614": {
+                "matches": 44,
+                "npxgFor": 26.47652499563992,
+                "npxgAgainst": 23.71609505545348,
+                "attack": 1.0594446397223252,
+                "defence": 0.9650273710433064
+              },
+              "75": {
+                "matches": 47,
+                "npxgFor": 28.1973500715103,
+                "npxgAgainst": 20.545701019000262,
+                "attack": 1.0573050736307523,
+                "defence": 0.8098647924605104
+              },
+              "579": {
+                "matches": 18,
+                "npxgFor": 5.177015990950167,
+                "npxgAgainst": 20.993036071769893,
+                "attack": 0.6618398284514144,
+                "defence": 1.7437766642058143
+              },
+              "668": {
+                "matches": 18,
+                "npxgFor": 8.243481991812587,
+                "npxgAgainst": 12.376716041006148,
+                "attack": 0.8716095748837028,
+                "defence": 1.1543544212967365
+              },
+              "587": {
+                "matches": 18,
+                "npxgFor": 6.789926026947796,
+                "npxgAgainst": 14.692823044024408,
+                "attack": 0.772175220780617,
+                "defence": 1.3127938687246703
+              },
+              "842": {
+                "matches": 6,
+                "npxgFor": 1.6792539823800325,
+                "npxgAgainst": 3.1085849786177278,
+                "attack": 0.7847656770153845,
+                "defence": 0.9663518699691654
+              },
+              "1211": {
+                "matches": 5,
+                "npxgFor": 3.6666030222550035,
+                "npxgAgainst": 3.0689990036189556,
+                "attack": 1.1170320401595706,
+                "defence": 1.0352706618035452
+              },
+              "1076": {
+                "matches": 12,
+                "npxgFor": 5.211340026929975,
+                "npxgAgainst": 12.16153500508517,
+                "attack": 0.8634442118152665,
+                "defence": 1.481524708763972
+              },
+              "361": {
+                "matches": 30,
+                "npxgFor": 17.172634054441005,
+                "npxgAgainst": 19.35908402199857,
+                "attack": 1.014295526478996,
+                "defence": 1.1166328358902677
+              },
+              "140": {
+                "matches": 6,
+                "npxgFor": 2.155114023014903,
+                "npxgAgainst": 8.519859060645103,
+                "attack": 0.8452202626818021,
+                "defence": 1.6538152092315646
+              },
+              "349": {
+                "matches": 6,
+                "npxgFor": 2.899695004336536,
+                "npxgAgainst": 4.873051943257451,
+                "attack": 0.9398139055118223,
+                "defence": 1.1905146702897422
+              },
+              "607": {
+                "matches": 14,
+                "npxgFor": 6.050948008429259,
+                "npxgAgainst": 7.78414798900485,
+                "attack": 0.8528277347634463,
+                "defence": 0.9929489973745426
+              },
+              "300": {
+                "matches": 22,
+                "npxgFor": 11.761756964959204,
+                "npxgAgainst": 11.64208103902638,
+                "attack": 0.9639816449026198,
+                "defence": 0.9568864621050297
+              },
+              "313": {
+                "matches": 6,
+                "npxgFor": 2.278556981589645,
+                "npxgAgainst": 5.121237998828292,
+                "attack": 0.8609028001441121,
+                "defence": 1.2220449184225755
+              },
+              "7164": {
+                "matches": 6,
+                "npxgFor": 2.745761009864509,
+                "npxgAgainst": 3.7999920258298516,
+                "attack": 0.9202577018781504,
+                "defence": 1.0541901480273195
+              },
+              "77": {
+                "matches": 16,
+                "npxgFor": 7.280497018247843,
+                "npxgAgainst": 9.72018001973629,
+                "attack": 0.8728785342492434,
+                "defence": 1.0536792751753081
+              },
+              "994": {
+                "matches": 6,
+                "npxgFor": 1.7681769914925098,
+                "npxgAgainst": 5.333845986053348,
+                "attack": 0.7960627038994527,
+                "defence": 1.249055229605489
+              },
+              "2201": {
+                "matches": 6,
+                "npxgFor": 2.3233840009197593,
+                "npxgAgainst": 5.117344940081239,
+                "attack": 0.8665977496016186,
+                "defence": 1.2215503333903588
+              },
+              "249": {
+                "matches": 10,
+                "npxgFor": 3.8005539847072214,
+                "npxgAgainst": 4.623136984184384,
+                "attack": 0.8199811984382206,
+                "defence": 0.9012614935628576
+              },
+              "395": {
+                "matches": 6,
+                "npxgFor": 1.8026890018954873,
+                "npxgAgainst": 5.177686017006636,
+                "attack": 0.8004472058774785,
+                "defence": 1.2292162319586089
+              },
+              "839": {
+                "matches": 11,
+                "npxgFor": 6.555479010567069,
+                "npxgAgainst": 4.829123995266855,
+                "attack": 1.03471413200003,
+                "defence": 0.8731092199499875
+              },
+              "80": {
+                "matches": 24,
+                "npxgFor": 14.178815010935068,
+                "npxgAgainst": 14.077134971739724,
+                "attack": 1.038075825178924,
+                "defence": 1.0324243246317135
+              },
+              "2097": {
+                "matches": 6,
+                "npxgFor": 1.324804998934269,
+                "npxgAgainst": 5.546977034769952,
+                "attack": 0.7397354903968396,
+                "defence": 1.276131991977932
+              },
+              "705": {
+                "matches": 6,
+                "npxgFor": 2.5441520055755973,
+                "npxgAgainst": 3.333417020039633,
+                "attack": 0.8946447321388877,
+                "defence": 0.9949151590626606
+              },
+              "306": {
+                "matches": 6,
+                "npxgFor": 1.6442600265145302,
+                "npxgAgainst": 4.590363030321896,
+                "attack": 0.7803199473427366,
+                "defence": 1.1546010830063709
+              },
+              "45": {
+                "matches": 8,
+                "npxgFor": 2.9926989870145917,
+                "npxgAgainst": 4.497231029905379,
+                "attack": 0.8326757168190343,
+                "defence": 0.9999231673704179
+              },
+              "752": {
+                "matches": 6,
+                "npxgFor": 2.132370000705123,
+                "npxgAgainst": 3.5012099957093596,
+                "attack": 0.8423307987056062,
+                "defence": 1.0162320462892391
+              },
+              "23": {
+                "matches": 5,
+                "npxgFor": 3.031670991331339,
+                "npxgAgainst": 5.1553149642422795,
+                "attack": 1.0301636182751366,
+                "defence": 1.3207106242322866
+              },
+              "796": {
+                "matches": 6,
+                "npxgFor": 2.360787007957697,
+                "npxgAgainst": 5.185603995807469,
+                "attack": 0.871349531848642,
+                "defence": 1.230222154050914
+              },
+              "288": {
+                "matches": 6,
+                "npxgFor": 4.902599009685218,
+                "npxgAgainst": 3.5625770203769207,
+                "attack": 1.1942684119490874,
+                "defence": 1.0240282841177162
+              },
+              "309": {
+                "matches": 6,
+                "npxgFor": 1.6464949923101813,
+                "npxgAgainst": 2.9980789832770824,
+                "attack": 0.7806038836257126,
+                "defence": 0.9523128803682299
+              },
+              "68": {
+                "matches": 8,
+                "npxgFor": 4.88477299362421,
+                "npxgAgainst": 3.4949489692226052,
+                "attack": 1.0430032770430016,
+                "defence": 0.8885070495318768
+              }
+            }
+          },
+          "calibration": {
+            "games": 182,
+            "teamTargets": 364,
+            "coldStartTeamTargets": 126,
+            "candidate": {
+              "mae": 0.32149915336299884,
+              "mse": 0.16977552844396746
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.3385028163245155,
+              "mse": 0.19336983165306298
+            }
+          },
+          "test": {
+            "games": 185,
+            "teamTargets": 370,
+            "coldStartTeamTargets": 70,
+            "candidate": {
+              "mae": 0.3404320098222748,
+              "mse": 0.22526672305546572
+            },
+            "leagueMeanBaseline": {
+              "mae": 0.3597037054087494,
+              "mse": 0.24243166556372323
+            }
+          }
+        }
+      }
+    }
+  },
+  "accepted": false,
+  "formalEligible": false,
+  "modelEffectApplied": false,
+  "executable": false,
+  "historicalAvailabilityVerified": false,
+  "independentUntouchedTestVerified": false,
+  "W": null,
+  "R": null,
+  "S": null,
+  "retainedObservationsSha256": "94b4eeee4400f52e3aa7fb8046b3fca14d7b13197133d3d8356b6b6805dda0b3",
+  "normalizerImplementationSha256": "c517f5675fd249be5d7db10d394de9943a877d36370f20e3be70a130b1dbfae9",
+  "contentHash": "76c964ece2dd63963c030aabe5e0e9b05754712e3eae9e666f80de000a7d650c"
+}
