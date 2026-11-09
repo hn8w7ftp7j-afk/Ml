@@ -1,3 +1,4 @@
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import { loadSoccerShotXgResearchUiForTest } from './helpers/soccer-shot-xg-ui-fixture.mjs';
 import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
 import * as soccerReadiness from '../lib/soccer/scoring-readiness.js';
@@ -39,7 +40,7 @@ function harness(fetch,{boardFetch=null}={}){
  const state=[],refs=[],effects=[],intervals=new Map(),cleanups=[],listeners=new Map();let si=0,ri=0,tree,intervalId=0;
  const document={visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
- const ctx=vm.createContext({...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
+ const ctx=vm.createContext({buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
    if(url.startsWith('/api/soccer/analysis?')&&!new URL(url,'https://fixture.invalid').searchParams.has('view')){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
    return fetch(url,options);
   },SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
@@ -145,10 +146,25 @@ const currentState={status:'done',data:{...liveSnapshot,observedAt:new Date(uiSt
 h.ctx.Date=class extends Date{static now(){return uiNow;}};
 h.state[0][realGame.id]=currentState;
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiStart).current,true);
-assert.match(renderToStaticMarkup(h.renderPanel(realGame)),/分析：<strong>比分研究完成/);
+assert.equal(currentState.data.status,'POSTSTART_AUDIT');
+const poststartMarkup=renderToStaticMarkup(h.renderPanel(realGame));
+assert.match(poststartMarkup,/分析：<strong>賽後核對完成/);assert.match(poststartMarkup,/篩選：<strong>歷史查閱/);
+assert.doesNotMatch(poststartMarkup,/分析：<strong>預測完成|篩選：<strong>依現有資料預測/,'a current postgame audit is not a completed prematch prediction');
+const prestartGame={...realGame,status:'scheduled',startTime:new Date(uiStart+3600000).toISOString()};
+const prestartState={...currentState,data:{...currentState.data,status:'RESEARCH_ONLY',
+  evidence:{...currentState.data.evidence,phase:'PREMATCH_OBSERVATION',game:prestartGame}}};
+h.state[0][realGame.id]=prestartState;
+const prestartMarkup=renderToStaticMarkup(h.renderPanel(prestartGame));
+assert.match(prestartMarkup,/分析：<strong>預測完成/);assert.match(prestartMarkup,/篩選：<strong>依現有資料預測/);
+assert.doesNotMatch(prestartMarkup,/分析：<strong>賽後核對完成|篩選：<strong>歷史查閱/);
+h.state[0][realGame.id]=currentState;
 uiNow=uiStart+60000;
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiNow).current,false,'expiry invalidates the display without a new analysis');
+assert.equal(h.ctx.soccerAnalysisPresentation(prestartState,uiNow).analysisLabel,'待重新核對','prematch predictions lose completion on the same receipt deadline');
 const expiredMarkup=renderToStaticMarkup(h.renderPanel(realGame));assert.match(expiredMarkup,/待重新核對/);assert.match(expiredMarkup,/僅供歷史查閱/);assert.match(expiredMarkup,/上半場比分研究/,'expiry preserves the result for historical reading');
+assert.doesNotMatch(expiredMarkup,/分析：<strong>賽後核對完成|分析：<strong>預測完成/);
+const failedPresentation=h.ctx.soccerAnalysisPresentation({...currentState,status:'error',analysisStatus:'FAILED'},uiStart);
+assert.equal(failedPresentation.analysisStatus,'FAILED');assert.equal(failedPresentation.analysisLabel,'失敗');assert.equal(failedPresentation.selectionLabel,'尚無結果');
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:{...receipt,revision:'newer-revision'}},uiStart).current,false);
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:{...receipt,analysisRunId:'newer-run'}},uiStart).current,false);
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:null},uiStart).current,false,'a failed read cannot fall back to the old POST flag');
@@ -233,11 +249,10 @@ for(const refresh of [false,true]){
   assert.equal(lightReads,1,'a fenced POST schedules a lightweight read on the next metadata tick');assert.equal(postReads,1,'rechecking never reruns analysis');
   assert.equal(delayedPost.state[0][games[0].id].currentResearch.publishedCurrent,false);delayedPost.cleanup();
 }
-console.log('PASS current research JSX and effects: expiry, quote/run mismatch, unknown legacy status, retained history, bounded read-only polling and hidden-page pause');
+console.log('PASS current research JSX and effects: distinct prematch prediction/postgame audit labels, expiry, failure, quote/run mismatch, unknown legacy status, retained history, bounded read-only polling and hidden-page pause');
 
 // The main workspace restores saved results on refresh. A board receipt is not
 // the lightweight fenced status receipt used by cards or workspace rankings.
-const {buildSoccerRanking}=await import('../lib/soccer/ranking.js');
 uiNow=uiStart;let releaseBoard,currentReads=0,activeSource=true;
 const restoreReceipt={...receipt,analysisRunId:'restored-run',revision:'restored-revision'};
 const rankedQuote={key:'restored-quote',period:'FT',kind:'TOTAL',unit:'GOALS',side:'over',line:'2-50',water:.9,fresh:true,prestart:true,provenance:{gameId:games[0].id,observedAt:new Date(uiStart).toISOString()}};

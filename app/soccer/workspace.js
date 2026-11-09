@@ -19,7 +19,7 @@ export function SoccerValidationPanel({league}){
     <div className="soccerCalibrationGroup"><h3>上半場｜分事件校準</h3><SoccerCalibrationPanel league={league} period="HT" label={halfTime?.period?`${halfTime.period} 年診斷`:'研究診斷'} audit={halfTime?.metrics?.probabilityAudit}/></div>
     <SoccerForwardValidationPanel league={league}/>
     <SoccerModelFamilyPanel league={league}/>
-    <p>目前正式評分與候選資格維持待驗證。球員、原盤與分析版本的依據可在各場分析結果內查閱。</p><a href="/soccer/specification">完整分析規格 2.2</a></section>;
+    <p>模型驗證持續收集。預測 S 使用現有資料與模型情境；正式模型驗收狀態另行保留。球員、原盤與分析版本的依據可在各場分析結果內查閱。</p><a href="/soccer/specification">完整分析規格 2.2</a></section>;
 }
 export function SoccerRanking({games,states,run,now,externalBusy=false}){
   const [view,setView]=useState('ranking'),[filter,setFilter]=useState('all');
@@ -27,10 +27,10 @@ export function SoccerRanking({games,states,run,now,externalBusy=false}){
   return <section className="panel soccerRanking" aria-label="足球分析排名"><div className="rankingViewTabs" aria-label="足球排名檢視"><button className={view==='ranking'?'active':''} aria-pressed={view==='ranking'} onClick={()=>setView('ranking')}>全部排名</button><button className={view==='order'?'active':''} aria-pressed={view==='order'} onClick={()=>setView('order')}>時間順序排名</button></div>
     <h2>{view==='order'?'時間順序排名':'全部排名'}</h2><div className="rankingViewTabs" aria-label="足球排名盤口篩選">{SOCCER_RANK_MARKETS.map(([key,label])=><button key={key} className={filter===key?'active':''} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}</div>
     <p>{ranking.currentGames} 場目前分析｜{entries.length} 個候選方向｜{view==='order'?'候選依開賽時間排列，同場按盤口分組':'候選依 S、W、R 由高到低'}</p>
-    <p className="soccerAvailability">兩種排名皆僅顯示通過正式資格核對，且 S ≥ 7.2、W &gt; 0、R &gt; 0 的候選。足球正式收益與模型仍待驗收，研究原盤請至「分析結果」查閱。</p>
+    <p className="soccerAvailability">預測候選維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並通過場次、期間與盤口時效核對。依現有資料預測，缺項及未驗證狀態另行標示。研究原盤請至「分析結果」查閱。</p>
     {ranking.outdatedGames>0&&<p>{ranking.outdatedGames} 場資料已過期或已開賽，請重新核對。</p>}{ranking.pendingGames>0&&<p>{ranking.pendingGames} 場待分析或重新核對。</p>}
-    {entries.map((e,i)=><article className="soccerRankRow" key={e.stableKey}><b>{i+1}</b><div className="soccerRankScore">{e.score==null?'—':e.score.toFixed(1)}<small>S 分數</small></div><div><h3>{soccerTeamLabel(e.game.home)}（主）對 {soccerTeamLabel(e.game.away)}（客）</h3><p>{e.market}｜{e.quote.label}｜水位 {e.quote.water}</p><p>W {num(e.W==null?null:e.W*100)}%｜R {num(e.R==null?null:e.R*100)}%{e.score==null?'｜研究中・正式評分待驗證':''}</p><time>{time(e.game.startTime)}（台灣）</time></div><div><SoccerRecordButton game={e.game} result={e.result} quote={e.quote}/><button className="mini secondary" disabled={externalBusy||['queued','loading'].includes(states[e.game.id]?.status)} onClick={()=>run(e.game)}>重新分析</button></div></article>)}
-    {!entries.length&&<p className="emptySmall">目前沒有通過 S／W／R 及正式資格核對的候選。研究原盤仍可在「分析結果」查閱。</p>}
+    {entries.map((e,i)=><article className="soccerRankRow" key={e.stableKey}><b>{i+1}</b><div className="soccerRankScore">{e.score==null?'—':e.score.toFixed(1)}<small>{e.prediction?'預測 S':'S 分數'}</small></div><div><h3>{soccerTeamLabel(e.game.home)}（主）對 {soccerTeamLabel(e.game.away)}（客）</h3><p>{e.market}｜{e.quote.label}｜水位 {e.quote.water}</p><p>W {num(e.W==null?null:e.W*100)}%｜{e.prediction?'模型情境 R':'R'} {num(e.R==null?null:e.R*100)}%{e.prediction?'｜依現有資料預測・完整模型誤差未驗證':e.score==null?'｜研究中・正式評分待驗證':''}</p><time>{time(e.game.startTime)}（台灣）</time></div><div><SoccerRecordButton game={e.game} result={e.result} quote={e.quote}/><button className="mini secondary" disabled={externalBusy||['queued','loading'].includes(states[e.game.id]?.status)} onClick={()=>run(e.game)}>重新分析</button></div></article>)}
+    {!entries.length&&<p className="emptySmall">目前沒有通過 S／W／R 及目前盤口核對的候選。研究原盤仍可在「分析結果」查閱。</p>}
   </section>;
 }
 export default function SoccerWorkspace({games,states,run,league,date,children,analysisReady=true,onHighScoreStatusChange,externalBusy=false}){

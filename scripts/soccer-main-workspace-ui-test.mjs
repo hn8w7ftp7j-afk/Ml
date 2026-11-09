@@ -1,3 +1,4 @@
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -11,7 +12,7 @@ const source = shipped.replace(/^import .*?;\n/gm, '').replace('export default f
 const compiled = await transform(source, { filename: 'main-workspace.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
 const readerSource = fs.readFileSync('app/soccer/reader-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export default function/g,'function').replace(/export function/g,'function');
 const readerCompiled = await transform(readerSource, { filename: 'reader-scope.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
-const readerScope = vm.createContext({React, Date}); vm.runInContext(readerCompiled.code, readerScope);
+const readerScope = vm.createContext({buildSoccerRanking,React, Date}); vm.runInContext(readerCompiled.code, readerScope);
 const plain = value => JSON.parse(JSON.stringify(value));
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const response = (league, date) => ({ ok: true, league: { id: league.toLowerCase() }, timeZone: 'Asia/Taipei', date,
@@ -36,7 +37,7 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
     history: Object.fromEntries(['pushState', 'replaceState'].map(method => [method, (_state, _title, url) => {
       history.push({ method, url }); window.location.search = new URL(url, 'https://fixture.invalid').search;
     }])) };
-  const ctx = vm.createContext({ React, URL, URLSearchParams, Date, Intl, AbortController, soccerTeamLabel, APP_VERSION: 'test', window,
+  const ctx = vm.createContext({buildSoccerRanking, React, URL, URLSearchParams, Date, Intl, AbortController, soccerTeamLabel, APP_VERSION: 'test', window,
     SoccerReaderBoards, SoccerReaderInventoryPanel, SoccerOfficialMarketCoveragePanel, soccerReaderBoardDates:readerScope.soccerReaderBoardDates, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
     Link: ({ children, prefetch, ...attributes }) => React.createElement('a', attributes, children),
     useState: initial => { const index = cursor++; if (!(index in hooks)) hooks[index] = typeof initial === 'function' ? initial() : initial;
@@ -203,7 +204,7 @@ await test('upcoming Reader scope follows match dates and saved-date navigation 
 });
 await test('legacy football route redirects to the root with valid query scope and strips unrelated controls', async () => {
   const route = fs.readFileSync('app/soccer/page.js', 'utf8').replace(/^import .*?;\n/gm, '').replace('export default async function', 'async function');
-  let url; const ctx = vm.createContext({ URLSearchParams, redirect: value => { url = value; } }); vm.runInContext(route, ctx);
+  let url; const ctx = vm.createContext({buildSoccerRanking, URLSearchParams, redirect: value => { url = value; } }); vm.runInContext(route, ctx);
   await ctx.SoccerPage({ searchParams: Promise.resolve({ league: 'ucl', date: '2026-10-22', view: 'upcoming', runId: 'wrun_ucl_fixture_101', analyzeAll: '1' }) });
   assert.equal(url, '/?sport=UCL&date=2026-10-22&view=upcoming&runId=wrun_ucl_fixture_101');
   await ctx.SoccerPage({ searchParams: Promise.resolve({ league: 'NBA', date: 'bad', runId: 'bad<script>' }) }); assert.equal(url, '/?sport=EPL');

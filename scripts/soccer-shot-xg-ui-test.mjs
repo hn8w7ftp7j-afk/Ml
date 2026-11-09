@@ -1,3 +1,4 @@
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -29,7 +30,7 @@ const compile=async path=>{
   const source=fs.readFileSync(path,'utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
   return (await transform(source,{filename:path.replace('.js','.jsx'),jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}})).code;
 };
-const context=vm.createContext({React,soccerIdentityHash,soccerMatchContextObservations});
+const context=vm.createContext({buildSoccerRanking,React,soccerIdentityHash,soccerMatchContextObservations});
 vm.runInContext(await compile('app/soccer/shot-xg-research-panel.js'),context);
 vm.runInContext(await compile('app/soccer/model-development-panel.js'),context);
 const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date:'2026-11-07',startTime:'2026-11-07T20:00:00Z',home:{sourceId:'1'},away:{sourceId:'2'}};

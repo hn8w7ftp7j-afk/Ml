@@ -234,7 +234,9 @@ await test('page exposes navigation, source evidence, empty/error states and mob
   assert.match(source, /window\.addEventListener\('popstate'/);
   assert.match(source, /type="date"/);
   assert.match(source, /game\.halfTime\?\.verified === true/);
-  assert.match(source, /正式評分尚未完成，有盤口仍不代表已有 S 分數/);
+  assert.match(source, /有效原盤可計算預測 S 與模型情境 R/);
+  assert.match(source, /完整模型誤差尚未驗證/);
+  assert.doesNotMatch(source, /正式評分尚未完成，有盤口仍不代表已有 S 分數/);
   assert.match(source, /role="alert"/);
   assert.match(source, /aria-busy=\{busy\}/);
   assert.match(source, /來源未列出當日賽事/);
