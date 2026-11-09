@@ -8,7 +8,7 @@ import { PGlite } from '@electric-sql/pglite';
 // Real retained source evidence and real PostgreSQL semantics. All source,
 // failure, and index writes in this test stay inside this isolated engine.
 const parts=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/soccer/ucl-seen-pregame-20261105.json.gz',import.meta.url))));
-const db=new PGlite(),statements=[],executions=[];let failingCapture=null,failInitialize=false,afterQuery=null;
+const db=new PGlite(),statements=[],executions=[];let failingCapture=null,failInitialize=false,failAttemptsInitialize=false,afterQuery=null;
 globalThis.__RAW_HISTORY_CRON_SQL=async(queries,transaction=false,options={})=>{
   executions.push({queries,transaction,options,at:Date.now()});
   const run=async connection=>{
@@ -16,6 +16,7 @@ globalThis.__RAW_HISTORY_CRON_SQL=async(queries,transaction=false,options={})=>{
     for(const {query,params} of queries){
       statements.push({query,params});
       if(failInitialize&&/CREATE TABLE IF NOT EXISTS soccer_raw_seen_history_batches_v1/.test(query))throw Object.assign(Error('isolated schema failure'),{code:'08006'});
+      if(failAttemptsInitialize&&/CREATE TABLE IF NOT EXISTS soccer_raw_seen_history_attempts_v1/.test(query))throw Object.assign(Error('isolated attempts schema failure'),{code:'08006'});
       if(failingCapture&&/WITH seed AS/.test(query)&&params.includes(failingCapture))throw Object.assign(Error('isolated transient read failure'),{code:'08006'});
       result.push((await connection.query(query,params)).rows);
       afterQuery?.(query,params);
@@ -67,7 +68,7 @@ const { writeFileSync }=await import('node:fs');
 const { tmpdir }=await import('node:os');
 const { join }=await import('node:path');
 function synthetic(league,sequence,{unsupported=false,day='2026-10-20'}={}){
-  const item={...structuredClone(evidence),league,observedAt:day+'T03:00:'+String(sequence).padStart(2,'0')+'.000Z',
+  const item={...structuredClone(evidence),league,observedAt:new Date(Date.parse(day+'T03:00:00.000Z')+sequence*1000).toISOString(),
     tables:[{...structuredClone(evidence.tables[171]),rows:[structuredClone(evidence.tables[171].rows[758])]}]};
   if(league==='EPL'){
     item.tables[0].sectionTitle='聯盟: 英格蘭超級聯賽(18)';
@@ -78,7 +79,7 @@ function synthetic(league,sequence,{unsupported=false,day='2026-10-20'}={}){
   return {...b,league,observedAt:item.observedAt,pageActivityAt:item.pageActivityAt||null,readerVersion:item.readerVersion,
     captureBatchId:null,partIndex:null,partCount:null,receivedAt:'2026-11-05T04:00:00.000Z',persistedAt:'2026-11-05T04:00:00.000Z'};
 }
-function assertReceipt(value,max=24){
+function assertReceipt(value,max=64){
   assert.equal(value.schema,'soccer-raw-history-maintenance-v1');assert.equal(value.budgetKind,'SOFT_DEADLINE');
   assert.equal(value.hardDeadlineEnforced,false);assert.equal(value.maxBatches,max);assert.ok(value.processedBatches<=max);
   assert.equal(value.completeWithinWindow,false);assert.equal(value.indexCoverage,'NOT_VERIFIED');assertFlags(value);
@@ -101,7 +102,7 @@ function assertProgress(value){
   for(const k of Object.keys(value.counts))assert.equal(value.counts[k],value.leagues.reduce((n,l)=>n+l.counts[k],0));
 }
 async function drain(now,options={}){
-  const before=await snapshot(),v=await drainRawSeenHistoryIndex({now,...options});assertReceipt(v,Math.min(options.maxBatches??24,64));
+  const before=await snapshot(),v=await drainRawSeenHistoryIndex({now,...options});assertReceipt(v,Math.min(options.maxBatches??64,64));
   assert.equal(await snapshot(),before,'raw captures and clocks remain immutable');return v;
 }
 async function progress(now){
@@ -110,12 +111,22 @@ async function progress(now){
   return value;
 }
 const request=authorization=>new Request('https://fixture.invalid/api/cron/soccer-raw-history-index',{headers:authorization?{authorization}:undefined});
+const indexDdlCount=()=>statements.filter(s=>/CREATE TABLE IF NOT EXISTS soccer_raw_seen_history_batches_v1/.test(s.query)).length;
+const attemptsDdlCount=()=>statements.filter(s=>/CREATE TABLE IF NOT EXISTS soccer_raw_seen_history_attempts_v1/.test(s.query)).length;
+// Each client has its own identity while using this same isolated PostgreSQL.
+// Its query objects remain lazy like Neon so every wait goes through the fence.
+function isolatedClient(){
+  const execute=(query,params=[])=>({query,params,then(a,b){return globalThis.__RAW_HISTORY_CRON_SQL([{query,params}]).then(x=>x[0]).then(a,b);}});
+  const sql=(strings,...params)=>execute(strings.reduce((s,p,i)=>s+(i?'$'+i:'')+p,''),params);
+  sql.query=execute;sql.transaction=(queries,options={})=>globalThis.__RAW_HISTORY_CRON_SQL(queries,true,options);return sql;
+}
 try{
   delete process.env.DATABASE_V2_URL;Object.assign(process.env,{DATABASE_URL:'postgres://isolated.invalid/raw-history-cron',CRON_SECRET:'cron-isolated-secret'});
   let cut=statements.length;
   for(const auth of [undefined,'Bearer wrong','Basic cron-isolated-secret'])assert.equal((await GET(request(auth))).status,401);
   assert.equal(statements.length,cut);
   failInitialize=true;let response=await GET(request('Bearer cron-isolated-secret'));assert.equal(response.status,503);failInitialize=false;
+  assert.equal(indexDdlCount(),1,'the failed initialization is not cached as a success');
   await initializeReaderSeenCaptureStore();
   const dbClock=Date.parse((await db.query('SELECT clock_timestamp()::text AS at')).rows[0].at);
   const future=new Date(Math.max(dbClock,Date.now(),Date.parse('2026-11-08T00:00:00Z'))+2*86400000);future.setUTCHours(0,0,0,0);
@@ -123,6 +134,7 @@ try{
   assert.equal((await progress(now)).status,'NOT_INITIALIZED','missing derived schema is unknown, never zero or auto-created');
   await insertSource(parts[0]);
   let v=await drain(now,{maxBatches:2});
+  assert.equal(indexDdlCount(),2,'a subsequent run retries the failed underlying client initialization');assert.equal(attemptsDdlCount(),1);
   assert.equal(v.processedBatches,1);assert.equal(v.stableAttemptBatches,1);assert.equal(v.results[0].reason,'RAW_SEEN_RECOVERY_INCOMPLETE');
   let pg=await progress(now);
   assert.equal(pg.counts.sourceFragments,1);assert.equal(pg.counts.sourceBatches,1);assert.equal(pg.counts.stableAttemptBatches,1);assert.equal(pg.counts.retryPendingBatches,0);
@@ -131,10 +143,12 @@ try{
   pg=await progress(now);assert.equal(pg.counts.sourceFragments,parts.length);assert.equal(pg.counts.sourceBatches,1);
   assert.equal(pg.counts.stableAttemptBatches,0);assert.equal(pg.counts.retryPendingBatches,1,'a new fragment invalidates the old attempt watermark');
   v=await drain(now+60000,{maxBatches:2});assert.equal(v.indexedBatches,1);assert.equal(v.results[0].indexedGames,16);
+  assert.equal(indexDdlCount(),2,'successful underlying initialization is reused by a new bounded wrapper and the index writer');assert.equal(attemptsDdlCount(),1);
   assert.equal(canonicalReaderSeenCapture(JSON.parse(JSON.stringify((await db.query('SELECT * FROM soccer_raw_seen_history_attempts_v1 ORDER BY capture_id')).rows))),oldAttempts);
   pg=await progress(now+60000);assert.equal(pg.counts.indexedBatches,1);assert.equal(pg.counts.indexedGames,16);assert.equal(pg.counts.sourceBatches,1);
   const history=await queryRawHistoryIndex({league:'UCL',from:'2026-11-05',through:'2026-11-05'},{now:now+60000});
   assert.equal(history.entries.length,9);assert.ok(history.entries.every(r=>r.marketCount===9));
+  for(const entry of history.entries){assertFlags(entry);assert.equal(Date.parse(entry.observedAt),Date.parse(parts[0].observedAt));}
   // A claimed batch hash alone cannot make a newly arrived fragment indexed.
   const extraEvidence={...structuredClone(parts[0].evidence),partIndex:parts.length,partCount:parts.length+1};
   const extraBuilt=buildReaderSeenCapture({schema:'READER-SEEN-CAPTURE-v1',evidence:extraEvidence},{deviceId:'cron-fixture',headerVersion:parts[0].readerVersion});
@@ -174,7 +188,7 @@ try{
   let clock=originalNow();Date.now=()=>clock;
   afterQuery=query=>{if(/WITH seed AS/.test(query))clock+=1001;};
   const beforeBudgetAttempts=await count('soccer_raw_seen_history_attempts_v1');
-  v=await drain(now+420000,{maxBatches:24,timeBudgetMs:1000});assert.equal(v.status,'BUDGET_DEFERRED');assert.equal(v.hardDeadlineEnforced,false);
+  v=await drain(now+420000,{maxBatches:64,timeBudgetMs:1000});assert.equal(v.status,'BUDGET_DEFERRED');assert.equal(v.hardDeadlineEnforced,false);
   assert.equal(v.retryableBatches,1);assert.equal(await count('soccer_raw_seen_history_attempts_v1'),beforeBudgetAttempts);assert.equal(v.hasMore,null);
   afterQuery=null;Date.now=originalNow;
   pg=await progress(now+420000);assert.equal(pg.counts.retryPendingBatches,1);
@@ -188,7 +202,7 @@ try{
       :phase==='INDEX_WRITE'?/INSERT INTO soccer_raw_seen_history_batches_v1/.test(query)
         :phase==='INDEX_READBACK'?/SELECT b.metadata,b.derived_hash/.test(query):/INSERT INTO soccer_raw_seen_history_attempts_v1/.test(query);
       if(matches&&slow<0){slow=executions.length-1;clock+=1001;}};
-    const before=await count('soccer_raw_seen_history_attempts_v1');v=await drain(now+540000,{maxBatches:24,timeBudgetMs:1000});
+    const before=await count('soccer_raw_seen_history_attempts_v1');v=await drain(now+540000,{maxBatches:64,timeBudgetMs:1000});
     assert.ok(slow>=executionStart,phase+' boundary exercised');assert.equal(v.status,'BUDGET_DEFERRED');assert.equal(v.retryableBatches,1);
     assert.equal(executions.length,slow+1,phase+' does not dispatch new SQL after expiry');
     assert.equal(await count('soccer_raw_seen_history_attempts_v1'),before+(phase==='ATTEMPT_WRITE'?1:0));
@@ -207,6 +221,65 @@ try{
   const footballBefore=(await progress(now+660000)).counts.sourceBatches;
   await insertSource(synthetic('NBA',52,{day:'2026-10-15'}));
   pg=await progress(now+660000);assert.equal(pg.counts.sourceBatches,footballBefore,'other sport raw evidence cannot enter football progress');
+  // The default actually runs 64 sources, fairly alternating both leagues and
+  // both source-date edges. Unsupported rows retain evidence and do not pin it.
+  for(const [league,offset]of [['EPL',100],['UCL',200]])for(let i=0;i<36;i++)
+    await insertSource(synthetic(league,offset+i,{day:'2026-10-'+String(10+i%4).padStart(2,'0'),unsupported:i%3===0}));
+  const ddlBefore64=[indexDdlCount(),attemptsDdlCount()];v=await drain(now+720000);
+  assert.equal(v.processedBatches,64);assert.equal(v.maxBatches,64);assert.equal(v.timeBudgetMs,40000);
+  assert.equal(v.status,'BATCH_LIMIT_REACHED');assert.equal(v.hasMore,null);
+  for(const league of ['EPL','UCL']){
+    assert.equal(v.results.filter(r=>r.league===league).length,32);
+    assert.deepEqual(v.results.slice(0,4).filter(r=>r.league===league).map(r=>r.sourceDate).sort(),['2026-10-10','2026-10-13']);
+    assert.deepEqual([...new Set(v.results.filter(r=>r.league===league).slice(2).map(r=>r.mode))].sort(),['BACKLOG','LATEST']);
+  }
+  assert.ok(v.indexedBatches>0&&v.stableAttemptBatches>0);assert.equal(v.retryableBatches,0);
+  assert.deepEqual([indexDdlCount(),attemptsDdlCount()],ddlBefore64,'64-batch loop performs no per-run or per-batch DDL after initialization');
+  pg=await progress(now+720000);assert.equal(pg.counts.retryPendingBatches,8);
+  writeFileSync(join(tmpdir(),'history-maintenance-contract-fixtures.json'),JSON.stringify({progress:pg,receipt:v}));
+  Date.now=()=>now+780000;
+  try{response=await GET(request('Bearer cron-isolated-secret'));}finally{Date.now=originalNow;}
+  assert.equal(response.status,200);
+  const cronReceipt=await response.json();assertReceipt(cronReceipt);assert.equal(cronReceipt.maxBatches,64);assert.equal(cronReceipt.timeBudgetMs,40000);
+  assert.equal(cronReceipt.processedBatches,8);assert.equal(cronReceipt.status,'WINDOW_EXHAUSTED');
+  await drain(now+780000);
+  // Cached success cannot turn a later missing table into a healthy empty
+  // queue. The failed run invalidates both caches; the next run does bounded
+  // DDL again and keeps every previous immutable row.
+  const staleDdlBefore=[indexDdlCount(),attemptsDdlCount()],stableBefore=await count('soccer_raw_seen_history_attempts_v1');
+  await db.query('ALTER TABLE soccer_raw_seen_history_attempts_v1 RENAME TO isolated_hidden_attempts_v1');
+  try{
+    pg=await progress(now+840000);assert.equal(pg.status,'NOT_INITIALIZED');assert.equal(pg.counts,null);
+    v=await drain(now+840000);assert.equal(v.ok,false);assert.equal(v.status,'RETRYABLE');assert.equal(v.processedBatches,0);
+    assert.equal(v.selectionErrors.length,2);assert.deepEqual([indexDdlCount(),attemptsDdlCount()],staleDdlBefore);
+  }finally{await db.query('ALTER TABLE isolated_hidden_attempts_v1 RENAME TO soccer_raw_seen_history_attempts_v1');}
+  v=await drain(now+900000);assert.equal(v.status,'WINDOW_EXHAUSTED');assert.equal(v.ok,true);
+  assert.equal(indexDdlCount(),staleDdlBefore[0]+1);assert.equal(attemptsDdlCount(),staleDdlBefore[1]+1);
+  assert.equal(await count('soccer_raw_seen_history_attempts_v1'),stableBefore);
+  // Failure after the base index DDL must also clear its success cache. A new
+  // client identity initializes independently and a failure remains retryable.
+  const retryClient=isolatedClient(),retryStart=[indexDdlCount(),attemptsDdlCount()];
+  failAttemptsInitialize=true;
+  try{await assert.rejects(()=>drainRawSeenHistoryIndex({db:retryClient,now:now+960000}),e=>e.code==='08006');}
+  finally{failAttemptsInitialize=false;}
+  assert.deepEqual([indexDdlCount(),attemptsDdlCount()],[retryStart[0]+1,retryStart[1]+1]);
+  await drain(now+960000,{db:retryClient});await drain(now+1020000,{db:retryClient});
+  assert.deepEqual([indexDdlCount(),attemptsDdlCount()],[retryStart[0]+2,retryStart[1]+2],'successful initialization is cached once; failure can retry both schemas');
+  // A schema transaction that finishes after its soft deadline cannot publish
+  // success or lend its expired wrapper/pending promise to another run.
+  for(const phase of ['BASE_SCHEMA','ATTEMPTS_SCHEMA']){
+    const timedClient=isolatedClient(),start=[indexDdlCount(),attemptsDdlCount()],executionStart=executions.length;
+    clock=originalNow();Date.now=()=>clock;let slow=-1;
+    afterQuery=query=>{const matches=phase==='BASE_SCHEMA'?/CREATE OR REPLACE TRIGGER soccer_raw_history_games_immutable_v1/.test(query)
+      :/CREATE OR REPLACE TRIGGER soccer_raw_history_attempts_immutable_v1/.test(query);
+      if(matches&&slow<0){slow=executions.length-1;clock+=1001;}};
+    try{await assert.rejects(()=>drainRawSeenHistoryIndex({db:timedClient,now:now+1080000,timeBudgetMs:1000}),e=>e.code==='RAW_HISTORY_INDEX_BUDGET_EXHAUSTED');}
+    finally{afterQuery=null;Date.now=originalNow;}
+    assert.ok(slow>=executionStart);assert.equal(executions.length,slow+1);assert.equal(executions.at(-1).options.fetchOptions.signal.aborted,true);
+    assert.deepEqual([indexDdlCount(),attemptsDdlCount()],[start[0]+1,start[1]+(phase==='BASE_SCHEMA'?0:1)]);
+    await drain(now+1080000,{db:timedClient});await drain(now+1140000,{db:timedClient});
+    assert.deepEqual([indexDdlCount(),attemptsDdlCount()],[start[0]+2,start[1]+(phase==='BASE_SCHEMA'?1:2)],phase+' retries through fresh deadline; later success skips DDL');
+  }
   v=await drain(now+540000,{maxBatches:999,timeBudgetMs:999999});assert.equal(v.maxBatches,64);assert.equal(v.timeBudgetMs,40000);
   for(const options of [{maxBatches:0},{maxBatches:1.5},{timeBudgetMs:0},{timeBudgetMs:NaN}])await assert.rejects(()=>drainRawSeenHistoryIndex(options),e=>e.status===400);
   for(const table of ['sports_reader_seen_captures_v1','soccer_raw_seen_history_batches_v1','soccer_raw_seen_history_games_v1','soccer_raw_seen_history_attempts_v1']){
@@ -226,7 +299,7 @@ try{
   const calibration=readFileSync(new URL('../app/api/cron/soccer-calibration/route.js',import.meta.url),'utf8');
   assert.doesNotMatch(calibration,/raw-seen-history|raw-history-index|drainRawSeen/);assert.match(calibration,/maxDuration\s*=\s*180/);assert.match(calibration,/deadline=Date\.now\(\)\+160000/);
   assert.equal(JSON.stringify(parts),fixtureBefore);
-  console.log('PASS real PostgreSQL raw-history maintenance: bounded24/hard64, balanced leagues/date buckets/backlog, read-only canonical progress, precise fragment retry watermarks, immutable derived data, 503 retry, soft deadline and source/time/price preservation; NOT Production');
+  console.log('PASS real PostgreSQL raw-history maintenance: default64/hard64, balanced64 leagues/date buckets/backlog, successful underlying initialization cache, schema/failure/deadline retry, read-only canonical progress, precise fragment retry watermarks, immutable source/time/price, nonexecutable derived data and 503 isolation; NOT Production');
 }finally{
   afterQuery=null;Date.now=originalNow;
   for(const [key,value]of Object.entries(oldEnv))value===undefined?delete process.env[key]:process.env[key]=value;
