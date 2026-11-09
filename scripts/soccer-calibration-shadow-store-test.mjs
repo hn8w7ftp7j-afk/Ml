@@ -40,6 +40,7 @@ function fresh(league = 'epl', { eventId = String(++serial), kickoff = Date.now(
   return evidence;
 }
 const deps = evidence => ({
+  enrichSoccerPrematchInputs: async evidence => evidence,
   ensureSoccerForwardProtocol: async () => { throw Error('unrelated forward collection omitted'); },
   fetchSoccerSchedule: async () => ({ ok: true, games: [evidence.game] }), fetchSoccerPrematch: async () => evidence,
   fetchSoccerWorkload: async () => ({ ok: false, status: 'INCOMPLETE', teams: {}, sources: [] }),

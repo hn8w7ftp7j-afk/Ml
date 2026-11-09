@@ -36,7 +36,7 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
       history.push({ method, url }); window.location.search = new URL(url, 'https://fixture.invalid').search;
     }])) };
   const ctx = vm.createContext({ React, URL, URLSearchParams, Date, Intl, AbortController, soccerTeamLabel, APP_VERSION: 'test', window,
-    SoccerReaderBoards, SoccerReaderInventoryPanel, soccerReaderBoardDates:readerScope.soccerReaderBoardDates, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
+    SoccerReaderBoards, SoccerReaderInventoryPanel, SoccerOfficialMarketCoveragePanel: () => null, soccerReaderBoardDates:readerScope.soccerReaderBoardDates, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
     Link: ({ children, prefetch, ...attributes }) => React.createElement('a', attributes, children),
     useState: initial => { const index = cursor++; if (!(index in hooks)) hooks[index] = typeof initial === 'function' ? initial() : initial;
       return [hooks[index], update => { const next = typeof update === 'function' ? update(hooks[index]) : update; if (!Object.is(next, hooks[index])) { hooks[index] = next; dirty = true; } }]; },

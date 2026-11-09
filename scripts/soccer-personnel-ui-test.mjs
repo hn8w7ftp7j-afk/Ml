@@ -30,7 +30,7 @@ const {code}=await transform(source,{filename:'soccer-personnel-analysis.jsx',js
 let analysisContext={states:{},run:()=>{}};
 const ctx=vm.createContext({React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
   useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],useRef:initial=>({current:initial}),useEffect:()=>{},
-  SoccerManualSimulation:()=>null,SoccerMarketDirections:()=>null,SoccerProvisionalMarketResearch:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel,SoccerModelDevelopmentPanel,SoccerMinutesV2Coverage,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
+  SoccerManualSimulation:()=>null,SoccerPrematchInputsPanel:()=>null,SoccerMarketDirections:()=>null,SoccerProvisionalMarketResearch:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel,SoccerModelDevelopmentPanel,SoccerMinutesV2Coverage,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
 vm.runInContext(code,ctx);
 const render=props=>renderToStaticMarkup(ctx.SoccerPersonnelResearch(props));
 const artifact=soccerPersonnelArtifacts(),analysisCutoff='2026-10-20T00:00:00Z';

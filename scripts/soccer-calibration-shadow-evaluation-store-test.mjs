@@ -29,6 +29,7 @@ try {
   for (const eventId of ['992000001', '992000002']) {
     const e = evidence(eventId, kickoff), game = e.game;
     const result = await analyzeSoccerGame({ league: game.league, date: game.date, eventId: game.sourceId }, {
+      enrichSoccerPrematchInputs: async evidence => evidence,
       ensureSoccerForwardProtocol: async () => { throw Error('unrelated fixture'); }, fetchSoccerSchedule: async () => ({ ok: true, games: [game] }),
       fetchSoccerPrematch: async () => e, fetchSoccerWorkload: async () => ({ ok: false, status: 'INCOMPLETE', teams: {}, sources: [] }),
       fetchSoccerTeamXg: async () => ({ ok: false }), loadSoccerReaderSnapshot: async () => null,

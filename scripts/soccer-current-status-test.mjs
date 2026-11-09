@@ -47,6 +47,7 @@ const current=()=>({analysisRunId:run.runId,revision:'saved-revision',qualificat
 const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date:'2026-10-20',startTime:kickoff,status:'scheduled'};
 const readCurrent=async()=>{if(currentReadError)throw Error('controlled current-status outage');return current();};
 const deps={
+  enrichSoccerPrematchInputs:async evidence=>evidence,
   beginSoccerAnalysisRun:async()=>run,recordSoccerCohort:async()=>{},fetchSoccerSchedule:async()=>{sourceReads++;return{ok:true,games:[game]};},
   fetchSoccerPrematch:async()=>({ok:true,source:{fetchedAt:new Date(at).toISOString()}}),fetchSoccerWorkload:async()=>({ok:false}),loadSoccerReaderSnapshot:async()=>null,
   fetchSoccerTeamXg:async()=>({ok:false,reason:'TEAM_XG_NOT_PART_OF_FIXTURE'}),

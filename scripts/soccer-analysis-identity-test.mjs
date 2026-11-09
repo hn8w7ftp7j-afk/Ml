@@ -33,7 +33,7 @@ try {
   process.env.DATABASE_URL='postgres://fixture.invalid/analysis-identity';delete process.env.DATABASE_V2_URL;
   const { analyzeSoccerGame }=await import('../lib/soccer/analysis-service.js');
   const evidence=()=>normalizeSoccerPrematch(payload,game,{...source,fetchedAt:new Date().toISOString()},Date.now());
-  const deps={fetchSoccerPrematch:async()=>evidence(),fetchSoccerWorkload:async()=>({ok:false,teams:{},sources:[]}),
+  const deps={enrichSoccerPrematchInputs:async evidence=>evidence,fetchSoccerPrematch:async()=>evidence(),fetchSoccerWorkload:async()=>({ok:false,teams:{},sources:[]}),
     fetchSoccerTeamXg:async()=>({ok:false,reason:'FIXTURE_UNAVAILABLE'}),loadSoccerReaderSnapshot:async()=>reader};
   const analyze=async board=>analyzeSoccerGame({league:'epl',date:game.date,eventId:game.sourceId},
     {...deps,fetchSoccerSchedule:async()=>board});

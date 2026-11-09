@@ -221,7 +221,7 @@ try{
   await enqueueSoccerReaderAnalysis('epl',liveGame.date,{query});
   const actualDeps={query,loadReader:async()=>liveReader,schedule,
     analyze:async(input,overrides)=>{
-      actualResponse=await analyzeSoccerGame(input,{...overrides,fetchSoccerPrematch:async()=>evidence(),
+      actualResponse=await analyzeSoccerGame(input,{...overrides,enrichSoccerPrematchInputs:async evidence=>evidence,fetchSoccerPrematch:async()=>evidence(),
         loadSoccerReaderSnapshot:async()=>liveReader,
         fetchSoccerWorkload:async()=>({ok:false,status:'INCOMPLETE',teams:{},sources:[],modelEffectApplied:false,executable:false}),
         fetchSoccerTeamXg:async()=>{throw Error('synthetic unavailable ancillary source');}});

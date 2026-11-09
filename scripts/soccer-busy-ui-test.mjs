@@ -18,7 +18,7 @@ function harness({ rows = games, ...initial } = {}) {
   const hooks = [], effects = [], calls = [], reports = [], timers = new Map(), listeners = new Map();
   const callback = value => reports.push(plain(value));
   function SoccerWorkspace() { return null; }
-  const ctx = vm.createContext({ React, URLSearchParams, Date, AbortController, ...recovery, SoccerWorkspace,
+  const ctx = vm.createContext({ React, URLSearchParams, Date, AbortController, ...recovery, SoccerWorkspace, SoccerPrematchInputsPanel: () => null,
     createContext: () => ({ Provider: 'provider' }), useContext: () => tree.props.value,
     useState: initial => { const index = cursor++; if (!(index in hooks)) hooks[index] = initial;
       return [hooks[index], update => { const value = typeof update === 'function' ? update(hooks[index]) : update;
