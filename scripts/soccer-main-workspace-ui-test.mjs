@@ -29,6 +29,7 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
   function SoccerAnalysisProvider({ children }) { return React.createElement('div', { 'data-analysis-provider': true }, children); }
   function SoccerReaderBoards() { return React.createElement('div', { 'data-reader': true }); }
   function SoccerReaderInventoryPanel() { return React.createElement('div', { 'data-reader-inventory': true }); }
+  function SoccerOfficialMarketCoveragePanel({ league, date }) { return React.createElement('section', { 'data-official-coverage': league, 'data-board-date': date }); }
   const window = { location: { search }, localStorage: { getItem: () => null },
     addEventListener: (name, listener) => { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(listener); },
     removeEventListener: (name, listener) => listeners.get(name)?.delete(listener),
@@ -36,7 +37,7 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
       history.push({ method, url }); window.location.search = new URL(url, 'https://fixture.invalid').search;
     }])) };
   const ctx = vm.createContext({ React, URL, URLSearchParams, Date, Intl, AbortController, soccerTeamLabel, APP_VERSION: 'test', window,
-    SoccerReaderBoards, SoccerReaderInventoryPanel, SoccerOfficialMarketCoveragePanel: () => null, soccerReaderBoardDates:readerScope.soccerReaderBoardDates, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
+    SoccerReaderBoards, SoccerReaderInventoryPanel, SoccerOfficialMarketCoveragePanel, soccerReaderBoardDates:readerScope.soccerReaderBoardDates, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
     Link: ({ children, prefetch, ...attributes }) => React.createElement('a', attributes, children),
     useState: initial => { const index = cursor++; if (!(index in hooks)) hooks[index] = typeof initial === 'function' ? initial() : initial;
       return [hooks[index], update => { const next = typeof update === 'function' ? update(hooks[index]) : update; if (!Object.is(next, hooks[index])) { hooks[index] = next; dirty = true; } }]; },
@@ -64,6 +65,18 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
 }
 let passed = 0;
 async function test(name, operation) { await operation(); passed++; console.log(`PASS ${name}`); }
+
+await test('embedded EPL/UCL market coverage receives the canonical API league and selected date, and unmounts while inactive', async () => {
+  for (const league of ['EPL', 'UCL']) for (const date of ['2026-10-19', '2026-11-21']) {
+    const h = harness({ active: true, embedded: true, selectedLeague: league }, `?sport=${league}&date=${date}`);
+    h.render();
+    assert.match(h.html(), new RegExp(`data-official-coverage="${league.toLowerCase()}"`), 'the production child only accepts the canonical lowercase scope');
+    assert.match(h.html(), new RegExp(`data-board-date="${date}"`));
+    h.render({ active: false, embedded: true, selectedLeague: league });
+    assert.doesNotMatch(h.html(), /data-official-coverage/);
+    h.unmount();
+  }
+});
 
 await test('unopened inactive football does not fetch; embedded activation shares the home header and keeps the analysis provider mounted while hidden', async () => {
   const reportBusy = () => {};
