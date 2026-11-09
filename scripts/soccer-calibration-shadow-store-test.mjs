@@ -6,6 +6,9 @@ import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
 import { soccerCalibrationHash, predictSoccerCalibrationResearch } from '../lib/soccer/calibration-research.js';
 import { soccerCalibrationShadowArtifacts } from '../lib/soccer/calibration-frozen.js';
 import { soccerSqlFixture } from './helpers/soccer-sql-fixture.mjs';
+import { soccerPersonnelInputsFixture } from './helpers/soccer-personnel-inputs-fixture.mjs';
+import { attachSoccerPersonnelInputs } from '../lib/soccer/personnel-inputs.js';
+import { archiveSoccerObservation } from '../lib/soccer/observation-store.js';
 
 const fixture = await soccerSqlFixture(), { db } = fixture;
 const previous = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_V2_URL: process.env.DATABASE_V2_URL };
@@ -280,6 +283,82 @@ try {
   const erasedPlayer = await run(suppliedPlayers);
   assert.equal(erasedPlayer.payload.calibrationShadowCapture.reason, 'CALIBRATION_SHADOW_SOURCE_RECOMPUTE_FAILED',
     'a raw source that actually supplied a player cannot use the missing-roster legacy projection');
+
+  // Exercise the actual new producer/archive/service/save/capture path. These
+  // provider-shaped fixtures test engineering admission, not model accuracy.
+  let personnelSerial = 993900000, previousPersonnelReceipt;
+  function personnelFixture(league, partial = false) {
+    const eventId = String(++personnelSerial);
+    const f = soccerPersonnelInputsFixture(league, Date.now(), { transformPayload: payload => {
+      payload.header.id = eventId; payload.header.competitions[0].id = eventId;
+      // The original personnel fixture's home club is untrained in UCL. Use
+      // the same model-trained team ID throughout current AND prior retained
+      // documents, preserving real adapter checks and recomputed source hashes.
+      if (league === 'ucl') {
+        const replace = node => {
+          if (!node || typeof node !== 'object') return;
+          if (node.id === '393' && (node.team || String(node.uid || '').includes('~t:393') || node.displayName)) node.id = '360';
+          if (typeof node.uid === 'string') node.uid = node.uid.replace(/~t:393\b/g, '~t:360');
+          for (const value of Object.values(node)) if (value && typeof value === 'object') replace(value);
+        };
+        replace(payload);
+      }
+    } });
+    if (partial) f.evidence.workload.teams.away.playerWorkload = { ok: false, reason: 'SYNTHETIC_UNAVAILABLE_SIDE' };
+    return f;
+  }
+  async function runPersonnel(f, mutate = null) {
+    return run(f.evidence, { fetchSoccerWorkload: async () => f.evidence.workload,
+      enrichSoccerPrematchInputs: async evidence => {
+        attachSoccerPersonnelInputs(evidence, { now: Date.now() });
+        for (const side of ['home', 'away']) if (evidence.teams[side].minutes.status === 'RESEARCH_FORECAST_AVAILABLE') {
+          const field = `teams.${side}.minutes`, minutes = evidence.teams[side].minutes;
+          minutes.observationArchive = await archiveSoccerObservation(minutes, { evidence, game: evidence.game, field });
+          assert.equal(minutes.observationArchive.persisted, true, JSON.stringify(minutes.observationArchive));
+        }
+        if (mutate) mutate(evidence);
+        return evidence;
+      } });
+  }
+  for (const league of ['epl', 'ucl']) for (const partial of [false, true]) {
+    const f = personnelFixture(league, partial), originalMinutes = clone(f.evidence.teams);
+    const response = await runPersonnel(f);
+    assert.equal(response.status, 200, JSON.stringify(response.payload));
+    const capture = response.payload.calibrationShadowCapture;
+    assert.equal(capture.persisted, true, JSON.stringify(capture));
+    assert.equal(capture.status, 'SHADOW_PREDICTION_SAVED');
+    assert.equal(response.payload.evidence.teams.home.lineup.status, 'PROVIDER_REPORTED_XI');
+    assert.equal(response.payload.evidence.teams.home.minutes.status, 'RESEARCH_FORECAST_AVAILABLE');
+    if (partial) assert.deepEqual(response.payload.evidence.teams.away.minutes, originalMinutes.away.minutes);
+    const immutable = await original(response.payload.revision), before = JSON.stringify(immutable);
+    assert.equal(immutable.evidence.teams.home.minutes.status, 'RESEARCH_FORECAST_AVAILABLE', 'projection never rewrites the stored derived research');
+    assert.equal(immutable.evidence.teams.home.minutes.players.find(player => player.missingReason).expectedMinutes, null);
+    const historicalNow = Date.now;
+    try {
+      Date.now = () => Date.parse(f.game.startTime) + 86400000;
+      const read = await loadSoccerCalibrationShadowValidationEvidence(league, { captureIds: [capture.capture.captureId] });
+      assert.equal(read.records.length, 1, 'historical replay uses archived documents/model, not a current-only freshness capability');
+    } finally { Date.now = historicalNow; }
+    assert.equal(JSON.stringify(await original(response.payload.revision)), before, 'readback source projection is transient and leaves immutable analysis unchanged');
+    assert.equal(response.payload.formalScoringEnabled, false); assert.equal(response.payload.executable, false);
+    previousPersonnelReceipt = clone(immutable.evidence.teams.home.minutes.observationArchive);
+  }
+  for (const mutate of [
+    evidence => { evidence.teams.home.minutes.players[0].expectedMinutes += 1; },
+    evidence => { delete evidence.teams.home.minutes.observationArchive; },
+    evidence => { evidence.teams.home.minutes.observationArchive.receiptId = '0'.repeat(64); },
+    evidence => { evidence.teams.home.minutes.observationArchive = previousPersonnelReceipt; },
+    evidence => { evidence.teams.home.lineup.starters[0].name += ' changed'; },
+    evidence => { evidence.teams.home.sourceId = '999'; },
+  ]) {
+    const result = await runPersonnel(personnelFixture('epl'), mutate);
+    assert.equal(result.payload.calibrationShadowCapture.reason, 'CALIBRATION_SHADOW_SOURCE_RECOMPUTE_FAILED',
+      'changed forecasts, absent/foreign DB receipts, source roster or team identity cannot use the minutes projection');
+  }
+  const changedPartial = await runPersonnel(personnelFixture('ucl', true), evidence => { evidence.teams.away.minutes.reason = 'FORGED_RAW_REASON'; });
+  assert.equal(changedPartial.payload.calibrationShadowCapture.reason, 'CALIBRATION_SHADOW_SOURCE_RECOMPUTE_FAILED',
+    'the unreplaced side retains full original summary minute verification');
+  console.log('PASS calibration capture with announced EPL/UCL XI and full/partial personnel bridge: real default PostgreSQL archives and exact model replay restore only original summary minutes, preserve immutable forecasts and historical readback, reject altered/missing/foreign proof, roster/team and raw-side tampering; no formal promotion');
   console.log('PASS shadow calibration PostgreSQL: actual analysis save hook, true freeze/capture clocks and fractional Date transport, FT/HT atomic first-game capture, immutable exact models and original/source readback, per-league registry continuity, concurrent dedup, fixed trusted receipt adapters, exact historical missing-roster replay and corruption rejection, late/fake cutoff/source/scope rejection; baseline and formal W/R/S unchanged');
 } finally {
   for (const key of Object.keys(previous)) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; }

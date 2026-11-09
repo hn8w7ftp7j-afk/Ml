@@ -17,8 +17,10 @@ const source = (data, league, eventId, now) => ({ provider: 'ESPN',
 
 // Controlled provider-shaped documents, not additional real observations or
 // historical PIT evidence. Actual source hashes are recomputed for every copy.
-export function soccerPersonnelInputsFixture(league = 'epl', now = Date.now()) {
-  const definition = soccerLeague(league), payload = structuredClone(input), c = payload.header.competitions[0];
+export function soccerPersonnelInputsFixture(league = 'epl', now = Date.now(), { transformPayload = null } = {}) {
+  const definition = soccerLeague(league), payload = structuredClone(input);
+  if (transformPayload) transformPayload(payload);
+  const c = payload.header.competitions[0];
   payload.header.league = { id: definition.espnId, slug: definition.espnSlug, uid: `s:600~l:${definition.espnId}` };
   payload.header.uid = `s:600~l:${definition.espnId}~e:${payload.header.id}`;
   c.uid = `s:600~l:${definition.espnId}~e:${payload.header.id}~c:${c.id}`; c.date = iso(now + day);
