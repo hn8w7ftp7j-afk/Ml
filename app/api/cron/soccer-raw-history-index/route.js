@@ -8,7 +8,7 @@ export async function GET(request){
   const headers={'Cache-Control':'no-store'},secret=String(process.env.CRON_SECRET||'').trim();
   if(!secret||request.headers.get('authorization')!==`Bearer ${secret}`)return NextResponse.json({ok:false,error:'Unauthorized'},{status:401,headers});
   try{
-    const result=await drainRawSeenHistoryIndex({timeBudgetMs:40000,maxBatches:24});
+    const result=await drainRawSeenHistoryIndex({timeBudgetMs:40000,maxBatches:64});
     return NextResponse.json(result,{status:result.ok?200:503,headers});
   }catch{
     return NextResponse.json({ok:false,status:'RETRYABLE',budgetKind:'SOFT_DEADLINE',hardDeadlineEnforced:false,code:'RAW_HISTORY_INDEX_UNAVAILABLE',archiveOnly:true,currentBoardUpdated:false,
