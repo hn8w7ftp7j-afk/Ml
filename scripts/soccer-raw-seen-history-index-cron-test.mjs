@@ -221,6 +221,7 @@ try{
   assert.doesNotMatch(middleware,/startsWith\([^)]*\/api\/cron/);
   const config=JSON.parse(readFileSync(new URL('../vercel.json',import.meta.url),'utf8'));
   assert.equal(config.crons.filter(c=>c.path==='/api/cron/soccer-raw-history-index').length,1);
+  assert.equal(config.crons.find(c=>c.path==='/api/cron/soccer-raw-history-index').schedule,'* * * * *');
   assert.equal(config.functions['app/api/cron/soccer-raw-history-index/route.js'].maxDuration,60);
   const calibration=readFileSync(new URL('../app/api/cron/soccer-calibration/route.js',import.meta.url),'utf8');
   assert.doesNotMatch(calibration,/raw-seen-history|raw-history-index|drainRawSeen/);assert.match(calibration,/maxDuration\s*=\s*180/);assert.match(calibration,/deadline=Date\.now\(\)\+160000/);
