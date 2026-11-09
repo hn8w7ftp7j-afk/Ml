@@ -34,5 +34,8 @@ assert.equal((await GET(request('GET', readerHeaders))).status, 401, 'extension 
 const siteHeaders = { Cookie: `mlb_session=${siteToken}` };
 assert.equal((await GET(request('GET', siteHeaders, null, '?league=NBA&deviceId=bad'))).status, 400);
 assert.equal((await GET(request('GET', siteHeaders, null, '?league=NFL'))).status, 400);
+assert.equal((await GET(request('GET', siteHeaders, null, '?league=NBA&from=2026-02-30'))).status, 400);
+assert.equal((await GET(request('GET', siteHeaders, null, '?league=NBA&until=2099-11-09T00:00:00.000Z'))).status, 400);
+assert.equal((await GET(request('GET', siteHeaders, null, '?league=NBA&from=2026-11-07&through=2026-11-08&until=2026-11-08T00:59:00.000Z'))).status, 503, 'valid historical filters cannot fabricate reports while DB is unavailable');
 assert.equal((await GET(request('GET', siteHeaders, null, '?league=NBA'))).status, 503, 'authenticated reads fail explicitly when DB is unavailable');
 console.log('Reader diagnostic API: signed device binding, login-only reads, forged tokens, origins, body limits and honest DB failure PASS');

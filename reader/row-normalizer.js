@@ -513,6 +513,25 @@
             && JSON.stringify(a.map(clean)) !== JSON.stringify(b.map(clean));
         });
         if (sharedConflict && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
+        // Keep complementary columns from this same standard NBA section.
+        // Only an entirely blank pair is missing evidence: partial/malformed
+        // content and explicit locks must continue through conflict checks.
+        const blank = pair => !Array.isArray(pair) || pair.every(value => !clean(value));
+        const complementary = expectedLeague === 'NBA' && !sharedConflict
+          && !previousGame.marketLocked && !game.marketLocked
+          && marketRichness(previousGame) > 0 && marketRichness(game) > 0
+          && marketIndexes.every(index => {
+            const a = previousGame.cells[index]?.pair, b = game.cells[index]?.pair;
+            return blank(a) || blank(b) || JSON.stringify(a.map(clean)) === JSON.stringify(b.map(clean));
+          });
+        if (complementary) {
+          const merged = { ...previousGame, cells: [...previousGame.cells] };
+          for (const index of marketIndexes) if (blank(merged.cells[index]?.pair) && !blank(game.cells[index]?.pair)) merged.cells[index] = game.cells[index];
+          unique[previous.index] = merged;
+          const mergedFingerprint = JSON.stringify({ cells: marketIndexes.map(index => merged.cells[index]?.pair || []), marketLocked: false });
+          seen.set(key, { fingerprint: mergedFingerprint, richness: marketRichness(merged), index: previous.index });
+          continue;
+        }
         const richness = marketRichness(game);
         if (richness > previous.richness) {
           unique[previous.index] = game;

@@ -147,6 +147,61 @@ try {
   await partialOutbox.flush(); assert.equal((await queued(partial)).length, 0); assert.equal((await acks(partial)).length, chunks.length);
   assert.equal((await partialOutbox.status()).failedCaptureCount, 0, 'the same failed capture is resolved only after all its exact fragments are durable');
 
+  // A nested source row may aggregate many games. The 140 KB batching target
+  // must not reject a legal larger row and thereby lose all its sibling rows.
+  // These are synthetic capacity fixtures, not evidence of a Production gap.
+  {
+    const packedRow = length => ({ marketLocked: false, cells: [{ pair:
+      Array.from({ length: Math.ceil(length / 60000) }, (_, index) =>
+        '0 '.repeat(Math.ceil(Math.min(60000, length - index * 60000) / 2))
+          .slice(0, Math.min(60000, length - index * 60000))) }] });
+    const larger = source('NBA', '2026-10-24T22:04:01.000Z');
+    const siblings = clone(larger.tables[0].rows), parent = packedRow(150000);
+    larger.tables[0].rows = [siblings[0], parent, siblings[1]];
+    const largeParts = await local.fragments(larger);
+    assert.equal(largeParts.length, 3, 'the large original row receives its own fragment');
+    assert.deepEqual(largeParts.flatMap(part => JSON.parse(part.wireText).evidence.tables.flatMap(table => table.rows)),
+      larger.tables[0].rows, 'every original cell, row and sibling survives in source order');
+    for (const part of largeParts) {
+      assert.ok(local.bytes(part.wireText) <= 590000);
+      assert.equal(buildReaderSeenCapture(JSON.parse(part.wireText), { deviceId: device, headerVersion: larger.readerVersion }).captureId,
+        part.captureId, 'the backend accepts the exact large-row fragment hash');
+    }
+    const interrupted = store(); let largeWrites = 0;
+    interrupted.beforeSet = values => {
+      if (Object.keys(values).some(key => key.startsWith(local.PREFIX)) && ++largeWrites === 2) throw Error('QUOTA_EXCEEDED');
+    };
+    const beforeRestart = createSeenCaptureOutbox({ storage: interrupted, upload: validAck });
+    assert.equal((await beforeRestart.enqueue(larger)).durable, false);
+    assert.equal((await queued(interrupted)).length, 1, 'a failed large-row write retains the previously saved sibling');
+    interrupted.beforeSet = null;
+    const restartedLarge = createSeenCaptureOutbox({ storage: interrupted, upload: async (wire, config) =>
+      saveReaderSeenCapture(wire, { deviceId: config.deviceId, headerVersion: wire.evidence.readerVersion, sql }) });
+    assert.equal((await restartedLarge.enqueue(larger)).durable, true);
+    assert.equal((await queued(interrupted)).length, 3);
+    await restartedLarge.flush();
+    assert.equal((await queued(interrupted)).length, 0);
+    assert.equal((await acks(interrupted)).length, 3, 'all exact large/sibling fragments require durable database ACKs');
+    await restartedLarge.enqueue(larger);
+    assert.equal((await queued(interrupted)).length, 0, 'restart and retries reuse exact ACKs without rewriting source');
+
+    const nearLimit = source('NBA', '2026-10-24T22:04:02.000Z');
+    nearLimit.tables[0].rows = [packedRow(588000)];
+    const nearParts = await local.fragments(nearLimit);
+    assert.equal(nearParts.length, 1);
+    assert.ok(local.bytes(nearParts[0].wireText) <= 590000);
+    buildReaderSeenCapture(JSON.parse(nearParts[0].wireText), { deviceId: device, headerVersion: nearLimit.readerVersion });
+    const metadataOverflow = clone(nearLimit);
+    metadataOverflow.tables[0].headers.push('NBA ' + '全場 '.repeat(1200));
+    await assert.rejects(() => local.fragments(metadataOverflow), /SEEN_ROW_TOO_LARGE/,
+      'the hard limit includes source/header metadata, not just row bytes');
+    const oversizedStorage = store();
+    const oversizeBox = createSeenCaptureOutbox({ storage: oversizedStorage, upload: validAck });
+    assert.equal((await oversizeBox.enqueue(metadataOverflow)).durable, false);
+    assert.equal((await oversizeBox.status()).code, 'SEEN_ROW_TOO_LARGE');
+    assert.equal((await queued(oversizedStorage)).length, 0, 'an unsupported row stays visibly failed instead of being truncated');
+  }
+
   // A restarted worker can distinguish an old capture gap from a current
   // upload failure without claiming unrelated new receipts repaired the gap.
   const tracked = store(), lost = source('EPL', '2026-10-24T22:03:01.000Z');

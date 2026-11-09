@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash, createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { register } from 'node:module';
@@ -264,6 +265,51 @@ try {
     assert.equal(batchRows[0].marketCount, 5); assertFlags(batchRows[0], true);
   }
   assert.deepEqual((await snapshot()).find(row => row.capture_id === twoDays.captureId), twoDaysSource);
+  // A deployment adds a new immutable derivation; it cannot hide archives
+  // that have not yet been re-indexed, duplicate a batch or move later pages.
+  const legacyPart=synthetic(item=>{
+    item.observedAt='2026-11-06T04:00:00.000Z';
+    item.tables[0].rows=[structuredClone(evidence.tables[171].rows[758])];
+    item.tables[0].rows[0].cells[0].pair=['11-05','23:59'];
+  });
+  await insertSource(legacyPart);
+  const newReplay=deriveRawSeenSoccerHistory([legacyPart]);
+  const legacyVersion='SOCCER-RAW-CREDIT-TABLE-HISTORY-v1',legacyGames=newReplay.games.map(({unavailableMarkets,...game})=>game);
+  const legacyHash=createHash('sha256').update(canonicalReaderSeenCapture({captureBatchId:newReplay.captureBatchId,derivationVersion:legacyVersion,games:legacyGames})).digest('hex');
+  const legacyCapture={captureId:legacyPart.captureId,captureBatchId:null,league:legacyPart.league,observedAt:legacyPart.observedAt,evidenceHash:legacyPart.evidenceHash};
+  const legacyMetadata={schema,derivationVersion:legacyVersion,derivedHash:legacyHash,capture:legacyCapture,parts:newReplay.parts};
+  const legacyGame=legacyGames[0],legacyGameKey=[legacyGame.boardTime,legacyGame.awayKey,legacyGame.homeKey].join('|');
+  const legacyGameMetadata={league:legacyGame.league,boardDate:legacyGame.boardDate,gameKey:legacyGameKey,boardTime:legacyGame.boardTime,
+    awayRaw:legacyGame.awayRaw,homeRaw:legacyGame.homeRaw,awayKey:legacyGame.awayKey,homeKey:legacyGame.homeKey,
+    marketCount:legacyGame.markets.length,periods:[...new Set(legacyGame.markets.map(m=>m.period))],identityStatus:legacyGame.identityStatus,executable:false};
+  await db.query(`INSERT INTO soccer_raw_seen_history_batches_v1(batch_hash,derivation_version,derived_hash,capture_id,league,observed_at,source_received_at,source_persisted_at,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [newReplay.captureBatchId,legacyVersion,legacyHash,legacyPart.captureId,legacyPart.league,newReplay.observedAt,newReplay.receivedAt,newReplay.persistedAt,JSON.stringify(legacyMetadata)]);
+  await db.query(`INSERT INTO soccer_raw_seen_history_games_v1(batch_hash,derivation_version,league,board_date,game_key,metadata) VALUES($1,$2,$3,$4,$5,$6)`,
+    [newReplay.captureBatchId,legacyVersion,legacyGame.league,legacyGame.boardDate,legacyGameKey,JSON.stringify(legacyGameMetadata)]);
+  const legacyScope={...scope,gameKey:legacyGameKey};
+  let legacyRead=await queryRawHistoryIndex(legacyScope);
+  assert.equal(legacyRead.entries.length,1);assert.equal(legacyRead.entries[0].derivationVersion,legacyVersion,'un-reindexed saved v1 source remains visible after a v2 release');
+  const beforeMigration=await queryRawHistoryIndex(scope);assert.equal(beforeMigration.hasMore,true);
+  const legacyBody=JSON.parse(Buffer.from(beforeMigration.nextAfter.split('.')[0],'base64url').toString());
+  assert.equal(legacyBody.derivationVersion,RAW_SEEN_DERIVATION_VERSION);
+  delete legacyBody.derivationVersion;
+  const obsoleteEncoded=Buffer.from(JSON.stringify(legacyBody)).toString('base64url');
+  const obsoleteToken=obsoleteEncoded+'.'+createHmac('sha256',process.env.SESSION_SECRET).update('RAW-HISTORY-INDEX-v1\n'+obsoleteEncoded).digest('base64url');
+  await assert.rejects(()=>queryRawHistoryIndex({...scope,after:obsoleteToken}),e=>e.code==='RAW_HISTORY_INDEX_CURSOR_INVALID','an older-engine cursor is not silently reused under a new derivation');
+  await indexRawSeenHistoryCapture(legacyPart.captureId);
+  const afterMigrationPage=await queryRawHistoryIndex({...scope,after:beforeMigration.nextAfter});
+  const stableLegacy=afterMigrationPage.entries.find(e=>e.captureBatchId===newReplay.captureBatchId);
+  assert.ok(stableLegacy);assert.equal(stableLegacy.derivationVersion,legacyVersion,'the original cutoff pins the older valid batch across a concurrent v2 append');
+  legacyRead=await queryRawHistoryIndex(legacyScope);
+  assert.equal(legacyRead.entries.length,1);assert.equal(legacyRead.entries[0].derivationVersion,RAW_SEEN_DERIVATION_VERSION,'a fresh query prefers the new version once it exists, with no duplicate batch');
+  const partialSource=synthetic(item=>{
+    item.observedAt='2026-11-06T05:00:00.000Z';
+    item.tables[0].rows=[structuredClone(evidence.tables[171].rows[758])];item.tables[0].rows[0].cells[4].pair=['-'];
+  });
+  await insertSource(partialSource);await indexRawSeenHistoryCapture(partialSource.captureId);
+  const partialIndex=(await queryRawHistoryIndex(scope)).entries.find(e=>e.captureBatchId===partialSource.captureId)
+    ||(await queryRawHistoryIndex({...scope,gameKey:[deriveRawSeenSoccerHistory([partialSource]).games[0].boardTime,deriveRawSeenSoccerHistory([partialSource]).games[0].awayKey,deriveRawSeenSoccerHistory([partialSource]).games[0].homeKey].join('|')})).entries.find(e=>e.captureBatchId===partialSource.captureId);
+  assert.ok(partialIndex);assert.equal(partialIndex.marketCount,4);assert.equal(partialIndex.unavailableMarketCount,1,'index reports unavailable siblings without dropping independently valid saved quotes');
   assert.equal(JSON.stringify(parts), sourceBefore, 'real retained fixture remains byte-equivalent in memory');
   assert.deepEqual((await snapshot()).filter(row => original.some(item => item.capture_id === row.capture_id)), original);
   const tables = (await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename")).rows.map(row => row.tablename);

@@ -95,7 +95,15 @@
       let part = {...meta,rows:[]};
       for (const row of table.rows) {
         const size=bytes(row);
-        if (size>130000) throw Error('SEEN_ROW_TOO_LARGE');
+        // 140 KB is a batching target, not a source-row limit. A legitimate
+        // nested board row can exceed it while still fitting the backend's
+        // immutable fragment contract. Keep that row intact in its own part;
+        // splitting cells would change the observed table layout. Include all
+        // source/header metadata and the largest possible part counters when
+        // testing the hard wire bound, rather than rejecting every other row
+        // in this capture because one parent row is larger than the target.
+        if (size>130000 && bytes({schema:SCHEMA,evidence:{...base,tables:[{...meta,rows:[row]}],
+          captureBatchId:batchId,partIndex:9999,partCount:10000}})>590000) throw Error('SEEN_ROW_TOO_LARGE');
         if (currentBytes+bytes(part)+size>140000 || part.rows.length>=800) {
           if (part.rows.length) {tables.push(part);currentBytes+=bytes(part);part={...meta,rows:[]};}
           flush();

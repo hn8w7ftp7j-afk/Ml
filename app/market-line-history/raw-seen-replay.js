@@ -16,11 +16,11 @@ const kinds = { HANDICAP: '讓球', TOTAL: '大小', MONEYLINE: '獨贏' };
 
 export function validateRawSeenReplay(value, capture) {
   const invalid = () => { throw new Error('這批歷史盤口回應未通過核對，原始保存仍可查看。'); };
-  if (!value || value.ok !== true || value.schema !== 'soccer-raw-seen-history-v1' || value.recordKind !== 'RAW_SEEN_REPLAY'
+  if (!value || value.ok !== true || value.schema !== (capture?.league === 'NBA' ? 'nba-raw-seen-history-v1' : 'soccer-raw-seen-history-v1') || value.recordKind !== 'RAW_SEEN_REPLAY'
     || value.archiveOnly !== true || value.currentBoardUpdated !== false || value.historicalAvailabilityVerified !== false
-    || value.executable !== false || value.coverageComplete !== false || value.closingCoverage !== 'NOT_VERIFIED'
+    || value.executable !== false || value.coverageComplete !== false || value.closingCoverage !== 'NOT_VERIFIED' || value.league !== capture?.league
     || value.integrity?.status !== 'VERIFIED' || value.integrity.batchHashVerified !== true
-    || !['EPL', 'UCL'].includes(capture?.league) || !digest(capture?.captureId)
+    || !['EPL', 'UCL', 'NBA'].includes(capture?.league) || !digest(capture?.captureId)
     || value.captureBatchId != null && !digest(value.captureBatchId)
     || capture.captureBatchId && value.captureBatchId !== capture.captureBatchId
     || value.observedAt !== capture.observedAt || !instant(value.observedAt)
@@ -47,7 +47,8 @@ export function validateRawSeenReplay(value, capture) {
     const gameKey = [game.boardDate, game.boardTime, game.awayKey, game.homeKey].join('|');
     if (games.has(gameKey)) invalid(); games.add(gameKey);
     for (const market of game.markets) {
-      if (!Object.hasOwn(periods, market?.period) || !Object.hasOwn(kinds, market.kind) || market.unit !== 'GOALS'
+      if (!Object.hasOwn(periods, market?.period) || !Object.hasOwn(kinds, market.kind) || market.unit !== (capture.league === 'NBA' ? 'POINTS' : 'GOALS')
+        || capture.league === 'NBA' && !['HANDICAP', 'TOTAL'].includes(market.kind)
         || market.executable === true || market.formalEligible === true
         || market.isAlternative != null && typeof market.isAlternative !== 'boolean'
         || !Array.isArray(market.rawRows) || !market.rawRows.length || market.rawRows.length > 3 || !market.rawRows.every(text)
@@ -96,7 +97,7 @@ export default function RawSeenReplay({ capture, gameFilter }) {
     const timeout = window.setTimeout(() => controller.abort(), 30000);
     setResult(null); setError(''); setBusy(true);
     try {
-      const response = await fetch(`/api/soccer/raw-seen-history?captureId=${seed}`, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+      const response = await fetch(`/api/${capture.league === 'NBA' ? 'nba' : 'soccer'}/raw-seen-history?captureId=${seed}`, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
       const payload = await response.json();
       if (!response.ok || payload?.ok !== true) throw new Error(payload?.code === 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT'
         ? '這批原文的表格格式尚未支援辨識，原始保存仍可查看；不能據此認定沒有盤口。'
@@ -108,18 +109,18 @@ export default function RawSeenReplay({ capture, gameFilter }) {
       if (current()) setError(cause.name === 'AbortError' ? '歷史盤口讀取逾時，請重試；原始保存仍保留。' : cause.message || '歷史盤口暫時無法讀取。');
     } finally { window.clearTimeout(timeout); if (current()) setBusy(false); }
   }
-  if (!['EPL', 'UCL'].includes(capture.league)) return null;
+  if (!['EPL', 'UCL', 'NBA'].includes(capture.league)) return null;
   return <div className={styles.panel} aria-label="原始保存重播的歷史盤口" aria-busy={busy}>
     <button type="button" className="secondary" disabled={busy} onClick={replay}>{busy ? '核對整批歷史盤口…' : '重播歷史盤口'}</button>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {result && <section className={styles.result}>
-      <h4>這批來源辨識出 {rawSeenSelectedGames(result, gameFilter).length} 場進球盤</h4>
+      <h4>這批來源辨識出 {rawSeenSelectedGames(result, gameFilter).length} 場{capture.league === 'NBA' ? '籃球盤' : '進球盤'}</h4>
       <p className={styles.notice}>以下由保存原文重新辨識，供歷史查閱，尚未核對官方場次。來源時間保持原值；未確認當時可分析資格或尾盤完整度。</p>
       <p className={styles.meta}>來源讀取 {time(result.observedAt)}｜頁面活動 {time(result.pageActivityAt)}<br/>接收 {time(result.receivedAt)}｜存入 {time(result.persistedAt)}<br/>本次重播 {time(result.recoveredAt)}</p>
-      {result.games.length === 0 && <p className={styles.notice}>這批原文未辨識出可列示的進球市場，不能據此認定沒有開盤。</p>}
+      {result.games.length === 0 && <p className={styles.notice}>這批原文未辨識出可列示的市場，不能據此認定沒有開盤。</p>}
       {rawSeenSelectedGames(result, gameFilter).map(game => <article className={styles.game} key={[game.boardDate, game.boardTime, game.awayKey, game.homeKey].join('|')}>
         <h5>{game.boardDate} {game.boardTime}｜{game.awayRaw} → {game.homeRaw}</h5>
-        {game.markets.length === 0 ? <p className={styles.notice}>此場沒有可列示的進球盤口。</p> : <div className={styles.tableWrap}><table>
+        {game.markets.length === 0 ? <p className={styles.notice}>此場沒有可列示的盤口。</p> : <div className={styles.tableWrap}><table>
           <caption>原盤盤口、水位與文字位置</caption>
           <thead><tr><th scope="col">市場</th><th scope="col">盤口與水位</th><th scope="col">來源文字</th><th scope="col">來源位置</th></tr></thead>
           <tbody>{game.markets.map((market, i) => <tr key={i}><th scope="row">{periods[market.period]} {kinds[market.kind]}{market.isAlternative === true && <small className={styles.interpreted}>替代盤線</small>}{market.periodEvidence?.originalPeriod === 'UNKNOWN' && market.period === 'FT' && <small className={styles.interpreted}>歷史辨識；原文未標全場</small>}</th><td>{rawSeenMarketText(market)}</td><td className={styles.raw}><small>{market.source.originalCell ? '保存原格' : '辨識用文字'}</small><br/>{(market.source.originalCell || market.rawRows).join('\n')}</td><td>表 {market.source.tableIndex + 1}／列 {market.source.rowIndex + 1}／欄 {market.source.columnIndex + 1}</td></tr>)}</tbody>

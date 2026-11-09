@@ -351,6 +351,7 @@ export function parseTai888Capture(capture, now = new Date()) {
   const league = LEAGUES.includes(capture?.league) ? capture.league : '';
   const tables = Array.isArray(capture?.tables) ? capture.tables : [];
   const games = [];
+  const explicitLockedGames = new WeakSet();
   let wrongPeriodHeader = league === 'NBA' && capture?.diagnostics?.wrongPeriodHeader === true;
   for (const table of tables.slice(0, 12)) {
     const headers = (table?.headers || []).map(clean);
@@ -417,6 +418,7 @@ export function parseTai888Capture(capture, now = new Date()) {
       // markets remain open and will fail the strict 4-market/8-direction gate.
       if (!markets.some(Boolean) && !(league === 'NHL' && game.rawMarketEvidence.some(value => value.rawRows.some(Boolean)))) game.marketStatus = 'locked';
       if (game.marketStatus === 'locked' && markets.some(Boolean)) game.marketStatus = 'open';
+      if (row?.marketLocked === true) explicitLockedGames.add(game);
       games.push(game);
     }
   }
@@ -438,7 +440,31 @@ export function parseTai888Capture(capture, now = new Date()) {
         return previousGame[property] && game[property]
           && JSON.stringify(canonical(previousGame[property])) !== JSON.stringify(canonical(game[property]));
       });
-      if (sharedConflict && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
+      const blockedDuplicate = league === 'NBA' && NBA_MARKET_PROPERTIES.some(property =>
+        previousGame.marketStates[property] === 'BLOCKED' || game.marketStates[property] === 'BLOCKED');
+      // A null quote has no price fingerprint. Keep malformed source evidence
+      // blocking even when richness fallback would otherwise retain an empty
+      // clone with an identical all-null market fingerprint.
+      if ((sharedConflict || blockedDuplicate) && !conflictingGameKeys.includes(key)) conflictingGameKeys.push(key);
+      // Responsive NBA rows can each expose different supported columns in
+      // this one captured frame. Preserve their union only when every shared
+      // quote agrees and every missing column is genuinely empty. A malformed
+      // price or explicit lock is not an empty slot and cannot be filled away.
+      const complementary = league === 'NBA' && !sharedConflict && !blockedDuplicate
+        && !explicitLockedGames.has(previousGame) && !explicitLockedGames.has(game)
+        && previousGame.marketStatus === 'open' && game.marketStatus === 'open'
+        && NBA_MARKET_PROPERTIES.every(property =>
+          (previousGame[property] || previousGame.marketStates[property] === 'UNAVAILABLE')
+          && (game[property] || game.marketStates[property] === 'UNAVAILABLE'));
+      if (complementary) {
+        const merged = { ...previousGame, marketStates: { ...previousGame.marketStates } };
+        for (const property of NBA_MARKET_PROPERTIES) if (!merged[property] && game[property]) {
+          merged[property] = game[property]; merged.marketStates[property] = 'AVAILABLE';
+        }
+        unique[previous.index] = merged;
+        seen.set(key, { fingerprint: marketFingerprint(merged, league), richness: marketRichness(merged, league), index: previous.index });
+        continue;
+      }
       const richness = marketRichness(game, league);
       if (richness > previous.richness) {
         unique[previous.index] = game;
