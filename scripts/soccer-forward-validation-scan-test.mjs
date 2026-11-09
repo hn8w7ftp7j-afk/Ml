@@ -72,7 +72,8 @@ try{
  assert.equal(page.report.conflictingResultCaptures,1);assert.equal(page.report.formalEligible,false);assert.equal(page.report.marketReturnValidation.S,null);
  assert.equal(page.report.returnErrorResearch.accepted,false);
  assert.ok(page.report.excludedReasons.FORWARD_ORIGINAL_REVISION_MISMATCH>=5103,'bad originals remain excluded, never turned into accepted samples by compaction');
- const again=await capacityScan(scope,{cursor,timeBudgetMs:25000});assert.deepEqual(again.report.groups,page.report.groups);assert.equal(again.report.capturedSnapshotPeriods,before,'terminal resume is idempotent');
+ const again=await capacityScan(scope,{cursor,timeBudgetMs:60000});assert.deepEqual(again.report.groups,page.report.groups);assert.equal(again.report.capturedSnapshotPeriods,before,'terminal resume is idempotent at the larger bounded request budget');
+ await assert.rejects(()=>capacityScan(scope,{cursor,timeBudgetMs:60001}),/續讀設定不正確/);
  let fresh=await capacityScan(scope,{gameLimit:25,timeBudgetMs:25000,readOptions:{captureRows:37,resultCheckRows:701}});
  while(fresh.report.scan.nextCursor)fresh=await capacityScan(scope,{cursor:fresh.report.scan.nextCursor,gameLimit:25,timeBudgetMs:25000});
  assert.equal(fresh.report.capturedSnapshotPeriods,before+3);assert.equal(fresh.report.readCoverage.loadedResultCheckRows,25003,'new scan sees subsequent evidence without mutating old scan');

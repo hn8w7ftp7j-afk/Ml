@@ -4,8 +4,10 @@ import { normalizeSoccerForwardScope } from '../../../../lib/soccer/forward-vali
 import { continueSoccerForwardScan, SoccerForwardScanError } from '../../../../lib/soccer/forward-validation-scan.js';
 import { collectSoccerForwardResults } from '../../../../lib/soccer/forward-result-collector.js';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
-const scanTimeBudgetMs = 25000;
+export const maxDuration = 120;
+// A complete large game can exceed 25 seconds even though every physical read
+// stays bounded. Keep room for source collection, DB cleanup and the response.
+const scanTimeBudgetMs = 60000;
 const response = (body, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const fail = (error,collection=null) => response({ ok: false,...(collection?{collection}:{}),...(error instanceof SoccerForwardScanError?{code:error.code}:{}), error: error instanceof SoccerForwardScanError?error.publicMessage:error.status === 400 ? error.message : '前瞻驗證資料暫時無法核對，未確認賽果不會列入統計。' }, error.status || 503);
 const keys = new Set(['league', 'date', 'from', 'through', 'cursor']);
@@ -41,3 +43,4 @@ export async function POST(request) {
     return response({ok:true,summary,report,...(collection?{collection}:{})});
   } catch (error) { return fail(error,collection); }
 }
+
