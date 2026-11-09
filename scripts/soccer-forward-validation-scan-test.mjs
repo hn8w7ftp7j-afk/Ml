@@ -150,10 +150,15 @@ try{
  assert.equal(upgradeFetches,1,'a recent legacy market check cannot suppress the current scanner');
  const upgraded=(await service.loadSoccerForwardEvidence(upgradeScope)).evaluations;
  assert.ok(upgraded.some(e=>e.marketReturnValidation?.diagnosticVersion===SOCCER_MARKET_RETURN_DIAGNOSTIC_VERSION));
- let repeatedFetches=0;
- await continueSoccerForwardScan(upgradeScope,{purpose:'evaluate',timeBudgetMs:25000,
+ let repeatedFetches=0,repeatedHistoryLoads=0;
+ const replayQuery=async(sql,params=[])=>{
+  if(sql.includes('SELECT count(*)::integer AS n FROM sports_soccer_forward_scan_captures_v1'))repeatedHistoryLoads++;
+  return(await db.query(sql,params)).rows;
+ };
+ await continueSoccerForwardScan(upgradeScope,{purpose:'evaluate',timeBudgetMs:25000,query:replayQuery,
    fetchResult:async()=>{repeatedFetches++;return upgradeResult;}});
  assert.equal(repeatedFetches,0,'the upgraded check respects the existing recheck interval');
+ assert.equal(repeatedHistoryLoads,1,'an already-current game reads its immutable history only once');
  console.log('PASS actual PostgreSQL scanner upgrades a completed legacy return check through the normal evaluate entry, appends current diagnostics once and respects the existing recheck interval');
  console.log('PASS complete durable scan: >24MiB originals/>5000 receipts and >8MiB/>25k checks, fixed manifests, bounded batches, old/new correction quarantine, scope/purpose/lease fencing, terminal idempotence, safe oversized rejection, deterministic deadline abort/lease release and source-preserving cache cleanup');
 }finally{if(oldDb===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=oldDb;if(oldDbV2===undefined)delete process.env.DATABASE_V2_URL;else process.env.DATABASE_V2_URL=oldDbV2;await fixture.close();}
