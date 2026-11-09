@@ -1,7 +1,6 @@
 import { bearerToken, verifyReaderToken, readerOriginAllowed, readerCorsHeaders } from '../../../../lib/reader-auth-v2.js';
 import { requireApiAuth, readJsonBody, checkRateLimit } from '../../../../lib/security.js';
-import { DIAGNOSTIC_LEAGUES } from '../../../../reader/diagnostic-schema.js';
-import { saveReaderDiagnostic, listReaderDiagnostics } from '../../../../lib/reader-diagnostic-store.js';
+import { saveReaderDiagnostic, listReaderDiagnostics, parseReaderDiagnosticQuery } from '../../../../lib/reader-diagnostic-store.js';
 import { logReaderDiagnosticReceipt } from '../../../../lib/reader-diagnostic-runtime-log.js';
 
 export const runtime = 'nodejs';
@@ -32,8 +31,8 @@ export async function GET(request) {
   const rate = checkRateLimit(request, { id: 'reader-diagnostics-read', limit: 120, windowMs: 600000 });
   if (!rate.allowed) return reply(request, { ok: false, error: '查詢過於頻繁' }, 429);
   const params = new URL(request.url).searchParams;
-  const deviceId = params.get('deviceId') || '', league = params.get('league') || '';
-  if (deviceId && !/^[a-zA-Z0-9._:-]{8,100}$/.test(deviceId) || league && !DIAGNOSTIC_LEAGUES.includes(league)) return reply(request, { ok: false, error: '診斷查詢條件錯誤' }, 400);
-  try { return reply(request, { ok: true, retentionDays: 14, reports: await listReaderDiagnostics({ deviceId, league }) }); }
-  catch { return reply(request, { ok: false, error: '診斷資料庫暫時無法查詢' }, 503); }
+  try {
+    const filters = parseReaderDiagnosticQuery(params);
+    return reply(request, { ok: true, retentionDays: 14, filters, dateBasis: 'SERVER_RECEIPT_TAIPEI_DATE', reports: await listReaderDiagnostics(filters) });
+  } catch (error) { return reply(request, { ok: false, error: error.status === 400 ? '診斷查詢條件錯誤' : '診斷資料庫暫時無法查詢' }, error.status === 400 ? 400 : 503); }
 }

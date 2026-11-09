@@ -86,9 +86,34 @@ for(const make of [
   ()=>synthetic(undefined,e=>{e.tables[0].rows.forEach(r=>{r.cells[1].pair[0]='AEK雅典-角球數[主]';});}),
   ()=>synthetic(undefined,e=>{e.tables[0].rows.forEach(r=>{r.cells[1].pair[1]='皇家馬德里U21';});}),
   ()=>synthetic(undefined,e=>{e.tables[0].rows.unshift({cells:[{pair:['聯盟: 英格蘭全國聯賽盃(14)']}]});}),
-  ()=>synthetic(undefined,e=>{e.tables[0].rows[0].cells[3].pair.push('0.999');}),
 ])assert.throws(()=>deriveRawSeenSoccerHistory(make()),e=>['RAW_SEEN_RECOVERY_NO_GOALS','RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT'].includes(e.code));
 assert.throws(()=>deriveRawSeenSoccerHistory(synthetic(undefined,e=>{e.tables[0].headers=[];})),e=>e.code==='RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT');
+// One unavailable quote is not evidence that independently parsed sibling
+// markets were absent. Only the exact supported row/identity/profile is used.
+for (const [column,expected] of [[2,4],[3,4],[4,4],[6,4],[7,4]]) {
+  const partialParts=synthetic([primary],e=>{e.tables[0].rows[0].cells[column].pair=['-'];});
+  const original=JSON.stringify(partialParts),partial=deriveRawSeenSoccerHistory(partialParts);
+  assert.equal(partial.games.length,1);assert.equal(partial.games[0].markets.length,expected);
+  assert.equal(partial.games[0].unavailableMarkets.length,1);
+  assert.equal(partial.games[0].unavailableMarkets[0].status,'LOCKED');
+  assert.equal(partial.games[0].unavailableMarkets[0].source.columnIndex,column);
+  assert.equal(partial.diagnostics.partialRows,1);assert.equal(partial.diagnostics.unavailableMarketCount,1);
+  assert.ok(partial.games[0].markets.every(m=>m.source.columnIndex!==column));
+  assert.equal(partial.historicalAvailabilityVerified,false);assert.equal(partial.executable,false);
+  assert.equal(JSON.stringify(partialParts),original,'partial derivation must not change stored source text');
+}
+const malformed=deriveRawSeenSoccerHistory(synthetic([primary],e=>{e.tables[0].rows[0].cells[3].pair.push('0.999');}));
+assert.equal(malformed.games[0].markets.length,4);assert.equal(malformed.games[0].unavailableMarkets[0].status,'UNRECOGNIZED');
+assert.ok(malformed.games[0].markets.some(m=>m.period==='HT'&&m.kind==='HANDICAP'));
+const oddEven=deriveRawSeenSoccerHistory(synthetic([primary],e=>{e.tables[0].rows[0].cells[5].pair=['-'];}));
+assert.equal(oddEven.games[0].markets.length,5,'an unrelated odd/even cell cannot discard valid goal quotes');
+const alternativeAfterUnavailablePrimary=deriveRawSeenSoccerHistory(synthetic([primary,alternative],e=>{
+  for(const column of [2,3,4,6,7])e.tables[0].rows[0].cells[column].pair=['-'];
+}));
+assert.equal(alternativeAfterUnavailablePrimary.games[0].markets.length,4);
+assert.ok(alternativeAfterUnavailablePrimary.games[0].markets.every(m=>m.isAlternative===true));
+assert.equal(alternativeAfterUnavailablePrimary.games[0].unavailableMarkets.length,5,'closed primary columns remain visible when later alternatives are recovered');
+
 
 const envNames=['DATABASE_URL','DATABASE_V2_URL','APP_PASSWORD','SESSION_SECRET'];
 const old=Object.fromEntries(envNames.map(k=>[k,process.env[k]]));

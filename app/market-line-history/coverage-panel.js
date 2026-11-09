@@ -7,7 +7,7 @@ import styles from './history.module.css';
 
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'EPL', 'UCL'];
 const LABELS = { EPL: '英超 EPL', UCL: '歐冠 UCL' };
-const MARKET_STATUS = { AVAILABLE: '有保存', NOT_CAPTURED: '未保存', INVALID: '內容異常', LOCKED: '鎖盤', PERIOD_UNKNOWN: '期間未確認', RETROSPECTIVE_INTERPRETATION: '有原盤，查閱時辨識為全場' };
+const MARKET_STATUS = { AVAILABLE: '有保存', NOT_CAPTURED: '此筆未讀到', INVALID: '內容異常', LOCKED: '鎖盤', PERIOD_UNKNOWN: '期間未確認', RETROSPECTIVE_INTERPRETATION: '有原盤，查閱時辨識為全場' };
 const numberText = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('zh-TW') : '未確認';
 const timeText = value => value && Number.isFinite(Date.parse(value)) ? taipeiHistoryTime(value) : '未確認';
 
@@ -91,15 +91,15 @@ export default function CoveragePanel() {
           <td>{timeText(row.lastReaderObservedAt)}</td><td>{timeText(row.lastPersistedAt)}</td>
         </tr>)}</tbody>
       </table></div>
-      <p className={styles.muted}>沒有讀盤回條的舊資料，無法回推最後確認時間。原始截圖未在此保存；未讀到的歷史盤口不補造。</p>
+      <p className={styles.muted}>沒有讀盤回條的舊資料，無法回推最後確認時間。歷來保存證據逐市場列時間，不代表同時盤口；沒有列出證據時，可再查這場全部紀錄。原始截圖未在此保存；未讀到的歷史盤口不補造。</p>
       {result.sources.some(source => source.status !== 'PASS') && <p role="status" className={styles.coverageWarning}>部分保存來源尚未可讀，相關時間或數量顯示「未確認」，不當作零筆。</p>}
       <details className={styles.coverageGames}><summary>查看各場市場缺漏（已載入 {numberText(result.games.length)} 筆{result.gameRowsTruncated ? '，可繼續載入' : ''}）</summary>
         {result.games.length === 0 ? <p>此查詢沒有可列出的保存場次，不能據此認定沒有開盤。</p> : <div className={styles.tableWrap}><table>
-          <caption>各場最新保存內容；尾盤完整性未驗證</caption>
+          <caption>各場最新觀測與歷來保存證據；尾盤完整性未驗證</caption>
           <thead><tr><th scope="col">場次</th><th scope="col">各市場狀態</th><th scope="col">最後讀盤觀測</th><th scope="col">最後尾盤</th></tr></thead>
           <tbody>{result.games.map(row => <tr key={`${row.league}|${row.boardDate}|${row.gameKey}`}>
-            <th scope="row">{row.league} {row.gameLabel || row.gameKey}<small className={styles.coverageSub}>{row.boardDate}</small><a href={`/market-line-history?${new URLSearchParams({ league: row.league, from: row.boardDate, through: row.boardDate, gameKey: row.gameKey })}`}>查看這場全部保存紀錄</a></th>
-            <td>{!row.lastReaderObservedAt && <small className={styles.coverageSub}>最後保存版本；讀盤回條未確認</small>}{coverageMarketsForDisplay(row).map((market, index) => <div key={`${market.market}|${index}`} className={['AVAILABLE', 'RETROSPECTIVE_INTERPRETATION'].includes(market.status) ? undefined : styles.coverageWarning}>{market.market}：{MARKET_STATUS[market.status] || '未確認'}{['EPL', 'UCL'].includes(row.league) && market.lastObservedAt && <small className={styles.coverageSub}>觀測 {timeText(market.lastObservedAt)}</small>}{market.status === 'RETROSPECTIVE_INTERPRETATION' && <small className={styles.coverageSub}>辨識 {timeText(market.historyPeriodInterpretation.interpretedAt)}｜原始時段 UNKNOWN 保留；不代表當時已可分析或下注</small>}</div>)}{row.integrity?.status === 'FAIL' && <div className={styles.invalid}>保存內容待核對</div>}</td>
+            <th scope="row">{row.league} {row.gameLabel || row.gameKey}<small className={styles.coverageSub}>{row.boardDate}</small><a href={`/market-line-history?${new URLSearchParams({ league: row.league, from: row.boardDate, through: row.boardDate, gameKey: row.gameKey })}`}>查看這場全部保存紀錄</a>{row.relatedIdentityCandidates?.length > 0 && <small className={styles.coverageSub}>同日相同對戰另有盤面識別（未確認同一場）：{row.relatedIdentityCandidates.map(candidate => <a key={candidate.gameKey} href={`/market-line-history?${new URLSearchParams({ league: row.league, from: row.boardDate, through: row.boardDate, gameKey: candidate.gameKey })}`}>{candidate.gameKey} </a>)}{row.relatedIdentityCandidatesTruncated ? '｜僅列前 10 個識別，可查整日紀錄。' : ''}</small>}</th>
+            <td>{!row.lastReaderObservedAt && <small className={styles.coverageSub}>最後保存版本；讀盤回條未確認</small>}{coverageMarketsForDisplay(row).map((market, index) => <div key={`${market.market}|${index}`} className={['AVAILABLE', 'RETROSPECTIVE_INTERPRETATION'].includes(market.status) ? undefined : styles.coverageWarning}>{market.market}｜{row.latestCaptureMarkets ? '最近讀盤' : '最近版本'}：{MARKET_STATUS[market.status] || '未確認'}{row.retainedMarkets?.[index]?.status === 'AVAILABLE' && <small className={styles.coverageSub}>歷來有保存｜原盤觀測 {timeText(row.retainedMarkets[index].lastObservedAt)}{market.status !== 'AVAILABLE' ? '｜最新觀測狀態不代表舊盤遺失' : ''}</small>}{row.retainedMarkets?.[index]?.status === 'NOT_VERIFIED' && <small className={styles.coverageSub}>歷來保存尚未核對完，可查看這場全部保存紀錄</small>}{['EPL', 'UCL'].includes(row.league) && market.lastObservedAt && <small className={styles.coverageSub}>觀測 {timeText(market.lastObservedAt)}</small>}{market.status === 'RETROSPECTIVE_INTERPRETATION' && <small className={styles.coverageSub}>辨識 {timeText(market.historyPeriodInterpretation.interpretedAt)}｜原始時段 UNKNOWN 保留；不代表當時已可分析或下注</small>}</div>)}{row.integrity?.status === 'FAIL' && <div className={styles.invalid}>保存內容待核對</div>}</td>
             <td>{timeText(row.lastReaderObservedAt)}</td><td>未驗證</td>
           </tr>)}</tbody>
         </table></div>}

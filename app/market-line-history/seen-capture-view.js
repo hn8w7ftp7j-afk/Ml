@@ -4,6 +4,17 @@ const timestamp = value => typeof value === 'string' && Number.isFinite(Date.par
 const nullableTimestamp = value => value === null || timestamp(value);
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
+// datetime-local has no timezone. This field always means Taipei, regardless
+// of the viewer's OS/browser timezone; it bounds original DB persistence time.
+export function seenCaptureTaipeiUntil(value, { now = Date.now() } = {}) {
+  if (!value) return '';
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) throw new Error('請填寫有效的台北保存截止時間。');
+  const parsed = Date.parse(`${value}:00+08:00`);
+  if (!Number.isFinite(parsed) || new Date(parsed + 8 * 3600000).toISOString().slice(0, 16) !== value || parsed > now)
+    throw new Error('請填寫有效且不晚於現在的台北保存截止時間。');
+  return new Date(parsed).toISOString();
+}
+
 export function validateSeenCaptureResponse(payload, expectedLeague = '') {
   const filters = typeof expectedLeague === 'object' ? expectedLeague : null;
   const league = filters?.league || (typeof expectedLeague === 'string' ? expectedLeague : '');

@@ -12,7 +12,7 @@ const {code}=await transform(source.replace(/^import .*?;\n/gm,'').replace(/expo
 });
 const at='2026-11-05T06:21:35.668Z',batch='c'.repeat(64);
 const capture=(id='a',league='UCL')=>({captureId:id.repeat(64),captureBatchId:batch,observedAt:at,league});
-const result=(id='a',league='UCL')=>({ok:true,schema:'soccer-raw-seen-history-v1',recordKind:'RAW_SEEN_REPLAY',archiveOnly:true,
+const result=(id='a',league='UCL')=>({ok:true,league,schema:'soccer-raw-seen-history-v1',recordKind:'RAW_SEEN_REPLAY',archiveOnly:true,
   currentBoardUpdated:false,historicalAvailabilityVerified:false,executable:false,coverageComplete:false,closingCoverage:'NOT_VERIFIED',
   integrity:{status:'VERIFIED',batchHashVerified:true},captureBatchId:batch,observedAt:at,pageActivityAt:at,
   receivedAt:at,persistedAt:at,recoveredAt:'2026-11-08T01:00:00.000Z',derivationVersion:'fixture-raw-seen-v1',derivedHash:'d'.repeat(64),
@@ -68,8 +68,10 @@ h.render({capture:capture('b','EPL')});assert.equal(oldSignal.aborted,true);asse
 const newer=h.click();h.calls[4].respond(result('b','EPL'));await newer;await h.settle();
 h.calls[3].respond(result());await race;await h.settle();assert.match(h.markup,/保存識別 b{64}/);assert.doesNotMatch(h.markup,/保存識別 a{64}/,'late prior capture response cannot replace the new batch');
 const aborted=h.click();h.unmount();assert.equal(h.calls[5].options.signal.aborted,true);h.calls[5].reject(Object.assign(new Error('cancelled'),{name:'AbortError'}));await aborted;
+const basketball=harness(),nba=result('a','NBA');nba.schema='nba-raw-seen-history-v1';nba.games[0].markets=nba.games[0].markets.filter(m=>m.kind!=='MONEYLINE').map(m=>({...m,unit:'POINTS',periodEvidence:undefined}));
+basketball.render({capture:capture('a','NBA')});const nbaRun=basketball.click();assert.equal(basketball.calls[0].url,`/api/nba/raw-seen-history?captureId=${'a'.repeat(64)}`);basketball.calls[0].respond(nba);await nbaRun;await basketball.settle();assert.match(basketball.markup,/場籃球盤/);assert.match(basketball.markup,/上半場 大小/);basketball.unmount();
 const baseball=harness();baseball.render({capture:capture('a','MLB')});assert.equal(baseball.tree,null);assert.equal(baseball.calls.length,0);
-const host=fs.readFileSync('app/market-line-history/seen-capture-panel.js','utf8');assert.match(host,/import RawSeenReplay from '\.\/raw-seen-replay\.js'/);assert.match(host,/<SeenCaptureEvidence capture=\{row\}\/>\s*\{\['EPL', 'UCL'\]\.includes\(row\.league\) && <RawSeenReplay capture=\{row\}\/>\}/);
+const host=fs.readFileSync('app/market-line-history/seen-capture-panel.js','utf8');assert.match(host,/import RawSeenReplay from '\.\/raw-seen-replay\.js'/);assert.match(host,/<SeenCaptureEvidence capture=\{row\}\/>/);assert.match(host,/\['EPL', 'UCL', 'NBA'\]\.includes\(row\.league\) && replayIds\.has\(row\.captureId\)/);
 assert.doesNotMatch(source,/method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]|dangerouslySetInnerHTML|\/api\/(?:analy|bets|soccer\/reader[?'"`])/);
 for(const path of process.argv.slice(2)){
   const actual=JSON.parse(fs.readFileSync(path,'utf8'));

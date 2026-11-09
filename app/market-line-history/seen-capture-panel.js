@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { taipeiHistoryTime } from './history-view.js';
-import { SEEN_CAPTURE_LEAGUES, SEEN_CAPTURE_REASON_LABELS, latestSeenDeliveryReports, seenCaptureQueryUrl, validateSeenCaptureDetail, validateSeenCaptureResponse } from './seen-capture-view.js';
+import { SEEN_CAPTURE_LEAGUES, SEEN_CAPTURE_REASON_LABELS, latestSeenDeliveryReports, seenCaptureQueryUrl, seenCaptureTaipeiUntil, validateSeenCaptureDetail, validateSeenCaptureResponse } from './seen-capture-view.js';
 import styles from './seen-capture.module.css';
 import RawSeenReplay from './raw-seen-replay.js';
 
-const LABELS = { NHL: '冰球 NHL', EPL: '英超 EPL', UCL: '歐冠 UCL' };
+const LABELS = { NBA: '籃球 NBA', NHL: '冰球 NHL', EPL: '英超 EPL', UCL: '歐冠 UCL' };
 const countText = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('zh-TW') : '未確認';
 const timeText = value => value && Number.isFinite(Date.parse(value)) ? taipeiHistoryTime(value) : '未確認';
 const DELIVERY_STATES = { sent: '回報無待補傳片段', pending: '等待補傳', error: '保存或補傳異常', idle: '尚無保存狀態' };
@@ -102,17 +102,27 @@ export default function SeenCapturePanel() {
     return () => { ++request.current.sequence; request.current.controller?.abort(); };
   }, [load]);
 
+  const replayBatches = new Set(), replayIds = new Set();
+  for (const row of result?.recent || []) {
+    const key = row.captureBatchId || row.captureId;
+    if (!replayBatches.has(key)) { replayBatches.add(key); replayIds.add(row.captureId); }
+  }
+
   return <section className={`panel ${styles.panel}`} aria-label="讀到的原始盤面保存" aria-busy={busy}>
     <h2>讀到的原始盤面保存</h2>
     <p>保存 Reader 看見的盤面文字與結構。未配對、未通過解析或未採用的來源，也與可分析盤口分開保留。</p>
     <p className={styles.notice}>這裡的筆數是原始盤面觀測片段，不是場數、可分析盤口數或完整尾盤數。同一批來源可能分段保存。</p>
     <form className={styles.filters} onSubmit={event => {
       event.preventDefault(); const form = new FormData(event.currentTarget);
-      load({ league: String(form.get('seen-league') || ''), from: String(form.get('seen-from') || ''), through: String(form.get('seen-through') || '') });
+      try {
+        const until = seenCaptureTaipeiUntil(String(form.get('seen-until') || ''));
+        load({ league: String(form.get('seen-league') || ''), from: String(form.get('seen-from') || ''), through: String(form.get('seen-through') || ''), until });
+      } catch (cause) { setError(cause.message); }
     }}>
       <label htmlFor="seen-league">原始盤面聯盟<select id="seen-league" name="seen-league" disabled={busy} defaultValue=""><option value="">八個聯盟</option>{SEEN_CAPTURE_LEAGUES.map(league => <option key={league} value={league}>{LABELS[league] || league}</option>)}</select></label>
       <label htmlFor="seen-from">來源讀取起日（台北）<input id="seen-from" name="seen-from" type="date" disabled={busy}/></label>
       <label htmlFor="seen-through">來源讀取迄日（台北）<input id="seen-through" name="seen-through" type="date" disabled={busy}/></label>
+      <label htmlFor="seen-until">截至保存時間（台北，選填）<input id="seen-until" name="seen-until" type="datetime-local" disabled={busy}/></label>
       <button type="submit" className="secondary" disabled={busy}>{busy ? '核對中…' : '查詢原始保存與補傳狀態'}</button>
     </form>
     {error && <p role="alert" className={styles.error}>{error}</p>}
@@ -135,10 +145,10 @@ export default function SeenCapturePanel() {
           {row.captureReasons.length > 0 && <p>擷取註記：{row.captureReasons.map(reason => SEEN_CAPTURE_REASON_LABELS[reason] || reason).join('、')}</p>}
           <small className={styles.id}>保存識別 {row.captureId}</small>
           <SeenCaptureEvidence capture={row}/>
-          {['EPL', 'UCL'].includes(row.league) && <RawSeenReplay capture={row}/>}
+          {['EPL', 'UCL', 'NBA'].includes(row.league) && replayIds.has(row.captureId) && <RawSeenReplay capture={row}/>}
         </li>)}</ol>}
       </details>
-      <p className={styles.notice}>依存入時間由新到舊分頁；日期篩選使用來源讀取的台北日期，並非已核對的賽事盤日。原始文字逐筆按需讀取。</p>
+      <p className={styles.notice}>依存入時間由新到舊分頁；日期篩選使用來源讀取的台北日期，並非已核對的賽事盤日。「截至保存時間」可定位賽前批次，同批片段提供一個整批重播按鈕。原始文字逐筆按需讀取。</p>
       <p role="status" className={styles.muted}>已載入 {countText(result.recent.length)}／{countText(result.leagues.reduce((total, row) => total + row.captureCount, 0))} 個原始保存片段{result.hasMore ? '；尚有下一頁。' : '；本次查詢已列完。'}</p>
       {result.hasMore && <button type="button" className="secondary" disabled={busy} onClick={() => load({ ...result.filters, until: result.until, after: result.nextAfter }, true)}>載入下一頁原始保存（最多 20 筆）</button>}
     </>}

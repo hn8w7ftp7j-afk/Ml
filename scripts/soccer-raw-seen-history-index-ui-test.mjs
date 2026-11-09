@@ -117,7 +117,7 @@ assert.equal(replay.scope.rawSeenSelectedGames(games,selected)[0],game);
 assert.throws(()=>replay.scope.rawSeenSelectedGames(games,{...selected,gameKey:'不存在'}),/未通過來源核對/);
 assert.throws(()=>replay.scope.rawSeenSelectedGames({games:[game,game]},selected),/未通過來源核對/);
 const quoteGame={...game,awayRaw:'阿仙奴',homeRaw:'布拉格斯拉維亞[主]',executable:false,markets:[{period:'FT',kind:'HANDICAP',unit:'GOALS',line:'1+50',lineSide:'away',awayWater:1.05,homeWater:.75,rawRows:['1+50 1.050','0.750'],source:{tableIndex:1,rowIndex:2,columnIndex:3}}]};
-const rawResponse={ok:true,schema:'soccer-raw-seen-history-v1',recordKind:'RAW_SEEN_REPLAY',...flags,
+const rawResponse={ok:true,league:'UCL',schema:'soccer-raw-seen-history-v1',recordKind:'RAW_SEEN_REPLAY',...flags,
   integrity:{status:'VERIFIED',batchHashVerified:true},captureBatchId:'b'.repeat(64),observedAt:original,pageActivityAt:null,
   receivedAt:received,persistedAt:persisted,recoveredAt:indexed,derivationVersion:'fixture-v1',derivedHash:'d'.repeat(64),
   parts:[{captureId:'a'.repeat(64),evidenceHash:'e'.repeat(64),partIndex:0,partCount:1,receivedAt:received,persistedAt:persisted}],
