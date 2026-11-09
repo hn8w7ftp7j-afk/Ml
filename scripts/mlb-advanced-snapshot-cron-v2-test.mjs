@@ -19,6 +19,7 @@ assert.deepEqual(vercel.crons, [
   { path: '/api/cron/bet-settlements', schedule: '15 * * * *' },
   { path: '/api/cron/nba-maintenance', schedule: '35 * * * *' },
   { path: '/api/cron/soccer-calibration', schedule: '45 * * * *' },
+  { path: '/api/cron/soccer-minutes-forward', schedule: '10 * * * *' },
   { path: '/api/cron/soccer-raw-history-index', schedule: '* * * * *' },
 ]);
 console.log('Authenticated MLB snapshot and automatic bet settlement crons PASS');
