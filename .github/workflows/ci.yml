@@ -98,6 +98,8 @@ jobs:
       - run: npm run test:asian-evidence
       - run: npm run test:external-audit
       - run: npm run test:evidence-completion
+      - name: Verify retained historical npxG research and source boundaries
+        run: python3 scripts/soccer-openplay-npxg-test.py
       - run: node --experimental-loader=./scripts/next-route-test-loader.mjs scripts/pit-history-export-test.mjs
       - run: npm test
       - run: npm run build
