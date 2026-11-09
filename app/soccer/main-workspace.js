@@ -105,7 +105,7 @@ function SoccerSystemReadiness({ value, league }) {
     && Array.isArray(value.blockers) && value.blockers.every(item => item?.owner === 'SYSTEM'
       && typeof item.label === 'string' && typeof item.nextAction === 'string');
   if (!verified) return <p className="soccerAvailability" role="status">評分系統狀態尚未核對，請重新整理賽程。</p>;
-  return <section className="soccerScoringReadiness" role="status" aria-label="足球評分系統缺項" data-system-scoring-status={value.status}>
+  return <details className="soccerDetails"><summary>模型驗證狀態・不阻擋現有資料預測</summary><section className="soccerScoringReadiness" role="status" aria-label="足球評分系統缺項" data-system-scoring-status={value.status}>
     <strong>{value.status === 'BLOCKED' ? '正式評分尚缺系統依據' : '評分設定已登錄，仍須逐場核對'}</strong>
     {value.blockers.length > 0 && <><p>全場與上半場須補齊以下依據，重新同步盤口不會補齊這些缺項。</p><ul>{value.blockers.map(item => <li key={item.code}><strong>{item.label}</strong><p>{item.nextAction}</p></li>)}</ul></>}
     {value.returnErrorLifecycle?.version === 'SOCCER-RETURN-ERROR-DURABLE-LIFECYCLE-v1' && value.returnErrorLifecycle.league === league && <p className="soccerMarketNote">
@@ -113,8 +113,8 @@ function SoccerSystemReadiness({ value, league }) {
         : value.returnErrorLifecycle.status === 'CONFIGURED_RESEARCH_ONLY' ? '收益誤差協定已登錄，排程會保存續讀進度、凍結及核對；正式驗收仍須另行完成。'
           : '收益誤差驗證協定暫時無法讀取，目前登錄狀態未知。'}
     </p>}
-    <p className="soccerMarketNote">一鍵分析可更新比分研究與符合條件原盤的收益試算。完成研究分析或保存盤口，仍須另行通過正式 S 評分核對。</p>
-  </section>;
+    <p className="soccerMarketNote">一鍵分析依現有資料產生預測；以下登錄狀態保留作模型驗證紀錄，不作為預測評分的放行條件。</p>
+  </section></details>;
 }
 function MatchCard({ game, showDate }) {
   const score = verifiedScore(game);
@@ -287,7 +287,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
       <div className="soccerDateControls"><button type="button" className="secondary" aria-label="前一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, -1), view: 'schedule' })}>前一天</button><label htmlFor={dateInputId}>台灣日期<input id={dateInputId} type="date" value={location.date} onChange={event => { if (validDate(event.target.value)) navigate({ ...location, date: event.target.value, view: 'schedule' }); }}/></label><button type="button" className="secondary" aria-label="後一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, 1), view: 'schedule' })}>後一天</button><button type="button" className="secondary" onClick={() => navigate({ ...location, date: taipeiDate(), view: 'schedule' })}>今天</button><button type="button" className="secondary soccerRefresh" disabled={!location.date || busy} onClick={retry}>{busy ? '更新中…' : '重新整理'}</button></div>
       <div className="soccerViewNav" aria-label="足球資料檢視">{Object.entries(VIEW_NAMES).map(([view, name]) => <button key={view} type="button" className={location.view === view ? 'active' : ''} aria-pressed={location.view === view} disabled={!location.date} onClick={() => navigate({ ...location, view })}>{name}</button>)}</div>
       {location.date&&<><div className="soccerAnalyzeActions"><button type="button" className="primary soccerLeagueAnalyzeButton" disabled={!canAnalyzeLeague} onClick={analyzeLeague}>{otherBusy ? '分析工作進行中…' : `一鍵分析${location.league === 'EPL' ? '英超' : '歐冠'}`}</button>{embedded ? <button type="button" className="secondary allLeagueAnalyzeButton" disabled={otherBusy || !onAnalyzeAll} onClick={() => onAnalyzeAll?.(location.date)}>一鍵分析全部聯盟</button> : <a className="secondary allLeagueAnalyzeButton" href={`/?analyzeAll=1&date=${encodeURIComponent(location.date)}`}>一鍵分析全部聯盟</a>}</div><p className="soccerAvailability">{location.view === 'standings' ? '切回當日或近期賽程，即可分析本聯盟。' : busy ? '正在讀取本聯盟賽程…' : error ? '請先重新整理賽程，再分析本聯盟。' : analysisTargets.length ? `${location.view === 'upcoming' ? '目前近期賽程' : `${location.date}（台灣時間）`}｜僅分析${league.name}未開賽 ${analysisTargets.length} 場` : '目前沒有可分析的未開賽賽事。'}</p></>}
-      <p className="soccerAvailability">目前可更新賽前資料與比分研究；正式評分尚未完成，有盤口仍不代表已有 S 分數。新鮮且期間已確認的原盤可顯示條件式收益分析；未同步原盤時，可先分析賽事，再使用手動盤口試算。<Link prefetch={false} href="/soccer/specification">分析規格 2.2</Link></p>
+      <p className="soccerAvailability">依現有資料預測；缺項已標示。有效原盤可計算預測 S 與模型情境 R，沿用既定派彩、退水及評分公式；完整模型誤差尚未驗證。未同步原盤時，可先分析賽事，再使用手動盤口試算。<Link prefetch={false} href="/soccer/specification">分析規格 2.2</Link></p>
       {board && <SoccerSystemReadiness value={board.scoringSystemReadiness} league={location.league.toLowerCase()}/>}
     </section>
     {active && <><SoccerReaderBoards league={location.league} date={location.date} games={games} view={location.view}/><SoccerReaderInventoryPanel league={location.league} date={location.date} throughDate={soccerReaderBoardDates({league:location.league,date:location.date,games,view:location.view}).at(-1)||location.date} onSelectDate={savedDate=>navigate({...location,date:savedDate,view:'schedule'})}/></>}

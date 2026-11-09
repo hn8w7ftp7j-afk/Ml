@@ -1,3 +1,4 @@
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import { loadSoccerShotXgResearchUiForTest } from './helpers/soccer-shot-xg-ui-fixture.mjs';
 import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
 import * as soccerReadiness from '../lib/soccer/scoring-readiness.js';
@@ -38,7 +39,7 @@ const current={analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',publ
   currentResearch:{publishedCurrent:true,reason:'ACTIVE',revision:'requirements-current',analysisRunId:'requirements-run',checkedAt:new Date(receiptAt).toISOString(),validUntil:new Date(receiptAt+180000).toISOString(),formalScoringEnabled:false,executable:false}};
 const currentState=data=>({status:'done',data,currentResearchRequestedAt:receiptAt,currentResearchReceivedAt:receiptAt});
 const plain=v=>JSON.parse(JSON.stringify(v));
-const context=vm.createContext({...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,createContext:()=>({Provider:'provider'})});
+const context=vm.createContext({buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,createContext:()=>({Provider:'provider'})});
 vm.runInContext(realComponentCode,context);
 vm.runInContext(code,context);
 const presentation=state=>plain(context.soccerAnalysisPresentation(state));
@@ -79,7 +80,7 @@ assert.match(renderToStaticMarkup(context.SoccerRequirementDetails({})),/歷史�
 
 function harness(fetch){
   const state=[],refs=[];let si=0,ri=0;
-  const ctx=vm.createContext({...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
+  const ctx=vm.createContext({buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
     createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
     useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
     useRef:initial=>refs[ri++]||(refs[ri-1]={current:initial}),useEffect:()=>{}});
@@ -164,10 +165,10 @@ const {SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS
 const specification=fs.readFileSync('app/soccer/specification/page.js','utf8').replace(/^import .*?;\n/gm,'').replace('export const metadata','const metadata').replace('export default function','function');
 const compiled=await transform(specification,{filename:'soccer-specification.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const {soccerProviderPolicy}=await import('../lib/soccer/provider-policy.js');
-const specificationContext=vm.createContext({...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,React,SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS_GATES,soccerProviderPolicy});
+const specificationContext=vm.createContext({buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,React,SOCCER_REQUIREMENTS_VERSION,SOCCER_REQUIREMENT_LAYERS,SOCCER_REQUIREMENTS_GATES,soccerProviderPolicy});
 vm.runInContext(compiled.code,specificationContext);
 const specificationMarkup=renderToStaticMarkup(specificationContext.SoccerSpecificationPage());
 assert.equal(SOCCER_REQUIREMENT_LAYERS.length,6);for(const layer of SOCCER_REQUIREMENT_LAYERS)assert.ok(specificationMarkup.includes(layer.title));
-assert.match(specificationMarkup,/SOCCER_ANALYSIS_2_2\.md/);assert.match(specificationMarkup,/目前正式評分、候選排名及下注尚未啟用/);
+assert.match(specificationMarkup,/SOCCER_ANALYSIS_2_2\.md/);assert.match(specificationMarkup,/依現有資料提供預測 S/);assert.match(specificationMarkup,/完整誤差保持未知/);assert.match(specificationMarkup,/不會送出下注/);
 assert.doesNotMatch(specificationMarkup,/undefined|NaN|\/workspace\/|DATABASE_URL/);
 console.log('PASS soccer requirement UI: current-version boundary, separate analysis/selection, full board counts, preserved API failure states, research-only response guard and observed-vs-modeled evidence');

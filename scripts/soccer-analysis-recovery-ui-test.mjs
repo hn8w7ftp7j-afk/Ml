@@ -1,3 +1,4 @@
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -48,7 +49,7 @@ function harness({ games = [game()], runId = '', date = games[0]?.date || '', sa
   const state = [], refs = [], effects = [], calls = [], timers = new Map(), listeners = new Map();
   let si = 0, ri = 0, ei = 0, nextTimer = 0, mounted = false, clientNow = now;
   class ClientDate extends Date { static now() { return clientNow; } }
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({buildSoccerRanking,
     React, Date: ClientDate, URLSearchParams, AbortController, AbortSignal, ...recovery, SoccerWorkspace:({children})=>children,
     createContext: () => ({ Provider: 'provider' }),
     useContext: () => ({ states: state[0], run: render().props.value.run }),

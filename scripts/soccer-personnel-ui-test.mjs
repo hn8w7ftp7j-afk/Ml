@@ -1,3 +1,4 @@
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import { loadSoccerShotXgResearchUiForTest } from './helpers/soccer-shot-xg-ui-fixture.mjs';
 import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
 import assert from 'node:assert/strict';
@@ -17,18 +18,18 @@ const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
 const minutesV2Summary=JSON.parse(fs.readFileSync('research/soccer/personnel-minutes-v2-coverage.json','utf8'));
 const xgSource=fs.readFileSync('app/soccer/team-xg-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const xgCode=await transform(xgSource,{filename:'soccer-personnel-xg.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const xgContext=vm.createContext({React,Date});vm.runInContext(xgCode.code,xgContext);
+const xgContext=vm.createContext({buildSoccerRanking,React,Date});vm.runInContext(xgCode.code,xgContext);
 const SoccerTeamXgPanel=xgContext.SoccerTeamXgPanel;
 const developmentSource=fs.readFileSync('app/soccer/model-development-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const developmentCode=await transform(developmentSource,{filename:'soccer-development.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const developmentContext=vm.createContext({...shotXgUi,React,soccerMatchContextObservations});vm.runInContext(developmentCode.code,developmentContext);
+const developmentContext=vm.createContext({buildSoccerRanking,...shotXgUi,React,soccerMatchContextObservations});vm.runInContext(developmentCode.code,developmentContext);
 const SoccerModelDevelopmentPanel=developmentContext.SoccerModelDevelopmentPanel;
 
 const shipped=fs.readFileSync('app/soccer/analysis-panel.js','utf8');
 const source=shipped.replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
 const {code}=await transform(source,{filename:'soccer-personnel-analysis.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 let analysisContext={states:{},run:()=>{}};
-const ctx=vm.createContext({React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
+const ctx=vm.createContext({buildSoccerRanking,React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
   useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],useRef:initial=>({current:initial}),useEffect:()=>{},
   SoccerManualSimulation:()=>null,SoccerPrematchInputsPanel:()=>null,SoccerMarketDirections:()=>null,SoccerProvisionalMarketResearch:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel,SoccerModelDevelopmentPanel,SoccerMinutesV2Coverage,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
 vm.runInContext(code,ctx);
@@ -60,7 +61,7 @@ for(const league of ['epl','ucl']){
   assert.ok(html.includes(`共同可評估 ${p.diagnostic.count}／原始母體 ${p.diagnostic.sample} 場`));
   for(const metric of [p.validation.reference.logLoss,p.validation.trials.find(t=>t.penalty===p.selectedPenalty).common.logLoss,p.diagnostic.logLoss,p.diagnostic.baseline.logLoss])assert.ok(html.includes(metric.toFixed(3)));
   assert.match(html,/2024 年選模保留原比分基準/);assert.match(html,/2025 年資料已用於先前開發/);assert.match(html,/不是新的未用樣本外測試（OOS）/);
-  assert.match(html,/目前預設比分分布維持原基準/);assert.match(html,/未啟用正式 W／R／S、候選或下注/);
+  assert.match(html,/人員研究尚未量化套入本次進球率/);assert.match(html,/預測 S 使用現有比分基準與模型情境/);
   assert.match(html,/歷史上場分鐘補齊/);assert.match(html,/這是目前保留歷史資料的賽後重播/);
   const minutes=minutesV2Summary.leagues[league];
   assert.ok(html.includes(`本次可重建 ${minutes.v2Reconstructed}／${minutes.population} 場，補回 ${minutes.recovered} 場`));

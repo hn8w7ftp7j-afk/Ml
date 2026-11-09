@@ -83,7 +83,7 @@ for(const input of [{}, {directions:null,unassignedQuotes:null},{directions:[{}]
 assert.equal(renderToStaticMarkup(ctx.SoccerHalfTimeResearch({})),'');
 const half=renderToStaticMarkup(ctx.SoccerHalfTimeResearch({halfTimePrediction:{homeRate:.7,awayRate:.4,outcomes:{home:.4,draw:.45,away:.15}},halfTimeResearch:{status:'UNVERIFIED',reasons:['HALF_TIME_MODEL_UNVERIFIED']}}));
 assert.match(half,/上半場比分研究/);assert.match(half,/40.0%/);assert.match(half,/45.0%/);assert.match(half,/15.0%/);assert.match(half,/主 0.70／客 0.40/);
-assert.match(half,/不列入候選排名/);assert.doesNotMatch(half,/class="soccerResearchOutcomes"|#6ce0bd|UNVERIFIED/);
+assert.match(half,/比分與勝平負機率不是 S 分數/);assert.match(half,/上半場原盤可另按預測 S/);assert.doesNotMatch(half,/class="soccerResearchOutcomes"|#6ce0bd|UNVERIFIED/);
 const missingHalf=renderToStaticMarkup(ctx.SoccerHalfTimeResearch({halfTimeResearch:{reasons:['SCORE_MODEL_UNAVAILABLE']}}));
 assert.match(missingHalf,/尚無適用的上半場研究分布/);assert.match(missingHalf,/缺少適用比分分布/);assert.doesNotMatch(missingHalf,/undefined|NaN/);
 console.log('PASS soccer market UI: eight markets, all source alternatives, unchanged raw price/water, unassigned-period isolation, threshold-only probabilities, research half-time and safe missing-data rendering');

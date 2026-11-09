@@ -1,3 +1,4 @@
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -18,7 +19,7 @@ function harness({ rows = games, ...initial } = {}) {
   const hooks = [], effects = [], calls = [], reports = [], timers = new Map(), listeners = new Map();
   const callback = value => reports.push(plain(value));
   function SoccerWorkspace() { return null; }
-  const ctx = vm.createContext({ React, URLSearchParams, Date, AbortController, ...recovery, SoccerWorkspace, SoccerPrematchInputsPanel: () => null,
+  const ctx = vm.createContext({buildSoccerRanking, React, URLSearchParams, Date, AbortController, ...recovery, SoccerWorkspace, SoccerPrematchInputsPanel: () => null,
     createContext: () => ({ Provider: 'provider' }), useContext: () => tree.props.value,
     useState: initial => { const index = cursor++; if (!(index in hooks)) hooks[index] = initial;
       return [hooks[index], update => { const value = typeof update === 'function' ? update(hooks[index]) : update;

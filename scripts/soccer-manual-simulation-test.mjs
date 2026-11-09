@@ -5,6 +5,10 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {transform} from 'next/dist/build/swc/index.js';
 import {simulateSoccerManualQuote,validSoccerSimulationInput} from '../lib/soccer/manual-simulation.js';
+import {soccerResearchArtifacts} from '../lib/soccer/research-frozen.js';
+import {soccerHalfTimeArtifacts} from '../lib/soccer/half-time-frozen.js';
+import {predictScoreModel} from '../lib/soccer/score-model.js';
+import {predictHalfTimeDistribution} from '../lib/soccer/half-time-model.js';
 const now=Date.parse('2026-10-26T06:00:00Z'),at=new Date(now).toISOString();
 const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date:'2026-10-26',status:'scheduled',startTime:new Date(now+3600000).toISOString(),home:{sourceId:'359',name:'Arsenal'},away:{sourceId:'364',name:'Liverpool'}};
 const distribution=period=>({league:'epl',gameId:game.id,period:period==='FT'?'REGULATION_FT':'REGULATION_HT',modelVersion:'SYNTHETIC_UNIT_NOT_APPROVED',trainingHash:'a'.repeat(64),trainedThrough:'2026-10-25T00:00:00Z',cells:[{home:2,away:0,probability:.6},{home:0,away:0,probability:.4}],retainedMass:1,tailMass:0});
@@ -28,8 +32,8 @@ const source=fs.readFileSync('app/soccer/manual-simulation-panel.js','utf8').rep
 const built=await transform(source,{filename:'manual-simulation.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 const nodes=x=>Array.isArray(x)?x.flatMap(nodes):x&&typeof x==='object'?[x,...nodes(x.props?.children)]:[];
 const text=x=>Array.isArray(x)?x.map(text).join(''):x&&typeof x==='object'?text(x.props?.children):String(x??'');
-function harness(){let cursor=0,dirty=false,tree,props={result:snapshot,game};const hooks=[],effects=[],calls=[],timers=new Set();
- class Clock extends Date{static now(){return now;}}
+function harness({clock=now,initial={result:snapshot,game}}={}){let cursor=0,dirty=false,tree,props=initial;const hooks=[],effects=[],calls=[],timers=new Set();
+ class Clock extends Date{static now(){return clock;}}
  const context=vm.createContext({React,Date:Clock,AbortController,setTimeout:fn=>{timers.add(fn);return fn;},clearTimeout:fn=>timers.delete(fn),
  useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=initial;return[hooks[i],v=>{hooks[i]=typeof v==='function'?v(hooks[i]):v;dirty=true;}];},
  useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},
@@ -41,7 +45,7 @@ function harness(){let cursor=0,dirty=false,tree,props={result:snapshot,game};co
  return{render,calls,timers,change,submit:()=>nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}}),markup:()=>renderToStaticMarkup(tree),unmount:()=>hooks.forEach(h=>h?.cleanup?.())};
 }
 const h=harness();h.render();h.change('試算球頭','1.5');h.change('試算水位','0.9');const first=h.submit();h.submit();assert.equal(h.calls.length,1,'rapid double submits cannot create overlapping requests');h.render();assert.match(h.markup(),/試算中/);
-const req=h.calls[0];assert.equal(req.url,'/api/soccer/simulation');assert.equal(req.options.method,'POST');const actual=JSON.parse(req.options.body);assert.deepEqual(actual,input);req.reply(run(actual));await first;h.render();assert.match(h.markup(),/\+15\.00%/);assert.match(h.markup(),/帳號適用條款尚未確認/);assert.match(h.markup(),/尚無正式 W／R／S/);assert.equal(h.timers.size,0);
+const req=h.calls[0];assert.equal(req.url,'/api/soccer/simulation');assert.equal(req.options.method,'POST');const actual=JSON.parse(req.options.body);assert.deepEqual(actual,input);req.reply(run(actual));await first;h.render();assert.match(h.markup(),/\+15\.00%/);assert.match(h.markup(),/帳號適用條款尚未確認/);assert.match(h.markup(),/不建立正式驗收或原盤排名資格/);assert.equal(h.timers.size,0);
 h.change('試算球頭','2.5');assert.doesNotMatch(h.markup(),/\+15\.00%/,'editing an input clears the previous calculation');
 const forged=h.submit();h.calls[1].reply({...run(JSON.parse(h.calls[1].options.body)),S:9});await forged;h.render();assert.doesNotMatch(h.markup(),/\+15\.00%/);assert.match(h.markup(),/回應的原分析、輸入或範圍不符/);
 const pending=h.submit();h.render({result:{...snapshot,revision:'c'.repeat(64)},game});assert.equal(h.calls[2].options.signal.aborted,true);h.calls[2].reply(run());await pending;h.render();assert.doesNotMatch(h.markup(),/\+15\.00%/,'late replies cannot attach to a different model revision');h.unmount();
@@ -69,3 +73,40 @@ try{
  const valid=await routeContext.POST(new Request(url,{method:'POST',headers,body:JSON.stringify(input)}));assert.equal(valid.status,200);assert.equal(reads,1);const body=await valid.json();assert.ok(Math.abs(body.netReturnBounds.lower-.15)<1e-12);assert.equal(body.S,null);assert.equal(body.inputSource,'USER_HYPOTHESIS');assert.equal(valid.headers.get('cache-control'),'no-store');
 }finally{for(const [k,v]of Object.entries(originalEnv))if(v===undefined)delete process.env[k];else process.env[k]=v;}
 console.log('PASS actual simulation POST: authentication/CSRF, body shape/size, immutable scoped DB read, numeric response with no-store and no formal S');
+
+// Real frozen model/scenario replay over clearly synthetic game identities.
+// No Reader quote, provider result, model acceptance or financial write is made.
+const predictionNow=Date.parse('2026-11-10T00:00:00Z');
+function canonical(league){
+ const model=soccerResearchArtifacts().leagues[league].liveModel,ids=Object.keys(model.coefficients);
+ const g={id:`soccer:${league}:999001`,sourceId:'999001',league,date:'2026-11-21',status:'scheduled',startTime:'2026-11-21T12:30:00Z',
+  home:{sourceId:ids[0],name:'Synthetic home'},away:{sourceId:ids[1],name:'Synthetic away'}};
+ const ft=predictScoreModel(model,{league,startTime:g.startTime,homeId:g.home.sourceId,awayId:g.away.sourceId,neutralSite:g.neutralSite});
+ const ht=predictHalfTimeDistribution(ft,soccerHalfTimeArtifacts().leagues[league].liveModel,{league,startTime:g.startTime});
+ const at=new Date(predictionNow).toISOString();
+ const s={...snapshot,gameId:g.id,league,date:g.date,evidence:{game:g,source:{fetchedAt:at}},analysisCutoff:at,
+  prediction:{...ft,league,gameId:g.id},halfTimePrediction:{...ht,league,gameId:g.id}};
+ return{game:g,snapshot:s,input:{...input,league,date:g.date,eventId:g.sourceId}};
+}
+for(const league of ['epl','ucl']){
+ const c=canonical(league);
+ for(const period of ['FT','HT'])for(const kind of ['TOTAL','HANDICAP'])for(const side of kind==='TOTAL'?['over','under']:['home','away']){
+  const r=simulateSoccerManualQuote({input:{...c.input,period,kind,side,lineSide:kind==='HANDICAP'?'home':null},snapshot:c.snapshot,now:predictionNow});
+  assert.equal(r.ok,true);assert.equal(r.predictionScore.status,'PREDICTION_RETURN_SUMMARY_AVAILABLE',JSON.stringify(r.predictionScore));
+  assert.ok(Number.isFinite(r.predictionScore.score)&&r.predictionScore.score>=1&&r.predictionScore.score<=10);
+  assert.equal(r.predictionScore.eligiblePrediction,false);assert.equal(r.predictionScore.totalModelError,null);
+  assert.equal(r.predictionScore.inputSource,'USER_HYPOTHESIS');assert.equal(r.predictionScore.formalEligible,false);
+  assert.equal(r.predictionScore.gameId,c.game.id);assert.equal(r.predictionScore.period,period);
+  assert.equal(r.W,null);assert.equal(r.R,null);assert.equal(r.S,null);
+ }
+ const altered=structuredClone(c.snapshot);altered.prediction.homeRate+=.01;
+ assert.equal(simulateSoccerManualQuote({input:c.input,snapshot:altered,now:predictionNow}).predictionScore.status,'UNAVAILABLE');
+}
+const c=canonical('epl'),ph=harness({clock:predictionNow,initial:{result:c.snapshot,game:c.game}});
+ph.render();ph.change('試算球頭','1.5');ph.change('試算水位','0.9');const ps=ph.submit();
+const pr=simulateSoccerManualQuote({input:JSON.parse(ph.calls[0].options.body),snapshot:c.snapshot,now:predictionNow});
+ph.calls[0].reply(pr);await ps;ph.render();assert.match(ph.markup(),/預測 S/);assert.match(ph.markup(),/模型情境 R/);
+assert.match(ph.markup(),/完整模型誤差尚未估計/);assert.match(ph.markup(),/手動輸入盤口/);
+const bad=ph.submit();ph.calls[1].reply({...pr,predictionScore:{...pr.predictionScore,eligiblePrediction:true}});await bad;ph.render();
+assert.match(ph.markup(),/回應的原分析、輸入或範圍不符/);ph.unmount();
+console.log('PASS manual prediction mode: frozen source/model replay, EPL/UCL eight directions, numeric prediction S with unknown full error, actual JSX response, invalid-scope rejection and no Reader/ranking/bet authority');

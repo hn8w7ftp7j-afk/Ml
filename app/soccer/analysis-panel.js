@@ -8,6 +8,7 @@ import { SoccerModelDevelopmentPanel } from './model-development-panel.js';
 import { SoccerMinutesV2Coverage } from './minutes-v2-coverage.js';
 import { SoccerPrematchInputsPanel } from './prematch-inputs-panel.js';
 import SoccerWorkspace from './workspace.js';
+import { buildSoccerRanking } from '../../lib/soccer/ranking.js';
 import { SOCCER_ALL_LEAGUE_STORAGE, validateSoccerAnalysisPayload, soccerSavedAnalysisState, findSoccerBackgroundJob, soccerBackgroundStates } from '../../lib/soccer/background-client.js';
 
 const Context=createContext(null);
@@ -42,11 +43,14 @@ export function soccerAnalysisPresentation(state,now=Date.now()){
   else if(state?.status==='done')analysisStatus=state.data?.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':soccerResearchIsCurrent(state,now)?'COMPLETED':'UNVERIFIED';
   const current=analysisStatus==='COMPLETED';
   const selectionResult=current&&analysisStatus==='COMPLETED'&&state.data?.selectionResult==='RESEARCH_SHADOW'?'RESEARCH_SHADOW':null;
-  return{analysisStatus,analysisLabel:analysisLabels[analysisStatus],selectionResult,selectionLabel:selectionResult?'研究中':'尚無結果',current};
+  const predictionMode=current&&state?.data?.predictionContext?.mode==='PREDICTION';
+  return{analysisStatus,analysisLabel:predictionMode?'預測完成':analysisLabels[analysisStatus],selectionResult,selectionLabel:predictionMode?'依現有資料預測':selectionResult?'研究中':'尚無結果',current};
 }
-export function soccerAnalysisCounts(games,states){
+export function soccerAnalysisCounts(games,states,now=Date.now()){
   const counts={total:games.length,candidates:0,waiting:0,processing:0,completed:0,insufficient:0,failed:0,research:0};
-  for(const game of games){const view=soccerAnalysisPresentation(states[game.id]);if(view.analysisStatus==='PROCESSING')counts.processing++;else if(view.analysisStatus==='FAILED')counts.failed++;else if(view.analysisStatus==='INSUFFICIENT_DATA')counts.insufficient++;else if(view.analysisStatus==='COMPLETED')counts.completed++;else counts.waiting++;if(view.selectionResult==='RESEARCH_SHADOW')counts.research++;}
+  for(const game of games){const view=soccerAnalysisPresentation(states[game.id],now);if(view.analysisStatus==='PROCESSING')counts.processing++;else if(view.analysisStatus==='FAILED')counts.failed++;else if(view.analysisStatus==='INSUFFICIENT_DATA')counts.insufficient++;else if(view.analysisStatus==='COMPLETED')counts.completed++;else counts.waiting++;if(view.selectionResult==='RESEARCH_SHADOW')counts.research++;}
+  if(Object.values(states).some(state=>state?.data?.predictionContext?.mode==='PREDICTION'))
+    counts.candidates=new Set(buildSoccerRanking(games,states,{now}).entries.map(entry=>entry.game.id)).size;
   return counts;
 }
 export function SoccerRequirementDetails({audit}){
@@ -113,7 +117,7 @@ export function SoccerPersonnelResearch({prediction,research,baseline,league,ana
       <h4>2025 年回顧診斷</h4><p className="soccerAvailability">2025 年資料已用於先前開發，這不是新的未用樣本外測試（OOS），也不代表投注勝率或收益。</p>
       {diagnosticPaired?<><p>共同可評估 {diagnosticCount}／原始母體 {diagnosticSample} 場。Log Loss：原基準 {decimal(diagnostic.baseline.logLoss)}／人員研究 {decimal(diagnostic.logLoss)}；Brier：原基準 {decimal(diagnostic.baseline.brier)}／人員研究 {decimal(diagnostic.brier)}。</p>{Number.isFinite(diagnostic.comparison?.meanDifference)&&<p>Log Loss 差異（人員研究減原基準）：{decimal(diagnostic.comparison.meanDifference,4)}{interval&&[interval.lower,interval.upper].every(Number.isFinite)&&interval.lower<=interval.upper?`；週區塊重抽樣範圍 ${decimal(interval.lower,4)} ～ ${decimal(interval.upper,4)}`:''}。此回顧比較不作正式升級依據。</p>}</>:<p>2025 年尚無可核對的共同樣本診斷。</p>}
     </>}
-    <p className="soccerAvailability">目前預設比分分布維持原基準；人員研究未啟用正式 W／R／S、候選或下注。</p>
+    <p className="soccerAvailability">人員研究尚未量化套入本次進球率；預測 S 使用現有比分基準與模型情境。</p>
     <SoccerMinutesV2Coverage league={league}/>
   </details>;
 }
@@ -291,7 +295,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     if(!batchScope||batchRequest.scope!==batchScope||currentBatchScope.current!==batchScope)return;
     void runAll();
   },[batchRequest?.id,batchRequest?.scope,batchScope]);
-  const targets=batchTargets(),available=targets.length>0,counts=soccerAnalysisCounts(games,states);
+  const targets=batchTargets(),available=targets.length>0;
   const background=states.__soccerJob;
   const busy=Boolean(batch||Object.values(states).some(state=>['queued','loading'].includes(state?.status))||background?.status==='running');
   const busyCallback=useRef(onBusyChange),reportedBusy=useRef(null);busyCallback.current=onBusyChange;
@@ -308,7 +312,8 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     reportedBusy.current=value;busyCallback.current?.(value);
   },[busyLeague,date,busy]);
   const workspaceStates=Object.fromEntries(Object.entries(states).map(([id,state])=>[id,state.data?{...state,data:{...state.data,publishedCurrent:soccerResearchIsCurrent(state)}}:state]));
-  return <Context.Provider value={{states,run,externalBusy}}><div className="soccerAnalysisToolbar"><button type="button" className="primary soccerLeagueAnalyzeButton" disabled={busy||externalBusy||!available} onClick={runAll}>{busy?`${batchLeagueName}分析中…`:`一鍵分析${batchLeagueName}（${targets.length} 場）`}</button><button type="button" className="secondary" onClick={()=>refreshSaved.current?.()}>載入已保存分析</button><span>{available?`僅分析本頁${batchLeagueName}未開賽賽事，不包含其他聯盟。`:'目前沒有可分析的未開賽賽事。'}</span><span>比分研究模式・正式評分尚未完成</span><a href="/soccer/specification">分析規格 2.2</a></div>{background?.message&&<p className="soccerAvailability" role="status">{background.message}</p>}{background?.error&&<p className="soccerAnalysisWarning" role="alert">{background.error}；可按「載入已保存分析」重試。</p>}<div className="soccerAnalysisSummary" role="status" aria-live="polite"><strong>目前候選 {counts.candidates} 場</strong><span>本頁範圍 {counts.total} 場</span><span>待分析／重核 {counts.waiting}</span><span>處理中 {counts.processing}</span><span>比分研究完成 {counts.completed}</span><span>資料不足 {counts.insufficient}</span><span>失敗 {counts.failed}</span><span>研究中 {counts.research}</span></div><SoccerWorkspace games={games} states={workspaceStates} run={run} league={league} date={date} analysisReady={!batch&&background?.status!=='running'} onHighScoreStatusChange={onHighScoreStatusChange} externalBusy={externalBusy}>{children}</SoccerWorkspace></Context.Provider>;
+  const counts=soccerAnalysisCounts(games,workspaceStates);
+  return <Context.Provider value={{states,run,externalBusy}}><div className="soccerAnalysisToolbar"><button type="button" className="primary soccerLeagueAnalyzeButton" disabled={busy||externalBusy||!available} onClick={runAll}>{busy?`${batchLeagueName}分析中…`:`一鍵分析${batchLeagueName}（${targets.length} 場）`}</button><button type="button" className="secondary" onClick={()=>refreshSaved.current?.()}>載入已保存分析</button><span>{available?`僅分析本頁${batchLeagueName}未開賽賽事，不包含其他聯盟。`:'目前沒有可分析的未開賽賽事。'}</span><span>依現有資料預測・缺項已標示</span><a href="/soccer/specification">分析規格 2.2</a></div>{background?.message&&<p className="soccerAvailability" role="status">{background.message}</p>}{background?.error&&<p className="soccerAnalysisWarning" role="alert">{background.error}；可按「載入已保存分析」重試。</p>}<div className="soccerAnalysisSummary" role="status" aria-live="polite"><strong>目前候選 {counts.candidates} 場</strong><span>本頁範圍 {counts.total} 場</span><span>待分析／重核 {counts.waiting}</span><span>處理中 {counts.processing}</span><span>比分研究完成 {counts.completed}</span><span>資料不足 {counts.insufficient}</span><span>失敗 {counts.failed}</span><span>研究中 {counts.research}</span></div><SoccerWorkspace games={games} states={workspaceStates} run={run} league={league} date={date} analysisReady={!batch&&background?.status!=='running'} onHighScoreStatusChange={onHighScoreStatusChange} externalBusy={externalBusy}>{children}</SoccerWorkspace></Context.Provider>;
 }
 export default function SoccerAnalysisPanel({game}){
   const [history,setHistory]=useState({versions:[],runs:[],loading:false,error:'',loaded:false});
@@ -321,7 +326,7 @@ export default function SoccerAnalysisPanel({game}){
     <div className="soccerAnalysisStatuses" data-analysis-status={presentation.analysisStatus}><span>分析：<strong>{presentation.analysisLabel}</strong></span><span>篩選：<strong>{presentation.selectionLabel}</strong></span>{qaFlag&&<span>{qaLabels[qaFlag]||'檢核狀態待確認'}</span>}</div>
     {state?.error&&<p className="soccerAnalysisWarning" role="alert">{state.error}{data?'；上次資料僅供歷史查閱，不代表本次完成。':''}</p>}
     {state?.recoveryError&&<p className="soccerAnalysisWarning" role="alert">已保存分析載入失敗：{state.recoveryError}；可按「載入已保存分析」重試。</p>}
-    {data&&<div className={`soccerAnalysisResult${historical?' soccerHistoricalResult':''}`}><p className="soccerAvailability">{historical?'上次資料・僅供歷史查閱':presentation.analysisStatus==='INSUFFICIENT_DATA'?'本次資料不足・尚無研究分布':data.status==='POSTSTART_AUDIT'?'賽後資料核對':'比分研究・不列入正式排名'}｜{clock(data.observedAt)}{stale?'｜資料待更新':''}{data.persisted?'｜版本已保存':'｜本次未保存'}</p>
+    {data&&<div className={`soccerAnalysisResult${historical?' soccerHistoricalResult':''}`}><p className="soccerAvailability">{historical?'上次資料・僅供歷史查閱':presentation.analysisStatus==='INSUFFICIENT_DATA'?'本次資料不足・尚無研究分布':data.status==='POSTSTART_AUDIT'?'賽後資料核對':data.predictionContext?.mode==='PREDICTION'?'預測分析・依現有資料':'比分研究・不列入正式排名'}｜{clock(data.observedAt)}{stale?'｜資料待更新':''}{data.persisted?'｜版本已保存':'｜本次未保存'}</p>
       {data.analysisStatus==='COMPLETED'&&!presentation.current&&<p className="soccerAnalysisWarning">目前有效狀態待重新核對；此版本僅供歷史查閱。</p>}
       {!data.persisted&&<p className="soccerAnalysisWarning">{data.persistenceError}</p>}
       <SoccerManualSimulation result={data} game={game}/>
