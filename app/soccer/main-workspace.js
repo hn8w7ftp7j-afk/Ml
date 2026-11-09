@@ -291,7 +291,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
       {board && <SoccerSystemReadiness value={board.scoringSystemReadiness} league={location.league.toLowerCase()}/>}
     </section>
     {active && <><SoccerReaderBoards league={location.league} date={location.date} games={games} view={location.view}/><SoccerReaderInventoryPanel league={location.league} date={location.date} throughDate={soccerReaderBoardDates({league:location.league,date:location.date,games,view:location.view}).at(-1)||location.date} onSelectDate={savedDate=>navigate({...location,date:savedDate,view:'schedule'})}/></>}
-    {active && <SoccerOfficialMarketCoveragePanel league={location.league} date={location.date} active={active}/>}
+    {active && <SoccerOfficialMarketCoveragePanel league={location.league.toLowerCase()} date={location.date} active={active}/>}
     {error && <div className="errorBox soccerError" role="alert"><div><strong>{board ? '更新失敗，保留上次資料' : '資料載入失敗'}</strong><p>{error}</p></div><button type="button" className="secondary" disabled={busy} onClick={retry}>重試</button></div>}
     <section aria-label={`${league.name}${VIEW_NAMES[location.view]}`} aria-busy={busy}>
       <div className="soccerBoardHeading"><h2>{location.view === 'upcoming' ? '近期賽程' : location.view === 'standings' ? '目前積分榜' : dateLabel}</h2><span role="status" aria-live="polite">{busy ? board ? '更新中…' : '載入中…' : board ? displayCount : ''}</span></div>
