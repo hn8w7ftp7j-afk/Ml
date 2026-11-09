@@ -41,6 +41,16 @@ try {
   const rows=await query('SELECT last_status,last_reason FROM sports_soccer_calibration_collection_v1 WHERE game_id=$1',['soccer:epl:11']);
   assert.equal(rows[0].last_status,'RETRYABLE');assert.equal(rows[0].last_reason,'CALIBRATION_COLLECTION_ANALYSIS_UNAVAILABLE');
 
+  games=[game(100),game(101,'epl',{startTime:new Date(now+7200000).toISOString()})];
+  await collect({}, {analyze:async()=>{throw Error('both sources remain unavailable');}});
+  await query(`UPDATE sports_soccer_calibration_collection_v1 SET
+    lease_until=clock_timestamp()-interval '1 second',
+    last_attempt_at=clock_timestamp()-CASE WHEN game_id='soccer:epl:101' THEN interval '2 hours' ELSE interval '1 hour' END
+    WHERE game_id=ANY($1::text[])`,[games.map(g=>g.id)]);
+  let retried;
+  await collect({limit:1}, {analyze:async input=>{retried=input.eventId;throw Error('still unavailable');}});
+  assert.equal(retried,'101','after all games were attempted, the oldest retry precedes an earlier kickoff');
+
   games=[game(20)];let release,entered;
   const blocked=new Promise(resolve=>release=resolve),started=new Promise(resolve=>entered=resolve);
   const inFlight=collect({}, {analyze:async input=>{entered();await blocked;return success(input);}});
@@ -72,3 +82,4 @@ try {
     'shipped schema creation uses the actual advisory-lock transaction and Neon transport against PostgreSQL');
   console.log('PASS calibration collection: real PostgreSQL leases, partial schedule failure, source/league/time scope, first capture dedup, starvation-free retry, concurrent claims and late-worker fencing; no formal promotion.');
 } finally { await fixture.close(); }
+

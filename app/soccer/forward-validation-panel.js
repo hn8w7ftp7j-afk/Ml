@@ -166,6 +166,7 @@ function checkedReport(value,league,range={from:'',through:''}){
       ||!date(s.scope?.from)||!date(s.scope?.through)||s.scope.from>s.scope.through
       ||range.from&&(s.scope.from!==range.from||s.scope.through!==range.through)
       ||!validCount(s.processedGames)||!validCount(s.totalGames)||s.processedGames>s.totalGames
+      ||s.resultCheckRows!==undefined&&!validCount(s.resultCheckRows)
       ||typeof s.complete!=='boolean'||!token(s.cursor)||s.nextCursor!==null&&!token(s.nextCursor)
       ||s.complete&&s.nextCursor!==null||!s.complete&&s.nextCursor===null
       ||!Number.isFinite(Date.parse(s.frozenAt))||value.complete===true&&!s.complete)throw Error('前瞻驗證接續資料的範圍或處理狀態不符。');
@@ -228,9 +229,13 @@ export function SoccerForwardValidationPanel({league}){
         const report=checkedReport(body.report,league,range);
         if(report.scan&&report.scan.purpose!==(evaluate?'evaluate':'read'))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
         if(cursor&&(report.scan?.cursor!==cursor||Date.parse(report.scan?.frozenAt)!==Date.parse(previousScan.frozenAt)
-          ||report.scan?.totalGames!==previousScan.totalGames||report.scan?.processedGames<previousScan.processedGames))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
+          ||report.scan?.totalGames!==previousScan.totalGames||report.scan?.processedGames<previousScan.processedGames
+          ||validCount(previousScan.resultCheckRows)&&validCount(report.scan?.resultCheckRows)
+            &&report.scan.resultCheckRows<previousScan.resultCheckRows))throw Error('前瞻驗證接續工作已改變，請重新讀取。');
         continuation.current=report.scan?{scopeKey,scan:report.scan}:null;
-        if(cursor&&report.scan?.nextCursor&&report.scan.processedGames===previousScan.processedGames){
+        const resultChecksAdvanced=evaluate&&validCount(previousScan?.resultCheckRows)&&validCount(report.scan?.resultCheckRows)
+          &&report.scan.resultCheckRows>previousScan.resultCheckRows;
+        if(cursor&&report.scan?.nextCursor&&report.scan.processedGames===previousScan.processedGames&&!resultChecksAdvanced){
           auto.current.enabled=false;setAutomatic({enabled:false,waitingUntil:null});
           setState(old=>({scopeKey,status:'failed',report,summary:evaluate?body.summary||null:null,collection:collection??(cursor?old.collection:null),error:'本批尚未取得新進度，已暫停自動處理；已完成結果保留，可稍後從同一進度重試。'}));return;
         }
@@ -279,3 +284,4 @@ export function SoccerForwardValidationPanel({league}){
     </>}
   </section>;
 }
+
