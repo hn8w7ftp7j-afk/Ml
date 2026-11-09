@@ -1,6 +1,18 @@
 const SOURCE_STATUSES = ['AVAILABLE', 'NOT_CAPTURED', 'INVALID', 'LOCKED', 'PERIOD_UNKNOWN'];
 const INTERPRETATION_VERSION = 'SOCCER-HISTORY-PERIOD-INTERPRETATION-v1';
 
+// The immutable status describes what the Reader stored. This display-only
+// label distinguishes explicit source locks from price-free, unconfirmed rows.
+export function nbaHistoricalAvailabilityLabel(league, capture) {
+  if (league !== 'NBA' || !capture) return null;
+  const locked = capture.status === undefined ? capture.marketStatus === 'locked' : capture.status === 'LOCKED';
+  const missing = locked || capture.status === 'NOT_CAPTURED';
+  if (!missing) return null;
+  if (locked && capture.availabilityEvidence === 'EXPLICIT_SOURCE_LOCK') return '來源明示鎖盤';
+  if (capture.availabilityEvidence === 'NO_PARSED_MARKETS') return '未讀到價格';
+  return locked ? '來源標記鎖盤，實際狀態未確認' : null;
+}
+
 // Read-time interpretation is separate from the immutable capture state. A
 // malformed interpretation must never make an unverified market look saved.
 export function validateCoverageDisplay(games) {

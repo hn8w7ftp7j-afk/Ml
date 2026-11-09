@@ -61,6 +61,15 @@ function game(overrides = {}) {
     marketStates: { fullRunline: 'AVAILABLE', fullTotal: 'AVAILABLE', firstHalfRunline: 'AVAILABLE', firstHalfTotal: 'AVAILABLE' },
     accountData: 'must-not-leak-account', ...overrides };
 }
+const statusCounts = value => Object.fromEntries(['openGameCount', 'lockedGameCount', 'unconfirmedGameCount'].map(key => [key, value[key]]));
+function mixedAvailabilityGames() {
+  const keys = Object.keys(game().marketStates);
+  const zero = (boardTime, availabilityEvidence) => game({ boardTime, marketStatus: 'locked',
+    ...Object.fromEntries(keys.map(key => [key, null])),
+    marketStates: Object.fromEntries(keys.map(key => [key, availabilityEvidence === 'NO_PARSED_MARKETS' ? 'BLOCKED' : 'UNAVAILABLE'])),
+    ...(availabilityEvidence === undefined ? {} : { availabilityEvidence }) });
+  return [game(), zero('07:05', 'EXPLICIT_SOURCE_LOCK'), zero('07:10', 'NO_PARSED_MARKETS'), zero('07:15')];
+}
 function payload(overrides = {}) {
   const value = { version: 'TAI888-READER-DOM-v2.2.0', readerVersion: '2.1.28', league: 'NBA', deviceId,
     sourceHost: 'www1.tai888.in', pageUrl: 'https://www1.tai888.in/newapp/#/BB', boardDate,
@@ -117,6 +126,59 @@ try {
     const missingHash = payload(); delete missingHash.payloadHash; rejects(missingHash, 'NBA_READER_HASH_INVALID');
     const unknownState = payload({ games: [game({ marketStates: { ...game().marketStates, first5Total: 'AVAILABLE' } })] });
     rejects(unknownState, 'NBA_READER_MARKET_INVALID');
+  });
+  await test('NBA zero-price availability evidence is bounded, hashed and isolated from priced siblings', () => {
+    const keys = Object.keys(game().marketStates);
+    const zero = game({ marketStatus: 'locked', ...Object.fromEntries(keys.map(key => [key, null])),
+      marketStates: Object.fromEntries(keys.map(key => [key, 'UNAVAILABLE'])) });
+    const legacy = normalize(payload({ games: [zero] })).games[0];
+    assert.equal(legacy.unavailableReason, 'reader-lock-unverified');
+    assert.equal(Object.hasOwn(legacy, 'availabilityEvidence'), false, 'legacy captures keep their original evidence shape');
+    const explicit = { ...zero, availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' };
+    const confirmed = normalize(payload({ games: [explicit] })).games[0];
+    assert.equal(confirmed.availabilityEvidence, 'EXPLICIT_SOURCE_LOCK');
+    assert.equal(Object.hasOwn(confirmed, 'unavailableReason'), false);
+    const unparsed = { ...zero, availabilityEvidence: 'NO_PARSED_MARKETS',
+      marketStates: Object.fromEntries(keys.map(key => [key, 'BLOCKED'])) };
+    const snapshot = normalize(payload({ games: [unparsed, game({ boardTime: '07:05' })], expectedGameCount: 2, detectedGameCount: 2 }));
+    assert.equal(snapshot.games[0].unavailableReason, 'reader-markets-unparsed');
+    assert.deepEqual(snapshot.games[0].marketStates, unparsed.marketStates);
+    assert.equal(snapshot.games[0].marketCount, 0);
+    assert.equal(snapshot.games[1].marketCount, 4);
+    assert.equal(snapshot.games[1].fullTotal.line, '220+50');
+    assert.equal(snapshot.marketCount, 4); assert.equal(snapshot.executable, false);
+    for (const availabilityEvidence of [null, '', 'LOCKED', 'explicit_source_lock']) {
+      rejects(payload({ games: [{ ...zero, availabilityEvidence }] }), 'NBA_READER_MARKET_INVALID');
+    }
+    for (const availabilityEvidence of ['EXPLICIT_SOURCE_LOCK', 'NO_PARSED_MARKETS']) {
+      rejects(payload({ games: [game({ availabilityEvidence })] }), 'NBA_READER_MARKET_INVALID');
+      rejects(payload({ games: [{ ...zero, availabilityEvidence, marketStatus: 'open' }] }), 'NBA_READER_MARKET_INVALID');
+      rejects(payload({ games: [game({ availabilityEvidence, marketStatus: 'locked' })] }), 'NBA_READER_MARKET_INVALID');
+    }
+    rejects(payload({ games: [{ ...unparsed, availabilityEvidence: 'EXPLICIT_SOURCE_LOCK' }] }), 'NBA_READER_MARKET_BLOCKED');
+    rejects(payload({ games: [{ ...zero, marketStates: unparsed.marketStates }] }), 'NBA_READER_MARKET_BLOCKED');
+    const tampered = payload({ games: [explicit] });
+    tampered.games[0].availabilityEvidence = 'NO_PARSED_MARKETS';
+    rejects(tampered, 'NBA_READER_HASH_INVALID');
+    const removed = payload({ games: [explicit] }); delete removed.games[0].availabilityEvidence;
+    rejects(removed, 'NBA_READER_HASH_INVALID');
+  });
+  await test('NBA availability counts distinguish open, confirmed source lock and unconfirmed zero rows', () => {
+    const snapshot = normalize(payload({ games: mixedAvailabilityGames(), expectedGameCount: 4, detectedGameCount: 4 }));
+    const expected = { openGameCount: 1, lockedGameCount: 1, unconfirmedGameCount: 2 };
+    assert.deepEqual(statusCounts(snapshot), expected);
+    assert.deepEqual(statusCounts(nbaReaderPublicView(snapshot, { now })), expected);
+    assert.equal(snapshot.gameCount, 4); assert.equal(snapshot.marketCount, 4); assert.equal(snapshot.executable, false);
+    const old = structuredClone(snapshot);
+    for (const key of Object.keys(expected)) delete old[key];
+    const before = structuredClone(old);
+    assert.deepEqual(statusCounts(nbaReaderPublicView(old, { now })), expected, 'old snapshots gain derived counts without a migration');
+    assert.deepEqual(old, before, 'read-time counts do not rewrite old snapshots or checksums');
+    Object.assign(old, { openGameCount: 99, lockedGameCount: 99, unconfirmedGameCount: 99 });
+    assert.deepEqual(statusCounts(nbaReaderPublicView(old, { now })), expected, 'stored count metadata cannot override retained quote evidence');
+    assert.deepEqual(statusCounts(nbaReaderPublicView(null)), { openGameCount: 0, lockedGameCount: 0, unconfirmedGameCount: 0 });
+    const malformed = { ...snapshot, games: [game({ fullRunline: null, fullTotal: {}, firstHalfRunline: null, firstHalfTotal: null })] };
+    assert.equal(nbaReaderPublicView(malformed, { now }).openGameCount, 0, 'an invalid object is not an available market');
   });
   await test('source, version, device, counts, identity duplicates and time are validated', () => {
     rejects(payload({ sourceHost: 'tai888.in.evil.test', pageUrl: 'https://tai888.in.evil.test/' }), 'NBA_READER_SOURCE_INVALID');
@@ -194,6 +256,25 @@ try {
     assert.equal(response.status, 200, view.error); assert.equal(view.league, 'NBA'); assert.equal(view.status, 'fresh');
     assert.equal(view.games[0].firstHalfTotal.line, '110-20'); assert.equal(view.games[0].identityStatus, 'team_mapped_game_unverified');
     assert.equal(Object.hasOwn(view, 'deviceId'), false); assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  });
+  await test('mixed availability POST, duplicate of old snapshot and GET report the same honest counts', async () => {
+    const body = payload({ games: mixedAvailabilityGames(), expectedGameCount: 4, detectedGameCount: 4,
+      observedAt: new Date(now + 1000).toISOString(), pageActivityAt: new Date(now + 500).toISOString() });
+    const posted = await POST(request(body)), receipt = await posted.json();
+    const expected = { openGameCount: 1, lockedGameCount: 1, unconfirmedGameCount: 2 };
+    assert.equal(posted.status, 200, receipt.error); assert.deepEqual(statusCounts(receipt), expected);
+    assert.equal(receipt.rawGameCount, 4); assert.equal(receipt.matchedGameCount, 0); assert.equal(receipt.executable, false);
+    const legacyBody = payload({ ...body, observedAt: new Date(now + 2000).toISOString(), pageActivityAt: new Date(now + 1500).toISOString() });
+    const oldSnapshot = normalize(legacyBody);
+    for (const key of Object.keys(expected)) delete oldSnapshot[key];
+    await storeNbaReaderSnapshot(oldSnapshot);
+    const duplicate = await POST(request(legacyBody)), duplicateReceipt = await duplicate.json();
+    assert.equal(duplicate.status, 200, duplicateReceipt.error); assert.equal(duplicateReceipt.duplicateCapture, true);
+    assert.deepEqual(statusCounts(duplicateReceipt), expected);
+    assert.equal(duplicateReceipt.rawGameCount, 4); assert.equal(duplicateReceipt.matchedGameCount, 0); assert.equal(duplicateReceipt.executable, false);
+    const response = await GET(request(null, {}, `date=${boardDate}`)), view = await response.json();
+    assert.equal(response.status, 200, view.error); assert.deepEqual(statusCounts(view), expected);
+    assert.deepEqual(await loadNbaReaderSnapshot(boardDate), oldSnapshot, 'duplicate and public enrichment leave the old stored snapshot intact');
   });
   console.log(`NBA Reader intake/store/API: ${checks} checks passed (synthetic history transport, not live DB/Production).`);
 } finally {

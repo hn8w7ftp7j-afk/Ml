@@ -45,10 +45,13 @@ export async function POST(request) {
     const duplicateCapture = previous?.clientPayloadHash === snapshot.clientPayloadHash
       && previous?.observedAt === snapshot.observedAt && previous?.pageActivityAt === snapshot.pageActivityAt;
     if (!duplicateCapture) assertNbaReaderMonotonic(previous, snapshot);
+    const view = nbaReaderPublicView(duplicateCapture ? previous : snapshot);
+    const counts = { openGameCount: view.openGameCount, lockedGameCount: view.lockedGameCount, unconfirmedGameCount: view.unconfirmedGameCount };
     const previousHistoryTracking = previous ? await requireReaderHistorySaved(previous) : null;
     if (duplicateCapture) return respond(request, {
       ok: true, captured: true, duplicateCapture: true, allRequiredWritesSucceeded: true,
       boardDate: previous.boardDate, gameCount: previous.gameCount,
+      ...counts,
       rawGameCount: previous.gameCount, matchedGameCount: 0, marketCount: previous.marketCount,
       directionCount: previous.marketCount * 2, observedAt: previous.observedAt,
       pageActivityAt: previous.pageActivityAt, identityStatus: 'team_mapped_game_unverified',
@@ -59,6 +62,7 @@ export async function POST(request) {
     console.info('[NBA_READER_CAPTURE_ACCEPTED]', { code: 'NBA_READER_CAPTURE_ACCEPTED', status: 200, boardDate: snapshot.boardDate,
       gameCount: snapshot.gameCount, marketCount: snapshot.marketCount, readerVersion: snapshot.readerVersion });
     return respond(request, { ok: true, captured: true, boardDate: snapshot.boardDate, gameCount: snapshot.gameCount,
+      ...counts,
       rawGameCount: snapshot.gameCount, matchedGameCount: 0, marketCount: snapshot.marketCount, directionCount: snapshot.marketCount * 2,
       identityStatus: 'team_mapped_game_unverified', ...storage, historyTracking, allRequiredWritesSucceeded: true,
       message: `NBA 已讀取 ${snapshot.gameCount} 場、${snapshot.marketCount} 個市場` });

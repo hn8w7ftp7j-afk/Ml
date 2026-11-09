@@ -25,7 +25,7 @@ export function buildNbaAuthorityDiagnostics(candidates) {
           ...(kind === 'HANDICAP' ? { lineSide: market.lineSide, awayWater: market.awayWater, homeWater: market.homeWater }
             : { overWater: market.overWater, underWater: market.underWater }) });
       }
-      if (game?.marketStatus === 'locked' || definitions.every(([property]) => game?.marketStates?.[property] === 'locked')) {
+      if (game?.marketStatus === 'locked' && game.availabilityEvidence === 'EXPLICIT_SOURCE_LOCK') {
         periodsCovered.push(period); periodStates[period] = 'locked';
       }
     }

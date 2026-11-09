@@ -82,6 +82,28 @@ for (const league of seven.slice(0, 4)) {
   await receipt(marketArchivePayload(capture));
 }
 
+for (const availabilityEvidence of ['EXPLICIT_SOURCE_LOCK', 'NO_PARSED_MARKETS']) {
+  const capture = payload('NBA'), row = capture.games[0];
+  const keys = ['fullRunline', 'fullTotal', 'firstHalfRunline', 'firstHalfTotal'];
+  for (const key of keys) row[key] = null;
+  row.marketStatus = 'locked'; row.availabilityEvidence = availabilityEvidence;
+  row.marketStates = Object.fromEntries(keys.map(key => [key, availabilityEvidence === 'NO_PARSED_MARKETS' ? 'BLOCKED' : 'UNAVAILABLE']));
+  capture.payloadHash = sha(parser.canonicalReaderPayload(capture));
+  const sanitized = marketArchivePayload(capture);
+  assert.equal(sanitized.games[0].availabilityEvidence, availabilityEvidence);
+  assert.equal(parser.canonicalReaderPayload(sanitized), parser.canonicalReaderPayload(capture));
+  const retained = memory();
+  let evidenceQueue = createMarketOutbox({ storage: retained.storage, sha, now: () => clock, upload: async () => { throw Error('offline'); } });
+  assert.equal((await evidenceQueue.enqueue(capture, retained.state.deviceId)).durable, true);
+  assert.equal(pending(retained.state)[0].payload.games[0].availabilityEvidence, availabilityEvidence);
+  evidenceQueue = createMarketOutbox({ storage: retained.storage, sha, now: () => clock, upload: receipt });
+  await evidenceQueue.flush();
+  assert.equal(pending(retained.state).length, 0, 'a restart sends the original availability evidence through real server validation');
+  const changed = structuredClone(sanitized);
+  changed.games[0].availabilityEvidence = availabilityEvidence === 'EXPLICIT_SOURCE_LOCK' ? 'NO_PARSED_MARKETS' : 'EXPLICIT_SOURCE_LOCK';
+  await assert.rejects(() => receipt(changed), error => error.code === 'READER_ARCHIVE_HASH_MISMATCH');
+}
+
 const mem = memory(); let offline = true, badReceipt = false, attempts = 0;
 const upload = async p => { attempts++; if (offline) throw new TypeError('offline');
   return { ...await receipt(p), ...(badReceipt ? { observedAt: new Date(clock + 1000).toISOString() } : {}) }; };
