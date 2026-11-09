@@ -1,0 +1,46 @@
+{
+  "classification": "BACKFILLED_DEVELOPMENT_DIAGNOSTIC",
+  "baseCommit": "9456b84a18ee850456dd5b3b83d7b73b887126d8",
+  "baseTree": "2e36cd5ff85916ccd3eadbf594c4e37363d0b504",
+  "scope": "SUPPLEMENTAL_PROVENANCE_NOT_A_NEW_PREREGISTRATION",
+  "sourceReferences": {
+    "lib/soccer/expected-minutes-model.js": "a4abd30f3e3edb0a0704fe430f0b859a9b12be90cc7adf422cd22ed815f02b52",
+    "lib/soccer/personnel-minutes-v2.js": "1a11fa2470d1bfc3dd43b3790f700dddbc4b2e2bd4834367bdfdbf62aeea5675",
+    "lib/soccer/personnel-history.js": "cd50f55f5e160d12f5505947932c03d9aa9d2b8692bb75347bb5ca8ad0f7beeb",
+    "lib/soccer/personnel-audit.js": "f2073f96e3bf05e53275bb529c28e67765628eefd97449eb6dea8f4f5b448d52",
+    "lib/soccer/contracts.js": "2bf6e5383ddb00c4a01ea92fcf4802cba80e739da37a93ed41e265b71b8df9c2",
+    "lib/soccer/expected-minutes-frozen.js": "498914440e7dd46805e62c5b8ea37636f9c36cff0e0b07f806721978facdb3d3",
+    "research/soccer/epl-history.json.gz": "a0056a6ce6942cfc354dc87354f2350c56278a11658f797e8fd09e603bc5030f",
+    "research/soccer/personnel-epl-sources.json.gz": "2a0e7af17c8a7e87d199540e5025bfd55e271a6610bad810bd43b924965068ac",
+    "research/soccer/ucl-history.json.gz": "f033a25c8c03bd35f78a410b33d059cc44c675c1a5c49e4ead4744dee45ec25a",
+    "research/soccer/personnel-ucl-sources.json.gz": "fb2c7ca92363c9eb6b27c9776dfb516707561cc9cf7e0520d7ef58c085c9d463"
+  },
+  "derivedObservationHashes": {
+    "epl": "bb5646f6ffed0c79b0f1b238598293393c6deace9b82e7e6bd15b15fb76e9576",
+    "ucl": "b4d0ef1ce269c158a8d179d5e1b946912598620db6e00ac54bee52879353b707"
+  },
+  "frozenArtifact": {
+    "contentHash": "64603af6fba931be78aee05072937061d5b643dcebbd0b0956893ad924bdcc50",
+    "createdAt": "2026-11-06T09:55:36.329Z",
+    "sourceFile": "lib/soccer/expected-minutes-frozen.js",
+    "fileSha256": "498914440e7dd46805e62c5b8ea37636f9c36cff0e0b07f806721978facdb3d3",
+    "fixedShrinkage": {
+      "epl": 20,
+      "ucl": 100
+    }
+  },
+  "runnerFileSha256": "eb7e04d8c2f42a9f73bae846b1ef8a67733403a80e45150c6bdab86257f418c9",
+  "protocolCanonicalSha256": "cb1d2a1787df356e475b08dd06bd8dcfcd6b2fda2a00203232cc07585d183cf3",
+  "reportFileSha256": "aa17fdad1ecc496622e7cbb38a58930be83745c309ad40538123fe311ff429df",
+  "reportCanonicalSha256": "8abcdaa2facaf3e593d6e1925a94432b3db872109d71b810981dbe873631fd41",
+  "priorTemporaryDiagnosticCanonicalSha256": "71ea90dd27c935f3f3fa9623ea8223c1e33c10301c7446acd69f30ceab4c33f9",
+  "priorTemporaryDiagnosticResultsExactlyReproduced": true,
+  "testedNodeVersion": "v24.22.1",
+  "runtimeDependencies": "NODE_BUILTINS_AND_PINNED_REPOSITORY_MODULES_ONLY",
+  "accepted": false,
+  "modelEffect": false,
+  "untouchedOOS": false,
+  "holdout2025Used": false,
+  "prospectivelyPreregistered": false,
+  "formalEligible": false
+}

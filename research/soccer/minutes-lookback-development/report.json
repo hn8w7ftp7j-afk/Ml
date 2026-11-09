@@ -1,0 +1,461 @@
+{
+  "classification": "BACKFILLED_DEVELOPMENT_DIAGNOSTIC",
+  "protocol": {
+    "version": "SOCCER-MINUTES-LOOKBACK-DEVELOPMENT-DIAGNOSTIC-v1",
+    "classification": "BACKFILLED_DEVELOPMENT_DIAGNOSTIC",
+    "initialDiagnosticRecordedAt": "2026-11-09T09:50:59.572Z",
+    "baseCommit": "9456b84a18ee850456dd5b3b83d7b73b887126d8",
+    "baseTree": "2e36cd5ff85916ccd3eadbf594c4e37363d0b504",
+    "leagues": [
+      "epl",
+      "ucl"
+    ],
+    "windows": [
+      14,
+      28,
+      42
+    ],
+    "trainingBefore": "2024-01-01T00:00:00.000Z",
+    "developmentBefore": "2025-01-01T00:00:00.000Z",
+    "labelLagHours": 24,
+    "maximumPriorMatches": 3,
+    "fixedShrinkage": {
+      "epl": 20,
+      "ucl": 100
+    },
+    "shrinkageOrigin": "EXISTING_ARTIFACT_2024_DEVELOPMENT_SELECTION_NO_NEW_SEARCH",
+    "weighting": "EQUAL_REAL_GAME_THEN_EQUAL_PRIOR_CANDIDATE_PLAYER",
+    "pairedCohort": "INTERSECTION_OF_PLAYER_GAME_TEAM_KEYS_AFTER_FULL_CANDIDATE_TEAM_RECONCILIATION",
+    "selection": "NO_WINNER_SELECTION",
+    "scope": "RETAINED_ESPN_SAME_LEAGUE_ONLY_RETROSPECTIVE_DEVELOPMENT",
+    "holdout2025Used": false,
+    "untouchedOOS": false,
+    "pointInTimeAvailabilityVerified": false,
+    "prospectivelyPreregistered": false,
+    "modelEffect": false,
+    "accepted": false,
+    "formalEligible": false,
+    "sourceFiles": {
+      "lib/soccer/expected-minutes-model.js": "a4abd30f3e3edb0a0704fe430f0b859a9b12be90cc7adf422cd22ed815f02b52",
+      "lib/soccer/personnel-minutes-v2.js": "1a11fa2470d1bfc3dd43b3790f700dddbc4b2e2bd4834367bdfdbf62aeea5675",
+      "lib/soccer/personnel-history.js": "cd50f55f5e160d12f5505947932c03d9aa9d2b8692bb75347bb5ca8ad0f7beeb",
+      "lib/soccer/personnel-audit.js": "f2073f96e3bf05e53275bb529c28e67765628eefd97449eb6dea8f4f5b448d52",
+      "lib/soccer/contracts.js": "2bf6e5383ddb00c4a01ea92fcf4802cba80e739da37a93ed41e265b71b8df9c2",
+      "lib/soccer/expected-minutes-frozen.js": "498914440e7dd46805e62c5b8ea37636f9c36cff0e0b07f806721978facdb3d3",
+      "research/soccer/epl-history.json.gz": "a0056a6ce6942cfc354dc87354f2350c56278a11658f797e8fd09e603bc5030f",
+      "research/soccer/personnel-epl-sources.json.gz": "2a0e7af17c8a7e87d199540e5025bfd55e271a6610bad810bd43b924965068ac",
+      "research/soccer/ucl-history.json.gz": "f033a25c8c03bd35f78a410b33d059cc44c675c1a5c49e4ead4744dee45ec25a",
+      "research/soccer/personnel-ucl-sources.json.gz": "fb2c7ca92363c9eb6b27c9776dfb516707561cc9cf7e0520d7ef58c085c9d463"
+    },
+    "expectedDerivedObservationHashes": {
+      "epl": "bb5646f6ffed0c79b0f1b238598293393c6deace9b82e7e6bd15b15fb76e9576",
+      "ucl": "b4d0ef1ce269c158a8d179d5e1b946912598620db6e00ac54bee52879353b707"
+    },
+    "limitations": [
+      "Postmatch backfilled sources do not establish historical pregame availability.",
+      "2025-and-later records are excluded before V2 normalization; gzip files and frozen artifact are loaded but 2025 labels, metrics and test selection are not used.",
+      "2024 already informed existing shrinkage and this exploratory lookback comparison; it is not untouched OOS.",
+      "Only the retained usable corpus is counted, not a complete official season.",
+      "Development features may use earlier development observations after the existing assumed 24-hour availability lag.",
+      "Temporary models are refit for each window; the production model, defaults, forecasts and registry remain unchanged.",
+      "Own-cohort metrics have changing denominators; paired metrics cover only shared candidate players, not omitted newcomers.",
+      "A selected new window would require separate approval, preregistration and new prospective OOS validation."
+    ]
+  },
+  "protocolHash": "cb1d2a1787df356e475b08dd06bd8dcfcd6b2fda2a00203232cc07585d183cf3",
+  "originalImplementationHash": "a4abd30f3e3edb0a0704fe430f0b859a9b12be90cc7adf422cd22ed815f02b52",
+  "temporaryTransformedSourceSemanticHash": "f747cfd4efd1c10ea1d20746cfb7e1974204da4a5ec938d456e902ea3bd710ae",
+  "sourceHashes": {
+    "research/soccer/epl-history.json.gz": "a0056a6ce6942cfc354dc87354f2350c56278a11658f797e8fd09e603bc5030f",
+    "research/soccer/personnel-epl-sources.json.gz": "2a0e7af17c8a7e87d199540e5025bfd55e271a6610bad810bd43b924965068ac",
+    "research/soccer/ucl-history.json.gz": "f033a25c8c03bd35f78a410b33d059cc44c675c1a5c49e4ead4744dee45ec25a",
+    "research/soccer/personnel-ucl-sources.json.gz": "fb2c7ca92363c9eb6b27c9776dfb516707561cc9cf7e0520d7ef58c085c9d463"
+  },
+  "derivedHashes": {
+    "epl": "bb5646f6ffed0c79b0f1b238598293393c6deace9b82e7e6bd15b15fb76e9576",
+    "ucl": "b4d0ef1ce269c158a8d179d5e1b946912598620db6e00ac54bee52879353b707"
+  },
+  "results": {
+    "epl": {
+      "retainedPre2025Observations": 1553,
+      "excluded2025BeforeNormalization": 637,
+      "shrinkage": 20,
+      "commonPairedPlayerTargets": 13954,
+      "candidates": [
+        {
+          "days": 14,
+          "trainingGames": 1086,
+          "trainingPlayerTargets": 44274,
+          "developmentRowsHash": "89347464cbbd837a342d2bbf42550f3c7bc65a8e2e2330a1cdf5e4e05d401b9f",
+          "modelHash": "cc368579f4c775dbf1bd89485b56af9c907536f66442beca358f6a3e864262ae",
+          "coverage": {
+            "populationGames": 372,
+            "populationTeamTargets": 744,
+            "evaluatedGames": 338,
+            "bothSidesGames": 324,
+            "availableTeamTargets": 662,
+            "candidatePlayerTargets": 13954,
+            "targetAppearingPlayers": 11255,
+            "unseenAppearingPlayers": 1676,
+            "unseenRegulationMinutes": 99880.55000000003
+          },
+          "allOwnCohort": {
+            "model": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 23.764195929192518,
+              "minuteRMSE": 29.94780848440406,
+              "logLoss": 0.7369851304869417,
+              "logLossState": "FINITE",
+              "brier": 0.412846474643171
+            },
+            "baseline": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 18.033146869234525,
+              "minuteRMSE": 30.485529999774556,
+              "logLoss": 0.7863713436006361,
+              "logLossState": "FINITE",
+              "brier": 0.43331607560620217
+            }
+          },
+          "commonPairedCohort": {
+            "model": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 23.764195929192518,
+              "minuteRMSE": 29.94780848440406,
+              "logLoss": 0.7369851304869417,
+              "logLossState": "FINITE",
+              "brier": 0.412846474643171
+            },
+            "baseline": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 18.033146869234525,
+              "minuteRMSE": 30.485529999774556,
+              "logLoss": 0.7863713436006361,
+              "logLossState": "FINITE",
+              "brier": 0.43331607560620217
+            }
+          },
+          "rescuedTeamTargetsOver14": 0
+        },
+        {
+          "days": 28,
+          "trainingGames": 1130,
+          "trainingPlayerTargets": 50995,
+          "developmentRowsHash": "d90123d8ed46602e25ff33d2b7cf5b78fc0e240a359937143b79d9d64bf228b2",
+          "modelHash": "fc0225796788aa387dc95e03106561f94a606c2440040737fc6c27ff870ce4f3",
+          "coverage": {
+            "populationGames": 372,
+            "populationTeamTargets": 744,
+            "evaluatedGames": 362,
+            "bothSidesGames": 362,
+            "availableTeamTargets": 724,
+            "candidatePlayerTargets": 16349,
+            "targetAppearingPlayers": 11255,
+            "unseenAppearingPlayers": 668,
+            "unseenRegulationMinutes": 34021.19999999999
+          },
+          "allOwnCohort": {
+            "model": {
+              "games": 362,
+              "playerTargets": 16349,
+              "minuteMAE": 22.756659004535294,
+              "minuteRMSE": 29.337695276007477,
+              "logLoss": 0.7094209001739323,
+              "logLossState": "FINITE",
+              "brier": 0.39609510452984736
+            },
+            "baseline": {
+              "games": 362,
+              "playerTargets": 16349,
+              "minuteMAE": 18.716665530914533,
+              "minuteRMSE": 30.10311345561414,
+              "logLoss": 0.7670317259794402,
+              "logLossState": "FINITE",
+              "brier": 0.4236965397417334
+            }
+          },
+          "commonPairedCohort": {
+            "model": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 23.397847370241113,
+              "minuteRMSE": 29.618923725974057,
+              "logLoss": 0.7251408650125305,
+              "logLossState": "FINITE",
+              "brier": 0.4053755909322089
+            },
+            "baseline": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 19.010941012499032,
+              "minuteRMSE": 30.280015979410592,
+              "logLoss": 0.7784335625082209,
+              "logLossState": "FINITE",
+              "brier": 0.42982544280364765
+            }
+          },
+          "rescuedTeamTargetsOver14": 62
+        },
+        {
+          "days": 42,
+          "trainingGames": 1130,
+          "trainingPlayerTargets": 51667,
+          "developmentRowsHash": "5d7d6a18769b64972bbe166439d5dae3bd558fd3a912875a22fb84521db26b42",
+          "modelHash": "3237ffadae4522e3a60a8063408cbd27e7e5bf18e989fc8b80c77ec64a5132fc",
+          "coverage": {
+            "populationGames": 372,
+            "populationTeamTargets": 744,
+            "evaluatedGames": 362,
+            "bothSidesGames": 362,
+            "availableTeamTargets": 724,
+            "candidatePlayerTargets": 16667,
+            "targetAppearingPlayers": 11255,
+            "unseenAppearingPlayers": 608,
+            "unseenRegulationMinutes": 31200.11666666665
+          },
+          "allOwnCohort": {
+            "model": {
+              "games": 362,
+              "playerTargets": 16667,
+              "minuteMAE": 22.58187868784206,
+              "minuteRMSE": 29.183106725968077,
+              "logLoss": 0.7061362512171112,
+              "logLossState": "FINITE",
+              "brier": 0.3939439050086812
+            },
+            "baseline": {
+              "games": 362,
+              "playerTargets": 16667,
+              "minuteMAE": 18.916391369333034,
+              "minuteRMSE": 30.05438459090479,
+              "logLoss": 0.7662051815961671,
+              "logLossState": "FINITE",
+              "brier": 0.42342069268063337
+            }
+          },
+          "commonPairedCohort": {
+            "model": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 23.379232586771888,
+              "minuteRMSE": 29.590799848517168,
+              "logLoss": 0.7244019324680595,
+              "logLossState": "FINITE",
+              "brier": 0.4048838839547314
+            },
+            "baseline": {
+              "games": 338,
+              "playerTargets": 13954,
+              "minuteMAE": 19.229428020470447,
+              "minuteRMSE": 30.351937867230518,
+              "logLoss": 0.7780633525022073,
+              "logLossState": "FINITE",
+              "brier": 0.43016955904364035
+            }
+          },
+          "rescuedTeamTargetsOver14": 62
+        }
+      ]
+    },
+    "ucl": {
+      "retainedPre2025Observations": 506,
+      "excluded2025BeforeNormalization": 299,
+      "shrinkage": 100,
+      "commonPairedPlayerTargets": 1451,
+      "candidates": [
+        {
+          "days": 14,
+          "trainingGames": 130,
+          "trainingPlayerTargets": 5433,
+          "developmentRowsHash": "a39a0b8398e0c812b5eb8895669a4faf67851bf60bb31816ccfe493c69cd5337",
+          "modelHash": "c763c2889a0079f2005c1d61c4d9d9cd33518a03d14a16581c7a0da50d93ede8",
+          "coverage": {
+            "populationGames": 130,
+            "populationTeamTargets": 260,
+            "evaluatedGames": 39,
+            "bothSidesGames": 28,
+            "availableTeamTargets": 67,
+            "candidatePlayerTargets": 1451,
+            "targetAppearingPlayers": 3977,
+            "unseenAppearingPlayers": 3010,
+            "unseenRegulationMinutes": 193006.05
+          },
+          "allOwnCohort": {
+            "model": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 27.673484077865485,
+              "minuteRMSE": 33.12735615500455,
+              "logLoss": 0.8309667280651729,
+              "logLossState": "FINITE",
+              "brier": 0.4751254015626101
+            },
+            "baseline": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 21.369257465796096,
+              "minuteRMSE": 35.71292403666938,
+              "logLoss": 0.8793206720893891,
+              "logLossState": "FINITE",
+              "brier": 0.5029266067610418
+            }
+          },
+          "commonPairedCohort": {
+            "model": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 27.673484077865485,
+              "minuteRMSE": 33.12735615500455,
+              "logLoss": 0.8309667280651729,
+              "logLossState": "FINITE",
+              "brier": 0.4751254015626101
+            },
+            "baseline": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 21.369257465796096,
+              "minuteRMSE": 35.71292403666938,
+              "logLoss": 0.8793206720893891,
+              "logLossState": "FINITE",
+              "brier": 0.5029266067610418
+            }
+          },
+          "rescuedTeamTargetsOver14": 0
+        },
+        {
+          "days": 28,
+          "trainingGames": 299,
+          "trainingPlayerTargets": 13023,
+          "developmentRowsHash": "b7a9490ee8d4dac896b37c92cdfc7db4d4d5ce737af11db923aa02bf919a5643",
+          "modelHash": "590d2d3b1cad952fe7d918a5a0668a7d99f5bbd79a3c86a5e3aa4bff1a2e1f29",
+          "coverage": {
+            "populationGames": 130,
+            "populationTeamTargets": 260,
+            "evaluatedGames": 101,
+            "bothSidesGames": 100,
+            "availableTeamTargets": 201,
+            "candidatePlayerTargets": 4383,
+            "targetAppearingPlayers": 3977,
+            "unseenAppearingPlayers": 1112,
+            "unseenRegulationMinutes": 68644.21666666663
+          },
+          "allOwnCohort": {
+            "model": {
+              "games": 101,
+              "playerTargets": 4383,
+              "minuteMAE": 26.956624625833147,
+              "minuteRMSE": 32.58691185398208,
+              "logLoss": 0.830796950781109,
+              "logLossState": "FINITE",
+              "brier": 0.47460877163743875
+            },
+            "baseline": {
+              "games": 101,
+              "playerTargets": 4383,
+              "minuteMAE": 20.728851959835577,
+              "minuteRMSE": 35.14292182504795,
+              "logLoss": 0.8720329755790179,
+              "logLossState": "FINITE",
+              "brier": 0.4970226353655807
+            }
+          },
+          "commonPairedCohort": {
+            "model": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 27.589692988872255,
+              "minuteRMSE": 33.200588905978044,
+              "logLoss": 0.8313325862148346,
+              "logLossState": "FINITE",
+              "brier": 0.47536444814309137
+            },
+            "baseline": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 21.40676057407231,
+              "minuteRMSE": 35.76517751748349,
+              "logLoss": 0.8721369007836748,
+              "logLossState": "FINITE",
+              "brier": 0.4984687942411784
+            }
+          },
+          "rescuedTeamTargetsOver14": 134
+        },
+        {
+          "days": 42,
+          "trainingGames": 299,
+          "trainingPlayerTargets": 13910,
+          "developmentRowsHash": "453a69ec937ffdd5cfb83956443b3023dd3079aba5d5882f4cec9599e94ae7f4",
+          "modelHash": "97702e300a3fce3065b10f412b2941e641e44e20a3a4ae71eda3f31e50d1ff7b",
+          "coverage": {
+            "populationGames": 130,
+            "populationTeamTargets": 260,
+            "evaluatedGames": 104,
+            "bothSidesGames": 102,
+            "availableTeamTargets": 206,
+            "candidatePlayerTargets": 4821,
+            "targetAppearingPlayers": 3977,
+            "unseenAppearingPlayers": 950,
+            "unseenRegulationMinutes": 58541.616666666676
+          },
+          "allOwnCohort": {
+            "model": {
+              "games": 104,
+              "playerTargets": 4821,
+              "minuteMAE": 25.932666821424846,
+              "minuteRMSE": 31.75786876374873,
+              "logLoss": 0.8031698584564174,
+              "logLossState": "FINITE",
+              "brier": 0.4570753990635484
+            },
+            "baseline": {
+              "games": 104,
+              "playerTargets": 4821,
+              "minuteMAE": 20.717881123906945,
+              "minuteRMSE": 33.282795275257385,
+              "logLoss": 0.8484812341818824,
+              "logLossState": "FINITE",
+              "brier": 0.47998423765631704
+            }
+          },
+          "commonPairedCohort": {
+            "model": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 26.573431537678754,
+              "minuteRMSE": 32.47626279154968,
+              "logLoss": 0.8052567572692985,
+              "logLossState": "FINITE",
+              "brier": 0.45890591350171206
+            },
+            "baseline": {
+              "games": 39,
+              "playerTargets": 1451,
+              "minuteMAE": 21.283011580842633,
+              "minuteRMSE": 34.159412244352126,
+              "logLoss": 0.8407041982331979,
+              "logLossState": "FINITE",
+              "brier": 0.47471846810854756
+            }
+          },
+          "rescuedTeamTargetsOver14": 139
+        }
+      ]
+    }
+  },
+  "networkRequests": 0,
+  "modelChanged": false,
+  "registryChanged": false,
+  "modelEffect": false,
+  "accepted": false,
+  "holdout2025Used": false,
+  "untouchedOOS": false,
+  "pointInTimeAvailabilityVerified": false,
+  "prospectivelyPreregistered": false,
+  "formalEligible": false,
+  "interpretation": "POST_HOC_RETROSPECTIVE_TRAIN_DEVELOPMENT_SENSITIVITY_NOT_NEW_UNTOUCHED_OOS"
+}
