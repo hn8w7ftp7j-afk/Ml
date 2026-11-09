@@ -19,7 +19,7 @@ globalThis.__RAW_HISTORY_CRON_SQL=async(queries,transaction=false,options={})=>{
       if(failAttemptsInitialize&&/CREATE TABLE IF NOT EXISTS soccer_raw_seen_history_attempts_v1/.test(query))throw Object.assign(Error('isolated attempts schema failure'),{code:'08006'});
       if(failingCapture&&/WITH seed AS/.test(query)&&params.includes(failingCapture))throw Object.assign(Error('isolated transient read failure'),{code:'08006'});
       result.push((await connection.query(query,params)).rows);
-      afterQuery?.(query,params);
+      await afterQuery?.(query,params,connection);
     }
     return result;
   };
@@ -53,9 +53,9 @@ const assertFlags=value=>{
   for(const key of ['currentBoardUpdated','historicalAvailabilityVerified','executable','coverageComplete','formalEligible','calibrationEligible'])assert.equal(value[key],false,key);
   assert.equal(value.closingCoverage,'NOT_VERIFIED');
 };
-async function insertSource(part,{persistedAt=part.persistedAt,receivedAt=part.receivedAt}={}){
+async function insertSource(part,{persistedAt=part.persistedAt,receivedAt=part.receivedAt,connection=db}={}){
   const b=buildReaderSeenCapture({schema:'READER-SEEN-CAPTURE-v1',evidence:part.evidence,captureId:part.captureId,evidenceHash:part.evidenceHash},{deviceId:'cron-fixture',headerVersion:part.readerVersion});
-  await db.query(`INSERT INTO sports_reader_seen_captures_v1
+  await connection.query(`INSERT INTO sports_reader_seen_captures_v1
     (capture_id,schema_version,league,source_observed_at,page_activity_at,evidence_hash,evidence_json,source_scope_hash,reader_version,
       table_count,row_count,cell_count,locked_row_count,capture_batch_id,part_index,part_count,received_at,persisted_at)
     VALUES($1,'READER-SEEN-CAPTURE-v1',$2,$3::timestamptz,$4::timestamptz,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::timestamptz,$17::timestamptz)`,
@@ -78,6 +78,15 @@ function synthetic(league,sequence,{unsupported=false,day='2026-10-20'}={}){
   const b=buildReaderSeenCapture({schema:'READER-SEEN-CAPTURE-v1',evidence:item},{deviceId:'cron-fixture',headerVersion:item.readerVersion});
   return {...b,league,observedAt:item.observedAt,pageActivityAt:item.pageActivityAt||null,readerVersion:item.readerVersion,
     captureBatchId:null,partIndex:null,partCount:null,receivedAt:'2026-11-05T04:00:00.000Z',persistedAt:'2026-11-05T04:00:00.000Z'};
+}
+function fragmented(size,sequence){
+  const whole=synthetic('EPL',sequence,{day:'2026-10-08'}),batch=whole.captureId;
+  return Array.from({length:size},(_,partIndex)=>{
+    const evidence={...structuredClone(whole.evidence),captureBatchId:batch,partIndex,partCount:size,
+      tables:partIndex===0?structuredClone(whole.evidence.tables):[]};
+    const built=buildReaderSeenCapture({schema:'READER-SEEN-CAPTURE-v1',evidence},{deviceId:'cron-fixture',headerVersion:evidence.readerVersion});
+    return {...whole,...built,captureBatchId:batch,partIndex,partCount:size};
+  });
 }
 function assertReceipt(value,max=64){
   assert.equal(value.schema,'soccer-raw-history-maintenance-v1');assert.equal(value.budgetKind,'SOFT_DEADLINE');
@@ -198,7 +207,7 @@ try{
   for(const [sequence,phase,unsupported]of [[46,'MANIFEST_READ',false],[47,'INDEX_WRITE',false],[48,'INDEX_READBACK',false],[49,'ATTEMPT_WRITE',true]]){
     const source=synthetic('EPL',sequence,{day:'2026-10-17',unsupported});await insertSource(source);
     clock=originalNow();Date.now=()=>clock;let slow=-1;const executionStart=executions.length;
-    afterQuery=query=>{const matches=phase==='MANIFEST_READ'?/SELECT capture_id FROM sports_reader_seen_captures_v1/.test(query)
+    afterQuery=query=>{const matches=phase==='MANIFEST_READ'?/octet_length\(a\.evidence_json\)::int AS evidence_bytes/.test(query)&&!/batch_metadata AS MATERIALIZED/.test(query)
       :phase==='INDEX_WRITE'?/INSERT INTO soccer_raw_seen_history_batches_v1/.test(query)
         :phase==='INDEX_READBACK'?/SELECT b.metadata,b.derived_hash/.test(query):/INSERT INTO soccer_raw_seen_history_attempts_v1/.test(query);
       if(matches&&slow<0){slow=executions.length-1;clock+=1001;}};
@@ -282,6 +291,88 @@ try{
   }
   v=await drain(now+540000,{maxBatches:999,timeBudgetMs:999999});assert.equal(v.maxBatches,64);assert.equal(v.timeBudgetMs,40000);
   for(const options of [{maxBatches:0},{maxBatches:1.5},{timeBudgetMs:0},{timeBudgetMs:NaN}])await assert.rejects(()=>drainRawSeenHistoryIndex(options),e=>e.status===400);
+  // >9 parts used to re-read the same first nine payloads and classify only one
+  // new ID per later run. One metadata-first pass now classifies every exact
+  // retained ID without hydrating evidence or expanding the eight-part parser.
+  const storedGroupReferences=[];
+  for(const size of [11,100]){
+    const oversized=fragmented(size,500+size);
+    for(const part of oversized)await insertSource(part);
+    const cut=statements.length,gamesBefore=await count('soccer_raw_seen_history_games_v1');
+    v=await drain(now+1200000,{maxBatches:64});
+    assert.equal(v.processedBatches,1);assert.equal(v.stableAttemptBatches,1);assert.equal(v.retryableBatches,0);
+    const receipt=v.results[0];assert.equal(receipt.reason,'RAW_SEEN_RECOVERY_BUDGET_EXCEEDED');assert.equal(receipt.sourceParts,size);
+    assert.equal(receipt.sourceWatermarkScope,'CUTOFF_FRAGMENT_SET');assert.equal(receipt.attemptWatermarkScope,'BOUNDED_FRAGMENT_GROUPS');
+    assert.equal(receipt.attemptGroupCount,Math.ceil(size/9));
+    assert.equal(receipt.sourceWatermarkHash,createHash('sha256').update(canonicalReaderSeenCapture(oversized.map(p=>p.captureId).sort())).digest('hex'));
+    const phase=statements.slice(cut);
+    assert.ok(!phase.some(s=>/SELECT a\.\*,/.test(s.query)),'overpart source is rejected from metadata before any evidence hydration');
+    assert.equal(phase.filter(s=>/INSERT INTO soccer_raw_seen_history_attempts_v1/.test(s.query)).length,1,'all groups are appended atomically in one statement');
+    assert.equal(await count('soccer_raw_seen_history_games_v1'),gamesBefore,'budget classification cannot invent a recovered game');
+    const saved=(await db.query('SELECT capture_id,source_capture_ids,source_watermark_hash FROM soccer_raw_seen_history_attempts_v1 WHERE batch_hash=$1 ORDER BY capture_id',[oversized[0].captureBatchId])).rows;
+    assert.deepEqual(saved.map(r=>r.capture_id.trim()),oversized.map(p=>p.captureId).sort(),'every exact current fragment is classified once');
+    const distinctGroups=new Set();let references=0;
+    for(const attempt of saved){
+      const ids=attempt.source_capture_ids;
+      assert.ok(ids.length>0&&ids.length<=9);assert.ok(ids.includes(attempt.capture_id.trim()));
+      assert.equal(new Set(ids).size,ids.length);assert.deepEqual(ids,[...ids].sort());
+      assert.equal(attempt.source_watermark_hash.trim(),createHash('sha256').update(canonicalReaderSeenCapture(ids)).digest('hex'));
+      distinctGroups.add(JSON.stringify(ids));references+=ids.length;
+    }
+    assert.equal(distinctGroups.size,Math.ceil(size/9));assert.ok(references<=9*size,'attempt storage is linear in fragment count');
+    storedGroupReferences.push(references);
+    pg=await progress(now+1200000);assert.equal(pg.counts.retryPendingBatches,0);
+    const next=await drain(now+1260000);assert.equal(next.processedBatches,0,'the next run never rehydrates/reclassifies another slice of the same unchanged batch');
+  }
+  assert.ok(storedGroupReferences[1]<=13*storedGroupReferences[0],'100 parts do not cause quadratic manifest replication relative to 11');
+  // A source part persisted after the fixed cutoff remains unclassified and
+  // eligible. A later run appends only that new attempt; previous proof stays
+  // byte-for-byte unchanged even when the group partition has changed.
+  const delayed=fragmented(11,700),futurePartAt=new Date(now+1500001).toISOString();
+  for(const [index,part]of delayed.entries())await insertSource(part,{persistedAt:index===10?futurePartAt:part.persistedAt});
+  v=await drain(now+1500000);assert.equal(v.results[0].sourceParts,10);
+  const delayedAttempts=await db.query('SELECT * FROM soccer_raw_seen_history_attempts_v1 WHERE batch_hash=$1 ORDER BY capture_id',[delayed[0].captureBatchId]);
+  assert.equal(delayedAttempts.rows.length,10);assert.ok(delayedAttempts.rows.every(r=>r.capture_id.trim()!==delayed[10].captureId));
+  pg=await progress(now+1500001);assert.equal(pg.counts.retryPendingBatches,1);
+  v=await drain(now+1560000);assert.equal(v.processedBatches,1);assert.equal(v.results[0].sourceParts,11);
+  const afterDelayed=(await db.query('SELECT * FROM soccer_raw_seen_history_attempts_v1 WHERE batch_hash=$1 ORDER BY capture_id',[delayed[0].captureBatchId])).rows;
+  assert.equal(afterDelayed.length,11);
+  assert.equal(canonicalReaderSeenCapture(JSON.parse(JSON.stringify(afterDelayed.filter(r=>r.capture_id.trim()!==delayed[10].captureId)))),canonicalReaderSeenCapture(JSON.parse(JSON.stringify(delayedAttempts.rows))));
+  // Insertion between metadata reservation and payload dispatch is caught by
+  // the payload statement's own metadata comparison. The stale list does not
+  // authorize either source interpretation or failure-attempt writes.
+  const racing=fragmented(1,800),lateEvidence={...structuredClone(racing[0].evidence),partIndex:1,partCount:2,tables:[]};
+  const lateBuilt=buildReaderSeenCapture({schema:'READER-SEEN-CAPTURE-v1',evidence:lateEvidence},{deviceId:'cron-fixture',headerVersion:lateEvidence.readerVersion});
+  const latePart={...racing[0],...lateBuilt,partIndex:1,partCount:2};
+  await insertSource(racing[0]);let insertedRace=false;
+  afterQuery=async(query,params,connection)=>{
+    if(!insertedRace&&/octet_length\(a\.evidence_json\)::int AS evidence_bytes/.test(query)&&!/batch_metadata AS MATERIALIZED/.test(query)&&params.includes(racing[0].captureId)){
+      insertedRace=true;await insertSource(latePart,{connection});
+    }
+  };
+  const raceCut=statements.length;
+  try{v=await drainRawSeenHistoryIndex({now:now+1620000});}finally{afterQuery=null;}
+  assert.equal(insertedRace,true);assert.equal(v.retryableBatches,1);assert.equal(v.stableAttemptBatches,0);
+  assert.ok(!statements.slice(raceCut).some(s=>/INSERT INTO soccer_raw_seen_history_(?:attempts|batches|games)_v1/.test(s.query)));
+  pg=await progress(now+1620000);assert.equal(pg.counts.retryPendingBatches,1);
+  v=await drain(now+1680000);assert.equal(v.stableAttemptBatches,1);assert.equal(v.retryableBatches,0);
+  pg=await progress(now+1680000);assert.equal(pg.counts.retryPendingBatches,0);
+  // The archive permits 10,000 declared parts, including conflicting payloads
+  // for one part index. A real 10,001-row group exercises the sentinel: never
+  // hydrate it or mislabel its first 10,000 IDs as a complete failure manifest.
+  const tooMany=fragmented(10000,900),duplicateEvidence={...structuredClone(tooMany.at(-1).evidence),pageLeagueLabel:'英超 EPL 重複片段'};
+  const duplicateBuilt=buildReaderSeenCapture({schema:'READER-SEEN-CAPTURE-v1',evidence:duplicateEvidence},{deviceId:'cron-fixture',headerVersion:duplicateEvidence.readerVersion});
+  const duplicatePart={...tooMany.at(-1),...duplicateBuilt};
+  await db.transaction(async connection=>{
+    for(const part of [...tooMany,duplicatePart])await insertSource(part,{connection});
+  });
+  const sentinelCut=statements.length;
+  v=await drain(now+1740000);assert.equal(v.processedBatches,1);assert.equal(v.retryableBatches,1);assert.equal(v.stableAttemptBatches,0);
+  assert.equal(v.status,'RETRYABLE');assert.equal(v.ok,false);
+  const sentinelQueries=statements.slice(sentinelCut);
+  assert.ok(sentinelQueries.some(s=>/octet_length\(a\.evidence_json\)::int AS evidence_bytes/.test(s.query)&&s.params.includes(10001)),'metadata query has an explicit 10,001-row sentinel');
+  assert.ok(!sentinelQueries.some(s=>/SELECT a\.\*,|INSERT INTO soccer_raw_seen_history_(?:attempts|batches|games)_v1/.test(s.query)),'oversized metadata stays unknown without payload hydration or partial failure classification');
+  pg=await progress(now+1740000);assert.equal(pg.counts.retryPendingBatches,1);
   for(const table of ['sports_reader_seen_captures_v1','soccer_raw_seen_history_batches_v1','soccer_raw_seen_history_games_v1','soccer_raw_seen_history_attempts_v1']){
     await assert.rejects(()=>db.query('DELETE FROM '+table),/IMMUTABLE/);
   }

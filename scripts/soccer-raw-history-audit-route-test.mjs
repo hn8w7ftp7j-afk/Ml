@@ -24,6 +24,8 @@ let report = { ok: true, schema, status: 'BOUNDED_SAMPLE', until: '2026-11-09T08
     status: 'VERIFIED_SOURCE', classification: 'FLAT_TEXT_ONLY', fragmentCount: 1,
     headers: [{ values: [], tables: 1 }], rowWidths: [{ cells: 1, rows: 137 }],
     rowCount: 137, cellCount: 137,
+    sectionScopeSummary: { basis: 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY', matchingStandardTables: 1,
+      matchingStandardRows: 137, excludedTables: 0, excludedRows: 0, unknownTables: 0, unknownRows: 0 },
     replay: { status: 'SOURCE_UNINDEXED', reason: 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT', gameCount: null, marketCount: null },
     fragmentManifest: [{ captureId: 'a'.repeat(64), evidenceHash: 'c'.repeat(64), partIndex: 0, partCount: 1,
       receivedAt: '2026-11-08T17:17:37.513000Z', persistedAt: '2026-11-08T17:17:37.524000Z' }],
@@ -72,6 +74,8 @@ try {
   blocked = false; calls = []; rates = [];
   response = await GET(request()); assert.equal(response.status, 200); privateResponse(response);
   let value = await response.json(); assert.deepEqual(value, report); assertFlags(value);
+  assert.deepEqual(value.samples[0].sectionScopeSummary, report.samples[0].sectionScopeSummary,
+    'route preserves bounded source-label diagnostics without promoting official identity');
   assert.equal(calls.length, 1); assert.equal(calls[0][0].league ?? null, null); assert.equal(calls[0][0].limit, 2);
   assert.equal(rates[0].limit, 30); assert.equal(rates[0].windowMs, 600000);
   for (const league of ['EPL', 'UCL']) {
@@ -81,9 +85,11 @@ try {
     value = await response.json(); assertFlags(value);
   }
   report = { ...report, samples: [{ ...report.samples[0], status: 'UNKNOWN', classification: 'UNKNOWN',
+    sectionScopeSummary: null,
     replay: { status: 'UNKNOWN', reason: 'RAW_HISTORY_AUDIT_SOURCE_BYTES_BUDGET', gameCount: null, marketCount: null } }] };
   response = await GET(request()); assert.equal(response.status, 200); privateResponse(response);
   value = await response.json(); assert.deepEqual(value, report); assertFlags(value);
+  assert.equal(value.samples[0].sectionScopeSummary, null);
   assert.equal(value.samples[0].replay.gameCount, null, 'bounded unknown sibling never invents a zero-game result');
   report = { ...report, ok: false, status: 'UNKNOWN', reason: 'RAW_HISTORY_AUDIT_STORAGE_NOT_INITIALIZED', samples: [] };
   response = await GET(request()); assert.equal(response.status, 503); privateResponse(response);

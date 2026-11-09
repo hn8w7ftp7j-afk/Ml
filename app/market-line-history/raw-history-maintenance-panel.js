@@ -94,7 +94,7 @@ export function validateRawHistoryMaintenanceReceipt(value) {
 function reasonLabel(code) {
   if (/INCOMPLETE|MISSING_PART|PART_COUNT|BATCH_PART/.test(code)) return '來源片段仍待核對';
   if (/NO_GOALS|NO_MARKET/.test(code)) return '尚未辨識出進球盤口';
-  if (/UNSUPPORTED_FORMAT/.test(code)) return '來源版面尚待支援';
+  if (/UNSUPPORTED_FORMAT/.test(code)) return '尚未轉成可查盤口';
   if (/BUDGET|TOO_LARGE|LIMIT/.test(code)) return '單批來源較大，仍待處理';
   return '來源內容仍待釐清';
 }
@@ -193,7 +193,7 @@ export default function RawHistoryMaintenancePanel() {
       {result.leagues.some(row => row.reasons.length) && <div className={styles.reasons}>
         <h3>仍待辨識的來源</h3>
         {result.leagues.filter(row => row.reasons.length).map(row => <p key={row.league}>{leagueNames[row.league]}：{row.reasons.map(reason => `${reasonLabel(reason.code)} ${number(reason.batches)} 批`).join('、')}。</p>)}
-        <p className={styles.notice}>這些來源仍有保存；新片段到達後可再核對，未當成沒有開盤。仍待辨識也包含同次讀盤的附加文字片段，批次數不等於缺失場次。</p>
+        <p className={styles.notice}>這些來源仍有保存；新片段到達後可再核對，未當成沒有開盤。尚未轉成可查盤口的來源可能包含附加文字、其他賽事與未支援格式，批次數不等於缺失場次。</p>
       </div>}
       <details className={styles.days}><summary>查看來源讀取日期明細（台北）</summary>
         <p className={styles.notice}>以下依每批最早的來源讀取日期分組，與賽事盤日不同。</p>

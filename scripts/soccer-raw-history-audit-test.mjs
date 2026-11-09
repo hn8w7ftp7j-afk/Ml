@@ -88,6 +88,22 @@ async function audit(input = { limit: 4 }, options = {}) {
   assert.ok(value.budget.sourceBytesRead <= value.budget.sourceBytesReserved);
   assert.ok(value.samples.length <= (input.limit || 2));
   assert.equal(value.sampleCompletenessVerified, false); assert.equal(value.siblingCoverageVerified, false);
+  for (const sample of value.samples) {
+    const scope = sample.sectionScopeSummary;
+    if (sample.status === 'UNKNOWN') { assert.equal(scope, null, 'unknown source cannot establish section scope'); continue; }
+    assert.deepEqual(Object.keys(scope).sort(), ['basis', 'matchingStandardTables', 'matchingStandardRows', 'excludedTables', 'excludedRows', 'unknownTables', 'unknownRows'].sort());
+    assert.equal(scope.basis, 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY');
+    for (const category of ['matchingStandard', 'excluded', 'unknown']) {
+      assert.ok(Number.isSafeInteger(scope[`${category}Tables`]) && scope[`${category}Tables`] >= 0);
+      assert.ok(Number.isSafeInteger(scope[`${category}Rows`]) && scope[`${category}Rows`] >= 0);
+      assert.ok(scope[`${category}Rows`] === 0 || scope[`${category}Tables`] > 0);
+    }
+    assert.equal(scope.matchingStandardRows + scope.excludedRows + scope.unknownRows, sample.rowCount);
+    const tables = scope.matchingStandardTables + scope.excludedTables + scope.unknownTables;
+    const exposedTables = sample.headers.reduce((sum, header) => sum + header.tables, 0);
+    if (sample.headersTruncated) assert.ok(tables >= exposedTables);
+    else assert.equal(tables, exposedTables);
+  }
   return value;
 }
 
@@ -139,6 +155,9 @@ try {
   assert.equal(value.samples[0].pageFrameVerified, false); assert.equal(value.samples[0].sameCaptureVerified, false);
   assert.equal(value.samples[0].siblingScopeBasis, 'NEARBY_SAME_LEAGUE_READER_TIME_WINDOW');
   assert.equal(JSON.stringify(value).includes('source_scope_hash'), false); assert.equal(JSON.stringify(value).includes('evidence_json'), false);
+  assert.equal(value.samples[0].sectionScopeSummary.matchingStandardTables, 1);
+  assert.equal(value.samples[0].sectionScopeSummary.matchingStandardRows, 2,
+    'matching source labels do not imply structured rows or replay eligibility');
   fixtures.push({ name: 'flat', value });
 
   // Failed HTTP/SQL reads retain their reserved allowance: an unconfirmed
@@ -189,6 +208,44 @@ try {
   afterQuery = null;
 
   await reset();
+  const mixed = synthetic(), baseTable = structuredClone(mixed.evidence.tables[0]);
+  const copy = (sectionTitle, extra = {}) => ({ ...structuredClone(baseTable), sectionTitle, ...extra });
+  mixed.evidence.tables = [baseTable,
+    copy('聯盟: 歐洲冠軍聯賽 U21'), copy('聯盟: 英格蘭超級聯賽(1)'), copy('歐洲冠軍聯賽 角球'),
+    copy('來源範圍未知'), copy('歐洲冠軍聯賽' + '備註'.repeat(130)),
+    copy('歐洲冠軍聯賽', { periodEvidenceTruncated: true }), copy('歐洲冠軍聯賽 全場 上半場')];
+  const mixedPart = await insert(mixed); await attempt(mixedPart);
+  value = await audit({ league: 'UCL', limit: 4 });
+  assert.deepEqual(value.samples[0].sectionScopeSummary, { basis: 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY',
+    matchingStandardTables: 1, matchingStandardRows: 1, excludedTables: 3, excludedRows: 3, unknownTables: 4, unknownRows: 4 });
+  assert.equal(value.samples[0].classification, 'STRUCTURED_ROWS');
+  assert.equal(value.samples[0].replay.status, 'RECOVERABLE');
+  assert.doesNotMatch(JSON.stringify(value), /來源範圍未知|備註備註|U21/,
+    'scope diagnostics expose only bounded counts, never raw titles or body text');
+  fixtures.push({ name: 'mixed-section-scopes', value });
+
+  await reset();
+  const youth = synthetic({ league: 'EPL' }); youth.evidence.tables[0].sectionTitle = '聯盟: 英格蘭超級聯賽盃U21(12)';
+  const youthPart = await insert(youth); await attempt(youthPart);
+  value = await audit({ league: 'EPL', limit: 4 });
+  assert.equal(value.samples[0].classification, 'STRUCTURED_ROWS');
+  assert.equal(value.samples[0].sectionScopeSummary.matchingStandardTables, 0);
+  assert.equal(value.samples[0].sectionScopeSummary.excludedTables, 1);
+  assert.equal(value.samples[0].replay.status, 'SOURCE_UNINDEXED');
+  assert.equal(value.samples[0].replay.reason, 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT');
+  fixtures.push({ name: 'excluded-youth-structure', value });
+
+  await reset();
+  const emptySource = synthetic(); emptySource.evidence.tables = [];
+  const emptyPart = await insert(emptySource); await attempt(emptyPart);
+  value = await audit({ league: 'UCL', limit: 4 });
+  assert.equal(value.samples[0].status, 'VERIFIED_SOURCE'); assert.equal(value.samples[0].rowCount, 0);
+  assert.deepEqual(value.samples[0].sectionScopeSummary, { basis: 'SOURCE_SECTION_LABELS_NOT_OFFICIAL_IDENTITY',
+    matchingStandardTables: 0, matchingStandardRows: 0, excludedTables: 0, excludedRows: 0, unknownTables: 0, unknownRows: 0 });
+  assert.equal(value.samples[0].replay.status, 'SOURCE_UNINDEXED');
+  fixtures.push({ name: 'verified-empty-source', value });
+
+  await reset();
   // Sampling is bounded and balances league first; both source-time edges of
   // each reason are candidates, rather than loading every failed payload.
   for (const league of ['EPL', 'UCL']) for (let i = 0; i < 5; i++) {
@@ -196,6 +253,25 @@ try {
   }
   value = await audit(); assert.equal(value.samples.length, 4);
   for (const league of ['EPL', 'UCL']) assert.deepEqual(value.samples.filter(row => row.league === league).map(row => row.sourceObservedAt.slice(0, 10)).sort(), ['2026-11-01', '2026-11-05']);
+
+  await reset();
+  for (const [league, reason, days] of [
+    ['EPL', 'RAW_SEEN_RECOVERY_BUDGET_EXCEEDED', [1, 8]],
+    ['EPL', 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT', [2, 9]],
+    ['UCL', 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT', [3, 10]],
+  ]) for (const day of days) {
+    const item = await insert(synthetic({ league, flat: true, at: `2026-11-${String(day).padStart(2, '0')}T00:00:00.000Z` }));
+    await attempt(item, reason);
+  }
+  value = await audit();
+  assert.equal(value.samples.length, 4);
+  assert.deepEqual(value.samples.filter(row => row.league === 'EPL').map(row => [row.attemptReason, row.sampleEdge]), [
+    ['RAW_SEEN_RECOVERY_BUDGET_EXCEEDED', 'OLDEST'], ['RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT', 'OLDEST'],
+  ], 'default four-sample audit cannot let both edges of a budget stratum hide another reason');
+  value = await audit({ league: 'EPL', limit: 4 });
+  assert.deepEqual(value.samples.map(row => row.sampleEdge), ['OLDEST', 'OLDEST', 'NEWEST', 'NEWEST']);
+  for (const reason of ['RAW_SEEN_RECOVERY_BUDGET_EXCEEDED', 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT'])
+    assert.deepEqual(value.samples.filter(row => row.attemptReason === reason).map(row => row.sampleEdge), ['OLDEST', 'NEWEST']);
   assert.ok(statements.filter(row => /WITH attempts AS/.test(row.query)).every(row => !/evidence_json|payload_json/.test(row.query)), 'selection never scans source JSON');
   const file = join(tmpdir(), 'raw-history-audit-contract-fixtures.json'); writeFileSync(file, JSON.stringify({ cases: fixtures }));
   console.log('PASS raw-history read-only audit: real PostgreSQL stratified bounds, original multipart/hash/clock verification, metadata-first byte limits, late-fragment/index exclusion, nearby metadata without coverage claims, missing schema/deadline UNKNOWN and immutable sources; NOT Production');
