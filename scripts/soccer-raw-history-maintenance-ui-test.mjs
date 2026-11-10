@@ -14,9 +14,9 @@ const { code } = await transform(source.replace(/^import .*?;\n/gm, '').replace(
 });
 const flags = { archiveOnly: true, currentBoardUpdated: false, historicalAvailabilityVerified: false, executable: false,
   formalEligible: false, calibrationEligible: false, coverageComplete: false, closingCoverage: 'NOT_VERIFIED', indexCoverage: 'NOT_VERIFIED' };
-const countKeys = ['sourceFragments', 'sourceBatches', 'indexedBatches', 'unindexedBatches', 'stableAttemptBatches', 'retryPendingBatches', 'indexedGames'];
+const countKeys = ['sourceFragments', 'sourceBatches', 'indexedBatches', 'previousReadableIndexedBatches', 'unindexedBatches', 'stableAttemptBatches', 'retryPendingBatches', 'indexedGames'];
 const count = (sources, indexed, attempted, fragments = sources, games = indexed * 9) => ({ sourceFragments: fragments, sourceBatches: sources,
-  indexedBatches: indexed, unindexedBatches: sources - indexed, stableAttemptBatches: attempted,
+  indexedBatches: indexed, previousReadableIndexedBatches: indexed ? 2 : 0, unindexedBatches: sources - indexed, stableAttemptBatches: attempted,
   retryPendingBatches: sources - indexed - attempted, indexedGames: games });
 function progress(extraIndexed = 0) {
   const leagues = [
@@ -73,6 +73,8 @@ for (const mutate of [
   value => { value.dateBucketBasis = 'LATEST_SOURCE_OBSERVATION_OF_BATCH'; },
   value => { value.counts = null; }, value => { value.counts.sourceBatches = '100'; }, value => { value.counts.sourceFragments = 1; },
   value => { value.counts.indexedBatches++; }, value => { value.counts.retryPendingBatches++; }, value => { delete value.counts.indexedGames; },
+  value => { delete value.counts.previousReadableIndexedBatches; }, value => { value.counts.previousReadableIndexedBatches = value.counts.unindexedBatches + 1; },
+  value => { value.leagues[0].days[0].counts.previousReadableIndexedBatches++; },
   value => { value.status = 'DONE'; }, value => { value.status = 'NO_PENDING_SOURCE'; }, value => { value.status = 'SOURCE_UNINDEXED'; },
   value => { value.leagues.pop(); }, value => { value.leagues[1].league = 'EPL'; }, value => { value.leagues[1].league = 'NBA'; },
   value => { value.identityVerified = true; }, value => { value.leagues[0].executable = true; }, value => { value.leagues[0].days[0].coverageComplete = true; },
@@ -104,6 +106,7 @@ for (const mutate of [
 
 h.calls[0].respond(progress()); await h.settle();
 assert.match(h.markup, /已保存來源/); assert.match(h.markup, /英超 EPL/); assert.match(h.markup, /歐冠 UCL/);
+assert.match(h.markup, /另有 4 批舊版仍可查、待新版重核/); assert.match(h.markup, /未算成新版已驗收/);
 assert.match(h.markup, /尚未轉成可查盤口 9 批/); assert.match(h.markup, /來源片段仍待核對 6 批/);
 assert.match(h.markup, /可能包含附加文字、其他賽事與未支援格式/); assert.match(h.markup, /批次數不等於缺失場次/);
 assert.doesNotMatch(h.markup, /來源版面尚待支援/);

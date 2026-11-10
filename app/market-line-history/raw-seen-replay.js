@@ -80,7 +80,7 @@ export function rawSeenSelectedGames(result, gameFilter) {
   return selected;
 }
 
-export default function RawSeenReplay({ capture, gameFilter }) {
+export default function RawSeenReplay({ capture, gameFilter, derivationVersion, expectedDerivedHash }) {
   const [result, setResult] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const request = useRef({ sequence: 0, controller: null, seed: capture.captureId });
   request.current.seed = capture.captureId;
@@ -88,7 +88,7 @@ export default function RawSeenReplay({ capture, gameFilter }) {
     ++request.current.sequence; request.current.controller?.abort();
     setResult(null); setError(''); setBusy(false);
     return () => { ++request.current.sequence; request.current.controller?.abort(); };
-  }, [capture.captureId, capture.league, gameFilter?.boardDate, gameFilter?.gameKey]);
+  }, [capture.captureId, capture.league, gameFilter?.boardDate, gameFilter?.gameKey, derivationVersion, expectedDerivedHash]);
   async function replay() {
     const sequence = ++request.current.sequence, seed = capture.captureId;
     request.current.controller?.abort();
@@ -97,12 +97,15 @@ export default function RawSeenReplay({ capture, gameFilter }) {
     const timeout = window.setTimeout(() => controller.abort(), 30000);
     setResult(null); setError(''); setBusy(true);
     try {
-      const response = await fetch(`/api/${capture.league === 'NBA' ? 'nba' : 'soccer'}/raw-seen-history?captureId=${seed}`, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+      const versionQuery=capture.league!=='NBA'&&derivationVersion?`&derivationVersion=${encodeURIComponent(derivationVersion)}`:'';
+      const response = await fetch(`/api/${capture.league === 'NBA' ? 'nba' : 'soccer'}/raw-seen-history?captureId=${seed}${versionQuery}`, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
       const payload = await response.json();
       if (!response.ok || payload?.ok !== true) throw new Error(payload?.code === 'RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT'
         ? '這批原文的表格格式尚未支援辨識，原始保存仍可查看；不能據此認定沒有盤口。'
         : '這批來源目前無法重播；片段或盤口仍待核對，原始保存可繼續查看。');
       const checked = validateRawSeenReplay(payload, capture);
+      if (derivationVersion && checked.derivationVersion!==derivationVersion
+        || expectedDerivedHash && checked.derivedHash!==expectedDerivedHash) throw new Error('重播版本或內容與保存索引不一致，未顯示不同版本的盤口；請重新整理後查詢。');
       rawSeenSelectedGames(checked, gameFilter);
       if (current()) setResult(checked);
     } catch (cause) {

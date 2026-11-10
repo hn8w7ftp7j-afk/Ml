@@ -6,7 +6,7 @@ import styles from './raw-history-maintenance.module.css';
 
 const endpoint = '/api/soccer/raw-seen-history-maintenance';
 const schema = 'soccer-raw-history-maintenance-v1';
-const countKeys = ['sourceFragments', 'sourceBatches', 'indexedBatches', 'unindexedBatches', 'stableAttemptBatches', 'retryPendingBatches', 'indexedGames'];
+const countKeys = ['sourceFragments', 'sourceBatches', 'indexedBatches', 'previousReadableIndexedBatches', 'unindexedBatches', 'stableAttemptBatches', 'retryPendingBatches', 'indexedGames'];
 const leagueNames = { EPL: '英超 EPL', UCL: '歐冠 UCL' };
 const league = value => typeof value === 'string' && Object.hasOwn(leagueNames, value);
 const integer = value => Number.isSafeInteger(value) && value >= 0;
@@ -28,6 +28,7 @@ const validCounts = value => value && countKeys.every(key => integer(value[key])
   && value.sourceFragments >= value.sourceBatches
   && value.sourceBatches === value.indexedBatches + value.unindexedBatches
   && value.unindexedBatches === value.stableAttemptBatches + value.retryPendingBatches
+  && value.previousReadableIndexedBatches <= value.unindexedBatches
   && (value.indexedBatches === 0 ? value.indexedGames === 0 : value.indexedGames >= value.indexedBatches);
 const sumMatches = (values, total) => countKeys.every(key => values.reduce((sum, value) => sum + value[key], 0) === total[key]);
 const number = value => integer(value) ? value.toLocaleString('zh-TW') : '未確認';
@@ -184,12 +185,14 @@ export default function RawHistoryMaintenancePanel() {
       <p className={styles.meta}>核對截至台北時間 {taipeiHistoryTime(result.until)}；已接收 {number(result.counts.sourceFragments)} 個原始片段。</p>
       <div className={styles.tableWrap}><table>
         <caption>英超與歐冠來源批次</caption>
-        <thead><tr><th scope="col">聯盟</th><th scope="col">已保存來源</th><th scope="col">已整理可查</th><th scope="col">待整理</th><th scope="col">仍待辨識</th></tr></thead>
+        <thead><tr><th scope="col">聯盟</th><th scope="col">已保存來源</th><th scope="col">新版已核可查</th><th scope="col">舊版仍可查</th><th scope="col">待整理</th><th scope="col">仍待辨識</th></tr></thead>
         <tbody>{[...result.leagues, { league: 'TOTAL', counts: result.counts }].map(row => <tr key={row.league}>
           <th scope="row">{leagueNames[row.league] || '合計'}</th><td>{number(row.counts.sourceBatches)}</td><td>{number(row.counts.indexedBatches)}</td>
+          <td>{number(row.counts.previousReadableIndexedBatches)}</td>
           <td>{number(row.counts.retryPendingBatches)}</td><td>{number(row.counts.stableAttemptBatches)}</td>
         </tr>)}</tbody>
       </table></div>
+      {result.counts.previousReadableIndexedBatches > 0 && <p className={styles.notice}>另有 {number(result.counts.previousReadableIndexedBatches)} 批舊版仍可查、待新版重核。這些批次包含在待整理或仍待辨識數量內，不代表資料消失，也未算成新版已驗收。</p>}
       {result.leagues.some(row => row.reasons.length) && <div className={styles.reasons}>
         <h3>仍待辨識的來源</h3>
         {result.leagues.filter(row => row.reasons.length).map(row => <p key={row.league}>{leagueNames[row.league]}：{row.reasons.map(reason => `${reasonLabel(reason.code)} ${number(reason.batches)} 批`).join('、')}。</p>)}
@@ -199,9 +202,9 @@ export default function RawHistoryMaintenancePanel() {
         <p className={styles.notice}>以下依每批最早的來源讀取日期分組，與賽事盤日不同。</p>
         {result.leagues.map(row => <div key={row.league} className={styles.tableWrap}><table>
           <caption>{leagueNames[row.league]}</caption>
-          <thead><tr><th scope="col">來源讀取日期</th><th scope="col">已保存</th><th scope="col">已整理可查</th><th scope="col">待整理</th><th scope="col">仍待辨識</th></tr></thead>
+          <thead><tr><th scope="col">來源讀取日期</th><th scope="col">已保存</th><th scope="col">新版已核可查</th><th scope="col">舊版仍可查</th><th scope="col">待整理</th><th scope="col">仍待辨識</th></tr></thead>
           <tbody>{row.days.map(bucket => <tr key={bucket.sourceDate}><th scope="row">{bucket.sourceDate}</th><td>{number(bucket.counts.sourceBatches)}</td>
-            <td>{number(bucket.counts.indexedBatches)}</td><td>{number(bucket.counts.retryPendingBatches)}</td><td>{number(bucket.counts.stableAttemptBatches)}</td></tr>)}</tbody>
+            <td>{number(bucket.counts.indexedBatches)}</td><td>{number(bucket.counts.previousReadableIndexedBatches)}</td><td>{number(bucket.counts.retryPendingBatches)}</td><td>{number(bucket.counts.stableAttemptBatches)}</td></tr>)}</tbody>
         </table></div>)}
       </details>
     </>}

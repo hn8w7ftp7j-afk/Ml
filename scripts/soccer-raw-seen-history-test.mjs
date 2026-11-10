@@ -29,6 +29,15 @@ const {GET}=await import('../app/api/soccer/raw-seen-history/route.js');
 const clone=value=>structuredClone(value),clock=Date.parse('2026-11-08T00:00:00.000Z');
 const restored=reassembleRawSeenBatch(parts),before=JSON.stringify(parts),rawCanonical=canonicalReaderSeenCapture(restored.evidence);
 const result=deriveRawSeenSoccerHistory(parts,{now:clock}),nov5=result.games.filter(g=>g.boardDate==='2026-11-05');
+const v2='SOCCER-RAW-CREDIT-TABLE-HISTORY-v2';
+const legacyReplay=deriveRawSeenSoccerHistory(parts,{now:clock,derivationVersion:v2});
+assert.equal(result.derivationVersion,'SOCCER-RAW-CREDIT-TABLE-HISTORY-v3');
+assert.equal(legacyReplay.derivedHash,'a2bce3504af7d9650905a2af40a1de0b1cb37cea794d748701d7e197ed814b97','exact pre-release v2 parser hash remains reproducible');
+assert.deepEqual(legacyReplay.games,result.games,'unchanged source prices remain byte-equivalent across parser versions');
+assert.notEqual(legacyReplay.derivedHash,result.derivedHash,'versioned immutable content cannot be silently relabelled');
+assert.throws(()=>deriveRawSeenSoccerHistory(parts,{derivationVersion:'SOCCER-RAW-CREDIT-TABLE-HISTORY-v1'}),e=>e.code==='RAW_SEEN_RECOVERY_DERIVATION_UNSUPPORTED');
+assert.equal(parseRawSeenHistoryQuery(new URLSearchParams({captureId:parts[0].captureId,derivationVersion:v2})).derivationVersion,v2);
+assert.throws(()=>parseRawSeenHistoryQuery(new URLSearchParams({captureId:parts[0].captureId,derivationVersion:'unknown'})),e=>e.code==='RAW_SEEN_RECOVERY_QUERY_INVALID');
 assert.equal(restored.batchHash,'2698627e29ccbc5f630f6f5509605baaf989cffaa7959243fb2cd0e7356ae4c2');
 assert.equal(restored.evidence.tables.length,173);assert.equal(restored.evidence.tables[171].rows.length,1624);
 assert.equal(parseSoccerCapture(restored.evidence,new Date(restored.evidence.observedAt)).games.length,0,'raw pre-normalization evidence is not a normalized Reader payload');
@@ -114,6 +123,53 @@ assert.equal(alternativeAfterUnavailablePrimary.games[0].markets.length,4);
 assert.ok(alternativeAfterUnavailablePrimary.games[0].markets.every(m=>m.isAlternative===true));
 assert.equal(alternativeAfterUnavailablePrimary.games[0].unavailableMarkets.length,5,'closed primary columns remain visible when later alternatives are recovered');
 
+// The source profile has a ninth notes header. Empty notes are omitted by the
+// DOM capture; nonempty notes must not erase unchanged, independently parsed
+// goal columns or become an extra market.
+const plainMarkets=deriveRawSeenSoccerHistory(synthetic()).games[0].markets;
+for(const notedRows of [[0],[1],[0,1]]) {
+  const notedParts=synthetic(undefined,e=>{for(const index of notedRows)e.tables[0].rows[index].cells.push({pair:['測試備註']});});
+  const before=JSON.stringify(notedParts),noted=deriveRawSeenSoccerHistory(notedParts);
+  assert.equal(noted.games.length,1);assert.deepEqual(noted.games[0].markets,plainMarkets);
+  assert.equal(noted.diagnostics.unrecognizedGoalRows,0);
+  assert.equal(JSON.stringify(notedParts),before,'notes and all original cells remain immutable');
+}
+const notedPrimary=deriveRawSeenSoccerHistory(synthetic([primary],e=>{e.tables[0].rows[0].cells.push({pair:['測試備註']});}));
+assert.throws(()=>deriveRawSeenSoccerHistory(synthetic([primary],e=>{e.tables[0].rows[0].cells.push({pair:['測試備註']});}),{derivationVersion:v2}),e=>e.code==='RAW_SEEN_RECOVERY_NO_GOALS','legacy replay retains its old parser instead of changing saved hashes');
+assert.equal(notedPrimary.games[0].markets.length,5);
+assert.ok(notedPrimary.games[0].markets.every(m=>m.source.columnIndex<8&&!m.isAlternative));
+for(const make of [
+  ()=>synthetic([alternative],e=>{e.tables[0].rows[0].cells.push({pair:['測試備註']});}),
+  ()=>synthetic([primary],e=>{e.tables[0].rows[0].cells.push({pair:['測試備註']},{pair:['額外欄位']});}),
+  ()=>synthetic([primary],e=>{e.tables[0].headers[8]='額外盤口';e.tables[0].rows[0].cells.push({pair:['測試備註']});}),
+])assert.throws(()=>deriveRawSeenSoccerHistory(make()),e=>['RAW_SEEN_RECOVERY_NO_GOALS','RAW_SEEN_RECOVERY_UNSUPPORTED_FORMAT'].includes(e.code),
+  'notes cannot excuse missing primary evidence, an extra column or a different header');
+
+// Primary locks govern primary prices, not independently open alternative
+// rows. Preserve only the validated primary shape/identity as layout proof.
+for(const notes of [false,true]) {
+  const lockedParts=synthetic(undefined,e=>{
+    e.tables[0].rows[0].marketLocked=true;
+    if(notes)for(const row of e.tables[0].rows)row.cells.push({pair:['測試備註']});
+  });
+  const before=JSON.stringify(lockedParts),openAlternative=deriveRawSeenSoccerHistory(lockedParts);
+  assert.equal(openAlternative.games.length,1);assert.equal(openAlternative.games[0].markets.length,4);
+  assert.equal(openAlternative.diagnostics.lockedGoalRows,1);
+  assert.ok(openAlternative.games[0].markets.every(m=>m.isAlternative&&m.source.rowIndex===1));
+  assert.deepEqual(openAlternative.games[0].markets,plainMarkets.filter(m=>m.isAlternative),
+    'locked primary quotes cannot appear in the recovered alternative markets');
+  assert.equal(JSON.stringify(lockedParts),before);
+}
+for(const make of [
+  ()=>synthetic([primary],e=>{e.tables[0].rows[0].marketLocked=true;}),
+  ()=>synthetic(undefined,e=>{for(const row of e.tables[0].rows)row.marketLocked=true;}),
+  ()=>synthetic([alternative,primary],e=>{e.tables[0].rows[1].marketLocked=true;}),
+  ()=>synthetic(undefined,e=>{e.tables[0].rows[0].marketLocked=true;e.tables[0].rows[0].cells[0].pair[1]='23:59';}),
+  ()=>synthetic(undefined,e=>{e.tables[0].rows[0].marketLocked=true;
+    e.tables.push({...clone(e.tables[0]),rows:[e.tables[0].rows.pop()]});}),
+])assert.throws(()=>deriveRawSeenSoccerHistory(make()),e=>e.code==='RAW_SEEN_RECOVERY_NO_GOALS',
+  'locks cannot authorize prices or establish alternative layout across time, tables or later primary rows');
+
 
 const envNames=['DATABASE_URL','DATABASE_V2_URL','APP_PASSWORD','SESSION_SECRET'];
 const old=Object.fromEntries(envNames.map(k=>[k,process.env[k]]));
@@ -151,6 +207,8 @@ try {
   assert.equal(body.derivedHash,result.derivedHash);assert.equal(body.executable,false);
   assert.equal(Object.hasOwn(body,'deviceId'),false);
   const other=await(await GET(request(`captureId=${parts[2].captureId}`))).json();assert.equal(other.derivedHash,body.derivedHash);
+  const oldBody=await(await GET(request(`captureId=${parts[2].captureId}&derivationVersion=${v2}`))).json();
+  assert.equal(oldBody.derivationVersion,v2);assert.equal(oldBody.derivedHash,legacyReplay.derivedHash,'API honors the saved parser version');
   assert.equal((await GET(request(`captureId=${'0'.repeat(64)}`))).status,404);
   assert.ok(statements.slice(cut).every(q=>! /\b(?:CREATE|ALTER|INSERT|UPDATE|DELETE)\b/.test(q)),'every authenticated replay is SELECT only');
   assert.equal(await count(),4,'historical read never creates a normalized observation, receipt or current head');

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { soccerReaderMatchTeamKey } from '../lib/soccer/reader-team-identity.js';
 import { matchSoccerReaderGames, validateSoccerCapture } from '../lib/soccer/reader.js';
 import { parseSoccerCapture, canonicalSoccerPayload } from '../reader/soccer-parser.js';
+import { deriveRawSeenSoccerHistory } from '../lib/soccer/raw-seen-history.js';
 
 const now=Date.parse('2026-10-20T00:00:00Z'),at=new Date(now).toISOString();
 // Source pairs observed on the live UCL board and provider schedule. Sabah FK
@@ -15,6 +18,7 @@ const aliases=[
   ['加拉塔沙雷','Galatasaray'],['寧斯','LASK Linz'],
   ['巴迪斯拉華','Slovan Bratislava'],['巴黎聖日門','Paris Saint-Germain'],['巴塞隆拿','Barcelona'],
   ['葡萄牙士砵亭','Sporting CP'],['薩克達','Shakhtar Donetsk'],['利爾','Lille'],
+  ['皇家貝迪斯','Real Betis'],['科木','Como'],['朗斯','Lens'],['維京','Viking FK'],
 ];
 const key=value=>globalThis.Tai888SoccerTeams.key(value);
 const hash=value=>createHash('sha256').update(canonicalSoccerPayload(value)).digest('hex');
@@ -246,4 +250,37 @@ for(const value of ['沙巴','Sabah','Sabah FC Malaysia','費倫巴治 U21','巴
     assert.equal(JSON.stringify(wire),before);assert.equal(canonicalSoccerPayload(wire),canonical);assert.equal(hash(wire),originalHash);
   }
 }
-console.log('PASS exact EPL/UCL board aliases → legacy-key server matching: old Reader wire/hash unchanged, both teams/date/kickoff/league exact, duplicate/prop/conflicting identities fail closed; two saved Nov 4 UCL identity pairs match without period/scoring promotion; stale/final quotes stay ineligible');
+// These three exact Nov 5 pairings were returned by the Production coverage
+// API on Nov 10. The original signed source already contains all four goal
+// markets; missing match-time spellings must not hide those archived prices.
+// ESPN team IDs are also retained in opta-ucl-espn-identities-20261029.json.
+{
+  const parts=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/soccer/ucl-seen-pregame-20261105.json.gz',import.meta.url))));
+  const sourceBefore=JSON.stringify(parts),replay=deriveRawSeenSoccerHistory(parts),at=Date.parse('2026-11-10T00:00:00.000Z');
+  const fixtures=[
+    {id:'401915304',awayRaw:'皇家貝迪斯',homeRaw:'多蒙特[主]',away:'Real Betis',awayId:'244',home:'Borussia Dortmund',homeId:'124'},
+    {id:'401915305',awayRaw:'科木',homeRaw:'朗斯[主]',away:'Como',awayId:'2572',home:'Lens',homeId:'175'},
+    {id:'401915302',awayRaw:'沙巴巴庫',homeRaw:'維京[主]',away:'Sabah FK',awayId:'21922',home:'Viking FK',homeId:'510'},
+  ];
+  for(const fixture of fixtures){
+    const raw=replay.games.find(g=>g.boardDate==='2026-11-05'&&g.homeRaw===fixture.homeRaw&&g.awayRaw===fixture.awayRaw);
+    assert.ok(raw,`${fixture.awayRaw} at ${fixture.homeRaw} exists in signed original capture`);
+    const before=JSON.stringify(raw),official={id:`soccer:ucl:${fixture.id}`,sourceId:fixture.id,league:'ucl',date:'2026-11-05',
+      startTime:'2026-11-04T20:00:00.000Z',status:'final',
+      home:{sourceId:fixture.homeId,name:fixture.home},away:{sourceId:fixture.awayId,name:fixture.away}};
+    const capture={league:'UCL',games:[raw]},matched=matchSoccerReaderGames(capture,[official],at)[0];
+    assert.equal(matched.matchStatus,'MATCHED');assert.equal(matched.officialGameId,official.id);
+    assert.deepEqual(matched.markets,raw.markets);assert.equal(matched.homeKey,raw.homeKey);assert.equal(matched.awayKey,raw.awayKey);
+    for(const cell of ['FT:HANDICAP','FT:TOTAL','HT:HANDICAP','HT:TOTAL'])
+      assert.ok(matched.markets.some(m=>`${m.period}:${m.kind}`===cell),cell);
+    assert.equal(matched.fresh,false);assert.equal(matched.prestart,false);assert.equal(matched.executable,false);
+    for(const other of [{...official,league:'epl'},{...official,date:'2026-11-06'},
+      {...official,startTime:'2026-11-04T20:01:00.000Z'},{...official,home:official.away,away:official.home},
+      {...official,away:{name:'Arsenal'}},{...official,home:{name:`${fixture.home} U21`}}])
+      assert.equal(matchSoccerReaderGames(capture,[other],at)[0].matchStatus,'UNMATCHED');
+    assert.equal(matchSoccerReaderGames(capture,[official,{...official,id:`${official.id}-duplicate`}],at)[0].matchStatus,'AMBIGUOUS');
+    assert.equal(JSON.stringify(raw),before);
+  }
+  assert.equal(JSON.stringify(parts),sourceBefore,'matching leaves signed source evidence unchanged');
+}
+console.log('PASS exact EPL/UCL board aliases → legacy-key server matching: old Reader wire/hash unchanged, both teams/date/kickoff/league exact, duplicate/prop/conflicting identities fail closed; saved Nov 4 and Nov 5 UCL identity pairs match without period/scoring promotion; stale/final quotes stay ineligible');

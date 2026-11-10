@@ -4,7 +4,7 @@ import { gunzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PGlite } from '@electric-sql/pglite';
-import { buildReaderSeenCapture, canonicalReaderSeenCapture, initializeReaderSeenCaptureStore } from '../lib/reader-seen-capture.js';
+import { buildReaderSeenCapture, canonicalReaderSeenCapture, initializeReaderSeenCaptureStore, readReaderSeenCaptureBatch } from '../lib/reader-seen-capture.js';
 import { initializeRawHistoryIndexStore, indexRawSeenHistoryCapture } from '../lib/soccer/raw-seen-history-index.js';
 import { reassembleRawSeenBatch, deriveRawSeenSoccerHistory } from '../lib/soccer/raw-seen-history.js';
 import { fetchSoccerSchedule } from '../lib/soccer/data.js';
@@ -131,6 +131,22 @@ try {
   await reset(); await indexed({ alternatives: true }); value = await read(); assert.equal(value.status, 'WITNESSES_FOUND');
   for (const game of value.games) for (const cell of Object.values(game.cells)) assert.deepEqual(cell.witnesses.map(q => q.isAlternative), [false, true]);
   assert.ok(value.games[0].cells['FT:HANDICAP'].witnesses.some(q => q.line === '1+50' && q.isAlternative)); keep('primary-and-alternative-lines', value);
+  // Simulate a pre-release DB that contains only exact immutable v2 indexes.
+  // The v3 rollout must verify those prices with v2, not reject or relabel them.
+  await reset(); const oldSource=await indexed({});
+  const oldReplay=deriveRawSeenSoccerHistory(await readReaderSeenCaptureBatch(oldSource.captureId,{sql}),
+    {now,derivationVersion:'SOCCER-RAW-CREDIT-TABLE-HISTORY-v2'});
+  const retainedBatch=(await db.query('SELECT * FROM soccer_raw_seen_history_batches_v1')).rows[0];
+  const retainedGames=(await db.query('SELECT * FROM soccer_raw_seen_history_games_v1')).rows;
+  await db.query('TRUNCATE soccer_raw_seen_history_batches_v1,soccer_raw_seen_history_games_v1 CASCADE');
+  await db.query(`INSERT INTO soccer_raw_seen_history_batches_v1(batch_hash,derivation_version,derived_hash,capture_id,league,observed_at,source_received_at,source_persisted_at,metadata)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,[retainedBatch.batch_hash,oldReplay.derivationVersion,oldReplay.derivedHash,
+    retainedBatch.capture_id,retainedBatch.league,retainedBatch.observed_at,retainedBatch.source_received_at,retainedBatch.source_persisted_at,
+    JSON.stringify({...retainedBatch.metadata,derivationVersion:oldReplay.derivationVersion,derivedHash:oldReplay.derivedHash})]);
+  for(const g of retainedGames)await db.query(`INSERT INTO soccer_raw_seen_history_games_v1(batch_hash,derivation_version,league,board_date,game_key,metadata)
+    VALUES($1,$2,$3,$4,$5,$6::jsonb)`,[g.batch_hash,oldReplay.derivationVersion,g.league,g.board_date,g.game_key,JSON.stringify(g.metadata)]);
+  value=await read();assert.equal(value.status,'WITNESSES_FOUND');assert.equal(value.sources[0].derivedHash,oldReplay.derivedHash);
+  assert.equal(value.budget.batchReads,1);keep('retained-v2-source-remains-verifiable-after-v3-rollout',value);
   await reset(); const microFuture = new Date(now).toISOString().replace(/\.(\d{3})Z$/, (_, ms) => `.${ms}001Z`);
   const micro = await insert(source(), { receivedAt: microFuture }); await indexRawSeenHistoryCapture(micro.captureId, { db: sql, now });
   value = await read(); assert.equal(value.status, 'UNKNOWN'); assert.ok(value.reasonCodes.includes('RAW_MARKET_COVERAGE_SOURCE_TIME_INVALID')); keep('one-microsecond-future-source-clock', value);

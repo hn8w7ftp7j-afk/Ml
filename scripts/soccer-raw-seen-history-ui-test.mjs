@@ -71,6 +71,18 @@ const aborted=h.click();h.unmount();assert.equal(h.calls[5].options.signal.abort
 const basketball=harness(),nba=result('a','NBA');nba.schema='nba-raw-seen-history-v1';nba.games[0].markets=nba.games[0].markets.filter(m=>m.kind!=='MONEYLINE').map(m=>({...m,unit:'POINTS',periodEvidence:undefined}));
 basketball.render({capture:capture('a','NBA')});const nbaRun=basketball.click();assert.equal(basketball.calls[0].url,`/api/nba/raw-seen-history?captureId=${'a'.repeat(64)}`);basketball.calls[0].respond(nba);await nbaRun;await basketball.settle();assert.match(basketball.markup,/場籃球盤/);assert.match(basketball.markup,/上半場 大小/);basketball.unmount();
 const baseball=harness();baseball.render({capture:capture('a','MLB')});assert.equal(baseball.tree,null);assert.equal(baseball.calls.length,0);
+const pinned=harness(),savedVersion='SOCCER-RAW-CREDIT-TABLE-HISTORY-v2',savedProps={capture:capture(),derivationVersion:savedVersion,expectedDerivedHash:'d'.repeat(64)};
+pinned.render(savedProps);const pinnedRun=pinned.click();
+assert.equal(pinned.calls[0].url,`/api/soccer/raw-seen-history?captureId=${'a'.repeat(64)}&derivationVersion=${savedVersion}`);
+const exactSaved=result();exactSaved.derivationVersion=savedVersion;pinned.calls[0].respond(exactSaved);await pinnedRun;await pinned.settle();assert.match(pinned.markup,/阿仙奴/);
+for(const field of ['derivationVersion','derivedHash']){
+  const mismatch=structuredClone(exactSaved);mismatch[field]=field==='derivedHash'?'f'.repeat(64):'SOCCER-RAW-CREDIT-TABLE-HISTORY-v3';
+  const index=pinned.calls.length,run=pinned.click();pinned.calls[index].respond(mismatch);await run;await pinned.settle();
+  assert.match(pinned.markup,/重播版本或內容與保存索引不一致/);assert.doesNotMatch(pinned.markup,/客 1\.05/);
+}
+const versionRace=pinned.click(),versionSignal=pinned.calls.at(-1).options.signal;
+pinned.render({...savedProps,derivationVersion:'SOCCER-RAW-CREDIT-TABLE-HISTORY-v3'});assert.equal(versionSignal.aborted,true,'same-capture version changes fence prior responses');
+pinned.calls.at(-1).respond(exactSaved);await versionRace;await pinned.settle();assert.doesNotMatch(pinned.markup,/客 1\.05/);pinned.unmount();
 const host=fs.readFileSync('app/market-line-history/seen-capture-panel.js','utf8');assert.match(host,/import RawSeenReplay from '\.\/raw-seen-replay\.js'/);assert.match(host,/<SeenCaptureEvidence capture=\{row\}\/>/);assert.match(host,/\['EPL', 'UCL', 'NBA'\]\.includes\(row\.league\) && replayIds\.has\(row\.captureId\)/);
 assert.doesNotMatch(source,/method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]|dangerouslySetInnerHTML|\/api\/(?:analy|bets|soccer\/reader[?'"`])/);
 for(const path of process.argv.slice(2)){
