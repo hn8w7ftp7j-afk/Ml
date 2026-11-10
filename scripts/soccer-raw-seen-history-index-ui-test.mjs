@@ -5,6 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import { taipeiHistoryTime } from '../app/market-line-history/history-view.js';
+import { RAW_SEEN_DERIVATION_VERSION, RAW_SEEN_REPLAYABLE_DERIVATION_VERSIONS } from '../lib/soccer/raw-seen-history-versions.js';
 
 // Run the shipped JSX and its handlers. Network replies are intentionally held
 // so that aborted/late responses can be exercised without a browser or writes.
@@ -23,7 +24,7 @@ const defaults={league:'UCL',from:'2026-11-02',through:'2026-11-08',gameKey:''};
 const capture=(league='UCL',seed='a')=>({league,captureId:seed.repeat(64),captureBatchId:'b'.repeat(64),evidenceHash:'e'.repeat(64),observedAt:original});
 const row=(league='UCL',seed='a')=>({...flags,league,boardDate:'2026-11-05',boardTime:'04:00',gameKey:'04:00|兵工廠|布拉格斯拉維亞',
   awayRaw:'阿仙奴',homeRaw:'布拉格斯拉維亞[主]',awayKey:'兵工廠',homeKey:'布拉格斯拉維亞',marketCount:9,periods:['FT','HT','UNKNOWN'],
-  identityStatus:'ORIGINAL_BOARD_IDENTITY_ONLY',captureBatchId:'b'.repeat(64),derivedHash:'d'.repeat(64),derivationVersion:'SOCCER-RAW-CREDIT-TABLE-HISTORY-v1',
+  identityStatus:'ORIGINAL_BOARD_IDENTITY_ONLY',captureBatchId:'b'.repeat(64),derivedHash:'d'.repeat(64),derivationVersion:'SOCCER-RAW-CREDIT-TABLE-HISTORY-v2',
   observedAt:original,sourceReceivedAt:received,sourcePersistedAt:persisted,indexedAt:indexed,capture:capture(league,seed)});
 const result=(filters=defaults,entries=[row(filters.league)])=>({ok:true,schema:'soccer-raw-history-index-v1',...flags,status:'INDEXED_HISTORY_ONLY',
   indexCoverage:'NOT_VERIFIED',filters:{...filters,gameKey:filters.gameKey||null},until:'2026-11-08T01:00:00.000Z',entries,hasMore:false,nextAfter:null});
@@ -36,7 +37,7 @@ function RawSeenReplay(props){return React.createElement('div',{'data-raw-replay
 class FixtureFormData {constructor(values){this.values=values;}get(k){return this.values[k]??null;}}
 function harness({replay=false,props={}}={}){
   let i=0,dirty=false,tree,currentProps=props;const hooks=[],effects=[],calls=[];
-  const scope=vm.createContext({React,taipeiHistoryTime,RawSeenReplay,AbortController,Date:FixtureDate,URLSearchParams,FormData:FixtureFormData,styles:{},
+  const scope=vm.createContext({React,taipeiHistoryTime,RAW_SEEN_DERIVATION_VERSION,RAW_SEEN_REPLAYABLE_DERIVATION_VERSIONS,RawSeenReplay,AbortController,Date:FixtureDate,URLSearchParams,FormData:FixtureFormData,styles:{},
     window:{setTimeout:()=>1,clearTimeout(){}},
     useState:init=>{const n=i++;if(!(n in hooks))hooks[n]=typeof init==='function'?init():init;return[hooks[n],v=>{hooks[n]=typeof v==='function'?v(hooks[n]):v;dirty=true;}];},
     useRef:init=>{const n=i++;return hooks[n]??={current:init};},
@@ -79,6 +80,13 @@ assert.match(h.markup,/9 個已辨識進球市場/);assert.match(h.markup,/無�
 assert.match(h.markup,/原始接收/);assert.match(h.markup,/原始存入/);assert.match(h.markup,/建立查閱索引/);
 assert.ok(h.markup.includes(taipeiHistoryTime(original)));assert.ok(h.markup.includes(taipeiHistoryTime(indexed)));
 const embedded=nodes(h.tree).find(n=>n.type===RawSeenReplay);assert.ok(embedded);
+assert.equal(embedded.props.derivationVersion,'SOCCER-RAW-CREDIT-TABLE-HISTORY-v2');
+assert.equal(embedded.props.expectedDerivedHash,'d'.repeat(64));
+assert.match(h.markup,/舊版歷史索引/);
+const oldIndex=harness();oldIndex.render();const v1row=row();v1row.derivationVersion='SOCCER-RAW-CREDIT-TABLE-HISTORY-v1';
+oldIndex.calls[0].respond(result(defaults,[v1row]));await oldIndex.settle();
+assert.match(oldIndex.markup,/原整理版本目前無法精確重播/);assert.equal(nodes(oldIndex.tree).filter(n=>n.type===RawSeenReplay).length,0);
+assert.match(oldIndex.markup,/阿仙奴/,'v1 index metadata remains readable');oldIndex.unmount();
 assert.deepEqual(JSON.parse(JSON.stringify(embedded.props.capture)),capture());
 assert.deepEqual(JSON.parse(JSON.stringify(embedded.props.gameFilter)),{boardDate:'2026-11-05',gameKey:row().gameKey});
 assert.ok(nodes(h.tree).filter(n=>n.type==='button').every(n=>!/下注|記錄|結算|分析/.test(text(n.props.children))),'history never offers financial/model actions');
@@ -128,5 +136,5 @@ const badOther=clone(rawResponse);badOther.games[1].markets[0].unit='CORNERS';co
 assert.match(replay.markup,/未通過核對/);assert.doesNotMatch(replay.markup,/阿仙奴/,'an invalid unselected game rejects the whole batch rather than bypassing source validation');replay.unmount();
 const host=fs.readFileSync('app/market-line-history/page.js','utf8');assert.match(host,/<RawSeenHistoryIndexPanel\/>/);
 assert.doesNotMatch(source,/dangerouslySetInnerHTML|\/api\/(?:analy|bets|soccer\/(?:analysis|reader)[?'"`])/);
-assert.match(replaySource,/const checked = validateRawSeenReplay\(payload, capture\);\s*rawSeenSelectedGames\(checked, gameFilter\)/,'selected replay still validates its whole raw source batch first');
+assert.match(replaySource,/const checked = validateRawSeenReplay\(payload, capture\);[\s\S]*rawSeenSelectedGames\(checked, gameFilter\)/,'selected replay still validates its whole raw source batch first');
 console.log('PASS shipped raw-history index UI: strict scope/clock/hash/readonly validation; recent board-date GET; original and indexing clocks; per-game source replay; source-ID-only indexing; unsupported/failed/absent indexes remain explicit; stale scope abort/fencing and no financial/model actions; Production NOT VERIFIED');

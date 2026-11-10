@@ -18,7 +18,7 @@ const schema = 'soccer-raw-history-maintenance-v1';
 const flags = { archiveOnly: true, currentBoardUpdated: false, historicalAvailabilityVerified: false,
   executable: false, formalEligible: false, calibrationEligible: false, coverageComplete: false,
   closingCoverage: 'NOT_VERIFIED', indexCoverage: 'NOT_VERIFIED' };
-const zero = { sourceFragments: 0, sourceBatches: 0, indexedBatches: 0, unindexedBatches: 0,
+const zero = { sourceFragments: 0, sourceBatches: 0, indexedBatches: 0, previousReadableIndexedBatches: 0, unindexedBatches: 0,
   stableAttemptBatches: 0, retryPendingBatches: 0, indexedGames: 0 };
 const until = '2026-11-09T04:00:00.000Z';
 let calls = [], rates = [], blocked = false, progressError = null, drainError = null;

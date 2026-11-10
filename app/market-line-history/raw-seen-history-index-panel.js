@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import RawSeenReplay from './raw-seen-replay.js';
 import { taipeiHistoryTime } from './history-view.js';
+import { RAW_SEEN_DERIVATION_VERSION, RAW_SEEN_REPLAYABLE_DERIVATION_VERSIONS } from '../../lib/soccer/raw-seen-history-versions.js';
 import styles from './raw-seen-history-index.module.css';
 
 const digest=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -89,9 +90,12 @@ export default function RawSeenHistoryIndexPanel() {
       <ol className={styles.games}>{result.entries.map(row=><li key={[row.boardDate,row.gameKey,row.captureBatchId].join('|')}>
         <h3>{row.boardDate} {row.boardTime}｜{row.awayRaw} → {row.homeRaw}</h3>
         <p>{row.marketCount} 個已辨識進球市場｜僅供查閱，無分析／投注操作</p>
+        <p className={styles.meta}>整理版本 {row.derivationVersion}{row.derivationVersion!==RAW_SEEN_DERIVATION_VERSION?'｜舊版歷史索引，尚未由目前版本重新核對。':'｜目前整理版本。'}</p>
         <p className={styles.meta}>來源讀取 {time(row.observedAt)}<br/>原始接收 {time(row.sourceReceivedAt)}｜原始存入 {time(row.sourcePersistedAt)}<br/>建立查閱索引 {time(row.indexedAt)}</p>
         <button type="button" className="secondary" disabled={busy} onClick={()=>{const filters={...result.filters,gameKey:row.gameKey,from:row.boardDate,through:row.boardDate};setDraft({...filters,gameKey:row.gameKey});load(filters);}}>只查這一場的來源紀錄</button>
-        <RawSeenReplay capture={row.capture} gameFilter={{boardDate:row.boardDate,gameKey:row.gameKey}}/>
+        {RAW_SEEN_REPLAYABLE_DERIVATION_VERSIONS.includes(row.derivationVersion)
+          ?<RawSeenReplay capture={row.capture} derivationVersion={row.derivationVersion} expectedDerivedHash={row.derivedHash} gameFilter={{boardDate:row.boardDate,gameKey:row.gameKey}}/>
+          :<p className={styles.notice}>這筆舊版索引仍保留，但原整理版本目前無法精確重播；可從上方查看原始保存並以目前版本重新整理。</p>}
       </li>)}</ol>
       {result.hasMore&&<button type="button" className="secondary" disabled={busy} onClick={()=>load({...result.filters,after:result.nextAfter},true)}>載入下一頁（最多 50 筆）</button>}
     </>}
