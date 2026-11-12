@@ -11,9 +11,15 @@ const before = Object.fromEntries(keys.map(key => [key, process.env[key]]));
 process.env.DATABASE_URL = 'postgres://fixture.invalid/official-coverage'; delete process.env.DATABASE_V2_URL;
 process.env.APP_PASSWORD = 'coverage-engineering'; process.env.SESSION_SECRET = 'coverage-session';
 const oldFetch = globalThis.fetch;
-const date = '2026-11-10', observedAt = new Date(Date.now() - 1000).toISOString();
+// Database receipts use real time. Keep the 21:00 Taipei fixture ahead of it.
+const kickoff = new Date();
+kickoff.setUTCDate(kickoff.getUTCDate() + 1);
+kickoff.setUTCHours(13, 0, 0, 0);
+const date = kickoff.toISOString().slice(0, 10), observedAt = new Date(Date.now() - 1000).toISOString();
+const providerDates = new Set([new Date(kickoff.getTime() - 86400000), kickoff]
+  .map(day => day.toISOString().slice(0, 10).replaceAll('-', '')));
 function sourceEvent(id = '9001', league = 'epl') {
-  return { id, date: '2026-11-10T13:00:00Z', status: { type: { state: 'pre', name: 'STATUS_SCHEDULED' } },
+  return { id, date: kickoff.toISOString(), status: { type: { state: 'pre', name: 'STATUS_SCHEDULED' } },
     competitions: [{ id, competitors: [
       { homeAway: 'home', team: { id: '331', displayName: 'Brighton & Hove Albion' } },
       { homeAway: 'away', team: { id: '384', displayName: 'Crystal Palace' } },
@@ -97,12 +103,13 @@ try {
   let unknown = await read({ league: 'epl', date }, { ...opts, loadCurrent: async () => ({ league: 'EPL', boardDate: date }) });
   assert.equal(unknown.report.games[0].current.cells, null); assert.equal(unknown.report.diagnostics.currentStatus, 'NOT_VERIFIED');
   const current = await load('epl', date), stale = structuredClone(current);
-  for (const raw of stale.games) for (const market of raw.markets) market.serverObservation.observedAt = '2026-11-01T00:00:00.000Z';
+  const staleAt = new Date(Date.parse(observedAt) - 86400000).toISOString();
+  for (const raw of stale.games) for (const market of raw.markets) market.serverObservation.observedAt = staleAt;
   report = (await read({ league: 'epl', date }, { ...opts, loadCurrent: async () => stale })).report;
   assert.equal(report.games[0].current.cells['FT:TOTAL'].freshPregameMarketCount, 0, 'history or a sibling heartbeat never makes stale quotes fresh');
   const unreceipted = structuredClone(current); for (const raw of unreceipted.games) for (const m of raw.markets) m.serverObservation.persistedAt = null;
   assert.equal((await read({ league: 'epl', date }, { ...opts, loadCurrent: async () => unreceipted })).report.games[0].current.cells['FT:TOTAL'].freshPregameMarketCount, 0);
-  const afterKickoff = (await read({ league: 'epl', date }, { ...opts, now: Date.parse('2026-11-10T13:00:00.000Z'), loadCurrent: async () => current })).report;
+  const afterKickoff = (await read({ league: 'epl', date }, { ...opts, now: kickoff.getTime(), loadCurrent: async () => current })).report;
   assert.equal(afterKickoff.games[0].current.cells['FT:TOTAL'].freshPregameMarketCount, 0, 'schedule fetch time does not re-establish pregame acquisition');
   const duplicateIncomplete = payload([mkMarket('FT', 'TOTAL', '5平', { underWater: null }), mkMarket('FT', 'TOTAL', '5平', { overWater: null })]); await save(duplicateIncomplete);
   report = (await read({ league: 'epl', date }, { ...opts, now: Date.now() + 20 })).report;
@@ -122,7 +129,8 @@ try {
     'periods',(SELECT jsonb_agg(to_jsonb(p) ORDER BY observation_id,period) FROM sports_soccer_reader_period_observations_v2 p),
     'heads',(SELECT jsonb_agg(to_jsonb(h) ORDER BY league,board_date,period) FROM sports_soccer_reader_period_heads_v2 h)) AS value`)).rows[0].value;
   const sourceBefore = await originalSources(); await read({ league: 'epl', date }, opts); assert.deepEqual(await originalSources(), sourceBefore, 'coverage performs no mutation, period adoption or clock freshening');
-  assert.ok(sourceUrls.every(url => /^https:\/\/site\.api\.espn\.com\/apis\/site\/v2\/sports\/soccer\/(?:eng\.1|uefa\.champions)\/scoreboard\?dates=202611(?:09|10)$/.test(url)), 'only real provider pages are fetched; cron/index summaries never substitute for schedule or originals');
+  const providerUrl = /^https:\/\/site\.api\.espn\.com\/apis\/site\/v2\/sports\/soccer\/(?:eng\.1|uefa\.champions)\/scoreboard\?dates=(\d{8})$/;
+  assert.ok(sourceUrls.every(url => providerDates.has(url.match(providerUrl)?.[1])), 'only real provider pages are fetched; cron/index summaries never substitute for schedule or originals');
   assert.deepEqual((await db.query('SELECT to_jsonb(h) AS value FROM sports_soccer_reader_period_heads_v2 h WHERE league=\'ucl\' ORDER BY league,board_date,period')).rows,
     frozen.rows.filter(row => row.value.league === 'ucl'), 'coverage never changes or adopts another league head');
   console.log('PASS official/Reader coverage against real PostgreSQL fixture: original hashes, immutable manifest pagination, private provider authority, unique fixtures, four cells, alternates, incomplete sides, unmatched/ambiguous identities, current DB receipt freshness, scope/league isolation, no raw exports or fabricated acceptance');
@@ -132,7 +140,7 @@ try {
   const { createSessionToken } = await import('../lib/security.js'), cookie = `mlb_session=${await createSessionToken()}`;
   let ip = 0; const request = (q = `?league=epl&date=${date}`, auth = true, fixedIp = null) => new Request(`http://localhost/api/soccer/market-coverage${q}`, { headers: { ...(auth ? { cookie } : {}), 'x-forwarded-for': fixedIp || `198.51.100.${++ip}` } });
   assert.equal((await GET(request(undefined, false))).status, 401);
-  for (const q of ['?league=nba&date=2026-11-10', '?league=epl', `?league=epl&date=${date}&league=ucl`, `?league=epl&date=${date}&fresh=true`, `?league=epl&date=${date}&cursor=bad`]) assert.equal((await GET(request(q))).status, 400);
+  for (const q of [`?league=nba&date=${date}`, '?league=epl', `?league=epl&date=${date}&league=ucl`, `?league=epl&date=${date}&fresh=true`, `?league=epl&date=${date}&cursor=bad`]) assert.equal((await GET(request(q))).status, 400);
   const api = await GET(request()); assert.equal(api.status, 200); assert.equal(api.headers.get('cache-control'), 'private, no-store'); assert.equal((await api.json()).report.history.totalReceipts, 6);
   for (let n = 0; n < 90; n++) assert.equal((await GET(request('?league=nba', true, '203.0.113.188'))).status, 400);
   assert.equal((await GET(request('?league=nba', true, '203.0.113.188'))).status, 429);
