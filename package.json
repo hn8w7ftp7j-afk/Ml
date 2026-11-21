@@ -63,7 +63,7 @@
     "test:soccer-prediction": "node scripts/soccer-prediction-score-test.mjs && node scripts/soccer-prediction-service-test.mjs && node --experimental-loader=./scripts/soccer-synthetic-identity-loader.mjs scripts/soccer-prediction-ui-test.mjs && node scripts/soccer-prediction-ui-test.mjs --producer /tmp/soccer-prediction-ui-contract.json"
   },
   "dependencies": {
-    "@neondatabase/serverless": "1.0.2",
+    "@neondatabase/serverless": "1.2.0",
     "@vercel/functions": "3.9.3",
     "cheerio": "1.2.0",
     "decimal.js": "10.6.0",
