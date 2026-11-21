@@ -32,7 +32,7 @@ const periodBindingReasons={
   LEAGUE_NOT_BOUND:'本聯盟尚未綁定全場期間。',GAME_NOT_MATCHED:'場次尚未與官方賽程配對。',
   MARKET_INVALID:'盤口欄位未通過核對。',HEADER_PROFILE_MISMATCH:'盤面標頭與既有期間設定不符。',
   OBSERVATION_MISSING:'尚缺盤口保存收據。',SOURCE_DEVICE_MISMATCH:'來源裝置與既有期間設定不符，系統需重新綁定。',
-  SOURCE_HOST_MISMATCH:'來源網站與既有期間設定不符。',CONFIRMATION_NOT_EFFECTIVE:'期間設定尚未生效。',
+  SOURCE_HOST_MISMATCH:'來源網站與既有期間設定不符。',SOURCE_PAGE_MISMATCH:'盤口來源頁面與已確認的讀盤入口不符。',CONFIRMATION_NOT_EFFECTIVE:'期間設定尚未生效。',
   OBSERVATION_BEFORE_CONFIRMATION:'此盤口早於期間設定生效時間，等待生效後的新盤口。',
   OBSERVATION_TIME_INVALID:'盤口來源時間或保存收據未通過核對。',SAME_CAPTURE_HALF_MISSING:'尚缺同一次讀盤的明確上半場標頭。',
   RESOLUTION_NOT_APPLIED:'期間設定符合，但解析結果尚未套用。',

@@ -18,18 +18,20 @@ try {
   const {saveSoccerReaderSnapshot,loadSoccerReaderSnapshot}=await import('../lib/soccer/reader-store.js');
   const {registerSoccerReaderPeriodDevice,loadSoccerReaderPeriodDeviceAuthorizations}=await import('../lib/soccer/reader-period-device-registry.js');
   const {soccerReaderDeviceContinuationTemplate,soccerReaderPeriodBindingDiagnostics,soccerMarketHasVerifiedPeriodResolution}=await import('../lib/soccer/reader-period-binding.js');
+  const {buildSoccerMarketDirections}=await import('../lib/soccer/market-directions.js');
+  const {adaptSoccerReaderQuote}=await import('../lib/soccer/soccer-scoring.js');
   const deviceId='synthetic-reinstalled-paired-reader',deviceHash=hash(deviceId);
   const parent={version:'TAI888-ACCOUNT-PERIOD-BINDING-v1',profile:'TAI888-DESKTOP-PRIMARY-WITH-EXPLICIT-HT-v1',
     sourceHost:'www.tai888.in',deviceHash:hash('synthetic-original-paired-reader'),leagues:['epl'],
     proofKey:'a'.repeat(64),confirmedAt:new Date(Date.now()-60000).toISOString()};
   process.env.SOCCER_READER_PERIOD_BINDING_JSON=JSON.stringify(parent);
-  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const rawAt=at=>({league:'EPL',pageLeagueLabel:'聯盟: 英格蘭超級聯賽(25)',sourceHost:parent.sourceHost,pageUrl:'https://www.tai888.in/newapp/',observedAt:at,
+  const boardDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()+86400000));
+  const rawAt=(at,pageUrl='https://www.tai888.in/newapp/')=>({league:'EPL',pageLeagueLabel:'聯盟: 英格蘭超級聯賽(25)',sourceHost:parent.sourceHost,pageUrl,observedAt:at,
     tables:[['時間','主客隊伍','讓球','大小盤','獨贏','單雙','備註'],['時間','主客隊伍','上半讓球','上半大小','','單雙','備註']]
-      .map(headers=>({headers,sectionTitle:'聯盟: 英格蘭超級聯賽(25)',rows:[{cells:[{pair:[today.slice(5),'22:00']},
+      .map(headers=>({headers,sectionTitle:'聯盟: 英格蘭超級聯賽(25)',rows:[{cells:[{pair:[boardDate.slice(5),'22:00']},
         {pair:['賓福特','侯城[主]']},{pair:['1+50 0.91','0.97']},{pair:['大3+50 0.85','小 1.01']},{pair:['主勝 -','和 -','客勝 -']}]}]}))});
-  const payloadAt=at=>{
-    const wire={...parseSoccerCapture(rawAt(at),new Date(at)),readerVersion:'2.1.56',pageActivityAt:at};
+  const payloadAt=(at,pageUrl)=>{
+    const wire={...parseSoccerCapture(rawAt(at,pageUrl),new Date(at)),readerVersion:'2.1.56',pageActivityAt:at};
     const checked=validateSoccerCapture(wire,{now:Date.now(),headerVersion:'2.1.56'});
     assert.equal(checked.ok,true,JSON.stringify(checked));
     return {...checked.payload,deviceId};
@@ -42,7 +44,14 @@ try {
   assert.equal(notInitialized.status,'NOT_INITIALIZED');
   assert.equal((await fixture.db.query("SELECT count(*)::int AS n FROM pg_tables WHERE tablename='sports_soccer_reader_period_devices_v1'")).rows[0].n,0,'GET-style reads never initialize registration schema');
   assert.ok(soccerReaderDeviceContinuationTemplate(original,deviceHash));
-  assert.equal(soccerReaderDeviceContinuationTemplate({...original,pageUrl:'https://www.tai888.in/unrelated/'},deviceHash),null);
+  const indexPage='https://www.tai888.in/newapp/index.html';
+  assert.ok(soccerReaderDeviceContinuationTemplate({...original,pageUrl:indexPage},deviceHash),'the explicit desktop index supports a first registration');
+  const rejectedPages=['https://www.tai888.in/unrelated/','https://www.tai888.in/newapp/other.html',
+    'https://www.tai888.in/newapp/index.html/','https://other.tai888.in/newapp/',
+    'https://www.tai888.in.evil.invalid/newapp/','http://www.tai888.in/newapp/',
+    'https://user:secret@www.tai888.in/newapp/','https://www.tai888.in:8443/newapp/',
+    'https://www.tai888.in/newapp/?other=1','https://www.tai888.in/newapp/#other'];
+  for(const pageUrl of rejectedPages)assert.equal(soccerReaderDeviceContinuationTemplate({...original,pageUrl},deviceHash),null,pageUrl);
   assert.equal(soccerReaderDeviceContinuationTemplate({...original,league:'UCL'},deviceHash),null);
   const noHalf=structuredClone(original);noHalf.games[0].markets=noHalf.games[0].markets.filter(m=>m.period!=='HT');
   assert.equal(soccerReaderDeviceContinuationTemplate(noHalf,deviceHash),null);
@@ -58,19 +67,28 @@ try {
   assert.ok(new Date(registration.registered_at).getTime()>=Date.parse(saved.receivedAt));
   assert.equal((await register(original)).status,'ALREADY_REGISTERED_OR_EVIDENCE_REJECTED');
   assert.equal((await fixture.db.query('SELECT count(*)::int AS n FROM sports_soccer_reader_period_devices_v1')).rows[0].n,1);
-  const old=await loadSoccerReaderSnapshot('epl',today);
+  const old=await loadSoccerReaderSnapshot('epl',boardDate);
   assert.ok(old.games[0].markets.every(m=>!m.serverObservation.periodBindingAuthorization),'registration cannot upgrade its older evidence observation');
-  const historical=await loadSoccerReaderSnapshot('epl',today,{asOf:saved.receivedAt});
+  const historical=await loadSoccerReaderSnapshot('epl',boardDate,{asOf:saved.receivedAt});
   assert.ok(!historical||historical.games[0].markets.every(m=>!m.serverObservation.periodBindingAuthorization));
   await new Promise(resolve=>setTimeout(resolve,10));
-  const next=payloadAt(new Date().toISOString()),nextSaved=await saveSoccerReaderSnapshot(next);
-  const current=await loadSoccerReaderSnapshot('epl',today);
-  const official={id:'soccer:epl:123',sourceId:'123',league:'epl',date:today,startTime:`${today}T14:00:00.000Z`,status:'scheduled',
+  // Production regression: a legitimately registered device later loads the
+  // same desktop app through its explicit index document. Both periods must
+  // retain the actual index URL and the same immutable capture receipts.
+  const next=payloadAt(new Date().toISOString(),indexPage),nextSaved=await saveSoccerReaderSnapshot(next);
+  const current=await loadSoccerReaderSnapshot('epl',boardDate);
+  const official={id:'soccer:epl:123',sourceId:'123',league:'epl',date:boardDate,startTime:`${boardDate}T14:00:00.000Z`,status:'scheduled',
     home:{sourceId:'306',name:'Hull City'},away:{sourceId:'337',name:'Brentford'}};
   const matched=matchSoccerReaderGames(current,[official]);
   const ft=matched[0].markets.filter(m=>m.period==='FT');assert.equal(ft.length,2);
   assert.ok(ft.every(m=>soccerMarketHasVerifiedPeriodResolution(m)));
   assert.equal(soccerReaderPeriodBindingDiagnostics(matched,current).resolvedMarketCount,2);
+  assert.ok(ft.every(m=>m.periodResolution.observation.pageUrl===indexPage),'resolution preserves the original page URL');
+  const analysisNow=Date.now();
+  const quotes=buildSoccerMarketDirections({reader:current,matchedGames:matched,game:official,now:analysisNow}).flatMap(direction=>direction.quotes);
+  assert.equal(quotes.filter(quote=>quote.period==='FT').length,4,'both FT market sides enter the scoring adapter');
+  assert.equal(quotes.filter(quote=>quote.period==='HT').length,4,'HT market scope remains explicit');
+  for(const quote of quotes)assert.equal(adaptSoccerReaderQuote({quote,game:official,now:analysisNow}).ok,true,`${quote.period}: ${quote.side}`);
   assert.equal(current.games[0].markets.find(m=>m.period==='UNKNOWN').line,'1+50');
   assert.equal(current.games[0].markets[0].serverObservation.observedAt,nextSaved.observedAt);
   const cert=current.games[0].markets[0].serverObservation.periodBindingAuthorization;
@@ -86,8 +104,21 @@ try {
   }
   const moved=structuredClone(current);moved.games[0].markets.forEach(m=>{m.serverObservation.deviceHash='9'.repeat(64);});
   assert.equal(resolvedCount(moved),0,'a valid certificate cannot transfer to another device');
-  const movedPage=structuredClone(current);movedPage.games[0].markets.forEach(m=>{m.serverObservation.pageUrl='https://www.tai888.in/unrelated/';});
-  assert.equal(resolvedCount(movedPage),0,'device continuation is confined to its confirmed desktop source path');
+  for(const pageUrl of rejectedPages){
+    const movedPage=structuredClone(current);movedPage.games[0].markets.forEach(m=>{m.serverObservation.pageUrl=pageUrl;});
+    assert.equal(resolvedCount(movedPage),0,'device continuation is confined to its confirmed desktop source path');
+    assert.deepEqual(soccerReaderPeriodBindingDiagnostics(matchSoccerReaderGames(movedPage,[official]),movedPage).blockerCounts,
+      {SOURCE_PAGE_MISMATCH:2},'page rejection must not be mislabeled as a timestamp failure');
+  }
+  const detachedHalf=structuredClone(current);detachedHalf.games[0].markets.filter(m=>m.period==='HT')
+    .forEach(m=>{m.serverObservation.pageUrl='https://www.tai888.in/newapp/';});
+  assert.equal(resolvedCount(detachedHalf),0,'equivalent entry paths cannot merge different capture identities');
+  assert.deepEqual(soccerReaderPeriodBindingDiagnostics(matchSoccerReaderGames(detachedHalf,[official]),detachedHalf).blockerCounts,
+    {SAME_CAPTURE_HALF_MISSING:2});
+  const invalidTime=structuredClone(current);invalidTime.games[0].markets.forEach(m=>{m.serverObservation.receivedAt='invalid';});
+  assert.equal(resolvedCount(invalidTime),0,'page compatibility cannot waive source receipt time validation');
+  assert.deepEqual(soccerReaderPeriodBindingDiagnostics(matchSoccerReaderGames(invalidTime,[official]),invalidTime).blockerCounts,
+    {OBSERVATION_TIME_INVALID:2});
   const tooOld=structuredClone(current);tooOld.games[0].markets.forEach(m=>{m.serverObservation.observedAt=new Date(Date.parse(cert.registeredAt)-1).toISOString();});
   assert.equal(resolvedCount(tooOld),0,'source time preceding actual registration stays unknown');
   const unresolved=structuredClone(current);unresolved.games[0].markets.forEach(m=>{delete m.serverObservation.periodBindingAuthorization;});
