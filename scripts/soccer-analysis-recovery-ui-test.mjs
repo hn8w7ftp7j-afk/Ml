@@ -1,4 +1,6 @@
-import { buildSoccerRanking } from '../lib/soccer/ranking.js';
+import { soccerHighScoreCandidates } from '../lib/soccer/league-bet-status.js';
+import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
+import { buildSoccerRanking, SOCCER_RANK_MARKETS } from '../lib/soccer/ranking.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -475,7 +477,8 @@ await test('fast handoff polling stops after its bounded window and unmount abor
       if(at===121000){assert.equal(h.reads.length,25,'the unchanged 120-second handoff must return to the normal interval');break;}
       last.respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:{...pending,checkedAt:new Date(now+at).toISOString()}});await flush();h.render();
     }
-    h.setNow(now+146000);await h.tick(1000);assert.equal(h.reads.length,26);const held=h.reads.at(-1);assert.equal(held.options.signal.aborted,false);
+    h.setNow(now+135999);await h.tick(1000);assert.equal(h.reads.length,25,'after the fast window, normal polling still waits twenty seconds');
+    h.setNow(now+136000);await h.tick(1000);assert.equal(h.reads.length,26,'bounded fast follow-up returns to the transport-safe normal cadence');const held=h.reads.at(-1);assert.equal(held.options.signal.aborted,false);
     h.unmount();await flush();assert.equal(held.options.signal.aborted,true);assert.equal(h.timers.size,0);assert.equal(h.posts.length,0);
   }finally{h.unmount();await flush();}
 });
@@ -593,4 +596,77 @@ await test('an immediate fallback child read cannot cancel its parent revocation
   }finally{h.flushStateUpdates();h.unmount();await flush();}
 });
 
+await test('normal polling budgets a slow full response inside the unchanged 45-second receipt lifetime', async () => {
+  const f=await soccerPredictionLiveFixture({now}),row=f.game,raw=f.build();
+  const make=(letter,sequence,checkedAt)=>{
+    const body=atomicBody(row,{...raw,persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',
+      revision:letter.repeat(64),analysisRunId:`soccer-slow-current-${sequence}`,validUntil:new Date(now+180000).toISOString()},sequence,checkedAt);
+    body.currentVersion=publishSoccerAnalysisCandidates(body.currentVersion,{currentStatus:body.currentResearch,now:checkedAt});return body;
+  };
+  const before=make('a','1',now),after=make('b','2',now+20001),h=harness({games:[row]});
+  const ranked=()=>buildSoccerRanking([row],{[row.id]:{...h.state[0][row.id],data:{...h.state[0][row.id].data,
+    publishedCurrent:h.ctx.soccerResearchIsCurrent(h.state[0][row.id])}}},{now:h.ctx.Date.now()}).entries.length;
+  try{
+    h.mount();h.reads[0].respond(before);await flush();h.render();const count=ranked();assert.ok(count>0);
+    h.setNow(now+19999);await h.tick(1000);assert.equal(h.reads.length,1);
+    h.setNow(now+20000);await h.tick(1000);assert.equal(h.reads.length,2,'normal current read starts with room for its whole 20-second timeout');
+    assert.equal(new URL(h.reads[1].url,'https://fixture.invalid').searchParams.get('revision'),before.currentVersion.revision);
+    for(const at of [30000,35000,38000]){h.setNow(now+at);await h.tick(1000);h.render();assert.equal(ranked(),count,'the prior authorized receipt stays valid while the full body travels');}
+    h.reads[1].respond(after);await flush();h.render();assert.equal(ranked(),count);assert.equal(h.state[0][row.id].data.revision,after.currentVersion.revision);
+    assert.equal(h.reads.length,2,'the complete response needs no fallback head');
+    h.setNow(now+65001);h.render();assert.equal(h.ctx.soccerResearchIsCurrent(h.state[0][row.id]),false,'a lost future poll still expires 45 seconds after the actual request start');
+  }finally{h.unmount();await flush();}
+});
+
 console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior groups passed.`);
+
+// A new current response can arrive between the workspace's ten-second timer
+// ticks. Execute the actual parent JSX with persistent hooks, real model quotes
+// and publication proof so the candidate list and league badge share the clock.
+{
+  const workspaceSource=fs.readFileSync('app/soccer/workspace.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
+  const workspaceCompiled=await transform(workspaceSource,{filename:'workspace-clock.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
+  const baseTime=Date.now(),f=await soccerPredictionLiveFixture({now:baseTime}),raw=f.build();
+  const published=(letter,checkedAt)=>{
+    const data={...raw,persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',
+      revision:letter.repeat(64),analysisRunId:`soccer-workspace-clock-${letter}`,qualificationVersion:'2',quoteGeneration:'9',validUntil:new Date(baseTime+180000).toISOString()};
+    const receipt={publishedCurrent:true,reason:'ACTIVE',analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',
+      revision:data.revision,analysisRunId:data.analysisRunId,qualificationVersion:data.qualificationVersion,quoteGeneration:data.quoteGeneration,
+      checkedAt:new Date(checkedAt).toISOString(),validUntil:data.validUntil,formalScoringEnabled:false,executable:false};
+    return publishSoccerAnalysisCandidates(data,{currentStatus:receipt,now:checkedAt});
+  };
+  let wallTime=baseTime+30000,index=0,effectCount=0,timerCount=0,cleanupCount=0;
+  const hookState=[],effects=[],intervals=new Map();
+  class WorkspaceDate extends Date {static now(){return wallTime;}}
+  const live=vm.createContext({React,Date:WorkspaceDate,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerTeamLabel,soccerHighScoreCandidates,
+    SoccerRecordProvider:({children})=>children,SoccerRecordButton:()=>null,SoccerBetRecords:()=>null,
+    useState:initial=>{const at=index++;if(!(at in hookState))hookState[at]=typeof initial==='function'?initial():initial;
+      return[hookState[at],value=>{hookState[at]=typeof value==='function'?value(hookState[at]):value;}];},
+    useEffect:effect=>{if(effectCount++===0)effects.push(effect);},
+    setInterval:(callback,delay)=>{const id=++timerCount;intervals.set(id,{callback,delay});return id;},
+    clearInterval:id=>{cleanupCount++;intervals.delete(id);}});
+  vm.runInContext(workspaceCompiled.code,live);
+  function renderLive(data){index=0;const tree=live.SoccerWorkspace({league:f.league,date:f.date,games:[f.game],
+    states:{[f.game.id]:{status:'done',data}},run:()=>{},children:[],onHighScoreStatusChange:()=>{}});
+    return{tree,html:renderToStaticMarkup(tree),candidates:tree.props.candidates};}
+  const old=published('a',baseTime+20000);
+  renderLive(old);hookState[0]='ranking';
+  const cleanups=effects.map(effect=>effect());
+  const first=renderLive(old),count=first.candidates.length;assert.ok(count>0);
+  assert.equal(intervals.size,1);assert.equal([...intervals.values()][0].delay,10000);
+  wallTime=baseTime+33000;const next=published('b',baseTime+31000);
+  const stale=buildSoccerRanking([f.game],{[f.game.id]:{status:'done',data:next}},{now:baseTime+30000});
+  assert.equal(stale.currentGames,1);assert.equal(stale.entries.length,0,'the previous timer snapshot reproduces one current game with zero rows');
+  const arrival=renderLive(next);
+  assert.equal(arrival.candidates.length,count,'arrival must immediately update the league badge without waiting for a timer tick');
+  assert.equal((arrival.html.match(/class="soccerRankRow"/g)||[]).length,count,'the actual ranking JSX must use the same current render time');
+  assert.match(arrival.html,new RegExp(`1 場目前分析｜${count} 個候選方向`));
+  assert.equal(timerCount,1,'payload re-renders never restart the clock interval');
+  assert.equal(cleanupCount,0);
+  const future=published('c',wallTime+1);
+  assert.equal(renderLive(future).candidates.length,0,'a genuinely future receipt is still rejected');
+  wallTime=baseTime+180000;
+  assert.equal(renderLive(next).candidates.length,0,'an unrelated render at the exact original expiry cannot retain scores until the next timer');
+  for(const cleanup of cleanups)cleanup?.();assert.equal(intervals.size,0);assert.equal(cleanupCount,1);
+  console.log('PASS actual workspace clock: real model rows and league badge survive a valid receipt between ticks; future receipts and exact immutable expiry remain rejected, with one stable timer and cleanup.');
+}
