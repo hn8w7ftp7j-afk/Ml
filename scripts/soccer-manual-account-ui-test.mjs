@@ -1,3 +1,4 @@
+import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -10,7 +11,7 @@ import { soccerReaderIdentityVerified } from '../lib/soccer/reader-identity-proo
 const source=fs.readFileSync('app/soccer/bet-records.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const code=await transform(source,{filename:'records.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 let state=[],cursor=0,action,ledger;
-const context=vm.createContext({React,Date,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified,
+const context=vm.createContext({React,Date,soccerTeamLabel,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified,
   useState:initial=>{const i=cursor++;if(!(i in state))state[i]=initial;return[state[i],value=>{state[i]=value;}];}});
 vm.runInContext(code.code,context);
 const record={id:'id',league:'epl',date:'2026-10-20',gameId:'soccer:epl:1',period:'FT',kind:'TOTAL',side:'over',line:'3平',water:.95,stake:10000,status:'OPEN',sourceIdentityStatus:'SELF_ASSERTED_UNVERIFIED',home:'甲',away:'乙',recordedAt:'2026-10-20T00:00:00Z'};

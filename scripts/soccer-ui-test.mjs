@@ -67,7 +67,7 @@ await test('direct UCL links retain league, real date and view; invalid inputs f
 });
 await test('club names translate without changing provider identities or league membership', () => {
   const { api } = context();
-  const labels = { Arsenal: '兵工廠', 'Manchester City': '曼城', 'Manchester United': '曼聯', 'Tottenham Hotspur': '熱刺', Liverpool: '利物浦', Chelsea: '切爾西', 'Real Madrid': '皇家馬德里', Barcelona: '巴塞隆納', 'Paris Saint-Germain': '巴黎聖日耳曼', 'Bayern München': '拜仁慕尼黑', 'Borussia Dortmund': '多特蒙德', Internazionale: '國際米蘭', Juventus: '尤文圖斯' };
+  const labels = { 'Hull City': '侯城', '赫爾城': '侯城', 'Brighton & Hove Albion': '白禮頓', '布萊頓': '白禮頓', Arsenal: '兵工廠', 'Manchester City': '曼城', 'Manchester United': '曼聯', 'Tottenham Hotspur': '熱刺', Liverpool: '利物浦', Chelsea: '切爾西', 'Real Madrid': '皇家馬德里', Barcelona: '巴塞隆納', 'Paris Saint-Germain': '巴黎聖日耳曼', 'Bayern München': '拜仁慕尼黑', 'Borussia Dortmund': '多特蒙德', Internazionale: '國際米蘭', Juventus: '尤文圖斯' };
   for (const [name, expected] of Object.entries(labels)) {
     const team = { id: 'soccer:ucl:team:123', sourceId: '123', name };
     const before = { ...team };

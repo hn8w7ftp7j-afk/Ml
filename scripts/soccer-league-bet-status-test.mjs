@@ -1,3 +1,4 @@
+import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 import assert from 'node:assert/strict';
 import { candidateFixture } from './helpers/soccer-candidate-fixture.mjs';
 import fs from 'node:fs';
@@ -38,7 +39,7 @@ console.log('PASS soccer card summary with mocked synthetic schedule authority: 
 
 const workspaceSource=fs.readFileSync('app/soccer/workspace.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
 const workspaceCode=await transform(workspaceSource,{filename:'soccer-card-workspace.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const workspaceContext=vm.createContext({React,Date,soccerHighScoreCandidates,SoccerRecordProvider:()=>null,useEffect:()=>{},useState:value=>[typeof value==='function'?value():value,()=>{}]});
+const workspaceContext=vm.createContext({React,Date,soccerTeamLabel,soccerHighScoreCandidates,SoccerRecordProvider:()=>null,useEffect:()=>{},useState:value=>[typeof value==='function'?value():value,()=>{}]});
 vm.runInContext(workspaceCode.code,workspaceContext);
 const onStatus=()=>{};
 const workspaceTree=workspaceContext.SoccerWorkspace({games:[game],states,run:()=>{},league,date,onHighScoreStatusChange:onStatus,children:[]});
@@ -54,7 +55,7 @@ const {code}=await transform(source,{filename:'soccer-card-records.jsx',jsc:{par
 let cursor=0,hooks=[],effects=[],dirty=false,tree;
 const requests=[],updates=[];
 let props={league,date,candidates:report.candidates,analysisReady:true,onHighScoreStatusChange:value=>updates.push(value),children:[]};
-const context=vm.createContext({React,Date,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,summarizeSoccerHighScoreBets,
+const context=vm.createContext({React,Date,soccerTeamLabel,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,summarizeSoccerHighScoreBets,
   createContext:()=>({Provider:'provider'}),
   useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],value=>{hooks[i]=typeof value==='function'?value(hooks[i]):value;dirty=true;}];},
   useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},

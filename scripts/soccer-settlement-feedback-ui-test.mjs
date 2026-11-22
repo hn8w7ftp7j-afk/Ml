@@ -1,3 +1,4 @@
+import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -14,7 +15,7 @@ const compiled=await transform(source,{filename:'soccer-records-feedback.jsx',
 let cursor=0,hooks=[],effects=[],dirty=false,tree;
 let props={league:'epl',date:'2026-11-07',children:[]};
 const requests=[];
-const ctx=vm.createContext({React,Date,URLSearchParams,AbortSignal,
+const ctx=vm.createContext({React,Date,soccerTeamLabel,URLSearchParams,AbortSignal,
   soccerRecordKey:r=>r.id||r.gameId,
   soccerRecordStats:()=>({active:0,cancelled:0,stake:0,settled:0,selfReportedSettled:0,pending:0,winRate:null,profit:0,roi:null}),
   soccerMarketName:()=>'',soccerReaderIdentityVerified:()=>false,
