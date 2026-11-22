@@ -74,6 +74,7 @@
 .soccerRankScore{font-weight:800;color:#7de5ae;font-size:28px}
 .soccerRankScore small{font-weight:400;font-size:12px}
 .soccerRankBody{min-width:0}
+.soccerRankBody .soccerRankSelection{font-weight:800;color:#7de5ae;font-size:17px;line-height:1.5;overflow-wrap:anywhere}
 .soccerRankBody .soccerRankPick{font-weight:700;color:#e0edf7;font-size:15px}
 .soccerRankBody p,.soccerRankBody time{font-size:14px}
 .soccerRankActions{display:flex;flex-direction:column;gap:8px;min-width:145px}
