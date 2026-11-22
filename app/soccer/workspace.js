@@ -11,6 +11,15 @@ import { SoccerModelFamilyPanel } from './model-family-panel.js';
 import { soccerHighScoreCandidates } from '../../lib/soccer/league-bet-status.js';
 const num=v=>Number.isFinite(v)?v.toFixed(2):'—';
 const time=v=>Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
+function rankingPickLabel(game,quote){
+  if(quote.kind==='HANDICAP'&&['home','away'].includes(quote.side)){
+    return `${soccerTeamLabel(game[quote.side])}（${quote.side==='home'?'主隊':'客隊'}）`;
+  }
+  if(quote.kind==='TOTAL'&&['over','under'].includes(quote.side)){
+    return `${quote.side==='over'?'大球':'小球'}（兩隊總進球）`;
+  }
+  return '方向待確認';
+}
 export function SoccerValidationPanel({league}){
   const validation=soccerValidationArtifacts(),research=validation.leagues[league];
   const halfTime=soccerHalfTimeArtifacts()?.leagues?.[league]?.diagnostic;
@@ -32,7 +41,7 @@ export function SoccerRanking({games,states,run,now,externalBusy=false,onShowRes
   }
   const renderEntry=(e,i)=><article className="soccerRankRow" key={e.stableKey} data-soccer-rank-key={e.stableKey}>
     <b aria-label={`方向第 ${i+1} 名`}>{i+1}</b><div className="soccerRankScore">{e.score==null?'—':e.score.toFixed(1)}<small>{e.prediction?'預測 S':'S 分數'}</small></div>
-    <div className="soccerRankBody"><h3>{soccerTeamLabel(e.game.home)}（主）對 {soccerTeamLabel(e.game.away)}（客）</h3><p className="soccerRankPick">{e.market}｜{e.quote.label}｜水位 {e.quote.water}</p><p>W {num(e.W==null?null:e.W*100)}%｜{e.prediction?'模型情境 R':'R'} {num(e.R==null?null:e.R*100)}%</p><time dateTime={e.game.startTime}>{time(e.game.startTime)}（台灣）</time>
+    <div className="soccerRankBody"><h3>{soccerTeamLabel(e.game.home)}（主）對 {soccerTeamLabel(e.game.away)}（客）</h3><p className="soccerRankSelection">下注方向：{rankingPickLabel(e.game,e.quote)}</p><p className="soccerRankPick">{e.market}｜{e.quote.label}｜水位 {e.quote.water}</p><p>W {num(e.W==null?null:e.W*100)}%｜{e.prediction?'模型情境 R':'R'} {num(e.R==null?null:e.R*100)}%</p><time dateTime={e.game.startTime}>{time(e.game.startTime)}（台灣）</time>
       <details className="soccerDetails soccerRankDetails"><summary>評分明細</summary><p>{e.prediction?'依現有資料預測・完整模型誤差未驗證':'已通過目前盤口資格核對'}。</p><p>原盤時間：{time(e.quote.provenance?.observedAt)}（台灣）</p></details>
     </div><div className="soccerRankActions"><SoccerRecordButton game={e.game} result={e.result} quote={e.quote}/><button className="mini secondary" disabled={externalBusy||['queued','loading'].includes(states[e.game.id]?.status)} onClick={()=>run(e.game)}>重新分析</button></div>
   </article>;
