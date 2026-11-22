@@ -12,7 +12,7 @@ async function captureReaderPass(scope,state){
   'use step';
   const result=await runSoccerReaderContinuationPass(scope,state);
   console.info('SOCCER_READER_CONTINUATION_PASS',JSON.stringify({runId:getWorkflowMetadata().workflowRunId,league:result.league,date:result.date,status:result.status,
-    stopped:result.stopped,delayMs:result.delayMs,checked:result.summary?.checked??0,captured:result.summary?.captured??0,
+    stopped:result.stopped,delayMs:result.delayMs,checked:result.summary?.checked??0,captured:result.summary?.captured??0,refreshed:result.summary?.refreshed??0,
     reason:result.summary?.continuation?.reason??null}));
   return result;
 }
@@ -23,10 +23,10 @@ export async function soccerReaderCaptureWorkflow(scope){
   // Persist the clock separately so even a retry of the first capture step
   // cannot reset the original run window after partial database work.
   let state=await initializeReaderRun(scope);
-  const totals={checked:0,captured:0,duplicate:0,retryable:0,deferred:0};
+  const totals={checked:0,captured:0,refreshed:0,duplicate:0,retryable:0,deferred:0};
   for(let batch=0;batch<32;batch++){
     const result=await captureReaderPass(scope,state);
-    for(const key of ['checked','captured','duplicate','retryable','deferred'])totals[key]+=result.summary?.[key]||0;
+    for(const key of ['checked','captured','refreshed','duplicate','retryable','deferred'])totals[key]+=result.summary?.[key]||0;
     if(result.stopped)return{league:result.league,date:result.date,status:result.status,batches:batch+1,
       ...totals,executable:false,formalScoringEnabled:false};
     state={startedAt:result.startedAt,deadlineAt:result.deadlineAt};

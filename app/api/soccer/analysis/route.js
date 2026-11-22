@@ -12,10 +12,19 @@ export async function GET(request){
   const denied=await requireApiAuth(request);if(denied)return denied;
   const rate=checkRateLimit(request,{id:'soccer-evidence-history',limit:90,windowMs:60000});if(!rate.allowed)return rateLimitResponse(rate);
   const p=new URL(request.url).searchParams,league=soccerLeague(p.get('league')),date=p.get('date'),eventId=p.get('eventId'),view=p.get('view');
-  if(!league||!validSoccerDate(date)||!validSoccerAnalysisQuery({league:league?.id,date,eventId})||['league','date','eventId'].some(k=>p.getAll(k).length!==1)||p.getAll('view').length>1||(view!==null&&view!=='current')||[...p.keys()].some(k=>!['league','date','eventId','view'].includes(k)))return response({ok:false,error:'歷史查詢條件無效'},400);
+  if(!league||!validSoccerDate(date)||!validSoccerAnalysisQuery({league:league?.id,date,eventId})||['league','date','eventId'].some(k=>p.getAll(k).length!==1)||p.getAll('view').length>1||(view!==null&&!['current','head'].includes(view))||[...p.keys()].some(k=>!['league','date','eventId','view'].includes(k)))return response({ok:false,error:'歷史查詢條件無效'},400);
   try{
     const gameId=`soccer:${league.id}:${eventId}`;
     if(view==='current')return response({ok:true,league:league.id,date,gameId,currentResearch:await getSoccerCurrentResearchStatus(league.id,date,gameId)});
+    if(view==='head'){
+      // Board recovery needs one full result and the latest attempt, not the
+      // entire history on every poll. Preserve the historical fallback when a
+      // refresh is pending, failed, or expired; qualification remains read-only.
+      const [current,runs,currentResearch]=await Promise.all([loadSoccerCurrentAnalysis(league.id,date,eventId),
+        listSoccerRunHistory(league.id,date,gameId,{limit:1}),getSoccerCurrentResearchStatus(league.id,date,gameId)]);
+      const versions=current.currentVersion?[]:await listSoccerAnalysis(league.id,gameId,date,{limit:1});
+      return response({ok:true,league:league.id,date,gameId,versions,runs,...current,currentResearch});
+    }
     const [versions,runs,current,currentResearch]=await Promise.all([listSoccerAnalysis(league.id,gameId,date),listSoccerRunHistory(league.id,date,gameId),loadSoccerCurrentAnalysis(league.id,date,eventId),getSoccerCurrentResearchStatus(league.id,date,gameId)]);
     return response({ok:true,league:league.id,date,gameId,versions,runs,...current,currentResearch});
   }catch{return response({ok:false,error:'已保存版本暫時無法讀取'},503);}

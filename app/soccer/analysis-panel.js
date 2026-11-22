@@ -130,7 +130,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
   const [states,setStates]=useState({}),[batch,setBatch]=useState(false),[,setClockTick]=useState(0);
   const queue=useRef([]),active=useRef(0),pending=useRef(new Map()),controllers=useRef(new Set()),alive=useRef(true);
   const batchFlight=useRef(false),seenBatchRequests=useRef(new Set()),currentBatchScope=useRef(batchScope);currentBatchScope.current=batchScope;
-  const epochs=useRef(new Map()),refreshSaved=useRef(null),gamesRef=useRef(games);gamesRef.current=games;
+  const epochs=useRef(new Map()),refreshSaved=useRef(null),refreshSavedGames=useRef(null),gamesRef=useRef(games);gamesRef.current=games;
   const latestStates=useRef(states);latestStates.current=states;
   const externalBusyRef=useRef(externalBusy);externalBusyRef.current=externalBusy;
   // One scope epoch fences both a delayed POST and its later status GETs.
@@ -176,7 +176,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       if(reading){for(const id of requested)queuedHistory.add(id);return;}reading=true;clearTimeout(historyTimer);let index=0,nextExpiry=Infinity;const processing=[];
       const targets=gamesRef.current.filter(game=>requested.has(game.id));
       async function worker(){while(current()&&index<targets.length){const game=targets[index++];if(pending.current.has(game.id))continue;const epoch=epochs.current.get(game.id)||0,requestedAt=Date.now(),receipt=beginReceipt(game);
-        try{const body=await json(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId})}`);
+        try{const body=await json(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'head'})}`);
           if(!current())return;const saved=soccerSavedAnalysisState(body,game,Date.now());
           if(saved?.data){saved.currentResearch=body.currentResearch||null;saved.currentResearchRequestedAt=requestedAt;saved.currentResearchReceivedAt=Date.now();if(!saved.currentResearch)needsCurrentCheck.current=true;}
           if(saved?.status==='loading')processing.push(game.id);
@@ -230,9 +230,9 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     function reconnect(){if(!current())return;clearTimeout(pollTimer);const next=discover();if(next){
       const key=`${next.runId}:${next.league}:${next.date}`;if(key!==jobKey){jobKey=key;settled.clear();jobEpochs=new Map(epochs.current);}
       job=next;void poll();}void loadSaved();}
-    refreshSaved.current=reconnect;reconnect();
+    refreshSaved.current=reconnect;refreshSavedGames.current=loadSaved;reconnect();
     if(typeof window!=='undefined'){window.addEventListener('focus',reconnect);window.addEventListener('storage',reconnect);}
-    return()=>{stopped=true;refreshSaved.current=null;clearTimeout(historyTimer);clearTimeout(pollTimer);for(const controller of reads)controller.abort();if(typeof window!=='undefined'){window.removeEventListener('focus',reconnect);window.removeEventListener('storage',reconnect);}};
+    return()=>{stopped=true;refreshSaved.current=null;refreshSavedGames.current=null;clearTimeout(historyTimer);clearTimeout(pollTimer);for(const controller of reads)controller.abort();if(typeof window!=='undefined'){window.removeEventListener('focus',reconnect);window.removeEventListener('storage',reconnect);}};
   },[recoveryScope,runId,date]);
   useEffect(()=>{
     let polling=false,lastPoll=Date.now(),cancelled=false,recheckNeeded=false;
@@ -241,16 +241,23 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       if(cancelled||polling||!alive.current||typeof document!=='undefined'&&document.visibilityState!=='visible')return;
       const targets=games.filter(game=>latestStates.current[game.id]?.status==='done'&&latestStates.current[game.id]?.data?.analysisStatus==='COMPLETED');
       if(!targets.length)return;
-      polling=true;let index=0;
+      polling=true;let index=0;const changed=[];
       async function worker(){while(!cancelled&&alive.current&&index<targets.length){const game=targets[index++],runId=latestStates.current[game.id]?.data?.analysisRunId,epoch=epochFor(game);
         const controller=new AbortController(),requestedAt=Date.now(),receipt=beginReceipt(game);controllers.current.add(controller);const timer=setTimeout(()=>controller.abort(),10000);
         try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'current'})}`,{cache:'no-store',signal:controller.signal}),d=await r.json(),status=d.currentResearch;
           if(!r.ok||!d.ok||d.gameId!==game.id||d.league!==game.league||d.date!==game.date||!status||typeof status.publishedCurrent!=='boolean'||status.executable!==false||status.formalScoringEnabled!==false||!Number.isFinite(Date.parse(status.checkedAt)))throw Error('CURRENT_STATUS_UNVERIFIED');
           patch(game.id,{currentResearch:status,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now()},previous=>!cancelled&&epochFor(game)===epoch&&receiptCurrent(receipt)&&previous?.data?.analysisRunId===runId);
+          // A new receipt revokes the displayed old result but cannot authorize
+          // its scores. Fetch the new immutable version before ranking it.
+          const previous=latestStates.current[game.id];
+          if(!cancelled&&epochFor(game)===epoch&&receiptCurrent(receipt)&&!pending.current.has(game.id)
+            &&previous?.data?.analysisRunId===runId&&status.analysisStatus==='COMPLETED'
+            &&typeof status.analysisRunId==='string'&&typeof status.revision==='string'
+            &&(status.analysisRunId!==runId||status.revision!==previous.data.revision))changed.push(game.id);
         }catch{patch(game.id,{currentResearch:null,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now()},previous=>!cancelled&&epochFor(game)===epoch&&receiptCurrent(receipt)&&previous?.data?.analysisRunId===runId);}
         finally{clearTimeout(timer);controllers.current.delete(controller);}
       }}
-      try{await Promise.all([worker(),worker()]);}finally{polling=false;if(recheckNeeded&&!cancelled){recheckNeeded=false;void pollCurrent();}}
+      try{await Promise.all([worker(),worker()]);}finally{polling=false;if(!cancelled&&changed.length)void refreshSavedGames.current?.(changed);if(recheckNeeded&&!cancelled){recheckNeeded=false;void pollCurrent();}}
     }
     const id=setInterval(()=>{if(typeof document!=='undefined'&&document.visibilityState!=='visible')return;
       // Check cheap metadata each second; redraw the result tree only when its
