@@ -39,11 +39,11 @@ export function SoccerRanking({games,states,run,now,externalBusy=false,onShowRes
   return <section className="panel soccerRanking" aria-label="足球分析排名"><div className="rankingViewTabs" aria-label="足球排名檢視"><button className={view==='ranking'?'active':''} aria-pressed={view==='ranking'} onClick={()=>setView('ranking')}>全部排名</button><button className={view==='order'?'active':''} aria-pressed={view==='order'} onClick={()=>setView('order')}>時間順序排名</button></div>
     <h2>{view==='order'?'時間順序排名':'全部排名'}</h2><div className="rankingViewTabs" aria-label="足球排名盤口篩選">{SOCCER_RANK_MARKETS.map(([key,label])=><button key={key} className={filter===key?'active':''} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}</div>
     <p>{ranking.currentGames} 場目前分析｜{entries.length} 個候選方向｜{view==='order'?'候選依開賽時間排列，同場按盤口分組':'候選依 S、W、R 由高到低'}</p>
-    <p className="soccerAvailability">預測候選・S ≥ 7.2、W／R 為正。完整模型誤差未驗證。</p>
+    <p className="soccerAvailability">同場同期間同盤種只列 EV（W）最高的合格盤口。預測候選・S ≥ 7.2、W／R 為正。完整模型誤差未驗證。</p>
     {ranking.outdatedGames>0&&<p>{ranking.outdatedGames} 場資料已過期或已開賽，請重新核對。</p>}{ranking.pendingGames>0&&<p>{ranking.pendingGames} 場待分析或重新核對。</p>}
     {view==='order'?groups.map((group,index)=><section className="soccerOrderGame" key={group.game.id} aria-label={`第 ${index+1} 場`}><header className="soccerOrderGameHead"><div><span>第 {index+1} 場</span><strong>{soccerTeamLabel(group.game.home)}（主）對 {soccerTeamLabel(group.game.away)}（客）</strong></div><time dateTime={group.game.startTime}>{time(group.game.startTime)}（台灣）</time></header>{group.entries.map(({entry,index})=>renderEntry(entry,index))}</section>):entries.map(renderEntry)}
     {!entries.length&&<div className="emptySmall"><p>目前沒有通過 S／W／R 及目前盤口核對的候選。研究原盤仍可在「分析結果」查閱。</p>{onShowResults&&<button className="secondary" onClick={onShowResults}>查看全部分析分數</button>}</div>}
-    <details className="soccerDetails"><summary>排序與評分說明</summary><p>預測候選維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並通過場次、期間與盤口時效核對。依現有資料預測，缺項及未驗證狀態另行標示。</p><p>全部排名依 S、W、R 排序；時間順序排名依開賽時間分場，同場依全場讓球、全場大小、上半讓球、上半大小排列，同市場按分數排序。場次與方向序號分開顯示。</p></details>
+    <details className="soccerDetails"><summary>排序與評分說明</summary><p>預測候選維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並通過場次、期間與盤口時效核對。依現有資料預測，缺項及未驗證狀態另行標示。</p><p>全部排名依 S、W、R 排序；時間順序排名依開賽時間分場，同場依全場讓球、全場大小、上半讓球、上半大小排列，每個市場先從合格盤口中選 W 最高的一筆，W 相同時依 R、固定盤口識別排序。其他原盤保留在分析結果。場次與方向序號分開顯示。</p></details>
   </section>;
 }
 export default function SoccerWorkspace({games,states,run,league,date,children,analysisReady=true,onHighScoreStatusChange,externalBusy=false}){
