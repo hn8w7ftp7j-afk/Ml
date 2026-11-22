@@ -158,6 +158,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;for(const c of controllers.current)c.abort();for(const q of queue.current.splice(0))q.resolve(null);};},[]);
   const patch=(id,value,guard=null)=>{if(alive.current)setStates(old=>guard&&!guard(old[id])?old:({...old,[id]:{...old[id],...(typeof value==='function'?value(old[id]):value)}}));};
   const recoveryScope=games.map(game=>`${game.id}:${game.date}`).join('|');
+  const currentScope=JSON.stringify(games.map(game=>[game.id,game.sourceId,game.league,game.date,game.startTime,game.status,game.home?.sourceId,game.away?.sourceId,Boolean(game.neutralSite)]));
   useEffect(()=>{
     if(!games.length)return undefined;
     let stopped=false,historyTimer,pollTimer,reading=false,polling=false,job=null,jobKey='';
@@ -254,7 +255,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
   },[recoveryScope,runId,date]);
   useEffect(()=>{
     let polling=false,cancelled=false,recheckNeeded=false;const mountedAt=Date.now(),lastAttempts=new Map(),fastWindows=new Map(),statusReads=new Set(),forcedIds=new Set();
-    const refreshClockBoundary=()=>{if(Object.entries(latestStates.current).some(([id,state])=>soccerResearchIsCurrent(state)!==Boolean(displayedCurrent.current[id]))||games.some(game=>soccerAnalysisPresentation(latestStates.current[game.id],Date.now(),game).analysisStatus!==displayedLifecycle.current[game.id]))setClockTick(value=>value+1);};
+    const refreshClockBoundary=()=>{if(Object.entries(latestStates.current).some(([id,state])=>soccerResearchIsCurrent(state)!==Boolean(displayedCurrent.current[id]))||gamesRef.current.some(game=>soccerAnalysisPresentation(latestStates.current[game.id],Date.now(),game).analysisStatus!==displayedLifecycle.current[game.id]))setClockTick(value=>value+1);};
     function delayFor(game,state,now,minimumDelay){
       // Preserve normal read-only postgame/audit recovery without fast-polling
       // expired prematch scores after kickoff.
@@ -280,7 +281,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     }
     async function pollCurrent(force=false){
       if(cancelled||polling||!alive.current||typeof document!=='undefined'&&document.visibilityState!=='visible')return;
-      const now=Date.now(),watching=games.filter(game=>{
+      const now=Date.now(),watching=gamesRef.current.filter(game=>{
         const state=latestStates.current[game.id];
         return state?.data?.analysisStatus==='COMPLETED'&&['done','loading','error'].includes(state.status)
           &&!pending.current.has(game.id);
@@ -343,7 +344,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     const onVisible=()=>{if(document.visibilityState==='visible'){refreshClockBoundary();void pollCurrent(true);}};
     const onReaderChange=event=>{
       const detail=event?.detail;if(!detail||!['epl','ucl'].includes(detail.league)||!/^[a-f0-9]{64}$/.test(detail.contentHash||''))return;
-      const affected=games.filter(game=>game.league===detail.league&&game.date===detail.date);
+      const affected=gamesRef.current.filter(game=>game.league===detail.league&&game.date===detail.date);
       if(!affected.length)return;
       for(const game of affected){epochs.current.set(game.id,(epochs.current.get(game.id)||0)+1);statusEpoch.current.set(scopeKey(game),epochFor(game)+1);forcedIds.add(game.id);if(latestStates.current[game.id])patch(game.id,{currentResearch:null,currentResearchRequestedAt:Date.now(),currentResearchReceivedAt:Date.now()});}
       if(polling)recheckNeeded=true;else void pollCurrent();
@@ -351,7 +352,9 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',onVisible);
     if(typeof window!=='undefined')window.addEventListener('soccer:reader-content-changed',onReaderChange);
     return()=>{cancelled=true;clearInterval(id);for(const controller of statusReads)controller.abort();if(typeof document!=='undefined')document.removeEventListener('visibilitychange',onVisible);if(typeof window!=='undefined')window.removeEventListener('soccer:reader-content-changed',onReaderChange);};
-  },[games]);
+  // Identical board refreshes must not abort status reads or reset their age
+  // budget; real identity, kickoff and lifecycle changes still restart them.
+  },[currentScope]);
   function pump(){
     while(alive.current&&active.current<2&&queue.current.length){const task=queue.current.shift(),game=task.game;active.current++;const controller=new AbortController(),requestedAt=Date.now(),epoch=epochFor(game),receipt=beginReceipt(game);controllers.current.add(controller);let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},50000);patch(game.id,{status:'loading',error:''});
       fetch('/api/soccer/analysis',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',signal:controller.signal,body:JSON.stringify({league:game.league,date:game.date,eventId:game.sourceId})}).then(async r=>{

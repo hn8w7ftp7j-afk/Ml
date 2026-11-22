@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { checkRateLimit, rateLimitResponse, requireApiAuth } from '../../../lib/security.js';
 import { SOCCER_CAPABILITIES, SOCCER_DATA_VERSION, SOCCER_LEAGUES, soccerDate, soccerLeague, validSoccerDate } from '../../../lib/soccer/contracts.js';
 import { fetchSoccerSchedule, fetchSoccerStandings } from '../../../lib/soccer/data.js';
+import { fetchSoccerMarketBoard } from '../../../lib/soccer/market-board.js';
 import { recordSoccerCohort,soccerJournalConfigured } from '../../../lib/soccer/journal.js';
 import { soccerSystemScoringReadiness } from '../../../lib/soccer/system-readiness.js';
 import { readSoccerReturnErrorLifecycleReadiness } from '../../../lib/soccer/return-error-lifecycle.js';
@@ -22,14 +23,16 @@ export async function GET(request) {
   const scoringSystemReadiness = soccerSystemScoringReadiness(league.id);
   scoringSystemReadiness.returnErrorLifecycle = await readSoccerReturnErrorLifecycleReadiness(league.id);
   if (view === 'status') return response({ ok: true, version: SOCCER_DATA_VERSION, league: league.id, leagues: Object.values(SOCCER_LEAGUES), capabilities: SOCCER_CAPABILITIES, scoringSystemReadiness });
-  if (!['schedule', 'upcoming', 'standings'].includes(view)) return response({ ok: false, code: 'SOCCER_INVALID_VIEW', error: '查詢類型無效' }, 400);
+  if (!['schedule', 'upcoming', 'markets', 'standings'].includes(view)) return response({ ok: false, code: 'SOCCER_INVALID_VIEW', error: '查詢類型無效' }, 400);
   const date = params.get('date') || soccerDate();
   if (!validSoccerDate(date)) return response({ ok: false, code: 'SOCCER_INVALID_DATE', error: '請輸入有效的台灣日期' }, 400);
   try {
-    const result = view === 'standings' ? await fetchSoccerStandings(league.id) : await fetchSoccerSchedule(league.id, date, { windowDays: view === 'upcoming' ? 14 : 1 });
+    const { cohortGames, ...result } = view === 'standings' ? await fetchSoccerStandings(league.id)
+      : view === 'markets' ? await fetchSoccerMarketBoard(league.id, date)
+        : await fetchSoccerSchedule(league.id, date, { windowDays: view === 'upcoming' ? 14 : 1 });
     let cohortPersistence=null;
     if(result.ok&&view!=='standings'){
-      if(soccerJournalConfigured()){try{cohortPersistence=await recordSoccerCohort(result.games);}catch{cohortPersistence={persisted:false,reason:'COHORT_STORAGE_UNAVAILABLE'};}}
+      if(soccerJournalConfigured()){try{cohortPersistence=await recordSoccerCohort(cohortGames || result.games);}catch{cohortPersistence={persisted:false,reason:'COHORT_STORAGE_UNAVAILABLE'};}}
       else cohortPersistence={persisted:false,reason:'COHORT_STORAGE_NOT_CONFIGURED'};
     }
     return response({ ...result, date, view, cohortPersistence, scoringSystemReadiness, ...(view === 'standings' ? { standingsScope: 'CURRENT_PROVIDER_TABLE', historicalAsOfVerified: false, requestedDateIsNavigationOnly: true } : {}), ...(!result.ok ? { error: result.code?.includes('IDENTITY') || result.code?.includes('INVALID') || result.code?.includes('CONFLICT') ? '資料身分或格式核對未通過，請稍後重試' : '足球資料來源暫時無法更新，請稍後重試' } : {}) }, result.ok ? 200 : 503);

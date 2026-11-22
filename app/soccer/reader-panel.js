@@ -6,8 +6,14 @@ const time=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLo
 const name=value=>String(value||'').replace(/[\[［【(（]\s*主\s*[\]］】)）]/gu,'');
 const periodName={FT:'全場',HT:'上半場',UNKNOWN:'期間待確認'};
 const validBoardDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(`${value}T00:00:00Z`))&&new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)===value;
-export function soccerReaderBoardDates({league,date,games=[],view='schedule'}={}){
+export function soccerReaderBoardDates({league,date,games=[],view='schedule',readerDates=[]}={}){
   if(!['EPL','UCL'].includes(league)||!validBoardDate(date))return [];
+  if(view==='markets'){
+    const gameDates=Array.isArray(games)?games.filter(game=>game?.league===league.toLowerCase()
+      &&typeof game.id==='string'&&game.id.startsWith(`soccer:${league.toLowerCase()}:`)
+      &&validBoardDate(game.date)).map(game=>game.date):[];
+    return [...new Set([...(Array.isArray(readerDates)?readerDates.filter(validBoardDate):[]),...gameDates])].sort();
+  }
   if(view!=='upcoming')return [date];
   const limit=Date.parse(`${date}T00:00:00Z`)+13*86400000;
   const dates=Array.isArray(games)?games.filter(game=>game?.league===league.toLowerCase()
@@ -15,10 +21,11 @@ export function soccerReaderBoardDates({league,date,games=[],view='schedule'}={}
     &&validBoardDate(game.date)&&game.date>=date&&Date.parse(`${game.date}T00:00:00Z`)<=limit).map(game=>game.date):[];
   return dates.length?[...new Set(dates)].sort():[date];
 }
-export function SoccerReaderBoards({league,date,games=[],view='schedule'}){
-  const dates=soccerReaderBoardDates({league,date,games,view});
+export function SoccerReaderBoards({league,date,games=[],view='schedule',readerDates=[]}){
+  const dates=soccerReaderBoardDates({league,date,games,view,readerDates});
   return <div className="soccerReaderBoards" aria-label="本頁賽事原盤核對">
     {view==='upcoming'&&dates.length>0&&<p className="soccerAvailability">按本頁賽事日期核對原盤：{dates.join('、')}。各日期及全場／上半場分開保存；未收到該日原盤不代表沒有歷史紀錄。</p>}
+    {view==='markets'&&<p className="soccerAvailability">{dates.length?`跨日盤口已合併顯示｜${dates.join('、')}。`:'等待同步未開賽盤口，收到後會自動顯示。'}全場與上半場依原始盤口分開核對。</p>}
     {dates.map((boardDate,index)=><SoccerReaderPanel key={`${league}:${boardDate}`} league={league} date={boardDate} showDownload={index===0}/>)}
   </div>;
 }

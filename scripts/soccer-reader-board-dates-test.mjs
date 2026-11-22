@@ -24,3 +24,11 @@ const uclRow=React.Children.toArray(ucl.props.children).find(child=>child.type==
 assert.deepEqual([uclRow.props.league,uclRow.props.date],['UCL','2026-11-04']);assert.notEqual(uclRow.key,rows[0].key);
 assert.match(React.Children.toArray(tree.props.children)[0].props.children.join(''),/2026-10-31、2026-11-01/);
 console.log('PASS actual soccer Reader board composition: upcoming dates, period/date separation, bounded scope, independent state keys and single download control');
+
+const markets={...props,view:'markets',readerDates:['2026-11-01','2027-02-01','2026-02-30']};
+assert.deepEqual(plain(ctx.soccerReaderBoardDates(markets)),['2026-10-31','2026-11-01','2027-02-01'],'all saved future market dates remain visible even beyond 14 days');
+assert.deepEqual(plain(ctx.soccerReaderBoardDates({...markets,games:[],readerDates:[]})),[],'empty market boards do not invent a captured date');
+assert.deepEqual(plain(ctx.soccerReaderBoardDates({...markets,readerDates:[],games:[game('2026-11-01','ucl')]})),[],'foreign games cannot create extra Reader requests');
+const marketTree=ctx.SoccerReaderBoards(markets);
+assert.equal(React.Children.toArray(marketTree.props.children).filter(child=>child.type===ctx.SoccerReaderPanel).length,3);
+console.log('PASS all-market Reader dates include unmatched and distant captured dates without a manual date switch');

@@ -36,7 +36,7 @@ const helpers = ['taipeiDate', 'validDate', 'shiftDate', 'readLocation', 'worksp
 function context(extra = {}) {
   const ctx = {
     URLSearchParams, URL, Date, Intl, AbortController, setTimeout, clearTimeout, soccerTeamLabel,
-    SOCCER_LEAGUES: { EPL: {}, UCL: {} }, VIEW_NAMES: { schedule: '', upcoming: '', standings: '' },
+    SOCCER_LEAGUES: { EPL: {}, UCL: {} }, VIEW_NAMES: { markets: '', schedule: '', upcoming: '', standings: '' },
     ...extra,
   };
   vm.createContext(ctx);
@@ -61,7 +61,7 @@ await test('Taipei day rolls over independently of the server timezone', () => {
 await test('direct UCL links retain league, real date and view; invalid inputs fail safely', () => {
   const { api } = context();
   assert.deepEqual(plain(api.readLocation('?league=ucl&date=2026-10-22&view=upcoming')), { league: 'UCL', date: '2026-10-22', view: 'upcoming' });
-  assert.deepEqual(plain(api.readLocation('?league=NBA&date=2026-02-30&view=unknown', new Date('2026-10-17T16:00:00Z'))), location);
+  assert.deepEqual(plain(api.readLocation('?league=NBA&date=2026-02-30&view=unknown', new Date('2026-10-17T16:00:00Z'))), { ...location, view: 'markets' });
   assert.equal(api.workspaceUrl({ league: 'UCL', date: '2026-10-22', view: 'upcoming' }), '/soccer?league=UCL&date=2026-10-22&view=upcoming');
   assert.notEqual(api.boardKey(location), api.boardKey({ ...location, league: 'UCL' }));
 });

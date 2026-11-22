@@ -18,7 +18,7 @@ assert.equal(mainSportSelection('?sport=NBA&league=EPL'), 'NBA');
 assert.equal(mainSportHref('BASEBALL', { league: 'NPB', date: '2026-10-23', view: 'standings', runId: 'foreign-football-run' }), '/?league=NPB&date=2026-10-23');
 assert.equal(mainSportHref('EPL', { date: '2026-02-30', runId: '<script>bad</script>', view: 'foreign' }), '/?sport=EPL');
 assert.equal(mainSportHref('NHL'), null);
-assert.equal(soccerAnalysisResultHref('UCL', '2026-10-22', 'workflow-navigation-101'), '/?sport=UCL&date=2026-10-22&runId=workflow-navigation-101');
+assert.equal(soccerAnalysisResultHref('UCL', '2026-10-22', 'workflow-navigation-101'), '/?sport=UCL&date=2026-10-22&view=schedule&runId=workflow-navigation-101');
 
 const source = fs.readFileSync('app/page.js', 'utf8');
 function handler(name) {
@@ -46,7 +46,7 @@ scopes.EPL = { date: '2026-10-25', view: 'standings', runId: '' };
 ctx.selectSoccer('UCL'); assert.equal(writes.at(-1), '/?sport=UCL&date=2026-10-22&runId=workflow-navigation-101');
 ctx.selectSoccer('EPL'); assert.equal(writes.at(-1), '/?sport=EPL&date=2026-10-25&view=standings', 'returning to a league retains its manual date/view');
 ctx.selectSoccer('EPL', { date: '2026-10-20', runId: 'workflow-navigation-101' });
-assert.equal(entries.EPL.date, '2026-10-20'); assert.match(writes.at(-1), /runId=workflow-navigation-101/);
+assert.equal(entries.EPL.date, '2026-10-20'); assert.equal(entries.EPL.view, 'schedule'); assert.match(writes.at(-1), /view=schedule/); assert.match(writes.at(-1), /runId=workflow-navigation-101/);
 ctx.selectNba(); assert.equal(nba, true); assert.equal(selected, ''); assert.equal(writes.at(-1), '/?sport=NBA&date=2026-10-21');
 ctx.selectBaseball('KBO'); assert.equal(nba, false); assert.equal(selected, ''); assert.equal(baseball, 'KBO');
 assert.equal(writes.at(-1), '/?league=KBO&date=2026-10-23');

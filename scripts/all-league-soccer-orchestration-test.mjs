@@ -113,7 +113,7 @@ assert.equal(progress.total, 7); assert.equal(progress.terminal, 7);
 assert.equal(progress.succeeded, 5); assert.equal(progress.research, 2);
 assert.match(allLeagueAnalysisOutcomeText(progress), /成功 5 聯盟｜研究完成 2 聯盟/);
 assert.equal(allLeagueStatusLabel('insufficient_data'), '資料不足');
-assert.equal(soccerAnalysisResultHref('EPL', '2026-10-20', 'workflow-seven-leagues'), '/?sport=EPL&date=2026-10-20&runId=workflow-seven-leagues');
+assert.equal(soccerAnalysisResultHref('EPL', '2026-10-20', 'workflow-seven-leagues'), '/?sport=EPL&date=2026-10-20&view=schedule&runId=workflow-seven-leagues');
 assert.equal(soccerAnalysisResultHref('MLB', '2026-10-20'), null);
 assert.equal(soccerAnalysisResultHref('UCL', '2026-02-30'), null);
 // Execute the football-page entry effect before React has rendered a saved

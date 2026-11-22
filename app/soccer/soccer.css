@@ -31,7 +31,7 @@
 
 /* Keep date controls, view tabs and analysis actions in separate layout rows. */
 .soccerControls{display:grid;gap:16px;min-width:0}
-.soccerControls .soccerViewNav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0}
+.soccerControls .soccerViewNav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0}
 .soccerControls .soccerAvailability{margin:0;line-height:1.7}
 .soccerDateControls input{box-sizing:border-box;min-inline-size:0;max-inline-size:100%;inline-size:100%;appearance:none;-webkit-appearance:none;overflow:hidden}
 .soccerDateControls input::-webkit-date-and-time-value{min-width:0;text-align:left}
