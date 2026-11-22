@@ -55,12 +55,12 @@ try{
 const routeSource=fs.readFileSync('app/api/soccer/analysis/route.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export const /g,'const ').replace(/export async function /g,'async function ');
 const {analyzeSoccerGame:sharedAnalyze,validSoccerAnalysisQuery}=await import('../lib/soccer/analysis-service.js');
 const at=Date.parse('2026-10-20T12:59:30Z'),kickoff='2026-10-20T13:00:00.000Z';
-let historyReads=0,sourceReads=0,currentLoads=0,savedResult=null,finishInput=null,denied=false,currentActive=true,currentReadError=false,publicationCurrent=true,receiptPatch={},headAvailable=true;
-const historyLimits=[],runLimits=[];
+let historyReads=0,sourceReads=0,currentLoads=0,currentReads=0,savedResult=null,finishInput=null,denied=false,currentActive=true,currentReadError=false,publicationCurrent=true,receiptPatch={},headAvailable=true,headReadError=false,headReceiptPatch={};
+const historyLimits=[],runLimits=[],currentSequence=[];
 const run={runId:'run-new',requestSeq:'4',quoteGeneration:'2',startedAt:new Date(at).toISOString()};
 const current=()=>({analysisRunId:run.runId,revision:'saved-revision',qualificationVersion:'4',quoteGeneration:'2',checkedAt:new Date(at).toISOString(),validUntil:kickoff,publishedCurrent:currentActive,reason:currentActive?'ACTIVE':'QUOTE_CHANGED',analysisStatus:'COMPLETED',selectionResult:currentActive?'RESEARCH_SHADOW':null,executable:false,formalScoringEnabled:false,...receiptPatch});
 const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date:'2026-10-20',startTime:kickoff,status:'scheduled'};
-const readCurrent=async()=>{if(currentReadError)throw Error('controlled current-status outage');return current();};
+const readCurrent=async()=>{currentReads++;if(currentReadError)throw Error('controlled current-status outage');return currentSequence.length?currentSequence.shift():current();};
 const deps={
   enrichSoccerPrematchInputs:async evidence=>evidence,
   beginSoccerAnalysisRun:async()=>run,recordSoccerCohort:async()=>{},fetchSoccerSchedule:async()=>{sourceReads++;return{ok:true,games:[game]};},
@@ -79,7 +79,7 @@ const context=vm.createContext({URL,Date,Number,JSON,Promise,NextResponse:{json:
   soccerLeague:value=>value==='epl'?{id:'epl'}:value==='ucl'?{id:'ucl'}:null,validSoccerDate:value=>/^\d{4}-\d{2}-\d{2}$/.test(value||''),
   getSoccerCurrentResearchStatus:readCurrent,listSoccerAnalysis:async(_league,_game,_date,options)=>{historyReads++;historyLimits.push(options?.limit);return options?.limit===1?[{revision:'latest-history',persisted:true}]:[];},listSoccerRunHistory:async(_league,_date,_game,options)=>{historyReads++;runLimits.push(options?.limit);return options?.limit===1?[{analysisRunId:run.runId,analysisStatus:receiptPatch.analysisStatus||'COMPLETED'}]:[];},
   validSoccerAnalysisQuery,analyzeSoccerGame:query=>sharedAnalyze(query,deps),
-  loadSoccerCurrentAnalysis:async()=>{currentLoads++;return headAvailable?{currentVersion:{revision:'saved-revision',persisted:true},currentRun:{analysisRunId:run.runId}}:{currentVersion:null,currentRun:null};},
+  loadSoccerCurrentAnalysis:async()=>{currentLoads++;if(headReadError)throw Error('controlled current-head outage');const receipt={...current(),...headReceiptPatch};return headAvailable?{currentVersion:{revision:receipt.revision,persisted:true},currentRun:{analysisRunId:receipt.analysisRunId},currentResearch:receipt}:{currentVersion:null,currentRun:null};},
 });
 vm.runInContext(routeSource+';globalThis.handlers={GET,POST};',context);
 const url='https://fixture.invalid/api/soccer/analysis?league=epl&date=2026-10-20&eventId=123';
@@ -87,6 +87,7 @@ const light=await context.handlers.GET(new Request(url+'&view=current')),lightBo
 assert.equal(light.status,200);assert.equal(historyReads,0);assert.equal(sourceReads,0);assert.equal(currentLoads,0);assert.equal(lightBody.currentResearch.publishedCurrent,true);assert.equal(lightBody.versions,undefined);assert.equal(lightBody.currentVersion,undefined);
 assert.equal(light.headers.get('cache-control'),'no-store');
 for(const suffix of ['&view=current&view=current','&view=head&view=current','&view=other','&unknown=1','&limit=1','&date=2026-10-20'])assert.equal((await context.handlers.GET(new Request(url+suffix))).status,400);
+for(const suffix of ['&revision='+ 'a'.repeat(64),'&view=head&revision='+ 'a'.repeat(64),'&view=current&revision=','&view=current&revision=bad','&view=current&revision='+ 'A'.repeat(64),'&view=current&revision='+ 'a'.repeat(64)+'&revision='+ 'b'.repeat(64)])assert.equal((await context.handlers.GET(new Request(url+suffix))).status,400);
 for(const eventId of ['0','9007199254740992','../123'])assert.equal((await context.handlers.GET(new Request(url.replace('eventId=123',`eventId=${eventId}`)))).status,400,'shared safe event-id validation must remain intact');
 const normal=await context.handlers.GET(new Request(url)),normalBody=await normal.json();
 assert.equal(normal.status,200);assert.equal(historyReads,2);assert.equal(currentLoads,1);assert.equal(sourceReads,0);
@@ -94,6 +95,32 @@ assert.deepEqual(normalBody.versions,[]);assert.deepEqual(normalBody.runs,[]);as
 const historyCount=historyLimits.length;
 const compact=await context.handlers.GET(new Request(url+'&view=head')),compactBody=await compact.json();
 assert.equal(compact.status,200);assert.equal(compact.headers.get('cache-control'),'no-store');assert.equal(historyLimits.length,historyCount,'an active head is not duplicated in the history fallback');assert.equal(runLimits.at(-1),1);assert.deepEqual(compactBody.versions,[]);assert.equal(compactBody.currentVersion.revision,'saved-revision');assert.equal(compactBody.runs.length,1);
+const readsBeforeRace=currentReads;
+headReceiptPatch={...current()};
+receiptPatch={analysisRunId:'run-newer',revision:'newer-revision',qualificationVersion:'5',analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'};
+const raced=await(await context.handlers.GET(new Request(url+'&view=head'))).json();
+assert.equal(currentReads,readsBeforeRace,'an active head cannot be paired with a separately read newer receipt');
+assert.equal(raced.currentResearch.analysisRunId,raced.currentRun.analysisRunId);
+assert.equal(raced.currentResearch.revision,raced.currentVersion.revision);
+assert.equal(raced.currentResearch.reason,'ACTIVE');
+assert.equal(raced.runs[0].analysisStatus,'PROCESSING','a staged newer attempt does not revoke the still-valid published version');
+headReceiptPatch={};receiptPatch={};
+const oldRevision='a'.repeat(64),newRevision='b'.repeat(64),racedRevision='c'.repeat(64),conditionalUrl=url+'&view=current&revision='+oldRevision;
+receiptPatch={revision:oldRevision};
+const loadsBeforeConditional=currentLoads,historyBeforeConditional=historyReads;
+const unchanged=await(await context.handlers.GET(new Request(conditionalUrl))).json();
+assert.equal(unchanged.currentResearch.revision,oldRevision);assert.equal(unchanged.currentVersion,undefined);assert.equal(currentLoads,loadsBeforeConditional,'unchanged conditional current reads remain metadata-only');
+receiptPatch={revision:newRevision,analysisRunId:'metadata-run-b'};
+headReceiptPatch={revision:racedRevision,analysisRunId:'atomic-run-c',qualificationVersion:'6'};
+const atomicResponse=await context.handlers.GET(new Request(conditionalUrl)),atomic=await atomicResponse.json();
+assert.equal(atomicResponse.headers.get('cache-control'),'no-store');
+assert.equal(atomic.currentVersion.revision,racedRevision);assert.equal(atomic.currentResearch.revision,racedRevision);assert.equal(atomic.currentRun.analysisRunId,'atomic-run-c');assert.equal(atomic.currentResearch.analysisRunId,'atomic-run-c');assert.deepEqual(atomic.versions,[]);assert.deepEqual(atomic.runs,[]);assert.equal(historyReads,historyBeforeConditional,'conditional handoff does not download unrelated history');
+headAvailable=false;headReceiptPatch={};
+currentSequence.push({...current(),publishedCurrent:true,reason:'ACTIVE'},{...current(),publishedCurrent:false,reason:'QUOTE_CHANGED',revision:null});
+const revoked=await(await context.handlers.GET(new Request(conditionalUrl))).json();
+assert.equal(revoked.currentVersion,undefined);assert.equal(revoked.currentResearch.publishedCurrent,false);assert.equal(revoked.currentResearch.reason,'QUOTE_CHANGED','a head invalidated during the conditional read cannot reuse its earlier ACTIVE receipt');
+headAvailable=true;headReadError=true;assert.equal((await context.handlers.GET(new Request(conditionalUrl))).status,503);headReadError=false;
+receiptPatch={};headReceiptPatch={};
 headAvailable=false;
 for(const [reason,analysisStatus]of [['EXPIRED','COMPLETED'],['REANALYSIS_PENDING','PROCESSING'],['ANALYSIS_NOT_COMPLETED','FAILED'],['ANALYSIS_NOT_COMPLETED','INSUFFICIENT_DATA']]){
   receiptPatch={reason,analysisStatus,publishedCurrent:false};
@@ -102,7 +129,8 @@ for(const [reason,analysisStatus]of [['EXPIRED','COMPLETED'],['REANALYSIS_PENDIN
 }
 headAvailable=true;receiptPatch={};
 denied=true;for(const view of ['current','head'])assert.equal((await context.handlers.GET(new Request(url+'&view='+view))).status,401);denied=false;
-currentReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);currentReadError=false;
+headReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);headReadError=false;
+headAvailable=false;currentReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);currentReadError=false;headAvailable=true;
 assert.equal(sourceReads,0,'head/current reads cannot launch model execution or fetch source feeds');
 const request=()=>new Request('https://fixture.invalid/api/soccer/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({league:'epl',date:game.date,eventId:'123'})});
 const post=await context.handlers.POST(request()),postBody=await post.json();assert.equal(post.status,200);

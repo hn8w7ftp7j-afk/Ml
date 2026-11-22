@@ -6,6 +6,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import * as recovery from '../lib/soccer/background-client.js';
+import { soccerPredictionLiveFixture } from './helpers/soccer-prediction-live-fixture.mjs';
+import { publishSoccerAnalysisCandidates } from '../lib/soccer/candidate-publication.js';
 
 // Run the shipped provider and its real recovery helpers. Effects and fetches
 // are controlled so races are reproducible without depending on a real clock.
@@ -45,15 +47,15 @@ function deferred() {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
-function harness({ games = [game()], runId = '', date = games[0]?.date || '', saved = null } = {}) {
+function harness({ games = [game()], runId = '', date = games[0]?.date || '', saved = null, onState = null } = {}) {
   const state = [], refs = [], effects = [], calls = [], timers = new Map(), listeners = new Map();
-  let si = 0, ri = 0, ei = 0, nextTimer = 0, mounted = false, clientNow = now;
+  let si = 0, ri = 0, ei = 0, nextTimer = 0, mounted = false, clientNow = now, holdUpdates = false;const deferredUpdates=[];
   class ClientDate extends Date { static now() { return clientNow; } }
   const ctx = vm.createContext({buildSoccerRanking,
     React, Date: ClientDate, URLSearchParams, AbortController, AbortSignal, ...recovery, SoccerWorkspace:({children})=>children,
     createContext: () => ({ Provider: 'provider' }),
     useContext: () => ({ states: state[0], run: render().props.value.run }),
-    useState: initial => { const i = si++; if (!(i in state)) state[i] = initial; return [state[i], value => { state[i] = typeof value === 'function' ? value(state[i]) : value; }]; },
+    useState: initial => { const i = si++; if (!(i in state)) state[i] = initial; return [state[i], value => { const apply=()=>{state[i] = typeof value === 'function' ? value(state[i]) : value;if(i===0)onState?.(state[0],clientNow,ctx);};if(i===0&&holdUpdates)deferredUpdates.push(apply);else apply(); }]; },
     useRef: initial => refs[ri++] || (refs[ri - 1] = { current: initial }),
     useEffect: (effect, deps) => { const i = ei++; if (!effects[i]) effects[i] = { effect, deps, cleanup: null }; },
     setTimeout: (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; },
@@ -84,7 +86,8 @@ function harness({ games = [game()], runId = '', date = games[0]?.date || '', sa
     counts: () => plain(ctx.soccerAnalysisCounts(games, state[0])),
     setNow: value => { clientNow = value; },
     setSaved: value => { saved = value; },
-    fire: event => { for (const listener of listeners.get(event) || []) listener(); },
+    fire: (event,detail) => { for (const listener of listeners.get(event) || []) listener(detail===undefined?undefined:{detail}); },
+    holdStateUpdates:()=>{holdUpdates=true;},flushStateUpdates:()=>{holdUpdates=false;for(const apply of deferredUpdates.splice(0))apply();},
     tick: async delay => { const entry = [...timers].find(([, timer]) => timer.delay === delay); assert.ok(entry, `Expected ${delay} ms timer`); if(!entry[1].interval)timers.delete(entry[0]); entry[1].callback(); await flush(); },
   };
 }
@@ -414,6 +417,180 @@ await test('a delayed replacement receipt cannot reload or overwrite a newer man
     assert.equal(h.reads.length,2,'a superseded status request must not schedule recovery work');
     assert.equal(h.state[0][row.id].data.revision,manual.revision);assert.equal(h.counts().completed,1);
   }finally{h.unmount();await flush();}
+});
+
+await test('a staged background refresh never demotes a still-authorized current head', async () => {
+  const row=game(),h=harness();
+  try{
+    h.mount();
+    h.reads[0].respond({...head(row),runs:[{analysisRunId:'soccer-staged-next-101',analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}]});await flush();h.render();
+    assert.equal(h.state[0][row.id].status,'done');assert.equal(h.counts().completed,1);
+    assert.equal(h.state[0][row.id].currentResearch.analysisRunId,analysis(row).analysisRunId);
+    h.setNow(now+5000);await h.tick(1000);assert.equal(h.reads.length,1,'an unrelated staged attempt does not trigger empty/loading or a tight poll loop');
+  }finally{h.unmount();await flush();}
+});
+
+await test('a server PROCESSING receipt follows up in five seconds and only for its own game', async () => {
+  const rows=[game('101'),game('102')],h=harness({games:rows});
+  try{
+    h.mount();for(let i=0;i<2;i++)h.reads[i].respond(head(rows[i]));await flush();h.render();
+    h.setNow(now+30000);await h.tick(1000);assert.equal(h.reads.length,4);
+    const pending={...analysis(rows[0]).currentResearch,analysisRunId:'soccer-pending-next-101',revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING',checkedAt:new Date(now+30000).toISOString()};
+    h.reads[2].respond({ok:true,gameId:rows[0].id,league:rows[0].league,date:rows[0].date,currentResearch:pending});
+    h.reads[3].respond({ok:true,gameId:rows[1].id,league:rows[1].league,date:rows[1].date,currentResearch:{...analysis(rows[1]).currentResearch,analysisStatus:'COMPLETED',checkedAt:new Date(now+30000).toISOString()}});await flush();h.render();
+    assert.equal(h.counts().completed,1,'pending source does not retain the old game authority');
+    h.setNow(now+34999);await h.tick(1000);assert.equal(h.reads.length,4);
+    h.setNow(now+35000);await h.tick(1000);assert.equal(h.reads.length,5);assert.equal(new URL(h.reads[4].url,'https://fixture.invalid').searchParams.get('eventId'),'101');
+    const next=analysis(rows[0],{analysisRunId:pending.analysisRunId,revision:'soccer-fresh-next-101',observedAt:new Date(now+32000).toISOString()});next.currentResearch.checkedAt=new Date(now+35000).toISOString();
+    h.reads[4].respond({ok:true,gameId:rows[0].id,league:rows[0].league,date:rows[0].date,currentResearch:{...next.currentResearch,analysisStatus:'COMPLETED'}});await flush();
+    assert.equal(h.reads.length,6);assert.equal(h.counts().completed,1,'new receipt cannot authorize old data while head loads');
+    h.reads[5].respond(head(rows[0],next));await flush();h.render();assert.equal(h.counts().completed,2);assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('server-restored loading keeps lightweight polling while a local manual request is excluded', async () => {
+  const row=game(),h=harness();
+  try{
+    const provider=h.mount(),pending={...analysis(row).currentResearch,analysisRunId:'soccer-restored-pending-101',revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'};
+    h.reads[0].respond({...head(row,null),versions:[analysis(row)],runs:[{analysisRunId:pending.analysisRunId,analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}],currentResearch:pending});await flush();h.render();
+    assert.equal(h.state[0][row.id].status,'loading');
+    h.setNow(now+1000);await h.tick(1000);assert.equal(h.reads.length,2,'loading from a server run must not leave the current-status polling set');
+    h.reads[1].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:pending});await flush();h.render();
+    const manual=provider.props.value.run(row);h.render();h.setNow(now+6000);await h.tick(1000);
+    assert.equal(h.reads.length,2,'a local POST is never raced by automatic status recovery');
+    const result=analysis(row,{analysisRunId:'soccer-manual-after-pending',revision:'manual-after-pending',observedAt:new Date(now+5000).toISOString()});result.currentResearch.checkedAt=new Date(now+6000).toISOString();
+    h.posts[0].respond(result);await manual;await flush();h.render();assert.equal(h.counts().completed,1);
+  }finally{h.unmount();await flush();}
+});
+
+await test('fast handoff polling stops after its bounded window and unmount aborts a held status read', async () => {
+  const row=game(),h=harness();
+  try{
+    const pending={...analysis(row).currentResearch,analysisRunId:'soccer-long-pending-101',revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'};
+    h.mount();h.reads[0].respond({...head(row,null),versions:[analysis(row)],runs:[{analysisRunId:pending.analysisRunId,analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}],currentResearch:pending});await flush();h.render();
+    h.setNow(now+1000);await h.tick(1000);
+    for(let at=1000;at<=121000;at+=5000){
+      if(at>1000){h.setNow(now+at);await h.tick(1000);}
+      const last=h.reads.at(-1);assert.equal(new URL(last.url,'https://fixture.invalid').searchParams.get('view'),'current');
+      if(at===121000){assert.equal(h.reads.length,25,'the unchanged 120-second handoff must return to the normal interval');break;}
+      last.respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:{...pending,checkedAt:new Date(now+at).toISOString()}});await flush();h.render();
+    }
+    h.setNow(now+146000);await h.tick(1000);assert.equal(h.reads.length,26);const held=h.reads.at(-1);assert.equal(held.options.signal.aborted,false);
+    h.unmount();await flush();assert.equal(held.options.signal.aborted,true);assert.equal(h.timers.size,0);assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('large upcoming boards pace fast follow-up below sixty status reads per minute', async () => {
+  const rows=Array.from({length:12},(_,index)=>game(String(201+index))),h=harness({games:rows});
+  try{
+    h.mount();
+    const pending=row=>({...analysis(row).currentResearch,analysisRunId:`soccer-pending-${row.sourceId}`,revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'});
+    for(let i=0;i<rows.length;i++){
+      const row=rows[i],receipt=pending(row);
+      h.reads[i].respond({...head(row,null),versions:[analysis(row)],runs:[{analysisRunId:receipt.analysisRunId,analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}],currentResearch:receipt});await flush();
+    }
+    h.render();h.setNow(now+1000);await h.tick(1000);assert.equal(h.reads.length,14,'two lightweight workers at most');
+    for(let i=0;i<rows.length;i++){
+      const row=rows[i];h.reads[12+i].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:pending(row)});await flush();
+    }
+    h.render();h.setNow(now+6000);await h.tick(1000);assert.equal(h.reads.length,24,'twelve pending games do not issue twelve reads every five seconds');
+    h.setNow(now+13000);await h.tick(1000);assert.equal(h.reads.length,26,'twelve-second board cadence retains bounded workers');
+  }finally{h.unmount();await flush();}
+});
+
+function atomicBody(row,value,sequence='2',checkedAt=now+30000){
+  const deadline=value.qualificationValidUntil||value.validUntil||new Date(now+180000).toISOString();
+  const receipt={analysisRunId:value.analysisRunId,revision:value.revision,qualificationVersion:sequence,quoteGeneration:'1',
+    checkedAt:new Date(checkedAt).toISOString(),validUntil:deadline,publishedCurrent:true,reason:'ACTIVE',analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',formalScoringEnabled:false,executable:false};
+  return{ok:true,league:row.league,date:row.date,gameId:row.id,versions:[],runs:[],currentResearch:receipt,
+    currentVersion:{...value,qualificationVersion:sequence,quoteGeneration:'1',validUntil:deadline,qualificationValidUntil:deadline,currentResearch:receipt},
+    currentRun:{analysisRunId:value.analysisRunId,revision:value.revision,requestSeq:sequence,quoteGeneration:'1',analysisStatus:'COMPLETED',publishedCurrent:true,validUntil:deadline}};
+}
+
+await test('conditional current response atomically replaces real model rankings without an empty intermediate state', async () => {
+  const f=await soccerPredictionLiveFixture({now}),raw=f.build(),row=f.game;
+  const base={...raw,persisted:true,publishedCurrent:true,analysisStatus:'COMPLETED',selectionResult:'RESEARCH_SHADOW',validUntil:new Date(now+180000).toISOString()};
+  function body(letter,seq,checkedAt){
+    const result=atomicBody(row,{...base,revision:letter.repeat(64),analysisRunId:`soccer-atomic-${seq}`},seq,checkedAt);
+    result.currentVersion=publishSoccerAnalysisCandidates(result.currentVersion,{currentStatus:result.currentResearch,now:checkedAt});return result;
+  }
+  const original=body('a','1',now),next=body('b','2',now+30000),frames=[];
+  const count=(states,clock,ctx)=>buildSoccerRanking([row],Object.fromEntries(Object.entries(states).map(([id,state])=>[id,{...state,data:state.data?{...state.data,publishedCurrent:ctx.soccerResearchIsCurrent(state,clock)}:null}])),{now:clock}).entries.length;
+  const h=harness({games:[row],onState:(states,clock,ctx)=>frames.push(count(states,clock,ctx))});
+  try{
+    h.mount();h.reads[0].respond(original);await flush();h.render();const before=count(h.state[0],now,h.ctx);assert.ok(before>0,'real parser, model, proof and ranking produce actual qualified rows');frames.length=0;
+    h.fire('focus');assert.equal(h.reads.length,2,'hold an older full-head read across the newer conditional response');
+    h.setNow(now+30000);await h.tick(1000);assert.equal(h.reads.length,3);
+    assert.equal(new URL(h.reads[2].url,'https://fixture.invalid').searchParams.get('revision'),original.currentVersion.revision);
+    assert.equal(count(h.state[0],now+30000,h.ctx),before,'old evidence remains valid only until the new response is received');
+    h.reads[2].respond(next);await flush();h.render();
+    assert.equal(h.state[0][row.id].data.revision,next.currentVersion.revision);assert.equal(h.state[0][row.id].currentResearch.revision,next.currentVersion.revision);
+    assert.equal(h.reads.length,3,'complete conditional response needs no second full-head fetch');assert.ok(frames.length>0&&frames.every(size=>size>0),'every state render keeps valid rows; new receipt and data are committed together');
+    h.reads[1].respond(original);await flush();h.render();assert.equal(h.state[0][row.id].data.revision,next.currentVersion.revision,'late old full head with equal source timestamps cannot replace atomic new authority');assert.ok(frames.every(size=>size>0));
+    const changed={...next.currentResearch,publishedCurrent:false,reason:'QUOTE_CHANGED',checkedAt:new Date(now+60000).toISOString()};h.setNow(now+60000);await h.tick(1000);
+    h.reads[3].respond({ok:true,league:row.league,date:row.date,gameId:row.id,currentResearch:changed});await flush();assert.equal(count(h.state[0],now+60000,h.ctx),0,'a genuine source change still removes the prior ranking immediately');
+  }finally{h.unmount();await flush();}
+});
+
+await test('metadata-only new heads fail closed and recover immediately without waiting for another status worker', async () => {
+  const rows=[game('101'),game('102')],h=harness({games:rows});
+  try{
+    h.mount();h.reads[0].respond(head(rows[0]));h.reads[1].respond(head(rows[1]));await flush();h.render();h.setNow(now+30000);await h.tick(1000);
+    const next=analysis(rows[0],{analysisRunId:'soccer-metadata-next',revision:'c'.repeat(64)});
+    h.reads[2].respond({ok:true,league:rows[0].league,date:rows[0].date,gameId:rows[0].id,currentResearch:{...next.currentResearch,analysisStatus:'COMPLETED'}});await flush();
+    assert.equal(h.counts().completed,1,'the known superseded game is removed while the other game remains');assert.equal(h.reads.length,5,'head recovery starts before the other held status response');
+    assert.equal(new URL(h.reads[4].url,'https://fixture.invalid').searchParams.get('view'),'head');assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('conditional full results reject mixed head receipts, run metadata and foreign identity', async () => {
+  const row=game(),original=analysis(row,{revision:'a'.repeat(64)}),next=atomicBody(row,analysis(row,{analysisRunId:'soccer-atomic-replacement',revision:'b'.repeat(64)}));
+  const mutations=[
+    body=>{body.currentRun.revision='c'.repeat(64);},body=>{body.currentRun.requestSeq='9';},body=>{body.currentRun.quoteGeneration='9';},
+    body=>{body.currentRun.validUntil=new Date(now+50000).toISOString();},body=>{body.currentVersion.currentResearch.revision='c'.repeat(64);},
+    body=>{body.currentVersion.currentResearch.analysisRunId='soccer-foreign-run';},body=>{body.currentVersion.currentResearch.quoteGeneration='9';},
+    body=>{body.currentVersion.currentResearch.checkedAt=new Date(now+29000).toISOString();},body=>{body.currentVersion.evidence.game.sourceId='999';},
+    body=>{body.gameId='soccer:ucl:101';},body=>{body.currentResearch.qualificationVersion='9';},
+  ];
+  for(const mutate of mutations){const h=harness();try{
+    h.mount();h.reads[0].respond(head(row,original));await flush();h.render();h.setNow(now+30000);await h.tick(1000);
+    const response=structuredClone(next);response.currentVersion.currentResearch=structuredClone(response.currentVersion.currentResearch);mutate(response);h.reads[1].respond(response);await flush();
+    assert.equal(h.state[0][row.id].data.revision,original.revision,'malformed replacement cannot overwrite the previous full result');assert.equal(h.state[0][row.id].currentResearch,null);assert.equal(h.counts().completed,0);
+  }finally{h.unmount();await flush();}}
+});
+
+await test('a queued manual run fences a conditional full response and its transport uses the full-head timeout', async () => {
+  const rows=[game('101'),game('102'),game('103')],h=harness({games:rows});let tasks=[];
+  try{
+    const provider=h.mount();h.reads[0].respond(head(rows[0]));await flush();h.reads[1].respond(head(rows[1],null));h.reads[2].respond(head(rows[2],null));await flush();h.render();
+    h.setNow(now+30000);await h.tick(1000);assert.equal(h.reads.length,4);assert.ok([...h.timers.values()].some(timer=>timer.delay===20000),'conditional full body is allowed the same twenty-second transport budget as head');
+    tasks=[provider.props.value.run(rows[1]),provider.props.value.run(rows[2]),provider.props.value.run(rows[0])];assert.equal(h.state[0][rows[0].id].status,'queued');
+    h.reads[3].respond(atomicBody(rows[0],analysis(rows[0],{analysisRunId:'soccer-superseded-atomic',revision:'b'.repeat(64)})));await flush();
+    assert.equal(h.state[0][rows[0].id].status,'queued','queued work is protected even before pump allocates its next receipt');assert.equal(h.state[0][rows[0].id].data.analysisRunId,analysis(rows[0]).analysisRunId);
+  }finally{h.unmount();await Promise.all(tasks);await flush();}
+});
+
+await test('Reader invalidation fences a delayed conditional full result before its atomic state update', async () => {
+  const row=game(),h=harness(),original=analysis(row,{revision:'a'.repeat(64)});
+  try{
+    h.mount();h.reads[0].respond(head(row,original));await flush();h.render();h.setNow(now+30000);await h.tick(1000);
+    h.fire('soccer:reader-content-changed',{league:row.league,date:row.date,contentHash:'c'.repeat(64)});h.render();assert.equal(h.state[0][row.id].currentResearch,null);
+    h.reads[1].respond(atomicBody(row,analysis(row,{analysisRunId:'soccer-obsolete-full-result',revision:'b'.repeat(64)})));await flush();
+    assert.equal(h.state[0][row.id].data.revision,original.revision);assert.equal(h.state[0][row.id].currentResearch,null);assert.equal(h.counts().completed,0);
+    assert.equal(h.posts.length,0,'source invalidation only schedules a new read');
+  }finally{h.unmount();await flush();}
+});
+
+await test('an immediate fallback child read cannot cancel its parent revocation in deferred React updates', async () => {
+  const row=game(),h=harness();
+  try{
+    h.mount();h.reads[0].respond(head(row));await flush();h.render();h.setNow(now+30000);await h.tick(1000);h.holdStateUpdates();
+    const next=analysis(row,{analysisRunId:'soccer-fallback-next-result',revision:'b'.repeat(64)});
+    h.reads[1].respond({ok:true,league:row.league,date:row.date,gameId:row.id,currentResearch:{...next.currentResearch,analysisStatus:'COMPLETED'}});await flush();
+    assert.equal(h.reads.length,3,'fallback child has already allocated a newer receipt sequence');
+    h.flushStateUpdates();h.render();assert.equal(h.state[0][row.id].currentResearch.revision,next.revision);assert.equal(h.counts().completed,0,'known supersession is applied before child data arrives, even when React deferred the updater');
+    h.reads[2].respond(head(row,next));await flush();h.render();assert.equal(h.counts().completed,1);
+  }finally{h.flushStateUpdates();h.unmount();await flush();}
 });
 
 console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior groups passed.`);
