@@ -17,7 +17,7 @@ const compiled=await transform(source,{filename:'workspace.jsx',jsc:{parser:{syn
 const calibrationSource=fs.readFileSync('app/soccer/calibration-panel.js','utf8').replace(/export function/g,'function');
 const calibrationCompiled=await transform(calibrationSource,{filename:'calibration-panel.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 let states=[],si=0;
-const ctx=vm.createContext({React,Date,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerTeamLabel,soccerValidationArtifacts,soccerHalfTimeArtifacts,
+const ctx=vm.createContext({React,Date,soccerTeamLabel,buildSoccerRanking,SOCCER_RANK_MARKETS,soccerValidationArtifacts,soccerHalfTimeArtifacts,
   SoccerRecordProvider:({children})=>children,SoccerRecordButton:()=>null,SoccerBetRecords:()=>React.createElement('p',null,'實際下注帳本'),
   SoccerForwardValidationPanel:({league})=>React.createElement('p',null,`${league} 前瞻封存與賽果核對`),
   // Child request/state behavior is exercised by soccer-model-family-panel-test;
@@ -82,17 +82,20 @@ console.log('PASS shipped workspace JSX: six NBA-style tabs, two ranking views, 
 const recordSource=fs.readFileSync('app/soccer/bet-records.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const recordCode=await transform(recordSource,{filename:'records.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 let ledger;
-const recordCtx=vm.createContext({React,Date,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified});
+const recordCtx=vm.createContext({React,Date,soccerTeamLabel,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified});
 vm.runInContext(recordCode.code,recordCtx);
 const game={id:'soccer:epl:123',league:'epl',date:'2026-10-20'},quote={period:'FT',kind:'TOTAL',side:'over',line:'3+50',lineSide:null,water:.95,key:'q1',unit:'GOALS'},result={persisted:true,revision:'a'.repeat(64)};
-const record={...quote,gameId:game.id,league:'epl',date:game.date,id:'id',status:'OPEN',stake:10000,recordedAt:'2026-10-19T00:00:00Z'};
+const record={home:'Hull City',away:'Brighton & Hove Albion',...quote,gameId:game.id,league:'epl',date:game.date,id:'id',status:'OPEN',stake:10000,recordedAt:'2026-10-19T00:00:00Z'};
 ledger={records:[record],status:'ready',date:game.date,pending:new Set()};
 assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/已下注 ✓/);
 ledger.records=[{...record,status:'CANCELLED'}];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/重新紀錄下注/);
 ledger={...ledger,league:'epl',load:()=>{},mutate:()=>{}};assert.match(renderToStaticMarkup(recordCtx.SoccerBetRecords()),/實際輸贏本金的 1%/);
 ledger.settlementPolicy={creditRuleConfirmation:soccerCreditRuleConfirmation('2026-10-30T15:01:39Z'),
   missingTerms:[{code:'REGISTRATION',label:'原盤規則登錄仍待完成'}]};
+const recordBefore=JSON.stringify(ledger.records);
 const confirmedMarkup=renderToStaticMarkup(recordCtx.SoccerBetRecords());
+assert.match(confirmedMarkup,/侯城（主）對 白禮頓（客）/);
+assert.equal(JSON.stringify(ledger.records),recordBefore,'display labels preserve immutable saved records');
 for(const value of ['已確認的信用盤派彩例子','1+20','1-20','1平','淨損益 182 元','淨損益 -198 元','淨損益 0 元','走盤不退','系統證據與登錄待完成'])assert.ok(confirmedMarkup.includes(value),value);
 assert.match(confirmedMarkup,/正式 S 評分的模型校準與誤差驗證仍由系統完成/);
 assert.doesNotMatch(confirmedMarkup,/按投注金額計算|尚待核對的派彩條款|正式評分已啟用/);
@@ -109,7 +112,7 @@ console.log('PASS shipped record JSX: original prices, recorded/cancelled/restor
 // Execute the shipped provider hooks. Only React scheduling and HTTP are fixtures.
 let cursor=0,hooks=[],effects=[],dirty=false,tree,props={league:'epl',date:game.date,children:[]};
 const requests=[];
-const hookCtx=vm.createContext({React,Date,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified,
+const hookCtx=vm.createContext({React,Date,soccerTeamLabel,URLSearchParams,AbortSignal,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified,
   createContext:()=>({Provider:'provider'}),
   useState:initial=>{const i=cursor++;if(!(i in hooks))hooks[i]=typeof initial==='function'?initial():initial;return[hooks[i],v=>{hooks[i]=typeof v==='function'?v(hooks[i]):v;dirty=true;}];},
   useRef:initial=>{const i=cursor++;return hooks[i]??={current:initial};},
