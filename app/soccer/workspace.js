@@ -47,8 +47,11 @@ export function SoccerRanking({games,states,run,now,externalBusy=false,onShowRes
   </section>;
 }
 export default function SoccerWorkspace({games,states,run,league,date,children,analysisReady=true,onHighScoreStatusChange,externalBusy=false}){
-  const [view,setView]=useState('board'),[now,setNow]=useState(Date.now());
-  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),10000);return()=>clearInterval(timer);},[]);
+  const [view,setView]=useState('board'),[,setClockTick]=useState(0);
+  // A newly received proof can be newer than the last timer tick. Validate it
+  // against this render's real clock; the timer only refreshes idle screens.
+  const now=Date.now();
+  useEffect(()=>{const timer=setInterval(()=>setClockTick(value=>value+1),10000);return()=>clearInterval(timer);},[]);
   const name=league==='ucl'?'歐冠':'英超';
   const dates=[date,...games.map(g=>g.date)].sort();
   const reminder=onHighScoreStatusChange?soccerHighScoreCandidates(games,states,{league,date,now,analysisReady}):null;

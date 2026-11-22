@@ -255,13 +255,15 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       const reason=!status?'STATUS_UNVERIFIED':status.analysisStatus==='PROCESSING'||state.status==='loading'?'PROCESSING'
         :status.analysisRunId!==data.analysisRunId||status.revision!==data.revision?'HEAD_HANDOFF'
         :status.publishedCurrent!==true?status.reason||'NOT_CURRENT':nearExpiry?'EXPIRING':null;
-      if(!reason){fastWindows.delete(game.id);return Math.max(30000,minimumDelay);}
+      // The 45-second receipt budget includes the full response's transport
+      // time. Start the normal read early enough for its 20-second timeout.
+      if(!reason){fastWindows.delete(game.id);return Math.max(20000,minimumDelay);}
       const signature=`${status?.analysisRunId||data.analysisRunId}:${status?.revision||''}:${reason}`;
       let window=fastWindows.get(game.id);
       if(window?.signature!==signature){window={signature,startedAt:now};fastWindows.set(game.id,window);}
       // Fast follow-up is scoped to this handoff, never an indefinite retry
       // loop while the Reader or an upstream source is unavailable.
-      return now-window.startedAt<120000?minimumDelay:Math.max(30000,minimumDelay);
+      return now-window.startedAt<120000?minimumDelay:Math.max(20000,minimumDelay);
     }
     async function pollCurrent(force=false){
       if(cancelled||polling||!alive.current||typeof document!=='undefined'&&document.visibilityState!=='visible')return;

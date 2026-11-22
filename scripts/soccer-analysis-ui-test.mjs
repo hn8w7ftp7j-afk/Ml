@@ -197,7 +197,7 @@ const polling=harness(async(url,options)=>{assert.equal(options.method,undefined
 polling.ctx.Date=class extends Date{static now(){return uiNow;}};
 polling.provider();polling.runEffects();
 for(const g of games){const status={...receipt,analysisRunId:`ui-run-${g.sourceId}`,revision:`ui-revision-${g.sourceId}`};polling.state[0][g.id]={status:'done',data:{analysisStatus:'COMPLETED',analysisRunId:status.analysisRunId,revision:status.revision,publishedCurrent:true},currentResearch:status,currentResearchRequestedAt:uiStart,currentResearchReceivedAt:uiStart};}
-polling.provider();uiNow+=29999;polling.tick();assert.equal(pollRequests,0);
+polling.provider();uiNow+=19999;polling.tick();assert.equal(pollRequests,0);
 uiNow++;polling.tick();assert.equal(pollRequests,2);assert.equal(pollMax,2);
 // A newer analysis response arrives while an older status read is in flight.
 const newerState={...polling.state[0][games[0].id],data:{...polling.state[0][games[0].id].data,analysisRunId:'replacement-run',revision:'replacement-revision'},currentResearch:{...receipt,analysisRunId:'replacement-run',revision:'replacement-revision'}};
