@@ -20,14 +20,14 @@ const producerOnly = process.argv[2] === '--producer';
 const contractPath = producerOnly ? process.argv[3] : process.argv[2];
 assert.ok(!producerOnly || typeof contractPath === 'string' && contractPath.length > 0, 'Producer mode requires its actual service/DB output file');
 const sha = character => character.repeat(64);
-function fixture(league = 'epl', W = .0435, R = .024) {
+function fixture(league = 'epl', W = .0435, R = .024, key = 'synthetic-price') {
   const game = { id: `soccer:${league}:123`, sourceId: '123', league, date: '2026-11-10', status: 'scheduled',
     startTime: new Date(now + 3600000).toISOString(), home: { name: '合成主隊', sourceId: '359' }, away: { name: '合成客隊', sourceId: '364' } };
   const score = deterministicScore({ weightedEV: W, robustEV: R, actualWater: true, qaPassed: true, executable: false }).score;
   const result = candidateFixture({ gameId: game.id, league, date: game.date, observedAt: at, persisted: true,
     publishedCurrent: true, analysisStatus: 'COMPLETED', evidence: { game }, formalScoringEnabled: true,
     qualification: { eligible: true }, directions: [{ period: 'FT', direction: 'TOTAL_OVER', eligible: true, score, W, R,
-      qaFlag: 'WARN', quotes: [{ key: 'synthetic-price', period: 'FT', unit: 'GOALS', kind: 'TOTAL', side: 'over', line: '2.5',
+      qaFlag: 'WARN', quotes: [{ key, period: 'FT', unit: 'GOALS', kind: 'TOTAL', side: 'over', line: '2.5',
         lineSide: null, water: .95, fresh: true, prestart: true, provenance: { gameId: game.id, observedAt: at } }] }] }, now);
   result.formalScoringEnabled = false; result.qualification.eligible = false;
   result.predictionContext = { version: 'SOCCER-AVAILABLE-DATA-PREDICTION-v1', mode: 'PREDICTION', contextualGoalEffectApplied: false };
@@ -69,6 +69,20 @@ if (!producerOnly) for (const league of ['epl', 'ucl']) {
   assert.equal(summarizeSoccerHighScoreBets(reminder.candidates, { league, date: value.game.date,
     ledgerReady: true, analysisReady: true }).unbet, 1);
   assert.equal(JSON.stringify(value), before, 'display, readiness and both rankings preserve the immutable data');
+  const alternatives = fixture(league, .4386, .3665, 'first');
+  const second = fixture(league, .528, .4363, 'second');
+  const highest = fixture(league, .6941, .5666, 'highest');
+  const invalid = fixture(league, .9, -.01, 'ineligible');
+  alternatives.result.directions[0].quotes.push(second.result.directions[0].quotes[0],
+    highest.result.directions[0].quotes[0], invalid.result.directions[0].quotes[0]);
+  const savedAlternatives = JSON.stringify(alternatives);
+  const selected = rank(alternatives);
+  assert.equal(selected.entries.length, 1, 'one eligible quote per game and market');
+  assert.equal(selected.entries[0].W, .6941, 'highest eligible EV wins');
+  assert.equal(selected.order[0].stableKey, selected.entries[0].stableKey, 'order view uses same winner');
+  assert.equal(JSON.stringify(alternatives), savedAlternatives, 'all raw alternatives remain intact');
+  alternatives.result.directions[0].quotes.reverse();
+  assert.equal(rank(alternatives).entries[0].stableKey, selected.entries[0].stableKey, 'input order cannot change winner');
   const low = fixture(league, .001, -.0001);
   assert.equal(show(low).status, 'BELOW_THRESHOLD'); assert.ok(show(low).score != null); assert.equal(rank(low).entries.length, 0);
   assert.equal(show({ ...value, now: now + 180000 }).status, 'HISTORICAL'); assert.equal(rank({ ...value, now: now + 180000 }).entries.length, 0);
