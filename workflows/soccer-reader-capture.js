@@ -14,7 +14,7 @@ async function captureReaderPass(scope,state){
   console.info('SOCCER_READER_CONTINUATION_PASS',JSON.stringify({runId:getWorkflowMetadata().workflowRunId,league:result.league,date:result.date,status:result.status,
     stopped:result.stopped,delayMs:result.delayMs,checked:result.summary?.checked??0,captured:result.summary?.captured??0,refreshed:result.summary?.refreshed??0,
     duplicate:result.summary?.duplicate??0,refreshSkipped:result.summary?.refreshSkipped||{},
-    reason:result.summary?.continuation?.reason??null}));
+    reason:result.summary?.continuation?.reason??null,nextDueAt:result.summary?.continuation?.nextDueAt??null}));
   return result;
 }
 captureReaderPass.maxRetries=2;
@@ -23,6 +23,9 @@ export async function soccerReaderCaptureWorkflow(scope){
   'use workflow';
   // Persist the clock separately so even a retry of the first capture step
   // cannot reset the original run window after partial database work.
+  // A durably acknowledged upload starts after its observation was persisted,
+  // so this window covers that observation's original 180-second lifetime.
+  // A newer upload starts its own window; an old one never extends source TTL.
   let state=await initializeReaderRun(scope);
   const totals={checked:0,captured:0,refreshed:0,duplicate:0,retryable:0,deferred:0,refreshSkipped:{}};
   for(let batch=0;batch<32;batch++){
