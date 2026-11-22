@@ -51,6 +51,17 @@ function fixture(league = 'epl', W = .0435, R = .024, key = 'synthetic-price') {
     checkedAt: at, validUntil: result.validUntil, formalEligible: false, executable: false };
   return { game: result.evidence.game, result, now };
 }
+function marketFixture(league, period, direction, key, W = .0435, R = .024) {
+  const value = fixture(league, W, R, key), d = value.result.directions[0], q = d.quotes[0];
+  const kind = direction.startsWith('TOTAL') ? 'TOTAL' : 'HANDICAP';
+  const side = { TOTAL_OVER: 'over', TOTAL_UNDER: 'under', HANDICAP_HOME: 'home', HANDICAP_AWAY: 'away' }[direction];
+  Object.assign(d, { period, direction });
+  Object.assign(q, { period, kind, side, lineSide: kind === 'HANDICAP' ? 'away' : null });
+  Object.assign(q.predictionScore, { period });
+  Object.assign(q.predictionScore.quote, { period, kind, direction: side.toUpperCase(), lineSide: q.lineSide });
+  Object.assign(q.predictionQualification, { period, direction, quoteIdentity: soccerQuoteIdentity(q) });
+  return value;
+}
 const show = ({ game, result, now: clock }) => soccerQuoteScorePresentation({ result, direction: result.directions[0],
   quote: result.directions[0].quotes[0], displayGame: game, now: clock });
 const rank = ({ game, result, now: clock }) => buildSoccerRanking([game], { [game.id]: { status: 'done', data: result } }, { now: clock });
@@ -83,6 +94,31 @@ if (!producerOnly) for (const league of ['epl', 'ucl']) {
   assert.equal(JSON.stringify(alternatives), savedAlternatives, 'all raw alternatives remain intact');
   alternatives.result.directions[0].quotes.reverse();
   assert.equal(rank(alternatives).entries[0].stableKey, selected.entries[0].stableKey, 'input order cannot change winner');
+  // A higher eligible EV must win even when its stress score is lower.
+  const highEV = fixture(league, .7, .001, 'lower-score-higher-ev');
+  assert.ok(highEV.result.directions[0].quotes[0].predictionScore.score < selected.entries[0].score);
+  alternatives.result.directions[0].quotes.push(highEV.result.directions[0].quotes[0]);
+  assert.equal(rank(alternatives).entries[0].W, .7);
+  highEV.result.directions[0].quotes[0].provenance.observedAt = new Date(now - 180000).toISOString();
+  assert.equal(rank(alternatives).entries[0].W, .6941, 'expired highest EV cannot displace a current eligible quote');
+  const tied = fixture(league, .5, .1, 'tie-low-r');
+  const tieA = fixture(league, .5, .2, 'tie-a'), tieB = fixture(league, .5, .2, 'tie-b');
+  tied.result.directions[0].quotes.push(tieA.result.directions[0].quotes[0], tieB.result.directions[0].quotes[0]);
+  const tieWinner = rank(tied).entries[0];
+  assert.equal(tieWinner.R, .2, 'equal W uses R only as a tie breaker');
+  tied.result.directions[0].quotes.reverse();
+  assert.equal(rank(tied).entries[0].stableKey, tieWinner.stableKey, 'equal W/R uses stable identity, not source order');
+  const scoped = marketFixture(league, 'FT', 'HANDICAP_HOME', 'ft-handicap');
+  for (const [period, direction] of [['FT', 'TOTAL_OVER'], ['HT', 'HANDICAP_HOME'], ['HT', 'TOTAL_OVER']]) {
+    scoped.result.directions.push(marketFixture(league, period, direction, `${period}-${direction}`).result.directions[0]);
+  }
+  const opposite = marketFixture(league, 'FT', 'HANDICAP_AWAY', 'ft-handicap-away', .1, .04);
+  scoped.result.directions.push(opposite.result.directions[0]);
+  const scopeRank = rank(scoped);
+  assert.deepEqual(scopeRank.entries.map(e => e.marketKey).sort(), ['FT:HANDICAP', 'FT:TOTAL', 'HT:HANDICAP', 'HT:TOTAL']);
+  assert.equal(scopeRank.entries.find(e => e.marketKey === 'FT:HANDICAP').quote.side, 'away', 'opposite directions share one market winner');
+  const filtered = buildSoccerRanking([scoped.game], { [scoped.game.id]: { status: 'done', data: scoped.result } }, { now, market: 'HT:HANDICAP' });
+  assert.equal(filtered.entries.length, 1); assert.equal(filtered.entries[0].marketKey, 'HT:HANDICAP');
   const low = fixture(league, .001, -.0001);
   assert.equal(show(low).status, 'BELOW_THRESHOLD'); assert.ok(show(low).score != null); assert.equal(rank(low).entries.length, 0);
   assert.equal(show({ ...value, now: now + 180000 }).status, 'HISTORICAL'); assert.equal(rank({ ...value, now: now + 180000 }).entries.length, 0);
@@ -104,15 +140,23 @@ if (!producerOnly) for (const league of ['epl', 'ucl']) {
   assert.equal(show(injected).score, null); assert.equal(rank(injected).entries.length, 0);
 }
 
+if (!producerOnly) {
+  const epl = fixture('epl', .08, .05, 'epl-price'), ucl = fixture('ucl', .1, .05, 'ucl-price');
+  const both = buildSoccerRanking([epl.game, ucl.game], {
+    [epl.game.id]: { status: 'done', data: epl.result }, [ucl.game.id]: { status: 'done', data: ucl.result },
+  }, { now });
+  assert.deepEqual(both.entries.map(e => e.game.league).sort(), ['epl', 'ucl'], 'matching source IDs in different leagues remain separate');
+}
+
 const marketSource = fs.readFileSync('app/soccer/market-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export function/g, 'function');
 const marketCode = await transform(marketSource, { filename: 'prediction-market.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
 const marketContext = vm.createContext({ React, Date, soccerQuoteScorePresentation, soccerScoringReadiness, soccerQuoteScoringBlockers, SoccerRecordButton: () => null });
 vm.runInContext(marketCode.code, marketContext);
 const rankingSource = fs.readFileSync('app/soccer/workspace.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export default function|export function/g, 'function');
 const rankingCode = await transform(rankingSource, { filename: 'prediction-ranking.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
-let stateIndex = 0;
+let stateIndex = 0, rankingView = 'ranking';
 const rankingContext = vm.createContext({ React, Date, buildSoccerRanking, SOCCER_RANK_MARKETS, soccerTeamLabel,
-  useState: initial => [stateIndex++ === 0 ? 'ranking' : initial, () => {}], SoccerRecordButton: () => null });
+  useState: initial => [stateIndex++ === 0 ? rankingView : initial, () => {}], SoccerRecordButton: () => null });
 vm.runInContext(rankingCode.code, rankingContext);
 const analysisSource = fs.readFileSync('app/soccer/analysis-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export default function|export function/g, 'function');
 const analysisCode = await transform(analysisSource, { filename: 'prediction-analysis.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
@@ -129,6 +173,20 @@ if (!producerOnly) for (const league of ['epl', 'ucl']) {
     states: { [value.game.id]: { status: 'done', data: value.result } }, run: () => {}, now }));
   assert.match(table, /soccerRankRow/); assert.match(table, /預測 S/); assert.match(table, /模型情境 R/);
   assert.doesNotMatch(table, /通過正式資格核對/);
+  const three = fixture(league, .4386, .3665, 'render-first');
+  three.result.directions[0].quotes.push(fixture(league, .528, .4363, 'render-second').result.directions[0].quotes[0],
+    fixture(league, .6941, .5666, 'render-highest').result.directions[0].quotes[0]);
+  const winnerKey = rank(three).entries[0].stableKey;
+  for (const view of ['ranking', 'order']) {
+    rankingView = view; stateIndex = 0;
+    const compact = renderToStaticMarkup(rankingContext.SoccerRanking({ games: [three.game],
+      states: { [three.game.id]: { status: 'done', data: three.result } }, run: () => {}, now }));
+    assert.equal((compact.match(/class="soccerRankRow"/g) || []).length, 1, `${view} renders only the winning alternative`);
+    assert.ok(compact.includes(`data-soccer-rank-key="${winnerKey}"`));
+    assert.match(compact, /W 69.41%/);
+  }
+  rankingView = 'ranking';
+
 }
 
 if (contractPath) {
