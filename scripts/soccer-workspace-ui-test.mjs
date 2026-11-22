@@ -54,11 +54,17 @@ for(const league of ['epl','ucl']){
   const games=fixtures.map(f=>f.game),analysisStates=Object.fromEntries(fixtures.map(f=>[f.game.id,{status:'done',data:f.data}]));
   const original=JSON.stringify(analysisStates);
   const rankMarkup=(view,market='all',rows=games)=>{states=[view,market];si=0;return renderToStaticMarkup(ctx.SoccerRanking({games:rows,states:analysisStates,run:()=>{},now:rankingNow}));};
+  const rankedKeys=markup=>[...markup.matchAll(/data-soccer-rank-key="([^"]+)"/g)].map(match=>match[1]).sort();
+  assert.deepEqual(rankedKeys(rankMarkup('ranking')),rankedKeys(rankMarkup('order')),'time grouping must preserve the exact qualified quote set');
+  const orderedMarkup=rankMarkup('order');
+  assert.equal((orderedMarkup.match(/class="soccerOrderGame"/g)||[]).length,2,'time view groups by actual game, not quote count');
+  assert.match(orderedMarkup,/aria-label="第 1 場"/);assert.match(orderedMarkup,/aria-label="方向第 1 名"/);
   for(const view of ['ranking','order']){
     const markup=rankMarkup(view);
     assert.equal((markup.match(/class="soccerRankRow"/g)||[]).length,2,`${league} ${view} includes only eligible candidate rows`);
     assert.match(markup,/合格高分/);assert.match(markup,/合格早場/);assert.match(markup,/2 個候選方向/);
     assert.match(markup,/W 200(?:\.0+)?%/);assert.match(markup,/R 100(?:\.0+)?%/);
+    assert.match(markup,/<details class="soccerDetails soccerRankDetails"><summary>評分明細<\/summary>/,'secondary ranking evidence is collapsed by default');
     for(const fixture of fixtures.slice(2))assert.ok(!markup.includes(fixture.game.home.name),`${league} ${view} excludes ${fixture.game.home.name}`);
     assert.doesNotMatch(markup,/尚無評分者列後方|研究中・正式評分待驗證/);
     const first=view==='ranking'?'合格高分':'合格早場',second=view==='ranking'?'合格早場':'合格高分';

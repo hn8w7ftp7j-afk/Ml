@@ -254,16 +254,19 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
       <div className="soccerMarketQuoteHeading"><strong>{textValue(q.label)||`原盤 ${index+1}`}</strong><span className="soccerMarketResearchTag">{period||'期間待確認'}</span></div>
       <p className="soccerMarketPrice">球頭 <strong>{line||'未提供'}</strong><span>水位 <strong>{water??'未提供'}</strong></span></p>
       <p className="soccerMarketNote">W {returnPct(presentation.W)}｜{presentation.scoreKind==='PREDICTION'?'模型情境 R':'R'} {returnPct(presentation.R)}</p>
-      {presentation.scoreKind==='PREDICTION'&&<p className="soccerMarketNote">依現有資料預測；完整模型誤差未驗證。</p>}
       <p className="soccerScoreStatus" data-score-status={presentation.status}>{presentation.status==='UNAVAILABLE'&&periodConfirmed?(result?.predictionContext?.mode==='PREDICTION'?'預測資料尚未通過核對':'正式評分尚未完成'):presentation.label}</p>
       {blockers.length>0&&<p className="soccerMarketCaution">無法評分：{blockers.slice(0,1).map(item=>item.label).join('；')}。</p>}
     </div></div>
-    {periodConfirmed&&<SoccerConditionalAnalysis quote={q} result={result} game={game} now={now}/>}
-    <SoccerQuoteScoring scoring={q.scoring}/>
-    {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
-    {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
-    {!periodConfirmed?<p className="soccerMarketCaution">期間待確認，暫不計算</p>:<details className="soccerDetails"><summary>比分門檻研究（不是 S 分數）</summary><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</details>}
+    {!periodConfirmed&&<p className="soccerMarketCaution">期間待確認，暫不計算</p>}
     {periodConfirmed&&<SoccerRecordButton game={game} result={result} quote={q}/>}
+    <details className="soccerDetails soccerQuoteDetails"><summary>原盤與評分明細</summary>
+      {presentation.scoreKind==='PREDICTION'&&<p className="soccerMarketNote">依現有資料預測；完整模型誤差未驗證。</p>}
+      {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
+      {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
+      {periodConfirmed&&<SoccerConditionalAnalysis quote={q} result={result} game={game} now={now}/>}
+      <SoccerQuoteScoring scoring={q.scoring}/>
+      {periodConfirmed&&<details className="soccerDetails"><summary>比分門檻研究（不是 S 分數）</summary><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</details>}
+    </details>
   </article>;
 }
 
@@ -288,11 +291,7 @@ export function SoccerProvisionalMarketResearch({value,result,game,now=Date.now(
 export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,result,now=Date.now()}){
   const items=Array.isArray(directions)?directions:[],unknown=Array.isArray(unassignedQuotes)?unassignedQuotes:[];
   const diagnostic=readerDiagnostic(result,game);
-  return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">每筆有效原盤獨立顯示預測 S，沿用既有 S 公式。預測排名維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並核對場次、期間及盤口時效。</p><p className="soccerMarketCaution">依目前可取得的資料預測；缺項保留標示。尚無有效計算依據時不產生分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
-    {result?.predictionContext?.version==='SOCCER-AVAILABLE-DATA-PREDICTION-v1'&&result.predictionContext.mode==='PREDICTION'&&<section className="soccerMarketNote" aria-label="本次預測依據"><strong>本次預測依據</strong><p>比分分布採同聯盟歷史比賽模型，搭配本筆原盤與已保存模型情境。</p>{result.predictionContext.contextualGoalEffectApplied===false&&<p>npxG、人員及比賽條件尚未量化套入本次進球率；已取得的來源資料仍保留供查閱，不以假設係數補值。</p>}<p>缺項會保留標示；模型與完整收益誤差未驗證。</p></section>}
-    <SoccerScenarioResearch result={result} game={game} now={now}/>
-    <SoccerAutomaticAnalysisStatus result={result} game={game} now={now}/>
-    <SoccerScoringReadiness result={result} game={game} now={now}/>
+  return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">預測 S・10 分制｜完整模型誤差未驗證｜詳細依據可展開查看</p>
     {diagnostic&&<p className="soccerMarketNote" role="status" data-reader-status={diagnostic.status}>{readerMessage(diagnostic,game,now)}{Number.isInteger(diagnostic.counts?.assignedQuotes)&&diagnostic.counts.assignedQuotes>0?` 已配入 ${diagnostic.counts.assignedQuotes} 筆方向原盤。`:''}</p>}
     <div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
       const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons).map(reason=>game&&(['live','final'].includes(game.status)||Date.parse(game.startTime)<=now)&&reason===reasonNames.READER_QUOTE_STALE?'此為歷史原盤，現在更新不能重建當時的賽前價格':reason);
@@ -303,6 +302,12 @@ export function SoccerMarketDirections({directions=[],unassignedQuotes=[],game,r
     })}</div>
     {!items.length&&<p className="soccerMarketEmpty">尚無八方向分析，請先核對賽前資料。</p>}
     {unknown.length>0&&<section className="soccerMarketUnassigned"><h4>期間待確認的原盤</h4><p className="soccerMarketCaution">以下原盤未能確認屬全場或上半場，暫不配入八方向。</p>{unknown.map((quote,i)=><SoccerRawMarketQuote quote={quote} unassigned index={i} key={`${quote.key||i}:${i}`}/>)}</section>}
+    <details className="soccerDetails soccerMarketResearchDetails"><summary>預測依據與診斷</summary><p className="soccerMarketNote">每筆有效原盤獨立顯示預測 S，沿用既有 S 公式。預測排名維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並核對場次、期間及盤口時效。</p><p className="soccerMarketCaution">依目前可取得的資料預測；缺項保留標示。尚無有效計算依據時不產生分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
+      {result?.predictionContext?.version==='SOCCER-AVAILABLE-DATA-PREDICTION-v1'&&result.predictionContext.mode==='PREDICTION'&&<section className="soccerMarketNote" aria-label="本次預測依據"><strong>本次預測依據</strong><p>比分分布採同聯盟歷史比賽模型，搭配本筆原盤與已保存模型情境。</p>{result.predictionContext.contextualGoalEffectApplied===false&&<p>npxG、人員及比賽條件尚未量化套入本次進球率；已取得的來源資料仍保留供查閱，不以假設係數補值。</p>}<p>缺項會保留標示；模型與完整收益誤差未驗證。</p></section>}
+      <SoccerScenarioResearch result={result} game={game} now={now}/>
+      <SoccerAutomaticAnalysisStatus result={result} game={game} now={now}/>
+      <SoccerScoringReadiness result={result} game={game} now={now}/>
+    </details>
   </details>;
 }
 

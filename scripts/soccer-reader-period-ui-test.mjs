@@ -51,6 +51,10 @@ await ui.load({...body,date:'2026-10-20',games:[]},{league,date:'2026-10-20'});a
 await ui.load({...body,contentHash:'b'.repeat(64)});await ui.load(body);
 assert.equal(ui.events.length,2,'a later real content change emits exactly one scoped notification');
 markup=renderToStaticMarkup(ui.render());
+const readerDetails=markup.indexOf('<details class="soccerDetails soccerReaderDetails">');
+assert.ok(readerDetails>0,'raw board and maintenance tools start collapsed');
+assert.ok(markup.indexOf('按期間分開保存')<readerDetails,'source status stays visible without opening raw prices');
+assert.ok(markup.indexOf('class="soccerQuoteGame"')>readerDetails,'raw quotes remain available inside the disclosure');
 assert.match(markup,/全場 [\d:]+（待更新）/);assert.match(markup,/上半場 [\d:]+(?:｜|<\/p>)/);assert.doesNotMatch(markup,/上半場 [\d:]+（待更新）/,'a fresh HT quote is not called stale because the FT aggregate timestamp is older');
 assert.match(markup,/按期間分開保存/);assert.match(markup,/白禮頓（主）對 水晶宮（客）/);assert.match(markup,/大 0\.84/);assert.match(markup,/大 0\.92/);assert.match(markup,/來源賽程初步配對，完整性待核對/);
 assert.doesNotMatch(markup,/原盤已逾期，請重新同步|undefined|NaN|已通過正式驗收|可直接下注/);
@@ -72,6 +76,7 @@ assert.deepEqual(plain(inspect.soccerReaderPeriodBindingMessages({blockerCounts:
 assert.deepEqual(plain(inspect.soccerReaderPeriodBindingMessages({blockerCounts:JSON.parse('{"toString":1,"__proto__":1,"SOURCE_DEVICE_MISMATCH":-1}')})),[],'only own reason codes with positive integer counts are displayed');
 await ui.load({...body,sourceObservations:[null,...sources]});assert.doesNotThrow(()=>renderToStaticMarkup(ui.render()));
 await ui.load({...body,league:'ucl'});markup=renderToStaticMarkup(ui.render());assert.match(markup,/原盤更新失敗.*身分核對未通過/,'wrong-league API results cannot silently replace the current board');
+assert.ok(markup.indexOf('原盤更新失敗')<markup.indexOf('<details'),'a collapsed raw board must not conceal a failed synchronization');
 const otherDate={league,date:'2026-10-20'};markup=renderToStaticMarkup(ui.render(otherDate));assert.doesNotMatch(markup,/白禮頓|大 0\.84/,'changing date cannot display the previous date as its current board');
 await ui.load({...body,date:'2026-10-19'},otherDate);markup=renderToStaticMarkup(ui.render(otherDate));assert.match(markup,/原盤更新失敗/);assert.doesNotMatch(markup,/白禮頓|大 0\.84/);
 console.log('PASS shipped soccer Reader UI: independent FT/HT freshness, clock bounds, safe optional receipts, identity-backed locked boards vs missing capture, raw prices, actual download link and league/date isolation');
