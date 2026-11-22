@@ -21,7 +21,7 @@ const previousEnv = Object.fromEntries(envKeys.map(key => [key, process.env[key]
 process.env.DATABASE_URL = 'postgres://fixture.invalid/soccer-current-refresh';
 delete process.env.DATABASE_V2_URL;
 try {
-  const { enqueueSoccerReaderAnalysis, drainSoccerReaderAnalysis, soccerReaderAnalysisCandidates } = await import('../lib/soccer/reader-auto-analysis.js');
+  const { enqueueSoccerReaderAnalysis, drainSoccerReaderAnalysis, soccerReaderAnalysisCandidates, soccerReaderEconomicPriceSet } = await import('../lib/soccer/reader-auto-analysis.js');
   const { claimSoccerReaderCurrentRefresh, beginSoccerReaderCurrentRefresh, finishSoccerReaderCurrentRefresh, soccerReaderRefreshDeadline } = await import('../lib/soccer/reader-current-refresh.js');
   const { saveSoccerReaderSnapshot, loadSoccerReaderSnapshot } = await import('../lib/soccer/reader-store.js');
   const { analyzeSoccerGame, loadSoccerCurrentAnalysis } = await import('../lib/soccer/analysis-service.js');
@@ -147,9 +147,30 @@ try {
   const missingSourceTime = structuredClone(originalSnapshot);
   delete missingSourceTime.evidence.source.fetchedAt;
   assert.equal(soccerReaderRefreshDeadline(missingSourceTime, liveCandidate, first.validUntil), null);
-  const noMatchingQuotes = { ...liveCandidate, economicPrices: [] };
-  assert.equal(soccerReaderRefreshDeadline(originalSnapshot, noMatchingQuotes, first.validUntil), null);
-  assert.equal((await claimSoccerReaderCurrentRefresh(noMatchingQuotes, { query })).reason, 'REFRESH_DEADLINE_UNVERIFIED');
+  const noMatchingQuotes = structuredClone(liveCandidate);
+  for (const quote of noMatchingQuotes.refreshQuotes) quote.provenance.sourceUrl = 'https://www.tai888.in/newapp/index.html';
+  noMatchingQuotes.economicPrices = soccerReaderEconomicPriceSet(noMatchingQuotes.refreshQuotes,
+    { league: f.league, gameId: f.game.id, snapshot: { inputVersions: { readerSourceObservations: noMatchingQuotes.sourceObservations } } });
+  assert.ok(noMatchingQuotes.economicPrices.length > 0);
+  const baseDeadline = Math.min(Date.parse(originalSnapshot.validUntil), Date.parse(originalSnapshot.observedAt) + 180000,
+    Date.parse(originalSnapshot.evidence.source.fetchedAt) + 180000, Date.parse(f.game.startTime), Date.parse(first.validUntil));
+  assert.equal(soccerReaderRefreshDeadline(originalSnapshot, noMatchingQuotes, first.validUntil), baseDeadline,
+    'a different already-captured source scope can renew using the verified base analysis deadline');
+  const mixedAvailability = structuredClone(originalSnapshot);
+  mixedAvailability.directions.flatMap(direction => direction.quotes)[0].predictionScore = {
+    status: 'UNAVAILABLE', reason: 'SYNTHETIC_QUOTE_NOT_CALCULATED', score: null, S: null, executable: false,
+  };
+  assert.ok(Number.isFinite(soccerReaderRefreshDeadline(mixedAvailability, liveCandidate, first.validUntil)),
+    'an unavailable direction has no prediction validity and cannot poison the valid base/other quote deadlines');
+  const incompleteAvailable = structuredClone(originalSnapshot);
+  const missingValidity = incompleteAvailable.directions.flatMap(direction => direction.quotes).find(quote => quote.predictionScore?.status === 'PREDICTION_SCORE_AVAILABLE').predictionScore;
+  delete missingValidity.provenance.validUntil; delete missingValidity.validUntil;
+  assert.equal(soccerReaderRefreshDeadline(incompleteAvailable, liveCandidate, first.validUntil), null,
+    'a claimed available prediction still requires its genuine validity timestamp');
+  const missingCalculatedAt = structuredClone(originalSnapshot);
+  const incompleteCalculation = missingCalculatedAt.directions.flatMap(direction => direction.quotes).find(quote => quote.predictionScore?.status === 'PREDICTION_SCORE_AVAILABLE').predictionScore;
+  delete incompleteCalculation.provenance.calculatedAt; delete incompleteCalculation.calculatedAt;
+  assert.equal(soccerReaderRefreshDeadline(missingCalculatedAt, liveCandidate, first.validUntil), null);
   const stale = structuredClone(liveCandidate);
   for (const quote of stale.refreshQuotes) quote.provenance.observedAt = new Date(Date.now() - 181000).toISOString();
   assert.equal((await claimSoccerReaderCurrentRefresh(stale, { query })).reason, 'REFRESH_QUOTE_STALE');
@@ -221,7 +242,69 @@ try {
   assert.equal((await finishSoccerReaderCurrentRefresh(priceClaim, lastResponse, { query })).refreshed, false, 'a successful older response cannot acknowledge a changed source generation');
   assert.deepEqual(await query('SELECT * FROM sports_soccer_reader_analysis_claims_v1 WHERE league=$1 AND board_date=$2::date AND game_id=$3', scopeValues), originalCapture);
   assert.equal((await query("SELECT count(*)::int n FROM sports_soccer_reader_current_refresh_v1 WHERE league='ucl'"))[0].n, 0);
-  console.log('PASS real PostgreSQL Reader drain → same-price renewal → normal model/journal/publication/ranking; unchanged CAPTURED history, not-due/new-receipt/freshness gates, concurrent lease, manual/generation CAS, failure backoff/recovery and league isolation');
+
+  // Production counterexample: both app-entry URL scopes were already captured,
+  // but the most recent completed analysis belonged to A while Reader returned
+  // to B. No economic quote matches A; verified base deadlines must still allow
+  // a normal new analysis for B instead of making permanent capture dedup final.
+  const pathA = 'https://www.tai888.in/newapp/', pathB = 'https://www.tai888.in/newapp/index.html';
+  async function savePath(pageUrl) {
+    const payload = structuredClone(f.readerPayload);
+    payload.pageUrl = pageUrl;
+    payload.observedAt = new Date(Date.now()).toISOString(); payload.pageActivityAt = payload.observedAt;
+    return saveSoccerReaderSnapshot(payload);
+  }
+  await savePath(pathB); await releaseQueue(); await releaseRefresh(); await enqueue();
+  const firstB = await drain();
+  assert.equal(firstB.captured, 1, JSON.stringify(firstB));
+  assert.equal(firstB.refreshed, 0);
+  const bCandidate = await candidate();
+  assert.notEqual(bCandidate.identity, originalCapture[0].identity, 'the two app-entry paths remain distinct economic source identities');
+  assert.ok(lastResponse.payload.directions.flatMap(direction => direction.quotes).every(quote => quote.provenance.sourceUrl === pathB));
+  const bothCaptures = await query(`SELECT * FROM sports_soccer_reader_analysis_claims_v1 WHERE ${headWhere} ORDER BY identity`, scopeValues);
+  assert.equal(bothCaptures.length, 2); assert.ok(bothCaptures.every(row => row.state === 'CAPTURED'));
+  assert.deepEqual(bothCaptures.find(row => row.identity === originalCapture[0].identity), originalCapture[0]);
+  const pathGeneration = String((await readHead()).quote_generation);
+
+  const aReceipt = await savePath(pathA);
+  assert.equal(aReceipt.quoteGeneration, pathGeneration, 'source path change alone must not invent a market-price generation');
+  const manualA = await deps.analyze({ league: f.league, date: f.date, eventId: f.game.sourceId }, { fetchSoccerSchedule: async () => f.board });
+  assert.equal(manualA.status, 200); assert.equal(manualA.payload.publishedCurrent, true);
+  assert.ok(manualA.payload.directions.flatMap(direction => direction.quotes).every(quote => quote.provenance.sourceUrl === pathA));
+  const headA = await readHead();
+  assert.equal(headA.published_revision, manualA.payload.revision);
+  await due();
+  assert.ok(bCandidate.refreshQuotes.every(quote => Date.parse(quote.provenance.observedAt) <= Date.parse(manualA.payload.observedAt)));
+  assert.equal((await claimSoccerReaderCurrentRefresh(bCandidate, { query })).reason, 'REFRESH_NEW_OBSERVATION_REQUIRED',
+    'a different source scope is not fresh authority when its receipt predates the current analysis');
+  const bReceipt = await savePath(pathB);
+  assert.equal(bReceipt.quoteGeneration, pathGeneration);
+  const returningB = await candidate();
+  assert.equal(returningB.identity, bCandidate.identity, 'returning B uses its existing permanent capture');
+  const aPrices = new Set(soccerReaderEconomicPriceSet(
+    manualA.payload.directions.flatMap(direction => direction.quotes), { league: f.league, gameId: f.game.id, snapshot: manualA.payload }));
+  assert.equal(returningB.economicPrices.filter(price => aPrices.has(price)).length, 0, 'reproduce the real no-matching-economic-quotes state');
+  assert.ok(Number.isFinite(soccerReaderRefreshDeadline(manualA.payload, returningB, (await readHead()).valid_until)));
+  await releaseQueue(); await releaseRefresh(); await enqueue();
+  const pathRunCount = await runCount(), pathCalls = analysisCalls;
+  const backToB = await drain();
+  assert.equal(backToB.refreshed, 1, JSON.stringify(backToB)); assert.equal(backToB.captured, 0);
+  assert.equal(analysisCalls, pathCalls + 1); assert.equal(await runCount(), pathRunCount + 1);
+  const newB = lastResponse.payload;
+  assert.equal(newB.publishedCurrent, true); assert.notEqual(newB.revision, manualA.payload.revision);
+  assert.equal(newB.quoteGeneration, pathGeneration);
+  assert.ok(newB.directions.flatMap(direction => direction.quotes).every(quote => quote.provenance.sourceUrl === pathB
+    && quote.provenance.readerObservationId === bReceipt.observationId));
+  assert.ok(buildSoccerRanking([f.game], { [f.game.id]: { status: 'done', data: newB } }).entries.length > 0);
+  assert.deepEqual(await query(`SELECT * FROM sports_soccer_reader_analysis_claims_v1 WHERE ${headWhere} ORDER BY identity`, scopeValues), bothCaptures,
+    'switching between already-captured app entries renews current analysis without modifying either original capture');
+  await savePath(pathB);
+  assert.equal((await claimSoccerReaderCurrentRefresh(await candidate(), { query })).reason, 'REFRESH_NOT_DUE');
+  await enqueue();
+  const stableB = await drain();
+  assert.equal(stableB.refreshed, 0); assert.equal(analysisCalls, pathCalls + 1);
+  assert.equal(stableB.refreshSkipped.REFRESH_NOT_DUE, 1, 'the next B heartbeat skips normally instead of creating a renewal loop');
+  console.log('PASS real PostgreSQL Reader drain → same-price renewal → normal model/journal/publication/ranking; unchanged CAPTURED history, deadline/availability/freshness gates, concurrent lease, manual/generation CAS, failure recovery and previously-captured app-entry A→B→A→B renewal');
 } finally {
   for (const key of envKeys) { if (previousEnv[key] === undefined) delete process.env[key]; else process.env[key] = previousEnv[key]; }
   await fixture.close();
