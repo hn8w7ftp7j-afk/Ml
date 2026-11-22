@@ -52,3 +52,48 @@
 .soccerScoringReadiness strong{display:block}
 .soccerScoringReadiness p{margin:6px 0}
 .soccerScoringReadiness ul{margin:8px 0;padding-left:22px}
+
+/* Keep scores and record actions visible; supporting evidence opens on demand. */
+.soccerGames{grid-template-columns:minmax(0,1fr)}
+.soccerApp .soccerMatchup{grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr);max-width:640px;margin:16px 0 12px}
+.soccerMarketDirectionGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.soccerMarketDirections>summary{font-size:15px;font-weight:700}
+.soccerMarketQuote{padding-bottom:0}
+.soccerMarketQuoteHeading,.soccerMarketPrice,.soccerMarketNote,.soccerScoreStatus{font-size:14px}
+.soccerMarketResearchTag,.soccerQuoteScore span,.soccerQuoteScore small{font-size:12px}
+.soccerQuoteScoreRow{grid-template-columns:52px minmax(0,1fr);gap:10px;padding:6px 0}
+.soccerMarketQuote .soccerRecordAction{margin:8px 0}
+.soccerQuoteDetails>summary,.soccerRankDetails>summary{padding:8px 0;font-size:14px}
+.soccerAnalysisResult .soccerQuoteDetails,.soccerRankDetails{margin-top:8px}
+.soccerSourceDetails{padding:4px 20px}
+.soccerSourceDetails>summary,.soccerUsageDetails>summary,.soccerAnalysisDetails>summary,.soccerMarketResearchDetails>summary{font-size:14px}
+.soccerSourceDetails>.panel{margin:0 0 14px}
+.soccerControls .soccerUsageDetails{margin:0}
+.soccerRankRow{padding:14px 0;gap:12px;align-items:start}
+.soccerRankRow>b,.soccerRankScore{padding-top:4px;font-variant-numeric:tabular-nums}
+.soccerRankScore{font-weight:800;color:#7de5ae;font-size:28px}
+.soccerRankScore small{font-weight:400;font-size:12px}
+.soccerRankBody{min-width:0}
+.soccerRankBody .soccerRankPick{font-weight:700;color:#e0edf7;font-size:15px}
+.soccerRankBody p,.soccerRankBody time{font-size:14px}
+.soccerRankActions{display:flex;flex-direction:column;gap:8px;min-width:145px}
+.soccerRankActions .soccerRecordAction{margin:0}
+.soccerRankActions button{width:100%;min-height:44px}
+.soccerOrderGame{margin-top:18px;border:1px solid #29445f;border-radius:12px;padding:0 14px;min-width:0}
+.soccerOrderGameHead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;font-size:14px}
+.soccerOrderGameHead>div{display:grid;gap:5px;min-width:0}
+.soccerOrderGameHead span{color:#a9bed1}
+.soccerOrderGameHead strong{color:#dceaf5;overflow-wrap:anywhere}
+.soccerOrderGameHead time{color:#b8cada;white-space:nowrap;font-size:13px}
+@media(max-width:1000px){.soccerMarketDirectionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+  .soccerMarketDirectionGrid{grid-template-columns:minmax(0,1fr)}
+  .soccerApp .soccerMatchup{grid-template-columns:minmax(0,1fr) 52px minmax(0,1fr);max-width:none}
+  .soccerRankRow{grid-template-columns:20px 48px minmax(0,1fr);gap:8px}
+  .soccerRankActions{grid-column:2/-1!important;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-width:0;align-items:start}
+  .soccerRankActions .soccerRecordAction{min-width:0}
+  .soccerRankActions button{font-size:14px;white-space:normal}
+  .soccerOrderGame{padding:0 10px}
+  .soccerOrderGameHead{align-items:flex-start;flex-direction:column;gap:6px}
+  .soccerSourceDetails{padding:4px 16px}
+}

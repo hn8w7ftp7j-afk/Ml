@@ -101,13 +101,15 @@ export default function SoccerReaderPanel({league,date,showDownload=true}) {
     <p className="soccerAvailability">{current?.error?`原盤更新失敗：${current.error}`:!data?`正在核對 ${date} 原盤保存狀態…`:games.length?`${games.length} 場｜${openMarketCount} 筆盤口${openMarketCount?'':'｜此版本沒有開放盤口'}${periodSources.length?'｜按期間分開保存':`｜同步 ${time(data.observedAt)}${fresh?'':'｜原盤已逾期，請重新同步'}`}`:periodSources.length?'原盤來源已保存，此版本沒有開放盤口。':`${date} 尚無原盤；等待 Reader ${READER_VERSION} 同步該日期分頁。其他已保存日期可在「已保存原盤」查看。`}</p>
     {periodSources.length>0&&<p className="soccerAvailability">{periodSources.map(source=>`${source.label} ${time(source.observedAt||source.sourceObservedAt)}${source.fresh?'':'（待更新）'}`).join('｜')}</p>}
     {periodBindingMessages.length>0&&<div className="soccerAvailability" role="status" aria-label="全場期間核對原因">{periodBindingMessages.map(message=><p key={message}>{message}</p>)}</div>}
-    {data&&(games.length>0||periodSources.length>0)&&<div className="soccerAvailability"><button type="button" className="secondary" disabled={resumeCurrent?.busy||current?.loading} onClick={resumeCapture}>{resumeCurrent?.busy?'正在啟動補存…':'補存盤口預測'}</button></div>}
     {resumeCurrent&&(resumeCurrent.message||resumeCurrent.error)&&<p className="soccerAvailability" role="status" aria-label="盤口預測補存狀態">{resumeCurrent.error?`補存未確認：${resumeCurrent.error}`:resumeCurrent.message}</p>}
+    <details className="soccerDetails soccerReaderDetails"><summary>原盤明細與同步工具{games.length?`｜${games.length} 場・${openMarketCount} 筆`:''}</summary>
+    {data&&(games.length>0||periodSources.length>0)&&<div className="soccerAvailability"><button type="button" className="secondary" disabled={resumeCurrent?.busy||current?.loading} onClick={resumeCapture}>{resumeCurrent?.busy?'正在啟動補存…':'補存盤口預測'}</button></div>}
     {showDownload&&<a className="secondary readerDownload" href={DOWNLOAD} download>下載 Reader {READER_VERSION} 足球版</a>}
     {games.length>0&&<p className="soccerAvailability">原始盤口；足球結算規格與模型仍在驗證。</p>}
     {games.map((game,index)=><div className="soccerQuoteGame" key={`${game.boardTime}:${game.homeCode}:${game.awayCode}:${index}`}><h3>{name(game.homeRaw)}（主）對 {name(game.awayRaw)}（客）</h3><p className="soccerAvailability">{game.boardTime}｜{game.matchStatus==='MATCHED'?'來源賽程初步配對，完整性待核對':'場次待核對'}{game.prestart?'':'｜非已確認賽前盤'}</p>
       {game.markets.length===0&&<p className="soccerAvailability">此版本沒有開放盤口；已保留來源場次紀錄。</p>}
       {game.markets.map((m,i)=><div className="soccerQuote" key={`${m.period}:${m.kind}:${m.line||''}:${i}`}><span>{periodName[m.period]||'期間待確認'}</span>{m.kind==='HANDICAP'?<><strong>讓球 {m.line}｜{m.lineSide==='home'?'主隊':'客隊'}讓球</strong><span>主 {m.homeWater}｜客 {m.awayWater}</span></>:m.kind==='TOTAL'?<><strong>大小 {m.line}</strong><span>大 {m.overWater}｜小 {m.underWater}</span></>:<><strong>獨贏</strong><span>主 {m.homeWater}｜和 {m.drawWater}｜客 {m.awayWater}</span></>}</div>)}
     </div>)}
+    </details>
   </section>;
 }
