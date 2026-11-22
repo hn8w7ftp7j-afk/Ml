@@ -148,7 +148,7 @@ h.state[0][realGame.id]=currentState;
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiStart).current,true);
 assert.equal(currentState.data.status,'POSTSTART_AUDIT');
 const poststartMarkup=renderToStaticMarkup(h.renderPanel(realGame));
-assert.match(poststartMarkup,/分析：<strong>賽後核對完成/);assert.match(poststartMarkup,/篩選：<strong>歷史查閱/);
+assert.match(poststartMarkup,/分析：<strong>賽後資料已保存/);assert.match(poststartMarkup,/篩選：<strong>歷史查閱/);
 assert.doesNotMatch(poststartMarkup,/分析：<strong>預測完成|篩選：<strong>依現有資料預測/,'a current postgame audit is not a completed prematch prediction');
 const prestartGame={...realGame,status:'scheduled',startTime:new Date(uiStart+3600000).toISOString()};
 const prestartState={...currentState,data:{...currentState.data,status:'RESEARCH_ONLY',
@@ -161,8 +161,31 @@ h.state[0][realGame.id]=currentState;
 uiNow=uiStart+60000;
 assert.equal(h.ctx.soccerAnalysisPresentation(currentState,uiNow).current,false,'expiry invalidates the display without a new analysis');
 assert.equal(h.ctx.soccerAnalysisPresentation(prestartState,uiNow).analysisLabel,'待重新核對','prematch predictions lose completion on the same receipt deadline');
-const expiredMarkup=renderToStaticMarkup(h.renderPanel(realGame));assert.match(expiredMarkup,/待重新核對/);assert.match(expiredMarkup,/僅供歷史查閱/);assert.match(expiredMarkup,/上半場比分研究/,'expiry preserves the result for historical reading');
+const expiredMarkup=renderToStaticMarkup(h.renderPanel(realGame));assert.match(expiredMarkup,/賽後資料已保存/);assert.doesNotMatch(expiredMarkup,/目前有效狀態待重新核對|資料待更新/);assert.match(expiredMarkup,/僅供歷史查閱/);assert.match(expiredMarkup,/上半場比分研究/,'expiry preserves the result for historical reading');
 assert.doesNotMatch(expiredMarkup,/分析：<strong>賽後核對完成|分析：<strong>預測完成/);
+// A final game's immutable prematch record survives quote changes and expiry;
+// it remains historical, never candidate authority or a request to reanalyse.
+const finalGame={...prestartGame,status:'final',startTime:new Date(uiStart-3600000).toISOString()};
+const archived={...prestartState,currentResearch:{...receipt,publishedCurrent:false,reason:'QUOTE_CHANGED'},
+  data:{...prestartState.data,persisted:true,observedAt:new Date(uiStart-7200000).toISOString(),evidence:{...prestartState.data.evidence,game:finalGame}}};
+const archivedView=h.ctx.soccerAnalysisPresentation(archived,uiNow,finalGame);
+assert.equal(archivedView.analysisStatus,'HISTORICAL');assert.equal(archivedView.analysisLabel,'賽前分析已保存');assert.equal(archivedView.current,false);
+const archivedCounts=h.ctx.soccerAnalysisCounts([finalGame],{[finalGame.id]:archived},uiNow);
+assert.equal(archivedCounts.waiting,0);assert.equal(archivedCounts.historical,1);assert.equal(archivedCounts.candidates,0);
+for(const state of [archived,undefined,{status:'loading'},{status:'error'}]){
+  const ranking=buildSoccerRanking([finalGame],{[finalGame.id]:state},{now:uiNow});
+  assert.equal(ranking.entries.length,0);assert.equal(ranking.outdatedGames,0);assert.equal(ranking.pendingGames,0);
+}
+assert.equal(h.ctx.soccerAnalysisPresentation(archived,uiNow,prestartGame).analysisStatus,'UNVERIFIED','upcoming expired analysis still requires a current receipt');
+assert.equal(h.ctx.soccerAnalysisPresentation({...archived,data:{...archived.data,league:'ucl'}},uiNow,finalGame).analysisStatus,'UNVERIFIED','cross-league data cannot establish saved history');
+assert.equal(h.ctx.soccerAnalysisPresentation({...archived,data:{...archived.data,persisted:false}},uiNow,finalGame).analysisStatus,'UNVERIFIED','unsaved data cannot claim persistence');
+assert.equal(h.ctx.soccerAnalysisPresentation({...archived,status:'error'},uiNow,finalGame).analysisStatus,'FAILED','a failed later audit remains visible');
+assert.equal(h.ctx.soccerAnalysisPresentation(null,uiNow,finalGame).analysisStatus,'CLOSED','missing historical data is not claimed completed');
+h.state[0][realGame.id]=archived;
+const archivedMarkup=renderToStaticMarkup(h.renderPanel(finalGame));
+assert.match(archivedMarkup,/賽前分析已保存/);assert.doesNotMatch(archivedMarkup,/目前有效狀態待重新核對|資料待更新/);
+assert.equal(h.ctx.soccerAnalysisPresentation(archived,uiNow,{...finalGame,status:'scheduled'}).analysisStatus,'HISTORICAL','kickoff boundary works before schedule polling catches up');
+console.log('PASS final-game lifecycle: saved history, no live authority, no reanalysis counts, identity and failed-attempt boundaries');
 const failedPresentation=h.ctx.soccerAnalysisPresentation({...currentState,status:'error',analysisStatus:'FAILED'},uiStart);
 assert.equal(failedPresentation.analysisStatus,'FAILED');assert.equal(failedPresentation.analysisLabel,'失敗');assert.equal(failedPresentation.selectionLabel,'尚無結果');
 assert.equal(h.ctx.soccerAnalysisPresentation({...currentState,currentResearch:{...receipt,revision:'newer-revision'}},uiStart).current,false);
