@@ -416,4 +416,83 @@ await test('a delayed replacement receipt cannot reload or overwrite a newer man
   }finally{h.unmount();await flush();}
 });
 
+await test('a staged background refresh never demotes a still-authorized current head', async () => {
+  const row=game(),h=harness();
+  try{
+    h.mount();
+    h.reads[0].respond({...head(row),runs:[{analysisRunId:'soccer-staged-next-101',analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}]});await flush();h.render();
+    assert.equal(h.state[0][row.id].status,'done');assert.equal(h.counts().completed,1);
+    assert.equal(h.state[0][row.id].currentResearch.analysisRunId,analysis(row).analysisRunId);
+    h.setNow(now+5000);await h.tick(1000);assert.equal(h.reads.length,1,'an unrelated staged attempt does not trigger empty/loading or a tight poll loop');
+  }finally{h.unmount();await flush();}
+});
+
+await test('a server PROCESSING receipt follows up in five seconds and only for its own game', async () => {
+  const rows=[game('101'),game('102')],h=harness({games:rows});
+  try{
+    h.mount();for(let i=0;i<2;i++)h.reads[i].respond(head(rows[i]));await flush();h.render();
+    h.setNow(now+30000);await h.tick(1000);assert.equal(h.reads.length,4);
+    const pending={...analysis(rows[0]).currentResearch,analysisRunId:'soccer-pending-next-101',revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING',checkedAt:new Date(now+30000).toISOString()};
+    h.reads[2].respond({ok:true,gameId:rows[0].id,league:rows[0].league,date:rows[0].date,currentResearch:pending});
+    h.reads[3].respond({ok:true,gameId:rows[1].id,league:rows[1].league,date:rows[1].date,currentResearch:{...analysis(rows[1]).currentResearch,analysisStatus:'COMPLETED',checkedAt:new Date(now+30000).toISOString()}});await flush();h.render();
+    assert.equal(h.counts().completed,1,'pending source does not retain the old game authority');
+    h.setNow(now+34999);await h.tick(1000);assert.equal(h.reads.length,4);
+    h.setNow(now+35000);await h.tick(1000);assert.equal(h.reads.length,5);assert.equal(new URL(h.reads[4].url,'https://fixture.invalid').searchParams.get('eventId'),'101');
+    const next=analysis(rows[0],{analysisRunId:pending.analysisRunId,revision:'soccer-fresh-next-101',observedAt:new Date(now+32000).toISOString()});next.currentResearch.checkedAt=new Date(now+35000).toISOString();
+    h.reads[4].respond({ok:true,gameId:rows[0].id,league:rows[0].league,date:rows[0].date,currentResearch:{...next.currentResearch,analysisStatus:'COMPLETED'}});await flush();
+    assert.equal(h.reads.length,6);assert.equal(h.counts().completed,1,'new receipt cannot authorize old data while head loads');
+    h.reads[5].respond(head(rows[0],next));await flush();h.render();assert.equal(h.counts().completed,2);assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('server-restored loading keeps lightweight polling while a local manual request is excluded', async () => {
+  const row=game(),h=harness();
+  try{
+    const provider=h.mount(),pending={...analysis(row).currentResearch,analysisRunId:'soccer-restored-pending-101',revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'};
+    h.reads[0].respond({...head(row,null),versions:[analysis(row)],runs:[{analysisRunId:pending.analysisRunId,analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}],currentResearch:pending});await flush();h.render();
+    assert.equal(h.state[0][row.id].status,'loading');
+    h.setNow(now+1000);await h.tick(1000);assert.equal(h.reads.length,2,'loading from a server run must not leave the current-status polling set');
+    h.reads[1].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:pending});await flush();h.render();
+    const manual=provider.props.value.run(row);h.render();h.setNow(now+6000);await h.tick(1000);
+    assert.equal(h.reads.length,2,'a local POST is never raced by automatic status recovery');
+    const result=analysis(row,{analysisRunId:'soccer-manual-after-pending',revision:'manual-after-pending',observedAt:new Date(now+5000).toISOString()});result.currentResearch.checkedAt=new Date(now+6000).toISOString();
+    h.posts[0].respond(result);await manual;await flush();h.render();assert.equal(h.counts().completed,1);
+  }finally{h.unmount();await flush();}
+});
+
+await test('fast handoff polling stops after its bounded window and unmount aborts a held status read', async () => {
+  const row=game(),h=harness();
+  try{
+    const pending={...analysis(row).currentResearch,analysisRunId:'soccer-long-pending-101',revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'};
+    h.mount();h.reads[0].respond({...head(row,null),versions:[analysis(row)],runs:[{analysisRunId:pending.analysisRunId,analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}],currentResearch:pending});await flush();h.render();
+    h.setNow(now+1000);await h.tick(1000);
+    for(let at=1000;at<=121000;at+=5000){
+      if(at>1000){h.setNow(now+at);await h.tick(1000);}
+      const last=h.reads.at(-1);assert.equal(new URL(last.url,'https://fixture.invalid').searchParams.get('view'),'current');
+      if(at===121000){assert.equal(h.reads.length,25,'the unchanged 120-second handoff must return to the normal interval');break;}
+      last.respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:{...pending,checkedAt:new Date(now+at).toISOString()}});await flush();h.render();
+    }
+    h.setNow(now+146000);await h.tick(1000);assert.equal(h.reads.length,26);const held=h.reads.at(-1);assert.equal(held.options.signal.aborted,false);
+    h.unmount();await flush();assert.equal(held.options.signal.aborted,true);assert.equal(h.timers.size,0);assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('large upcoming boards pace fast follow-up below sixty status reads per minute', async () => {
+  const rows=Array.from({length:12},(_,index)=>game(String(201+index))),h=harness({games:rows});
+  try{
+    h.mount();
+    const pending=row=>({...analysis(row).currentResearch,analysisRunId:`soccer-pending-${row.sourceId}`,revision:null,analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'});
+    for(let i=0;i<rows.length;i++){
+      const row=rows[i],receipt=pending(row);
+      h.reads[i].respond({...head(row,null),versions:[analysis(row)],runs:[{analysisRunId:receipt.analysisRunId,analysisStatus:'PROCESSING',startedAt:new Date(now).toISOString()}],currentResearch:receipt});await flush();
+    }
+    h.render();h.setNow(now+1000);await h.tick(1000);assert.equal(h.reads.length,14,'two lightweight workers at most');
+    for(let i=0;i<rows.length;i++){
+      const row=rows[i];h.reads[12+i].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:pending(row)});await flush();
+    }
+    h.render();h.setNow(now+6000);await h.tick(1000);assert.equal(h.reads.length,24,'twelve pending games do not issue twelve reads every five seconds');
+    h.setNow(now+13000);await h.tick(1000);assert.equal(h.reads.length,26,'twelve-second board cadence retains bounded workers');
+  }finally{h.unmount();await flush();}
+});
+
 console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior groups passed.`);

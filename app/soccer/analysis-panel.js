@@ -178,7 +178,8 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       async function worker(){while(current()&&index<targets.length){const game=targets[index++];if(pending.current.has(game.id))continue;const epoch=epochs.current.get(game.id)||0,requestedAt=Date.now(),receipt=beginReceipt(game);
         try{const body=await json(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'head'})}`);
           if(!current())return;const saved=soccerSavedAnalysisState(body,game,Date.now());
-          if(saved?.data){saved.currentResearch=body.currentResearch||null;saved.currentResearchRequestedAt=requestedAt;saved.currentResearchReceivedAt=Date.now();if(!saved.currentResearch)needsCurrentCheck.current=true;}
+          if(saved?.data){saved.currentResearch=body.currentResearch||null;saved.currentResearchRequestedAt=requestedAt;saved.currentResearchReceivedAt=Date.now();
+            if(!saved.currentResearch||saved.currentResearch.analysisRunId!==saved.data.analysisRunId||saved.currentResearch.revision!==saved.data.revision)needsCurrentCheck.current=true;}
           if(saved?.status==='loading')processing.push(game.id);
           if(saved?.data?.publishedCurrent){const expiry=Date.parse(saved.data.qualificationValidUntil||saved.data.validUntil||'');if(Number.isFinite(expiry))nextExpiry=Math.min(nextExpiry,expiry);}
           if(saved)recoverPatch(game.id,saved,epoch,'saved',receipt);
@@ -235,15 +236,47 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     return()=>{stopped=true;refreshSaved.current=null;refreshSavedGames.current=null;clearTimeout(historyTimer);clearTimeout(pollTimer);for(const controller of reads)controller.abort();if(typeof window!=='undefined'){window.removeEventListener('focus',reconnect);window.removeEventListener('storage',reconnect);}};
   },[recoveryScope,runId,date]);
   useEffect(()=>{
-    let polling=false,lastPoll=Date.now(),cancelled=false,recheckNeeded=false;
+    let polling=false,cancelled=false,recheckNeeded=false;const mountedAt=Date.now(),lastAttempts=new Map(),fastWindows=new Map(),statusReads=new Set(),forcedIds=new Set();
     const refreshClockBoundary=()=>{if(Object.entries(latestStates.current).some(([id,state])=>soccerResearchIsCurrent(state)!==Boolean(displayedCurrent.current[id])))setClockTick(value=>value+1);};
-    async function pollCurrent(){
+    function delayFor(game,state,now,minimumDelay){
+      // Preserve normal read-only postgame/audit recovery without fast-polling
+      // expired prematch scores after kickoff.
+      if(game.status!=='scheduled'||!(Date.parse(game.startTime)>now)){fastWindows.delete(game.id);return Math.max(30000,minimumDelay);}
+      const status=state.currentResearch,data=state.data,elapsed=now-state.currentResearchRequestedAt;
+      const serverNow=Date.parse(status?.checkedAt||'')+elapsed;
+      const deadlines=[status?.validUntil,data?.validUntil,data?.qualificationValidUntil,
+        ...(data?.directions||[]).flatMap(direction=>(direction.quotes||[]).filter(quote=>quote.predictionQualification?.status==='CURRENT_PREDICTION').map(quote=>quote.predictionQualification.validUntil))]
+        .map(value=>Date.parse(value||'')).filter(Number.isFinite);
+      const nearExpiry=Number.isFinite(serverNow)&&deadlines.some(deadline=>deadline-serverNow<=30000);
+      const reason=!status?'STATUS_UNVERIFIED':status.analysisStatus==='PROCESSING'||state.status==='loading'?'PROCESSING'
+        :status.analysisRunId!==data.analysisRunId||status.revision!==data.revision?'HEAD_HANDOFF'
+        :status.publishedCurrent!==true?status.reason||'NOT_CURRENT':nearExpiry?'EXPIRING':null;
+      if(!reason){fastWindows.delete(game.id);return Math.max(30000,minimumDelay);}
+      const signature=`${status?.analysisRunId||data.analysisRunId}:${status?.revision||''}:${reason}`;
+      let window=fastWindows.get(game.id);
+      if(window?.signature!==signature){window={signature,startedAt:now};fastWindows.set(game.id,window);}
+      // Fast follow-up is scoped to this handoff, never an indefinite retry
+      // loop while the Reader or an upstream source is unavailable.
+      return now-window.startedAt<120000?minimumDelay:Math.max(30000,minimumDelay);
+    }
+    async function pollCurrent(force=false){
       if(cancelled||polling||!alive.current||typeof document!=='undefined'&&document.visibilityState!=='visible')return;
-      const targets=games.filter(game=>latestStates.current[game.id]?.status==='done'&&latestStates.current[game.id]?.data?.analysisStatus==='COMPLETED');
+      const now=Date.now(),watching=games.filter(game=>{
+        const state=latestStates.current[game.id];
+        return state?.data?.analysisStatus==='COMPLETED'&&['done','loading','error'].includes(state.status)
+          &&!pending.current.has(game.id);
+      });
+      // Leave room in the shared API budget for full-head/history reads. A
+      // large upcoming board cannot multiply five-second polling indefinitely.
+      const minimumDelay=Math.max(5000,watching.length*1000),targets=watching.filter(game=>{
+        const state=latestStates.current[game.id],delay=delayFor(game,state,now,minimumDelay),received=Number.isFinite(state.currentResearchRequestedAt)?state.currentResearchRequestedAt:mountedAt;
+        return force||forcedIds.has(game.id)||now-Math.max(lastAttempts.get(game.id)||mountedAt,received)>=delay;
+      });
       if(!targets.length)return;
       polling=true;let index=0;const changed=[];
       async function worker(){while(!cancelled&&alive.current&&index<targets.length){const game=targets[index++],runId=latestStates.current[game.id]?.data?.analysisRunId,epoch=epochFor(game);
-        const controller=new AbortController(),requestedAt=Date.now(),receipt=beginReceipt(game);controllers.current.add(controller);const timer=setTimeout(()=>controller.abort(),10000);
+        if(pending.current.has(game.id))continue;
+        const controller=new AbortController(),requestedAt=Date.now(),receipt=beginReceipt(game);lastAttempts.set(game.id,requestedAt);forcedIds.delete(game.id);controllers.current.add(controller);statusReads.add(controller);const timer=setTimeout(()=>controller.abort(),10000);
         try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'current'})}`,{cache:'no-store',signal:controller.signal}),d=await r.json(),status=d.currentResearch;
           if(!r.ok||!d.ok||d.gameId!==game.id||d.league!==game.league||d.date!==game.date||!status||typeof status.publishedCurrent!=='boolean'||status.executable!==false||status.formalScoringEnabled!==false||!Number.isFinite(Date.parse(status.checkedAt)))throw Error('CURRENT_STATUS_UNVERIFIED');
           patch(game.id,{currentResearch:status,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now()},previous=>!cancelled&&epochFor(game)===epoch&&receiptCurrent(receipt)&&previous?.data?.analysisRunId===runId);
@@ -255,7 +288,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
             &&typeof status.analysisRunId==='string'&&typeof status.revision==='string'
             &&(status.analysisRunId!==runId||status.revision!==previous.data.revision))changed.push(game.id);
         }catch{patch(game.id,{currentResearch:null,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now()},previous=>!cancelled&&epochFor(game)===epoch&&receiptCurrent(receipt)&&previous?.data?.analysisRunId===runId);}
-        finally{clearTimeout(timer);controllers.current.delete(controller);}
+        finally{clearTimeout(timer);controllers.current.delete(controller);statusReads.delete(controller);}
       }}
       try{await Promise.all([worker(),worker()]);}finally{polling=false;if(!cancelled&&changed.length)void refreshSavedGames.current?.(changed);if(recheckNeeded&&!cancelled){recheckNeeded=false;void pollCurrent();}}
     }
@@ -263,20 +296,20 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       // Check cheap metadata each second; redraw the result tree only when its
       // current/historical classification crosses a deadline or clock boundary.
       refreshClockBoundary();
-      if(needsCurrentCheck.current&&!polling){needsCurrentCheck.current=false;lastPoll=Date.now();void pollCurrent();}
-      else if(Date.now()-lastPoll>=30000){lastPoll=Date.now();void pollCurrent();}
+      if(needsCurrentCheck.current&&!polling){needsCurrentCheck.current=false;void pollCurrent(true);}
+      else if(!polling)void pollCurrent();
     },1000);
-    const onVisible=()=>{if(document.visibilityState==='visible'){refreshClockBoundary();lastPoll=Date.now();void pollCurrent();}};
+    const onVisible=()=>{if(document.visibilityState==='visible'){refreshClockBoundary();void pollCurrent(true);}};
     const onReaderChange=event=>{
       const detail=event?.detail;if(!detail||!['epl','ucl'].includes(detail.league)||!/^[a-f0-9]{64}$/.test(detail.contentHash||''))return;
       const affected=games.filter(game=>game.league===detail.league&&game.date===detail.date);
       if(!affected.length)return;
-      for(const game of affected){epochs.current.set(game.id,(epochs.current.get(game.id)||0)+1);statusEpoch.current.set(scopeKey(game),epochFor(game)+1);if(latestStates.current[game.id])patch(game.id,{currentResearch:null,currentResearchRequestedAt:Date.now(),currentResearchReceivedAt:Date.now()});}
-      lastPoll=Date.now();if(polling)recheckNeeded=true;else void pollCurrent();
+      for(const game of affected){epochs.current.set(game.id,(epochs.current.get(game.id)||0)+1);statusEpoch.current.set(scopeKey(game),epochFor(game)+1);forcedIds.add(game.id);if(latestStates.current[game.id])patch(game.id,{currentResearch:null,currentResearchRequestedAt:Date.now(),currentResearchReceivedAt:Date.now()});}
+      if(polling)recheckNeeded=true;else void pollCurrent();
     };
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',onVisible);
     if(typeof window!=='undefined')window.addEventListener('soccer:reader-content-changed',onReaderChange);
-    return()=>{cancelled=true;clearInterval(id);if(typeof document!=='undefined')document.removeEventListener('visibilitychange',onVisible);if(typeof window!=='undefined')window.removeEventListener('soccer:reader-content-changed',onReaderChange);};
+    return()=>{cancelled=true;clearInterval(id);for(const controller of statusReads)controller.abort();if(typeof document!=='undefined')document.removeEventListener('visibilitychange',onVisible);if(typeof window!=='undefined')window.removeEventListener('soccer:reader-content-changed',onReaderChange);};
   },[games]);
   function pump(){
     while(alive.current&&active.current<2&&queue.current.length){const task=queue.current.shift(),game=task.game;active.current++;const controller=new AbortController(),requestedAt=Date.now(),epoch=epochFor(game),receipt=beginReceipt(game);controllers.current.add(controller);let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},50000);patch(game.id,{status:'loading',error:''});

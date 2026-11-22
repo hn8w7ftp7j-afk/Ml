@@ -20,8 +20,13 @@ export async function GET(request){
       // Board recovery needs one full result and the latest attempt, not the
       // entire history on every poll. Preserve the historical fallback when a
       // refresh is pending, failed, or expired; qualification remains read-only.
-      const [current,runs,currentResearch]=await Promise.all([loadSoccerCurrentAnalysis(league.id,date,eventId),
-        listSoccerRunHistory(league.id,date,gameId,{limit:1}),getSoccerCurrentResearchStatus(league.id,date,gameId)]);
+      const [current,runs]=await Promise.all([loadSoccerCurrentAnalysis(league.id,date,eventId),
+        listSoccerRunHistory(league.id,date,gameId,{limit:1})]);
+      // The full version and its qualification receipt must come from the same
+      // head read. A separately read receipt can refer to a newer publication
+      // and incorrectly invalidate the version being delivered to the browser.
+      const currentResearch=current.currentVersion?current.currentResearch:
+        await getSoccerCurrentResearchStatus(league.id,date,gameId);
       const versions=current.currentVersion?[]:await listSoccerAnalysis(league.id,gameId,date,{limit:1});
       return response({ok:true,league:league.id,date,gameId,versions,runs,...current,currentResearch});
     }

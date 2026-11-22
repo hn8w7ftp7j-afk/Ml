@@ -55,12 +55,12 @@ try{
 const routeSource=fs.readFileSync('app/api/soccer/analysis/route.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export const /g,'const ').replace(/export async function /g,'async function ');
 const {analyzeSoccerGame:sharedAnalyze,validSoccerAnalysisQuery}=await import('../lib/soccer/analysis-service.js');
 const at=Date.parse('2026-10-20T12:59:30Z'),kickoff='2026-10-20T13:00:00.000Z';
-let historyReads=0,sourceReads=0,currentLoads=0,savedResult=null,finishInput=null,denied=false,currentActive=true,currentReadError=false,publicationCurrent=true,receiptPatch={},headAvailable=true;
+let historyReads=0,sourceReads=0,currentLoads=0,currentReads=0,savedResult=null,finishInput=null,denied=false,currentActive=true,currentReadError=false,publicationCurrent=true,receiptPatch={},headAvailable=true,headReadError=false,headReceiptPatch={};
 const historyLimits=[],runLimits=[];
 const run={runId:'run-new',requestSeq:'4',quoteGeneration:'2',startedAt:new Date(at).toISOString()};
 const current=()=>({analysisRunId:run.runId,revision:'saved-revision',qualificationVersion:'4',quoteGeneration:'2',checkedAt:new Date(at).toISOString(),validUntil:kickoff,publishedCurrent:currentActive,reason:currentActive?'ACTIVE':'QUOTE_CHANGED',analysisStatus:'COMPLETED',selectionResult:currentActive?'RESEARCH_SHADOW':null,executable:false,formalScoringEnabled:false,...receiptPatch});
 const game={id:'soccer:epl:123',sourceId:'123',league:'epl',date:'2026-10-20',startTime:kickoff,status:'scheduled'};
-const readCurrent=async()=>{if(currentReadError)throw Error('controlled current-status outage');return current();};
+const readCurrent=async()=>{currentReads++;if(currentReadError)throw Error('controlled current-status outage');return current();};
 const deps={
   enrichSoccerPrematchInputs:async evidence=>evidence,
   beginSoccerAnalysisRun:async()=>run,recordSoccerCohort:async()=>{},fetchSoccerSchedule:async()=>{sourceReads++;return{ok:true,games:[game]};},
@@ -79,7 +79,7 @@ const context=vm.createContext({URL,Date,Number,JSON,Promise,NextResponse:{json:
   soccerLeague:value=>value==='epl'?{id:'epl'}:value==='ucl'?{id:'ucl'}:null,validSoccerDate:value=>/^\d{4}-\d{2}-\d{2}$/.test(value||''),
   getSoccerCurrentResearchStatus:readCurrent,listSoccerAnalysis:async(_league,_game,_date,options)=>{historyReads++;historyLimits.push(options?.limit);return options?.limit===1?[{revision:'latest-history',persisted:true}]:[];},listSoccerRunHistory:async(_league,_date,_game,options)=>{historyReads++;runLimits.push(options?.limit);return options?.limit===1?[{analysisRunId:run.runId,analysisStatus:receiptPatch.analysisStatus||'COMPLETED'}]:[];},
   validSoccerAnalysisQuery,analyzeSoccerGame:query=>sharedAnalyze(query,deps),
-  loadSoccerCurrentAnalysis:async()=>{currentLoads++;return headAvailable?{currentVersion:{revision:'saved-revision',persisted:true},currentRun:{analysisRunId:run.runId}}:{currentVersion:null,currentRun:null};},
+  loadSoccerCurrentAnalysis:async()=>{currentLoads++;if(headReadError)throw Error('controlled current-head outage');return headAvailable?{currentVersion:{revision:'saved-revision',persisted:true},currentRun:{analysisRunId:run.runId},currentResearch:{...current(),...headReceiptPatch}}:{currentVersion:null,currentRun:null};},
 });
 vm.runInContext(routeSource+';globalThis.handlers={GET,POST};',context);
 const url='https://fixture.invalid/api/soccer/analysis?league=epl&date=2026-10-20&eventId=123';
@@ -94,6 +94,16 @@ assert.deepEqual(normalBody.versions,[]);assert.deepEqual(normalBody.runs,[]);as
 const historyCount=historyLimits.length;
 const compact=await context.handlers.GET(new Request(url+'&view=head')),compactBody=await compact.json();
 assert.equal(compact.status,200);assert.equal(compact.headers.get('cache-control'),'no-store');assert.equal(historyLimits.length,historyCount,'an active head is not duplicated in the history fallback');assert.equal(runLimits.at(-1),1);assert.deepEqual(compactBody.versions,[]);assert.equal(compactBody.currentVersion.revision,'saved-revision');assert.equal(compactBody.runs.length,1);
+const readsBeforeRace=currentReads;
+headReceiptPatch={...current()};
+receiptPatch={analysisRunId:'run-newer',revision:'newer-revision',qualificationVersion:'5',analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'};
+const raced=await(await context.handlers.GET(new Request(url+'&view=head'))).json();
+assert.equal(currentReads,readsBeforeRace,'an active head cannot be paired with a separately read newer receipt');
+assert.equal(raced.currentResearch.analysisRunId,raced.currentRun.analysisRunId);
+assert.equal(raced.currentResearch.revision,raced.currentVersion.revision);
+assert.equal(raced.currentResearch.reason,'ACTIVE');
+assert.equal(raced.runs[0].analysisStatus,'PROCESSING','a staged newer attempt does not revoke the still-valid published version');
+headReceiptPatch={};receiptPatch={};
 headAvailable=false;
 for(const [reason,analysisStatus]of [['EXPIRED','COMPLETED'],['REANALYSIS_PENDING','PROCESSING'],['ANALYSIS_NOT_COMPLETED','FAILED'],['ANALYSIS_NOT_COMPLETED','INSUFFICIENT_DATA']]){
   receiptPatch={reason,analysisStatus,publishedCurrent:false};
@@ -102,7 +112,8 @@ for(const [reason,analysisStatus]of [['EXPIRED','COMPLETED'],['REANALYSIS_PENDIN
 }
 headAvailable=true;receiptPatch={};
 denied=true;for(const view of ['current','head'])assert.equal((await context.handlers.GET(new Request(url+'&view='+view))).status,401);denied=false;
-currentReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);currentReadError=false;
+headReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);headReadError=false;
+headAvailable=false;currentReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);currentReadError=false;headAvailable=true;
 assert.equal(sourceReads,0,'head/current reads cannot launch model execution or fetch source feeds');
 const request=()=>new Request('https://fixture.invalid/api/soccer/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({league:'epl',date:game.date,eventId:'123'})});
 const post=await context.handlers.POST(request()),postBody=await post.json();assert.equal(post.status,200);

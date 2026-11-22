@@ -42,17 +42,24 @@ try {
       contentHash: createHash('sha256').update(JSON.stringify(raw)).digest('hex'),
     }, now);
   }
-  let analysisCalls = 0, sourceUnavailable = false, lastResponse = null;
+  let analysisCalls = 0, sourceUnavailable = false, lastResponse = null, providerGate = null, beforeStagedFinish = null;
   const deps = {
     query, league: f.league, date: f.date, schedule: async () => f.board,
     analyze: async (input, overrides) => {
       analysisCalls++;
       lastResponse = await analyzeSoccerGame(input, {
         ...overrides,
-        fetchSoccerPrematch: async () => sourceUnavailable ? { ok: false, code: 'SYNTHETIC_PROVIDER_UNAVAILABLE' } : currentEvidence(),
+        fetchSoccerPrematch: async () => {
+          if (providerGate) await providerGate();
+          return sourceUnavailable ? { ok: false, code: 'SYNTHETIC_PROVIDER_UNAVAILABLE' } : currentEvidence();
+        },
         fetchSoccerWorkload: async () => ({ ok: false, status: 'INCOMPLETE', teams: {}, sources: [], modelEffectApplied: false, executable: false }),
         fetchSoccerTeamXg: async () => ({ ok: false, reason: 'SYNTHETIC_NO_MATCH_NPXG' }),
         enrichSoccerPrematchInputs: async evidence => evidence,
+        ...(overrides.finishSoccerAnalysisRun ? { finishSoccerAnalysisRun: async (run, outcome, context) => {
+          if (beforeStagedFinish) await beforeStagedFinish(run, outcome, context);
+          return overrides.finishSoccerAnalysisRun(run, outcome, context);
+        } } : {}),
       });
       return lastResponse;
     },
@@ -61,7 +68,7 @@ try {
   const drain = overrides => drainSoccerReaderAnalysis({ ...deps, ...overrides });
   const readHead = async () => (await query(`SELECT * FROM sports_soccer_analysis_heads_v2 WHERE ${headWhere}`, scopeValues))[0];
   const runCount = async () => (await query(`SELECT count(*)::int AS n FROM sports_soccer_analysis_runs_v2 WHERE ${headWhere}`, scopeValues))[0].n;
-  const due = () => query(`UPDATE sports_soccer_analysis_heads_v2 SET valid_until=clock_timestamp()+interval '10 seconds' WHERE ${headWhere}`, scopeValues);
+  const due = (remainingMs = 10000) => query(`UPDATE sports_soccer_analysis_heads_v2 SET valid_until=clock_timestamp()+$4*interval '1 millisecond' WHERE ${headWhere}`, [...scopeValues, remainingMs]);
   const releaseQueue = () => query("UPDATE sports_soccer_reader_analysis_queue_v1 SET retry_at=clock_timestamp()-interval '1 second',lease_until=NULL WHERE league=$1 AND board_date=$2::date", [f.league, f.date]);
   const releaseRefresh = () => query(`UPDATE sports_soccer_reader_current_refresh_v1 SET retry_at=clock_timestamp()-interval '1 second',lease_until=clock_timestamp()-interval '1 second' WHERE ${headWhere}`, scopeValues);
   let lastObservationAt = f.now;
@@ -114,10 +121,40 @@ try {
 
   // Only the mutable head deadline is shortened to exercise the boundary now;
   // the immutable original analysis and observations keep their actual times.
-  await due();
+  await due(80000);
   await enqueue();
   const beforeRenewal = await runCount();
-  const concurrent = await Promise.all([drain(), drain()]);
+  const baseBeforeStage = await readHead();
+  let stageEntered, releaseStage;
+  const enteredStage = new Promise(resolve => { stageEntered = resolve; });
+  const stageReleased = new Promise(resolve => { releaseStage = resolve; });
+  providerGate = async () => { stageEntered(); await stageReleased; };
+  const pendingRenewal = Promise.all([drain(), drain()]);
+  await Promise.race([enteredStage, pendingRenewal.then(value => { throw Error(`Expected staged provider work: ${JSON.stringify(value)}`); })]);
+  let stagingError;
+  try {
+    assert.deepEqual(await readHead(), baseBeforeStage, 'background begin stages its new run without clearing or replacing the current head');
+    const during = await getSoccerCurrentResearchStatus(f.league, f.date, f.game.id);
+    assert.equal(during.reason, 'ACTIVE'); assert.equal(during.analysisRunId, first.analysisRunId);
+    const duringVersion = (await loadSoccerCurrentAnalysis(f.league, f.date, f.game.sourceId)).currentVersion;
+    assert.equal(duringVersion.revision, first.revision);
+    assert.ok(buildSoccerRanking([f.game], { [f.game.id]: { status: 'done', data: duringVersion } }).entries.length > 0,
+      'independently valid old scores remain ranked while a background stage is running');
+    const stagingRun = (await query(`SELECT r.run_id,e.run_id AS terminal_run FROM sports_soccer_analysis_runs_v2 r
+      LEFT JOIN sports_soccer_analysis_events_v2 e ON e.run_id=r.run_id WHERE r.league=$1 AND r.board_date=$2::date AND r.game_id=$3
+      ORDER BY r.request_seq DESC LIMIT 1`, scopeValues))[0];
+    assert.notEqual(stagingRun.run_id, first.analysisRunId); assert.equal(stagingRun.terminal_run, null);
+    await due(-1);
+    const expiredDuringStage = await getSoccerCurrentResearchStatus(f.league, f.date, f.game.id);
+    assert.equal(expiredDuringStage.reason, 'EXPIRED');
+    assert.equal((await loadSoccerCurrentAnalysis(f.league, f.date, f.game.sourceId)).currentVersion, null);
+    assert.equal(buildSoccerRanking([f.game], { [f.game.id]: { status: 'done', data: {
+      ...duringVersion, publishedCurrent: expiredDuringStage.publishedCurrent, currentResearch: expiredDuringStage,
+    } } }).entries.length, 0, 'a pending refresh never extends the original current deadline');
+  } catch (error) { stagingError = error; }
+  finally { providerGate = null; releaseStage(); }
+  const concurrent = await pendingRenewal;
+  if (stagingError) throw stagingError;
   assert.equal(concurrent.reduce((n, result) => n + result.refreshed, 0), 1, JSON.stringify(concurrent));
   assert.equal(await runCount(), beforeRenewal + 1, 'one same-price renewal creates one normal journal run');
   assert.equal(analysisCalls, 2);
@@ -304,7 +341,123 @@ try {
   const stableB = await drain();
   assert.equal(stableB.refreshed, 0); assert.equal(analysisCalls, pathCalls + 1);
   assert.equal(stableB.refreshSkipped.REFRESH_NOT_DUE, 1, 'the next B heartbeat skips normally instead of creating a renewal loop');
-  console.log('PASS real PostgreSQL Reader drain → same-price renewal → normal model/journal/publication/ranking; unchanged CAPTURED history, deadline/availability/freshness gates, concurrent lease, manual/generation CAS, failure recovery and previously-captured app-entry A→B→A→B renewal');
+
+  // An unavailable upstream source is not authority to replace or extend the
+  // independently valid current base. Its failed staging event stays auditable.
+  await savePath(pathB); await due(80000); await releaseRefresh(); await releaseQueue(); await enqueue();
+  const validBaseBeforeFailure = await readHead();
+  sourceUnavailable = true;
+  const validBaseFailure = await drain();
+  sourceUnavailable = false;
+  assert.equal(validBaseFailure.refreshed, 0); assert.ok(validBaseFailure.retryable > 0);
+  assert.equal(lastResponse.payload.publishedCurrent, false);
+  assert.deepEqual(await readHead(), validBaseBeforeFailure, 'failed staging preserves the original head and exact validity deadline');
+  assert.equal((await getSoccerCurrentResearchStatus(f.league, f.date, f.game.id)).reason, 'ACTIVE');
+  const keptAfterFailure = (await loadSoccerCurrentAnalysis(f.league, f.date, f.game.sourceId)).currentVersion;
+  assert.equal(keptAfterFailure.revision, validBaseBeforeFailure.published_revision);
+  assert.ok(buildSoccerRanking([f.game], { [f.game.id]: { status: 'done', data: keptAfterFailure } }).entries.length > 0);
+
+  // Race real, successfully calculated/saved stages immediately before their
+  // normal finish callback. Each must retain its terminal event without gaining
+  // current authority after the concurrent invalidating action.
+  async function rejectedStage(label, changeAuthority) {
+    await savePath(pathB); await due(80000); await releaseRefresh(); await releaseQueue(); await enqueue();
+    const base = await readHead(); let reached = false;
+    beforeStagedFinish = async (run, outcome, context) => {
+      assert.equal(outcome.analysisStatus, 'COMPLETED'); assert.ok(context?.saved?.revision);
+      assert.equal(context.result.analysisRunId, run.runId);
+      assert.deepEqual(await readHead(), base, `${label}: saved staging calculation must still leave the published head untouched`);
+      reached = true; await changeAuthority(run, outcome, context, base);
+    };
+    let result;
+    try { result = await drain(); } finally { beforeStagedFinish = null; }
+    assert.equal(reached, true, `${label}: normal analyzer reached conditional publication`);
+    assert.equal(result.refreshed, 0, label); assert.equal(lastResponse.payload.publishedCurrent, false, label);
+    const event = (await query('SELECT analysis_status,analysis_revision FROM sports_soccer_analysis_events_v2 WHERE run_id=$1', [lastResponse.payload.analysisRunId]))[0];
+    assert.equal(event.analysis_status, 'COMPLETED', `${label}: rejected publication retains real terminal history`);
+    assert.equal(event.analysis_revision, lastResponse.payload.revision);
+    return { base, response: lastResponse, result };
+  }
+
+  let newerUnheaded;
+  const unheadedStage = await rejectedStage('newer manual INSERT before head UPDATE', async run => {
+    newerUnheaded = (await query(`INSERT INTO sports_soccer_analysis_runs_v2
+      (run_id,league,game_id,board_date,started_at,quote_generation,requirements_version)
+      VALUES('synthetic-unheaded-manual-at-stage-finish',$1,$3,$2::date,clock_timestamp(),$4::bigint,'2.2') RETURNING *`,
+    [...scopeValues, run.quoteGeneration]))[0];
+    assert.ok(BigInt(newerUnheaded.request_seq) > BigInt(run.requestSeq));
+  });
+  assert.deepEqual(await readHead(), unheadedStage.base);
+  await finishSoccerAnalysisRun({ ...scope, runId: newerUnheaded.run_id, requestSeq: String(newerUnheaded.request_seq), quoteGeneration: String(newerUnheaded.quote_generation) },
+    { analysisStatus: 'FAILED', qaFlag: 'BLOCKED', reasons: ['SYNTHETIC_MANUAL_ENDED_BEFORE_HEAD_UPDATE'] });
+
+  const lateLeaseStage = await rejectedStage('expired staging lease', async () => {
+    await query(`UPDATE sports_soccer_reader_current_refresh_v1 SET lease_until=clock_timestamp()-interval '1 second' WHERE ${headWhere}`, scopeValues);
+  });
+  assert.deepEqual(await readHead(), lateLeaseStage.base, 'a late completed worker cannot publish after losing its lease');
+
+  let interveningManual;
+  await rejectedStage('manual request supersedes staging', async () => {
+    interveningManual = await beginSoccerAnalysisRun(scope);
+    const current = await getSoccerCurrentResearchStatus(f.league, f.date, f.game.id);
+    assert.equal(current.reason, 'REANALYSIS_PENDING');
+    assert.equal((await loadSoccerCurrentAnalysis(f.league, f.date, f.game.sourceId)).currentVersion, null,
+      'explicit manual begin continues to revoke the previous published analysis immediately');
+  });
+  assert.equal((await readHead()).requested_run_id, interveningManual.runId);
+  await finishSoccerAnalysisRun(interveningManual, { analysisStatus: 'FAILED', qaFlag: 'BLOCKED', reasons: ['SYNTHETIC_MANUAL_TERMINATED'] });
+
+  const generationStage = await rejectedStage('Reader price generation changed during staging', async () => {
+    const repriced = structuredClone(f.readerPayload);
+    repriced.pageUrl = pathB; repriced.observedAt = new Date(Date.now()).toISOString(); repriced.pageActivityAt = repriced.observedAt;
+    for (const game of repriced.games) for (const market of game.markets) if (market.kind === 'TOTAL') market.overWater += .02;
+    repriced.contentHash = soccerReaderHash(canonicalSoccerPayload(repriced));
+    await saveSoccerReaderSnapshot(repriced);
+  });
+  assert.equal((await readHead()).requested_run_id, generationStage.base.requested_run_id);
+  assert.equal((await getSoccerCurrentResearchStatus(f.league, f.date, f.game.id)).reason, 'QUOTE_CHANGED');
+  assert.deepEqual(await query(`SELECT * FROM sports_soccer_reader_analysis_claims_v1 WHERE ${headWhere} ORDER BY identity`, scopeValues), bothCaptures);
+
+  // A crashed owned stage B must receive an immutable terminal event before C
+  // takes its ownership row. Otherwise C failing would erase the only evidence
+  // that B was automatic and its orphan run would block every future D attempt.
+  await savePath(pathB);
+  const orphanBaseResponse = await deps.analyze({ league: f.league, date: f.date, eventId: f.game.sourceId }, { fetchSoccerSchedule: async () => f.board });
+  assert.equal(orphanBaseResponse.payload.publishedCurrent, true);
+  await savePath(pathB); await due(80000); await releaseQueue();
+  const orphanBase = await readHead();
+  const orphan = (await query(`INSERT INTO sports_soccer_analysis_runs_v2
+    (run_id,league,game_id,board_date,started_at,quote_generation,requirements_version)
+    VALUES('synthetic-crashed-owned-stage',$1,$3,$2::date,clock_timestamp()-interval '121 seconds',$4::bigint,'2.2') RETURNING *`,
+  [...scopeValues, String(orphanBase.quote_generation)]))[0];
+  await query(`UPDATE sports_soccer_reader_current_refresh_v1 SET refresh_run_id=$4,
+    lease_until=clock_timestamp()-interval '1 second',retry_at=clock_timestamp()-interval '1 second' WHERE ${headWhere}`,
+  [...scopeValues, orphan.run_id]);
+  await enqueue(); sourceUnavailable = true;
+  const failedReplacement = await drain();
+  sourceUnavailable = false;
+  assert.equal(failedReplacement.refreshed, 0); assert.ok(failedReplacement.retryable > 0);
+  const replacementRunId = lastResponse.payload.analysisRunId;
+  assert.notEqual(replacementRunId, orphan.run_id);
+  assert.deepEqual(await readHead(), orphanBase, 'failed replacement C still preserves the independent published base A');
+  const retired = (await query('SELECT * FROM sports_soccer_analysis_events_v2 WHERE run_id=$1', [orphan.run_id]))[0];
+  assert.equal(retired.analysis_status, 'FAILED'); assert.equal(retired.qa_flag, 'BLOCKED');
+  assert.equal(retired.analysis_revision, null); assert.equal(retired.selection_result, null);
+  assert.deepEqual(retired.reasons, ['SOCCER_REFRESH_LEASE_EXPIRED']);
+  assert.deepEqual((await query('SELECT * FROM sports_soccer_analysis_runs_v2 WHERE run_id=$1', [orphan.run_id]))[0], orphan,
+    'recovery appends a terminal receipt without rewriting the crashed immutable run');
+  assert.equal((await query(`SELECT refresh_run_id FROM sports_soccer_reader_current_refresh_v1 WHERE ${headWhere}`, scopeValues))[0].refresh_run_id,
+    replacementRunId, 'C has replaced the ownership pointer, so the B terminal event is necessary for the next attempt');
+  await savePath(pathB); await releaseRefresh(); await releaseQueue(); await enqueue();
+  const recoveredAfterOrphan = await drain();
+  assert.equal(recoveredAfterOrphan.refreshed, 1, JSON.stringify(recoveredAfterOrphan));
+  assert.equal(lastResponse.payload.publishedCurrent, true);
+  assert.notEqual(lastResponse.payload.analysisRunId, replacementRunId);
+  assert.equal((await getSoccerCurrentResearchStatus(f.league, f.date, f.game.id)).reason, 'ACTIVE');
+  assert.ok(buildSoccerRanking([f.game], { [f.game.id]: { status: 'done', data: lastResponse.payload } }).entries.length > 0);
+  assert.deepEqual((await query('SELECT * FROM sports_soccer_analysis_events_v2 WHERE run_id=$1', [orphan.run_id]))[0], retired);
+  assert.deepEqual(await query(`SELECT * FROM sports_soccer_reader_analysis_claims_v1 WHERE ${headWhere} ORDER BY identity`, scopeValues), bothCaptures);
+  console.log('PASS real PostgreSQL Reader staging renewal: valid current/ranking survives background begin, original expiry still revokes, atomic replacement, immutable captures/history, failed-source preservation, manual/generation/lease publication fences, crashed B→failed C→successful D recovery, and captured app-entry A→B→A→B recovery');
 } finally {
   for (const key of envKeys) { if (previousEnv[key] === undefined) delete process.env[key]; else process.env[key] = previousEnv[key]; }
   await fixture.close();
