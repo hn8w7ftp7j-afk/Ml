@@ -1984,7 +1984,7 @@ export default function Home() {
       if (MAIN_SOCCER_LEAGUES.includes(sport)) {
         setSoccerOpened(current => current.includes(sport) ? current : [...current, sport]);
         const query = new URLSearchParams(window.location.search);
-        setSoccerEntryScopes(current => ({ ...current, [sport]: { date: query.get('date') || '', view: query.get('view') || 'schedule', runId: query.get('runId') || '' } }));
+        setSoccerEntryScopes(current => ({ ...current, [sport]: { date: query.get('date') || '', view: query.get('view') || 'markets', runId: query.get('runId') || '' } }));
       }
     };
     sync(); window.addEventListener('popstate', sync); return () => window.removeEventListener('popstate', sync);
@@ -2002,10 +2002,10 @@ export default function Home() {
   function selectSoccer(id, requestedScope = null) {
     if (!MAIN_SOCCER_LEAGUES.includes(id)) return;
     const batch = allLeagueRunRef.current?.leagues?.[id];
-    const scope = requestedScope || soccerScopesRef.current[id] || { date: batch?.boardDate || taipeiDate(), runId: allLeagueRunRef.current?.runId || '' };
+    const scope = requestedScope ? { ...requestedScope, view: requestedScope.view || 'schedule' } : soccerScopesRef.current[id] || { date: batch?.boardDate || taipeiDate(), runId: allLeagueRunRef.current?.runId || '' };
     setNbaSelected(false); setSoccerSelected(id);
     setSoccerOpened(current => current.includes(id) ? current : [...current, id]);
-    if (requestedScope) setSoccerEntryScopes(current => ({ ...current, [id]: { ...requestedScope } }));
+    if (requestedScope) setSoccerEntryScopes(current => ({ ...current, [id]: { ...scope } }));
     window.history.replaceState(null, '', mainSportHref(id, scope));
   }
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);

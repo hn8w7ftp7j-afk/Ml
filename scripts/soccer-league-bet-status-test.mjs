@@ -35,6 +35,21 @@ assert.equal(summarizeSoccerHighScoreBets(research.candidates,{league,date,ledge
 assert.equal(soccerHighScoreCandidates([game],states,{league,date:'2026-10-21',now}).candidates.length,0,'upcoming games on other dates cannot populate this board reminder');
 assert.equal(soccerHighScoreCandidates([game],states,{league:'ucl',date,now}).candidates.length,0);
 assert.equal(soccerHighScoreCandidates([game],states,{league,date,now:now+180000}).analysisReady,false,'expired current research cannot keep the previous all-bet summary');
+const tomorrow='2026-10-21',nextGame={...game,id:'soccer:epl:124',sourceId:'124',date:tomorrow,startTime:new Date(now+26*3600000).toISOString()};
+const nextResult=candidateFixture({gameId:nextGame.id,league,date:tomorrow,publishedCurrent:true,persisted:true,analysisStatus:'COMPLETED',observedAt:new Date(now).toISOString(),evidence:{game:nextGame},formalScoringEnabled:true,qualification:{eligible:true},directions:['FT','HT'].map(period=>({period,direction:'TOTAL_OVER',eligible:true,qaFlag:'PASS',score:8,W:2,R:1,quotes:[{...quote(period),key:`next-${period}`,provenance:{gameId:nextGame.id,observedAt:new Date(now).toISOString()}}]}))},now);
+const crossGames=[game,nextGame],crossStates={...states,[nextGame.id]:{status:'done',data:nextResult}};
+const crossReport=soccerHighScoreCandidates(crossGames,crossStates,{league,date,through:tomorrow,now});
+assert.equal(crossReport.candidates.length,4,'a cross-midnight board includes qualified candidates on both Taiwan dates');
+assert.equal(crossReport.analysisReady,true);
+assert.equal(soccerHighScoreCandidates(crossGames,states,{league,date,through:tomorrow,now}).analysisReady,false,'missing tomorrow analysis cannot claim a complete range');
+assert.equal(soccerHighScoreCandidates(crossGames,crossStates,{league,date,now}).candidates.length,2,'single-day callers retain their exact scope');
+const nextRecords=crossReport.candidates.filter(entry=>entry.game.date===tomorrow).map((entry,i)=>({...entry.quote,league,date:tomorrow,gameId:nextGame.id,id:`next-record-${i}`,status:'OPEN',stake:10000}));
+const crossSummary=(rows,extra={})=>summarizeSoccerHighScoreBets(crossReport.candidates,{records:rows,league,date,through:tomorrow,ledgerReady:true,analysisReady:true,...extra});
+assert.equal(crossSummary(records).unbet,2,'today records cannot conceal tomorrow unrecorded candidates');
+assert.equal(crossSummary([...records,...nextRecords]).state,'all_bet');
+assert.equal(crossSummary([...records,...nextRecords.map(record=>({...record,date}))]).unbet,2,'range summaries still require each record actual date');
+assert.equal(crossSummary([...records,...nextRecords.map(record=>({...record,league:'ucl'}))]).unbet,2,'range summaries never mix leagues');
+assert.equal(crossSummary([...records,{...nextRecords[0],status:'CANCELLED'},nextRecords[1]]).unbet,1);
 console.log('PASS soccer card summary with mocked synthetic schedule authority: ranking candidates, research exclusion, exact date/league/FT/HT/side/line isolation, unloaded/failed/expired analysis, pending ledger, cancel and restore');
 
 const workspaceSource=fs.readFileSync('app/soccer/workspace.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
@@ -46,6 +61,9 @@ const workspaceTree=workspaceContext.SoccerWorkspace({games:[game],states,run:()
 assert.equal(workspaceTree.props.onHighScoreStatusChange,onStatus);assert.equal(workspaceTree.props.summaryDate,date);assert.equal(workspaceTree.props.candidates.length,2);
 const notLoaded=workspaceContext.SoccerWorkspace({games:[game],states:{},run:()=>{},league,date,onHighScoreStatusChange:onStatus,children:[]});
 assert.equal(notLoaded.props.analysisReady,false);
+const crossWorkspace=workspaceContext.SoccerWorkspace({games:crossGames,states:crossStates,run:()=>{},league,date,onHighScoreStatusChange:onStatus,children:[]});
+assert.equal(crossWorkspace.props.through,tomorrow);assert.equal(crossWorkspace.props.candidates.length,4);
+assert.deepEqual(Array.from(crossWorkspace.props.dates),[date,tomorrow]);
 console.log('PASS shipped soccer workspace passes exact-date ranking candidates, source readiness and callback into the record provider');
 
 // Run the shipped record provider hooks so callbacks follow actual durable
@@ -67,7 +85,7 @@ const render=()=>{cursor=0;dirty=false;tree=context.SoccerRecordProvider(props);
 const flush=async()=>{for(let i=0;i<20;i++){await Promise.resolve();if(dirty)render();}assert.equal(dirty,false);};
 const ledger=()=>tree.props.value;
 const respond=async(recordRequest,value)=>{recordRequest.resolve({ok:true,json:async()=>value});await flush();};
-const readBody=rows=>({ok:true,league:props.league,date:props.date,through:props.date,records:rows});
+const readBody=rows=>({ok:true,league:props.league,date:props.date,through:props.through||props.date,records:rows});
 render();await flush();assert.equal(updates.at(-1).state,'pending');
 await respond(requests.shift(),readBody([]));assert.equal(updates.at(-1).unbet,2);
 async function write(record){const flight=ledger().mutate({action:'record',gameId:game.id},soccerRecordKey(record));await flush();await respond(requests.shift(),{ok:true,persistence:'durable_database',record});await flight;await flush();}
@@ -82,5 +100,23 @@ render();await flush();assert.equal(updates.at(-1).date,'2026-10-21');assert.equ
 await respond(requests.shift(),readBody([]));assert.equal(updates.at(-1).state,'unbet');
 props={...props,league:'ucl',candidates:[]};render();await flush();await respond(requests.shift(),readBody([]));
 assert.equal(updates.at(-1).league,'UCL');assert.equal(updates.at(-1).state,'none');
+props={...props,league,date,through:tomorrow,candidates:crossReport.candidates};
+render();await flush();assert.equal(updates.at(-1).state,'pending');
+const crossRead=requests.shift();assert.equal(new URL(crossRead.url,'https://fixture.invalid').searchParams.get('through'),tomorrow);
+await respond(crossRead,readBody(records));assert.equal(updates.at(-1).total,4);assert.equal(updates.at(-1).unbet,2);
+const nextWrite=ledger().mutate({action:'record',date:tomorrow,gameId:nextGame.id},soccerRecordKey(nextRecords[0]));await flush();
+const crossPost=requests.shift();assert.equal(JSON.parse(crossPost.options.body).date,tomorrow);
+await respond(crossPost,{ok:true,persistence:'durable_database',record:nextRecords[0]});await nextWrite;await flush();
+assert.equal(updates.at(-1).unbet,1,'recording the next-date selection refreshes the combined reminder');
+const farDate='2026-12-03',farCandidates=crossReport.candidates.filter(entry=>entry.game.date===tomorrow).map(entry=>({...entry,stableKey:`far:${entry.stableKey}`,game:{...entry.game,date:farDate}}));
+const farRecords=nextRecords.map(record=>({...record,date:farDate}));
+props={...props,through:farDate,dates:[date,farDate],candidates:[...report.candidates,...farCandidates]};
+render();await flush();assert.equal(ledger().status,'loading');
+assert.equal(requests.length,2,'sparse distant game dates need only two bounded ledger reads');
+const sparseReads=requests.splice(0);
+assert.deepEqual(sparseReads.map(call=>{const q=new URL(call.url,'https://fixture.invalid').searchParams;return[q.get('date'),q.get('through')];}),[[date,date],[farDate,farDate]]);
+await respond(sparseReads[0],{ok:true,league,date,through:date,records});assert.equal(ledger().status,'loading','partial ledger coverage cannot publish all-bet');
+await respond(sparseReads[1],{ok:true,league,date:farDate,through:farDate,records:farRecords});
+assert.equal(ledger().status,'ready');assert.equal(updates.at(-1).state,'all_bet');assert.equal(updates.at(-1).total,4);
 hooks.forEach(hook=>hook?.cleanup?.());
 console.log('PASS shipped soccer record hooks: durable record/cancel/restore callbacks, deduplicated publications, pending analysis, immediate date-scope fence and uppercase league isolation');

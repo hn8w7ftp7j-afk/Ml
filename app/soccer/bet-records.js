@@ -14,18 +14,46 @@ async function request(url,options={}){
   const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(20000),...options}),d=await r.json();
   if(!r.ok||!d.ok)throw Error(r.status===401?'登入已過期，請重新登入。':d.error||'帳本暫時無法同步。');return d;
 }
-export function SoccerRecordProvider({league,date,through=date,children,summaryDate=date,candidates=[],analysisReady=true,onHighScoreStatusChange}){
+function recordReadRanges(date,through,dates){
+  const valid=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(`${value}T00:00:00Z`))&&new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)===value;
+  if(!valid(date)||!valid(through)||through<date)return [{date,through}];
+  const day=86400000,ranges=[];
+  if(Array.isArray(dates)){
+    const selected=[...new Set([date,...dates.filter(value=>valid(value)&&value>=date&&value<=through)])].sort();
+    for(const value of selected){const previous=ranges.at(-1);
+      if(previous&&Date.parse(value)-Date.parse(previous.through)===day&&Date.parse(value)-Date.parse(previous.date)<=14*day)previous.through=value;
+      else ranges.push({date:value,through:value});
+    }
+  }else{
+    for(let start=Date.parse(date),end=Date.parse(through);start<=end;start+=15*day)ranges.push({date:new Date(start).toISOString().slice(0,10),through:new Date(Math.min(end,start+14*day)).toISOString().slice(0,10)});
+  }
+  return ranges;
+}
+export function SoccerRecordProvider({league,date,through=date,dates=null,children,summaryDate=date,candidates=[],analysisReady=true,onHighScoreStatusChange}){
   const [records,setRecords]=useState([]),[status,setStatus]=useState('loading'),[error,setError]=useState(''),[pending,setPending]=useState(new Set());
   const [loadedScope,setLoadedScope]=useState('');
   const [settlementPolicy,setSettlementPolicy]=useState(null),[settlementSummary,setSettlementSummary]=useState(null),[settlementError,setSettlementError]=useState('');
   const generation=useRef(0),flights=useRef(new Set());
-  const scope=`${league}|${date}|${through}`,ledgerStatus=loadedScope===scope?status:'loading';
-  async function load(){if(flights.current.size)return;const token=++generation.current;setStatus('loading');setError('');try{const d=await request(`/api/soccer/bet-records?${new URLSearchParams({league,date,through})}`);if(token!==generation.current)return;if(d.league!==league||d.date!==date||d.through!==through||!Array.isArray(d.records)||d.records.some(r=>r.league!==league||r.date<date||r.date>through))throw Error('帳本識別不符。');setRecords(d.records);setSettlementPolicy(d.settlementPolicy||null);setLoadedScope(scope);setStatus('ready');}catch(e){if(token===generation.current){setLoadedScope(scope);setStatus('failed');setError(e.message);}}}
-  useEffect(()=>{flights.current.clear();setPending(new Set());setRecords([]);setSettlementPolicy(null);setSettlementSummary(null);setSettlementError('');setLoadedScope('');void load();return()=>{generation.current++;};},[league,date,through]);
-  const summary=onHighScoreStatusChange?summarizeSoccerHighScoreBets(candidates,{records,league,date:summaryDate,ledgerReady:ledgerStatus==='ready',analysisReady}):null;
+  const ranges=recordReadRanges(date,through,dates),rangeKey=ranges.map(range=>`${range.date}:${range.through}`).join('|');
+  const scope=`${league}|${date}|${through}|${rangeKey}`,ledgerStatus=loadedScope===scope?status:'loading';
+  async function load(){
+    if(flights.current.size)return;const token=++generation.current;setStatus('loading');setError('');
+    try{
+      const responses=new Array(ranges.length);let index=0;
+      async function worker(){while(token===generation.current&&index<ranges.length){const i=index++,range=ranges[i];
+        const d=await request(`/api/soccer/bet-records?${new URLSearchParams({league,...range})}`);
+        if(d.league!==league||d.date!==range.date||d.through!==range.through||!Array.isArray(d.records)||d.records.some(r=>r.league!==league||r.date<range.date||r.date>range.through))throw Error('帳本識別不符。');
+        responses[i]=d;
+      }}
+      await Promise.all([worker(),worker()]);if(token!==generation.current)return;
+      setRecords(responses.flatMap(value=>value.records));setSettlementPolicy(responses[0]?.settlementPolicy||null);setLoadedScope(scope);setStatus('ready');
+    }catch(e){if(token===generation.current){setLoadedScope(scope);setStatus('failed');setError(e.message);}}
+  }
+  useEffect(()=>{flights.current.clear();setPending(new Set());setRecords([]);setSettlementPolicy(null);setSettlementSummary(null);setSettlementError('');setLoadedScope('');void load();return()=>{generation.current++;};},[league,date,through,rangeKey]);
+  const summary=onHighScoreStatusChange?summarizeSoccerHighScoreBets(candidates,{records,league,date:summaryDate,through,ledgerReady:ledgerStatus==='ready',analysisReady}):null;
   const callback=useRef(onHighScoreStatusChange);callback.current=onHighScoreStatusChange;
   const published=useRef('');
-  useEffect(()=>{if(!callback.current||!summary)return;const signature=JSON.stringify(summary);if(published.current===signature)return;published.current=signature;callback.current(summary);},[league,summaryDate,summary?.state,summary?.label,summary?.total,summary?.recorded,summary?.unbet]);
+  useEffect(()=>{if(!callback.current||!summary)return;const signature=JSON.stringify(summary);if(published.current===signature)return;published.current=signature;callback.current(summary);},[league,summaryDate,through,summary?.state,summary?.label,summary?.total,summary?.recorded,summary?.unbet]);
   async function mutate(body,key){
     if(ledgerStatus!=='ready'||flights.current.has(key)||flights.current.has(SETTLEMENT_CHECK_KEY))return;const token=generation.current;flights.current.add(key);setPending(new Set(flights.current));setError('');
     try{const d=await request('/api/soccer/bet-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,league,date:body.date||date})});if(token!==generation.current)return;

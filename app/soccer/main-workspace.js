@@ -11,7 +11,7 @@ import { soccerTeamLabel } from '../../lib/soccer/team-labels.js';
 import './soccer.css';
 
 const SOCCER_LEAGUES = { EPL: { name: '英超', fullName: '英格蘭超級聯賽' }, UCL: { name: '歐冠 UCL', fullName: '歐洲冠軍聯賽' } };
-const VIEW_NAMES = { schedule: '當日賽程', upcoming: '近期賽程', standings: '積分榜' };
+const VIEW_NAMES = { markets: '全部盤口', schedule: '按日期查詢', upcoming: '近期賽程', standings: '積分榜' };
 const STATUSES = { scheduled: '未開賽', live: '比賽中', final: '已完賽', postponed: '延期', cancelled: '取消', unknown: '狀態待更新' };
 
 function taipeiDate(now = new Date()) {
@@ -31,16 +31,17 @@ function shiftDate(value, days) {
 function readLocation(search, now = new Date()) {
   const query = new URLSearchParams(search);
   const rawLeague = (query.get('sport') || query.get('league') || '').toUpperCase();
+  const view = Object.hasOwn(VIEW_NAMES, query.get('view')) ? query.get('view') : 'markets';
   return {
     league: Object.hasOwn(SOCCER_LEAGUES, rawLeague) ? rawLeague : 'EPL',
-    date: validDate(query.get('date')) ? query.get('date') : taipeiDate(now),
-    view: Object.hasOwn(VIEW_NAMES, query.get('view')) ? query.get('view') : 'schedule',
+    date: view !== 'markets' && validDate(query.get('date')) ? query.get('date') : taipeiDate(now),
+    view,
     ...(/^[a-zA-Z0-9_:-]{8,300}$/.test(query.get('runId')||'') ? { runId: query.get('runId') } : {}),
   };
 }
 function workspaceUrl(location, embedded = false) {
   const query = new URLSearchParams({ [embedded ? 'sport' : 'league']: location.league, date: location.date });
-  if (location.view !== 'schedule') query.set('view', location.view);
+  query.set('view', location.view);
   if (/^[a-zA-Z0-9_:-]{8,300}$/.test(location.runId||'')) query.set('runId', location.runId);
   return `${embedded ? '/' : '/soccer'}?${query}`;
 }
@@ -50,10 +51,10 @@ function savedAllRun() {
 function runLocation(location, run, allowDate = true) {
   const date = run?.leagues?.[location.league]?.boardDate;
   if (!validDate(date) || typeof run?.runId !== 'string' || !/^[a-zA-Z0-9_:-]{8,300}$/.test(run.runId)
-    || !allowDate && location.date !== date) return null;
-  return { ...location, date, runId: run.runId };
+    || location.view !== 'markets' && !allowDate && location.date !== date) return null;
+  return { ...location, date: location.view === 'markets' ? location.date : date, runId: run.runId };
 }
-function boardKey(location) { return `soccer:${location.league}:${location.date}:${location.view}`; }
+function boardKey(location) { return location.view === 'markets' ? `soccer:${location.league}:markets` : `soccer:${location.league}:${location.date}:${location.view}`; }
 function teamName(team) { return soccerTeamLabel(team); }
 function scoreValue(value) { return Number.isInteger(value) && value >= 0 ? value : null; }
 function verifiedScore(game) {
@@ -79,6 +80,7 @@ function validateBoard(body, location) {
     for (const game of body.games) {
       if (game?.league !== id || !game.id?.startsWith(`soccer:${id}:`) || !validDate(game.date) || (location.view === 'schedule' && game.date !== location.date)) throw new Error('賽事識別不符，已停止顯示這次資料。');
     }
+    if (location.view === 'markets' && (body.view !== 'markets' || !Array.isArray(body.readerDates) || body.readerDates.some(value => !validDate(value)))) throw new Error('跨日盤口日期不完整，請重新整理。');
   }
   return body;
 }
@@ -134,7 +136,7 @@ function Standings({ board }) {
 }
 
 export default function SoccerMainWorkspace({ active = true, embedded = false, selectedLeague = 'EPL', allRun = null, onAnalyzeAll = null, otherBusy = false, onHighScoreStatusChange = null, onBusyChange = null, onScopeChange = null, requestedScope = null }) {
-  const [location, setLocation] = useState({ league: Object.hasOwn(SOCCER_LEAGUES, selectedLeague) ? selectedLeague : 'EPL', date: '', view: 'schedule' });
+  const [location, setLocation] = useState({ league: Object.hasOwn(SOCCER_LEAGUES, selectedLeague) ? selectedLeague : 'EPL', date: '', view: 'markets' });
   const [responses, setResponses] = useState({});
   const [loadingKey, setLoadingKey] = useState('');
   const [failure, setFailure] = useState(null);
@@ -149,6 +151,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
   const key = boardKey(location);
   const board = responses[key];
   const busy = loadingKey === key;
+  const boardLoading = useRef(false); boardLoading.current = busy;
   const error = failure?.key === key ? failure.message : '';
   const league = SOCCER_LEAGUES[location.league];
 
@@ -197,7 +200,23 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
       if (token === generation.current) setLoadingKey('');
     });
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [key, refresh, active]);
+  }, [key, location.date, refresh, active]);
+
+  useEffect(() => {
+    if (!active || location.view !== 'markets' || !location.date) return;
+    let cancelled = false, timer;
+    const poll = () => {
+      if (cancelled) return;
+      if (!boardLoading.current && (typeof document === 'undefined' || document.visibilityState === 'visible')) {
+        const today = taipeiDate();
+        if (today !== latestLocation.current.date) setLocation(current => ({ ...current, date: today }));
+        setRefresh(value => value + 1);
+      }
+      timer = setTimeout(poll, 30000);
+    };
+    timer = setTimeout(poll, 30000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [active, location.view, location.date]);
 
   useEffect(() => {
     if (!active || !location.date) return;
@@ -224,7 +243,8 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
     const league = String(requestedScope.league || selectedLeague).toUpperCase();
     if (!Object.hasOwn(SOCCER_LEAGUES, league) || embedded && league !== selectedLeague || !validDate(requestedScope.date)) return;
     requested.current = requestedScope;
-    const next = { league, date: requestedScope.date, view: Object.hasOwn(VIEW_NAMES, requestedScope.view) ? requestedScope.view : 'schedule' };
+    const view = Object.hasOwn(VIEW_NAMES, requestedScope.view) ? requestedScope.view : 'schedule';
+    const next = { league, date: view === 'markets' ? taipeiDate() : requestedScope.date, view };
     if (/^[a-zA-Z0-9_:-]{8,300}$/.test(requestedScope.runId || '')) next.runId = requestedScope.runId;
     manualRun.current = next.runId ? '' : allRun?.runId || '';
     generation.current += 1;
@@ -235,7 +255,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
 
   useEffect(() => {
     if (!active || !location.date) return;
-    const signature = `${boardKey(location)}:${location.runId || ''}`;
+    const signature = `${boardKey(location)}:${location.date}:${location.runId || ''}`;
     if (reportedScope.current === signature) return;
     reportedScope.current = signature;
     scopeCallback.current?.({ ...location, runId: location.runId || '' });
@@ -245,6 +265,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
   useEffect(() => { setLeagueBatchRequest(null); }, [key]);
 
   function navigate(next) {
+    if (next.view === 'markets') next = { ...next, date: taipeiDate() };
     if (!validDate(next.date) || boardKey(next) === boardKey(location) && next.runId === location.runId) return;
     next = { ...next };
     if (next.league !== location.league) {
@@ -265,6 +286,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
   }
   function retry() { setRefresh(value => value + 1); }
   const games = board?.games || [];
+  const readerDates = board?.readerDates || [];
   const analysisTargets = [...new Map(games.filter(game => game.league === location.league.toLowerCase()
     && game.status === 'scheduled' && Date.parse(game.startTime) > Date.now()).map(game => [game.id, game])).values()];
   const canAnalyzeLeague = active && Boolean(board) && !busy && !error && !otherBusy
@@ -284,21 +306,24 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
     <header className="appHeader"><div><div className="eyebrow">FOOTBALL</div><h1>{league.name}｜足球賽程</h1><p>{league.fullName}・台灣時間</p></div><div className="headerBadges"><span className="version">v{APP_VERSION}</span></div></header>
     <nav className="soccerLeagueNav" aria-label="聯盟切換"><Link prefetch={false} href={`/?league=MLB${location.date ? `&date=${location.date}` : ''}`}><b>棒球</b><small>MLB・日韓台棒</small></Link><Link prefetch={false} href={`/?sport=NBA${location.date ? `&date=${location.date}` : ''}`}><b>NBA</b><small>美國職籃</small></Link>{Object.entries(SOCCER_LEAGUES).map(([id, item]) => <a key={id} href={workspaceUrl({ ...location, league: id }, embedded)} onClick={event => leagueClick(event, id)} aria-current={location.league === id ? 'page' : undefined} className={location.league === id ? 'active' : ''}><b>{id}</b><small>{item.name}</small></a>)}</nav></>}
     <section className="panel soccerControls" aria-label="足球賽程查詢">
-      <div className="soccerDateControls"><button type="button" className="secondary" aria-label="前一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, -1), view: 'schedule' })}>前一天</button><label htmlFor={dateInputId}>台灣日期<input id={dateInputId} type="date" value={location.date} onChange={event => { if (validDate(event.target.value)) navigate({ ...location, date: event.target.value, view: 'schedule' }); }}/></label><button type="button" className="secondary" aria-label="後一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, 1), view: 'schedule' })}>後一天</button><button type="button" className="secondary" onClick={() => navigate({ ...location, date: taipeiDate(), view: 'schedule' })}>今天</button><button type="button" className="secondary soccerRefresh" disabled={!location.date || busy} onClick={retry}>{busy ? '更新中…' : '重新整理'}</button></div>
       <div className="soccerViewNav" aria-label="足球資料檢視">{Object.entries(VIEW_NAMES).map(([view, name]) => <button key={view} type="button" className={location.view === view ? 'active' : ''} aria-pressed={location.view === view} disabled={!location.date} onClick={() => navigate({ ...location, view })}>{name}</button>)}</div>
-      {location.date&&<><div className="soccerAnalyzeActions"><button type="button" className="primary soccerLeagueAnalyzeButton" disabled={!canAnalyzeLeague} onClick={analyzeLeague}>{otherBusy ? '分析工作進行中…' : `一鍵分析${location.league === 'EPL' ? '英超' : '歐冠'}`}</button>{embedded ? <button type="button" className="secondary allLeagueAnalyzeButton" disabled={otherBusy || !onAnalyzeAll} onClick={() => onAnalyzeAll?.(location.date)}>一鍵分析全部聯盟</button> : <a className="secondary allLeagueAnalyzeButton" href={`/?analyzeAll=1&date=${encodeURIComponent(location.date)}`}>一鍵分析全部聯盟</a>}</div><p className="soccerAvailability">{location.view === 'standings' ? '切回當日或近期賽程，即可分析本聯盟。' : busy ? '正在讀取本聯盟賽程…' : error ? '請先重新整理賽程，再分析本聯盟。' : analysisTargets.length ? `${location.view === 'upcoming' ? '目前近期賽程' : `${location.date}（台灣時間）`}｜僅分析${league.name}未開賽 ${analysisTargets.length} 場` : '目前沒有可分析的未開賽賽事。'}</p></>}
+      <div className="soccerBoardHeading"><p className="soccerAvailability">{location.view === 'markets' ? '已讀到盤口的未開賽場次一次顯示，跨日自動合併，依開賽時間排列。' : '日期與時間皆為台灣時間。'}</p><button type="button" className="secondary soccerRefresh" disabled={!location.date || busy} onClick={retry}>{busy ? '更新中…' : '重新整理'}</button></div>
+      {location.view !== 'markets' && <div className="soccerDateControls"><button type="button" className="secondary" aria-label="前一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, -1), view: 'schedule' })}>前一天</button><label htmlFor={dateInputId}>台灣日期<input id={dateInputId} type="date" value={location.date} onChange={event => { if (validDate(event.target.value)) navigate({ ...location, date: event.target.value, view: 'schedule' }); }}/></label><button type="button" className="secondary" aria-label="後一天" disabled={!location.date} onClick={() => navigate({ ...location, date: shiftDate(location.date, 1), view: 'schedule' })}>後一天</button><button type="button" className="secondary" onClick={() => navigate({ ...location, date: taipeiDate(), view: 'schedule' })}>今天</button></div>}
+      {location.date&&<><div className="soccerAnalyzeActions"><button type="button" className="primary soccerLeagueAnalyzeButton" disabled={!canAnalyzeLeague} onClick={analyzeLeague}>{otherBusy ? '分析工作進行中…' : `一鍵分析${location.league === 'EPL' ? '英超' : '歐冠'}`}</button>{embedded ? <button type="button" className="secondary allLeagueAnalyzeButton" disabled={otherBusy || !onAnalyzeAll} onClick={() => onAnalyzeAll?.(location.date)}>一鍵分析全部聯盟</button> : <a className="secondary allLeagueAnalyzeButton" href={`/?analyzeAll=1&date=${encodeURIComponent(location.date)}`}>一鍵分析全部聯盟</a>}</div><p className="soccerAvailability">{location.view === 'standings' ? '切回全部盤口或賽程，即可分析本聯盟。' : busy ? '正在讀取本聯盟賽程…' : error ? '請先重新整理賽程，再分析本聯盟。' : analysisTargets.length ? `${location.view === 'markets' ? '全部已讀盤口（跨日）' : location.view === 'upcoming' ? '目前近期賽程' : `${location.date}（台灣時間）`}｜僅分析${league.name}未開賽 ${analysisTargets.length} 場` : '目前沒有可分析的未開賽賽事。'}</p></>}
       <p className="soccerAvailability">依現有資料預測・完整模型誤差尚未驗證</p>
       <details className="soccerDetails soccerUsageDetails"><summary>分析說明與模型驗證狀態</summary><p className="soccerAvailability">依現有資料預測；缺項已標示。有效原盤可計算預測 S 與模型情境 R，沿用既定派彩、退水及評分公式；完整模型誤差尚未驗證。未同步原盤時，可先分析賽事，再使用手動盤口試算。<Link prefetch={false} href="/soccer/specification">分析規格 2.2</Link></p>{board && <SoccerSystemReadiness value={board.scoringSystemReadiness} league={location.league.toLowerCase()}/>}</details>
     </section>
-    {active && <><SoccerReaderBoards league={location.league} date={location.date} games={games} view={location.view}/><details className="panel soccerDetails soccerSourceDetails"><summary>歷史原盤與資料覆蓋</summary><SoccerReaderInventoryPanel league={location.league} date={location.date} throughDate={soccerReaderBoardDates({league:location.league,date:location.date,games,view:location.view}).at(-1)||location.date} onSelectDate={savedDate=>navigate({...location,date:savedDate,view:'schedule'})}/><SoccerOfficialMarketCoveragePanel league={location.league.toLowerCase()} date={location.date} active={active}/></details></>}
+    {active && <><SoccerReaderBoards league={location.league} date={location.date} games={games} view={location.view} readerDates={readerDates}/><details className="panel soccerDetails soccerSourceDetails"><summary>歷史原盤與資料覆蓋</summary><SoccerReaderInventoryPanel league={location.league} date={location.date} throughDate={soccerReaderBoardDates({league:location.league,date:location.date,games,view:location.view,readerDates}).at(-1)||location.date} onSelectDate={savedDate=>navigate({...location,date:savedDate,view:'schedule'})}/><SoccerOfficialMarketCoveragePanel league={location.league.toLowerCase()} date={location.date} active={active}/></details></>}
     {error && <div className="errorBox soccerError" role="alert"><div><strong>{board ? '更新失敗，保留上次資料' : '資料載入失敗'}</strong><p>{error}</p></div><button type="button" className="secondary" disabled={busy} onClick={retry}>重試</button></div>}
     <section aria-label={`${league.name}${VIEW_NAMES[location.view]}`} aria-busy={busy}>
-      <div className="soccerBoardHeading"><h2>{location.view === 'upcoming' ? '近期賽程' : location.view === 'standings' ? '目前積分榜' : dateLabel}</h2><span role="status" aria-live="polite">{busy ? board ? '更新中…' : '載入中…' : board ? displayCount : ''}</span></div>
+      <div className="soccerBoardHeading"><h2>{location.view === 'markets' ? '全部未開賽盤口' : location.view === 'upcoming' ? '近期賽程' : location.view === 'standings' ? '目前積分榜' : dateLabel}</h2><span role="status" aria-live="polite">{busy ? board ? '更新中…' : '載入中…' : board ? displayCount : ''}</span></div>
       {board && <Source value={board.source}/>}
+      {location.view === 'markets' && board?.marketCoverage?.complete === false && <p className="soccerAnalysisWarning" role="status">部分日期尚未完成讀取，將自動重試，也可按重新整理。{[...(board.marketCoverage.failedDates||[]),...(board.marketCoverage.deferredDates||[])].join('、')}</p>}
+      {location.view === 'markets' && board?.marketCoverage?.unmatchedGames > 0 && <p className="soccerAvailability">另有 {board.marketCoverage.unmatchedGames} 場原盤待配對，可在上方原盤明細查看。</p>}
       {board?.cohortPersistence?.persisted===false&&<p className="soccerAnalysisWarning" role="status">賽程紀錄暫未保存，統計範圍尚未確認。</p>}
       {busy && !board && <div className="panel soccerLoading" role="status">正在取得{league.name}資料…</div>}
       {board && location.view === 'standings' && <><p className="soccerAvailability">目前賽季積分，不回推所選日期。</p><Standings board={board}/></>}
-      {board && location.view !== 'standings' && <SoccerAnalysisProvider key={key} games={games} runId={location.runId||''} league={location.league.toLowerCase()} date={location.date} batchScope={key} batchRequest={leagueBatchRequest} onHighScoreStatusChange={onHighScoreStatusChange} onBusyChange={onBusyChange} externalBusy={otherBusy}><div className="soccerGames">{games.map(game => <MatchCard key={game.id} game={game} showDate={location.view === 'upcoming'}/>)}</div>{!games.length&&<section className="emptyBoard soccerEmpty"><h2>{location.view === 'upcoming' ? '來源未列出近期賽事' : '來源未列出當日賽事'}</h2><p>{location.view === 'upcoming' ? '來源在目前查詢範圍沒有列出賽事，完整賽程仍未確認。' : `本次來源未列出 ${dateLabel}（台灣時間）的${league.name}賽事，完整賽程仍未確認。`}</p>{location.view === 'schedule' && <button type="button" className="primary" onClick={() => navigate({ ...location, view: 'upcoming' })}>查看近期賽程</button>}</section>}</SoccerAnalysisProvider>}
+      {board && location.view !== 'standings' && <SoccerAnalysisProvider key={key} games={games} runId={location.runId||''} league={location.league.toLowerCase()} date={location.date} batchScope={key} batchRequest={leagueBatchRequest} onHighScoreStatusChange={onHighScoreStatusChange} onBusyChange={onBusyChange} externalBusy={otherBusy}><div className="soccerGames">{games.map(game => <MatchCard key={game.id} game={game} showDate={location.view === 'upcoming' || location.view === 'markets'}/>)}</div>{!games.length&&<section className="emptyBoard soccerEmpty"><h2>{location.view === 'markets' ? '目前尚無已配對的未開賽盤口' : location.view === 'upcoming' ? '來源未列出近期賽事' : '來源未列出當日賽事'}</h2><p>{location.view === 'markets' ? '收到新盤口後會自動更新；尚未配對的原盤可在上方原盤明細查閱。' : location.view === 'upcoming' ? '來源在目前查詢範圍沒有列出賽事，完整賽程仍未確認。' : `本次來源未列出 ${dateLabel}（台灣時間）的${league.name}賽事，完整賽程仍未確認。`}</p>{location.view === 'schedule' && <button type="button" className="primary" onClick={() => navigate({ ...location, view: 'upcoming' })}>查看近期賽程</button>}</section>}</SoccerAnalysisProvider>}
     </section>
   </WorkspaceElement>;
 }

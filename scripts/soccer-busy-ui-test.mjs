@@ -73,6 +73,17 @@ await test('busy reports are league/date scoped and repeated parent callback ref
   h.render({ games, league: 'epl', date: '2026-10-20', onBusyChange: value => h.reports.push(plain(value)) }); assert.equal(h.reports.length, 1);
   h.unmount(); await h.settle();
 });
+await test('new next-date markets hydrate saved analyses without changing the board date', async () => {
+  const first=games[0],next={...games[1],date:'2026-10-21'};
+  const h=harness({rows:[first]});h.render();
+  h.reads[0].respond({ok:true,gameId:first.id,league:first.league,date:first.date,versions:[],runs:[]});await h.settle();
+  h.render({games:[first,next],league:'epl',date:first.date,batchScope:'soccer:EPL:2026-10-20:markets'});
+  const requests=h.reads.slice(1);
+  assert.deepEqual(requests.map(call=>new URL(call.url,'https://fixture.invalid').searchParams.get('date')),[first.date,next.date]);
+  for(const [index,row] of [first,next].entries())requests[index].respond({ok:true,gameId:row.id,league:row.league,date:row.date,versions:[],runs:[]});
+  await h.settle();assert.equal(h.posts.length,0,'discovering new markets does not place or analyse anything automatically');
+  h.unmount();await h.settle();
+});
 await test('queued/manual work reports busy, blocks new work during external activity, and preserves its existing queue', async () => {
   const h = harness(); h.render(); const runs = games.slice(0, 3).map(h.run); h.render();
   assert.equal(h.posts.length, 2); assert.equal(h.reports.at(-1).busy, true);
@@ -85,6 +96,16 @@ await test('queued/manual work reports busy, blocks new work during external act
   for (const post of h.posts.slice(1)) post.respond({ ok: false, error: 'fixture source failure' }, 503);
   await Promise.all(runs); await h.settle(); assert.equal(h.reports.at(-1).busy, false);
   h.unmount(); await h.settle();
+});
+await test('midnight display-date rollover preserves active analysis requests and their queued game dates', async () => {
+  const rows=[games[0],{...games[1],date:'2026-10-21'},games[2]],h=harness({rows,batchScope:'soccer:EPL:markets'});h.render();
+  const runs=rows.map(h.run);h.render();assert.equal(h.posts.length,2);
+  h.render({games:rows,league:'epl',date:'2026-10-21',batchScope:'soccer:EPL:markets'});
+  assert.ok(h.posts.every(post=>!post.options.signal.aborted),'changing only the display date cannot abort game-specific POSTs');
+  assert.equal(h.reports.at(-1).date,'2026-10-21');assert.equal(h.reports.at(-1).busy,true);
+  await finishPosts(h);await Promise.all(runs);await h.settle();
+  assert.deepEqual(h.posts.map(post=>JSON.parse(post.options.body).date),rows.map(row=>row.date));
+  assert.equal(h.reports.at(-1).busy,false);h.unmount();await h.settle();
 });
 await test('external activity blocks the local run-all action while saved heads and background polling continue', async () => {
   const row = games[0], runId = 'wrun_busy_recovery_101', h = harness({ rows: [row], externalBusy: true, runId }); h.render();

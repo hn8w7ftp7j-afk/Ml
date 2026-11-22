@@ -28,7 +28,7 @@ vm.runInContext(`Object.assign(globalThis,(()=>{${calibrationCompiled.code};retu
 vm.runInContext(compiled.code,ctx);
 const render=(view,league='epl')=>{states=[view];si=0;return renderToStaticMarkup(ctx.SoccerWorkspace({league,date:'2026-10-20',games:[],states:{},run:()=>{},children:[]}));};
 for(const view of ['board','results','ranking','records','data','validation']){
-  const markup=render(view);for(const name of ['今日盤口','分析結果','排名','下注紀錄','賽程與球員','模型驗證'])assert.ok(markup.includes(name));
+  const markup=render(view);for(const name of ['盤口','分析結果','排名','下注紀錄','賽程與球員','模型驗證'])assert.ok(markup.includes(name));
   assert.doesNotMatch(markup,/undefined|NaN/);
 }
 assert.match(render('ranking'),/全部排名/);assert.match(render('ranking'),/時間順序排名/);

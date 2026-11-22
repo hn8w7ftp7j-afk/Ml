@@ -23,7 +23,9 @@ function find(tree, predicate) {
   for (const child of React.Children.toArray(tree.props?.children)) { const match = find(child, predicate); if (match) return match; }
   return null;
 }
-function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
+function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19&view=schedule', initialNow = Date.now()) {
+  let now = initialNow;
+  class WorkspaceDate extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } }
   let cursor = 0, dirty = false, tree, props = initialProps;
   const hooks = [], effects = [], requests = [], history = [], listeners = new Map(), scopes = [];
   const timerMap = new Map(); let timerId = 0;
@@ -37,7 +39,7 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
     history: Object.fromEntries(['pushState', 'replaceState'].map(method => [method, (_state, _title, url) => {
       history.push({ method, url }); window.location.search = new URL(url, 'https://fixture.invalid').search;
     }])) };
-  const ctx = vm.createContext({buildSoccerRanking, React, URL, URLSearchParams, Date, Intl, AbortController, soccerTeamLabel, APP_VERSION: 'test', window,
+  const ctx = vm.createContext({buildSoccerRanking, React, URL, URLSearchParams, Date: WorkspaceDate, Intl, AbortController, soccerTeamLabel, APP_VERSION: 'test', window,
     SoccerReaderBoards, SoccerReaderInventoryPanel, SoccerOfficialMarketCoveragePanel, soccerReaderBoardDates:readerScope.soccerReaderBoardDates, SoccerAnalysisProvider, SoccerAnalysisPanel: () => null,
     Link: ({ children, prefetch, ...attributes }) => React.createElement('a', attributes, children),
     useState: initial => { const index = cursor++; if (!(index in hooks)) hooks[index] = typeof initial === 'function' ? initial() : initial;
@@ -59,7 +61,8 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19') {
   async function settle() { await flush(); if (dirty) render(); await flush(); if (dirty) render(); }
   const provider = () => find(tree, element => element.type === SoccerAnalysisProvider);
   const control = className => find(tree, element => element.props?.className?.split(' ').includes(className));
-  return { render, settle, requests, history, scopes, provider, control, window, listeners,
+  return { render, settle, requests, history, scopes, provider, control, window, listeners, advance: ms => { now += ms; },
+    fireTimer: delay => { const entry = [...timerMap].find(([,timer])=>timer.delay===delay); assert.ok(entry); timerMap.delete(entry[0]); entry[1].fn(); },
     get tree() { return tree; }, html: () => tree ? renderToStaticMarkup(tree) : '',
     unmount: () => { for (const hook of hooks) hook?.cleanup?.(); },
   };
@@ -69,7 +72,7 @@ async function test(name, operation) { await operation(); passed++; console.log(
 
 await test('embedded EPL/UCL market coverage receives the canonical API league and selected date, and unmounts while inactive', async () => {
   for (const league of ['EPL', 'UCL']) for (const date of ['2026-10-19', '2026-11-21']) {
-    const h = harness({ active: true, embedded: true, selectedLeague: league }, `?sport=${league}&date=${date}`);
+    const h = harness({ active: true, embedded: true, selectedLeague: league }, `?sport=${league}&date=${date}&view=schedule`);
     h.render();
     assert.match(h.html(), new RegExp(`data-official-coverage="${league.toLowerCase()}"`), 'the production child only accepts the canonical lowercase scope');
     assert.match(h.html(), new RegExp(`data-board-date="${date}"`));
@@ -158,22 +161,22 @@ await test('UCL embedded requests and scope callbacks are isolated; foreign EPL 
 await test('manual dates survive old batch updates; an explicit batch result scope restores its date and run in place', async () => {
   const run = { runId: 'wrun_soccer_fixture_101', leagues: { EPL: { boardDate: '2026-10-20' }, UCL: { boardDate: '2026-10-22' } } };
   let props = { embedded: true, selectedLeague: 'EPL', allRun: run };
-  const h = harness(props, '?sport=EPL&date=2026-10-20&runId=wrun_soccer_fixture_101'); h.render();
+  const h = harness(props, '?sport=EPL&date=2026-10-20&view=schedule&runId=wrun_soccer_fixture_101'); h.render();
   const input = find(h.tree, element => element.type === 'input' && element.props.type === 'date');
   input.props.onChange({ target: { value: '2026-10-25' } }); h.render();
-  assert.match(h.history.at(-1).url, /^\/\?sport=EPL&date=2026-10-25$/); assert.equal(h.scopes.at(-1).runId, '');
+  assert.match(h.history.at(-1).url, /^\/\?sport=EPL&date=2026-10-25&view=schedule$/); assert.equal(h.scopes.at(-1).runId, '');
   props = { ...props, allRun: { ...run, status: 'complete', leagues: { ...run.leagues, EPL: { boardDate: '2026-10-20', status: 'complete' } } } };
   h.render(props); assert.equal(h.scopes.at(-1).date, '2026-10-25');
   props = { ...props, requestedScope: { league: 'EPL', date: '2026-10-20', runId: run.runId } }; h.render(props);
   assert.equal(h.scopes.at(-1).date, '2026-10-20'); assert.equal(h.scopes.at(-1).runId, run.runId);
-  assert.match(h.history.at(-1).url, /^\/\?sport=EPL&date=2026-10-20&runId=/);
+  assert.match(h.history.at(-1).url, /^\/\?sport=EPL&date=2026-10-20&view=schedule&runId=/);
   const before = h.requests.length; h.render({ ...props, otherBusy: true }); assert.equal(h.requests.length, before, 'same requestedScope must not refetch');
   props = { ...props, allRun: { runId: 'wrun_soccer_newbatch_202', leagues: { EPL: { boardDate: '2026-10-26' } } } }; h.render(props);
   assert.equal(h.scopes.at(-1).date, '2026-10-26'); assert.equal(h.scopes.at(-1).runId, 'wrun_soccer_newbatch_202'); h.unmount();
 });
 await test('view buttons keep run scope and write only the root URL; backward navigation restores the requested view and date', () => {
-  const h = harness({ embedded: true }, '?sport=EPL&date=2026-10-20&runId=wrun_soccer_fixture_101'); h.render();
-  const tabs = h.control('soccerViewNav'); React.Children.toArray(tabs.props.children)[1].props.onClick(); h.render();
+  const h = harness({ embedded: true }, '?sport=EPL&date=2026-10-20&view=schedule&runId=wrun_soccer_fixture_101'); h.render();
+  const tabs = h.control('soccerViewNav'); React.Children.toArray(tabs.props.children).find(button=>button.props.children==='近期賽程').props.onClick(); h.render();
   assert.equal(h.history.at(-1).url, '/?sport=EPL&date=2026-10-20&view=upcoming&runId=wrun_soccer_fixture_101');
   h.window.location.search = '?sport=EPL&date=2026-10-18&view=standings';
   for (const listener of h.listeners.get('popstate')) listener(); h.render();
@@ -181,7 +184,7 @@ await test('view buttons keep run scope and write only the root URL; backward na
 });
 await test('fixed league instances have unique accessible date controls and a newly started first batch can update an open workspace', () => {
   const epl = harness({ embedded: true, selectedLeague: 'EPL' });
-  const ucl = harness({ embedded: true, selectedLeague: 'UCL' }, '?sport=UCL&date=2026-10-22');
+  const ucl = harness({ embedded: true, selectedLeague: 'UCL' }, '?sport=UCL&date=2026-10-22&view=schedule');
   epl.render(); ucl.render();
   const inputId = h => find(h.tree, element => element.type === 'input' && element.props.type === 'date').props.id;
   assert.equal(inputId(epl), 'soccer-date-epl'); assert.equal(inputId(ucl), 'soccer-date-ucl');
@@ -199,7 +202,7 @@ await test('upcoming Reader scope follows match dates and saved-date navigation 
   const inventory=find(h.tree,element=>typeof element.props?.onSelectDate==='function');assert.ok(inventory);
   assert.equal(inventory.props.throughDate,'2026-11-01');
   inventory.props.onSelectDate('2026-10-25');h.render();
-  assert.equal(h.history.at(-1).url,'/?sport=EPL&date=2026-10-25');
+  assert.equal(h.history.at(-1).url,'/?sport=EPL&date=2026-10-25&view=schedule');
   assert.equal(h.scopes.at(-1).league,'EPL');assert.equal(h.scopes.at(-1).view,'schedule');h.unmount();
 });
 await test('legacy football route redirects to the root with valid query scope and strips unrelated controls', async () => {
@@ -208,5 +211,42 @@ await test('legacy football route redirects to the root with valid query scope a
   await ctx.SoccerPage({ searchParams: Promise.resolve({ league: 'ucl', date: '2026-10-22', view: 'upcoming', runId: 'wrun_ucl_fixture_101', analyzeAll: '1' }) });
   assert.equal(url, '/?sport=UCL&date=2026-10-22&view=upcoming&runId=wrun_ucl_fixture_101');
   await ctx.SoccerPage({ searchParams: Promise.resolve({ league: 'NBA', date: 'bad', runId: 'bad<script>' }) }); assert.equal(url, '/?sport=EPL');
+});
+await test('default markets ignores stale URL dates and shows both sides of midnight without date controls', async () => {
+  for (const league of ['EPL','UCL']) {
+    const h=harness({embedded:true,selectedLeague:league},`?sport=${league}&date=2026-10-01`,Date.parse('2026-11-22T15:00:00Z'));
+    h.render();
+    assert.match(h.requests[0].url,new RegExp(`league=${league.toLowerCase()}&date=2026-11-22&view=markets`));
+    assert.doesNotMatch(h.html(),/type="date"|aria-label="前一天"|aria-label="後一天"/);
+    h.fireTimer(30000);h.render();
+    assert.equal(h.requests.length,1,'a slow board request must survive the 30 second refresh tick');
+    assert.equal(h.requests[0].options.signal.aborted,false);
+    const board={...response(league,'2026-11-22'),view:'markets',readerDates:['2026-11-22','2026-11-23','2026-12-20']};
+    board.games=[{...board.games[0],startTime:'2026-11-22T15:30:00Z'},
+      {...board.games[0],id:`soccer:${league.toLowerCase()}:102`,date:'2026-11-23',startTime:'2026-11-22T17:00:00Z'}];
+    h.requests[0].respond(board);await h.settle();
+    assert.deepEqual(h.provider().props.games.map(game=>game.date),['2026-11-22','2026-11-23']);
+    assert.match(h.html(),/23:30/);assert.match(h.html(),/01:00/);
+    assert.match(h.html(),/全部已讀盤口（跨日）.*未開賽 2 場/);
+    const reader=find(h.tree,element=>element.props?.view==='markets'&&element.props?.readerDates);
+    assert.deepEqual(reader.props.readerDates,board.readerDates,'unmatched or distant Reader dates remain available');
+    h.control('soccerLeagueAnalyzeButton').props.onClick();h.render();
+    assert.equal(h.provider().props.batchRequest.scope,`soccer:${league}:markets`);
+    const providerKey=h.provider().key;
+    h.advance(3600000);h.fireTimer(30000);h.render();
+    assert.equal(h.scopes.at(-1).date,'2026-11-23');
+    assert.equal(h.provider().key,providerKey,'midnight must not unmount the live analysis workspace');
+    assert.deepEqual(h.provider().props.games,board.games,'keep the old board while the new day refresh is pending');
+    assert.equal(h.provider().props.batchRequest.scope,`soccer:${league}:markets`,'a queued cross-date analysis must not reset at midnight');
+    const refreshed={...board,date:'2026-11-23',games:[board.games[1]],readerDates:['2026-11-23']};
+    h.requests.at(-1).respond(refreshed);await h.settle();
+    assert.equal(h.provider().key,providerKey);assert.equal(h.provider().props.games.length,1);
+    h.unmount();
+  }
+});
+await test('cross-date responses reject malformed Reader dates instead of fetching arbitrary dates',async()=>{
+  const h=harness({embedded:true},'?sport=EPL',Date.parse('2026-11-22T15:00:00Z'));h.render();
+  h.requests[0].respond({...response('EPL','2026-11-22'),view:'markets',readerDates:['2026-02-30']});await h.settle();
+  assert.match(h.html(),/跨日盤口日期不完整/);assert.equal(h.provider(),null);h.unmount();
 });
 console.log(`Soccer embedded main workspace: ${passed} shipped component and route behavior groups passed.`);

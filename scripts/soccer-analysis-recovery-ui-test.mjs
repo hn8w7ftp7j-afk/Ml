@@ -50,7 +50,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 function harness({ games = [game()], runId = '', date = games[0]?.date || '', saved = null, onState = null } = {}) {
-  const state = [], refs = [], effects = [], calls = [], timers = new Map(), listeners = new Map();
+  const state = [], refs = [], effects = [], changedEffects=[], calls = [], timers = new Map(), listeners = new Map();
   let si = 0, ri = 0, ei = 0, nextTimer = 0, mounted = false, clientNow = now, holdUpdates = false;const deferredUpdates=[];
   class ClientDate extends Date { static now() { return clientNow; } }
   const ctx = vm.createContext({buildSoccerRanking,
@@ -59,7 +59,7 @@ function harness({ games = [game()], runId = '', date = games[0]?.date || '', sa
     useContext: () => ({ states: state[0], run: render().props.value.run }),
     useState: initial => { const i = si++; if (!(i in state)) state[i] = initial; return [state[i], value => { const apply=()=>{state[i] = typeof value === 'function' ? value(state[i]) : value;if(i===0)onState?.(state[0],clientNow,ctx);};if(i===0&&holdUpdates)deferredUpdates.push(apply);else apply(); }]; },
     useRef: initial => refs[ri++] || (refs[ri - 1] = { current: initial }),
-    useEffect: (effect, deps) => { const i = ei++; if (!effects[i]) effects[i] = { effect, deps, cleanup: null }; },
+    useEffect: (effect, deps) => { const i = ei++,previous=effects[i];if(!previous)effects[i]={effect,deps,cleanup:null};else if(!deps.every((value,index)=>Object.is(value,previous.deps[index]))){effects[i]={effect,deps,cleanup:null};changedEffects.push(()=>{previous.cleanup?.();effects[i].cleanup=effect();});} },
     setTimeout: (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; },
     clearTimeout: id => timers.delete(id),
     setInterval:(callback,delay)=>{const id=++nextTimer;timers.set(id,{callback,delay,interval:true});return id;},clearInterval:id=>timers.delete(id),
@@ -77,7 +77,7 @@ function harness({ games = [game()], runId = '', date = games[0]?.date || '', sa
     },
   });
   vm.runInContext(code, ctx);
-  function render() { si = 0; ri = 0; ei = 0; return ctx.SoccerAnalysisProvider({ games, runId, date, children: [] }); }
+  function render(next={}) { if(next.games)games=next.games;if(next.date)date=next.date;si = 0; ri = 0; ei = 0; const tree=ctx.SoccerAnalysisProvider({ games, runId, date, children: [] });if(mounted)for(const apply of changedEffects.splice(0))apply();return tree; }
   function mount() { assert.equal(mounted, false); mounted = true; const tree = render(); for (const effect of effects) effect.cleanup = effect.effect(); return tree; }
   function unmount() { if (!mounted) return; mounted = false; for (const effect of effects) effect.cleanup?.(); }
   return {
@@ -126,6 +126,32 @@ await test('upcoming saved reads use each game actual date instead of the outer 
     assert.equal(h.state[0][games[0].id].data.date, games[0].date); assert.equal(h.state[0][games[1].id].data.date, games[1].date);
     assert.equal(h.counts().completed, 2); assert.equal(h.posts.length, 0);
   } finally { h.unmount(); await flush(); }
+});
+
+await test('next-date Reader changes only invalidate and recheck that date on a combined board', async () => {
+  const games=[game('201','2026-10-20'),game('202','2026-10-21')],h=harness({games,date:games[0].date});
+  try{
+    h.mount();h.reads.forEach((call,index)=>call.respond(head(games[index])));await flush();h.render();
+    const previous=h.state[0][games[0].id].currentResearch;
+    h.fire('soccer:reader-content-changed',{league:'epl',date:games[1].date,contentHash:'c'.repeat(64)});h.render();
+    assert.equal(h.state[0][games[0].id].currentResearch,previous,'today authority is not revoked by tomorrow Reader update');
+    assert.equal(h.state[0][games[1].id].currentResearch,null,'tomorrow authority is revoked immediately');
+    assert.equal(h.reads.length,3);assert.equal(new URL(h.reads[2].url,'https://fixture.invalid').searchParams.get('date'),games[1].date);
+    assert.equal(h.posts.length,0,'read-only source reconciliation cannot start analysis or record bets');
+  }finally{h.unmount();await flush();}
+});
+
+await test('identical market refreshes preserve in-flight current reads while real lifecycle changes restart them', async () => {
+  const row=game(),h=harness({games:[row]});
+  try{
+    h.mount();h.reads[0].respond(head(row));await flush();h.render();
+    h.fire('soccer:reader-content-changed',{league:row.league,date:row.date,contentHash:'d'.repeat(64)});h.render();
+    const pending=h.reads[1],listener=[...h.listeners.get('soccer:reader-content-changed')][0];assert.ok(pending);
+    h.render({games:[{...row,home:{...row.home},source:{fetchedAt:new Date(now+30000).toISOString()}}]});
+    assert.equal(pending.options.signal.aborted,false,'new array and refreshed metadata cannot abort the current receipt request');
+    assert.equal([...h.listeners.get('soccer:reader-content-changed')][0],listener,'unchanged identity preserves the polling age and fast-handoff budgets');
+    h.render({games:[{...row,status:'live'}]});assert.equal(pending.options.signal.aborted,true,'real kickoff lifecycle change still retires old current reads');
+  }finally{h.unmount();await flush();}
 });
 
 await test('local all-league job resumes polling and only fresh server head can mark workflow results current', async () => {

@@ -62,9 +62,9 @@ export default function SoccerWorkspace({games,states,run,league,date,children,a
   const now=Date.now();
   useEffect(()=>{const timer=setInterval(()=>setClockTick(value=>value+1),10000);return()=>clearInterval(timer);},[]);
   const name=league==='ucl'?'歐冠':'英超';
-  const dates=[date,...games.map(g=>g.date)].sort();
-  const reminder=onHighScoreStatusChange?soccerHighScoreCandidates(games,states,{league,date,now,analysisReady}):null;
-  return <SoccerRecordProvider league={league} date={dates[0]} through={dates.at(-1)} summaryDate={date} candidates={reminder?.candidates||[]} analysisReady={reminder?.analysisReady??analysisReady} onHighScoreStatusChange={onHighScoreStatusChange}><nav className="mainTabs soccerWorkspaceTabs" aria-label="足球主站功能">{[['board','今日盤口'],['results','分析結果'],['ranking','排名'],['records','下注紀錄'],['data','賽程與球員'],['validation','模型驗證']].map(([key,label])=><button key={key} className={view===key?'active':''} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>
+  const dates=[...new Set([date,...games.map(g=>g.date)])].sort();
+  const reminder=onHighScoreStatusChange?soccerHighScoreCandidates(games,states,{league,date,through:dates.at(-1),now,analysisReady}):null;
+  return <SoccerRecordProvider league={league} date={dates[0]} through={dates.at(-1)} dates={dates} summaryDate={date} candidates={reminder?.candidates||[]} analysisReady={reminder?.analysisReady??analysisReady} onHighScoreStatusChange={onHighScoreStatusChange}><nav className="mainTabs soccerWorkspaceTabs" aria-label="足球主站功能">{[['board','盤口'],['results','分析結果'],['ranking','排名'],['records','下注紀錄'],['data','賽程與球員'],['validation','模型驗證']].map(([key,label])=><button key={key} className={view===key?'active':''} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>
     {view==='ranking'&&<SoccerRanking games={games} states={states} run={run} now={now} externalBusy={externalBusy} onShowResults={()=>setView('results')}/>}
     {view==='records'&&<SoccerBetRecords/>}
     {view==='results'&&<section className="panel"><h2>{name}｜分析結果</h2><p>已分析 {games.filter(g=>states[g.id]?.data).length}／{games.length} 場。展開各場查看八方向原盤、比分研究與核對紀錄。</p></section>}
