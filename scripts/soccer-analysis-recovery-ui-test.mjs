@@ -380,4 +380,40 @@ await test('an older ACTIVE lightweight receipt cannot overwrite a newer saved-h
   }finally{h.unmount();await flush();}
 });
 
+await test('a new current run immediately loads its immutable head before restoring ranking authority', async () => {
+  const row=game(),h=harness();
+  try{
+    h.mount();assert.equal(new URL(h.reads[0].url,'https://fixture.invalid').searchParams.get('view'),'head');
+    h.reads[0].respond(head(row));await flush();h.render();
+    h.setNow(now+30000);await h.tick(1000);
+    const refreshed=analysis(row,{analysisRunId:'soccer-refreshed-101',revision:'refreshed-101',observedAt:new Date(now+20000).toISOString()});
+    refreshed.currentResearch.checkedAt=new Date(now+30000).toISOString();
+    h.reads[1].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:{...refreshed.currentResearch,analysisStatus:'COMPLETED'}});await flush();
+    assert.equal(h.counts().completed,0,'the new receipt must not authorize the old scores');
+    assert.equal(h.reads.length,3,'new revision is loaded immediately rather than waiting for the minute timer');
+    assert.equal(new URL(h.reads[2].url,'https://fixture.invalid').searchParams.get('view'),'head');
+    assert.equal(h.posts.length,0,'the browser never invents a new analysis or extends a receipt');
+    h.reads[2].respond(head(row,refreshed));await flush();h.render();
+    assert.equal(h.state[0][row.id].data.revision,refreshed.revision);assert.equal(h.counts().completed,1);
+    h.setNow(now+60000);await h.tick(1000);
+    h.reads[3].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:{...refreshed.currentResearch,analysisStatus:'COMPLETED'}});await flush();
+    assert.equal(h.reads.length,4,'same-run status polling must not reload a full head every time');
+  }finally{h.unmount();await flush();}
+});
+
+await test('a delayed replacement receipt cannot reload or overwrite a newer manual result', async () => {
+  const row=game(),h=harness();
+  try{
+    const provider=h.mount();h.reads[0].respond(head(row));await flush();h.render();
+    h.setNow(now+30000);await h.tick(1000);
+    const manual=analysis(row,{analysisRunId:'soccer-manual-new-101',revision:'manual-new-101',observedAt:new Date(now+25000).toISOString()});
+    manual.currentResearch.checkedAt=new Date(now+30000).toISOString();
+    const task=provider.props.value.run(row);h.posts[0].respond(manual);await task;await flush();h.render();
+    const obsolete=analysis(row,{analysisRunId:'soccer-obsolete-101',revision:'obsolete-101'});
+    h.reads[1].respond({ok:true,gameId:row.id,league:row.league,date:row.date,currentResearch:{...obsolete.currentResearch,analysisStatus:'COMPLETED'}});await flush();
+    assert.equal(h.reads.length,2,'a superseded status request must not schedule recovery work');
+    assert.equal(h.state[0][row.id].data.revision,manual.revision);assert.equal(h.counts().completed,1);
+  }finally{h.unmount();await flush();}
+});
+
 console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior groups passed.`);

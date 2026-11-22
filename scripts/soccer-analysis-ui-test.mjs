@@ -41,7 +41,7 @@ function harness(fetch,{boardFetch=null}={}){
  const document={visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const ctx=vm.createContext({buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
-   if(url.startsWith('/api/soccer/analysis?')&&!new URL(url,'https://fixture.invalid').searchParams.has('view')){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
+   if(url.startsWith('/api/soccer/analysis?')&&new URL(url,'https://fixture.invalid').searchParams.get('view')!=='current'){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
    return fetch(url,options);
   },SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
   document,window,setInterval:(fn,delay)=>{intervals.set(++intervalId,{fn,delay});return intervalId;},clearInterval:id=>intervals.delete(id),
