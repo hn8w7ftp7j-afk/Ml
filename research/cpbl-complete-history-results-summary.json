@@ -1,0 +1,1371 @@
+{
+  "createdAt": "2026-09-23T07:54:09.089Z",
+  "protocol": {
+    "protocolVersion": "CPBL-COMPLETE-HISTORY-20260923-v2",
+    "frozenAt": "2026-09-23T07:45:07.959281+00:00",
+    "cutoff": "2026-09-23T03:17:27.422Z",
+    "seasons": [
+      2025,
+      2026
+    ],
+    "months": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "targetUniverse": "All official regular-season finished games returned for each season through cutoff; missing months must remain explicitly incomplete",
+    "deduplicateBy": "official GameId; reconcile actual detail date and teams against schedule; ambiguous identities excluded",
+    "trainingEligibility": "Actual local date strictly before target actual local date, maximum 6 baseline / 24 candidate prior team games, no cross-season carryover",
+    "baseline": "Unmodified production projectCpblRotationStarter, 6 prior team games",
+    "candidate": "Frozen empirical cadence helper from previous limited audit, 24 prior team games",
+    "candidateFunctionSha256": "e10488982a001674f27407f8be1fd9efe395ccdca3e303d1c85f04754c9ac84a",
+    "candidateFileSha256": "b48f07459bd84e1f94d35106e77c963a1e70889122ec5efcdc1831d50b267f76",
+    "outcome": "Verified actual first-pitch starter from official explicit role reconciled against first inning live log; unavailable/conflicting identity excluded",
+    "metrics": [
+      "coverage",
+      "top1_all_eligible",
+      "top1_covered",
+      "common_coverage_top1",
+      "candidate_recall",
+      "by_month",
+      "by_team",
+      "newly_available_games_vs_prior_audit"
+    ],
+    "deploymentGate": "No automatic promotion. Require complete schedule/detail acquisition, no leakage, consistent improvement on newly acquired games, coverage tradeoff disclosed, and runtime cost assessed. Otherwise retain production algorithm.",
+    "noTuning": true,
+    "limitations": [
+      "Retrospective event-time replay from later-fetched records is not an archived acquisition-time prediction.",
+      "2026 August/September audit results already known; exclude those games from newly acquired subset.",
+      "2025 earlier-year validation is external-year retrospective validation, not prospective unseen holdout.",
+      "Raw API zero rows cannot prove no games occurred."
+    ],
+    "diagnosticComparisons": {
+      "registeredAt": "2026-09-23T07:48:59.459834+00:00",
+      "beforeEvaluation": true,
+      "methods": [
+        "baseline6 (primary baseline)",
+        "candidate24 (primary candidate)",
+        "baseline24 (history-only diagnostic)",
+        "candidate6 (formula-only diagnostic)"
+      ],
+      "purpose": "Separate improved history coverage from formula change; no parameter tuning or cherry-picked promotion"
+    }
+  },
+  "protocolSha256": "66090a2491e367ee43d5abde243868d49284ee8aec41ddfd4d0af9f6de485f1f",
+  "baselineFunctionSha256": "84e192d169a021960fb949ce3cd4f7f64e7a47af86fe0fe1d1196500c6616fd0",
+  "candidateFunctionSha256": "e10488982a001674f27407f8be1fd9efe395ccdca3e303d1c85f04754c9ac84a",
+  "acquisition": {
+    "seasonScheduleGames": {
+      "2025": 0,
+      "2026": 360
+    },
+    "emptyScheduleMonths": [
+      "schedule-2025-01",
+      "schedule-2025-02",
+      "schedule-2025-03",
+      "schedule-2025-04",
+      "schedule-2025-05",
+      "schedule-2025-06",
+      "schedule-2025-07",
+      "schedule-2025-08",
+      "schedule-2025-09",
+      "schedule-2025-10",
+      "schedule-2025-11",
+      "schedule-2025-12",
+      "schedule-2026-01",
+      "schedule-2026-02",
+      "schedule-2026-11",
+      "schedule-2026-12"
+    ],
+    "scheduleFailures": [],
+    "detailFailures": [],
+    "statusCounts": {
+      "ELIGIBLE": 330,
+      "FUTURE_SCHEDULE": 15,
+      "NOT_FINISHED_BY_CUTOFF": 15
+    }
+  },
+  "dataset": {
+    "games": 330,
+    "sides": 660,
+    "firstDate": "2026-03-28",
+    "lastDate": "2026-09-22"
+  },
+  "exclusions": [],
+  "summary": {
+    "all": {
+      "old": {
+        "eligible": 660,
+        "covered": 639,
+        "correct": 59,
+        "recalled": 412,
+        "coverage": 0.9681818181818181,
+        "top1All": 0.0893939393939394,
+        "top1Covered": 0.09233176838810642,
+        "candidateRecallAll": 0.6242424242424243
+      },
+      "next": {
+        "eligible": 660,
+        "covered": 628,
+        "correct": 266,
+        "recalled": 549,
+        "coverage": 0.9515151515151515,
+        "top1All": 0.403030303030303,
+        "top1Covered": 0.42356687898089174,
+        "candidateRecallAll": 0.8318181818181818
+      },
+      "diagnostics": {
+        "baseline24": {
+          "eligible": 660,
+          "covered": 639,
+          "correct": 59,
+          "recalled": 416,
+          "coverage": 0.9681818181818181,
+          "top1All": 0.0893939393939394,
+          "top1Covered": 0.09233176838810642,
+          "candidateRecallAll": 0.6303030303030303
+        },
+        "candidate6": {
+          "eligible": 660,
+          "covered": 515,
+          "correct": 195,
+          "recalled": 345,
+          "coverage": 0.7803030303030303,
+          "top1All": 0.29545454545454547,
+          "top1Covered": 0.3786407766990291,
+          "candidateRecallAll": 0.5227272727272727
+        }
+      },
+      "common": {
+        "old": {
+          "eligible": 625,
+          "covered": 625,
+          "correct": 58,
+          "recalled": 406,
+          "coverage": 1,
+          "top1All": 0.0928,
+          "top1Covered": 0.0928,
+          "candidateRecallAll": 0.6496
+        },
+        "next": {
+          "eligible": 625,
+          "covered": 625,
+          "correct": 266,
+          "recalled": 547,
+          "coverage": 1,
+          "top1All": 0.4256,
+          "top1Covered": 0.4256,
+          "candidateRecallAll": 0.8752
+        },
+        "oldOnlyCorrect": 22,
+        "nextOnlyCorrect": 230
+      },
+      "complete24HistorySides": 516
+    },
+    "newlyAcquired": {
+      "old": {
+        "eligible": 560,
+        "covered": 539,
+        "correct": 48,
+        "recalled": 344,
+        "coverage": 0.9625,
+        "top1All": 0.08571428571428572,
+        "top1Covered": 0.08905380333951762,
+        "candidateRecallAll": 0.6142857142857143
+      },
+      "next": {
+        "eligible": 560,
+        "covered": 528,
+        "correct": 216,
+        "recalled": 461,
+        "coverage": 0.9428571428571428,
+        "top1All": 0.38571428571428573,
+        "top1Covered": 0.4090909090909091,
+        "candidateRecallAll": 0.8232142857142857
+      },
+      "diagnostics": {
+        "baseline24": {
+          "eligible": 560,
+          "covered": 539,
+          "correct": 48,
+          "recalled": 347,
+          "coverage": 0.9625,
+          "top1All": 0.08571428571428572,
+          "top1Covered": 0.08905380333951762,
+          "candidateRecallAll": 0.6196428571428572
+        },
+        "candidate6": {
+          "eligible": 560,
+          "covered": 446,
+          "correct": 167,
+          "recalled": 303,
+          "coverage": 0.7964285714285714,
+          "top1All": 0.2982142857142857,
+          "top1Covered": 0.3744394618834081,
+          "candidateRecallAll": 0.5410714285714285
+        }
+      },
+      "common": {
+        "old": {
+          "eligible": 525,
+          "covered": 525,
+          "correct": 47,
+          "recalled": 338,
+          "coverage": 1,
+          "top1All": 0.08952380952380952,
+          "top1Covered": 0.08952380952380952,
+          "candidateRecallAll": 0.6438095238095238
+        },
+        "next": {
+          "eligible": 525,
+          "covered": 525,
+          "correct": 216,
+          "recalled": 459,
+          "coverage": 1,
+          "top1All": 0.4114285714285714,
+          "top1Covered": 0.4114285714285714,
+          "candidateRecallAll": 0.8742857142857143
+        },
+        "oldOnlyCorrect": 17,
+        "nextOnlyCorrect": 186
+      },
+      "complete24HistorySides": 416
+    },
+    "priorAudit": {
+      "old": {
+        "eligible": 100,
+        "covered": 100,
+        "correct": 11,
+        "recalled": 68,
+        "coverage": 1,
+        "top1All": 0.11,
+        "top1Covered": 0.11,
+        "candidateRecallAll": 0.68
+      },
+      "next": {
+        "eligible": 100,
+        "covered": 100,
+        "correct": 50,
+        "recalled": 88,
+        "coverage": 1,
+        "top1All": 0.5,
+        "top1Covered": 0.5,
+        "candidateRecallAll": 0.88
+      },
+      "diagnostics": {
+        "baseline24": {
+          "eligible": 100,
+          "covered": 100,
+          "correct": 11,
+          "recalled": 69,
+          "coverage": 1,
+          "top1All": 0.11,
+          "top1Covered": 0.11,
+          "candidateRecallAll": 0.69
+        },
+        "candidate6": {
+          "eligible": 100,
+          "covered": 69,
+          "correct": 28,
+          "recalled": 42,
+          "coverage": 0.69,
+          "top1All": 0.28,
+          "top1Covered": 0.4057971014492754,
+          "candidateRecallAll": 0.42
+        }
+      },
+      "common": {
+        "old": {
+          "eligible": 100,
+          "covered": 100,
+          "correct": 11,
+          "recalled": 68,
+          "coverage": 1,
+          "top1All": 0.11,
+          "top1Covered": 0.11,
+          "candidateRecallAll": 0.68
+        },
+        "next": {
+          "eligible": 100,
+          "covered": 100,
+          "correct": 50,
+          "recalled": 88,
+          "coverage": 1,
+          "top1All": 0.5,
+          "top1Covered": 0.5,
+          "candidateRecallAll": 0.88
+        },
+        "oldOnlyCorrect": 5,
+        "nextOnlyCorrect": 44
+      },
+      "complete24HistorySides": 100
+    },
+    "fullHistory24": {
+      "old": {
+        "eligible": 516,
+        "covered": 513,
+        "correct": 50,
+        "recalled": 327,
+        "coverage": 0.9941860465116279,
+        "top1All": 0.09689922480620156,
+        "top1Covered": 0.09746588693957114,
+        "candidateRecallAll": 0.6337209302325582
+      },
+      "next": {
+        "eligible": 516,
+        "covered": 516,
+        "correct": 216,
+        "recalled": 451,
+        "coverage": 1,
+        "top1All": 0.4186046511627907,
+        "top1Covered": 0.4186046511627907,
+        "candidateRecallAll": 0.874031007751938
+      },
+      "diagnostics": {
+        "baseline24": {
+          "eligible": 516,
+          "covered": 513,
+          "correct": 50,
+          "recalled": 331,
+          "coverage": 0.9941860465116279,
+          "top1All": 0.09689922480620156,
+          "top1Covered": 0.09746588693957114,
+          "candidateRecallAll": 0.6414728682170543
+        },
+        "candidate6": {
+          "eligible": 516,
+          "covered": 417,
+          "correct": 161,
+          "recalled": 277,
+          "coverage": 0.8081395348837209,
+          "top1All": 0.312015503875969,
+          "top1Covered": 0.38609112709832133,
+          "candidateRecallAll": 0.5368217054263565
+        }
+      },
+      "common": {
+        "old": {
+          "eligible": 513,
+          "covered": 513,
+          "correct": 50,
+          "recalled": 327,
+          "coverage": 1,
+          "top1All": 0.09746588693957114,
+          "top1Covered": 0.09746588693957114,
+          "candidateRecallAll": 0.6374269005847953
+        },
+        "next": {
+          "eligible": 513,
+          "covered": 513,
+          "correct": 216,
+          "recalled": 449,
+          "coverage": 1,
+          "top1All": 0.42105263157894735,
+          "top1Covered": 0.42105263157894735,
+          "candidateRecallAll": 0.8752436647173489
+        },
+        "oldOnlyCorrect": 20,
+        "nextOnlyCorrect": 186
+      },
+      "complete24HistorySides": 516
+    },
+    "bySeason": {
+      "2026": {
+        "old": {
+          "eligible": 660,
+          "covered": 639,
+          "correct": 59,
+          "recalled": 412,
+          "coverage": 0.9681818181818181,
+          "top1All": 0.0893939393939394,
+          "top1Covered": 0.09233176838810642,
+          "candidateRecallAll": 0.6242424242424243
+        },
+        "next": {
+          "eligible": 660,
+          "covered": 628,
+          "correct": 266,
+          "recalled": 549,
+          "coverage": 0.9515151515151515,
+          "top1All": 0.403030303030303,
+          "top1Covered": 0.42356687898089174,
+          "candidateRecallAll": 0.8318181818181818
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 660,
+            "covered": 639,
+            "correct": 59,
+            "recalled": 416,
+            "coverage": 0.9681818181818181,
+            "top1All": 0.0893939393939394,
+            "top1Covered": 0.09233176838810642,
+            "candidateRecallAll": 0.6303030303030303
+          },
+          "candidate6": {
+            "eligible": 660,
+            "covered": 515,
+            "correct": 195,
+            "recalled": 345,
+            "coverage": 0.7803030303030303,
+            "top1All": 0.29545454545454547,
+            "top1Covered": 0.3786407766990291,
+            "candidateRecallAll": 0.5227272727272727
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 625,
+            "covered": 625,
+            "correct": 58,
+            "recalled": 406,
+            "coverage": 1,
+            "top1All": 0.0928,
+            "top1Covered": 0.0928,
+            "candidateRecallAll": 0.6496
+          },
+          "next": {
+            "eligible": 625,
+            "covered": 625,
+            "correct": 266,
+            "recalled": 547,
+            "coverage": 1,
+            "top1All": 0.4256,
+            "top1Covered": 0.4256,
+            "candidateRecallAll": 0.8752
+          },
+          "oldOnlyCorrect": 22,
+          "nextOnlyCorrect": 230
+        },
+        "complete24HistorySides": 516
+      }
+    },
+    "byMonth": {
+      "2026-03": {
+        "old": {
+          "eligible": 14,
+          "covered": 0,
+          "correct": 0,
+          "recalled": 0,
+          "coverage": 0,
+          "top1All": 0,
+          "top1Covered": null,
+          "candidateRecallAll": 0
+        },
+        "next": {
+          "eligible": 14,
+          "covered": 0,
+          "correct": 0,
+          "recalled": 0,
+          "coverage": 0,
+          "top1All": 0,
+          "top1Covered": null,
+          "candidateRecallAll": 0
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 14,
+            "covered": 0,
+            "correct": 0,
+            "recalled": 0,
+            "coverage": 0,
+            "top1All": 0,
+            "top1Covered": null,
+            "candidateRecallAll": 0
+          },
+          "candidate6": {
+            "eligible": 14,
+            "covered": 0,
+            "correct": 0,
+            "recalled": 0,
+            "coverage": 0,
+            "top1All": 0,
+            "top1Covered": null,
+            "candidateRecallAll": 0
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 0,
+            "covered": 0,
+            "correct": 0,
+            "recalled": 0,
+            "coverage": null,
+            "top1All": null,
+            "top1Covered": null,
+            "candidateRecallAll": null
+          },
+          "next": {
+            "eligible": 0,
+            "covered": 0,
+            "correct": 0,
+            "recalled": 0,
+            "coverage": null,
+            "top1All": null,
+            "top1Covered": null,
+            "candidateRecallAll": null
+          },
+          "oldOnlyCorrect": 0,
+          "nextOnlyCorrect": 0
+        },
+        "complete24HistorySides": 0
+      },
+      "2026-04": {
+        "old": {
+          "eligible": 114,
+          "covered": 110,
+          "correct": 7,
+          "recalled": 74,
+          "coverage": 0.9649122807017544,
+          "top1All": 0.06140350877192982,
+          "top1Covered": 0.06363636363636363,
+          "candidateRecallAll": 0.6491228070175439
+        },
+        "next": {
+          "eligible": 114,
+          "covered": 96,
+          "correct": 43,
+          "recalled": 85,
+          "coverage": 0.8421052631578947,
+          "top1All": 0.37719298245614036,
+          "top1Covered": 0.4479166666666667,
+          "candidateRecallAll": 0.7456140350877193
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 114,
+            "covered": 110,
+            "correct": 7,
+            "recalled": 74,
+            "coverage": 0.9649122807017544,
+            "top1All": 0.06140350877192982,
+            "top1Covered": 0.06363636363636363,
+            "candidateRecallAll": 0.6491228070175439
+          },
+          "candidate6": {
+            "eligible": 114,
+            "covered": 84,
+            "correct": 31,
+            "recalled": 59,
+            "coverage": 0.7368421052631579,
+            "top1All": 0.2719298245614035,
+            "top1Covered": 0.36904761904761907,
+            "candidateRecallAll": 0.5175438596491229
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 96,
+            "covered": 96,
+            "correct": 6,
+            "recalled": 68,
+            "coverage": 1,
+            "top1All": 0.0625,
+            "top1Covered": 0.0625,
+            "candidateRecallAll": 0.7083333333333334
+          },
+          "next": {
+            "eligible": 96,
+            "covered": 96,
+            "correct": 43,
+            "recalled": 85,
+            "coverage": 1,
+            "top1All": 0.4479166666666667,
+            "top1Covered": 0.4479166666666667,
+            "candidateRecallAll": 0.8854166666666666
+          },
+          "oldOnlyCorrect": 2,
+          "nextOnlyCorrect": 39
+        },
+        "complete24HistorySides": 0
+      },
+      "2026-05": {
+        "old": {
+          "eligible": 132,
+          "covered": 132,
+          "correct": 10,
+          "recalled": 90,
+          "coverage": 1,
+          "top1All": 0.07575757575757576,
+          "top1Covered": 0.07575757575757576,
+          "candidateRecallAll": 0.6818181818181818
+        },
+        "next": {
+          "eligible": 132,
+          "covered": 132,
+          "correct": 60,
+          "recalled": 112,
+          "coverage": 1,
+          "top1All": 0.45454545454545453,
+          "top1Covered": 0.45454545454545453,
+          "candidateRecallAll": 0.8484848484848485
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 132,
+            "covered": 132,
+            "correct": 10,
+            "recalled": 90,
+            "coverage": 1,
+            "top1All": 0.07575757575757576,
+            "top1Covered": 0.07575757575757576,
+            "candidateRecallAll": 0.6818181818181818
+          },
+          "candidate6": {
+            "eligible": 132,
+            "covered": 106,
+            "correct": 36,
+            "recalled": 71,
+            "coverage": 0.803030303030303,
+            "top1All": 0.2727272727272727,
+            "top1Covered": 0.33962264150943394,
+            "candidateRecallAll": 0.5378787878787878
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 132,
+            "covered": 132,
+            "correct": 10,
+            "recalled": 90,
+            "coverage": 1,
+            "top1All": 0.07575757575757576,
+            "top1Covered": 0.07575757575757576,
+            "candidateRecallAll": 0.6818181818181818
+          },
+          "next": {
+            "eligible": 132,
+            "covered": 132,
+            "correct": 60,
+            "recalled": 112,
+            "coverage": 1,
+            "top1All": 0.45454545454545453,
+            "top1Covered": 0.45454545454545453,
+            "candidateRecallAll": 0.8484848484848485
+          },
+          "oldOnlyCorrect": 6,
+          "nextOnlyCorrect": 56
+        },
+        "complete24HistorySides": 116
+      },
+      "2026-06": {
+        "old": {
+          "eligible": 94,
+          "covered": 92,
+          "correct": 17,
+          "recalled": 61,
+          "coverage": 0.9787234042553191,
+          "top1All": 0.18085106382978725,
+          "top1Covered": 0.18478260869565216,
+          "candidateRecallAll": 0.648936170212766
+        },
+        "next": {
+          "eligible": 94,
+          "covered": 94,
+          "correct": 38,
+          "recalled": 83,
+          "coverage": 1,
+          "top1All": 0.40425531914893614,
+          "top1Covered": 0.40425531914893614,
+          "candidateRecallAll": 0.8829787234042553
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 94,
+            "covered": 92,
+            "correct": 17,
+            "recalled": 63,
+            "coverage": 0.9787234042553191,
+            "top1All": 0.18085106382978725,
+            "top1Covered": 0.18478260869565216,
+            "candidateRecallAll": 0.6702127659574468
+          },
+          "candidate6": {
+            "eligible": 94,
+            "covered": 80,
+            "correct": 29,
+            "recalled": 54,
+            "coverage": 0.851063829787234,
+            "top1All": 0.30851063829787234,
+            "top1Covered": 0.3625,
+            "candidateRecallAll": 0.574468085106383
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 92,
+            "covered": 92,
+            "correct": 17,
+            "recalled": 61,
+            "coverage": 1,
+            "top1All": 0.18478260869565216,
+            "top1Covered": 0.18478260869565216,
+            "candidateRecallAll": 0.6630434782608695
+          },
+          "next": {
+            "eligible": 92,
+            "covered": 92,
+            "correct": 38,
+            "recalled": 81,
+            "coverage": 1,
+            "top1All": 0.41304347826086957,
+            "top1Covered": 0.41304347826086957,
+            "candidateRecallAll": 0.8804347826086957
+          },
+          "oldOnlyCorrect": 4,
+          "nextOnlyCorrect": 25
+        },
+        "complete24HistorySides": 94
+      },
+      "2026-07": {
+        "old": {
+          "eligible": 102,
+          "covered": 101,
+          "correct": 7,
+          "recalled": 57,
+          "coverage": 0.9901960784313726,
+          "top1All": 0.06862745098039216,
+          "top1Covered": 0.06930693069306931,
+          "candidateRecallAll": 0.5588235294117647
+        },
+        "next": {
+          "eligible": 102,
+          "covered": 102,
+          "correct": 31,
+          "recalled": 90,
+          "coverage": 1,
+          "top1All": 0.30392156862745096,
+          "top1Covered": 0.30392156862745096,
+          "candidateRecallAll": 0.8823529411764706
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 102,
+            "covered": 101,
+            "correct": 7,
+            "recalled": 57,
+            "coverage": 0.9901960784313726,
+            "top1All": 0.06862745098039216,
+            "top1Covered": 0.06930693069306931,
+            "candidateRecallAll": 0.5588235294117647
+          },
+          "candidate6": {
+            "eligible": 102,
+            "covered": 90,
+            "correct": 32,
+            "recalled": 60,
+            "coverage": 0.8823529411764706,
+            "top1All": 0.3137254901960784,
+            "top1Covered": 0.35555555555555557,
+            "candidateRecallAll": 0.5882352941176471
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 101,
+            "covered": 101,
+            "correct": 7,
+            "recalled": 57,
+            "coverage": 1,
+            "top1All": 0.06930693069306931,
+            "top1Covered": 0.06930693069306931,
+            "candidateRecallAll": 0.5643564356435643
+          },
+          "next": {
+            "eligible": 101,
+            "covered": 101,
+            "correct": 31,
+            "recalled": 90,
+            "coverage": 1,
+            "top1All": 0.3069306930693069,
+            "top1Covered": 0.3069306930693069,
+            "candidateRecallAll": 0.8910891089108911
+          },
+          "oldOnlyCorrect": 2,
+          "nextOnlyCorrect": 26
+        },
+        "complete24HistorySides": 102
+      },
+      "2026-08": {
+        "old": {
+          "eligible": 108,
+          "covered": 108,
+          "correct": 10,
+          "recalled": 64,
+          "coverage": 1,
+          "top1All": 0.09259259259259259,
+          "top1Covered": 0.09259259259259259,
+          "candidateRecallAll": 0.5925925925925926
+        },
+        "next": {
+          "eligible": 108,
+          "covered": 108,
+          "correct": 48,
+          "recalled": 95,
+          "coverage": 1,
+          "top1All": 0.4444444444444444,
+          "top1Covered": 0.4444444444444444,
+          "candidateRecallAll": 0.8796296296296297
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 108,
+            "covered": 108,
+            "correct": 10,
+            "recalled": 65,
+            "coverage": 1,
+            "top1All": 0.09259259259259259,
+            "top1Covered": 0.09259259259259259,
+            "candidateRecallAll": 0.6018518518518519
+          },
+          "candidate6": {
+            "eligible": 108,
+            "covered": 90,
+            "correct": 41,
+            "recalled": 63,
+            "coverage": 0.8333333333333334,
+            "top1All": 0.37962962962962965,
+            "top1Covered": 0.45555555555555555,
+            "candidateRecallAll": 0.5833333333333334
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 108,
+            "covered": 108,
+            "correct": 10,
+            "recalled": 64,
+            "coverage": 1,
+            "top1All": 0.09259259259259259,
+            "top1Covered": 0.09259259259259259,
+            "candidateRecallAll": 0.5925925925925926
+          },
+          "next": {
+            "eligible": 108,
+            "covered": 108,
+            "correct": 48,
+            "recalled": 95,
+            "coverage": 1,
+            "top1All": 0.4444444444444444,
+            "top1Covered": 0.4444444444444444,
+            "candidateRecallAll": 0.8796296296296297
+          },
+          "oldOnlyCorrect": 4,
+          "nextOnlyCorrect": 42
+        },
+        "complete24HistorySides": 108
+      },
+      "2026-09": {
+        "old": {
+          "eligible": 96,
+          "covered": 96,
+          "correct": 8,
+          "recalled": 66,
+          "coverage": 1,
+          "top1All": 0.08333333333333333,
+          "top1Covered": 0.08333333333333333,
+          "candidateRecallAll": 0.6875
+        },
+        "next": {
+          "eligible": 96,
+          "covered": 96,
+          "correct": 46,
+          "recalled": 84,
+          "coverage": 1,
+          "top1All": 0.4791666666666667,
+          "top1Covered": 0.4791666666666667,
+          "candidateRecallAll": 0.875
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 96,
+            "covered": 96,
+            "correct": 8,
+            "recalled": 67,
+            "coverage": 1,
+            "top1All": 0.08333333333333333,
+            "top1Covered": 0.08333333333333333,
+            "candidateRecallAll": 0.6979166666666666
+          },
+          "candidate6": {
+            "eligible": 96,
+            "covered": 65,
+            "correct": 26,
+            "recalled": 38,
+            "coverage": 0.6770833333333334,
+            "top1All": 0.2708333333333333,
+            "top1Covered": 0.4,
+            "candidateRecallAll": 0.3958333333333333
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 96,
+            "covered": 96,
+            "correct": 8,
+            "recalled": 66,
+            "coverage": 1,
+            "top1All": 0.08333333333333333,
+            "top1Covered": 0.08333333333333333,
+            "candidateRecallAll": 0.6875
+          },
+          "next": {
+            "eligible": 96,
+            "covered": 96,
+            "correct": 46,
+            "recalled": 84,
+            "coverage": 1,
+            "top1All": 0.4791666666666667,
+            "top1Covered": 0.4791666666666667,
+            "candidateRecallAll": 0.875
+          },
+          "oldOnlyCorrect": 4,
+          "nextOnlyCorrect": 42
+        },
+        "complete24HistorySides": 96
+      }
+    },
+    "byTeam": {
+      "701": {
+        "old": {
+          "eligible": 111,
+          "covered": 108,
+          "correct": 11,
+          "recalled": 76,
+          "coverage": 0.972972972972973,
+          "top1All": 0.0990990990990991,
+          "top1Covered": 0.10185185185185185,
+          "candidateRecallAll": 0.6846846846846847
+        },
+        "next": {
+          "eligible": 111,
+          "covered": 106,
+          "correct": 44,
+          "recalled": 92,
+          "coverage": 0.954954954954955,
+          "top1All": 0.3963963963963964,
+          "top1Covered": 0.41509433962264153,
+          "candidateRecallAll": 0.8288288288288288
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 111,
+            "covered": 108,
+            "correct": 11,
+            "recalled": 77,
+            "coverage": 0.972972972972973,
+            "top1All": 0.0990990990990991,
+            "top1Covered": 0.10185185185185185,
+            "candidateRecallAll": 0.6936936936936937
+          },
+          "candidate6": {
+            "eligible": 111,
+            "covered": 88,
+            "correct": 39,
+            "recalled": 61,
+            "coverage": 0.7927927927927928,
+            "top1All": 0.35135135135135137,
+            "top1Covered": 0.4431818181818182,
+            "candidateRecallAll": 0.5495495495495496
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 106,
+            "covered": 106,
+            "correct": 11,
+            "recalled": 75,
+            "coverage": 1,
+            "top1All": 0.10377358490566038,
+            "top1Covered": 0.10377358490566038,
+            "candidateRecallAll": 0.7075471698113207
+          },
+          "next": {
+            "eligible": 106,
+            "covered": 106,
+            "correct": 44,
+            "recalled": 92,
+            "coverage": 1,
+            "top1All": 0.41509433962264153,
+            "top1Covered": 0.41509433962264153,
+            "candidateRecallAll": 0.8679245283018868
+          },
+          "oldOnlyCorrect": 3,
+          "nextOnlyCorrect": 36
+        },
+        "complete24HistorySides": 87
+      },
+      "702": {
+        "old": {
+          "eligible": 110,
+          "covered": 106,
+          "correct": 5,
+          "recalled": 60,
+          "coverage": 0.9636363636363636,
+          "top1All": 0.045454545454545456,
+          "top1Covered": 0.04716981132075472,
+          "candidateRecallAll": 0.5454545454545454
+        },
+        "next": {
+          "eligible": 110,
+          "covered": 105,
+          "correct": 47,
+          "recalled": 91,
+          "coverage": 0.9545454545454546,
+          "top1All": 0.42727272727272725,
+          "top1Covered": 0.44761904761904764,
+          "candidateRecallAll": 0.8272727272727273
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 110,
+            "covered": 106,
+            "correct": 5,
+            "recalled": 60,
+            "coverage": 0.9636363636363636,
+            "top1All": 0.045454545454545456,
+            "top1Covered": 0.04716981132075472,
+            "candidateRecallAll": 0.5454545454545454
+          },
+          "candidate6": {
+            "eligible": 110,
+            "covered": 79,
+            "correct": 33,
+            "recalled": 47,
+            "coverage": 0.7181818181818181,
+            "top1All": 0.3,
+            "top1Covered": 0.4177215189873418,
+            "candidateRecallAll": 0.42727272727272725
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 104,
+            "covered": 104,
+            "correct": 5,
+            "recalled": 59,
+            "coverage": 1,
+            "top1All": 0.04807692307692308,
+            "top1Covered": 0.04807692307692308,
+            "candidateRecallAll": 0.5673076923076923
+          },
+          "next": {
+            "eligible": 104,
+            "covered": 104,
+            "correct": 47,
+            "recalled": 91,
+            "coverage": 1,
+            "top1All": 0.4519230769230769,
+            "top1Covered": 0.4519230769230769,
+            "candidateRecallAll": 0.875
+          },
+          "oldOnlyCorrect": 1,
+          "nextOnlyCorrect": 43
+        },
+        "complete24HistorySides": 86
+      },
+      "703": {
+        "old": {
+          "eligible": 109,
+          "covered": 105,
+          "correct": 8,
+          "recalled": 72,
+          "coverage": 0.963302752293578,
+          "top1All": 0.07339449541284404,
+          "top1Covered": 0.0761904761904762,
+          "candidateRecallAll": 0.6605504587155964
+        },
+        "next": {
+          "eligible": 109,
+          "covered": 103,
+          "correct": 47,
+          "recalled": 95,
+          "coverage": 0.944954128440367,
+          "top1All": 0.43119266055045874,
+          "top1Covered": 0.4563106796116505,
+          "candidateRecallAll": 0.8715596330275229
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 109,
+            "covered": 105,
+            "correct": 8,
+            "recalled": 72,
+            "coverage": 0.963302752293578,
+            "top1All": 0.07339449541284404,
+            "top1Covered": 0.0761904761904762,
+            "candidateRecallAll": 0.6605504587155964
+          },
+          "candidate6": {
+            "eligible": 109,
+            "covered": 86,
+            "correct": 37,
+            "recalled": 63,
+            "coverage": 0.7889908256880734,
+            "top1All": 0.3394495412844037,
+            "top1Covered": 0.43023255813953487,
+            "candidateRecallAll": 0.5779816513761468
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 102,
+            "covered": 102,
+            "correct": 8,
+            "recalled": 71,
+            "coverage": 1,
+            "top1All": 0.0784313725490196,
+            "top1Covered": 0.0784313725490196,
+            "candidateRecallAll": 0.696078431372549
+          },
+          "next": {
+            "eligible": 102,
+            "covered": 102,
+            "correct": 47,
+            "recalled": 94,
+            "coverage": 1,
+            "top1All": 0.46078431372549017,
+            "top1Covered": 0.46078431372549017,
+            "candidateRecallAll": 0.9215686274509803
+          },
+          "oldOnlyCorrect": 2,
+          "nextOnlyCorrect": 41
+        },
+        "complete24HistorySides": 85
+      },
+      "704": {
+        "old": {
+          "eligible": 110,
+          "covered": 107,
+          "correct": 9,
+          "recalled": 70,
+          "coverage": 0.9727272727272728,
+          "top1All": 0.08181818181818182,
+          "top1Covered": 0.08411214953271028,
+          "candidateRecallAll": 0.6363636363636364
+        },
+        "next": {
+          "eligible": 110,
+          "covered": 105,
+          "correct": 49,
+          "recalled": 86,
+          "coverage": 0.9545454545454546,
+          "top1All": 0.44545454545454544,
+          "top1Covered": 0.4666666666666667,
+          "candidateRecallAll": 0.7818181818181819
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 110,
+            "covered": 107,
+            "correct": 9,
+            "recalled": 72,
+            "coverage": 0.9727272727272728,
+            "top1All": 0.08181818181818182,
+            "top1Covered": 0.08411214953271028,
+            "candidateRecallAll": 0.6545454545454545
+          },
+          "candidate6": {
+            "eligible": 110,
+            "covered": 85,
+            "correct": 33,
+            "recalled": 57,
+            "coverage": 0.7727272727272727,
+            "top1All": 0.3,
+            "top1Covered": 0.38823529411764707,
+            "candidateRecallAll": 0.5181818181818182
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 105,
+            "covered": 105,
+            "correct": 9,
+            "recalled": 69,
+            "coverage": 1,
+            "top1All": 0.08571428571428572,
+            "top1Covered": 0.08571428571428572,
+            "candidateRecallAll": 0.6571428571428571
+          },
+          "next": {
+            "eligible": 105,
+            "covered": 105,
+            "correct": 49,
+            "recalled": 86,
+            "coverage": 1,
+            "top1All": 0.4666666666666667,
+            "top1Covered": 0.4666666666666667,
+            "candidateRecallAll": 0.819047619047619
+          },
+          "oldOnlyCorrect": 4,
+          "nextOnlyCorrect": 44
+        },
+        "complete24HistorySides": 86
+      },
+      "705": {
+        "old": {
+          "eligible": 110,
+          "covered": 107,
+          "correct": 10,
+          "recalled": 67,
+          "coverage": 0.9727272727272728,
+          "top1All": 0.09090909090909091,
+          "top1Covered": 0.09345794392523364,
+          "candidateRecallAll": 0.6090909090909091
+        },
+        "next": {
+          "eligible": 110,
+          "covered": 105,
+          "correct": 40,
+          "recalled": 92,
+          "coverage": 0.9545454545454546,
+          "top1All": 0.36363636363636365,
+          "top1Covered": 0.38095238095238093,
+          "candidateRecallAll": 0.8363636363636363
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 110,
+            "covered": 107,
+            "correct": 10,
+            "recalled": 67,
+            "coverage": 0.9727272727272728,
+            "top1All": 0.09090909090909091,
+            "top1Covered": 0.09345794392523364,
+            "candidateRecallAll": 0.6090909090909091
+          },
+          "candidate6": {
+            "eligible": 110,
+            "covered": 86,
+            "correct": 23,
+            "recalled": 54,
+            "coverage": 0.7818181818181819,
+            "top1All": 0.20909090909090908,
+            "top1Covered": 0.26744186046511625,
+            "candidateRecallAll": 0.4909090909090909
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 105,
+            "covered": 105,
+            "correct": 9,
+            "recalled": 66,
+            "coverage": 1,
+            "top1All": 0.08571428571428572,
+            "top1Covered": 0.08571428571428572,
+            "candidateRecallAll": 0.6285714285714286
+          },
+          "next": {
+            "eligible": 105,
+            "covered": 105,
+            "correct": 40,
+            "recalled": 92,
+            "coverage": 1,
+            "top1All": 0.38095238095238093,
+            "top1Covered": 0.38095238095238093,
+            "candidateRecallAll": 0.8761904761904762
+          },
+          "oldOnlyCorrect": 1,
+          "nextOnlyCorrect": 32
+        },
+        "complete24HistorySides": 86
+      },
+      "706": {
+        "old": {
+          "eligible": 110,
+          "covered": 106,
+          "correct": 16,
+          "recalled": 67,
+          "coverage": 0.9636363636363636,
+          "top1All": 0.14545454545454545,
+          "top1Covered": 0.1509433962264151,
+          "candidateRecallAll": 0.6090909090909091
+        },
+        "next": {
+          "eligible": 110,
+          "covered": 104,
+          "correct": 39,
+          "recalled": 93,
+          "coverage": 0.9454545454545454,
+          "top1All": 0.35454545454545455,
+          "top1Covered": 0.375,
+          "candidateRecallAll": 0.8454545454545455
+        },
+        "diagnostics": {
+          "baseline24": {
+            "eligible": 110,
+            "covered": 106,
+            "correct": 16,
+            "recalled": 68,
+            "coverage": 0.9636363636363636,
+            "top1All": 0.14545454545454545,
+            "top1Covered": 0.1509433962264151,
+            "candidateRecallAll": 0.6181818181818182
+          },
+          "candidate6": {
+            "eligible": 110,
+            "covered": 91,
+            "correct": 30,
+            "recalled": 63,
+            "coverage": 0.8272727272727273,
+            "top1All": 0.2727272727272727,
+            "top1Covered": 0.32967032967032966,
+            "candidateRecallAll": 0.5727272727272728
+          }
+        },
+        "common": {
+          "old": {
+            "eligible": 103,
+            "covered": 103,
+            "correct": 16,
+            "recalled": 66,
+            "coverage": 1,
+            "top1All": 0.1553398058252427,
+            "top1Covered": 0.1553398058252427,
+            "candidateRecallAll": 0.6407766990291263
+          },
+          "next": {
+            "eligible": 103,
+            "covered": 103,
+            "correct": 39,
+            "recalled": 92,
+            "coverage": 1,
+            "top1All": 0.3786407766990291,
+            "top1Covered": 0.3786407766990291,
+            "candidateRecallAll": 0.8932038834951457
+          },
+          "oldOnlyCorrect": 11,
+          "nextOnlyCorrect": 34
+        },
+        "complete24HistorySides": 86
+      }
+    }
+  },
+  "deploymentDecision": "NOT_AUTOMATICALLY_PROMOTED",
+  "verification": {
+    "status": "PASS",
+    "games": 330,
+    "sides": 660,
+    "verified": [
+      "raw hashes",
+      "unique game sides",
+      "actual identity",
+      "strictly prior team history",
+      "same season",
+      "candidate weights",
+      "outcome flags",
+      "summary accounting"
+    ]
+  },
+  "interpretation": "Unconditional retrospective evaluation of fallback rotation formula, not overall website identity accuracy. No production promotion."
+}
