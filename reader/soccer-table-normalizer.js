@@ -113,7 +113,10 @@
     const registry = globalThis.Tai888LeagueRegistry, tables = new Map(), identities = new Set(), issues = new Set();
     let label = '', excludedProps = 0, rawTableRowCount = 0, headerCount = 0, markerCount = 0, skippedAlternativeCount = 0;
     const samples = [], rejectedSamples = [], quoteFailures = [];
-    for (const records of (Array.isArray(groups) ? groups : []).slice(0, 32)) {
+    // These are page/table positions, not a competition's capture budget.
+    // Walk every observed boundary so preceding foreign tables and rows cannot
+    // hide a later valid league. Parser and transport bounds remain separate.
+    for (const records of (Array.isArray(groups) ? groups : [])) {
       let header = null, sectionTitle = '', accepted = false, pending = [];
       function flush() {
         if (!pending.length || !accepted || !header) { pending = []; return; }
@@ -177,7 +180,7 @@
           ] });
         }
       }
-      for (const record of records.slice(0, 1200)) {
+      for (const record of records) {
         const nextHeader = columns(record), text = clean(record.text);
         if (nextHeader) { flush(); header = nextHeader; headerCount++; continue; }
         const pureHeading = text.length <= 240 && !/\d{1,2}[/-]\d{1,2}|\d{1,2}:\d{2}|\d+\.\d/.test(text);
