@@ -45,8 +45,12 @@ export function diagnosticCode(value) {
 const codes = values => [...new Set((Array.isArray(values) ? values : []).slice(0, 16).map(diagnosticCode))];
 const version = value => typeof value === 'string' && /^\d{1,3}(?:\.\d{1,3}){1,3}$/.test(value) ? value : null;
 export const diagnosticIdValid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-function counts(input) {
-  return { ...Object.fromEntries(COUNT_KEYS.map(key => [key, diagnosticCount(input?.[key])])),
+function counts(input, league) {
+  const soccerKeys = ['identityDateFailures', 'identityTimeFailures', 'identityTeamCountFailures',
+    'identityUnresolvedTeamFailures', 'identityDuplicateTeamFailures', 'identityHomeMarkerFailures'];
+  const identityCounts = ['EPL', 'UCL'].includes(league) ? Object.fromEntries(soccerKeys
+    .filter(key => Object.hasOwn(input || {}, key)).map(key => [key, diagnosticCount(input[key])])) : {};
+  return { ...Object.fromEntries(COUNT_KEYS.map(key => [key, diagnosticCount(input?.[key])])), ...identityCounts,
     sawLeagueMarker: input?.sawLeagueMarker === true, wrongPeriodHeader: input?.wrongPeriodHeader === true };
 }
 const AUTHORITY_VERSION = 'SOCCER-AUTHORITY-DIAGNOSTICS-v1';
@@ -149,7 +153,7 @@ export function sanitizeDiagnosticReport(input) {
     leagues[league] = { state: row.state, errorCode: row.errorCode ? diagnosticCode(row.errorCode) : '',
       issues: codes(row.issues), rawGameCount: diagnosticCount(row.rawGameCount), marketCount: diagnosticCount(row.marketCount),
       boards: (Array.isArray(row.boards) ? row.boards : []).slice(0, 2).map(board => ({
-        diagnostics: counts(board?.diagnostics), parsedGameCount: diagnosticCount(board?.parsedGameCount),
+        diagnostics: counts(board?.diagnostics, league), parsedGameCount: diagnosticCount(board?.parsedGameCount),
         issues: codes(board?.issues),
       })), ...(authority ? { authority } : {}), ...(conflictRecovery ? { conflictRecovery } : {}) };
   }

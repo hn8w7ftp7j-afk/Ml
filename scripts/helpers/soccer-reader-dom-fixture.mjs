@@ -35,7 +35,8 @@ export class RenderedElement {
 export function desktopDocument(league, { homeFirst = true, separatedRows = false, malformed = false, foreignHeading = false,
   lockMarket = '', lockCount = 1, fullyLocked = false, omitColumnHeader = false, layout = 'table', iconText = '★', nestedFragments = false,
   cardProp = '罰牌數', headingCount = 5, malformedCard = false, malformedAlternative = false, singleRow = false,
-  precedingElements = 0, precedingRows = 0, precedingTables = 0 } = {}) {
+  precedingElements = 0, precedingRows = 0, precedingTables = 0, emptyMarket = '', invalidIdentity = '',
+  secondGame = false, multiGameWrapper = false } = {}) {
   const label = `聯盟：${league === 'EPL' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽'}(${headingCount})`;
   const root = new RenderedElement('HTML', { height: 900 }); root.isConnected = true;
   const body = root.append(new RenderedElement('BODY', { height: 900 }));
@@ -67,7 +68,7 @@ export function desktopDocument(league, { homeFirst = true, separatedRows = fals
       cell(foreign, 455, 650, ['西班牙甲級聯賽']);
     }
     const suffix = definition.prop ? `-${definition.prop}` : '';
-    const teams = foreignHeading && index >= 1
+    const teams = secondGame && index === 1 ? ['曼城[主]', '切爾西'] : foreignHeading && index >= 1
       ? [`皇家馬德里${suffix}[主]`, `巴塞隆納${suffix}`]
       : [`${home}${suffix}[主]`, `${away}${suffix}`];
     const waters = [...definition.water];
@@ -85,6 +86,14 @@ export function desktopDocument(league, { homeFirst = true, separatedRows = fals
       [890, 30, ['單', '雙', '']], [920, 60, ['0.930', '0.950', '']],
       [980, 50, halfRows], [1030, 70, [...halfWater, '']],
     ];
+    if (index === 0 && emptyMarket) {
+      const indexes = emptyMarket === 'all' ? values.slice(2).map((_, offset) => offset + 2)
+        : emptyMarket === 'runline' ? [3, 4] : emptyMarket === 'total' ? [5, 6] : [];
+      for (const valueIndex of indexes) values[valueIndex][2] = ['', '', ''];
+    }
+    if (index === 0 && invalidIdentity === 'same-team') values[1][2] = [`${home}[主]`, home, iconText];
+    if (index === 0 && invalidIdentity === 'duplicate-home') values[1][2] = [`${home}[主]`, `${away}[主]`, iconText];
+    if (index === 0 && invalidIdentity === 'time') values[0][2] = ['10-20', '25:99', ''];
     function lockedColumn(key, count) {
       if (key === 'moneyline') values[2][2] = Array.from({ length: 3 }, (_, offset) => offset < count ? '-' : '');
       else if (key === 'runline') { values[3][2] = ['', '', '']; values[4][2] = ['-', count > 1 ? '-' : '', '']; }
@@ -142,6 +151,15 @@ export function desktopDocument(league, { homeFirst = true, separatedRows = fals
         matchTable.append(row);
       }
     }
+  }
+  if (multiGameWrapper) {
+    assert.equal(layout, 'div-grid');
+    const board = body.children[0];
+    const matches = board.children.filter(element => element.top >= 155);
+    const wrapper = new RenderedElement('DIV', { left: 455, top: 155, width: 650, height: 400 });
+    board.children = board.children.filter(element => !matches.includes(element));
+    board.append(wrapper);
+    for (const match of matches) wrapper.append(match);
   }
   if (nestedFragments) {
     // The public Angular football template nests individual date/time and odds

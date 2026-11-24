@@ -27,6 +27,22 @@ assert.equal(clean.leagues.NBA.issues[0], 'game-1:full-total:invalid-line');
 assert.equal(diagnosticCode('parser:wrong-period-header:NBA:first-five'), 'parser:wrong-period-header:NBA:first-five');
 assert.equal(diagnosticCode(`parser:conflicting-duplicate:${poison}`), 'parser:conflicting-duplicate');
 assert.throws(() => sanitizeDiagnosticReport({ ...dirty, reportId: 'not-an-id' }));
+const identityKeys = ['identityDateFailures', 'identityTimeFailures', 'identityTeamCountFailures',
+  'identityUnresolvedTeamFailures', 'identityDuplicateTeamFailures', 'identityHomeMarkerFailures'];
+const identityCounts = Object.fromEntries(identityKeys.map((key, index) => [key, index + 1]));
+const identityBoard = { diagnostics: { ...identityCounts, identityOtherFailures: poison, rawTeam: poison }, parsedGameCount: 0,
+  issues: ['table:SOCCER_TABLE_IDENTITY_INVALID'] };
+const identityReport = makeReport();
+identityReport.leagues.UCL = { state: 'error', boards: [identityBoard] };
+Object.assign(identityReport.leagues.NBA.boards[0].diagnostics, identityCounts);
+const cleanIdentity = sanitizeDiagnosticReport(identityReport);
+assert.deepEqual(Object.fromEntries(identityKeys.map(key => [key, cleanIdentity.leagues.UCL.boards[0].diagnostics[key]])), identityCounts);
+assert.ok(identityKeys.every(key => !Object.hasOwn(cleanIdentity.leagues.NBA.boards[0].diagnostics, key)), 'soccer reasons stay league-scoped');
+assert.equal(JSON.stringify(cleanIdentity).includes(poison), false);
+for (const bad of [poison, -1, 1.5, Infinity, 100001, { team: poison }]) {
+  const unsafe = structuredClone(identityReport); unsafe.leagues.UCL.boards[0].diagnostics.identityDateFailures = bad;
+  assert.equal(sanitizeDiagnosticReport(unsafe).leagues.UCL.boards[0].diagnostics.identityDateFailures, 0);
+}
 
 const state = { readerToken: 'synthetic-token', deviceId: 'device-test-123456' };
 const storage = { get: async () => structuredClone(state), set: async value => Object.assign(state, structuredClone(value)) };
@@ -73,6 +89,7 @@ const sql = async (strings, ...values) => {
   throw new Error(`Unexpected SQL: ${query}`);
 };
 const report = makeReport();
+report.leagues.UCL = { state: 'error', boards: [identityBoard] };
 const receipt = await saveReaderDiagnostic(report, state.deviceId, { sql });
 assert.equal(receipt.durable, true); assert.equal(receipt.reportId, report.reportId);
 assert.deepEqual(await saveReaderDiagnostic(report, state.deviceId, { sql }), receipt);
@@ -80,6 +97,9 @@ await assert.rejects(saveReaderDiagnostic(report, 'other-device-12345', { sql })
 await assert.rejects(saveReaderDiagnostic({ ...report, readerVersion: '2.1.44' }, state.deviceId, { sql }), error => error.status === 409);
 assert.equal((await listReaderDiagnostics({ league: 'NBA' }, { sql })).length, 1);
 assert.equal((await listReaderDiagnostics({ league: 'EPL' }, { sql })).length, 0);
+assert.deepEqual(Object.fromEntries(identityKeys.map(key => [key,
+  dbRows.get(report.reportId).payload.leagues.UCL.boards[0].diagnostics[key]])), identityCounts,
+  'server-sanitized numeric reasons survive permanent diagnostic storage');
 assert.ok(statements.every(query => !/sports_baseball_reader|nba_reader|analysis_result/.test(query)), 'diagnostics cannot mutate market or analysis tables');
 
 // Run the actual service-worker scan: a locally rejected NBA capture must
@@ -91,7 +111,9 @@ const fakeChrome = {
   alarms: { onAlarm: events },
   storage: { local: { get: async () => structuredClone(workerState), set: async values => Object.assign(workerState, structuredClone(values)) } },
   tabs: { onUpdated: events, query: async () => [{ id: 1 }], sendMessage: async () => ({ ok: true,
-    capture: { readerVersion, captures: [{ league: 'NBA', observedAt: new Date().toISOString(), sourceHost: 'www.tai888.in', tables: [{ rows: [] }], diagnostics: { gameCount: 1, expectedGameCount: 1 } }] } }) },
+    capture: { readerVersion, captures: [{ league: 'NBA', observedAt: new Date().toISOString(), sourceHost: 'www.tai888.in', tables: [{ rows: [] }], diagnostics: { gameCount: 1, expectedGameCount: 1 } },
+      { league: 'UCL', observedAt: new Date().toISOString(), sourceHost: 'www.tai888.in', tables: [],
+        diagnostics: { ...identityCounts, rawTeam: poison, tableIssues: ['SOCCER_TABLE_IDENTITY_INVALID'], sawLeagueMarker: true } }] } }) },
   webNavigation: { getAllFrames: async () => [{ frameId: 0 }] },
 };
 const context = vm.createContext({ chrome: fakeChrome, ...parser, ...selector, createDiagnosticOutbox,
@@ -108,6 +130,10 @@ const scan = await vm.runInContext("performSync('manual')", context);
 assert.equal(scan.ok, false); assert.equal(requests.length, 1);
 assert.equal(requests[0].body.leagues.NBA.state, 'error');
 assert.ok(requests[0].body.leagues.NBA.boards[0].issues.includes('no-parsed-games'));
+assert.equal(requests[0].body.leagues.UCL.state, 'error');
+assert.deepEqual(Object.fromEntries(identityKeys.map(key => [key, requests[0].body.leagues.UCL.boards[0].diagnostics[key]])), identityCounts,
+  'actual worker capture sanitizer and automatic diagnostic outbox retain only numeric reasons');
+assert.equal(JSON.stringify(requests).includes(poison), false);
 assert.equal(workerState.diagnosticDelivery.state, 'sent');
 assert.equal(JSON.stringify(requests).includes('test-token'), false);
 console.log('Automatic Reader diagnostics: redaction, rejection-to-report, no market bypass, offline/restart retry, bounded queue, receipts, idempotency and league/device isolation PASS');

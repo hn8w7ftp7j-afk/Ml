@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   const liveNormalizerAvailable = Boolean(policy?.shouldKeepRecord && normalizer?.normalizeRowRecords);
   const clean = policy?.clean || (value => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim());
-  const READER_VERSION = '2.1.61';
+  const READER_VERSION = '2.1.62';
   const pendingSeenCaptures = new Map();
   const lastSeenFingerprint = new Map();
   let seenSequence = 0;
@@ -588,17 +588,23 @@
       if (element.querySelector?.('tr,[role="row"]')) continue;
       add(element);
     }
-    // A desktop event is itself one complete row of nested DIV columns. Its
-    // date/time and price children contain the same rendered text. Keeping
-    // those descendants as extra records would start false partial matches.
+    // A desktop event owns its nested date/team fragments even when its
+    // prices are empty. Ownership requires exactly one date, time and pair
+    // of distinct team labels with one home marker; a multi-event wrapper cannot
+    // suppress its child events. This does not validate or create a market.
     const completeRows = records.filter(record => headers.some(header => {
       const inColumn = key => record.cells.filter(cell => header.some(column => column.key === key
         && cell.left >= column.left - 2 && cell.right <= column.right + 2));
       const times = inColumn('time').flatMap(cell => cell.lines || []);
-      return times.some(text => /^\d{1,2}[/-]\d{1,2}$/.test(text))
-        && times.some(text => /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(text))
-        && inColumn('teams').some(cell => /[\[［【(（]\s*主\s*[\]］】)）]/u.test(cell.text))
-        && inColumn('runline').length && inColumn('total').length;
+      const names = inColumn('teams').flatMap(cell => cell.lines || [])
+        .filter(text => !/^(?:[★☆*\s]+|grade(?:\s+lock)?|lock(?:\s+grade)?)$/i.test(text));
+      // Keep prop-labelled rows intact too: the normalizer excludes those
+      // whole rows. Splitting their date children would manufacture errors.
+      const teamLabels = names.map(text => text.replace(/[\[［【(（]\s*主\s*[\]］】)）]/gu, '').trim());
+      return times.filter(text => /^\d{1,2}[/-]\d{1,2}$/.test(text)).length === 1
+        && times.filter(text => /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(text)).length === 1
+        && teamLabels.length === 2 && teamLabels.every(Boolean) && teamLabels[0] !== teamLabels[1]
+        && names.filter(text => /[\[［【(（]\s*主\s*[\]］】)）]/u.test(text)).length === 1;
     }));
     return records.filter(record => !completeRows.some(parent => parent !== record
       && owners.get(parent)?.contains(owners.get(record))))

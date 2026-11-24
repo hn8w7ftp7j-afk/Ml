@@ -69,6 +69,49 @@ for (const league of ['EPL', 'UCL']) {
       failures.push({ ...summary, error: error.message });
     }
   }
+  // Empty prices do not remove the parent event's date/time/team identity.
+  // Its nested date fragments must not become separate incomplete games.
+  for (const emptyMarket of ['all', 'runline', 'total']) {
+    const options = { layout: 'div-grid', emptyMarket, iconText: 'grade' };
+    const flat = parseTai888Capture(captureDesktop(league, options), new Date(now));
+    const capture = captureDesktop(league, { ...options, nestedFragments: true });
+    const parsed = parseTai888Capture(capture, new Date(now));
+    assert.deepEqual(capture.diagnostics.tableIssues, [], `${emptyMarket}: nested identity fragments are not extra games`);
+    assert.equal(canonicalSoccerPayload(parsed), canonicalSoccerPayload(flat), 'nesting cannot create prices, locks or change retained contracts');
+    assert.equal(parsed.games.length, 1);
+    assert.equal(parsed.games[0].markets.length, emptyMarket === 'all' ? 6 : 9);
+    assert.equal(parsed.games[0].marketStatus, 'open');
+    assert.equal(selectAuthoritativeSoccerBoards([{ tabId: 1, frameId: 0, active: true, capture, parsed }], { now, league }).ok, true);
+    assert.equal(validateSoccerCapture({ ...parsed, readerVersion: manifest.version, pageActivityAt: new Date(now).toISOString() }, { now, headerVersion: manifest.version }).ok, true);
+    for (const invalidIdentity of ['same-team', 'duplicate-home', 'time']) {
+      const invalid = captureDesktop(league, { ...options, nestedFragments: true, invalidIdentity });
+      assert.ok(invalid.diagnostics.tableIssues.includes('SOCCER_TABLE_IDENTITY_INVALID'));
+      assert.equal(selectAuthoritativeSoccerBoards([{ tabId: 1, frameId: 0, active: true, capture: invalid,
+        parsed: parseTai888Capture(invalid, new Date(now)) }], { now, league }).ok, false, 'invalid identities remain blocked');
+    }
+  }
+  const wrapperOptions = { layout: 'div-grid', nestedFragments: true, secondGame: true };
+  const unwrapped = parseTai888Capture(captureDesktop(league, wrapperOptions), new Date(now));
+  const wrapped = captureDesktop(league, { ...wrapperOptions, multiGameWrapper: true });
+  const wrappedParsed = parseTai888Capture(wrapped, new Date(now));
+  assert.deepEqual(wrapped.diagnostics.tableIssues, []);
+  assert.equal(wrappedParsed.games.length, 2, 'a wrapper containing multiple event identities must retain both child events');
+  assert.equal(canonicalSoccerPayload(wrappedParsed), canonicalSoccerPayload(unwrapped));
+  assert.equal(selectAuthoritativeSoccerBoards([{ tabId: 1, frameId: 0, active: true, capture: wrapped, parsed: wrappedParsed }], { now, league }).ok, true);
+  const empty = captureDesktop(league, { layout: 'div-grid', nestedFragments: true, emptyMarket: 'all', singleRow: true });
+  const emptyParsed = parseTai888Capture(empty, new Date(now));
+  assert.deepEqual(empty.diagnostics.tableIssues, [], 'one empty parent event cannot manufacture an identity error');
+  assert.equal(emptyParsed.games.length, 0, 'blank quotes are neither prices nor an explicit market lock');
+  assert.equal(selectAuthoritativeSoccerBoards([{ tabId: 1, frameId: 0, active: true, capture: empty, parsed: emptyParsed }], { now, league }).ok, false);
+  const malformed = captureDesktop(league, { layout: 'div-grid', nestedFragments: true, singleRow: true, malformed: true });
+  assert.ok(malformed.diagnostics.tableIssues.includes('SOCCER_TABLE_QUOTES_AMBIGUOUS'));
+  assert.equal(selectAuthoritativeSoccerBoards([{ tabId: 1, frameId: 0, active: true, capture: malformed,
+    parsed: parseTai888Capture(malformed, new Date(now)) }], { now, league }).ok, false, 'a single malformed price is still blocked');
+  const foreignEmptyOptions = { layout: 'div-grid', emptyMarket: 'runline', foreignHeading: true };
+  const foreignFlat = parseTai888Capture(captureDesktop(league, foreignEmptyOptions), new Date(now));
+  const foreignNested = parseTai888Capture(captureDesktop(league, { ...foreignEmptyOptions, nestedFragments: true }), new Date(now));
+  assert.equal(foreignNested.games[0].markets.length, 3, 'empty prices do not admit following foreign competition rows');
+  assert.equal(canonicalSoccerPayload(foreignNested), canonicalSoccerPayload(foreignFlat));
   for (const [name, options] of [
     ['missing table helper', { sourceOverrides: { 'soccer-table-normalizer.js': 'void 0; // test an incomplete extension installation' } }],
     ['missing column header', { omitColumnHeader: true }],
@@ -89,4 +132,4 @@ for (const league of ['EPL', 'UCL']) {
 }
 console.log(JSON.stringify({ fixtures: summaries, failures }, null, 2));
 assert.equal(failures.length, 0, 'all independently reconstructed desktop layouts must survive actual content collection, parsing, authority and server reparse');
-console.log('PASS soccer rendered-layout regressions: accepted DIV headings, separate/nested tables, DIV grids and nested DIV/SPAN labels preserve exact quotes/periods/identities and authoritative uploads; grade/lock decorations retain prices while unknown team bands block; foreign headings bound scope and missing helpers/headers remain visible diagnostics. Live Tai888 DOM remains separate.');
+console.log('PASS soccer rendered-layout regressions: accepted DIV headings, separate/nested tables, DIV grids and nested DIV/SPAN labels preserve exact quotes/periods/identities and authoritative uploads; empty prices retain parent identity ownership without inventing prices/locks; multi-game wrappers retain children, invalid identities/quotes block, foreign headings bound scope and missing helpers/headers remain visible diagnostics. Live Tai888 DOM remains separate.');

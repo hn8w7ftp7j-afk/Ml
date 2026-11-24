@@ -40,7 +40,9 @@ function source(league = 'NBA', at = '2026-10-24T22:00:01.000Z') {
       { marketLocked: false, cells: [{ pair: ['not-a-date', '07:00'] }, { pair: ['未知隊名', 'LAL 湖人[主]'] }, { pair: [' 3+50 0.95\n1.5 ', '3+75 0.91'] }] },
       { marketLocked: true, cells: [{ pair: ['10/25', '08:00'] }, { pair: ['鎖盤', ''] }] },
     ] }], diagnostics: { lastMutationAt: '2026-10-24T22:00:00.000Z', sawLeagueMarker: true, recordCount: 2,
-      expectedGameCount: null, tableIssues: ['CONFLICTING_ROWS'], conflictingGameKeys: ['07:00|GS|LAL'] } };
+      expectedGameCount: null, tableIssues: ['CONFLICTING_ROWS'], conflictingGameKeys: ['07:00|GS|LAL'],
+      ...(['EPL', 'UCL'].includes(league) ? { identityDateFailures: 1, identityTimeFailures: 2, identityTeamCountFailures: 3,
+        identityUnresolvedTeamFailures: 4, identityDuplicateTeamFailures: 5, identityHomeMarkerFailures: 6 } : {}) } };
 }
 const validAck = async wire => ({ ok: true, durable: true, schema: local.SCHEMA,
   captureId: await local.sha(local.canonical(wire)), evidenceHash: await local.sha(local.canonical(wire.evidence)),
@@ -75,6 +77,8 @@ try {
       'local fragments and backend canonical identities match after Chrome key sorting');
     assert.deepEqual(wire.evidence.tables, captures.find(value => value.league === wire.evidence.league).tables,
       'unknown identities, malformed dates, conflicting quote strings, whitespace and locks are exact');
+    assert.deepEqual(wire.evidence.diagnostics, captures.find(value => value.league === wire.evidence.league).diagnostics,
+      'fixed numeric identity reasons survive local storage and server evidence validation');
   }
   let uploads = 0;
   const outbox = createSeenCaptureOutbox({ storage, upload: async (wire, config) => {
