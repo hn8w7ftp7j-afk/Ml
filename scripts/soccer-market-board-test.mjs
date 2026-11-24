@@ -108,3 +108,57 @@ assert.deepEqual(deferred.marketCoverage.deferredDates, manyDates.slice(4));
 assert.deepEqual(deferred.readerDates, manyDates);
 assert.equal(deferred.marketCoverage.complete, false);
 console.log('PASS hard end-to-end deadline: unresolved index, Reader, schedule and deferred workers return within budget; source requests receive remaining timeout');
+
+
+// A timer may fire before the monotonic budget reaches zero because its
+// fractional millisecond delay is rounded by the runtime. Once our deadline
+// signal fires, no later date may be dispatched even if clock time remains.
+{
+  const performanceDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  const realSetTimeout = globalThis.setTimeout, realClearTimeout = globalThis.clearTimeout;
+  let clock = 0, nextTimer = 0;
+  const timers = new Map(), launched = [];
+  try {
+    Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => clock } });
+    globalThis.setTimeout = callback => { const id = ++nextTimer; timers.set(id, callback); return id; };
+    globalThis.clearTimeout = id => timers.delete(id);
+    const pending = fetchSoccerMarketBoard('epl', late.date, { ...options, timeBudgetMs: 25,
+      listDates: async () => { clock = .5; return [...manyDates]; },
+      loadReader: async (_league, boardDate) => { launched.push(boardDate); return new Promise(() => {}); },
+    });
+    for (let tick = 0; tick < 32 && launched.length < 4; tick++) await Promise.resolve();
+    assert.equal(launched.length, 4, 'the first concurrent batch has started');
+    assert.equal(timers.size, 4, 'only the four Reader deadlines remain');
+    clock = 23.75;
+    const firstTimers = [...timers.entries()];
+    for (const [id, callback] of firstTimers) { timers.delete(id); callback(); }
+    for (let tick = 0; tick < 32; tick++) await Promise.resolve();
+    // Finish any wrongly dispatched work too, so an unfixed implementation
+    // produces a deterministic assertion failure instead of a hanging test.
+    clock = 25;
+    for (const [id, callback] of [...timers.entries()]) { timers.delete(id); callback(); }
+    const result = await pending;
+    assert.deepEqual(launched, manyDates.slice(0, 4), 'the first deadline signal permanently stops dispatch');
+    assert.deepEqual(result.marketCoverage.failedDates, manyDates.slice(0, 4));
+    assert.deepEqual(result.marketCoverage.deferredDates, manyDates.slice(4));
+    assert.deepEqual(result.readerDates, manyDates);
+  } finally {
+    Object.defineProperty(globalThis, 'performance', performanceDescriptor);
+    globalThis.setTimeout = realSetTimeout;
+    globalThis.clearTimeout = realClearTimeout;
+  }
+}
+{
+  const launched = [];
+  const result = await fetchSoccerMarketBoard('epl', late.date, { ...options,
+    listDates: async () => [...manyDates], loadReader: async (_league, boardDate) => {
+      launched.push(boardDate);
+      if (manyDates.indexOf(boardDate) < 4) throw Error('SOCCER_MARKET_BOARD_DEADLINE');
+      return null;
+    },
+  });
+  assert.deepEqual(launched, manyDates, 'a dependency error is not our whole-request deadline');
+  assert.deepEqual(result.marketCoverage.failedDates, manyDates.slice(0, 4));
+  assert.deepEqual(result.marketCoverage.deferredDates, []);
+}
+console.log('PASS deterministic early deadline signal stops later date dispatch; ordinary dependency failure preserves remaining date work');
