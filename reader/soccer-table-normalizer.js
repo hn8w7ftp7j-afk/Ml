@@ -113,6 +113,8 @@
     const registry = globalThis.Tai888LeagueRegistry, tables = new Map(), identities = new Set(), issues = new Set();
     let label = '', excludedProps = 0, rawTableRowCount = 0, headerCount = 0, markerCount = 0, skippedAlternativeCount = 0;
     const samples = [], rejectedSamples = [], quoteFailures = [];
+    const identityFailureCounts = { identityDateFailures: 0, identityTimeFailures: 0, identityTeamCountFailures: 0,
+      identityUnresolvedTeamFailures: 0, identityDuplicateTeamFailures: 0, identityHomeMarkerFailures: 0 };
     // These are page/table positions, not a competition's capture budget.
     // Walk every observed boundary so preceding foreign tables and rows cannot
     // hide a later valid league. Parser and transport bounds remain separate.
@@ -139,8 +141,15 @@
         const names = bands(records, teamColumn).filter(row => !/^(?:[★☆*\s]+|grade(?:\s+lock)?|lock(?:\s+grade)?)$/i.test(row.text));
         if (names.some(row => props.test(row.text))) { excludedProps++; return; }
         const teams = names.map(row => ({ ...row, team: globalThis.Tai888SoccerTeams?.resolve(row.text) }));
-        if (day.length !== 1 || clock.length !== 1 || teams.length !== 2 || teams.some(row => !row.team)
-          || teams[0].team.key === teams[1].team.key || teams.filter(row => homeMarker.test(row.text)).length !== 1) {
+        const identityFailures = { identityDateFailures: day.length !== 1, identityTimeFailures: clock.length !== 1,
+          identityTeamCountFailures: teams.length !== 2, identityUnresolvedTeamFailures: teams.some(row => !row.team),
+          identityDuplicateTeamFailures: teams.length === 2 && teams.every(row => row.team) && teams[0].team.key === teams[1].team.key,
+          identityHomeMarkerFailures: teams.filter(row => homeMarker.test(row.text)).length !== 1 };
+        if (Object.values(identityFailures).some(Boolean)) {
+          // Fixed numeric reasons explain a rejection without publishing team
+          // names or DOM. A row may fail more than one independent condition.
+          for (const key of Object.keys(identityFailureCounts)) if (identityFailures[key]) identityFailureCounts[key]++;
+          rejectedSamples.push(...rowSamples.slice(0, Math.max(0, 8 - rejectedSamples.length)));
           issues.add('SOCCER_TABLE_IDENTITY_INVALID'); return;
         }
         const home = homeMarker.test(teams[0].text) ? 0 : 1, evidence = [];
@@ -212,7 +221,7 @@
       gameCount: identities.size, expectedGameCount: issues.size ? null : identities.size || null,
       gameCountBasis: 'UNIQUE_DATE_TIME_TEAMS', rawTableRowCount, headerCount, markerCount,
       samples: [...rejectedSamples, ...samples].slice(0, 8), skippedAlternativeCount,
-      excludedProps, tableIssues: [...issues], conflictingGameKeys: [] } };
+      excludedProps, ...identityFailureCounts, tableIssues: [...issues], conflictingGameKeys: [] } };
   }
   globalThis.Tai888SoccerTableNormalizer = Object.freeze({ normalize, columns, geometryGroups, version: 'SOCCER-DESKTOP-v2' });
 })();

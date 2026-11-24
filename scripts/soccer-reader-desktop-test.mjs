@@ -239,4 +239,38 @@ try {
 } finally {
   if (oldSecret === undefined) delete process.env.READER_PAIR_SECRET; else process.env.READER_PAIR_SECRET = oldSecret;
 }
-console.log('PASS desktop soccer screenshot reconstruction: actual content-script table collection, split date/time, home/away row order, 3-way home/away/draw reorder, seven unlabelled-period goal quotes, three separate HT handicaps, foreign-section/prop/odd-even exclusion, exact closed-outcome counts, incomplete-lock/missing-header upload blocks, guard-removal sensitivity, signed EPL/UCL uploads, server reparse and heartbeat. Live PC/DOM NOT VERIFIED.');
+// Diagnostic reasons must describe the unchanged identity rejection, including
+// an invalid row after valid quotes. They cannot turn a rejected identity into
+// a market or copy names/DOM into the automatic numeric report.
+await import('../reader/soccer-table-normalizer.js');
+{
+  const keys = ['identityDateFailures', 'identityTimeFailures', 'identityTeamCountFailures',
+    'identityUnresolvedTeamFailures', 'identityDuplicateTeamFailures', 'identityHomeMarkerFailures'];
+  const cell = (left, width, lines, top) => ({ left, right: left + width, top, text: lines.join(' '), lines,
+    rows: lines.map((text, index) => ({ text, top: top + index * 18, left })) });
+  const record = (cells, top) => ({ tag: 'DIV', left: 0, right: 500, top, bottom: top + 80,
+    text: cells.map(value => value.text).join(' '), cells });
+  const header = record(['時間', '主客隊伍', '讓球', '大小盤'].map((text, index) => cell(index * 125, 125, [text], 0)), 0);
+  const heading = record([cell(0, 500, ['聯盟: 歐洲冠軍聯賽'], 20)], 20);
+  const row = ({ dates = ['10-20'], times = ['03:00'], teams = ['皇家馬德里[主]', '巴塞隆拿'], top = 100 } = {}) => record([
+    cell(0, 125, [...dates, ...times], top), cell(125, 125, teams, top),
+    cell(250, 125, ['1平 0.950', '0.910'], top), cell(375, 125, ['3平 大 0.950', '小 0.910'], top),
+  ], top);
+  const cases = [
+    { dates: ['10-20', '10-21'] }, { times: [] },
+    { teams: ['皇家馬德里[主]', '巴塞隆拿', '阿仙奴'] }, { teams: ['皇家馬德里[主]', '12345'] },
+    { teams: ['皇家馬德里[主]', '皇家馬德里'] }, { teams: ['皇家馬德里', '巴塞隆拿'] },
+  ];
+  for (let index = 0; index < cases.length; index++) {
+    const output = globalThis.Tai888SoccerTableNormalizer.normalize([[header, heading, row(), row({ ...cases[index], top: 250 })]], 'UCL');
+    assert.ok(output.diagnostics.tableIssues.includes('SOCCER_TABLE_IDENTITY_INVALID'), JSON.stringify({ index, diagnostics: output.diagnostics }));
+    assert.equal(output.diagnostics.expectedGameCount, null, 'identity diagnostics never relax the rejection');
+    assert.deepEqual(Object.fromEntries(keys.map(key => [key, output.diagnostics[key]])),
+      Object.fromEntries(keys.map((key, position) => [key, Number(index === position)])),
+      'fixed reason counts preserve the actual independent failure');
+    assert.equal(output.diagnostics.samples[0].top, 250, 'bounded local samples prioritize the rejected identity');
+    assert.equal(output.diagnostics.samples.length <= 8, true);
+    assert.equal(output.diagnostics.gameCount, 1, 'the rejected identity never becomes another valid match');
+  }
+}
+console.log('PASS desktop soccer screenshot reconstruction: actual content-script table collection, split date/time, home/away row order, 3-way home/away/draw reorder, seven unlabelled-period goal quotes, three separate HT handicaps, foreign-section/prop/odd-even exclusion, exact closed-outcome counts, incomplete-lock/missing-header upload blocks, guard-removal sensitivity, signed EPL/UCL uploads, server reparse, numeric identity diagnostics and heartbeat. Live PC/DOM NOT VERIFIED.');

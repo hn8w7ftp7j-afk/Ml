@@ -69,7 +69,8 @@
     }
     if(Object.hasOwn(input,'diagnostics')) {
       const counts=['recordCount','headerCount','candidateRows','gameCount','pairedRows','singleRows','expectedGameCount','rootCount',
-        'candidateElementCount','acceptedRecordCount','skippedAlternativeCount','sectionCount','mutationAgeSeconds'];
+        'candidateElementCount','acceptedRecordCount','skippedAlternativeCount','sectionCount','mutationAgeSeconds',
+        'identityDateFailures','identityTimeFailures','identityTeamCountFailures','identityUnresolvedTeamFailures','identityDuplicateTeamFailures','identityHomeMarkerFailures'];
       const bools=['sawLeagueMarker','wrongPeriodHeader'],times=['lastMutationAt','activityAt'];
       fields(input.diagnostics,[...counts,...bools,...times,'tableIssues','conflictingGameKeys']);
       for(const name of counts)if(Object.hasOwn(input.diagnostics,name))ensure(input.diagnostics[name]===null||Number.isSafeInteger(input.diagnostics[name])&&input.diagnostics[name]>=0&&input.diagnostics[name]<=10000000,'SEEN_DIAGNOSTICS_INVALID');

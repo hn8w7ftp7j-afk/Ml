@@ -6,7 +6,7 @@ import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
 import { createSeenCaptureOutbox, SEEN_CAPTURE_ALARM } from './seen-outbox.js';
 import { recoverNbaConflict, NBA_CONFLICT_RECOVERY_KEY } from './nba-conflict-recovery.js';
 
-const VERSION = '2.1.61';
+const VERSION = '2.1.62';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -252,6 +252,12 @@ function localBoardDiagnostic(payload, capture) {
   return { openCount, lockedCount, marketCount, ...(payload?.league === 'NBA' ? { unconfirmedCount } : {}),
     sample: sample.join('｜').slice(0, 280) };
 }
+function soccerIdentityFailureCounts(diagnostics) {
+  const keys = ['identityDateFailures', 'identityTimeFailures', 'identityTeamCountFailures',
+    'identityUnresolvedTeamFailures', 'identityDuplicateTeamFailures', 'identityHomeMarkerFailures'];
+  return Object.fromEntries(keys.filter(key => Object.hasOwn(diagnostics || {}, key))
+    .map(key => [key, integer(diagnostics[key], 100000)]));
+}
 function sanitizeCapture(raw) {
   const input = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const league = LEAGUES.includes(input.league) ? input.league : null;
@@ -260,7 +266,7 @@ function sanitizeCapture(raw) {
     ...(['NHL','EPL','UCL'].includes(league) ? { pageLeagueLabel: String(input.pageLeagueLabel || '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 100) } : {}),
     sourceHost: safeHost(`https://${input.sourceHost || ''}`) || safeHost(input.pageUrl), pageUrl: safeUrl(input.pageUrl), frameUrl: safeUrl(input.frameUrl), observedAt: iso(input.observedAt),
     tables: Array.isArray(input.tables) ? input.tables.slice(0, 12) : [],
-    diagnostics: { recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, wrongPeriodHeader: input.diagnostics?.wrongPeriodHeader === true, skippedAlternativeCount: integer(input.diagnostics?.skippedAlternativeCount, 1000), tableIssues: ['EPL', 'UCL'].includes(league) && Array.isArray(input.diagnostics?.tableIssues) ? [...new Set(input.diagnostics.tableIssues.filter(issue => SOCCER_LAYOUT_ISSUES.has(issue)))].slice(0, 8) : [], conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
+    diagnostics: { ...(['EPL', 'UCL'].includes(league) ? soccerIdentityFailureCounts(input.diagnostics) : {}), recordCount: integer(input.diagnostics?.recordCount), headerCount: integer(input.diagnostics?.headerCount), candidateRows: integer(input.diagnostics?.candidateRows), gameCount: integer(input.diagnostics?.gameCount, 40), pairedRows: integer(input.diagnostics?.pairedRows, 80), singleRows: integer(input.diagnostics?.singleRows, 80), expectedGameCount: integer(input.diagnostics?.expectedGameCount, 40), rootCount: integer(input.diagnostics?.rootCount), candidateElementCount: integer(input.diagnostics?.candidateElementCount), acceptedRecordCount: integer(input.diagnostics?.acceptedRecordCount), lastMutationAt: iso(input.diagnostics?.lastMutationAt), sawLeagueMarker: input.diagnostics?.sawLeagueMarker === true, wrongPeriodHeader: input.diagnostics?.wrongPeriodHeader === true, skippedAlternativeCount: integer(input.diagnostics?.skippedAlternativeCount, 1000), tableIssues: ['EPL', 'UCL'].includes(league) && Array.isArray(input.diagnostics?.tableIssues) ? [...new Set(input.diagnostics.tableIssues.filter(issue => SOCCER_LAYOUT_ISSUES.has(issue)))].slice(0, 8) : [], conflictingGameKeys: Array.isArray(input.diagnostics?.conflictingGameKeys) && input.diagnostics.conflictingGameKeys.length ? ['redacted-conflict'] : [] },
   };
 }
 
