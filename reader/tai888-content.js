@@ -6,7 +6,7 @@
   const normalizer = globalThis.Tai888RowNormalizer;
   const liveNormalizerAvailable = Boolean(policy?.shouldKeepRecord && normalizer?.normalizeRowRecords);
   const clean = policy?.clean || (value => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim());
-  const READER_VERSION = '2.1.60';
+  const READER_VERSION = '2.1.61';
   const pendingSeenCaptures = new Map();
   const lastSeenFingerprint = new Map();
   let seenSequence = 0;
@@ -332,7 +332,11 @@
 
     // Always inspect div/li grids. The Tai888 SPA can contain unrelated table rows while
     // the actual odds board itself is rendered as a div grid, so a primary-row count gate is unsafe.
-    const fallback = queryAcrossRoots(roots, 'div,li').slice(0, 7000);
+    // A global DOM ordinal is not a board boundary. Football competitions can
+    // appear after thousands of unrelated nodes while the raw archive still
+    // sees their headings. Apply the existing row/visibility policy to every
+    // candidate instead of silently dropping the end of the page.
+    const fallback = queryAcrossRoots(roots, 'div,li');
     for (const element of fallback) {
       if (!visible(element) || candidates.has(element)) continue;
       const hasRowDescendant = Boolean(element.querySelector?.('tr,[role="row"]'));
@@ -524,7 +528,7 @@
 
   function captureSoccerCards(league) {
     const sections=[], seen=new Set();
-    for (const heading of queryAcrossRoots(openRoots(), 'div,span,h1,h2,h3,h4,p,strong,button').slice(0,7000)) {
+    for (const heading of queryAcrossRoots(openRoots(), 'div,span,h1,h2,h3,h4,p,strong,button')) {
       if (!visible(heading)) continue;
       const label=clean(heading.innerText||heading.textContent||'');
       if(label.length>140||!globalThis.Tai888LeagueRegistry.standardMarker(label,league))continue;
@@ -568,7 +572,7 @@
     if (!headers.length) return records;
     // Collect continuation/draw rows only inside an observed sports header's
     // horizontal span. Generic baseball record policy is deliberately unchanged.
-    for (const element of queryAcrossRoots(openRoots(), 'div,li').slice(0, 7000)) {
+    for (const element of queryAcrossRoots(openRoots(), 'div,li')) {
       if (!visible(element)) continue;
       const box = element.getBoundingClientRect();
       const cells = rowCellElements(element);

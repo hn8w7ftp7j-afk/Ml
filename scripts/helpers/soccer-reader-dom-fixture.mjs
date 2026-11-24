@@ -34,7 +34,8 @@ export class RenderedElement {
 
 export function desktopDocument(league, { homeFirst = true, separatedRows = false, malformed = false, foreignHeading = false,
   lockMarket = '', lockCount = 1, fullyLocked = false, omitColumnHeader = false, layout = 'table', iconText = '★', nestedFragments = false,
-  cardProp = '罰牌數', headingCount = 5, malformedCard = false, malformedAlternative = false, singleRow = false } = {}) {
+  cardProp = '罰牌數', headingCount = 5, malformedCard = false, malformedAlternative = false, singleRow = false,
+  precedingElements = 0, precedingRows = 0, precedingTables = 0 } = {}) {
   const label = `聯盟：${league === 'EPL' ? '英格蘭超級聯賽' : '歐洲冠軍聯賽'}(${headingCount})`;
   const root = new RenderedElement('HTML', { height: 900 }); root.isConnected = true;
   const body = root.append(new RenderedElement('BODY', { height: 900 }));
@@ -157,6 +158,37 @@ export function desktopDocument(league, { homeFirst = true, separatedRows = fals
       }
     }
   }
+  // A rendered football page can have many unrelated nodes before this
+  // competition. Keep the board's own geometry and text exactly unchanged.
+  if (precedingElements) {
+    const prefix = Array.from({ length: precedingElements }, (_, index) => {
+      const element = new RenderedElement('DIV', { left: 0, top: -10000 - index, width: 10, height: 10,
+        fragments: [{ text: 'decoration', left: 0, top: -10000 - index }] });
+      element.parentElement = body;
+      return element;
+    });
+    body.children.unshift(...prefix);
+  }
+  if (precedingRows || precedingTables) {
+    const count = precedingTables || 1, prefix = [];
+    for (let index = 0; index < count; index++) {
+      const top = -50000 + index * 100;
+      const container = new RenderedElement('TABLE', { left: 455, top, width: 650, height: 50 });
+      container.parentElement = body;
+      // Foreign table groups are valid physical board candidates. Their
+      // geometry may differ; none may supply prices to the target league.
+      const marker = container.append(new RenderedElement('TR', { left: 455, top, width: 650 }));
+      cell(marker, 455, 650, ['聯盟: 西班牙甲級聯賽']);
+      for (let rowIndex = 0; rowIndex < (index === 0 ? precedingRows || 1 : 1); rowIndex++) {
+        const rowTop = top + 20 + rowIndex * 10;
+        const row = container.append(new RenderedElement('TR', { left: 455, top: rowTop, width: 650 }));
+        cell(row, 455, 45, ['10-20', '03:00']);
+        cell(row, 500, 110, ['其他客隊', '其他主隊[主]']);
+      }
+      prefix.push(container);
+    }
+    body.children.unshift(...prefix);
+  }
   let rangeNode;
   const document = {
     documentElement: root, body, visibilityState: 'visible', readyState: 'complete', referrer: '', addEventListener() {},
@@ -181,7 +213,7 @@ export function captureDesktop(league, options = {}) {
     getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
     performance: { timeOrigin: now, now: () => 0, getEntriesByType: () => [] },
     MutationObserver: class { observe() {} disconnect() {} },
-    chrome: { runtime: { id: 'desktop-fixture', sendMessage: async () => ({}), onMessage: { addListener(value) { handler = value; } } } },
+    chrome: { runtime: { id: 'desktop-fixture', sendMessage: async message => { options.messages?.push(message); return {}; }, onMessage: { addListener(value) { handler = value; } } } },
     addEventListener() {}, setInterval() {}, setTimeout() {}, clearTimeout() {}, URL, Date: Clock, console });
   for (const file of manifest.content_scripts[0].js) vm.runInContext(options.sourceOverrides?.[file] || fs.readFileSync(`reader/${file}`, 'utf8'), context);
   let response;
