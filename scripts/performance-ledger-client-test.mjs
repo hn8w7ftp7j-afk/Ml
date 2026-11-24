@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { PERFORMANCE_LEAGUE_IDS, performanceLeagueId, performanceLeagueConfig, loadNbaPerformanceLedger } from '../lib/performance-ledger-client.js';
 import { LEAGUE_IDS } from '../lib/leagues.js';
 
-assert.deepEqual(PERFORMANCE_LEAGUE_IDS, ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA']);
+assert.deepEqual(PERFORMANCE_LEAGUE_IDS, ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'EPL', 'UCL']);
 assert.deepEqual(LEAGUE_IDS, ['MLB', 'NPB', 'KBO', 'CPBL'], 'display changes cannot widen baseball model or API registry');
 assert.equal(performanceLeagueId(' nba '), 'NBA');
 assert.equal(performanceLeagueId('NHL'), null, 'unsupported sport cannot become MLB');

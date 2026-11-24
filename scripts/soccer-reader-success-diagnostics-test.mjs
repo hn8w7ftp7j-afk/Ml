@@ -63,7 +63,7 @@ for (const league of ['EPL', 'UCL']) {
       sendMessage: async tabId => ({ ok: true, capture: { readerVersion: version, seenCaptureVersion: 'READER-SEEN-CAPTURE-v1', captures: [sources[tabId - 101]] } }) },
     webNavigation: { getAllFrames: async ({ tabId }) => [{ frameId: tabId - 101 }] },
     storage: { local: { get: async () => structuredClone(state), set: async values => Object.assign(state, structuredClone(values)), remove: async () => {} } } };
-  const worker = vm.createContext({ chrome, ...parser, ...selector, createDiagnosticOutbox, DIAGNOSTIC_ALARM,
+  const worker = vm.createContext({ chrome, ...parser, ...selector, createDiagnosticOutbox: options => createDiagnosticOutbox({ ...options, now: () => now }), DIAGNOSTIC_ALARM,
     DIAGNOSTIC_SCHEMA, Date: Clock, crypto: webcrypto, TextEncoder, URL, AbortController,
     setTimeout, clearTimeout, queueMicrotask, fetch: async (url, options) => {
       const payload = JSON.parse(options.body);
