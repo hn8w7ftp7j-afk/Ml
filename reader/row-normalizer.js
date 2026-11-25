@@ -97,7 +97,7 @@
     return DEFINITIONS.find(definition => definition.patterns.some(pattern => pattern.test(value))) || null;
   }
 
-  function buildHeaderProfile(record, expectedLeague = '') {
+  function buildHeaderProfile(record, expectedLeague = '', includeUnsupported = false) {
     const columns = {};
     const extraColumns = [];
     for (const cell of Array.isArray(record?.cells) ? record.cells : []) {
@@ -117,8 +117,10 @@
     }
     if (!columns.time || !columns.teams) return null;
     const marketKeys = ['runline', 'total', 'first5Runline', 'first5Total'];
-    if (!marketKeys.some(key => columns[key])) return null;
+    const hasMarkets = marketKeys.some(key => columns[key]);
+    if (!hasMarkets && !includeUnsupported) return null;
     return {
+      hasMarkets,
       order: number(record?.order),
       top: number(record?.top),
       columns,
@@ -390,21 +392,49 @@
     return /(?:聯盟|联盟)\s*[:：]?/i.test(clean(text));
   }
 
+  function hasFirstFiveHeader(record) {
+    return record.cells.some(cell => /前\s*(?:5|五)|\bF5\b/i.test(clean(cell?.text || (cell?.lines || []).join(' '))));
+  }
+
   function partitionLeagueSections(sorted) {
     const sections = [];
     let current = null;
     let latestHeader = null;
+    let nbaHeader = null;
+    let sharedNbaHeader = null;
+    let appliedNbaHeader = null;
+    let sawMarker = false;
     for (const record of sorted) {
-      const profile = buildHeaderProfile(record);
-      if (profile) latestHeader = record;
-      if (isLeagueMarker(record.text)) {
-        const league = leagueRegistry.identify?.(clean(record.text));
-        current = league && leagueRegistry.standardMarker(clean(record.text), league)
-          ? { league, records: latestHeader ? [latestHeader, record] : [record] } : null;
-        if (current) sections.push(current);
+      const profile = buildHeaderProfile(record, '', true);
+      if (profile) {
+        if (profile.hasMarkets) latestHeader = record;
+        nbaHeader = record;
+        // A page-wide sports header may serve several consecutive league
+        // sections. A later section-specific layout ends that authority.
+        sharedNbaHeader = !sawMarker && profile.columns.runline && profile.columns.total
+          && profile.columns.first5Runline && profile.columns.first5Total && !hasFirstFiveHeader(record)
+          ? record : null;
         continue;
       }
-      if (current && record !== latestHeader) current.records.push(record);
+      if (isLeagueMarker(record.text)) {
+        sawMarker = true;
+        const league = leagueRegistry.identify?.(clean(record.text));
+        current = league && leagueRegistry.standardMarker(clean(record.text), league)
+          ? { league, records: league !== 'NBA' && latestHeader ? [latestHeader, record] : [record] } : null;
+        if (current) sections.push(current);
+        appliedNbaHeader = null;
+        if (current?.league !== 'NBA') nbaHeader = sharedNbaHeader;
+        continue;
+      }
+      // A header immediately before a marker belongs to the rows after it.
+      // Within a standard NBA section, apply a new layout before the next row.
+      if (current?.league === 'NBA' && nbaHeader && nbaHeader !== appliedNbaHeader) {
+        current.records.push(nbaHeader);
+        appliedNbaHeader = nbaHeader;
+      } else if (sawMarker && current?.league !== 'NBA') {
+        nbaHeader = sharedNbaHeader;
+      }
+      if (current) current.records.push(record);
     }
     return sections;
   }
@@ -428,9 +458,9 @@
     let singleRows = 0;
 
     for (const record of sorted) {
-      const profile = buildHeaderProfile(record, expectedLeague);
+      const profile = buildHeaderProfile(record, expectedLeague, expectedLeague === 'NBA');
       if (profile) {
-        currentProfile = profile;
+        currentProfile = profile.hasMarkets ? profile : null;
         pendingAway = null;
         continue;
       }
@@ -444,7 +474,7 @@
         continue;
       }
 
-      if (!currentProfile) {
+      if (!currentProfile && expectedLeague !== 'NBA') {
         currentProfile = [...headers].reverse().find(item => item.order <= number(record.order)) || headers[0] || null;
       }
       if (!currentProfile) continue;
@@ -566,7 +596,7 @@
         expectedGameCount,
         conflictingGameKeys,
         wrongPeriodHeader: expectedLeague === 'NBA' && sorted.some(record => buildHeaderProfile(record)
-          && record.cells.some(cell => /前\s*(?:5|五)|\bF5\b/i.test(clean(cell?.text || (cell?.lines || []).join(' '))))),
+          && hasFirstFiveHeader(record)),
       },
     };
   }
