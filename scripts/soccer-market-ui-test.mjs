@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
-import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
+import { soccerQuoteScorePresentation, soccerMarketScorePresentations } from '../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../lib/soccer/scoring-readiness.js';
 
 // Exercise the native disclosure separately from the expanded evidence fixtures below.
@@ -34,7 +34,7 @@ import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../lib/socce
 }
 const source=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const {code}=await transform(source,{filename:'soccer-market-ui.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,Date,soccerQuoteScorePresentation,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButton:()=>null});
+const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,Date,soccerQuoteScorePresentation,soccerMarketScorePresentations,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButtonGroup:({children})=>children,SoccerRecordButton:()=>null});
 vm.runInContext(code,ctx);
 const threshold={axis:'TOTAL_GOALS',boundary:2,above:.421,equal:.271,below:.307,retainedMass:.999,tailMass:.001};
 const quote=(key,line,water,overrides={})=>({key,period:'FT',line,side:'over',water,rawRows:[`大 ${line} ${water}`,'小 0.81'],provenance:{periodEvidence:'全場',observedAt:'2026-10-18T15:50:00Z',revision:'not-for-users'},thresholdProbabilities:threshold,...overrides});

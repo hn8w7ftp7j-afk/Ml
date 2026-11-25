@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 const shotXgUi=await loadSoccerShotXgResearchUiForTest(React);
 import * as soccerBackgroundClient from '../lib/soccer/background-client.js';
-import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
+import { soccerQuoteScorePresentation, soccerMarketScorePresentations } from '../lib/soccer/score-presentation.js';
 import { loadSoccerMinutesV2CoverageForTest } from './helpers/soccer-minutes-v2-ui-fixture.mjs';
 
 const SoccerMinutesV2Coverage=await loadSoccerMinutesV2CoverageForTest(React);
@@ -41,10 +41,10 @@ function harness(fetch,{boardFetch=null}={}){
  const state=[],refs=[],effects=[],intervals=new Map(),cleanups=[],listeners=new Map();let si=0,ri=0,tree,intervalId=0;
  const document={visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
  const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
- const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
+ const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,soccerMarketScorePresentations,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch:(url,options)=>{
    if(url.startsWith('/api/soccer/analysis?')&&new URL(url,'https://fixture.invalid').searchParams.get('view')!=='current'){if(boardFetch)return boardFetch(url,options);return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true}));}
    return fetch(url,options);
-  },SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
+  },SoccerWorkspace:({children})=>children,SoccerRecordButtonGroup:({children})=>children,SoccerRecordButton:()=>null,
   document,window,setInterval:(fn,delay)=>{intervals.set(++intervalId,{fn,delay});return intervalId;},clearInterval:id=>intervals.delete(id),
   createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
   useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},

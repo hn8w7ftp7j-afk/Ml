@@ -1,7 +1,7 @@
 'use client';
 import { SoccerDeferredDetails } from './deferred-details.js';
-import { SoccerRecordButton } from './bet-records.js';
-import { soccerQuoteScorePresentation } from '../../lib/soccer/score-presentation.js';
+import { SoccerRecordButton, SoccerRecordButtonGroup } from './bet-records.js';
+import { soccerQuoteScorePresentation, soccerMarketScorePresentations } from '../../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../../lib/soccer/scoring-readiness.js';
 
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
@@ -308,12 +308,12 @@ function SoccerQuoteEvidence({quote:q,game,result,now,periodConfirmed,scoreKind}
   </>;
 }
 
-function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result,direction,now}){
+function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result,direction,now,score}){
   const q=quote||{};
   const periodConfirmed=!unassigned&&Boolean(periods[q.period])&&(!expectedPeriod||q.period===expectedPeriod);
   const period=periodConfirmed?periods[q.period]:null;
   const line=textValue(q.line),water=textValue(q.water);
-  const presentation=soccerQuoteScorePresentation({result,direction,quote:q,displayGame:game,periodConfirmed,now});
+  const presentation=score ?? soccerQuoteScorePresentation({result,direction,quote:q,displayGame:game,periodConfirmed,now});
   const predictionMode=result?.predictionContext?.mode==='PREDICTION' && q.scoring?.formalScoringEnabled!==true;
   const unavailable=periodConfirmed && presentation.status==='UNAVAILABLE';
   const reason=unavailable && predictionMode ? predictionBlocker(q,result) : null;
@@ -356,18 +356,19 @@ export function SoccerProvisionalMarketResearch({value,result,game,now=Date.now(
 
 export function SoccerMarketDirections({directions=[],unassignedQuotes=[],historicalPrediction,game,result,now=Date.now()}){
   const items=Array.isArray(directions)?directions:[],unknown=Array.isArray(unassignedQuotes)?unassignedQuotes:[];
+  const scores=soccerMarketScorePresentations({result,directions:items,displayGame:game,now});
   const diagnostic=readerDiagnostic(result,game);
   return <details className="soccerDetails soccerMarketDirections" open><summary>八方向與實際原盤｜S 評分</summary><p className="soccerMarketNote">預測 S・10 分制｜完整模型誤差未驗證｜詳細依據可展開查看</p>
     {historicalPrediction && (!items.some(d=>d?.quotes?.length) || items.some(d=>d?.quotes?.some(q=>q.predictionScore?.status!=='PREDICTION_SCORE_AVAILABLE'))) &&
       <SoccerHistoricalPrediction value={historicalPrediction} game={game} result={result} now={now}/>}
     {diagnostic&&<p className="soccerMarketNote" role="status" data-reader-status={diagnostic.status}>{readerMessage(diagnostic,game,now)}{Number.isInteger(diagnostic.counts?.assignedQuotes)&&diagnostic.counts.assignedQuotes>0?` 已配入 ${diagnostic.counts.assignedQuotes} 筆方向原盤。`:''}</p>}
-    <div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
+    <SoccerRecordButtonGroup result={result}><div className="soccerMarketDirectionGrid">{items.map((direction,index)=>{
       const d=direction||{},quotes=Array.isArray(d.quotes)?d.quotes:[],reasons=readableReasons(d.reasons).map(reason=>game&&(['live','final'].includes(game.status)||Date.parse(game.startTime)<=now)&&reason===reasonNames.READER_QUOTE_STALE?'此為歷史原盤，現在更新不能重建當時的賽前價格':reason);
       const emptyReason=Array.isArray(d.unknownPeriodQuotes)&&d.unknownPeriodQuotes.length?'已有原盤，但尚未確認屬全場或上半場。':diagnostic&&diagnostic.status!=='READY'?readerMessage(diagnostic,game,now):'缺少此方向可確認期間的原盤。';
       const rawReasons=diagnostic&&diagnostic.status!=='READY'?reasons.filter(reason=>reason!==reasonNames.MATCHED_READER_QUOTE_MISSING):reasons;
       const shownReasons=result?.predictionContext?.mode==='PREDICTION'||quotes.some(q=>q.predictionScore?.status==='PREDICTION_SCORE_AVAILABLE')?rawReasons.filter(reason=>![reasonNames.SOCCER_MODEL_NOT_PROMOTED,reasonNames.SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED].includes(reason)):rawReasons;
-      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>尚無此方向評分</strong><p className="soccerMarketEmpty">{emptyReason}</p></div></div>}{shownReasons.length>0&&<p className="soccerMarketNote">{shownReasons.join('；')}。</p>}</section>;
-    })}</div>
+      return <section className="soccerMarketDirection" key={`${d.period}:${d.direction}:${index}`}><h4>{periods[d.period]||'期間待確認'} {directionNames[d.direction]||'盤口方向待確認'}</h4>{quotes.length>1&&<p className="soccerMarketNote">共 {quotes.length} 筆原盤，保留全部替代盤；未指定主盤。</p>}{quotes.length?quotes.map((quote,i)=><SoccerRawMarketQuote score={scores.get(direction)?.get(quote)} quote={quote} expectedPeriod={d.period} index={i} game={game} result={result} direction={d} now={now} key={`${quote.key||i}:${i}`}/>):<div className="soccerQuoteScoreRow"><div className="soccerQuoteScore pending" aria-label="尚未產生 S 分數"><span>S 分數</span><strong>—</strong><small>10 分制</small></div><div className="soccerQuoteScoreBody"><strong>尚無此方向評分</strong><p className="soccerMarketEmpty">{emptyReason}</p></div></div>}{shownReasons.length>0&&<p className="soccerMarketNote">{shownReasons.join('；')}。</p>}</section>;
+    })}</div></SoccerRecordButtonGroup>
     {!items.length&&<p className="soccerMarketEmpty">尚無八方向分析，請先核對賽前資料。</p>}
     {unknown.length>0&&<section className="soccerMarketUnassigned"><h4>期間待確認的原盤</h4><p className="soccerMarketCaution">以下原盤未能確認屬全場或上半場，暫不配入八方向。</p>{unknown.map((quote,i)=><SoccerRawMarketQuote quote={quote} unassigned index={i} key={`${quote.key||i}:${i}`}/>)}</section>}
     <SoccerDeferredDetails className="soccerDetails soccerMarketResearchDetails" label="預測依據與診斷">{() => <><p className="soccerMarketNote">每筆有效原盤獨立顯示預測 S，沿用既有 S 公式。預測排名維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並核對場次、期間及盤口時效。</p><p className="soccerMarketCaution">依目前可取得的資料預測；缺項保留標示。尚無有效計算依據時不產生分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>

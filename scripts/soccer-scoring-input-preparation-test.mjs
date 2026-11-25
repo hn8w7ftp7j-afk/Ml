@@ -12,6 +12,7 @@ import { soccerResearchArtifacts } from '../lib/soccer/research-frozen.js';
 import { soccerHalfTimeArtifacts } from '../lib/soccer/half-time-frozen.js';
 import { predictScoreModel } from '../lib/soccer/score-model.js';
 import { predictHalfTimeDistribution } from '../lib/soccer/half-time-model.js';
+import { immutableSoccerScoringInput } from '../lib/soccer/scoring-hash.js';
 import { analyzeSoccerConditionalQuote } from '../lib/soccer/conditional-analysis.js';
 import { fixtureScoringBundle, fixtureScoringBundleModule, fixtureScoringFactory } from './helpers/soccer-scoring-bundle-fixture.mjs';
 import { fixtureCapture, sha, iso, observed } from './helpers/soccer-forward-fixture.mjs';
@@ -66,6 +67,27 @@ const ht = { ...predictHalfTimeDistribution(ft, soccerHalfTimeArtifacts().league
   league: game.league, gameId: game.id };
 const quotes = quotesFor(game, now);
 assert.equal(quotes.length, 8);
+// Only server-owned immutable data can reuse a digest or arithmetic result.
+// A shallow-frozen outsider remains mutable below the root.
+const untrusted = Object.freeze({ cells: [{ probability: 1 }] });
+const originalDigest = hash(untrusted);
+untrusted.cells[0].probability = 0.5;
+assert.notEqual(hash(untrusted), originalDigest);
+const immutableFT = immutableSoccerScoringInput(ft);
+assert.equal(hash(immutableFT), hash(ft));
+assert.notEqual(immutableFT, ft);
+assert.throws(() => { immutableFT.cells[0].probability = 0; }, TypeError);
+for (const quote of quotes.filter(value => value.period === 'FT')) {
+  const original = analyzeSoccerConditionalQuote({ quote, game, distribution: ft, now });
+  const read = () => analyzeSoccerConditionalQuote({ quote, game, distribution: immutableFT, now });
+  const first = read();
+  assert.deepEqual(first, original);
+  first.netReturnBounds.lower = 999;
+  const second = read();
+  assert.deepEqual(second, original);
+  second.probabilityBounds.FULL_WIN.lower = 999;
+  assert.deepEqual(read(), original);
+}
 const beforeHash = hash({ research, evidence, ft, ht, quotes });
 for (const quote of quotes) {
   const distribution = quote.period === 'FT' ? ft : ht, context = { quote, game, distribution, evidence, scenarioResearch: research, now };

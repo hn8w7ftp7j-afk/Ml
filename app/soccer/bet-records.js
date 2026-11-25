@@ -6,6 +6,7 @@ import { summarizeSoccerHighScoreBets } from '../../lib/soccer/league-bet-status
 import { soccerReaderIdentityVerified } from '../../lib/soccer/reader-identity-proof.js';
 import { soccerTeamLabel } from '../../lib/soccer/team-labels.js';
 const Ledger=createContext(null);
+const MatchIdentity=createContext(null);
 const SETTLEMENT_CHECK_KEY='__settlement_check__';
 const providerScopedRecord=record=>record?.sourceIdentityStatus==='PROVIDER_SCOPED_UNIQUE_MATCH'
   &&record.sourceIdentityEvidence?.version==='SOCCER-PROVIDER-SCOPED-IDENTITY-v1'
@@ -75,9 +76,16 @@ export function SoccerRecordProvider({league,date,through=date,dates=null,childr
   const scopeMatches=loadedScope===scope,ledgerError=scopeMatches?error:'',checkError=scopeMatches?settlementError:'';
   return <Ledger.Provider value={{league,date,records:scopeMatches?records:[],status:ledgerStatus,error:[ledgerError,checkError].filter(Boolean).join('；'),pending,load,mutate,checkSettlement,settlementPolicy,settlementSummary:scopeMatches?settlementSummary:null}}>{ledgerError&&<p className="errorBox" role="alert">{ledgerError}<button className="mini secondary" onClick={load}>重新同步</button></p>}{checkError&&<p className="errorBox" role="alert">{checkError}<button className="mini secondary" disabled={ledgerStatus!=='ready'||pending.size>0} onClick={checkSettlement}>重新核對結算</button></p>}{children}</Ledger.Provider>;
 }
+// All manual record buttons in a market card refer to the same analysis.
+export function SoccerRecordButtonGroup({result,children}){
+  const ledger=useContext(Ledger);
+  if(!ledger||!result)return children;
+  const identity={result,verified:soccerReaderIdentityVerified(result)};
+  return <MatchIdentity.Provider value={identity}>{children}</MatchIdentity.Provider>;
+}
 export function SoccerRecordButton({game,result,quote,provisional=false}){
-  const ledger=useContext(Ledger);if(!ledger||!game||!quote||!result?.persisted||!result.revision||!['FT','HT'].includes(quote.period)||quote.unit!=='GOALS'||!Number.isFinite(quote.water))return null;
-  provisional=provisional||!soccerReaderIdentityVerified(result);
+  const identity=useContext(MatchIdentity),ledger=useContext(Ledger);if(!ledger||!game||!quote||!result?.persisted||!result.revision||!['FT','HT'].includes(quote.period)||quote.unit!=='GOALS'||!Number.isFinite(quote.water))return null;
+  provisional=provisional||!(identity?.result===result?identity.verified:soccerReaderIdentityVerified(result));
   const key=soccerRecordKey({league:game.league,date:game.date,gameId:game.id,...quote});
   const record=ledger.records.find(r=>soccerRecordKey(r)===key),cancelled=record?.status==='CANCELLED',busy=ledger.pending.has(key);
   return <div className="soccerRecordAction">{record&&<strong>{cancelled?'已取消紀錄':'已下注 ✓'}</strong>}<button className="mini secondary" disabled={ledger.status!=='ready'||busy} title={provisional?'僅記錄你自行核對且已完成的下注；場次身分未驗證，結算待核對，不會送單':'僅記錄你已自行完成的下注；每筆 10,000 元，不會送單'} onClick={()=>ledger.mutate(record?{action:cancelled?'restore':'cancel',id:record.id,date:record.date}:{action:'record',alreadyPlaced:true,...(provisional?{identityUnverifiedAcknowledged:true}:{}),date:game.date,gameId:game.id,revision:result.revision,quoteKey:quote.key},key)}>{busy?'儲存中…':ledger.status!=='ready'?'帳本待同步':cancelled?'重新紀錄下注':record?'取消下注':provisional?'自行核對後記錄已下注':'紀錄實際下注'}</button>{record&&<small>原盤 {record.line}｜水位 {record.water}｜{record.stake.toLocaleString('zh-TW')} 元</small>}</div>;

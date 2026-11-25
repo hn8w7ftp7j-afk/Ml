@@ -182,6 +182,15 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
   const externalBusyRef=useRef(externalBusy);externalBusyRef.current=externalBusy;
   // One scope epoch fences both a delayed POST and its later status GETs.
   const statusEpoch=useRef(new Map()),needsCurrentCheck=useRef(false);
+  // Head and current GETs share one server bucket. POSTs and job status do not.
+  const readRetryAt=useRef(0);
+  function rateLimitedRead(response){
+    if(response.status!==429)return false;
+    const now=Date.now(),header=response.headers?.get?.('Retry-After')?.trim();
+    const until=/^\d+$/.test(header||'')?now+Number(header)*1000:Date.parse(header||'');
+    readRetryAt.current=Math.max(readRetryAt.current,Number.isFinite(until)?Math.max(now+1000,until):now+60000);
+    return true;
+  }
   const epochFor=game=>statusEpoch.current.get(scopeKey(game))||0;
   const receiptSequences=useRef(new Map());
   const beginReceipt=(game,parent=null)=>{const key=scopeKey(game),previous=receiptSequences.current.get(key),receipt={key,seq:(previous?.seq||0)+1,parent:previous===parent?parent:null};receiptSequences.current.set(key,receipt);return receipt;};
@@ -196,7 +205,8 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
   useEffect(()=>{
     if(!games.length)return undefined;
     let stopped=false,historyTimer,pollTimer,reading=false,polling=false,job=null,jobKey='';
-    const reads=new Set(),queuedHistory=new Set(),queuedParents=new Map(),settled=new Map();let jobEpochs=new Map();
+    const reads=new Set(),queuedHistory=new Set(),queuedParents=new Map(),retryHeads=new Set(),settled=new Map();let jobEpochs=new Map();
+    let missedHiddenRead=false;
     const current=()=>!stopped&&alive.current;
     const recoverPatch=(id,value,epoch,source='saved',receipt=null)=>{if(current()&&!pending.current.has(id)&&(epochs.current.get(id)||0)===epoch)setStates(old=>{
       const stored=old[id],scope=savedScope(stored);
@@ -226,16 +236,32 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
     });};
     async function json(url,headers){
       const controller=new AbortController();reads.add(controller);const timer=setTimeout(()=>controller.abort(),20000);
-      try{const response=await fetch(url,{headers,cache:'no-store',signal:controller.signal});const body=await response.json();
+      try{const response=await fetch(url,{headers,cache:'no-store',signal:controller.signal});
+        if(headers===matchCardHeaders&&rateLimitedRead(response))throw Object.assign(Error('請求過於頻繁，稍後會自動補讀'),{status:429});
+        const body=await response.json();
         if(!response.ok||body.ok!==true)throw Object.assign(Error(response.status===401?'登入已過期':body.error||'已保存分析暫時無法讀取'),{status:response.status});return body;
       }finally{clearTimeout(timer);reads.delete(controller);}
     }
+    function timedRead(ids,delay){
+      clearTimeout(historyTimer);
+      historyTimer=setTimeout(()=>{
+        if(typeof document!=='undefined'&&document.visibilityState==='hidden'){missedHiddenRead=true;return;}
+        void loadSaved(ids);
+      },delay);
+    }
     async function loadSaved(ids=null,parentReceipt=null){
-      if(!current())return;const requested=new Set(ids||gamesRef.current.map(game=>game.id));
+      if(!current())return;const requested=new Set(ids||(retryHeads.size?retryHeads:gamesRef.current.map(game=>game.id)));
       if(parentReceipt)for(const game of gamesRef.current)if(requested.has(game.id)&&scopeKey(game)===parentReceipt.key)queuedParents.set(game.id,parentReceipt);
-      if(reading){for(const id of requested)queuedHistory.add(id);return;}reading=true;clearTimeout(historyTimer);let index=0,nextExpiry=Infinity;const processing=[];
+      if(readRetryAt.current>Date.now()){
+        for(const id of requested)retryHeads.add(id);
+        timedRead(null,Math.min(60000,readRetryAt.current-Date.now()));
+        return;
+      }
+      if(reading){for(const id of requested)queuedHistory.add(id);return;}
+      for(const id of requested)retryHeads.delete(id);
+      reading=true;clearTimeout(historyTimer);let index=0,nextExpiry=Infinity;const processing=[];
       const targets=gamesRef.current.filter(game=>requested.has(game.id));
-      async function worker(){while(current()&&index<targets.length){const game=targets[index++];if(pending.current.has(game.id))continue;const epoch=epochs.current.get(game.id)||0,requestedAt=Date.now(),receipt=beginReceipt(game,queuedParents.get(game.id));queuedParents.delete(game.id);
+      async function worker(){while(current()&&index<targets.length&&Date.now()>=readRetryAt.current){const game=targets[index++];if(pending.current.has(game.id))continue;const epoch=epochs.current.get(game.id)||0,requestedAt=Date.now(),receipt=beginReceipt(game,queuedParents.get(game.id));queuedParents.delete(game.id);
         const previous=latestStates.current[game.id];
         if(previous?.recoveryError&&savedReadStatus(game,previous)==='RECOVERY_FAILED')recoverPatch(game.id,{recoveryError:'',savedHeadScope:undefined},epoch,'saved',receipt);
         try{const body=await json(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'head'})}`,matchCardHeaders);
@@ -250,15 +276,24 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
         }catch(error){
           // Scope cleanup sets stopped before aborting. While still mounted,
           // an AbortError is the 20-second read deadline and needs a retry UI.
-          if(current())recoverPatch(game.id,{savedHeadScope:receipt.key,recoveryError:error.name==='AbortError'?'讀取逾時':error.message},epoch,'saved',receipt);
+          if(current()){
+            if(error.status===429)retryHeads.add(game.id);
+            recoverPatch(game.id,{savedHeadScope:receipt.key,recoveryError:error.name==='AbortError'?'讀取逾時':error.message},epoch,'saved',receipt);
+          }
         }
       }}
       try{await Promise.all([worker(),worker()]);}finally{reading=false;if(current()){
-        if(queuedHistory.size){const next=[...queuedHistory];queuedHistory.clear();void loadSaved(next);}
+        // Retain throttled and undispatched games; successful cards stay in place.
+        for(const game of targets.slice(index))retryHeads.add(game.id);
+        if(retryHeads.size){
+          for(const id of queuedHistory)retryHeads.add(id);
+          queuedHistory.clear();
+          timedRead(null,Math.min(60000,Math.max(0,readRetryAt.current-Date.now())));
+        }else if(queuedHistory.size){const next=[...queuedHistory];queuedHistory.clear();void loadSaved(next);}
         else{let delay=Math.min(60000,Math.max(250,nextExpiry-Date.now()+20)),ids=null;
           const processingDelay=Math.max(10000,processing.length*2000);
           if(!job&&processing.length&&processingDelay<delay){delay=processingDelay;ids=processing;}
-          historyTimer=setTimeout(()=>loadSaved(ids),delay);}
+          timedRead(ids,delay);}
       }}
     }
     function discover(){
@@ -295,12 +330,16 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       }}
       finally{polling=false;if(current()&&job)pollTimer=setTimeout(poll,2500);}
     }
-    function reconnect(){if(!current())return;clearTimeout(pollTimer);const next=discover();if(next){
+    function reconnect(onlyIdle=false){if(!current())return;clearTimeout(pollTimer);const next=discover();if(next){
       const key=`${next.runId}:${next.league}:${next.date}`;if(key!==jobKey){jobKey=key;settled.clear();jobEpochs=new Map(epochs.current);}
-      job=next;void poll();}void loadSaved();}
+      job=next;void poll();}if(!onlyIdle||!reading)void loadSaved();}
+    const onFocus=()=>{missedHiddenRead=false;reconnect(true);};
+    const onVisible=()=>{if(document.visibilityState==='visible'&&missedHiddenRead)onFocus();};
+    const onStorage=event=>{if(event?.key==null||event.key===SOCCER_ALL_LEAGUE_STORAGE)reconnect();};
     refreshSaved.current=reconnect;refreshSavedGames.current=loadSaved;reconnect();
-    if(typeof window!=='undefined'){window.addEventListener('focus',reconnect);window.addEventListener('storage',reconnect);}
-    return()=>{stopped=true;refreshSaved.current=null;refreshSavedGames.current=null;clearTimeout(historyTimer);clearTimeout(pollTimer);for(const controller of reads)controller.abort();if(typeof window!=='undefined'){window.removeEventListener('focus',reconnect);window.removeEventListener('storage',reconnect);}};
+    if(typeof window!=='undefined'){window.addEventListener('focus',onFocus);window.addEventListener('storage',onStorage);}
+    if(typeof document!=='undefined')document.addEventListener('visibilitychange',onVisible);
+    return()=>{stopped=true;refreshSaved.current=null;refreshSavedGames.current=null;clearTimeout(historyTimer);clearTimeout(pollTimer);for(const controller of reads)controller.abort();if(typeof window!=='undefined'){window.removeEventListener('focus',onFocus);window.removeEventListener('storage',onStorage);}if(typeof document!=='undefined')document.removeEventListener('visibilitychange',onVisible);};
   },[recoveryScope,runId,date]);
   useEffect(()=>{
     let polling=false,cancelled=false,recheckNeeded=false;const mountedAt=Date.now(),lastAttempts=new Map(),fastWindows=new Map(),statusReads=new Set(),forcedIds=new Set();
@@ -329,7 +368,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       return now-window.startedAt<120000?minimumDelay:Math.max(20000,minimumDelay);
     }
     async function pollCurrent(force=false){
-      if(cancelled||polling||!alive.current||typeof document!=='undefined'&&document.visibilityState!=='visible')return;
+      if(cancelled||polling||!alive.current||Date.now()<readRetryAt.current||typeof document!=='undefined'&&document.visibilityState!=='visible')return;
       const now=Date.now(),watching=gamesRef.current.filter(game=>{
         const state=latestStates.current[game.id];
         return state?.data?.analysisStatus==='COMPLETED'&&['done','loading','error'].includes(state.status)
@@ -343,12 +382,14 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       });
       if(!targets.length)return;
       polling=true;let index=0;
-      async function worker(){while(!cancelled&&alive.current&&index<targets.length){const game=targets[index++],snapshot=latestStates.current[game.id]?.data,runId=snapshot?.analysisRunId,epoch=epochFor(game);
+      async function worker(){while(!cancelled&&alive.current&&index<targets.length&&Date.now()>=readRetryAt.current){const game=targets[index++],snapshot=latestStates.current[game.id]?.data,runId=snapshot?.analysisRunId,epoch=epochFor(game);
         if(pending.current.has(game.id))continue;
         const controller=new AbortController(),requestedAt=Date.now(),receipt=beginReceipt(game);lastAttempts.set(game.id,requestedAt);forcedIds.delete(game.id);controllers.current.add(controller);statusReads.add(controller);const timer=setTimeout(()=>controller.abort(),20000);
         const params={league:game.league,date:game.date,eventId:game.sourceId,view:'current'};
         if(/^[a-f0-9]{64}$/.test(snapshot?.revision||''))params.revision=snapshot.revision;
-        try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams(params)}`,{headers:matchCardHeaders,cache:'no-store',signal:controller.signal}),d=await r.json(),status=d.currentResearch;
+        try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams(params)}`,{headers:matchCardHeaders,cache:'no-store',signal:controller.signal});
+          if(rateLimitedRead(r)){forcedIds.add(game.id);throw Error('CURRENT_STATUS_UNVERIFIED');}
+          const d=await r.json(),status=d.currentResearch;
           if(!r.ok||!d.ok||d.gameId!==game.id||d.league!==game.league||d.date!==game.date||!status||typeof status.publishedCurrent!=='boolean'||status.executable!==false||status.formalScoringEnabled!==false||!Number.isFinite(Date.parse(status.checkedAt)))throw Error('CURRENT_STATUS_UNVERIFIED');
           let replacement=null;
           if(d.currentVersion!=null){

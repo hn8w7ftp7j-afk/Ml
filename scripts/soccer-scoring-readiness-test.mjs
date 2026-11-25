@@ -10,13 +10,13 @@ import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
 import { buildSoccerAnalysis, soccerAnalysisHash } from '../lib/soccer/analysis.js';
 import { soccerScenarioArtifacts } from '../lib/soccer/scenario-frozen.js';
 import { soccerDate } from '../lib/soccer/contracts.js';
-import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
+import { soccerQuoteScorePresentation, soccerMarketScorePresentations } from '../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../lib/soccer/scoring-readiness.js';
 
 const now=Date.parse('2026-10-18T13:35:00.000Z'),at=new Date(now).toISOString();
 const sourceCode=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const {code}=await transform(sourceCode,{filename:'soccer-score-readiness.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,soccerQuoteScorePresentation,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButton:()=>null});
+const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,soccerQuoteScorePresentation,soccerMarketScorePresentations,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButtonGroup:({children})=>children,SoccerRecordButton:()=>null});
 vm.runInContext(code,ctx);
 for(const league of ['epl','ucl']){
   const p=JSON.parse(fs.readFileSync(`scripts/fixtures/soccer/${league}-summary.json`));

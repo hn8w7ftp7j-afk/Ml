@@ -7,7 +7,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import { deterministicScore, SCORE_FORMULA_VERSION } from '../lib/deterministic-score.js';
-import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
+import { soccerQuoteScorePresentation, soccerMarketScorePresentations } from '../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../lib/soccer/scoring-readiness.js';
 import { candidateFixture } from './helpers/soccer-candidate-fixture.mjs';
 import { soccerReaderIdentityVerified } from '../lib/soccer/reader-identity-proof.js';
@@ -20,7 +20,7 @@ const quote=result.directions[0].quotes[0];quote.scoring.scoreFormulaVersion=SCO
 assert.equal(soccerReaderIdentityVerified(result),false,'forged serialized proof cannot become authority');
 const source=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const {code}=await transform(source,{filename:'soccer-score-identity.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,Date,soccerQuoteScorePresentation,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButton:()=>null});vm.runInContext(code,ctx);
+const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,Date,soccerQuoteScorePresentation,soccerMarketScorePresentations,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButtonGroup:({children})=>children,SoccerRecordButton:()=>null});vm.runInContext(code,ctx);
 for(const variant of ['legacy','forged']){
   const snapshot=structuredClone(result);if(variant==='legacy')delete snapshot.readerIdentityEvidence;
   const direction=snapshot.directions[0],q=direction.quotes[0],before=JSON.stringify(snapshot);

@@ -12,7 +12,16 @@ try{
   await ensureSoccerJournal();
   const scope={league:'epl',date:'2026-10-20',gameId:'soccer:epl:123'};
   const finish=(run,revision,validUntil=new Date(Date.now()+60000).toISOString())=>finishSoccerAnalysisRun(run,{analysisStatus:'COMPLETED',qaFlag:'WARN',selectionResult:'RESEARCH_SHADOW',revision,validUntil});
-  const a=await beginSoccerAnalysisRun(scope),b=await beginSoccerAnalysisRun(scope);
+  const transport=globalThis.__SOCCER_TEST_SQL;
+  let admissions=0,a;
+  globalThis.__SOCCER_TEST_SQL=(...args)=>{admissions++;return transport(...args);};
+  try {a=await beginSoccerAnalysisRun(scope);} finally {globalThis.__SOCCER_TEST_SQL=transport;}
+  assert.equal(admissions,1,'recording a request and claiming its head requires one database round trip');
+  await db.query("ALTER TABLE sports_soccer_analysis_heads_v2 ADD CONSTRAINT rejected_fixture_head CHECK (game_id <> 'soccer:epl:9999')");
+  await assert.rejects(()=>beginSoccerAnalysisRun({...scope,gameId:'soccer:epl:9999'}),/rejected_fixture_head/);
+  assert.equal((await db.query("SELECT run_id FROM sports_soccer_analysis_runs_v2 WHERE game_id='soccer:epl:9999'")).rows.length,0,
+    'a failed head claim cannot leave an orphan request marked as processing');
+  const b=await beginSoccerAnalysisRun(scope);
   assert.equal((await finish(a,'old-run')).publishedCurrent,false,'old result cannot publish while a newer run is still computing');
   assert.equal((await finish(b,'new-run')).publishedCurrent,true);
   assert.equal((await db.query('SELECT published_revision FROM sports_soccer_analysis_heads_v2')).rows[0].published_revision,'new-run');
