@@ -8,6 +8,27 @@ const name = team => NBA_TEAM_LABELS[team?.abbreviation] || team?.name || '球�
 const num = value => Number.isFinite(value) ? value.toFixed(2) : '—';
 const pct = value => Number.isFinite(value) ? `${(value * 100).toFixed(2)}%` : '—';
 const time = value => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
+
+function readerMarketText(row, entry, now) {
+  const game = row?.game, board = row?.quote;
+  if (row?.readOnly || row?.scheduleVerified === false || game?.status !== 'scheduled' || game.completed
+    || !game.timeConfirmed || !(Date.parse(game.startTime) > now) || !board || board.league !== 'NBA'
+    || board.boardDate !== row.result.date || board.home?.id !== game.home?.id || board.away?.id !== game.away?.id)
+    return '目前 Reader｜本場盤口尚未核對';
+  const fresh = at => Date.parse(at) <= now && now - Date.parse(at) < 180000;
+  if (!fresh(row.observedAt) || !fresh(row.pageActivityAt)) return '目前 Reader｜盤口待更新';
+  if (board.marketStatus === 'locked' && board.availabilityEvidence === 'EXPLICIT_SOURCE_LOCK') return '目前 Reader｜來源已鎖盤';
+  const quote = board[entry.marketKey];
+  if (!quote) return '目前 Reader｜尚未讀到此市場盤口';
+  const water = quote[`${entry.side}Water`];
+  if (!row.canAnalyze || board.marketStatus !== 'open' || !quote.line || !Number.isFinite(water)
+    || (board.marketStates && board.marketStates[entry.marketKey] !== 'AVAILABLE')) return '目前 Reader｜此市場尚未核對';
+  if (entry.marketKey.endsWith('Total')) return `目前 Reader｜${entry.side === 'over' ? '大分' : '小分'} ${quote.line}｜水位 ${num(water)}`;
+  if (!['home','away'].includes(quote.lineSide)) return '目前 Reader｜讓分方尚未核對';
+  const side = entry.side === quote.lineSide ? '讓方' : `${name(game[entry.side])}受讓`;
+  return `目前 Reader｜${name(game[quote.lineSide])}讓 ${quote.line}｜${side}水位 ${num(water)}`;
+}
+
 export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy, readOnly = false }) {
   const [view, setView] = useState('ranking');
   const [filter, setFilter] = useState('all');
@@ -22,11 +43,11 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy, rea
   const entryReadOnly = entry => readOnly || rows.some(row => row.game.id === entry.game.id && unverified(row));
   const renderEntry = (entry, index) => <div className="rankRow nbaRankRow" key={entry.stableKey} data-nba-rank-key={entry.stableKey}>
       <b>{view === 'order' ? entry.betOrderIndex : index + 1}</b><strong className={`rankScore nbaRankScore ${entry.score >= 8.5 ? 'strongest' : ''}`} title="固定 S 分數">{entry.score == null ? '—' : entry.score.toFixed(1)}<small>S 分數</small></strong>
-      <div><span>{name(entry.game.away)}（客）@ {name(entry.game.home)}（主）</span><div className="scorePick">{entry.market}｜{entry.side === 'home' || entry.side === 'away' ? `${name(entry.game[entry.side])} ${entry.role}` : entry.role}｜{entry.line}</div>
+      <div><span>{name(entry.game.away)}（客）@ {name(entry.game.home)}（主）</span><div className="scorePick">{entry.previousAnalysis && '上次分析｜'}{entry.market}｜{entry.side === 'home' || entry.side === 'away' ? `${name(entry.game[entry.side])} ${entry.role}` : entry.role}｜{entry.line}</div>
         <div className="scoreMeta">W {num(entry.expectedNet)}%｜R {num(entry.robustExpectedNet)}%</div>
-        {entry.previousAnalysis && <div className="scoreMeta">上次分析盤口｜待更新並重新分析</div>}
         {entry.score == null && <div className="scoreMeta">需重新分析以產生 W／R 評分</div>}
         <div className="scoreMeta">估計勝率 {pct(entry.winProbability)}｜水位 {num(entry.water)}</div>
+        {entry.previousAnalysis && <div className="scoreMeta">{readerMarketText(displayRows.find(row => row.game.id === entry.game.id), entry, now)}</div>}
         <small>{time(entry.game.startTime)}（台灣）</small><details className="rankingDetails"><summary>估計明細</summary><p>盤口 {time(entry.observedAt)}｜走水 {pct(entry.pushProbability)}｜誤差樣本 {entry.samples ?? '—'} 筆。W／R 為每 100 元含退水淨額。</p></details>
       </div>{!entryReadOnly(entry) && <div className="rankActionStack"><NbaBetRecordButton entry={{ ...entry, away: name(entry.game.away), home: name(entry.game.home) }}/><button className="mini secondary" disabled={busy} onClick={() => onAnalyze(entry.game.sourceId)}>重新分析</button></div>}
     </div>;
@@ -46,8 +67,8 @@ export default function NbaShadowRanking({ rows, date, now, onAnalyze, busy, rea
       {group.entries.map(renderEntry)}
     </div>)}
     {previous.entries.length > 0 && <section aria-label="NBA 上次分析排名">
-      <h3>{hasReadOnlyRows ? '已保存分析｜賽程待核對' : '上次分析｜盤口待更新'}</h3>
-      <p className="muted">{previous.gameCount} 場保留上次分析。以下分數、W／R、盤口與水位均屬當時快照；請更新盤口並重新分析後確認目前候選。投注狀態依已儲存紀錄顯示。</p>
+      <h3>{hasReadOnlyRows ? '已保存分析｜賽程待核對' : '上次分析｜歷史盤口'}</h3>
+      <p className="muted">{previous.gameCount} 場保留上次分析。分數、W／R 和估計勝率均按上次盤口與水位計算。投注狀態依已儲存紀錄顯示。</p>
       {view === 'ranking' ? previous.entries.map(renderEntry) : previousGroups.map((group, index) => <div className="betOrderGame" key={group.key}>
         <div className="betOrderGameHead"><div><span>上次分析第 {index + 1} 場</span><strong>{name(group.entries[0].game.away)}（客）@ {name(group.entries[0].game.home)}（主）</strong></div><time>{time(group.gameDate)}（台灣）</time></div>
         {group.entries.map(renderEntry)}
