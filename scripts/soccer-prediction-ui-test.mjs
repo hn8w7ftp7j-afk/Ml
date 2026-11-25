@@ -180,7 +180,8 @@ const rankingSource = fs.readFileSync('app/soccer/workspace.js', 'utf8').replace
 const rankingCode = await transform(rankingSource, { filename: 'prediction-ranking.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
 let stateIndex = 0, rankingView = 'ranking';
 const rankingContext = vm.createContext({ React, Date, buildSoccerRanking, SOCCER_RANK_MARKETS, soccerTeamLabel,
-  useState: initial => [stateIndex++ === 0 ? rankingView : initial, () => {}], SoccerRecordButton: () => null });
+  useState: initial => [stateIndex++ === 0 ? rankingView : initial, () => {}],
+  SoccerRecordButton: () => React.createElement('button', null, '紀錄實際下注') });
 vm.runInContext(rankingCode.code, rankingContext);
 const analysisSource = fs.readFileSync('app/soccer/analysis-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export default function|export function/g, 'function');
 const analysisCode = await transform(analysisSource, { filename: 'prediction-analysis.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
@@ -213,6 +214,82 @@ if (!producerOnly) for (const league of ['epl', 'ucl']) {
 
 }
 
+// An expired original price may be reviewed, but must never flow into the
+// current list, current count, reminder or record controls.
+if (!producerOnly) for (const league of ['epl', 'ucl']) {
+  const value = fixture(league, .08, .05, 'original-over');
+  const { game, result } = value;
+  result.status = 'RESEARCH_ONLY';
+  const original = result.directions[0].quotes[0];
+  original.label = '大 2.5';
+  const lower = fixture(league, .04, .02, 'other-over').result.directions[0].quotes[0];
+  lower.label = '大 2.5';
+  result.directions[0].quotes.push(lower);
+  const later = now + 180001;
+  const history = (state, options = {}) => buildSoccerRanking([game], { [game.id]: state },
+    { includePrevious: true, now: later, ...options });
+  const saved = { status: 'done', data: result };
+  const previous = history(saved);
+  assert.equal(previous.entries.length, 0);
+  assert.equal(previous.order.length, 0);
+  assert.equal(previous.previousEntries.length, 1, 'retain only the highest eligible W in each expired market');
+  assert.equal(previous.previousEntries[0].quote.key, original.key);
+  assert.equal(previous.previousEntries[0].score, original.predictionScore.S);
+  assert.equal(previous.previousOrder[0].quote.key, original.key);
+  assert.equal(soccerHighScoreCandidates([game], { [game.id]: saved }, { league, date: game.date, now: later }).candidates.length, 0);
+  assert.equal(history(saved, { market: 'HT:TOTAL' }).previousEntries.length, 0);
+  const pending = history({ status: 'loading', data: { ...result, publishedCurrent: false } }, { now });
+  assert.equal(pending.entries.length, 0);
+  assert.equal(pending.previousEntries[0]?.quote.key, original.key, 'a recheck retains the verified original price in read-only history');
+  assert.equal(history(saved, { now: Date.parse(game.startTime) }).previousEntries.length, 0);
+  assert.equal(history({ ...saved, data: { ...result, persisted: false } }).previousEntries.length, 0);
+
+  // Head retrieval carries compact immutable history separately after a later
+  // attempt loses usable prices. Old findings are visible again after reload.
+  const priorAt = new Date(now - 240000).toISOString();
+  const archivedQuote = { key: sha('7'), kind: 'TOTAL', side: 'over', line: '3.5', lineSide: null,
+    period: 'FT', label: '大 3.5', water: .78, S: original.predictionScore.S,
+    W: original.predictionScore.W, R: original.predictionScore.R_model, observedAt: priorAt, calculatedAt: priorAt };
+  const archive = { status: 'HISTORICAL_PREDICTION', league, date: game.date, gameId: game.id, startTime: game.startTime,
+    homeId: game.home.sourceId, awayId: game.away.sourceId, neutralSite: false, revision: sha('f'), observedAt: priorAt,
+    eligible: false, executable: false, quotes: [archivedQuote] };
+  const missing = structuredClone(result);
+  missing.directions[0].quotes = [];
+  const restored = { status: 'done', data: missing, historicalPrediction: archive };
+  assert.equal(history(restored, { now }).previousEntries[0]?.quote.key, archivedQuote.key);
+  const liveHalf = marketFixture(league, 'HT', 'HANDICAP_HOME', 'mixed-half').result;
+  liveHalf.status = 'RESEARCH_ONLY';
+  const mixed = history({ ...restored, data: liveHalf }, { now });
+  assert.deepEqual(mixed.entries.map(entry => entry.marketKey), ['HT:HANDICAP']);
+  assert.deepEqual(mixed.previousEntries.map(entry => entry.marketKey), ['FT:TOTAL']);
+  assert.equal(history({ ...restored, historicalPrediction: { ...archive,
+    quotes: [{ ...archivedQuote, calculatedAt: at }] } }, { now }).previousEntries.length, 0);
+  for (const mismatch of [{ league: 'other' }, { gameId: 'soccer:epl:999' }, { awayId: game.home.sourceId },
+    { revision: result.revision }, { startTime: new Date(now + 10000).toISOString() }, { date: '2026-11-11' }]) {
+    assert.equal(history({ ...restored, historicalPrediction: { ...archive, ...mismatch } }, { now }).previousEntries.length, 0);
+  }
+  assert.equal(history({ ...saved, historicalPrediction: archive }, { now }).previousEntries.length, 0,
+    'a live market cannot reappear in the historical list');
+  const low = fixture(league, .001, -.0001).result;
+  low.status = 'RESEARCH_ONLY';
+  assert.equal(history({ ...saved, data: low, historicalPrediction: archive }, { now }).previousEntries.length, 0,
+    'a freshly priced below-threshold market supersedes an older high score');
+  for (const view of ['ranking', 'order']) {
+    rankingView = view; stateIndex = 0;
+    const html = renderToStaticMarkup(rankingContext.SoccerRanking({ games: [game],
+      states: { [game.id]: restored }, run: () => {}, onShowResults: () => {}, now }));
+    const heading = html.indexOf('上次分析｜盤口待更新');
+    assert.ok(heading >= 0, 'the historical section is visible in both sort orders');
+    const section = html.slice(heading, html.indexOf('</section>', heading));
+    assert.match(section, /3\.5/); assert.match(section, /0\.78/); assert.match(section, /8\.00%/);
+    assert.match(section, /5\.00%/); assert.match(section, /原盤時間/);
+    assert.doesNotMatch(section, /<button|紀錄實際下注|重新分析/);
+    assert.match(html, /目前 0 個候選方向｜上次達標 1 個方向/);
+    assert.doesNotMatch(html, /class="emptySmall"|查看全部分析分數/);
+  }
+  rankingView = 'ranking';
+}
+
 if (contractPath) {
   const payload = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
   assert.ok(Array.isArray(payload.cases) && payload.cases.length >= 2, 'Actual service/DB producer cases are required');
@@ -233,7 +310,10 @@ if (contractPath) {
     stateIndex = 0;
     const table = renderToStaticMarkup(rankingContext.SoccerRanking({ games: [game],
       states: { [game.id]: { status: 'done', data: result } }, run: () => {}, now: clock }));
-    assert.equal((table.match(/class="soccerRankRow"/g) || []).length, actual.entries.length);
+    assert.equal((table.match(/data-soccer-rank-key=/g) || []).length, actual.entries.length);
+    const historicalRows = (table.match(/data-soccer-history-key=/g) || []).length;
+    if (item.name === `${game.league}-historical`) assert.ok(historicalRows > 0, 'saved qualifying predictions remain available for review');
+    else assert.equal(historicalRows, 0, 'current and purely below-threshold prices have no superseded rows');
     if (item.expectRanked) { assert.match(table, /預測 S/); assert.match(table, /模型情境 R/); }
   }
   assert.deepEqual([...leagues].sort(), ['epl', 'ucl']);
