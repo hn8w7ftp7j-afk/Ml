@@ -783,4 +783,121 @@ console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior g
   assert.equal(renderLive(next).candidates.length,0,'an unrelated render at the exact original expiry cannot retain scores until the next timer');
   for(const cleanup of cleanups)cleanup?.();assert.equal(intervals.size,0);assert.equal(cleanupCount,1);
   console.log('PASS actual workspace clock: real model rows and league badge survive a valid receipt between ticks; future receipts and exact immutable expiry remain rejected, with one stable timer and cleanup.');
+
+  await test('first head reads distinguish partial rankings, failures and a confirmed empty board', async () => {
+    const missingGame = game('102', f.date, f.league);
+    const h = harness({ games: [f.game, missingGame] });
+    wallTime = baseTime + 30000;
+    h.setNow(wallTime);
+    function element(tree, matches) {
+      if (!React.isValidElement(tree)) return null;
+      if (matches(tree)) return tree;
+      for (const child of React.Children.toArray(tree.props.children)) {
+        const found = element(child, matches);
+        if (found) return found;
+      }
+      return null;
+    }
+    function rankedPage(next) {
+      const provider = h.render(next);
+      const workspace = element(provider, node => node.type === h.ctx.SoccerWorkspace);
+      index = 0;
+      const tree = live.SoccerWorkspace(workspace.props);
+      const ranking = element(tree, node => node.type === live.SoccerRanking);
+      const content = live.SoccerRanking(ranking.props);
+      return { progress: plain(workspace.props.readProgress), html: renderToStaticMarkup(content),
+        retry: element(content, node => node.type === 'button' && node.props.children === '重試讀取') };
+    }
+    const assertPending = html => assert.doesNotMatch(html, /目前沒有通過|目前 0 個候選方向/);
+    try {
+      h.mount();
+      const first = rankedPage();
+      assert.deepEqual(first.progress, { total: 2, loaded: 0, failed: 0 });
+      assert.match(first.html, /已載回 0\s*\/\s*2 場/);
+      assertPending(first.html);
+      h.reads[0].respond(head(f.game, old));
+      await flush();
+      const partial = rankedPage();
+      assert.deepEqual(partial.progress, { total: 2, loaded: 1, failed: 0 });
+      assert.match(partial.html, /已載回 1\s*\/\s*2 場/);
+      assert.equal((partial.html.match(/data-soccer-rank-key=/g) || []).length, count,
+        'the first trustworthy candidates remain visible while the other read is pending');
+
+      h.reads[1].respond({ ok: false, error: 'head unavailable' }, 503);
+      await flush();
+      const failure = rankedPage();
+      assert.deepEqual(failure.progress, { total: 2, loaded: 1, failed: 1 });
+      assert.match(failure.html, /讀取失敗/);
+      assert.ok(failure.retry && !failure.retry.props.disabled);
+      assert.equal((failure.html.match(/data-soccer-rank-key=/g) || []).length, count);
+      failure.retry.props.onClick();
+      await flush();
+      assert.equal(h.reads.length, 3, 'retry reads only the failed game');
+      assert.equal(new URL(h.reads[2].url, 'https://fixture.invalid').searchParams.get('eventId'), missingGame.sourceId);
+      assert.equal(h.posts.length, 0, 'first-load retry cannot start a model run');
+      h.reads[2].respond(head(missingGame, null));
+      await flush();
+      const finished = rankedPage();
+      assert.deepEqual(finished.progress, { total: 2, loaded: 2, failed: 0 });
+      assert.doesNotMatch(finished.html, /讀取失敗|重試讀取/);
+      assert.equal((finished.html.match(/data-soccer-rank-key=/g) || []).length, count);
+
+      // Focus drives the normal background GET. Keep displayed results and
+      // first-read completion while the identical scope is refreshed.
+      h.fire('focus');
+      assert.deepEqual(rankedPage().progress, finished.progress);
+      const otherDate = f.date === '2099-01-02' ? '2099-01-03' : '2099-01-02';
+      const moved = { ...f.game, date: otherDate, startTime: otherDate + 'T13:00:00Z' };
+      const newScope = rankedPage({ games: [moved], date: otherDate });
+      assert.deepEqual(newScope.progress, { total: 1, loaded: 0, failed: 0 });
+      assertPending(newScope.html);
+      assert.doesNotMatch(newScope.html, /data-soccer-rank-key=/);
+      h.reads.at(-1).respond(head(moved, null));
+      await flush();
+      const empty = rankedPage();
+      assert.deepEqual(empty.progress, { total: 1, loaded: 1, failed: 0 });
+      assert.match(empty.html, /目前 0 個候選方向/);
+      assert.match(empty.html, /目前沒有通過/);
+      assert.doesNotMatch(empty.html, /讀取失敗|重試讀取/);
+
+      // A confirmed empty response is local to its original match date.
+      // Reusing the same source ID on another date must not inherit that idle state.
+      const timedDate = '2099-01-04';
+      const timedGame = { ...moved, date: timedDate, startTime: timedDate + 'T13:00:00Z' };
+      const timedScope = { games: [timedGame], date: timedGame.date };
+      assertPending(rankedPage(timedScope).html);
+      await h.tick(20000);
+      const timeout = rankedPage();
+      assert.deepEqual(timeout.progress, { total: 1, loaded: 0, failed: 1 });
+      assertPending(timeout.html);
+      assert.match(timeout.html, /讀取失敗/);
+      timeout.retry.props.onClick();
+      await flush();
+      const retriedHead = h.reads.at(-1);
+      const manual = h.render().props.value.run(timedGame);
+      h.posts.at(-1).respond(analysis(timedGame, { revision: 'manual-wins', analysisRunId: 'current-manual-run' }));
+      await manual; await flush();
+      assert.deepEqual(rankedPage().progress, { total: 1, loaded: 1, failed: 0 });
+      retriedHead.respond({ ok: false }, 503); await flush();
+      assert.equal(h.state[0][timedGame.id].data.revision, 'manual-wins');
+      assert.deepEqual(rankedPage().progress, { total: 1, loaded: 1, failed: 0 },
+        'an obsolete head failure cannot revoke a newer completed manual result');
+
+      const failedGame = game('304', moved.date, f.league);
+      rankedPage({ games: [failedGame], date: failedGame.date });
+      const firstRead = h.reads.at(-1), readsBeforeRun = h.reads.length;
+      const failedRun = h.render().props.value.run(failedGame);
+      h.posts.at(-1).respond({ ok: false, error: 'analysis unavailable' }, 503);
+      await failedRun; await flush();
+      firstRead.respond(head(failedGame, null)); await flush();
+      assert.equal(h.reads.length, readsBeforeRun + 1, 'an unsuccessful manual run schedules a new read for the fenced head');
+      assertPending(rankedPage().html);
+      h.reads.at(-1).respond(head(failedGame, null)); await flush();
+      assert.deepEqual(rankedPage().progress, { total: 1, loaded: 1, failed: 0 });
+      const confirmedEmptyScope = rankedPage({ games: [], date: failedGame.date });
+      assert.deepEqual(confirmedEmptyScope.progress, { total: 0, loaded: 0, failed: 0 });
+      assert.match(confirmedEmptyScope.html, /目前範圍沒有未開賽場次/);
+      assert.doesNotMatch(confirmedEmptyScope.html, /目前沒有通過|讀取失敗|重試讀取|已載回/);
+    } finally { h.unmount(); await flush(); }
+  });
 }

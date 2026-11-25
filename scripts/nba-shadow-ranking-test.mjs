@@ -99,10 +99,41 @@ function nodes(value){
 const render=(input,at)=>{uiHook=0;return nodes(sandbox.exports.default({rows:input,date,now:at,onAnalyze:()=>{},busy:false}));};
 const staleUi=render([row],now+180001);
 assert.equal(staleUi.filter(n=>n?.props?.['data-nba-rank-key']).length,8);
-assert.ok(staleUi.includes('上次分析｜盤口待更新'));
+assert.ok(staleUi.includes('上次分析｜歷史盤口'));
 assert.ok(!staleUi.includes('尚無目前盤口的分析結果。'));
 assert.equal(staleUi.filter(n=>n?.type==='BetRecordButton').length,8);
-assert.ok(!render([row],now).includes('上次分析｜盤口待更新'));
+assert.ok(!render([row],now).includes('上次分析｜歷史盤口'));
+// The archived CHI/CHA observation moved from home 1.5 to home 2+50,
+// both at 0.94. Keep the saved score bound to its original quote.
+const savedPrices={...quotes,firstHalfRunline:{line:'1.5',lineSide:'home',homeWater:.94,awayWater:.94}};
+const saved=make(401909318,savedPrices);
+saved.game={...saved.game,status:'scheduled',timeConfirmed:true,home:{...saved.game.home,name:'夏洛特黃蜂'},away:{...saved.game.away,name:'芝加哥公牛'}};
+const latest={...savedPrices,league:'NBA',boardDate:date,marketStatus:'open',home:saved.game.home,away:saved.game.away,
+  marketStates:{firstHalfRunline:'AVAILABLE',fullTotal:'AVAILABLE'},firstHalfRunline:{...savedPrices.firstHalfRunline,line:'2+50'}};
+const changedRow={...saved,quote:latest};
+const historicalHome=(input,at=now)=>{
+  const rowNode=render([input],at).find(node=>node?.props?.['data-nba-rank-key']===`${saved.game.id}:firstHalfRunline:home`);
+  return nodes(rowNode);
+};
+const home=historicalHome(changedRow);
+assert.ok(home.includes('上次分析｜') && home.includes('1.5'));
+assert.ok(home.includes('目前 Reader｜夏洛特黃蜂讓 2+50｜讓方水位 0.94'));
+assert.equal(home.find(node=>node?.type==='BetRecordButton').props.entry.line,'1.5');
+const half=market=>({...changedRow,quote:{...latest,firstHalfRunline:market}});
+assert.ok(historicalHome(half({...savedPrices.firstHalfRunline,homeWater:.99})).includes('目前 Reader｜夏洛特黃蜂讓 1.5｜讓方水位 0.99'));
+assert.ok(historicalHome(half({line:'2+50',lineSide:'away',homeWater:.91,awayWater:1.02})).includes('目前 Reader｜芝加哥公牛讓 2+50｜夏洛特黃蜂受讓水位 0.91'));
+assert.ok(historicalHome(half(null)).includes('目前 Reader｜尚未讀到此市場盤口'));
+const changedTotal={...changedRow,quote:{...latest,fullTotal:{line:'222+30',overWater:.88,underWater:1.02}}};
+assert.ok(render([changedTotal],now).includes('目前 Reader｜大分 222+30｜水位 0.88'));
+assert.ok(render([changedTotal],now).includes('目前 Reader｜小分 222+30｜水位 1.02'));
+assert.ok(historicalHome({...changedRow,canAnalyze:false,quote:{...latest,marketStatus:'locked',availabilityEvidence:'EXPLICIT_SOURCE_LOCK',firstHalfRunline:null}}).includes('目前 Reader｜來源已鎖盤'));
+assert.ok(historicalHome({...changedRow,pageActivityAt:new Date(now-180000).toISOString()}).includes('目前 Reader｜盤口待更新'));
+for(const uncertain of [{...changedRow,readOnly:true},{...changedRow,scheduleVerified:false},
+  {...changedRow,game:{...saved.game,timeConfirmed:false}},{...changedRow,quote:{...latest,home:latest.away}}]){
+  assert.ok(historicalHome(uncertain).includes('目前 Reader｜本場盤口尚未核對'));
+}
+assert.equal(historicalHome(changedRow,Date.parse(saved.game.startTime)).length,0);
+assert.ok(!historicalHome({...changedRow,quote:{...latest,firstHalfRunline:savedPrices.firstHalfRunline}}).includes('上次分析｜'));
 uiView='order';
 const staleOrderUi=render([row],now+180001);
 assert.equal(staleOrderUi.filter(n=>n?.props?.['data-nba-rank-key']).length,buildNbaShadowOrder(previous.entries).flatMap(group=>group.entries).length);

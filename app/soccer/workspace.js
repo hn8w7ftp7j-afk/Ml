@@ -30,10 +30,12 @@ export function SoccerValidationPanel({league}){
     <SoccerModelFamilyPanel league={league}/>
     <p>模型驗證持續收集。預測 S 使用現有資料與模型情境；正式模型驗收狀態另行保留。球員、原盤與分析版本的依據可在各場分析結果內查閱。</p><a href="/soccer/specification">完整分析規格 2.2</a></section>;
 }
-export function SoccerRanking({games,states,run,now,externalBusy=false,onShowResults}){
+export function SoccerRanking({games,states,run,now,externalBusy=false,onShowResults,readProgress,onRetryReads}){
   const [view,setView]=useState('ranking'),[filter,setFilter]=useState('all');
   const ranking=buildSoccerRanking(games,states,{now,market:filter,includePrevious:true}),entries=view==='order'?ranking.order:ranking.entries;
   const previous=view==='order'?ranking.previousOrder:ranking.previousEntries;
+  const incomplete=readProgress&&readProgress.loaded<readProgress.total;
+  const loading=incomplete&&readProgress.loaded+readProgress.failed<readProgress.total;
   const groups=[];
   if(view==='order')for(const [index,entry] of entries.entries()){
     let group=groups.find(value=>value.game.id===entry.game.id);
@@ -48,9 +50,12 @@ export function SoccerRanking({games,states,run,now,externalBusy=false,onShowRes
   </article>;
   return <section className="panel soccerRanking" aria-label="足球分析排名"><div className="rankingViewTabs" aria-label="足球排名檢視"><button className={view==='ranking'?'active':''} aria-pressed={view==='ranking'} onClick={()=>setView('ranking')}>全部排名</button><button className={view==='order'?'active':''} aria-pressed={view==='order'} onClick={()=>setView('order')}>時間順序排名</button></div>
     <h2>{view==='order'?'時間順序排名':'全部排名'}</h2><div className="rankingViewTabs" aria-label="足球排名盤口篩選">{SOCCER_RANK_MARKETS.map(([key,label])=><button key={key} className={filter===key?'active':''} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}</div>
-    <p>{ranking.currentGames} 場分析有效｜目前 {entries.length} 個候選方向{previous.length>0&&`｜上次達標 ${previous.length} 個方向`}</p>
+    {incomplete&&<div role="status"><p>{loading?'正在讀取已保存分析，':''}已載回 {readProgress.loaded}/{readProgress.total} 場{readProgress.failed>0&&`，${readProgress.failed} 場讀取失敗`}。</p>
+      {readProgress.failed>0&&onRetryReads&&<button type="button" className="secondary" onClick={onRetryReads}>重試讀取</button>}</div>}
+    {(!incomplete||entries.length>0||previous.length>0)&&<p>{ranking.currentGames} 場分析有效｜{incomplete?'已載回範圍':'目前'} {entries.length} 個候選方向{previous.length>0&&`｜上次達標 ${previous.length} 個方向`}</p>}
     {view==='order'?groups.map((group,index)=><section className="soccerOrderGame" key={group.game.id} aria-label={`第 ${index+1} 場`}><header className="soccerOrderGameHead"><div><span>第 {index+1} 場</span><strong>{soccerTeamLabel(group.game.home)}（主）對 {soccerTeamLabel(group.game.away)}（客）</strong></div><time dateTime={group.game.startTime}>{time(group.game.startTime)}（台灣）</time></header>{group.entries.map(({entry,index})=>renderEntry(entry,index))}</section>):entries.map(renderEntry)}
-    {!entries.length&&!previous.length&&<div className="emptySmall"><p>目前沒有通過 S／W／R 及目前盤口核對的候選。研究原盤仍可在「分析結果」查閱。</p>{onShowResults&&<button className="secondary" onClick={onShowResults}>查看全部分析分數</button>}</div>}
+    {readProgress?.total===0&&<p>目前範圍沒有未開賽場次。</p>}
+    {!incomplete&&readProgress?.total!==0&&!entries.length&&!previous.length&&<div className="emptySmall"><p>目前沒有通過 S／W／R 及目前盤口核對的候選。研究原盤仍可在「分析結果」查閱。</p>{onShowResults&&<button className="secondary" onClick={onShowResults}>查看全部分析分數</button>}</div>}
     {previous.length>0&&<section aria-label="上次分析｜盤口待更新">
       <h3>上次分析｜盤口待更新</h3>
       <p>以下保留上次達標時的盤口、水位及評分，僅供查閱。</p>
@@ -65,11 +70,11 @@ export function SoccerRanking({games,states,run,now,externalBusy=false,onShowRes
       </article>)}
     </section>}
     <p className="soccerAvailability">同場同期間同盤種只列 EV（W）最高的合格盤口。預測候選・S ≥ 7.2、W／R 為正。完整模型誤差未驗證。</p>
-    {ranking.outdatedGames>0&&<p>{ranking.outdatedGames} 場賽前資料已過期或待核對，請重新核對。</p>}{ranking.pendingGames>0&&<p>{ranking.pendingGames} 場尚無已核對的目前評分。</p>}
+    {ranking.outdatedGames>0&&<p>{ranking.outdatedGames} 場賽前資料已過期或待核對，請重新核對。</p>}{!incomplete&&ranking.pendingGames>0&&<p>{ranking.pendingGames} 場尚無已核對的目前評分。</p>}
     <details className="soccerDetails"><summary>排序與評分說明</summary><p>預測候選維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並通過場次、期間與盤口時效核對。依現有資料預測，缺項及未驗證狀態另行標示。</p><p>全部排名依 S、W、R 排序；時間順序排名依開賽時間分場，同場依全場讓球、全場大小、上半讓球、上半大小排列，每個市場先從合格盤口中選 W 最高的一筆，W 相同時依 R、固定盤口識別排序。其他原盤保留在分析結果。場次與方向序號分開顯示。</p></details>
   </section>;
 }
-export default function SoccerWorkspace({games,states,run,league,date,children,analysisReady=true,onHighScoreStatusChange,externalBusy=false}){
+export default function SoccerWorkspace({games,states,run,league,date,children,analysisReady=true,onHighScoreStatusChange,externalBusy=false,readProgress,onRetryReads}){
   const [view,setView]=useState('board'),[,setClockTick]=useState(0);
   // A newly received proof can be newer than the last timer tick. Validate it
   // against this render's real clock; the timer only refreshes idle screens.
@@ -79,7 +84,7 @@ export default function SoccerWorkspace({games,states,run,league,date,children,a
   const dates=[...new Set([date,...games.map(g=>g.date)])].sort();
   const reminder=onHighScoreStatusChange?soccerHighScoreCandidates(games,states,{league,date,through:dates.at(-1),now,analysisReady}):null;
   return <SoccerRecordProvider league={league} date={dates[0]} through={dates.at(-1)} dates={dates} summaryDate={date} candidates={reminder?.candidates||[]} analysisReady={reminder?.analysisReady??analysisReady} onHighScoreStatusChange={onHighScoreStatusChange}><nav className="mainTabs soccerWorkspaceTabs" aria-label="足球主站功能">{[['board','盤口'],['results','分析結果'],['ranking','排名'],['records','下注紀錄'],['data','賽程與球員'],['validation','模型驗證']].map(([key,label])=><button key={key} className={view===key?'active':''} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>
-    {view==='ranking'&&<SoccerRanking games={games} states={states} run={run} now={now} externalBusy={externalBusy} onShowResults={()=>setView('results')}/>}
+    {view==='ranking'&&<SoccerRanking games={games} states={states} run={run} now={now} externalBusy={externalBusy} readProgress={readProgress} onRetryReads={onRetryReads} onShowResults={()=>setView('results')}/>}
     {view==='records'&&<SoccerBetRecords/>}
     {view==='results'&&<section className="panel"><h2>{name}｜分析結果</h2><p>已載入分析 {games.filter(g=>states[g.id]?.data).length}／{games.length} 場。展開各場查看八方向原盤、比分研究與核對紀錄。</p></section>}
     {view==='validation'&&<SoccerValidationPanel league={league}/>}
