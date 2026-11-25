@@ -108,6 +108,9 @@ await test('mount restores saved current analysis with GET only and at most two 
   const games = [game('101'), game('102'), game('103')], h = harness({ games });
   try {
     h.mount(); assert.equal(h.reads.length, 2); assert.equal(h.posts.length, 0);
+    assert.equal(h.counts().restoring,3,'includes games still waiting for a head-read worker');
+    assert.equal(h.counts().waiting,0); assert.equal(h.counts().processing,0);
+    assert.equal(h.ctx.soccerAnalysisPresentation(undefined,now,games[2]).analysisLabel,'正在讀取已保存分析');
     h.reads[0].respond(head(games[0])); await flush(); assert.equal(h.reads.length, 3);
     h.reads[1].respond(head(games[1])); h.reads[2].respond(head(games[2])); await flush();
     assert.equal(h.counts().completed, 3); assert.equal(h.counts().research, 3); assert.equal(h.counts().candidates, 0);
@@ -115,6 +118,26 @@ await test('mount restores saved current analysis with GET only and at most two 
     assert.match(renderToStaticMarkup(h.render()), /載入已保存分析/);
     for (const call of h.reads) { assert.equal(call.options.cache, 'no-store'); assert.ok(call.options.signal); }
   } finally { h.unmount(); await flush(); }
+});
+
+await test('initial head timeout is distinct from no saved result, manual failure and unmount', async () => {
+  const row=game(),h=harness({games:[row]});
+  try {
+    h.mount(); await h.tick(20000);
+    assert.equal(h.counts().restoring,0); assert.equal(h.counts().recoveryFailed,1);
+    assert.equal(h.counts().waiting,0); assert.equal(h.counts().failed,0);
+    assert.match(h.state[0][row.id].recoveryError,/逾時/);
+    assert.equal(h.ctx.soccerAnalysisPresentation(h.state[0][row.id],now,row).analysisStatus,'RECOVERY_FAILED');
+    h.render(); h.fire('focus'); await flush();
+    assert.equal(h.counts().restoring,1); assert.equal(h.counts().recoveryFailed,0);
+    h.reads[1].respond({ok:true,gameId:row.id,league:row.league,date:row.date,versions:[],runs:[]}); await flush();
+    assert.equal(h.counts().restoring,0); assert.equal(h.counts().waiting,1);
+    assert.equal(h.ctx.soccerAnalysisPresentation(h.state[0][row.id],now,row).analysisStatus,'NOT_STARTED');
+    assert.equal(h.posts.length,0);
+  } finally {h.unmount(); await flush();}
+  const abandoned=harness({games:[row]});
+  abandoned.mount(); abandoned.unmount(); await flush();
+  assert.equal(abandoned.state[0][row.id],undefined,'cleanup abort must not report a read failure');
 });
 
 await test('first load and immediate manual recovery retain read-only archive separately from the live payload', async () => {
