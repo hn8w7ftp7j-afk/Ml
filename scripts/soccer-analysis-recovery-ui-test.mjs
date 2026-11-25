@@ -751,7 +751,7 @@ console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior g
   const arrival=renderLive(next);
   assert.equal(arrival.candidates.length,count,'arrival must immediately update the league badge without waiting for a timer tick');
   assert.equal((arrival.html.match(/class="soccerRankRow"/g)||[]).length,count,'the actual ranking JSX must use the same current render time');
-  assert.match(arrival.html,new RegExp(`1 場目前分析｜${count} 個候選方向`));
+  assert.match(arrival.html,new RegExp(`1 場分析有效｜目前 ${count} 個候選方向`));
   assert.equal(timerCount,1,'payload re-renders never restart the clock interval');
   assert.equal(cleanupCount,0);
   const future=published('c',wallTime+1);

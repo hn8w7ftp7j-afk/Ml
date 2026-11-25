@@ -152,6 +152,8 @@ try {
     'two continuation workers use one scope/refresh lease at the exact due time');
   assert.equal(calls.length, initialCalls + 1);
   assert.equal(calls.at(-1), rawGames[1].id, 'the earlier game wakes before the later game');
+  const renewalCursor = await query('SELECT last_game_id FROM sports_soccer_reader_analysis_cursor_v1 WHERE league=$1 AND board_date=$2::date', [f.league, f.date]);
+  assert.equal(renewalCursor[0].last_game_id, board.games.find(game => game.sourceId === calls.at(-1)).id, 'same-price renewals advance the same cursor as first captures');
   assert.equal(enqueueCount, uploadCount, 'the wake consumes the already stored fresh observation without another POST');
   for (const old of originalRows) assert.deepEqual((await query('SELECT payload FROM sports_soccer_analysis_v1 WHERE analysis_hash=$1', [old.analysis_hash]))[0].payload, old.payload,
     'waking never extends or rewrites immutable evidence');

@@ -78,6 +78,56 @@ try{
  await query("UPDATE sports_soccer_reader_analysis_queue_v1 SET lease_token='other-worker',lease_until=clock_timestamp()+interval '120 seconds'");
  const held=await drainSoccerReaderAnalysis(deps);assert.equal(held.checked,0);assert.equal(held.continuation.needed,true);assert.equal(held.continuation.reason,'SCOPE_LEASE_HELD');
  assert.ok(held.continuation.delayMs>100000,'zero work under another active lease does not report completion');
+ // Seven games at unchanged prices, two still failing after their real retry interval.
+ // When each pass can fund two analyses, repeatedly starting at the head starves games 5–7.
+ await reset();
+ await query('DELETE FROM sports_soccer_reader_analysis_cursor_v1');
+ const slate=games.slice(0,7),attempted=[];
+ let available=slate,priceTick=0;
+ const nextUpload=async(changed=false)=>{
+   if(changed){priceTick++;for(const row of reader.games)row.markets[0].overWater=.8+priceTick/100;}
+   await enqueueSoccerReaderAnalysis(league,date,{query});
+ };
+ const fairDeps={...deps,maxGames:2,
+   schedule:async()=>({...await schedule(),games:available}),
+   analyze:async input=>{
+     attempted.push(input.eventId);
+     if(input.eventId===slate[1].sourceId||input.eventId===slate[3].sourceId)throw Error('synthetic failed analysis');
+     return normalAnalyze(input);
+   }};
+ const cursor=async()=>(await query('SELECT last_game_id FROM sports_soccer_reader_analysis_cursor_v1 WHERE league=$1 AND board_date=$2::date',[league,date]))[0]?.last_game_id;
+ await query(`INSERT INTO sports_soccer_reader_analysis_cursor_v1 VALUES ('epl',$1,'other-league'),('ucl',$1::date-1,'other-date')`,[date]);
+ await nextUpload();
+ const firstPair=await drainSoccerReaderAnalysis(fairDeps);
+ assert.equal(firstPair.captured,1);assert.equal(firstPair.retryable,1);
+ assert.equal(firstPair.continuation.delayMs,0,'a failed game cannot delay other unvisited games');
+ assert.equal(await cursor(),slate[1].id,'an unsuccessful expensive attempt also advances the turn');
+ available=slate.slice().reverse();
+ for(let pass=0;pass<3;pass++){
+   logicalNow+=21000;
+   await query("UPDATE sports_soccer_reader_analysis_claims_v1 SET lease_until=clock_timestamp()-interval '1 second' WHERE state='RETRYABLE'");
+   await nextUpload();await drainSoccerReaderAnalysis(fairDeps);
+ }
+ assert.deepEqual(attempted.slice(0,7),slate.map(g=>g.sourceId),'the same seven games get a turn before any failure repeats');
+ assert.equal(attempted[7],slate[1].sourceId,'wrap-around skips a captured unchanged quote and retries the first eligible game');
+ available=available.filter(g=>g!==slate[1]);
+ await nextUpload(true);await drainSoccerReaderAnalysis(fairDeps);
+ assert.deepEqual(attempted.slice(8),[slate[2].sourceId,slate[3].sourceId],'a removed cursor and changed prices resume at the next stable game');
+ assert.equal((await query("SELECT count(*)::int n FROM sports_soccer_reader_analysis_cursor_v1 WHERE last_game_id IN ('other-league','other-date')"))[0].n,2);
+ const lastAttempt=await cursor(),beforeLost=attempted.length;
+ await nextUpload(true);
+ let replaced=false;
+ const takenOver=async(sql,params)=>{
+   if(!replaced&&sql.includes('INSERT INTO sports_soccer_reader_analysis_cursor_v1')){
+     replaced=true;
+     await query("UPDATE sports_soccer_reader_analysis_queue_v1 SET lease_token='new-owner' WHERE league=$1 AND board_date=$2::date",[league,date]);
+   }
+   return query(sql,params);
+ };
+ await drainSoccerReaderAnalysis({...fairDeps,query:takenOver});
+ assert.ok(replaced);assert.equal(await cursor(),lastAttempt,'an old scope lease cannot advance the cursor');
+ assert.equal(attempted.length,beforeLost,'an old worker cannot launch a new analysis after losing its lease');
+ assert.equal((await query("SELECT count(*)::int n FROM sports_soccer_reader_analysis_claims_v1 WHERE last_reason='SCOPE_LEASE_LOST' AND state='RETRYABLE' AND lease_until<=clock_timestamp()"))[0].n,1,'the unused game claim is available to the new owner');
  let failureClock=initial,attempts=0;
  const fixedState={startedAt:initial,deadlineAt:initial+180000};
  const failureDeps={now:()=>failureClock,drain:async()=>{attempts++;return{continuation:{needed:true,delayMs:20000,league,date,reason:'SERVER_INPUT_OR_STORAGE_UNAVAILABLE'}};}};
