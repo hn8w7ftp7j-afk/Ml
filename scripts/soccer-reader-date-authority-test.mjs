@@ -61,12 +61,15 @@ const invalid = board('EPL', ['10-25', '10-26']); invalid.tables[0].rows[1].cell
 assert.equal(select([invalid]).ok, false, 'an invalid row on another date cannot be hidden by date projection');
 
 class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } }
-async function workerFlow(captures, { persist = null, selector = selectAuthoritativeSoccerBoards } = {}) {
+async function workerFlow(captures, { persist = null, selector = selectAuthoritativeSoccerBoards, silentTab = false } = {}) {
   const event = { addListener() {} }, state = { readerToken: 'synthetic-date-token', deviceId: 'synthetic-date-device' }, uploads = [];
   const tabs = captures.map((_capture, index) => ({ id: index + 1, active: index === 0, lastAccessed: index + 1 }));
+  if (silentTab) tabs.push({ id: captures.length + 1 });
   const chrome = { runtime: { onInstalled: event, onStartup: event, onMessage: event }, alarms: { onAlarm: event },
-    tabs: { onUpdated: event, query: async () => tabs, sendMessage: async tabId => ({ ok: true,
-      capture: { readerVersion: version, captures: [captures[tabId - 1]] } }) },
+    tabs: { onUpdated: event, query: async () => tabs, reload: async () => {}, sendMessage: async tabId => {
+      if (!captures[tabId - 1]) throw new Error('Frame disconnected');
+      return { ok: true, capture: { readerVersion: version, captures: [captures[tabId - 1]] } };
+    } },
     webNavigation: { getAllFrames: async () => [{ frameId: 0 }] },
     storage: { local: { get: async () => structuredClone(state), set: async value => Object.assign(state, structuredClone(value)), remove: async () => {} } } };
   const worker = vm.createContext({ chrome, Date: Clock, URL, setTimeout, clearTimeout, queueMicrotask,
@@ -99,6 +102,10 @@ for (const league of ['EPL', 'UCL']) {
 const conflictFlow = await workerFlow([ft, tomorrow, board('EPL', ['10-25'], { water: '0.96' })]);
 assert.equal(conflictFlow.first.ok, false); assert.equal(conflictFlow.uploads.length, 0);
 assert.equal(conflictFlow.state.readerStatuses.EPL.diagnosticCode, 'conflicting-duplicate-tabs');
+const isolated = await workerFlow([ft, board('EPL', ['10-25'], { water: '0.96' }), board('UCL', ['10-25'])], { silentTab: true });
+assert.equal(isolated.state.readerStatuses.EPL.diagnosticCode, 'conflicting-duplicate-tabs');
+assert.deepEqual(isolated.uploads.map(body => body.league), ['UCL'],
+  'recovering a separate silent tab must preserve both conflict checks and valid unrelated league saves');
 const noDates = await workerFlow([ft], { selector: (...args) => {
   const result = selectAuthoritativeSoccerBoards(...args); return { ...result, selections: result.selections.map(({ sourceScopes, ...row }) => row) };
 } });

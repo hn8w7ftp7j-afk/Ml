@@ -6,7 +6,7 @@ import { createMarketOutbox, MARKET_ARCHIVE_ALARM } from './market-outbox.js';
 import { createSeenCaptureOutbox, SEEN_CAPTURE_ALARM } from './seen-outbox.js';
 import { recoverNbaConflict, NBA_CONFLICT_RECOVERY_KEY } from './nba-conflict-recovery.js';
 
-const VERSION = '2.1.62';
+const VERSION = '2.1.63';
 const ORIGIN = 'https://mlb-positive-ev.vercel.app';
 const PATTERNS = ['https://*.tai888.in/*', 'https://tai888.in/*'];
 const LEAGUES = ['MLB', 'NPB', 'KBO', 'CPBL', 'NBA', 'NHL', 'EPL', 'UCL'];
@@ -19,7 +19,7 @@ function getSeenOutbox() { return seenOutbox ||= createSeenCaptureOutbox({storag
       Authorization:`Bearer ${stored.readerToken}`,'Content-Type':'application/json',
       'X-Device-Id':stored.deviceId,'X-Reader-Version':wire.evidence.readerVersion,
     },body:JSON.stringify(wire)},8000);
-    const receipt=await json(response);
+    const receipt=response.data;
     if(!response.ok)throw Object.assign(new Error('SEEN_UPLOAD_FAILED'),{status:response.status});
     return receipt;
   },
@@ -43,7 +43,7 @@ function getMarketOutbox() { return marketOutbox ||= createMarketOutbox({ storag
       Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json',
       'X-Device-Id': stored.deviceId, 'X-Reader-Version': payload.readerVersion,
     }, body: JSON.stringify({ schema: 'READER-CAPTURE-ARCHIVE-v1', payload: { ...payload, deviceId: stored.deviceId } }) }, 8000);
-    const receipt = await json(response);
+    const receipt = response.data;
     if (!response.ok) throw Object.assign(new Error('MARKET_ARCHIVE_UPLOAD_FAILED'), { status: response.status });
     return receipt;
   },
@@ -57,7 +57,7 @@ function getDiagnosticOutbox() { return diagnosticOutbox ||= createDiagnosticOut
     Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json',
     'X-Device-Id': stored.deviceId, 'X-Reader-Version': VERSION,
   }, body: JSON.stringify(report) }, 8000);
-  const receipt = await json(response);
+  const receipt = response.data;
   if (!response.ok) throw Object.assign(new Error('DIAGNOSTIC_UPLOAD_FAILED'), { status: response.status });
   return receipt;
 } }); }
@@ -70,9 +70,7 @@ function syncExceptionCode(error) {
     : error?.name === 'TypeError' ? 'NETWORK_ERROR' : 'SYNC_EXCEPTION';
 }
 let running;
-let pendingRerun = false;
-let pendingReason = 'mutation';
-let pendingPreferredTabId = null;
+let pendingRerun;
 let mutationTimer;
 const recoveryCooldownByTab = new Map();
 const RECOVERY_COOLDOWN_MS = 90_000;
@@ -162,7 +160,10 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (message?.type === 'GET_READER_STATUS') { readerStatus().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'GET_READER_DIAGNOSTICS') { readerDiagnostics().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
   if (message?.type === 'REPAIR_READER') { repairReader().then(reply).catch(error => reply({ ok: false, error: error.message })); return true; }
-  if (message?.type === 'SET_AUTO_ENABLED') { chrome.storage.local.set({ autoEnabled: Boolean(message.enabled) }).then(async () => { await ensureAlarm(); reply({ ok: true, enabled: Boolean(message.enabled) }); }); return true; }
+  if (message?.type === 'SET_AUTO_ENABLED') {
+    setAutoEnabled(Boolean(message.enabled)).then(reply).catch(error => reply({ ok: false, error: error.message }));
+    return true;
+  }
   if (message?.type === 'TAI888_BOARD_MUTATED') { const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null; clearTimeout(mutationTimer); mutationTimer = setTimeout(() => syncNow('mutation', preferredTabId).catch(() => {}), 3500); }
   if (message?.type === 'TAI888_FRAME_READY') { const preferredTabId = sender?.tab?.active === true ? sender.tab.id : null; clearTimeout(mutationTimer); mutationTimer = setTimeout(() => syncNow('frame-ready', preferredTabId).catch(() => {}), 1800); }
 });
@@ -171,6 +172,21 @@ async function ensureAlarm() {
   const { autoEnabled = true } = await chrome.storage.local.get('autoEnabled');
   await chrome.alarms.clear(ALARM);
   if (autoEnabled) await chrome.alarms.create(ALARM, { delayInMinutes: .5, periodInMinutes: 1 });
+}
+async function setAutoEnabled(enabled) {
+  await chrome.storage.local.set({ autoEnabled: enabled });
+  await ensureAlarm();
+  try {
+    const { readerToken, deviceId } = await chrome.storage.local.get(['readerToken', 'deviceId']);
+    if (readerToken && deviceId) {
+      const outbox = getDiagnosticOutbox();
+      await outbox.enqueue({ schema: DIAGNOSTIC_SCHEMA, reportId: crypto.randomUUID(),
+        readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(), createdAt: new Date().toISOString(),
+        syncTrigger: 'auto-setting', autoEnabled: enabled });
+      outbox.flush().catch(() => {});
+    }
+  } catch { /* The setting still applies when diagnostic storage is unavailable. */ }
+  return { ok: true, enabled };
 }
 function safeUrl(value) { try { const url = new URL(String(value || '')); const host = url.hostname.toLowerCase(); if (url.protocol !== 'https:' || (host !== 'tai888.in' && !host.endsWith('.tai888.in'))) return ''; return `${url.origin}${url.pathname}${/^#\/BS(?:$|[/?&])/i.test(url.hash) ? '#/BS' : ''}`.slice(0, 500); } catch { return ''; } }
 function safeHost(value) { try { const host = new URL(String(value || '')).hostname.toLowerCase(); return host === 'tai888.in' || host.endsWith('.tai888.in') ? host : ''; } catch { return ''; } }
@@ -352,10 +368,30 @@ function extensionManifestVersion() {
   try { const version = chrome.runtime.getManifest?.()?.version; return typeof version === 'string' && /^\d+(?:\.\d+){1,3}$/.test(version) ? version : null; }
   catch { return null; }
 }
-async function request(url, options, timeout = 45000) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeout); try { return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' }); } finally { clearTimeout(timer); } }
-async function json(response) { const text = await response.text(); try { return JSON.parse(text); } catch { throw new Error(`主系統回傳格式錯誤（${response.status}）`); } }
+async function request(url, options, timeout = 45000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+    const text = await response.text();
+    try { return { ok: response.ok, status: response.status, data: JSON.parse(text) }; }
+    catch { throw new Error(`主系統回傳格式錯誤（${response.status}）`); }
+  } finally { clearTimeout(timer); }
+}
 async function sha(value) { const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value))); return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join(''); }
 function wait(milliseconds) { return new Promise(resolve => setTimeout(resolve, milliseconds)); }
+
+// A frozen renderer can keep the message port open without ever replying.
+// Ignore a late reply once the frame is recorded as unresponsive for this scan.
+async function messageFrame(tabId, frameId, type) {
+  let timer;
+  try {
+    return await Promise.race([
+      chrome.tabs.sendMessage(tabId, { type }, { frameId }),
+      new Promise(resolve => { timer = setTimeout(() => resolve(null), 8_000); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
 
 async function collectCandidates(tabs) {
   const candidates = [];
@@ -365,7 +401,7 @@ async function collectCandidates(tabs) {
     let responded = false;
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0, url: tab.url }]);
     for (const frame of frames || []) try {
-      const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_CAPTURE_BASEBALL_TABLE' }, { frameId: frame.frameId });
+      const answer = await messageFrame(tab.id, frame.frameId, 'TAI888_CAPTURE_BASEBALL_TABLE');
       // Legacy content may not have direct pre-normalization storage. Preserve
       // its returned sport cells before version, parse or authority rejection.
       if(answer?.capture?.seenCaptureVersion!=='READER-SEEN-CAPTURE-v1') {
@@ -511,7 +547,7 @@ async function recoverTabs(tabs, tabIds, { force = false } = {}) {
     recoveryCooldownByTab.set(tab.id, Date.now());
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => [{ frameId: 0 }]);
     for (const frame of frames || []) try {
-      const answer = await chrome.tabs.sendMessage(tab.id, { type: 'TAI888_READER_RECOVER' }, { frameId: frame.frameId });
+      const answer = await messageFrame(tab.id, frame.frameId, 'TAI888_READER_RECOVER');
       requested = requested || answer?.ok === true;
     } catch {}
   }
@@ -523,26 +559,29 @@ async function pair(password, deviceName) {
   const current = await chrome.storage.local.get('deviceId'); const deviceId = current.deviceId || crypto.randomUUID();
   await chrome.storage.local.set({ deviceId });
   const response = await request(`${ORIGIN}/api/reader/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Reader-Version': VERSION }, body: JSON.stringify({ deviceId, deviceName: String(deviceName || 'Tai888 Reader PC').slice(0, 80), password: String(password || '') }) }, 20000);
-  const data = await json(response); if (!response.ok || !data.ok) throw new Error(data.error || `配對失敗（${response.status}）`);
+  const data = response.data; if (!response.ok || !data.ok) throw new Error(data.error || `配對失敗（${response.status}）`);
   await chrome.storage.local.set({ readerToken: data.token, pairedAt: Date.now(), autoEnabled: true, pairError: '', readerStatuses: {}, lastSuccessfulPayloadHashes: {}, lastSuccessfulSyncAts: {} });
   await ensureAlarm();
   try { return { ok: true, paired: true, syncOk: true, message: data.message, sync: await syncNow('paired') }; } catch (error) { return { ok: true, paired: true, syncOk: false, message: `配對完成，但首次讀盤未成功：${error.message}` }; }
 }
 async function syncNow(reason, preferredTabId = null) {
   if (running) {
-    pendingRerun = true;
-    pendingReason = reason || 'mutation';
-    if (preferredTabId != null) pendingPreferredTabId = preferredTabId;
-    return running;
+    if (!pendingRerun) {
+      let resolve;
+      const result = new Promise(done => { resolve = done; });
+      pendingRerun = { reason, preferredTabId, result, resolve };
+    } else if (reason === 'manual' || pendingRerun.reason !== 'manual') {
+      pendingRerun.reason = reason;
+      if (reason === 'manual' || preferredTabId != null) pendingRerun.preferredTabId = preferredTabId;
+    }
+    return pendingRerun.result;
   }
   running = performSync(reason, preferredTabId).finally(() => {
     running = null;
     if (pendingRerun) {
-      const rerunReason = pendingReason;
-      const rerunTabId = pendingPreferredTabId;
-      pendingRerun = false;
-      pendingPreferredTabId = null;
-      queueMicrotask(() => syncNow(rerunReason, rerunTabId).catch(() => {}));
+      const next = pendingRerun;
+      pendingRerun = null;
+      next.resolve(syncNow(next.reason, next.preferredTabId));
     }
   });
   return running;
@@ -561,7 +600,7 @@ async function performSync(reason, preferredTabId) {
     // Diagnostics use an independent endpoint and never authorize a failed
     // board. Do not let diagnostic/storage/network failure break market sync.
     try {
-      const stored = await chrome.storage.local.get(['readerToken', 'readerStatuses', 'deviceId', 'pairedAt']);
+      const stored = await chrome.storage.local.get(['readerToken', 'readerStatuses', 'deviceId', 'pairedAt', 'autoEnabled']);
       if (stored.deviceId && stored.pairedAt && !(reason !== 'manual' && context.skipped)) {
         const leagues = {};
         for (const league of LEAGUES) {
@@ -574,7 +613,7 @@ async function performSync(reason, preferredTabId) {
         }
         await getDiagnosticOutbox().enqueue({ schema: DIAGNOSTIC_SCHEMA, reportId: crypto.randomUUID(),
           readerVersion: VERSION, extensionManifestVersion: extensionManifestVersion(),
-          createdAt: new Date().toISOString(), tabCount: context.tabCount,
+          createdAt: new Date().toISOString(), autoEnabled: stored.autoEnabled !== false, syncTrigger: reason, tabCount: context.tabCount,
           silentTabCount: context.silentTabCount, exceptionCode, leagues,
           seenCaptureDelivery:await getSeenOutbox().status() });
         await getDiagnosticOutbox().flush();
@@ -602,7 +641,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
     for (const tabId of scan.silentTabIds) {
       try { await chrome.tabs.reload(tabId); reloaded += 1; } catch {}
     }
-    if (reloaded) {
+    if (reloaded && !scan.candidates.length) {
       const message = `已更新 ${reloaded} 個分頁內的 Reader 程式，頁面載入後會自動重新讀取。`;
       await chrome.storage.local.set({ readerStatuses: Object.fromEntries(LEAGUES.map(league => [league, { ok: false, state: 'idle', league, message, readerVersion: VERSION }])) });
       return { ok: false, message };
@@ -704,7 +743,7 @@ async function performSyncAttempt(reason, preferredTabId, context) {
         const endpoint = ['EPL','UCL'].includes(league) ? '/api/soccer/reader' : league === 'NHL' ? '/api/nhl/reader' : league === 'NBA' ? '/api/nba/reader' : '/api/reader/ingest';
         const wirePayload = league === 'NHL' ? nhlReaderEvidencePayload(payload) : payload;
         const response = await request(`${ORIGIN}${endpoint}`, { method: 'POST', headers: { Authorization: `Bearer ${stored.readerToken}`, 'Content-Type': 'application/json', 'X-Reader-Version': VERSION, 'X-Device-Id': stored.deviceId }, body: JSON.stringify(wirePayload) });
-        const data = await json(response); if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw Object.assign(new Error('Reader 配對已過期，請重新配對'), { status: 401 }); } if (!response.ok || !data.ok) throw Object.assign(new Error(data.error || `同步失敗（${response.status}）`), { status: response.status });
+        const data = response.data; if (response.status === 401) { await chrome.storage.local.remove('readerToken'); throw Object.assign(new Error('Reader 配對已過期，請重新配對'), { status: 401 }); } if (!response.ok || !data.ok) throw Object.assign(new Error(data.error || `同步失敗（${response.status}）`), { status: response.status });
         const saveReceipt = confirmedReaderSaveReceipt(data, payload, payloadHash);
         if (soccer) confirmedSoccerScopes.push(...periodsCovered.map(period =>
           `${SOCCER_CONFLICT_RECOVERY_PREFIX}${league}:${payload.boardDate}:${period}`));

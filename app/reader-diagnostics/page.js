@@ -8,6 +8,8 @@ const reasons = { 'no-complete-tab': '盤面檢查未通過', 'no-parsed-games':
   'conflicting-duplicate-frames': '同頁框架盤口衝突', 'conflicting-duplicate-tabs': '不同分頁盤口衝突',
   NETWORK_ERROR: '上傳連線失敗', TIMEOUT: '上傳逾時', SYNC_EXCEPTION: '同步程式例外' };
 const periods = { FT: '全場', HT: '上半場', UNKNOWN: '期間待確認' };
+const syncTriggers = { 'auto-setting': '變更同步設定', alarm: '定時同步', 'tab-loaded': '盤面分頁載入',
+  mutation: '盤面內容變動', 'frame-ready': '盤面框架就緒', paired: '完成配對', manual: 'Reader 視窗要求同步' };
 const differenceTypes = { PRICE: '水位不同', STATE: '開盤／鎖盤不同', GAME_ONLY_LEFT: '只有前一盤面有此場', GAME_ONLY_RIGHT: '只有後一盤面有此場', CONTRACT_ONLY_LEFT: '只有前一盤面有此盤', CONTRACT_ONLY_RIGHT: '只有後一盤面有此盤' };
 const fields = { awayWater: '客隊水位', homeWater: '主隊水位', overWater: '大球水位', underWater: '小球水位', drawWater: '和局水位', line: '盤線', lineSide: '讓球方', marketStatus: '盤口狀態' };
 const values = { home: '主隊', away: '客隊', open: '開盤', locked: '鎖盤' };
@@ -32,14 +34,18 @@ export default function ReaderDiagnosticsPage() {
     <h1>Reader 自動診斷</h1>
     <p>盤口未通過也會回傳原因。以下為已收到的紀錄，保留 14 天；電腦離線或 Reader 未啟動時，無法即時收到。</p>
     <form style={{ ...panel, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end' }} onSubmit={event => { event.preventDefault(); setDeviceQuery(device.trim()); setReload(value => value + 1); }}>
-      <label>聯盟<br /><select value={league} onChange={event => setLeague(event.target.value)} style={{ padding: 10 }}><option value="">全部</option>{leagues.map(id => <option key={id}>{id}</option>)}</select></label>
+      <label>聯盟<br /><select value={league} onChange={event => setLeague(event.target.value)} style={{ padding: 10 }}><option value="">全部（含裝置設定）</option>{leagues.map(id => <option key={id}>{id}</option>)}</select></label>
       <label style={{ flex: '1 1 220px' }}>裝置識別碼（可留空）<br /><input style={{ padding: 10, width: '100%', boxSizing: 'border-box' }} value={device} onChange={event => setDevice(event.target.value)} maxLength={100} /></label>
       <button type="submit" style={{ padding: '10px 18px' }} disabled={loading}>重新查詢</button>
     </form>
     <div role="status">{loading ? '讀取診斷中…' : error || (!reports.length ? '目前沒有符合條件的診斷紀錄。尚不能判定 Reader 正常。' : `最近 ${reports.length} 筆回報`)}</div>
     {!loading && reports.map(record => <article key={record.report_id} style={panel}>
       <h2 style={{ fontSize: 18 }}>Reader {record.payload.readerVersion}｜{new Date(record.received_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</h2>
-      <p style={{ overflowWrap: 'anywhere', fontSize: 13 }}>裝置：{record.device_id}<br />回報：{record.report_id}<br />電腦記錄時間：{new Date(record.payload.createdAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}<br />分頁 {record.payload.tabCount}，未連線 {record.payload.silentTabCount}</p>
+      <p style={{ overflowWrap: 'anywhere', fontSize: 13 }}>裝置：{record.device_id}<br />回報：{record.report_id}<br />電腦記錄時間：{new Date(record.payload.createdAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+        {typeof record.payload.autoEnabled === 'boolean' && <><br />自動同步{record.payload.autoEnabled ? '已開啟' : '已暫停'}</>}
+        {syncTriggers[record.payload.syncTrigger] && <>｜{syncTriggers[record.payload.syncTrigger]}</>}
+        {record.payload.syncTrigger !== 'auto-setting' && <><br />分頁 {record.payload.tabCount}，未連線 {record.payload.silentTabCount}</>}
+      </p>
       {record.payload.exceptionCode && <p>同步例外：{reasons[record.payload.exceptionCode] || record.payload.exceptionCode}</p>}
       {Object.entries(record.payload.leagues || {}).filter(([id]) => !league || id === league).map(([id, row]) => <section key={id} style={{ borderTop: '1px solid #33465c', paddingTop: 10, marginTop: 10 }}>
         <strong>{id}｜{row.state === 'synced' && record.computedCoverage?.[id]?.status === 'PARTIAL' ? '已同步部分盤口｜缺漏待查' : states[row.state] || row.state}</strong>
