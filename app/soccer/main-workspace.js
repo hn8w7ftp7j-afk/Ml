@@ -142,6 +142,7 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
   const [failure, setFailure] = useState(null);
   const [refresh, setRefresh] = useState(0);
   const [leagueBatchRequest, setLeagueBatchRequest] = useState(null);
+  const [historyRequested, setHistoryRequested] = useState(false);
   const batchSequence = useRef(0);
   const generation = useRef(0);
   const opened = useRef(false), appliedRuns = useRef(new Set()), manualRun = useRef(''), entryRun = useRef(null);
@@ -261,6 +262,8 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
     scopeCallback.current?.({ ...location, runId: location.runId || '' });
   }, [active, location.league, location.date, location.view, location.runId]);
 
+  useEffect(() => { if (!active) setHistoryRequested(false); }, [active]);
+
   // A previous click must not replay when an old date/view is mounted again.
   useEffect(() => { setLeagueBatchRequest(null); }, [key]);
 
@@ -313,7 +316,18 @@ export default function SoccerMainWorkspace({ active = true, embedded = false, s
       <p className="soccerAvailability">依現有資料預測・完整模型誤差尚未驗證</p>
       <details className="soccerDetails soccerUsageDetails"><summary>分析說明與模型驗證狀態</summary><p className="soccerAvailability">依現有資料預測；缺項已標示。有效原盤可計算預測 S 與模型情境 R，沿用既定派彩、退水及評分公式；完整模型誤差尚未驗證。未同步原盤時，可先分析賽事，再使用手動盤口試算。<Link prefetch={false} href="/soccer/specification">分析規格 2.2</Link></p>{board && <SoccerSystemReadiness value={board.scoringSystemReadiness} league={location.league.toLowerCase()}/>}</details>
     </section>
-    {active && <><SoccerReaderBoards league={location.league} date={location.date} games={games} view={location.view} readerDates={readerDates}/><details className="panel soccerDetails soccerSourceDetails"><summary>歷史原盤與資料覆蓋</summary><SoccerReaderInventoryPanel league={location.league} date={location.date} throughDate={soccerReaderBoardDates({league:location.league,date:location.date,games,view:location.view,readerDates}).at(-1)||location.date} onSelectDate={savedDate=>navigate({...location,date:savedDate,view:'schedule'})}/><SoccerOfficialMarketCoveragePanel league={location.league.toLowerCase()} date={location.date} active={active}/></details></>}
+    {active && <>
+      <SoccerReaderBoards league={location.league} date={location.date} games={games} view={location.view} readerDates={readerDates}/>
+      <details className="panel soccerDetails soccerSourceDetails" onToggle={event => {
+        if (event.target === event.currentTarget && event.currentTarget.open) setHistoryRequested(true);
+      }}>
+        <summary>歷史原盤與資料覆蓋</summary>
+        {historyRequested && <>
+          <SoccerReaderInventoryPanel league={location.league} date={location.date} throughDate={soccerReaderBoardDates({league:location.league,date:location.date,games,view:location.view,readerDates}).at(-1)||location.date} onSelectDate={savedDate=>navigate({...location,date:savedDate,view:'schedule'})}/>
+          <SoccerOfficialMarketCoveragePanel league={location.league.toLowerCase()} date={location.date} active={active}/>
+        </>}
+      </details>
+    </>}
     {error && <div className="errorBox soccerError" role="alert"><div><strong>{board ? '更新失敗，保留上次資料' : '資料載入失敗'}</strong><p>{error}</p></div><button type="button" className="secondary" disabled={busy} onClick={retry}>重試</button></div>}
     <section aria-label={`${league.name}${VIEW_NAMES[location.view]}`} aria-busy={busy}>
       <div className="soccerBoardHeading"><h2>{location.view === 'markets' ? '全部未開賽盤口' : location.view === 'upcoming' ? '近期賽程' : location.view === 'standings' ? '目前積分榜' : dateLabel}</h2><span role="status" aria-live="polite">{busy ? board ? '更新中…' : '載入中…' : board ? displayCount : ''}</span></div>

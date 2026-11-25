@@ -73,7 +73,8 @@ const deps={
   finishSoccerAnalysisRun:async(_run,value)=>{finishInput=value;return{publishedCurrent:publicationCurrent};},
   getSoccerCurrentResearchStatus:readCurrent,
 };
-const context=vm.createContext({URL,Date,Number,JSON,Promise,NextResponse:{json:(body,options)=>Response.json(body,options)},
+const {soccerMatchCard,SOCCER_MATCH_CARD_MEDIA_TYPE}=await import('../lib/soccer/match-card-transport.js');
+const context=vm.createContext({soccerMatchCard,SOCCER_MATCH_CARD_MEDIA_TYPE,URL,Date,Number,JSON,Promise,NextResponse:{json:(body,options)=>Response.json(body,options)},
   requireApiAuth:async()=>denied?Response.json({ok:false},{status:401}):null,validateSameOrigin:()=>true,originErrorResponse:()=>Response.json({ok:false},{status:403}),
   checkRateLimit:()=>({allowed:true}),rateLimitResponse:()=>Response.json({ok:false},{status:429}),readJsonBody:request=>request.json(),
   soccerLeague:value=>value==='epl'?{id:'epl'}:value==='ucl'?{id:'ucl'}:null,validSoccerDate:value=>/^\d{4}-\d{2}-\d{2}$/.test(value||''),
@@ -95,6 +96,9 @@ assert.equal(normal.status,200);assert.equal(historyReads,2);assert.equal(curren
 assert.deepEqual(normalBody.versions,[]);assert.deepEqual(normalBody.runs,[]);assert.equal(normalBody.currentVersion.revision,'saved-revision');assert.equal(normalBody.currentRun.analysisRunId,run.runId);assert.equal(normalBody.currentResearch.publishedCurrent,true,'normal history GET keeps main recovery fields and adds a separate current receipt');
 const historyCount=historyLimits.length;
 const compact=await context.handlers.GET(new Request(url+'&view=head')),compactBody=await compact.json();
+const negotiated=await context.handlers.GET(new Request(url+'&view=head',{headers:{accept:SOCCER_MATCH_CARD_MEDIA_TYPE}}));
+assert.equal(negotiated.headers.get('content-type'),SOCCER_MATCH_CARD_MEDIA_TYPE);
+assert.equal(negotiated.headers.get('vary'),'Accept');assert.deepEqual(await negotiated.json(),compactBody);
 assert.equal(compactBody.historicalPrediction.revision,'earlier-scored');assert.equal(compact.status,200);assert.equal(compact.headers.get('cache-control'),'no-store');assert.equal(historyLimits.length,historyCount,'an active head is not duplicated in the history fallback');assert.equal(runLimits.at(-1),1);assert.deepEqual(compactBody.versions,[]);assert.equal(compactBody.currentVersion.revision,'saved-revision');assert.equal(compactBody.runs.length,1);
 const readsBeforeRace=currentReads;
 headReceiptPatch={...current()};
@@ -128,16 +132,54 @@ for(const [reason,analysisStatus]of [['EXPIRED','COMPLETED'],['REANALYSIS_PENDIN
   const fallback=await(await context.handlers.GET(new Request(url+'&view=head'))).json();
   assert.equal(fallback.currentVersion,null);assert.equal(fallback.currentRun,null);assert.deepEqual(fallback.versions,[{revision:'latest-history',persisted:true}]);assert.equal(fallback.runs.length,1);assert.equal(fallback.runs[0].analysisStatus,analysisStatus);assert.equal(fallback.currentResearch.reason,reason);assert.equal(fallback.currentResearch.publishedCurrent,false);assert.equal(historyLimits.at(-1),1);assert.equal(runLimits.at(-1),1);
 }
+// A read-only version can load while the missing head's status is pending. A
+// newer publication during those reads cannot turn that version into current.
+let releaseStatus,signalStatus;
+const statusStarted=new Promise(resolve=>{signalStatus=resolve;});
+const statusGate=new Promise(resolve=>{releaseStatus=resolve;});
+const statusBeforeGate=context.getSoccerCurrentResearchStatus;
+context.getSoccerCurrentResearchStatus=async()=>{signalStatus();await statusGate;return {...current(),publishedCurrent:true,reason:'ACTIVE',revision:'new-head'};};
+const previousHistoryReads=historyLimits.length;
+const recovering=context.handlers.GET(new Request(url+'&view=head'));
+await statusStarted;
+const historyStarted=historyLimits.length>previousHistoryReads;
+releaseStatus();
+const recovered=await(await recovering).json();
+context.getSoccerCurrentResearchStatus=statusBeforeGate;
+assert.equal(historyStarted,true,'the read-only version starts without waiting for the status round trip');
+assert.equal(recovered.currentVersion,null);
+assert.deepEqual(recovered.versions,[{revision:'latest-history',persisted:true}]);
+assert.equal(recovered.currentResearch.revision,'new-head');
 headAvailable=true;receiptPatch={};
 denied=true;for(const view of ['current','head'])assert.equal((await context.handlers.GET(new Request(url+'&view='+view))).status,401);denied=false;
 headReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);headReadError=false;
 headAvailable=false;currentReadError=true;assert.equal((await context.handlers.GET(new Request(url+'&view=head'))).status,503);currentReadError=false;headAvailable=true;
 assert.equal(sourceReads,0,'head/current reads cannot launch model execution or fetch source feeds');
-const request=()=>new Request('https://fixture.invalid/api/soccer/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({league:'epl',date:game.date,eventId:'123'})});
+const request=(headers={})=>new Request('https://fixture.invalid/api/soccer/analysis',{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify({league:'epl',date:game.date,eventId:'123'})});
 const post=await context.handlers.POST(request()),postBody=await post.json();assert.equal(post.status,200);
 assert.equal(savedResult.validUntil,kickoff,'the immutable prematch snapshot expires at kickoff before the three-minute source TTL');
 assert.equal(finishInput.validUntil,kickoff);assert.equal(postBody.validUntil,kickoff);assert.equal(postBody.publishedCurrent,true);
 assert.equal(postBody.currentResearch.executable,false);assert.equal(postBody.formalScoringEnabled,false);
+{
+  const analyze=context.analyzeSoccerGame,lookup=context.loadSoccerHistoricalPrediction;
+  const prediction={...postBody,predictionContext:{mode:'PREDICTION'}},calls=[];
+  context.analyzeSoccerGame=async()=>({status:200,payload:prediction});
+  context.loadSoccerHistoricalPrediction=async latest=>{calls.push(latest);return {revision:'earlier-scored',eligible:false,executable:false};};
+  const headers={accept:'application/vnd.soccer.match-card+json'};
+  try{
+    const unchanged=await (await context.handlers.POST(request())).json();
+    assert.equal(calls.length,0);assert.equal(Object.hasOwn(unchanged,'historicalPrediction'),false);
+    const loads=currentLoads,heads=historyReads;
+    const card=await (await context.handlers.POST(request(headers))).json();
+    assert.equal(calls.length,1);assert.equal(calls[0],prediction,'reuse the actual newly saved revision');
+    assert.equal(card.historicalPrediction.revision,'earlier-scored');assert.equal(card.revision,prediction.revision);
+    assert.equal(currentLoads,loads);assert.equal(historyReads,heads,'no redundant full-head query');
+    context.loadSoccerHistoricalPrediction=async()=>{throw Error('controlled archive outage');};
+    const failed=await context.handlers.POST(request(headers)),fallback=await failed.json();
+    assert.equal(failed.status,200);assert.deepEqual(fallback.currentResearch,prediction.currentResearch);
+    assert.equal(fallback.historicalPredictionReadFailed,true);assert.equal(fallback.historicalPrediction,null);
+  }finally{context.analyzeSoccerGame=analyze;context.loadSoccerHistoricalPrediction=lookup;}
+}
 currentActive=false;const superseded=await (await context.handlers.POST(request())).json();
 assert.equal(superseded.publishedCurrent,false,'a quote change between publication and response cannot be advertised as current');
 assert.equal(superseded.persisted,true,'superseded results remain saved');

@@ -1,3 +1,4 @@
+import { OpenedSoccerDetails } from './helpers/soccer-opened-details-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -7,9 +8,33 @@ import { transform } from 'next/dist/build/swc/index.js';
 import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../lib/soccer/scoring-readiness.js';
 
+// Exercise the native disclosure separately from the expanded evidence fixtures below.
+{
+  const source = fs.readFileSync('app/soccer/deferred-details.js', 'utf8').replace(/^import .*?;\n/gm, '').replace('export function', 'function');
+  const { code } = await transform(source, { filename: 'deferred-details.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
+  let visited = false, reads = 0;
+  const ctx = vm.createContext({ React, useState: () => [visited, value => { visited = value; }] });
+  vm.runInContext(code, ctx);
+  const details = value => ctx.SoccerDeferredDetails({ className: 'evidence', label: '明細', children: () => { reads++; return value; } });
+  const closed = details('old');
+  assert.equal(closed.type, 'details');
+  assert.equal(closed.props.children[0].type, 'summary');
+  assert.equal(closed.props.children[0].props.children, '明細');
+  assert.equal(reads, 0);
+  const own = { open: false };
+  closed.props.onToggle({ currentTarget: own, target: own });
+  closed.props.onToggle({ currentTarget: own, target: { open: true } });
+  assert.equal(visited, false);
+  own.open = true; closed.props.onToggle({ currentTarget: own, target: own });
+  assert.equal(details('current').props.children[1], 'current');
+  own.open = false;
+  const retained = details('updated');
+  assert.equal(retained.props.children[1], 'updated');
+  assert.equal(retained.props.onToggle, undefined);
+}
 const source=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const {code}=await transform(source,{filename:'soccer-market-ui.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({React,Date,soccerQuoteScorePresentation,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButton:()=>null});
+const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,Date,soccerQuoteScorePresentation,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButton:()=>null});
 vm.runInContext(code,ctx);
 const threshold={axis:'TOTAL_GOALS',boundary:2,above:.421,equal:.271,below:.307,retainedMass:.999,tailMass:.001};
 const quote=(key,line,water,overrides={})=>({key,period:'FT',line,side:'over',water,rawRows:[`大 ${line} ${water}`,'小 0.81'],provenance:{periodEvidence:'全場',observedAt:'2026-10-18T15:50:00Z',revision:'not-for-users'},thresholdProbabilities:threshold,...overrides});

@@ -1,4 +1,5 @@
 'use client';
+import { SoccerDeferredDetails } from './deferred-details.js';
 import { SoccerRecordButton } from './bet-records.js';
 import { soccerQuoteScorePresentation } from '../../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../../lib/soccer/scoring-readiness.js';
@@ -294,9 +295,21 @@ export function SoccerHistoricalPrediction({ value, game, result, now = Date.now
   </section>;
 }
 
-function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result,direction,now}){
-  const q=quote||{},provenance=q.provenance||{},rawRows=(Array.isArray(q.rawRows)?q.rawRows:[]).map(rowText).filter(Boolean);
+function SoccerQuoteEvidence({quote:q,game,result,now,periodConfirmed,scoreKind}) {
+  const provenance=q.provenance||{},rawRows=(Array.isArray(q.rawRows)?q.rawRows:[]).map(rowText).filter(Boolean);
   const observed=clock(provenance.observedAt||q.observedAt||provenance.receivedAt);
+  return <>
+    {scoreKind==='PREDICTION'&&<p className="soccerMarketNote">依現有資料預測；完整模型誤差未驗證。</p>}
+    {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
+    {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
+    {periodConfirmed&&<SoccerConditionalAnalysis quote={q} result={result} game={game} now={now}/>}
+    <SoccerQuoteScoring scoring={q.scoring}/>
+    {periodConfirmed&&<details className="soccerDetails"><summary>比分門檻研究（不是 S 分數）</summary><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</details>}
+  </>;
+}
+
+function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=0,game,result,direction,now}){
+  const q=quote||{};
   const periodConfirmed=!unassigned&&Boolean(periods[q.period])&&(!expectedPeriod||q.period===expectedPeriod);
   const period=periodConfirmed?periods[q.period]:null;
   const line=textValue(q.line),water=textValue(q.water);
@@ -316,14 +329,10 @@ function SoccerRawMarketQuote({quote,unassigned=false,expectedPeriod=null,index=
     </div></div>
     {!periodConfirmed&&<p className="soccerMarketCaution">期間待確認，暫不計算</p>}
     {periodConfirmed&&<SoccerRecordButton game={game} result={result} quote={q}/>}
-    <details className="soccerDetails soccerQuoteDetails"><summary>原盤與評分明細</summary>
-      {presentation.scoreKind==='PREDICTION'&&<p className="soccerMarketNote">依現有資料預測；完整模型誤差未驗證。</p>}
-      {rawRows.length>0&&<p className="soccerMarketRaw"><span>原始標示：</span>{rawRows.join(' ／ ')}</p>}
-      {observed&&<p className="soccerMarketNote">原盤時間：{observed}</p>}
-      {periodConfirmed&&<SoccerConditionalAnalysis quote={q} result={result} game={game} now={now}/>}
-      <SoccerQuoteScoring scoring={q.scoring}/>
-      {periodConfirmed&&<details className="soccerDetails"><summary>比分門檻研究（不是 S 分數）</summary><SoccerThresholdProbabilities probabilities={q.thresholdProbabilities}/>{!q.thresholdProbabilities&&<p className="soccerMarketNote">尚無適用的進球門檻機率。</p>}</details>}
-    </details>
+    <SoccerDeferredDetails className="soccerDetails soccerQuoteDetails" label="原盤與評分明細">
+      {() => <SoccerQuoteEvidence quote={q} game={game} result={result} now={now}
+        periodConfirmed={periodConfirmed} scoreKind={presentation.scoreKind}/>}
+    </SoccerDeferredDetails>
   </article>;
 }
 

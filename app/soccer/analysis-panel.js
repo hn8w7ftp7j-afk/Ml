@@ -1,6 +1,7 @@
 'use client';
 import { createContext,useContext,useEffect,useRef,useState } from 'react';
 import { SoccerMarketDirections, SoccerHalfTimeResearch, SoccerProvisionalMarketResearch } from './market-panel.js';
+import { SoccerDeferredDetails } from './deferred-details.js';
 import { SoccerManualSimulation } from './manual-simulation-panel.js';
 import { SoccerWorkloadPanel } from './workload-panel.js';
 import { SoccerTeamXgPanel } from './team-xg-panel.js';
@@ -12,6 +13,7 @@ import { buildSoccerRanking } from '../../lib/soccer/ranking.js';
 import { SOCCER_ALL_LEAGUE_STORAGE, validateSoccerAnalysisPayload, soccerSavedAnalysisState, findSoccerBackgroundJob, soccerBackgroundStates } from '../../lib/soccer/background-client.js';
 
 const Context=createContext(null);
+const matchCardHeaders={Accept:'application/vnd.soccer.match-card+json'};
 const clock=v=>v?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
 const pct=v=>Number.isFinite(v)?`${(v*100).toFixed(1)}%`:'—';
 const reasons={MATCH_ALREADY_STARTED:'比賽已開始',HALF_TIME_MODEL_UNVERIFIED:'上半場模型未驗證',SCORE_MODEL_UNAVAILABLE:'比分模型不適用',MATCHED_READER_QUOTE_MISSING:'缺少已配對原盤',READER_QUOTE_STALE:'原盤已逾期',SOCCER_PERIOD_SETTLEMENT_REBATE_UNVERIFIED:'期間、派彩及退水適用條件待核對',SOCCER_MODEL_NOT_PROMOTED:'研究模型尚未正式驗收'};
@@ -198,9 +200,9 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       }
       return{...old,[id]:{...previous,...update}};
     });};
-    async function json(url){
+    async function json(url,headers){
       const controller=new AbortController();reads.add(controller);const timer=setTimeout(()=>controller.abort(),20000);
-      try{const response=await fetch(url,{cache:'no-store',signal:controller.signal});const body=await response.json();
+      try{const response=await fetch(url,{headers,cache:'no-store',signal:controller.signal});const body=await response.json();
         if(!response.ok||body.ok!==true)throw Object.assign(Error(response.status===401?'登入已過期':body.error||'已保存分析暫時無法讀取'),{status:response.status});return body;
       }finally{clearTimeout(timer);reads.delete(controller);}
     }
@@ -210,7 +212,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
       if(reading){for(const id of requested)queuedHistory.add(id);return;}reading=true;clearTimeout(historyTimer);let index=0,nextExpiry=Infinity;const processing=[];
       const targets=gamesRef.current.filter(game=>requested.has(game.id));
       async function worker(){while(current()&&index<targets.length){const game=targets[index++];if(pending.current.has(game.id))continue;const epoch=epochs.current.get(game.id)||0,requestedAt=Date.now(),receipt=beginReceipt(game,queuedParents.get(game.id));queuedParents.delete(game.id);
-        try{const body=await json(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'head'})}`);
+        try{const body=await json(`/api/soccer/analysis?${new URLSearchParams({league:game.league,date:game.date,eventId:game.sourceId,view:'head'})}`,matchCardHeaders);
           if(!current())return;const saved=soccerSavedAnalysisState(body,game,Date.now());
           if(saved)Object.assign(saved,savedPredictionHistory(body));
           if(saved?.data){saved.currentResearch=body.currentResearch||null;saved.currentResearchRequestedAt=requestedAt;saved.currentResearchReceivedAt=Date.now();
@@ -316,7 +318,7 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
         const controller=new AbortController(),requestedAt=Date.now(),receipt=beginReceipt(game);lastAttempts.set(game.id,requestedAt);forcedIds.delete(game.id);controllers.current.add(controller);statusReads.add(controller);const timer=setTimeout(()=>controller.abort(),20000);
         const params={league:game.league,date:game.date,eventId:game.sourceId,view:'current'};
         if(/^[a-f0-9]{64}$/.test(snapshot?.revision||''))params.revision=snapshot.revision;
-        try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams(params)}`,{cache:'no-store',signal:controller.signal}),d=await r.json(),status=d.currentResearch;
+        try{const r=await fetch(`/api/soccer/analysis?${new URLSearchParams(params)}`,{headers:matchCardHeaders,cache:'no-store',signal:controller.signal}),d=await r.json(),status=d.currentResearch;
           if(!r.ok||!d.ok||d.gameId!==game.id||d.league!==game.league||d.date!==game.date||!status||typeof status.publishedCurrent!=='boolean'||status.executable!==false||status.formalScoringEnabled!==false||!Number.isFinite(Date.parse(status.checkedAt)))throw Error('CURRENT_STATUS_UNVERIFIED');
           let replacement=null;
           if(d.currentVersion!=null){
@@ -375,15 +377,19 @@ export function SoccerAnalysisProvider({games,children,league=games[0]?.league,d
   },[currentScope]);
   function pump(){
     while(alive.current&&active.current<2&&queue.current.length){const task=queue.current.shift(),game=task.game;active.current++;const controller=new AbortController(),requestedAt=Date.now(),epoch=epochFor(game),receipt=beginReceipt(game);controllers.current.add(controller);let timedOut=false,refreshPredictionHistory=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},50000);patch(game.id,{status:'loading',error:''});
-      fetch('/api/soccer/analysis',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',signal:controller.signal,body:JSON.stringify({league:game.league,date:game.date,eventId:game.sourceId})}).then(async r=>{
-        const d=await r.json();if(!r.ok||!d.ok)throw Object.assign(Error(r.status===401?'登入已過期':d.error||'核對失敗'),{analysisStatus:d.analysisStatus,qaFlag:d.qaFlag,analysisRunId:d.analysisRunId});
+      fetch('/api/soccer/analysis',{method:'POST',headers:{...matchCardHeaders,'Content-Type':'application/json'},cache:'no-store',signal:controller.signal,body:JSON.stringify({league:game.league,date:game.date,eventId:game.sourceId})}).then(async r=>{
+        const body=await r.json();
+        if(!r.ok||!body.ok)throw Object.assign(Error(r.status===401?'登入已過期':body.error||'核對失敗'),{analysisStatus:body.analysisStatus,qaFlag:body.qaFlag,analysisRunId:body.analysisRunId});
+        const {historicalPrediction,historicalPredictionReadFailed,...d}=body;
+        const hasHistory=Object.hasOwn(body,'historicalPrediction');
+        const history=hasHistory?savedPredictionHistory({historicalPrediction,historicalPredictionReadFailed}):null;
         validateSoccerAnalysisPayload(d,game);
-        if(d.persisted && d.predictionContext?.mode==='PREDICTION'){
+        if(!hasHistory && d.persisted && d.predictionContext?.mode==='PREDICTION'){
           const {total,scored}=predictionQuoteCounts(d);
           refreshPredictionHistory=!total || scored<total;
         }
         patch(game.id,()=>{const invalidated=epochFor(game)!==epoch||!receiptCurrent(receipt);if(invalidated)needsCurrentCheck.current=true;
-          return{status:'done',data:d,currentResearch:invalidated?null:d.currentResearch||null,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now(),error:''};});
+          return{...(!invalidated&&history),status:'done',data:d,currentResearch:invalidated?null:d.currentResearch||null,currentResearchRequestedAt:requestedAt,currentResearchReceivedAt:Date.now(),error:''};});
         task.resolve(d);
       }).catch(e=>{patch(game.id,{status:'error',analysisStatus:e.analysisStatus==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':'FAILED',qaFlag:e.qaFlag||'BLOCKED',analysisRunId:e.analysisRunId||null,error:timedOut?'核對逾時，請重試':e.name==='AbortError'?'核對已停止':e.message});task.resolve(null);}).finally(()=>{clearTimeout(timer);controllers.current.delete(controller);pending.current.delete(game.id);active.current--;if(refreshPredictionHistory && alive.current)void refreshSavedGames.current?.([game.id]);pump();});
     }
@@ -439,7 +445,7 @@ export default function SoccerAnalysisPanel({game}){
       <SoccerProvisionalMarketResearch value={data.provisionalReaderResearch} result={data} game={game}/>
       {state.historicalPredictionReadFailed && <p className="soccerAnalysisWarning" role="status">歷史盤口評分暫時無法更新。</p>}
       <SoccerMarketDirections historicalPrediction={state.historicalPrediction} directions={data.directions} unassignedQuotes={data.unassignedQuotes} game={game} result={{...data,publishedCurrent:data.publishedCurrent===true&&presentation.current}}/>
-      <details className="soccerDetails soccerAnalysisDetails"><summary>詳細資料與研究</summary>
+      <SoccerDeferredDetails className="soccerDetails soccerAnalysisDetails" label="詳細資料與研究">{() => <>
       <SoccerManualSimulation result={data} game={game}/>
       <details className="soccerDetails soccerProbabilityResearch"><summary>比分與勝平負研究（不是 S 分數）</summary>
       {prediction?<><h3>研究比分分布</h3><div className="soccerResearchOutcomes"><span>主勝 <strong>{pct(prediction.outcomes.home)}</strong></span><span>和局 <strong>{pct(prediction.outcomes.draw)}</strong></span><span>客勝 <strong>{pct(prediction.outcomes.away)}</strong></span></div><p className="soccerAvailability">模型平均進球：主 {prediction.homeRate.toFixed(2)}／客 {prediction.awayRate.toFixed(2)}。僅依歷史賽果，尚未加入陣容與 xG。</p></>:<p className="soccerAvailability">{prestart?'此場無適用的已訓練球隊資料。':'比賽開始後不補算賽前機率。'}</p>}
@@ -461,7 +467,7 @@ export default function SoccerAnalysisPanel({game}){
       <details className="soccerDetails"><summary>原盤結算核對表</summary><p>以下僅套用網站現有信用盤計算，供核對原盤文字。足球期間、派彩與退水適用條件尚未完成核對，不代表可下注。</p>{data.settlementReviews?.length?data.settlementReviews.map((m,i)=><div key={i}><h4>{m.kind==='TOTAL'?'大小':'讓球'} {m.rawLine}</h4><div className="soccerTableWrap"><table className="soccerAuditTable"><thead><tr><th>{m.kind==='TOTAL'?'總進球':'主隊淨勝球'}</th><th>{m.rows[0]?.outcomes[0].pick}</th><th>{m.rows[0]?.outcomes[1].pick}</th></tr></thead><tbody>{m.rows.map(r=><tr key={r.value}><td>{r.value}</td>{r.outcomes.map((o,j)=><td key={j}>{shareText(o)}</td>)}</tr>)}</tbody></table></div></div>):<p>尚無已配對原盤，無法產生核對表。</p>}</details>
       <details className="soccerDetails"><summary>歷史研究與限制</summary><p>回顧測試期：2025 年。可評估 {data.researchValidation.test.metrics.count}／{data.researchValidation.test.metrics.total} 場，覆蓋 {pct(data.researchValidation.test.metrics.coverage)}。</p><p>1X2 Log Loss {data.researchValidation.test.metrics.logLoss?.toFixed(3)??'—'}；Brier {data.researchValidation.test.metrics.brier?.toFixed(3)??'—'}（越低越好）。不代表投注勝率或獲利。</p><p>資料為事後補抓，未證明歷史賽前可取得性。歐冠尚未加入國內聯賽強度映射；半場研究不能替代人員影響、足球信用盤結算與正式收益驗收。</p></details>
       {data.researchValidation.rolling&&<details className="soccerDetails"><summary>逐年滾動研究檢查</summary><p>每期只用更早資料選參數。這是事後取得資料的診斷，不是新的未碰過測試或投注績效。</p><div className="soccerTableWrap"><table className="soccerAuditTable"><thead><tr><th>年份</th><th>覆蓋</th><th>低比分模型誤差</th><th>獨立模型誤差</th><th>差異區間</th></tr></thead><tbody>{data.researchValidation.rolling.folds.map(f=><tr key={f.testYear}><td>{f.testYear}</td><td>{f.metrics.count}／{f.metrics.total}</td><td>{f.metrics.logLoss?.toFixed(3)??'—'}</td><td>{f.referenceMetrics.logLoss?.toFixed(3)??'—'}</td><td>{f.comparison.interval?`${f.comparison.interval.lower.toFixed(4)} ～ ${f.comparison.interval.upper.toFixed(4)}`:'樣本不足'}</td></tr>)}</tbody></table></div><p>誤差採 1X2 Log Loss，越低越好。差異為「低比分模型減獨立模型」，區間以 UTC 週為單位重抽樣；不含選模或資料取得偏誤。各年度尚未呈現一致改善，維持研究模式。</p></details>}
-      </details>
+      </>}</SoccerDeferredDetails>
     </div>}
     <details className="soccerDetails"><summary>已保存版本與嘗試</summary><button type="button" className="secondary" disabled={history.loading} onClick={loadHistory}>{history.loading?'讀取中…':'讀取最近紀錄'}</button>{history.error&&<p role="alert">{history.error}</p>}{history.loaded&&!history.versions.length&&<p>此場尚無已保存資料版本。</p>}<SoccerRunHistory runs={history.runs||[]}/>{history.versions.map(v=><div className="soccerSavedVersion" key={v.revision}><p>{clock(v.observedAt)}｜{v.analysisStatus==='INSUFFICIENT_DATA'?'資料不足':v.status==='POSTSTART_AUDIT'?'賽後核對':'賽前研究'}</p>{v.prediction&&<p>主 {pct(v.prediction.outcomes.home)}／和 {pct(v.prediction.outcomes.draw)}／客 {pct(v.prediction.outcomes.away)}</p>}<p className="soccerAvailability">當時原盤：{v.readerEvidence.observedAt?clock(v.readerEvidence.observedAt):'無已配對原盤'}；資料與盤口保留原版本。</p></div>)}</details>
   </section>;
