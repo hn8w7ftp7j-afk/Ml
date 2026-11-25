@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server';
 import { requireApiAuth,validateSameOrigin,originErrorResponse,checkRateLimit,rateLimitResponse,readJsonBody } from '../../../../lib/security.js';
 import { soccerLeague,validSoccerDate } from '../../../../lib/soccer/contracts.js';
-import { listSoccerAnalysis } from '../../../../lib/soccer/analysis-store.js';
+import { listSoccerAnalysis,loadSoccerHistoricalPrediction } from '../../../../lib/soccer/analysis-store.js';
 import { listSoccerRunHistory, getSoccerCurrentResearchStatus } from '../../../../lib/soccer/journal.js';
 import { analyzeSoccerGame, loadSoccerCurrentAnalysis, validSoccerAnalysisQuery } from '../../../../lib/soccer/analysis-service.js';
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
 export const maxDuration=60;
 const response=(body,status=200)=>NextResponse.json(body,{status,headers:{'Cache-Control':'no-store'}});
+async function fullResponse(body){
+  // A historical read has no authority over the active result. Preserve the
+  // verified current response even if this independent lookup is unavailable.
+  try{return response({...body,historicalPrediction:await loadSoccerHistoricalPrediction(body.currentVersion||body.versions?.[0])});}
+  catch{return response({...body,historicalPrediction:null,historicalPredictionReadFailed:true});}
+}
 export async function GET(request){
   const denied=await requireApiAuth(request);if(denied)return denied;
   const rate=checkRateLimit(request,{id:'soccer-evidence-history',limit:90,windowMs:60000});if(!rate.allowed)return rateLimitResponse(rate);
@@ -22,7 +28,7 @@ export async function GET(request){
         // browser can replace both atomically instead of first revoking its
         // old result and then downloading the new result in a second request.
         const current=await loadSoccerCurrentAnalysis(league.id,date,eventId);
-        if(current.currentVersion)return response({ok:true,league:league.id,date,gameId,versions:[],runs:[],...current});
+        if(current.currentVersion)return fullResponse({ok:true,league:league.id,date,gameId,versions:[],runs:[],...current});
         // Repricing/expiry may have invalidated the head between the two reads.
         // Never reuse the earlier ACTIVE receipt with an absent full result.
         return response({ok:true,league:league.id,date,gameId,currentResearch:await getSoccerCurrentResearchStatus(league.id,date,gameId)});
@@ -41,10 +47,10 @@ export async function GET(request){
       const currentResearch=current.currentVersion?current.currentResearch:
         await getSoccerCurrentResearchStatus(league.id,date,gameId);
       const versions=current.currentVersion?[]:await listSoccerAnalysis(league.id,gameId,date,{limit:1});
-      return response({ok:true,league:league.id,date,gameId,versions,runs,...current,currentResearch});
+      return fullResponse({ok:true,league:league.id,date,gameId,versions,runs,...current,currentResearch});
     }
     const [versions,runs,current,currentResearch]=await Promise.all([listSoccerAnalysis(league.id,gameId,date),listSoccerRunHistory(league.id,date,gameId),loadSoccerCurrentAnalysis(league.id,date,eventId),getSoccerCurrentResearchStatus(league.id,date,gameId)]);
-    return response({ok:true,league:league.id,date,gameId,versions,runs,...current,currentResearch});
+    return fullResponse({ok:true,league:league.id,date,gameId,versions,runs,...current,currentResearch});
   }catch{return response({ok:false,error:'已保存版本暫時無法讀取'},503);}
 }
 export async function POST(request){

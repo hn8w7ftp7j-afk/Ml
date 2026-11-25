@@ -152,6 +152,30 @@ const marketSource = fs.readFileSync('app/soccer/market-panel.js', 'utf8').repla
 const marketCode = await transform(marketSource, { filename: 'prediction-market.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
 const marketContext = vm.createContext({ React, Date, soccerQuoteScorePresentation, soccerScoringReadiness, soccerQuoteScoringBlockers, SoccerRecordButton: () => null });
 vm.runInContext(marketCode.code, marketContext);
+if (!producerOnly) for (const league of ['epl', 'ucl']) {
+  const { game, result } = fixture(league);
+  const quote = result.directions[0].quotes[0], priorAt = new Date(now - 240000).toISOString();
+  const archive = { status: 'HISTORICAL_PREDICTION', league, date: game.date, gameId: game.id, startTime: game.startTime,
+    homeId: game.home.sourceId, awayId: game.away.sourceId, neutralSite: false, revision: sha('f'), observedAt: priorAt,
+    eligible: false, executable: false, quotes: [{ key: sha('7'), kind: 'TOTAL', side: 'over', line: '3.5', lineSide: null,
+      period: 'FT', label: '大 3.5', water: .78, S: 8.1, W: .04, R: .02, observedAt: priorAt, calculatedAt: priorAt }] };
+  const props = { historicalPrediction: archive, game, result, directions: result.directions, now };
+  const render = value => renderToStaticMarkup(marketContext.SoccerMarketDirections(value));
+  assert.doesNotMatch(render(props), /歷史賽前預測/, 'a current scored result has no fallback table');
+  quote.predictionScore = { status: 'PREDICTION_SCORE_UNAVAILABLE', reason: 'SOCCER_SCORE_READER_TIME_INVALID' };
+  quote.provenance.observedAt = priorAt;
+  const markup = render(props);
+  assert.match(markup, /歷史賽前預測/);
+  assert.match(markup, /全場 大 3.5/); assert.match(markup, /8.1<\/td>/); assert.match(markup, /\+4.00%/);
+  assert.match(markup, /分析時這筆原盤已滿 3 分鐘/);
+  assert.doesNotMatch(markup, /無法評分：正式評分所需|無法評分：此版本尚未保存/);
+  assert.doesNotMatch(markup.match(/<section[^>]+aria-label="歷史賽前預測"[^>]*>[\s\S]*?<\/section>/)[0], /<button/);
+  assert.equal(rank({game,result,now}).entries.length, 0);
+  for (const bad of [{gameId: 'soccer:epl:999'}, {date: '2026-11-11'}, {neutralSite: true}, {awayId: game.home.sourceId},
+    {revision: result.revision}, {eligible: true}, {quotes: [{...archive.quotes[0], calculatedAt: at}]}]) {
+    assert.doesNotMatch(render({...props, historicalPrediction: {...archive,...bad}}), /歷史賽前預測/);
+  }
+}
 const rankingSource = fs.readFileSync('app/soccer/workspace.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export default function|export function/g, 'function');
 const rankingCode = await transform(rankingSource, { filename: 'prediction-ranking.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
 let stateIndex = 0, rankingView = 'ranking';
