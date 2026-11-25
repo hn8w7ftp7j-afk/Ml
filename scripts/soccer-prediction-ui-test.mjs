@@ -1,3 +1,4 @@
+import { OpenedSoccerDetails } from './helpers/soccer-opened-details-fixture.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -11,6 +12,7 @@ import { buildSoccerRanking, SOCCER_RANK_MARKETS } from '../lib/soccer/ranking.j
 import { soccerHighScoreCandidates, summarizeSoccerHighScoreBets } from '../lib/soccer/league-bet-status.js';
 import { soccerQuoteIdentity } from '../lib/soccer/candidate-qualification.js';
 import { soccerTeamLabel } from '../lib/soccer/team-labels.js';
+import { soccerMatchCard } from '../lib/soccer/match-card-transport.js';
 import { candidateFixture } from './helpers/soccer-candidate-fixture.mjs';
 
 // Explicit synthetic client fixtures. The package command uses the existing
@@ -150,7 +152,7 @@ if (!producerOnly) {
 
 const marketSource = fs.readFileSync('app/soccer/market-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export function/g, 'function');
 const marketCode = await transform(marketSource, { filename: 'prediction-market.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
-const marketContext = vm.createContext({ React, Date, soccerQuoteScorePresentation, soccerScoringReadiness, soccerQuoteScoringBlockers, SoccerRecordButton: () => null });
+const marketContext = vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails, React, Date, soccerQuoteScorePresentation, soccerScoringReadiness, soccerQuoteScoringBlockers, SoccerRecordButton: () => null });
 vm.runInContext(marketCode.code, marketContext);
 if (!producerOnly) for (const league of ['epl', 'ucl']) {
   const { game, result } = fixture(league);
@@ -306,10 +308,27 @@ if (contractPath) {
     assert.equal(counts.candidates, item.expectRanked ? 1 : 0, 'toolbar counts the same distinct current games as ranking');
     assert.ok(actual.entries.every(value => value.prediction && value.formalEligible === false));
     const html = renderToStaticMarkup(marketContext.SoccerMarketDirections({ directions: result.directions, result, game, now: clock }));
+    const original = JSON.stringify(result);
+    const card = soccerMatchCard(result);
+    assert.equal(JSON.stringify(result), original, 'full stored result remains intact');
+    assert.equal(card.revision, result.revision);
+    assert.equal(renderToStaticMarkup(marketContext.SoccerMarketDirections({ directions:card.directions, result:card, game, now:clock })), html);
+    for (const [i, direction] of result.directions.entries()) for (const [j, quote] of (direction.quotes || []).entries()) {
+      const transported = card.directions[i].quotes[j];
+      for (const [before, after] of [[quote.payoff, transported.payoff], [quote.scoring?.conditionalPayoff, transported.scoring?.conditionalPayoff]]) {
+        if (Array.isArray(before?.rows)) {
+          const { rows, ...fields } = before;
+          assert.deepEqual(after, { ...fields, scorelineRowCount:rows.length });
+        }
+      }
+    }
     if (item.expectPredictionScore) { assert.match(html, /預測 S/); assert.match(html, /模型情境 R/); }
     stateIndex = 0;
     const table = renderToStaticMarkup(rankingContext.SoccerRanking({ games: [game],
       states: { [game.id]: { status: 'done', data: result } }, run: () => {}, now: clock }));
+    stateIndex = 0;
+    assert.equal(renderToStaticMarkup(rankingContext.SoccerRanking({games:[game],
+      states:{[game.id]:{status:'done',data:card}},run:()=>{},now:clock})), table);
     assert.equal((table.match(/data-soccer-rank-key=/g) || []).length, actual.entries.length);
     const historicalRows = (table.match(/data-soccer-history-key=/g) || []).length;
     if (item.name === `${game.league}-historical`) assert.ok(historicalRows > 0, 'saved qualifying predictions remain available for review');

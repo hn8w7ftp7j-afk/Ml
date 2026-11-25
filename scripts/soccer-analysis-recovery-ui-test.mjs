@@ -148,6 +148,40 @@ await test('first load and immediate manual recovery retain read-only archive se
   } finally { h.unmount(); await flush(); }
 });
 
+await test('manual match card carries archive without a second head, preserves it on outage and fences invalidations', async () => {
+  const row=game(),h=harness({games:[row]}),base=analysis(row,{predictionContext:{mode:'PREDICTION'}});
+  const archive={status:'HISTORICAL_PREDICTION',revision:'a'.repeat(64),eligible:false,executable:false};
+  const headers='application/vnd.soccer.match-card+json';
+  try {
+    const provider=h.mount();
+    assert.equal(h.reads[0].options.headers.Accept,headers);
+    h.reads[0].respond(head(row,base));await flush();h.render();
+    const run=provider.props.value.run(row);
+    assert.equal(h.posts[0].options.headers.Accept,headers);
+    h.posts[0].respond({...base,historicalPrediction:archive});const result=await run;await flush();h.render();
+    assert.equal(result.historicalPrediction,undefined);
+    assert.deepEqual(plain(h.state[0][row.id].historicalPrediction),archive);
+    assert.equal(h.state[0][row.id].data.historicalPrediction,undefined);
+    assert.equal(h.reads.length,1);assert.equal(h.counts().candidates,0);
+    const next=analysis(row,{predictionContext:{mode:'PREDICTION'},revision:'manual-next',analysisRunId:'manual-next-run'});
+    const retry=provider.props.value.run(row);
+    h.posts[1].respond({...next,historicalPrediction:null,historicalPredictionReadFailed:true});
+    await retry;await flush();h.render();
+    assert.equal(h.state[0][row.id].data.revision,next.revision);
+    assert.deepEqual(plain(h.state[0][row.id].historicalPrediction),archive);
+    assert.equal(h.state[0][row.id].historicalPredictionReadFailed,true);
+    assert.equal(h.reads.length,1,'a failed optional archive does not download current again');
+    const late=provider.props.value.run(row);
+    h.fire('soccer:reader-content-changed',{league:row.league,date:row.date,contentHash:'c'.repeat(64)});
+    h.posts[2].respond({...next,historicalPrediction:null});await late;await flush();h.render();
+    assert.deepEqual(plain(h.state[0][row.id].historicalPrediction),archive,'superseded response cannot clear the archive');
+    assert.equal(h.state[0][row.id].currentResearch,null);
+    h.setNow(now+30000);await h.tick(1000);
+    assert.equal(h.reads.at(-1).options.headers.Accept,headers,'atomic replacement via current uses the same card format');
+    assert.match(h.reads.at(-1).url,/view=current/);
+  } finally { h.unmount(); await flush(); }
+});
+
 await test('upcoming saved reads use each game actual date instead of the outer selected board date', async () => {
   const games = [game('201', '2026-10-20'), game('202', '2026-10-22')], h = harness({ games, date: '2026-10-19' });
   try {
