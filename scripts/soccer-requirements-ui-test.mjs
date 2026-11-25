@@ -1,3 +1,4 @@
+import { OpenedSoccerDetails } from './helpers/soccer-opened-details-fixture.mjs';
 import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import { loadSoccerShotXgResearchUiForTest } from './helpers/soccer-shot-xg-ui-fixture.mjs';
 import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
@@ -80,7 +81,7 @@ assert.match(renderToStaticMarkup(context.SoccerRequirementDetails({})),/歷史�
 
 function harness(fetch){
   const state=[],refs=[];let si=0,ri=0;
-  const ctx=vm.createContext({buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
+  const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,buildSoccerRanking,...shotXgUi,soccerMatchContextObservations,...soccerReadiness,...soccerBackgroundClient,soccerQuoteScorePresentation,SoccerMinutesV2Coverage,React,Date,URLSearchParams,AbortController,AbortSignal,setTimeout,clearTimeout,fetch,SoccerWorkspace:({children})=>children,SoccerRecordButton:()=>null,
     createContext:()=>({Provider:'provider'}),useContext:()=>({states:state[0],run:ctx.provider().props.value.run}),
     useState:initial=>{const i=si++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
     useRef:initial=>refs[ri++]||(refs[ri-1]={current:initial}),useEffect:()=>{}});

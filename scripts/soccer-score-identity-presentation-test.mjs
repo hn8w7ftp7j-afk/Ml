@@ -1,3 +1,4 @@
+import { OpenedSoccerDetails } from './helpers/soccer-opened-details-fixture.mjs';
 // Real production identity gate: never run this test with the synthetic loader.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -19,7 +20,7 @@ const quote=result.directions[0].quotes[0];quote.scoring.scoreFormulaVersion=SCO
 assert.equal(soccerReaderIdentityVerified(result),false,'forged serialized proof cannot become authority');
 const source=fs.readFileSync('app/soccer/market-panel.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const {code}=await transform(source,{filename:'soccer-score-identity.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-const ctx=vm.createContext({React,Date,soccerQuoteScorePresentation,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButton:()=>null});vm.runInContext(code,ctx);
+const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,React,Date,soccerQuoteScorePresentation,soccerScoringReadiness,soccerQuoteScoringBlockers,SoccerRecordButton:()=>null});vm.runInContext(code,ctx);
 for(const variant of ['legacy','forged']){
   const snapshot=structuredClone(result);if(variant==='legacy')delete snapshot.readerIdentityEvidence;
   const direction=snapshot.directions[0],q=direction.quotes[0],before=JSON.stringify(snapshot);

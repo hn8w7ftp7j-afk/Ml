@@ -48,6 +48,22 @@ close(calc(total, one(1, 1)).netEV, -0.5);
 close(calc({ ...total, direction: 'UNDER' }, one(1, 1)).netEV, 0.4);
 close(calc({ ...total, sourceLine: '2+50' }, one(1, 1), credit).netEV, 0.4);
 
+// Equal margins or totals can share the credit-engine calculation. The
+// scoreline, probability and mutable leg detail must still belong to each row.
+for (const [market, secondScore] of [
+  [{ ...quote, sourceLine: '1+25' }, { home: 2, away: 1 }],
+  [{ ...total, sourceLine: '1-25' }, { home: 0, away: 1 }],
+]) {
+  const cells = [{ home: 1, away: 0, probability: .25 }, { ...secondScore, probability: .75 }];
+  const { rows } = calc(market, grid(cells), credit);
+  for (const [index, cell] of cells.entries()) {
+    const reference = calc(market, one(cell.home, cell.away), credit).rows[0];
+    assert.deepEqual(rows[index], { ...reference, probability: cell.probability });
+  }
+  assert.notStrictEqual(rows[0].legs, rows[1].legs);
+  assert.notStrictEqual(rows[0].legs[0], rows[1].legs[0]);
+}
+
 // Rebate amount uses an explicit basis, not an implicit site-wide 1.5%.
 for (const [basis, expected] of [['SETTLED_PRINCIPAL', 0.005], ['TOTAL_PRINCIPAL', 0.01], ['LOSS_PRINCIPAL', 0]]) {
   const r = calc(quote, one(1, 0), { ...contract, rebate: { rate: 0.01, basis } });

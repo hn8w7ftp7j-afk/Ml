@@ -70,10 +70,21 @@ function harness(initialProps = {}, search = '?sport=EPL&date=2026-10-19&view=sc
 let passed = 0;
 async function test(name, operation) { await operation(); passed++; console.log(`PASS ${name}`); }
 
+function toggleHistoryTools(h, open = true) {
+  const details = find(h.tree, element => element.type === 'details' && element.props.className?.includes('soccerSourceDetails'));
+  const target = { open };
+  details.props.onToggle({ target, currentTarget: target });
+  h.render();
+}
+
 await test('embedded EPL/UCL market coverage receives the canonical API league and selected date, and unmounts while inactive', async () => {
   for (const league of ['EPL', 'UCL']) for (const date of ['2026-10-19', '2026-11-21']) {
     const h = harness({ active: true, embedded: true, selectedLeague: league }, `?sport=${league}&date=${date}&view=schedule`);
     h.render();
+    assert.doesNotMatch(h.html(), /data-official-coverage|data-reader-inventory/, 'initial board leaves both background archive reads unmounted');
+    toggleHistoryTools(h);
+    assert.match(h.html(), /data-reader-inventory/);
+    toggleHistoryTools(h, false);
     assert.match(h.html(), new RegExp(`data-official-coverage="${league.toLowerCase()}"`), 'the production child only accepts the canonical lowercase scope');
     assert.match(h.html(), new RegExp(`data-board-date="${date}"`));
     h.render({ active: false, embedded: true, selectedLeague: league });
@@ -199,6 +210,7 @@ await test('upcoming Reader scope follows match dates and saved-date navigation 
   h.requests[0].respond(board);await h.settle();
   const reader=find(h.tree,element=>element.props?.games===board.games&&element.props?.view==='upcoming');assert.ok(reader);
   assert.equal(reader.props.date,'2026-10-29');assert.equal(reader.props.league,'EPL');
+  toggleHistoryTools(h);
   const inventory=find(h.tree,element=>typeof element.props?.onSelectDate==='function');assert.ok(inventory);
   assert.equal(inventory.props.throughDate,'2026-11-01');
   inventory.props.onSelectDate('2026-10-25');h.render();

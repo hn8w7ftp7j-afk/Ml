@@ -120,6 +120,56 @@ try {
   assert.equal(result.status, 200); assert.equal(builtReceipt.status, 'ARCHIVED');
   assert.equal(savedBody.evidence.sourceDocumentArchive.receiptId, builtReceipt.receiptId);
   assert.equal(JSON.stringify(savedBody).includes('lastFiveGames'), false);
+  // A slow operation in one independent ledger/source must not serialize its
+  // siblings. Check ordering of starts and completions, not elapsed wall time.
+  const serviceEvents = [];
+  const observe = (label, operation) => async (...args) => {
+    serviceEvents.push(`${label}:start`);
+    await new Promise(resolve => setImmediate(resolve));
+    try { return await operation(...args); } finally { serviceEvents.push(`${label}:done`); }
+  };
+  const before = (first, second) => {
+    assert.ok(serviceEvents.includes(first) && serviceEvents.includes(second)
+      && serviceEvents.indexOf(first) < serviceEvents.indexOf(second), `${first} before ${second}: ${serviceEvents}`);
+  };
+  const scoped = evidenceFor(), independent = makeDeps(scoped);
+  delete independent.enrichSoccerPrematchInputs;
+  let priorQuery, priorConsumed;
+  result = await analyzeSoccerGame(request, { ...independent,
+    ensureSoccerMinutesForwardProtocol: observe('minutes-protocol', () => true),
+    ensureSoccerForwardProtocol: observe('forward-protocol', () => true),
+    beginSoccerAnalysisRun: observe('begin', independent.beginSoccerAnalysisRun),
+    fetchSoccerWeather: observe('weather', () => { throw Error('provider offline'); }),
+    fetchSoccerWorkload: observe('workload', independent.fetchSoccerWorkload),
+    archiveSoccerSourceDocument: observe('document', archiveSoccerSourceDocument),
+    loadSoccerReaderSnapshot: observe('reader', () => { throw Error('reader unavailable'); }),
+    listSoccerAnalysis: observe('prior', (...args) => { priorQuery = args; return [{ revision: 'prior' }]; }),
+    buildSoccerAnalysis: input => { priorConsumed = input.previous; return independent.buildSoccerAnalysis(input); },
+    saveSoccerAnalysis: observe('save', independent.saveSoccerAnalysis),
+    captureSoccerCalibrationShadow: observe('calibration', () => { throw Error('ledger unavailable'); }),
+    captureSoccerMinutesForward: observe('minutes', () => ({ status: 'MINUTES_FIXTURE' })),
+    captureSoccerForwardSnapshot: observe('forward', () => ({ status: 'FORWARD_FIXTURE' })),
+    finishSoccerAnalysisRun: observe('publish', independent.finishSoccerAnalysisRun),
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.payload.readerUnavailable, true);
+  assert.equal(result.payload.evidence.weather.reason, 'WEATHER_SOURCE_UNAVAILABLE');
+  assert.equal(result.payload.calibrationShadowCapture.persisted, false);
+  assert.equal(result.payload.minutesForwardCapture.status, 'MINUTES_FIXTURE');
+  assert.equal(result.payload.forwardCapture.status, 'FORWARD_FIXTURE');
+  assert.deepEqual(priorQuery, [request.league, scoped.evidence.game.id, request.date, { limit: 1 }]);
+  assert.deepEqual(priorConsumed, { revision: 'prior' });
+  before('minutes-protocol:start', 'forward-protocol:done');
+  before('minutes-protocol:done', 'begin:start');
+  before('forward-protocol:done', 'begin:start');
+  before('weather:start', 'workload:done');
+  before('document:start', 'workload:done');
+  before('prior:start', 'reader:done');
+  before('forward:start', 'calibration:done');
+  for (const ledger of ['calibration', 'minutes', 'forward']) {
+    before('save:done', `${ledger}:start`);
+    before(`${ledger}:done`, 'publish:start');
+  }
   const unavailableValue = evidenceFor();
   result = await analyzeSoccerGame(request, { ...makeDeps(unavailableValue), archiveSoccerSourceDocument: async () => { throw Error('private connection detail'); } });
   assert.equal(result.status, 200); assert.equal(builtReceipt.reason, 'SOURCE_DOCUMENT_STORAGE_UNAVAILABLE');

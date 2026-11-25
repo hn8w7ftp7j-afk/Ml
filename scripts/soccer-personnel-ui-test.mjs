@@ -1,3 +1,4 @@
+import { OpenedSoccerDetails } from './helpers/soccer-opened-details-fixture.mjs';
 import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 import { loadSoccerShotXgResearchUiForTest } from './helpers/soccer-shot-xg-ui-fixture.mjs';
 import { soccerMatchContextObservations } from '../lib/soccer/match-context-observations.js';
@@ -29,7 +30,7 @@ const shipped=fs.readFileSync('app/soccer/analysis-panel.js','utf8');
 const source=shipped.replace(/^import .*?;\n/gm,'').replace(/export default function|export function/g,'function');
 const {code}=await transform(source,{filename:'soccer-personnel-analysis.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
 let analysisContext={states:{},run:()=>{}};
-const ctx=vm.createContext({buildSoccerRanking,React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
+const ctx=vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails,buildSoccerRanking,React,Date,URLSearchParams,AbortSignal,createContext:()=>({}),useContext:()=>analysisContext,
   useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],useRef:initial=>({current:initial}),useEffect:()=>{},
   SoccerManualSimulation:()=>null,SoccerPrematchInputsPanel:()=>null,SoccerMarketDirections:()=>null,SoccerProvisionalMarketResearch:()=>null,SoccerWorkloadPanel:()=>null,SoccerTeamXgPanel,SoccerModelDevelopmentPanel,SoccerMinutesV2Coverage,SoccerHalfTimeResearch:()=>null,SoccerWorkspace:({children})=>children});
 vm.runInContext(code,ctx);
