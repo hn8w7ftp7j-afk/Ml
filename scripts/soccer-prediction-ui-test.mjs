@@ -6,7 +6,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transform } from 'next/dist/build/swc/index.js';
 import { deterministicScore, SCORE_FORMULA_VERSION } from '../lib/deterministic-score.js';
-import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
+import { soccerQuoteScorePresentation, soccerMarketScorePresentations } from '../lib/soccer/score-presentation.js';
 import { soccerScoringReadiness, soccerQuoteScoringBlockers } from '../lib/soccer/scoring-readiness.js';
 import { buildSoccerRanking, SOCCER_RANK_MARKETS } from '../lib/soccer/ranking.js';
 import { soccerHighScoreCandidates, summarizeSoccerHighScoreBets } from '../lib/soccer/league-bet-status.js';
@@ -152,7 +152,7 @@ if (!producerOnly) {
 
 const marketSource = fs.readFileSync('app/soccer/market-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export function/g, 'function');
 const marketCode = await transform(marketSource, { filename: 'prediction-market.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
-const marketContext = vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails, React, Date, soccerQuoteScorePresentation, soccerScoringReadiness, soccerQuoteScoringBlockers, SoccerRecordButton: () => null });
+const marketContext = vm.createContext({ SoccerDeferredDetails:OpenedSoccerDetails, React, Date, soccerQuoteScorePresentation,soccerMarketScorePresentations, soccerScoringReadiness, soccerQuoteScoringBlockers, SoccerRecordButtonGroup:({children})=>children,SoccerRecordButton: () => null });
 vm.runInContext(marketCode.code, marketContext);
 if (!producerOnly) for (const league of ['epl', 'ucl']) {
   const { game, result } = fixture(league);
@@ -183,7 +183,7 @@ const rankingCode = await transform(rankingSource, { filename: 'prediction-ranki
 let stateIndex = 0, rankingView = 'ranking';
 const rankingContext = vm.createContext({ React, Date, buildSoccerRanking, SOCCER_RANK_MARKETS, soccerTeamLabel,
   useState: initial => [stateIndex++ === 0 ? rankingView : initial, () => {}],
-  SoccerRecordButton: () => React.createElement('button', null, '紀錄實際下注') });
+  SoccerRecordButtonGroup:({children})=>children,SoccerRecordButton: () => React.createElement('button', null, '紀錄實際下注') });
 vm.runInContext(rankingCode.code, rankingContext);
 const analysisSource = fs.readFileSync('app/soccer/analysis-panel.js', 'utf8').replace(/^import .*?;\n/gm, '').replace(/export default function|export function/g, 'function');
 const analysisCode = await transform(analysisSource, { filename: 'prediction-analysis.jsx', jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
@@ -301,6 +301,16 @@ if (contractPath) {
     assert.equal(result.formalScoringEnabled, false);
     const displays = (result.directions || []).flatMap(direction => (direction.quotes || []).map(quote =>
       soccerQuoteScorePresentation({ result, direction, quote, displayGame: game, now: clock })));
+    const batched = soccerMarketScorePresentations({ result, displayGame:game, now:clock });
+    assert.deepEqual(result.directions.flatMap(direction => direction.quotes.map(quote => batched.get(direction).get(quote))), displays);
+    if (item.expectRanked) {
+      const changed = structuredClone(result), direction = changed.directions.find(d => d.quotes.length), quote = direction.quotes[0];
+      const read = time => soccerMarketScorePresentations({ result:changed, displayGame:game, now:time }).get(direction).get(quote);
+      assert.equal(read(clock).status, soccerQuoteScorePresentation({result:changed, direction, quote, displayGame:game, now:clock}).status);
+      assert.equal(read(Date.parse(game.startTime)).status, 'HISTORICAL');
+      changed.readerIdentityEvidence.contentHash = '0'.repeat(64);
+      assert.equal(read(clock).status, 'IDENTITY_UNVERIFIED', 'a new pass must verify the receipt again even for the same result object');
+    }
     assert.equal(displays.some(value => value.scoreKind === 'PREDICTION' && value.score != null), item.expectPredictionScore);
     const actual = buildSoccerRanking([game], { [game.id]: { status: 'done', data: result } }, { now: clock });
     assert.equal(actual.entries.length > 0, item.expectRanked);

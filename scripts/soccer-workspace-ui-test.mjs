@@ -81,12 +81,27 @@ console.log('PASS shipped workspace JSX: six NBA-style tabs, two ranking views, 
 
 const recordSource=fs.readFileSync('app/soccer/bet-records.js','utf8').replace(/^import .*?;\n/gm,'').replace(/export function/g,'function');
 const recordCode=await transform(recordSource,{filename:'records.jsx',jsc:{parser:{syntax:'ecmascript',jsx:true},transform:{react:{runtime:'classic'}}}});
-let ledger;
-const recordCtx=vm.createContext({React,Date,soccerTeamLabel,createContext:()=>({}),useContext:()=>ledger,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified});
+let ledger,matchIdentity;
+const contexts=[];
+function createRecordContext() { const value={Provider:'fixture-provider'}; contexts.push(value); return value; }
+const recordCtx=vm.createContext({React,Date,soccerTeamLabel,createContext:createRecordContext,useContext:ctx=>ctx===contexts[0]?ledger:matchIdentity,soccerRecordKey,soccerRecordStats,soccerMarketName,soccerReaderIdentityVerified});
 vm.runInContext(recordCode.code,recordCtx);
 const game={id:'soccer:epl:123',league:'epl',date:'2026-10-20'},quote={period:'FT',kind:'TOTAL',side:'over',line:'3+50',lineSide:null,water:.95,key:'q1',unit:'GOALS'},result={persisted:true,revision:'a'.repeat(64)};
 const record={home:'Hull City',away:'Brighton & Hove Albion',...quote,gameId:game.id,league:'epl',date:game.date,id:'id',status:'OPEN',stake:10000,recordedAt:'2026-10-19T00:00:00Z'};
 ledger={records:[record],status:'ready',date:game.date,pending:new Set()};
+{
+  let checks=0;
+  recordCtx.soccerReaderIdentityVerified=value=>{checks++;return value===result;};
+  matchIdentity=recordCtx.SoccerRecordButtonGroup({result,children:null}).props.value;
+  for(const price of [quote,{...quote,water:.7}]) {
+    const button=recordCtx.SoccerRecordButton({game,result,quote:price});
+    assert.doesNotMatch(renderToStaticMarkup(button),/場次身分未驗證/);
+  }
+  assert.equal(checks,1,'one identity check covers the record controls for the same snapshot');
+  assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result:{...result},quote})),/場次身分未驗證/);
+  assert.equal(checks,2,'a different result cannot borrow the surrounding match proof');
+  recordCtx.soccerReaderIdentityVerified=soccerReaderIdentityVerified;matchIdentity=null;
+}
 assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/已下注 ✓/);
 ledger.records=[{...record,status:'CANCELLED'}];assert.match(renderToStaticMarkup(recordCtx.SoccerRecordButton({game,result,quote})),/重新紀錄下注/);
 ledger={...ledger,league:'epl',load:()=>{},mutate:()=>{}};assert.match(renderToStaticMarkup(recordCtx.SoccerBetRecords()),/實際輸贏本金的 1%/);

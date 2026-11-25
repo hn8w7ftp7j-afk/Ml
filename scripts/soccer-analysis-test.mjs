@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import { register } from 'node:module';
 import { normalizeSoccerSchedule } from '../lib/soccer/data.js';
 import { normalizeSoccerPrematch } from '../lib/soccer/prematch.js';
-import { buildSoccerAnalysis } from '../lib/soccer/analysis.js';
+import { buildSoccerAnalysis, soccerAnalysisHash } from '../lib/soccer/analysis.js';
+import { soccerForwardAnalysisRevision } from '../lib/soccer/forward-validation.js';
 const fixture=name=>JSON.parse(fs.readFileSync(`scripts/fixtures/soccer/${name}.json`));
 const at='2026-10-18T13:35:00.000Z',now=Date.parse(at),source={provider:'ESPN',url:'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=401878769',fetchedAt:at,contentHash:'bounded-real-provider-extraction'};
 function gameFrom(p,league='epl'){const c=p.header.competitions[0];return normalizeSoccerSchedule({leagues:[p.header.league],events:[{...p.header,date:c.date,status:c.status}]},league,source).games[0];}
@@ -54,7 +55,7 @@ const count=async()=>(await db.query('SELECT count(*)::int AS n FROM sports_socc
 try{
  Date.now=()=>now;delete process.env.DATABASE_V2_URL;process.env.DATABASE_URL='postgres://fixture.invalid/analysis';process.env.APP_PASSWORD='fixture-soccer';process.env.SESSION_SECRET='fixture-soccer-session';
  let calls=0;globalThis.fetch=async url=>{calls++;assert.match(String(url),/^https:\/\/site.api.espn.com\/apis\/site\/v2\/sports\/soccer\/eng.1\/(?:summary\?event=401878769|scoreboard\?dates=202610(?:17|18|19))$/);if(String(url).includes('summary'))return Response.json(p);return Response.json({leagues:[p.header.league],events:[{...p.header,date:p.header.competitions[0].date,status:p.header.competitions[0].status}]});};
- const {POST,GET}=await import('../app/api/soccer/analysis/route.js'),{createSessionToken}=await import('../lib/security.js'),{saveSoccerAnalysis}=await import('../lib/soccer/analysis-store.js');
+ const {POST,GET}=await import('../app/api/soccer/analysis/route.js'),{createSessionToken}=await import('../lib/security.js'),{listSoccerAnalysis,saveSoccerAnalysis}=await import('../lib/soccer/analysis-store.js');
  const token=await createSessionToken(),body={league:'epl',date:game.date,eventId:game.sourceId};
  const request=(b=body,headers={})=>new Request('https://fixture.invalid/api/soccer/analysis',{method:'POST',headers:{cookie:`mlb_session=${token}`,'Content-Type':'application/json',Origin:'https://fixture.invalid',...headers},body:JSON.stringify(b)});
  assert.equal((await POST(request(body,{cookie:''}))).status,401);assert.equal((await POST(request(body,{Origin:'https://evil.invalid'}))).status,403);assert.equal(calls,0);
@@ -69,5 +70,64 @@ try{
  const saved=await (await GET(historyRequest())).json();assert.equal(saved.versions.length,await count());assert.ok(saved.versions.every(v=>v.persisted));assert.equal(saved.runs[0].analysisStatus,'COMPLETED');assert.equal((await (await GET(historyRequest('league=ucl&date=2026-10-18&eventId=401878769'))).json()).versions.length,0);
  const failedRuns=(await db.query("SELECT analysis_status,selection_result FROM sports_soccer_analysis_events_v2 WHERE analysis_status='INSUFFICIENT_DATA'")).rows;assert.equal(failedRuns.length,1);assert.equal(failedRuns[0].selection_result,null);
  assert.ok((await db.query('SELECT * FROM sports_soccer_cohort_v2')).rows.length>0,'entire observed schedule is retained, including unselected games');
+ // Verify post-commit readback against the submitted input on fresh writes and
+ // conflicts, including old JSONB number spellings and deliberately corrupt rows.
+ const originalAnalysis={...analysis};delete originalAnalysis.analysisHash;
+ const snapshot=probe=>{const payload={...originalAnalysis,readbackProbe:probe};return {...payload,analysisHash:soccerAnalysisHash(payload)};};
+ const fresh=snapshot(1),revision=soccerForwardAnalysisRevision(fresh);
+ const before=await count(),transport=globalThis.__SOCCER_TEST_SQL,readbacks=[];
+ globalThis.__SOCCER_TEST_SQL=async(queries,transaction)=>{
+   const result=await transport(queries,transaction);
+   for(const rows of result) for(const row of rows) if(Object.hasOwn(row,'differing_payload'))readbacks.push(row);
+   return result;
+ };
+ try{
+   const saved=await Promise.all([saveSoccerAnalysis(fresh),saveSoccerAnalysis(fresh)]);
+   assert.deepEqual(saved,[{persisted:true,revision},{persisted:true,revision}]);
+   assert.equal(await count(),before+1);
+   assert.deepEqual(readbacks,[{differing_payload:null},{differing_payload:null}]);
+   const changing=snapshot(7),submittedRevision=soccerForwardAnalysisRevision(changing);
+   const pending=saveSoccerAnalysis(changing);changing.readbackProbe=8;
+   assert.deepEqual(await pending,{persisted:true,revision:submittedRevision});
+   const frozen=await db.query("SELECT payload->>'readbackProbe' AS probe FROM sports_soccer_analysis_v1 WHERE analysis_hash=$1",[submittedRevision]);
+   assert.equal(frozen.rows[0].probe,'7');
+   for(const [value,storedValue,valid] of [[2,'2.000',true],[3,'4',false]]){
+     const submission=snapshot(value),key=soccerForwardAnalysisRevision(submission);
+     await db.query(`INSERT INTO sports_soccer_analysis_v1(league,game_id,analysis_hash,observed_at,payload)
+       VALUES($1,$2,$3,$4,jsonb_set($5::jsonb,'{readbackProbe}',$6::jsonb))`,
+       [submission.league,submission.gameId,key,submission.observedAt,JSON.stringify(submission),storedValue]);
+     if(valid)assert.deepEqual(await saveSoccerAnalysis(submission),{persisted:true,revision:key});
+     else await assert.rejects(()=>saveSoccerAnalysis(submission),/SOCCER_ANALYSIS_READBACK_FAILED/);
+     assert.equal(readbacks.at(-1).differing_payload.readbackProbe,Number(storedValue));
+   }
+   await db.exec(`CREATE FUNCTION fixture_change_analysis_input() RETURNS trigger LANGUAGE plpgsql AS $$
+     BEGIN NEW.payload=jsonb_set(NEW.payload,'{readbackProbe}','6'::jsonb);RETURN NEW;END;$$;
+     CREATE TRIGGER fixture_change_analysis_before_insert BEFORE INSERT ON sports_soccer_analysis_v1
+     FOR EACH ROW WHEN (NEW.payload->>'readbackProbe'='5') EXECUTE FUNCTION fixture_change_analysis_input();`);
+   await assert.rejects(()=>saveSoccerAnalysis(snapshot(5)),/SOCCER_ANALYSIS_READBACK_FAILED/);
+   assert.equal(readbacks.at(-1).differing_payload.readbackProbe,6,'a new insert must verify the actual stored value too');
+ }finally{globalThis.__SOCCER_TEST_SQL=transport;}
+ // Compare both history paths to the original exact-date selection on one
+ // changing game identity, including same-time revisions and sparse dates.
+ const rescheduled='soccer:epl:771221',dayA='2026-10-18',dayB='2026-10-19';
+ for(const [i,date] of [dayA,dayA,dayB,dayA,dayB,dayB].entries()){
+   const observedAt=new Date(now+Math.floor(i/2)*1000).toISOString();
+   const payload={league:'epl',gameId:rescheduled,date,observedAt,sequence:i};
+   await db.query(`INSERT INTO sports_soccer_analysis_v1(league,game_id,analysis_hash,observed_at,payload)
+     VALUES($1,$2,$3,$4,$5)`,['epl',rescheduled,soccerForwardAnalysisRevision(payload),observedAt,JSON.stringify(payload)]);
+ }
+ for(const day of [dayA,dayB,'2026-10-20'])for(const limit of [1,2,3,5]){
+   const old=await db.query(`SELECT analysis_hash,payload FROM sports_soccer_analysis_v1
+     WHERE league=$1 AND game_id=$2 AND payload->>'date'=$3 ORDER BY observed_at DESC,analysis_hash DESC LIMIT $4`,
+     ['epl',rescheduled,day,limit]);
+   assert.deepEqual(await listSoccerAnalysis('epl',rescheduled,day,{limit}),
+     old.rows.map(row=>({...row.payload,persisted:true,revision:row.analysis_hash})));
+ }
+ const corrupt={league:'epl',gameId:rescheduled,date:dayA,observedAt:new Date(now+5000).toISOString()};
+ await db.query(`INSERT INTO sports_soccer_analysis_v1(league,game_id,analysis_hash,observed_at,payload)
+   VALUES('epl',$1,$2,$3,$4)`,[rescheduled,'f'.repeat(64),corrupt.observedAt,JSON.stringify(corrupt)]);
+ await assert.rejects(()=>listSoccerAnalysis('epl',rescheduled,dayA,{limit:1}),/SOCCER_ANALYSIS_HISTORY_CORRUPTED/);
+ const alternate=await listSoccerAnalysis('epl',rescheduled,dayB,{limit:5});
+ assert.ok(alternate.length===3&&alternate.every(row=>row.date===dayB),'a corrupt foreign-date row is never returned');
  console.log('PASS real soccer API + PostgreSQL: auth/origin/scope, six-layer research states, immutable snapshots/dedup, failed attempts, cohort retention and separate historical versions; no Production writes');
 }finally{Date.now=originalNow;globalThis.fetch=originalFetch;for(const k of keys){if(env[k]===undefined)delete process.env[k];else process.env[k]=env[k];}await fixtureDb.close();}

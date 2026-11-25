@@ -69,7 +69,7 @@ function harness({ games = [game()], runId = '', date = games[0]?.date || '', sa
       removeEventListener: (event, listener) => listeners.get(event)?.delete(listener),
     },
     fetch: (url, options = {}) => {
-      const task = deferred(), call = { url: String(url), options, ...task, respond: (value, status = 200) => task.resolve(Response.json(value, { status })) };
+      const task = deferred(), call = { url: String(url), options, ...task, respond: (value, status = 200, headers = {}) => task.resolve(Response.json(value, { status, headers })) };
       calls.push(call);
       const abort = () => task.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
       if (options.signal?.aborted) abort(); else options.signal?.addEventListener('abort', abort, { once: true });
@@ -118,6 +118,70 @@ await test('mount restores saved current analysis with GET only and at most two 
     assert.match(renderToStaticMarkup(h.render()), /載入已保存分析/);
     for (const call of h.reads) { assert.equal(call.options.cache, 'no-store'); assert.ok(call.options.signal); }
   } finally { h.unmount(); await flush(); }
+});
+
+await test('a throttled head stops fanout and automatically retries only missing games at Retry-After', async () => {
+  const rows=[game('11'),game('12'),game('13'),game('14'),game('15')],h=harness({games:rows});
+  const ids=()=>h.reads.map(call=>new URL(call.url,'https://fixture.invalid').searchParams.get('eventId'));
+  try{
+    h.mount();
+    const nearExpiry=analysis(rows[0],{qualificationValidUntil:new Date(now+2000).toISOString()});
+    h.reads[0].respond(head(rows[0],nearExpiry));await flush();
+    assert.deepEqual(ids(),['11','12','13']);
+    h.reads[1].respond({},429,{'Retry-After':'4'});await flush();
+    h.reads[2].respond(head(rows[2]));await flush();h.render();
+    assert.deepEqual(ids(),['11','12','13'],'the remainder of the wave waits');
+    assert.equal(h.counts().completed,2);
+    h.setNow(now+2999);
+    assert.equal(h.ctx.soccerResearchIsCurrent(h.state[0][rows[0].id]),false,'the verified score expires during cooldown');
+    h.fire('focus');h.fire('soccer:reader-content-changed',{league:'epl',date:rows[0].date,contentHash:'f'.repeat(64)});
+    await h.tick(1000);
+    assert.equal(h.reads.length,3,'focus, timer and lightweight status share the server deadline');
+    h.setNow(now+4000);await h.tick(1001);
+    assert.deepEqual(ids().slice(3),['12','14']);
+    h.reads[3].respond(head(rows[1]));await flush();
+    h.reads[4].respond(head(rows[3]));h.reads[5].respond(head(rows[4]));await flush();
+    assert.deepEqual(ids(),['11','12','13','12','14','15']);
+    assert.ok(rows.every(row=>h.state[0][row.id]?.data?.persisted===true));assert.equal(h.counts().recoveryFailed,0);assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('a throttled current receipt blocks other status and head requests until its HTTP-date', async () => {
+  const rows=[game('21'),game('22'),game('23')],h=harness({games:rows});
+  try{
+    h.mount();h.reads[0].respond(head(rows[0]));await flush();
+    h.reads[1].respond(head(rows[1]));h.reads[2].respond(head(rows[2]));await flush();h.render();
+    const start=Math.ceil((now+30000)/1000)*1000;
+    h.setNow(start);await h.tick(1000);assert.equal(h.reads.length,5);
+    const read=rows[1],status=analysis(read).currentResearch;
+    h.reads[3].respond({},429,{'Retry-After':new Date(start+5000).toUTCString()});await flush();
+    h.reads[4].respond({ok:true,league:read.league,date:read.date,gameId:read.id,currentResearch:status});await flush();h.render();
+    assert.equal(h.state[0][rows[0].id].currentResearch,null,'failed verification cannot assert current authority');
+    h.fire('focus');h.setNow(start+4000);await h.tick(1000);
+    assert.equal(h.reads.length,5,'no head or current request dispatched while blocked');
+    h.setNow(start+5000);await h.tick(5000);
+    assert.equal(h.reads.length,7,'full-head refresh can resume when the server deadline passes');
+    assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
+});
+
+await test('a hidden board skips scheduled full reads, resumes once and ignores unrelated storage writes', async () => {
+  const row=game(),h=harness(),events=new Map();
+  h.ctx.document={visibilityState:'visible',addEventListener:(k,fn)=>{if(!events.has(k))events.set(k,new Set());events.get(k).add(fn);},removeEventListener:(k,fn)=>events.get(k)?.delete(fn)};
+  try{
+    h.mount();h.reads[0].respond(head(row,null));await flush();h.render();
+    h.ctx.document.visibilityState='hidden';await h.tick(60000);
+    assert.equal(h.reads.length,1);
+    h.ctx.document.visibilityState='visible';
+    for(const fn of events.get('visibilitychange'))fn();
+    h.fire('focus');assert.equal(h.reads.length,2,'one recovery for the foreground transition');
+    h.reads[1].respond(head(row,null));await flush();h.render();
+    for(const fn of h.listeners.get('storage'))fn({key:'unrelated-account-preference'});
+    assert.equal(h.reads.length,2);
+    for(const fn of h.listeners.get('storage'))fn({key:recovery.SOCCER_ALL_LEAGUE_STORAGE});
+    assert.equal(h.reads.length,3,'a genuine workflow change still reconnects');
+    assert.equal(h.posts.length,0);
+  }finally{h.unmount();await flush();}
 });
 
 await test('initial head timeout is distinct from no saved result, manual failure and unmount', async () => {
