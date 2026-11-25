@@ -104,6 +104,51 @@ const normalizerHeaders = ['時間', '主客隊伍', '讓分', '大小盤', '獨
 const spans = normalizerHeaders.map((_, index) => [index * 100, (index + 1) * 100]);
 const rectCell = (text, index, top) => ({ text, lines: text ? [text] : [], rows: text ? [{ text, top, left: spans[index][0] }] : [], left: spans[index][0], right: spans[index][1] });
 const record = (order, top, values) => ({ order, top, bottom: top + 20, text: values.filter(Boolean).join(' '), cells: values.map((text, index) => rectCell(text, index, top)).filter(value => value.text) });
+{
+  const marker = ['聯盟：NBA 美國職業籃球(1)'];
+  const halfFirst = [...normalizerHeaders];
+  [halfFirst[2], halfFirst[6]] = [halfFirst[6], halfFirst[2]];
+  // Synthetic contracts make a valid full-game 1.5 distinguishable from the half.
+  const away = ['11-26', 'CHI 公牛', '0.940', '220平 大 0.940', '', '', '0.950', '115平 大 0.930'];
+  const home = ['08:00', 'CHA 黃蜂[主]', '3-40 0.940', '小 0.940', '', '', '1.5 0.950', '小 0.930'];
+  function readLayout(rows) {
+    const records = rows.map((values, index) => record(index, index * 24, values));
+    const normalized = normalizer.normalizeRowRecords(records, { expectedLeague: 'NBA' });
+    return parseTai888Capture({ ...capture(), ...normalized }, now);
+  }
+  for (const prefix of [[halfFirst, marker], [marker, halfFirst], [normalizerHeaders, marker, halfFirst]]) {
+    const parsed = readLayout([...prefix, away, home]);
+    assert.equal(parsed.games.length, 1);
+    const game = parsed.games[0];
+    assert.deepEqual([game.fullRunline.line, game.fullRunline.homeWater], ['1.5', 0.95]);
+    assert.deepEqual([game.firstHalfRunline.lineSide, game.firstHalfRunline.line, game.firstHalfRunline.homeWater], ['home', '3-40', 0.94]);
+    assert.deepEqual(parsed.parseIssues, []);
+  }
+  const lateHeader = readLayout([marker, away, home, halfFirst, away, [...home.slice(0, 1), 'TOR 暴龍[主]', ...home.slice(2)]]);
+  assert.deepEqual(lateHeader.games.map(game => game.homeCode), ['TOR'], 'a later header cannot authorize earlier rows');
+  assert.equal(readLayout([marker, away, home]).games.length, 0);
+  const unsupported = ['時間', '主客隊伍', '單雙', '獨贏'];
+  assert.equal(readLayout([halfFirst, marker, unsupported, away, home]).games.length, 0, 'unrecognized market headers invalidate the older layout');
+  const missingHalf = halfFirst.map(name => name === '上半讓分' ? '其他盤' : name);
+  assert.equal(readLayout([halfFirst, marker, missingHalf, away, home]).games[0].firstHalfRunline, null);
+
+  const otherPeriod = normalizerHeaders.map(name => name.replace('上半', '前五'));
+  for (const nextMarker of [['聯盟：MLB 美國職棒(1)'], ['聯盟：NBA 美國職業籃球-主推過關(1)']]) {
+    const shared = readLayout([halfFirst, nextMarker, away, home, marker, away, home]);
+    assert.equal(shared.games.length, 1, 'a page-wide standard header can serve NBA after another section');
+    assert.equal(shared.games[0].firstHalfRunline.line, '3-40');
+    assert.equal(readLayout([otherPeriod, nextMarker, away, home, marker, away, home]).games.length, 0,
+      'a page-wide first-five board is not a basketball layout');
+    assert.equal(readLayout([halfFirst, nextMarker, otherPeriod, away, home, marker, away, home]).games.length, 0,
+      'a later scoped layout invalidates the older shared layout');
+    const parsed = readLayout([halfFirst, marker, away, home, otherPeriod, nextMarker, away, home]);
+    assert.equal(parsed.games.length, 1);
+    assert.deepEqual(parsed.parseIssues, [], 'a header before another board must not flag the prior NBA game');
+    assert.equal(parsed.games[0].firstHalfRunline.line, '3-40');
+    assert.equal(readLayout([nextMarker, otherPeriod, away, home, marker, away, home]).games.length, 0,
+      'a foreign or special layout cannot authorize a headerless NBA section');
+  }
+}
 // Reproduce the user's Tai888 NBA warm-up board, including the actual heading,
 // space-separated team codes, swapped unsupported columns and empty halves.
 const warmupRecords = [
