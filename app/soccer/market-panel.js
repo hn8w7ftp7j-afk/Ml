@@ -370,12 +370,12 @@ export function SoccerMarketDirections({directions=[],unassignedQuotes=[],histor
     })}</div>
     {!items.length&&<p className="soccerMarketEmpty">尚無八方向分析，請先核對賽前資料。</p>}
     {unknown.length>0&&<section className="soccerMarketUnassigned"><h4>期間待確認的原盤</h4><p className="soccerMarketCaution">以下原盤未能確認屬全場或上半場，暫不配入八方向。</p>{unknown.map((quote,i)=><SoccerRawMarketQuote quote={quote} unassigned index={i} key={`${quote.key||i}:${i}`}/>)}</section>}
-    <details className="soccerDetails soccerMarketResearchDetails"><summary>預測依據與診斷</summary><p className="soccerMarketNote">每筆有效原盤獨立顯示預測 S，沿用既有 S 公式。預測排名維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並核對場次、期間及盤口時效。</p><p className="soccerMarketCaution">依目前可取得的資料預測；缺項保留標示。尚無有效計算依據時不產生分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
+    <SoccerDeferredDetails className="soccerDetails soccerMarketResearchDetails" label="預測依據與診斷">{() => <><p className="soccerMarketNote">每筆有效原盤獨立顯示預測 S，沿用既有 S 公式。預測排名維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並核對場次、期間及盤口時效。</p><p className="soccerMarketCaution">依目前可取得的資料預測；缺項保留標示。尚無有效計算依據時不產生分數。進球門檻機率僅描述比分分布，不是過盤率或獲利勝率。</p>
       {result?.predictionContext?.version==='SOCCER-AVAILABLE-DATA-PREDICTION-v1'&&result.predictionContext.mode==='PREDICTION'&&<section className="soccerMarketNote" aria-label="本次預測依據"><strong>本次預測依據</strong><p>比分分布採同聯盟歷史比賽模型，搭配本筆原盤與已保存模型情境。</p>{result.predictionContext.contextualGoalEffectApplied===false&&<p>npxG、人員及比賽條件尚未量化套入本次進球率；已取得的來源資料仍保留供查閱，不以假設係數補值。</p>}<p>缺項會保留標示；模型與完整收益誤差未驗證。</p></section>}
       <SoccerScenarioResearch result={result} game={game} now={now}/>
       <SoccerAutomaticAnalysisStatus result={result} game={game} now={now}/>
       <SoccerScoringReadiness result={result} game={game} now={now}/>
-    </details>
+    </>}</SoccerDeferredDetails>
   </details>;
 }
 
