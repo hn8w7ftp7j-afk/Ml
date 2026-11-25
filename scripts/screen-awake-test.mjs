@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
+import { createRequire } from 'node:module';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { load } from 'cheerio';
 import { createScreenAwake, SCREEN_AWAKE_MS } from '../lib/screen-awake.js';
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
@@ -80,4 +84,34 @@ for (const event of ['pointerdown', 'keydown', 'visibilitychange', 'pageshow', '
 }
 assert.match(component, /current\.dispose\(\)/);
 assert.match(fs.readFileSync('app/layout.js', 'utf8'), /<ScreenAwake\/>/);
+// A gesture can change both the status and the action before click. All
+// supported states must reserve space for the same wrapping text and action.
+const require = createRequire(import.meta.url);
+const { transform } = require('next/dist/build/swc/index.js');
+const { code } = await transform(component, { filename: 'app/screen-awake.js', module: { type: 'commonjs' },
+  jsc: { parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'automatic' } }, target: 'es2022' } });
+let displayed;
+const module = { exports: {}, require(id) {
+  if (id === 'react') return { useState: () => [displayed, () => {}], useRef: () => ({}), useEffect: () => {} };
+  if (id === 'next/navigation') return { usePathname: () => '/' };
+  if (id.endsWith('/screen-awake.js')) return { createScreenAwake };
+  return require(id);
+} };
+vm.runInNewContext(code, module);
+const labels = new Set(), actions = new Set();
+const supportedStates = ['blocked', 'pending', 'active', 'paused', 'idle'];
+const footer = state => { displayed = state; return load(renderToStaticMarkup(module.exports.default())); };
+for (const state of supportedStates) {
+  const $ = footer(state);
+  labels.add($('[role=status]').text());
+  actions.add($('button span span:not([aria-hidden])').text());
+}
+for (const state of supportedStates) {
+  const $ = footer(state);
+  const sizingText = owner => new Set($(owner).find('[aria-hidden=true]').map((_index, node) => $(node).text()).get());
+  assert.deepEqual(sizingText($('[role=status]').parent()), labels);
+  assert.deepEqual(sizingText('button'), actions);
+  assert.equal($('[role=status]').closest('[aria-hidden]').length, 0);
+}
+assert.equal(footer('unsupported')('button').length, 0);
 console.log('PASS five-minute renewal, visibility/BFCache, pause/retry, unsupported/denied, expiry/disposal races, OS release and global authenticated-page wiring');

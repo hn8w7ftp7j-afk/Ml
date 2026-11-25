@@ -65,7 +65,7 @@ const states={
   [games[7].id]:currentState({...current,currentResearch:undefined}),
   'soccer:ucl:foreign':{status:'done',data:current},
 };
-assert.deepEqual(plain(context.soccerAnalysisCounts(games,states)),{total:8,candidates:0,waiting:3,processing:2,completed:1,insufficient:1,failed:1,research:1,historical:0},'the current board, including unstarted and failed games, fixes the summary denominator');
+assert.deepEqual(plain(context.soccerAnalysisCounts(games,states)),{total:8,candidates:0,waiting:2,restoring:1,recoveryFailed:0,processing:2,completed:1,insufficient:1,failed:1,research:1,historical:0},'the current board, including unstarted and failed games, fixes the summary denominator');
 
 const audit={layers:[{key:'personnel',title:'球員與分鐘',items:[
   {key:'lineup',label:'先發陣容',status:'AVAILABLE',reason:'資料源列出名單，公布時點尚未核對。',modelUsage:'OBSERVED_ONLY'},

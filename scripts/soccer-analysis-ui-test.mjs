@@ -181,7 +181,7 @@ assert.equal(h.ctx.soccerAnalysisPresentation(archived,uiNow,prestartGame).analy
 assert.equal(h.ctx.soccerAnalysisPresentation({...archived,data:{...archived.data,league:'ucl'}},uiNow,finalGame).analysisStatus,'UNVERIFIED','cross-league data cannot establish saved history');
 assert.equal(h.ctx.soccerAnalysisPresentation({...archived,data:{...archived.data,persisted:false}},uiNow,finalGame).analysisStatus,'UNVERIFIED','unsaved data cannot claim persistence');
 assert.equal(h.ctx.soccerAnalysisPresentation({...archived,status:'error'},uiNow,finalGame).analysisStatus,'FAILED','a failed later audit remains visible');
-assert.equal(h.ctx.soccerAnalysisPresentation(null,uiNow,finalGame).analysisStatus,'CLOSED','missing historical data is not claimed completed');
+assert.equal(h.ctx.soccerAnalysisPresentation({status:'idle'},uiNow,finalGame).analysisStatus,'CLOSED','missing historical data is not claimed completed');
 h.state[0][realGame.id]=archived;
 const archivedMarkup=renderToStaticMarkup(h.renderPanel(finalGame));
 assert.match(archivedMarkup,/賽前分析已保存/);assert.doesNotMatch(archivedMarkup,/目前有效狀態待重新核對|資料待更新/);

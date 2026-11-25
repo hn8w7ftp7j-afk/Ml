@@ -12,6 +12,17 @@ const LABELS = {
   blocked: '手機未允許螢幕常亮・請檢查省電模式或重試',
   unsupported: '此瀏覽器不支援螢幕常亮・請使用新版 Safari 或 Chrome',
 };
+const statusLabels = Object.entries(LABELS).filter(([key]) => key !== 'unsupported').map(([, label]) => label);
+const buttonLabels = ['關閉常亮', '亮屏 5 分鐘'];
+
+// All possible labels share a grid cell. The footer keeps its natural wrapped
+// size when a pointer or keyboard event starts a new OS request.
+function StableLabel({ labels, children }) {
+  return <span className="screen-awake-label">
+    {labels.map(label => <span key={label} aria-hidden="true">{label}</span>)}
+    {children}
+  </span>;
+}
 
 export default function ScreenAwake() {
   const pathname = usePathname();
@@ -45,9 +56,9 @@ export default function ScreenAwake() {
   if (!enabled || !status) return null;
   const active = status === 'active' || status === 'pending';
   return <aside data-screen-awake className="screen-awake" aria-label="螢幕常亮設定">
-    <span role="status">{LABELS[status]}</span>
+    <StableLabel labels={status === 'unsupported' ? [] : statusLabels}><span role="status">{LABELS[status]}</span></StableLabel>
     {status !== 'unsupported' && <button type="button" onClick={() => active ? controller.current?.pause() : controller.current?.resume()}>
-      {active ? '關閉常亮' : '亮屏 5 分鐘'}
+      <StableLabel labels={buttonLabels}><span>{active ? buttonLabels[0] : buttonLabels[1]}</span></StableLabel>
     </button>}
   </aside>;
 }

@@ -108,6 +108,9 @@ await test('mount restores saved current analysis with GET only and at most two 
   const games = [game('101'), game('102'), game('103')], h = harness({ games });
   try {
     h.mount(); assert.equal(h.reads.length, 2); assert.equal(h.posts.length, 0);
+    assert.equal(h.counts().restoring,3,'includes games still waiting for a head-read worker');
+    assert.equal(h.counts().waiting,0); assert.equal(h.counts().processing,0);
+    assert.equal(h.ctx.soccerAnalysisPresentation(undefined,now,games[2]).analysisLabel,'正在讀取已保存分析');
     h.reads[0].respond(head(games[0])); await flush(); assert.equal(h.reads.length, 3);
     h.reads[1].respond(head(games[1])); h.reads[2].respond(head(games[2])); await flush();
     assert.equal(h.counts().completed, 3); assert.equal(h.counts().research, 3); assert.equal(h.counts().candidates, 0);
@@ -115,6 +118,26 @@ await test('mount restores saved current analysis with GET only and at most two 
     assert.match(renderToStaticMarkup(h.render()), /載入已保存分析/);
     for (const call of h.reads) { assert.equal(call.options.cache, 'no-store'); assert.ok(call.options.signal); }
   } finally { h.unmount(); await flush(); }
+});
+
+await test('initial head timeout is distinct from no saved result, manual failure and unmount', async () => {
+  const row=game(),h=harness({games:[row]});
+  try {
+    h.mount(); await h.tick(20000);
+    assert.equal(h.counts().restoring,0); assert.equal(h.counts().recoveryFailed,1);
+    assert.equal(h.counts().waiting,0); assert.equal(h.counts().failed,0);
+    assert.match(h.state[0][row.id].recoveryError,/逾時/);
+    assert.equal(h.ctx.soccerAnalysisPresentation(h.state[0][row.id],now,row).analysisStatus,'RECOVERY_FAILED');
+    h.render(); h.fire('focus'); await flush();
+    assert.equal(h.counts().restoring,1); assert.equal(h.counts().recoveryFailed,0);
+    h.reads[1].respond({ok:true,gameId:row.id,league:row.league,date:row.date,versions:[],runs:[]}); await flush();
+    assert.equal(h.counts().restoring,0); assert.equal(h.counts().waiting,1);
+    assert.equal(h.ctx.soccerAnalysisPresentation(h.state[0][row.id],now,row).analysisStatus,'NOT_STARTED');
+    assert.equal(h.posts.length,0);
+  } finally {h.unmount(); await flush();}
+  const abandoned=harness({games:[row]});
+  abandoned.mount(); abandoned.unmount(); await flush();
+  assert.equal(abandoned.state[0][row.id],undefined,'cleanup abort must not report a read failure');
 });
 
 await test('first load and immediate manual recovery retain read-only archive separately from the live payload', async () => {
@@ -837,7 +860,10 @@ console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior g
       assert.match(empty.html, /目前沒有通過/);
       assert.doesNotMatch(empty.html, /讀取失敗|重試讀取/);
 
-      const timedGame = game('303', moved.date, f.league);
+      // A confirmed empty response is local to its original match date.
+      // Reusing the same source ID on another date must not inherit that idle state.
+      const timedDate = '2099-01-04';
+      const timedGame = { ...moved, date: timedDate, startTime: timedDate + 'T13:00:00Z' };
       const timedScope = { games: [timedGame], date: timedGame.date };
       assertPending(rankedPage(timedScope).html);
       await h.tick(20000);
@@ -868,6 +894,10 @@ console.log(`Soccer automatic recovery UI: ${passed} shipped-provider behavior g
       assertPending(rankedPage().html);
       h.reads.at(-1).respond(head(failedGame, null)); await flush();
       assert.deepEqual(rankedPage().progress, { total: 1, loaded: 1, failed: 0 });
+      const confirmedEmptyScope = rankedPage({ games: [], date: failedGame.date });
+      assert.deepEqual(confirmedEmptyScope.progress, { total: 0, loaded: 0, failed: 0 });
+      assert.match(confirmedEmptyScope.html, /目前範圍沒有未開賽場次/);
+      assert.doesNotMatch(confirmedEmptyScope.html, /目前沒有通過|讀取失敗|重試讀取|已載回/);
     } finally { h.unmount(); await flush(); }
   });
 }

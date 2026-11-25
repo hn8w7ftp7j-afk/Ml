@@ -70,7 +70,7 @@ export function SoccerRanking({games,states,run,now,externalBusy=false,onShowRes
       </article>)}
     </section>}
     <p className="soccerAvailability">同場同期間同盤種只列 EV（W）最高的合格盤口。預測候選・S ≥ 7.2、W／R 為正。完整模型誤差未驗證。</p>
-    {ranking.outdatedGames>0&&<p>{ranking.outdatedGames} 場賽前資料已過期或待核對，請重新核對。</p>}{!incomplete&&ranking.pendingGames>0&&<p>{ranking.pendingGames} 場待分析或重新核對。</p>}
+    {ranking.outdatedGames>0&&<p>{ranking.outdatedGames} 場賽前資料已過期或待核對，請重新核對。</p>}{!incomplete&&ranking.pendingGames>0&&<p>{ranking.pendingGames} 場尚無已核對的目前評分。</p>}
     <details className="soccerDetails"><summary>排序與評分說明</summary><p>預測候選維持 S ≥ 7.2、W &gt; 0、模型情境 R &gt; 0，並通過場次、期間與盤口時效核對。依現有資料預測，缺項及未驗證狀態另行標示。</p><p>全部排名依 S、W、R 排序；時間順序排名依開賽時間分場，同場依全場讓球、全場大小、上半讓球、上半大小排列，每個市場先從合格盤口中選 W 最高的一筆，W 相同時依 R、固定盤口識別排序。其他原盤保留在分析結果。場次與方向序號分開顯示。</p></details>
   </section>;
 }
@@ -86,7 +86,7 @@ export default function SoccerWorkspace({games,states,run,league,date,children,a
   return <SoccerRecordProvider league={league} date={dates[0]} through={dates.at(-1)} dates={dates} summaryDate={date} candidates={reminder?.candidates||[]} analysisReady={reminder?.analysisReady??analysisReady} onHighScoreStatusChange={onHighScoreStatusChange}><nav className="mainTabs soccerWorkspaceTabs" aria-label="足球主站功能">{[['board','盤口'],['results','分析結果'],['ranking','排名'],['records','下注紀錄'],['data','賽程與球員'],['validation','模型驗證']].map(([key,label])=><button key={key} className={view===key?'active':''} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>
     {view==='ranking'&&<SoccerRanking games={games} states={states} run={run} now={now} externalBusy={externalBusy} readProgress={readProgress} onRetryReads={onRetryReads} onShowResults={()=>setView('results')}/>}
     {view==='records'&&<SoccerBetRecords/>}
-    {view==='results'&&<section className="panel"><h2>{name}｜分析結果</h2><p>已分析 {games.filter(g=>states[g.id]?.data).length}／{games.length} 場。展開各場查看八方向原盤、比分研究與核對紀錄。</p></section>}
+    {view==='results'&&<section className="panel"><h2>{name}｜分析結果</h2><p>已載入分析 {games.filter(g=>states[g.id]?.data).length}／{games.length} 場。展開各場查看八方向原盤、比分研究與核對紀錄。</p></section>}
     {view==='validation'&&<SoccerValidationPanel league={league}/>}
     <div hidden={['ranking','records','validation'].includes(view)} className={view==='results'?'soccerResultsView':''}>
       {children}
