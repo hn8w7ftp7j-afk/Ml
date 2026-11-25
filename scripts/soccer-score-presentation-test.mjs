@@ -3,6 +3,8 @@ import { deterministicScore, SCORE_FORMULA_VERSION } from '../lib/deterministic-
 import { soccerQuoteScorePresentation } from '../lib/soccer/score-presentation.js';
 import { candidateFixture } from './helpers/soccer-candidate-fixture.mjs';
 import { scoreSoccerQuote } from '../lib/soccer/soccer-scoring.js';
+import { soccerMatchCard } from '../lib/soccer/match-card-transport.js';
+import { buildSoccerRanking } from '../lib/soccer/ranking.js';
 
 const now = Date.parse('2026-10-20T00:00:00Z'), at = new Date(now).toISOString();
 const game = { id: 'soccer:epl:123', sourceId: '123', league: 'epl', date: '2026-10-20', status: 'scheduled',
@@ -27,6 +29,36 @@ const control = fixture(), original = JSON.stringify(control);
 assert.deepEqual(show(control), { score: 8, W: .0435, R: .024, status: 'QUALIFIED', label: '通過排名門檻', tone: 'qualified', eligible: true });
 assert.equal(JSON.stringify(control), original, 'presentation must not mutate the saved/current result');
 assert.equal(show(control, { displayGame: structuredClone(game) }).status, 'QUALIFIED');
+// A formal direction repeats its selected quote. Both copies are part of the
+// publication check, including their original score-by-score settlement rows.
+const withRows = fixture();
+const selected = withRows.directions[0].quotes[0];
+const rows = [{ home: 3, away: 1, probability: 1, outcome: 'FULL_WIN', net: .95 }];
+selected.payoff = { ok: true, rows };
+selected.scoring.conditionalPayoff.rows = rows;
+withRows.directions[0].quote = structuredClone(selected);
+const [compactDirection] = soccerMatchCard(withRows).directions;
+for (const compactQuote of [compactDirection.quote, compactDirection.quotes[0]]) {
+  for (const payoff of [compactQuote.payoff, compactQuote.scoring.conditionalPayoff]) {
+    assert.equal(payoff.rows, undefined);
+    assert.equal(payoff.scorelineRowCount, rows.length);
+  }
+}
+assert.deepEqual(selected.scoring.conditionalPayoff.rows, rows);
+const roundTrip = value => JSON.parse(JSON.stringify(value));
+const rankedCount = result => buildSoccerRanking([game], {
+  [game.id]: { status: 'done', data: result },
+}, { now }).entries.length;
+for (const transport of [roundTrip, value => roundTrip(soccerMatchCard(value))]) {
+  const received = transport(withRows);
+  assert.equal(show(received).status, 'QUALIFIED', 'a full or compact response preserves the formal score');
+  assert.equal(rankedCount(received), 1);
+  const mismatched = structuredClone(withRows);
+  mismatched.directions[0].quote.scoring.conditionalPayoff.rows[0].home++;
+  const rejected = transport(mismatched);
+  assert.equal(show(rejected).eligible, false, 'transport cannot reconcile conflicting score-by-score evidence');
+  assert.equal(rankedCount(rejected), 0);
+}
 for (const changed of [null, { ...game, id: 'soccer:epl:124' }, { ...game, league: 'ucl' },
   { ...game, date: '2026-10-21' }, { ...game, sourceId: '124' },
   { ...game, startTime: new Date(now + 7200000).toISOString() }, { ...game, startTime: 'invalid' },
