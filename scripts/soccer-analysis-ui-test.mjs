@@ -155,7 +155,7 @@ const prestartState={...currentState,data:{...currentState.data,status:'RESEARCH
   evidence:{...currentState.data.evidence,phase:'PREMATCH_OBSERVATION',game:prestartGame}}};
 h.state[0][realGame.id]=prestartState;
 const prestartMarkup=renderToStaticMarkup(h.renderPanel(prestartGame));
-assert.match(prestartMarkup,/分析：<strong>預測完成/);assert.match(prestartMarkup,/篩選：<strong>依現有資料預測/);
+assert.match(prestartMarkup,/分析：<strong>(等待可評分盤口|本次盤口已評分 0／)/);assert.match(prestartMarkup,/篩選：<strong>依現有資料預測/);
 assert.doesNotMatch(prestartMarkup,/分析：<strong>賽後核對完成|篩選：<strong>歷史查閱/);
 h.state[0][realGame.id]=currentState;
 uiNow=uiStart+60000;

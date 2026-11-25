@@ -77,6 +77,7 @@ const context=vm.createContext({URL,Date,Number,JSON,Promise,NextResponse:{json:
   requireApiAuth:async()=>denied?Response.json({ok:false},{status:401}):null,validateSameOrigin:()=>true,originErrorResponse:()=>Response.json({ok:false},{status:403}),
   checkRateLimit:()=>({allowed:true}),rateLimitResponse:()=>Response.json({ok:false},{status:429}),readJsonBody:request=>request.json(),
   soccerLeague:value=>value==='epl'?{id:'epl'}:value==='ucl'?{id:'ucl'}:null,validSoccerDate:value=>/^\d{4}-\d{2}-\d{2}$/.test(value||''),
+  loadSoccerHistoricalPrediction:async latest=>latest?{revision:'earlier-scored',eligible:false,executable:false}:null,
   getSoccerCurrentResearchStatus:readCurrent,listSoccerAnalysis:async(_league,_game,_date,options)=>{historyReads++;historyLimits.push(options?.limit);return options?.limit===1?[{revision:'latest-history',persisted:true}]:[];},listSoccerRunHistory:async(_league,_date,_game,options)=>{historyReads++;runLimits.push(options?.limit);return options?.limit===1?[{analysisRunId:run.runId,analysisStatus:receiptPatch.analysisStatus||'COMPLETED'}]:[];},
   validSoccerAnalysisQuery,analyzeSoccerGame:query=>sharedAnalyze(query,deps),
   loadSoccerCurrentAnalysis:async()=>{currentLoads++;if(headReadError)throw Error('controlled current-head outage');const receipt={...current(),...headReceiptPatch};return headAvailable?{currentVersion:{revision:receipt.revision,persisted:true},currentRun:{analysisRunId:receipt.analysisRunId},currentResearch:receipt}:{currentVersion:null,currentRun:null};},
@@ -94,7 +95,7 @@ assert.equal(normal.status,200);assert.equal(historyReads,2);assert.equal(curren
 assert.deepEqual(normalBody.versions,[]);assert.deepEqual(normalBody.runs,[]);assert.equal(normalBody.currentVersion.revision,'saved-revision');assert.equal(normalBody.currentRun.analysisRunId,run.runId);assert.equal(normalBody.currentResearch.publishedCurrent,true,'normal history GET keeps main recovery fields and adds a separate current receipt');
 const historyCount=historyLimits.length;
 const compact=await context.handlers.GET(new Request(url+'&view=head')),compactBody=await compact.json();
-assert.equal(compact.status,200);assert.equal(compact.headers.get('cache-control'),'no-store');assert.equal(historyLimits.length,historyCount,'an active head is not duplicated in the history fallback');assert.equal(runLimits.at(-1),1);assert.deepEqual(compactBody.versions,[]);assert.equal(compactBody.currentVersion.revision,'saved-revision');assert.equal(compactBody.runs.length,1);
+assert.equal(compactBody.historicalPrediction.revision,'earlier-scored');assert.equal(compact.status,200);assert.equal(compact.headers.get('cache-control'),'no-store');assert.equal(historyLimits.length,historyCount,'an active head is not duplicated in the history fallback');assert.equal(runLimits.at(-1),1);assert.deepEqual(compactBody.versions,[]);assert.equal(compactBody.currentVersion.revision,'saved-revision');assert.equal(compactBody.runs.length,1);
 const readsBeforeRace=currentReads;
 headReceiptPatch={...current()};
 receiptPatch={analysisRunId:'run-newer',revision:'newer-revision',qualificationVersion:'5',analysisStatus:'PROCESSING',publishedCurrent:false,reason:'REANALYSIS_PENDING'};
@@ -109,7 +110,7 @@ const oldRevision='a'.repeat(64),newRevision='b'.repeat(64),racedRevision='c'.re
 receiptPatch={revision:oldRevision};
 const loadsBeforeConditional=currentLoads,historyBeforeConditional=historyReads;
 const unchanged=await(await context.handlers.GET(new Request(conditionalUrl))).json();
-assert.equal(unchanged.currentResearch.revision,oldRevision);assert.equal(unchanged.currentVersion,undefined);assert.equal(currentLoads,loadsBeforeConditional,'unchanged conditional current reads remain metadata-only');
+assert.equal(unchanged.historicalPrediction,undefined);assert.equal(unchanged.currentResearch.revision,oldRevision);assert.equal(unchanged.currentVersion,undefined);assert.equal(currentLoads,loadsBeforeConditional,'unchanged conditional current reads remain metadata-only');
 receiptPatch={revision:newRevision,analysisRunId:'metadata-run-b'};
 headReceiptPatch={revision:racedRevision,analysisRunId:'atomic-run-c',qualificationVersion:'6'};
 const atomicResponse=await context.handlers.GET(new Request(conditionalUrl)),atomic=await atomicResponse.json();

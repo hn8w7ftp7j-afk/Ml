@@ -117,6 +117,37 @@ await test('mount restores saved current analysis with GET only and at most two 
   } finally { h.unmount(); await flush(); }
 });
 
+await test('first load and immediate manual recovery retain read-only archive separately from the live payload', async () => {
+  const row = game(), h = harness({games:[row]});
+  const latest = analysis(row, {predictionContext:{mode:'PREDICTION'}});
+  const archive = {status:'HISTORICAL_PREDICTION', revision:'a'.repeat(64), eligible:false, executable:false};
+  try {
+    const provider = h.mount();
+    h.reads[0].respond({...head(row,latest), historicalPrediction:archive});
+    await flush(); h.render();
+    assert.deepEqual(plain(h.state[0][row.id].historicalPrediction), archive);
+    h.fire('focus');
+    const second = analysis(row,{predictionContext:{mode:'PREDICTION'}, revision:'saved-manual',analysisRunId:'manual-without-score'});
+    const run = provider.props.value.run(row);
+    h.posts[0].respond(second); await run; await flush(); h.render();
+    h.reads[1].respond({...head(row,latest), historicalPrediction:{...archive,revision:'older'}});
+    await flush();
+    assert.equal(h.state[0][row.id].historicalPrediction.revision, archive.revision, 'late old head is fenced');
+    assert.equal(h.reads.length,3,'persisted manual result with no prices immediately requests its saved head');
+    h.reads[2].respond({...head(row,second),historicalPrediction:{...archive,revision:'b'.repeat(64)}});
+    await flush(); h.render();
+    assert.equal(h.state[0][row.id].historicalPrediction.revision, 'b'.repeat(64));
+    assert.equal(Object.hasOwn(h.state[0][row.id].data, 'historicalPrediction'), false);
+    assert.equal(h.state[0][row.id].data.revision, second.revision);
+    h.fire('focus');
+    h.reads[3].respond({...head(row,second),historicalPrediction:null,historicalPredictionReadFailed:true});
+    await flush(); h.render();
+    assert.equal(h.state[0][row.id].historicalPrediction.revision, 'b'.repeat(64));
+    assert.equal(h.state[0][row.id].historicalPredictionReadFailed, true);
+    assert.equal(h.counts().candidates,0);
+  } finally { h.unmount(); await flush(); }
+});
+
 await test('upcoming saved reads use each game actual date instead of the outer selected board date', async () => {
   const games = [game('201', '2026-10-20'), game('202', '2026-10-22')], h = harness({ games, date: '2026-10-19' });
   try {

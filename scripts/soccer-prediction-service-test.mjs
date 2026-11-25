@@ -15,7 +15,7 @@ const cases = [], timings = [];
 try {
   process.env.DATABASE_URL = 'postgres://fixture.invalid/prediction-service'; delete process.env.DATABASE_V2_URL;
   const { analyzeSoccerGame, loadSoccerCurrentAnalysis } = await import('../lib/soccer/analysis-service.js');
-  const { loadSoccerAnalysisRevision } = await import('../lib/soccer/analysis-store.js');
+  const { loadSoccerAnalysisRevision, loadSoccerHistoricalPrediction, listSoccerAnalysis } = await import('../lib/soccer/analysis-store.js');
   const { saveSoccerReaderSnapshot } = await import('../lib/soccer/reader-store.js');
   for (const league of ['epl', 'ucl']) {
     const f = await soccerPredictionLiveFixture({ league });
@@ -123,6 +123,31 @@ try {
     const pending = publishSoccerAnalysisCandidates(low, { currentStatus: pendingStatus, now: Date.now() });
     assert.equal(pending.predictionScoringSummary.currentQuoteCount, 0);
     assert.equal((await loadSoccerCurrentAnalysis(league, lowFixture.date, lowFixture.game.sourceId)).currentVersion, null);
+    // The current price cannot inherit a score from an older quote, even
+    // when the last actual prematch prediction is beyond normal history depth.
+    const scope={league,date:low.date,gameId:low.gameId,evidence:{game:low.evidence.game}};
+    for(let i=1;i<=6;i++){
+      const observedAt=new Date(Date.parse(low.observedAt)+1000*i).toISOString();
+      const unscored={...scope,observedAt,directions:[{quotes:[{water:.02}]}]};
+      await fixtureDb.db.query('INSERT INTO sports_soccer_analysis_v1(league,game_id,analysis_hash,observed_at,payload) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [league,low.gameId,soccerAnalysisHash(canonical(unscored)),observedAt,JSON.stringify(unscored)]);
+    }
+    const versions=await listSoccerAnalysis(league,low.gameId,low.date);
+    assert.equal(versions.length,5);assert.ok(versions.every(row=>row.revision!==low.revision));
+    const archived=await loadSoccerHistoricalPrediction(versions[0]);
+    assert.equal(archived.revision,low.revision);assert.equal(archived.status,'HISTORICAL_PREDICTION');
+    assert.equal(archived.eligible,false);assert.equal(archived.executable,false);
+    assert.equal(archived.quotes.length,8);assert.ok(archived.quotes.every(q=>q.water===.01));
+    const originals=low.directions.flatMap(direction=>direction.quotes);
+    for(const quote of archived.quotes){
+      const original=originals.find(item=>item.key===quote.key);
+      assert.equal(quote.S,original.predictionScore.S);assert.equal(quote.W,original.predictionScore.W);
+      assert.equal(quote.R,original.predictionScore.R_model);assert.equal(quote.observedAt,original.provenance.observedAt);
+    }
+    assert.equal(await loadSoccerHistoricalPrediction(low),null,'already scored prices need no history lookup');
+    const changedGame={...low.evidence.game,home:low.evidence.game.away};
+    assert.equal(await loadSoccerHistoricalPrediction({...versions[0],evidence:{game:changedGame}}),null);
+
   }
   fs.writeFileSync('/tmp/soccer-prediction-ui-contract.json', JSON.stringify({ syntheticOnly: true, cases }));
   console.log(JSON.stringify({ ok: true, syntheticOnly: true, cases: cases.length, timings,
