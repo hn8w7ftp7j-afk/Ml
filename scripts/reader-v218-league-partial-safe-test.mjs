@@ -129,8 +129,30 @@ assert.match(contentSource, /activityByLeague/);
 assert.match(contentSource, /fingerprintByLeague/);
 assert.match(contentSource, /fingerprint !== fingerprintByLeague\[league\]/);
 assert.doesNotMatch(contentSource, /document\.body\.innerText|document\.body\?\.innerText/);
-assert.match(backgroundSource, /pendingRerun = true/);
-assert.match(backgroundSource, /if \(pendingRerun\)/);
+const event = { addListener() {} }, attempts = [];
+const worker = vm.createContext({ chrome: { runtime: { onInstalled: event, onStartup: event, onMessage: event },
+  alarms: { onAlarm: event }, tabs: { onUpdated: event } }, queueMicrotask,
+  controlledSync: (reason, tab) => new Promise((resolve, reject) => attempts.push({ reason, tab, resolve, reject })) });
+vm.runInContext(backgroundSource.replace(/^import .*?;\n/gm, ''), worker);
+const sync = vm.runInContext('performSync = controlledSync; syncNow', worker);
+const firstScan = sync('alarm');
+const mutation = sync('mutation', 7), firstClick = sync('manual'), secondClick = sync('manual'), alarm = sync('alarm', 9);
+assert.equal(attempts.length, 1, 'overlaps must not start a second scan concurrently');
+const firstFailure = assert.rejects(firstScan, /old scan failed/);
+// Attach handlers before rejecting the first scan: queued callers must receive
+// the result belonging to the manual retry even when the prior scan failed.
+const retryResults = Promise.allSettled([mutation, firstClick, secondClick, alarm]);
+attempts[0].reject(new Error('old scan failed'));
+await firstFailure;
+assert.deepEqual(attempts.map(({ reason, tab }) => [reason, tab]), [['alarm', null], ['manual', null]]);
+attempts[1].resolve('manual receipt');
+assert.deepEqual(await retryResults, Array(4).fill({ status: 'fulfilled', value: 'manual receipt' }));
+const nextAlarm = sync('alarm'), nextClick = sync('manual');
+const manualFailure = assert.rejects(nextClick, /manual failure/);
+attempts[2].resolve('previous success');
+assert.equal(await nextAlarm, 'previous success');
+attempts[3].reject(new Error('manual failure'));
+await manualFailure;
 assert.match(backgroundSource, /answer\?\.capture\?\.captures/);
 assert.equal(withinTai888TabScanLimit(5), true);
 assert.doesNotMatch(backgroundSource, /最多檢查/);

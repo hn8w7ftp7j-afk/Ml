@@ -15,6 +15,8 @@ export function createDiagnosticOutbox({ storage, upload, now = Date.now }) {
       const report = sanitizeDiagnosticReport(input);
       const stored = await storage.get(['diagnosticOutbox', 'diagnosticLastSignature', 'diagnosticLastQueuedAt', 'diagnosticDelivery']);
       const { reportId, createdAt, ...fingerprint } = report;
+      // Different automatic triggers often observe the same board within seconds.
+      if (['alarm', 'tab-loaded', 'mutation', 'frame-ready'].includes(fingerprint.syncTrigger)) fingerprint.syncTrigger = 'automatic';
       const signature = JSON.stringify(fingerprint);
       const interval = report.exceptionCode || Object.values(report.leagues).some(row => ['error', 'disconnected'].includes(row.state)) ? 60000 : 300000;
       if (signature === stored.diagnosticLastSignature && now() - Number(stored.diagnosticLastQueuedAt || 0) < interval) return;

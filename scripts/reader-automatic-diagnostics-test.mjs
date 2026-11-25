@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { transform } from 'next/dist/build/swc/index.js';
 import { DIAGNOSTIC_SCHEMA, diagnosticCode, sanitizeDiagnosticReport } from '../reader/diagnostic-schema.js';
 import { createDiagnosticOutbox, DIAGNOSTIC_ALARM } from '../reader/diagnostic-outbox.js';
 import { saveReaderDiagnostic, listReaderDiagnostics } from '../lib/reader-diagnostic-store.js';
@@ -18,11 +21,16 @@ const makeReport = (state = 'error') => ({ schema: DIAGNOSTIC_SCHEMA, reportId: 
     issues: ['game-1:full-total:invalid-line'], boards: [{ parsedGameCount: 1, diagnostics: { expectedGameCount: 2, gameCount: 1 }, issues: ['expected-2-parsed-1'] }] } } });
 const poison = 'password=secret-cookie-token';
 const dirty = makeReport(); dirty.password = poison; dirty.leagues.NBA.message = poison;
+dirty.syncTrigger = poison; dirty.autoEnabled = poison;
 dirty.leagues.NBA.issues.push(poison, `duplicate-game:${poison}`);
 dirty.leagues.NBA.boards[0].diagnostics.session = poison;
 dirty.leagues.NBA.boards[0].tables = [{ raw: poison }];
 const clean = sanitizeDiagnosticReport(dirty);
 assert.ok(!JSON.stringify(clean).includes(poison));
+assert.ok(!Object.hasOwn(clean, 'autoEnabled') && !Object.hasOwn(clean, 'syncTrigger'));
+const settingReport = sanitizeDiagnosticReport({ ...dirty, autoEnabled: false, syncTrigger: 'auto-setting' });
+assert.deepEqual(settingReport.leagues, {}, 'a setting event cannot claim to have observed a league');
+assert.ok(!Object.hasOwn(settingReport, 'tabCount'));
 assert.equal(clean.leagues.NBA.issues[0], 'game-1:full-total:invalid-line');
 assert.equal(diagnosticCode('parser:wrong-period-header:NBA:first-five'), 'parser:wrong-period-header:NBA:first-five');
 assert.equal(diagnosticCode(`parser:conflicting-duplicate:${poison}`), 'parser:conflicting-duplicate');
@@ -67,7 +75,11 @@ assert.equal(state.diagnosticOutbox.length, 0); assert.equal(state.diagnosticDel
 assert.equal(received[0].reportId, clean.reportId, 'worker restart must retain the original ID');
 const repeat = makeReport(); await outbox.enqueue(repeat); await outbox.enqueue(makeReport());
 assert.equal(state.diagnosticOutbox.length, 1, 'identical snapshots are sampled');
-await outbox.enqueue(makeReport('synced')); assert.equal(state.diagnosticOutbox.length, 2, 'state transitions are retained immediately');
+await outbox.enqueue({ ...makeReport(), autoEnabled: true, syncTrigger: 'alarm' });
+await outbox.enqueue({ ...makeReport(), autoEnabled: true, syncTrigger: 'mutation' });
+assert.equal(state.diagnosticOutbox.length, 2, 'automatic trigger changes alone do not cause extra reports');
+await outbox.flush();
+await outbox.enqueue(makeReport('synced')); assert.equal(state.diagnosticOutbox.length, 1, 'state transitions are retained immediately');
 for (let i = 0; i < 25; i++) { clock += 60001; await outbox.enqueue(makeReport()); }
 assert.equal(state.diagnosticOutbox.length, 20, 'local queue is bounded');
 delete state.readerToken; await outbox.flush(); assert.equal(state.diagnosticOutbox.length, 20, 'unpaired reports wait for valid pairing');
@@ -108,7 +120,7 @@ const events = { addListener() {} }, requests = [];
 const workerState = { readerToken: 'test-token', deviceId: 'worker-device-12345', pairedAt: clock, autoEnabled: true };
 const fakeChrome = {
   runtime: { onInstalled: events, onStartup: events, onMessage: events, getManifest: () => ({ version: readerVersion }) },
-  alarms: { onAlarm: events },
+  alarms: { onAlarm: events, clear: async () => {}, create: async () => {} },
   storage: { local: { get: async () => structuredClone(workerState), set: async values => Object.assign(workerState, structuredClone(values)) } },
   tabs: { onUpdated: events, query: async () => [{ id: 1 }], sendMessage: async () => ({ ok: true,
     capture: { readerVersion, captures: [{ league: 'NBA', observedAt: new Date().toISOString(), sourceHost: 'www.tai888.in', tables: [{ rows: [] }], diagnostics: { gameCount: 1, expectedGameCount: 1 } },
@@ -128,6 +140,8 @@ installArchiveWorkerFixture(context);
 vm.runInContext(readFileSync('reader/background.js', 'utf8').replace(/^import .*?;\n/gm, line => line.includes('./nba-conflict-recovery.js') ? readNbaRecoverySource('reader/nba-conflict-recovery.js', 'utf8').replace(/^export /gm, '') + '\n' : ''), context);
 const scan = await vm.runInContext("performSync('manual')", context);
 assert.equal(scan.ok, false); assert.equal(requests.length, 1);
+assert.equal(requests[0].body.syncTrigger, 'manual');
+assert.equal(requests[0].body.autoEnabled, true);
 assert.equal(requests[0].body.leagues.NBA.state, 'error');
 assert.ok(requests[0].body.leagues.NBA.boards[0].issues.includes('no-parsed-games'));
 assert.equal(requests[0].body.leagues.UCL.state, 'error');
@@ -136,4 +150,37 @@ assert.deepEqual(Object.fromEntries(identityKeys.map(key => [key, requests[0].bo
 assert.equal(JSON.stringify(requests).includes(poison), false);
 assert.equal(workerState.diagnosticDelivery.state, 'sent');
 assert.equal(JSON.stringify(requests).includes('test-token'), false);
+const statusesBeforeToggle = structuredClone(workerState.readerStatuses);
+for (const enabled of [false, true]) {
+  await vm.runInContext(`setAutoEnabled(${enabled})`, context);
+  await vm.runInContext('getDiagnosticOutbox().flush()', context);
+  const body = requests.at(-1).body;
+  assert.equal(body.syncTrigger, 'auto-setting'); assert.equal(body.autoEnabled, enabled);
+  assert.deepEqual(body.leagues, {}); assert.ok(!Object.hasOwn(body, 'tabCount'));
+  assert.deepEqual(workerState.readerStatuses, statusesBeforeToggle);
+  assert.equal((await saveReaderDiagnostic(body, workerState.deviceId, { sql })).durable, true);
+  assert.equal(dbRows.get(body.reportId).payload.autoEnabled, enabled);
+  if (!enabled) {
+    const previousRequests = requests.length;
+    assert.equal((await vm.runInContext("performSync('alarm')", context)).skipped, true);
+    assert.equal(requests.length, previousRequests, 'paused device does not claim subsequent scans');
+  }
+}
+const pageSource = readFileSync('app/reader-diagnostics/page.js', 'utf8').replace(/^import .*?;\n/gm, '').replace('export default function', 'function');
+const page = await transform(pageSource, { filename: 'page.jsx', jsc: {
+  parser: { syntax: 'ecmascript', jsx: true }, transform: { react: { runtime: 'classic' } } } });
+function renderReport(payload) {
+  const record = { payload, report_id: payload.reportId, device_id: workerState.deviceId, received_at: payload.createdAt };
+  const initialState = ['', '', '', 0, [record], '', false];
+  const tree = vm.runInNewContext(page.code + '\nReaderDiagnosticsPage()', {
+    React, useEffect() {}, useState() { return [initialState.shift(), () => {}]; } });
+  return renderToStaticMarkup(tree);
+}
+const settingView = renderReport(settingReport);
+assert.match(settingView, /自動同步已暫停/); assert.match(settingView, /變更同步設定/);
+assert.doesNotMatch(settingView, /未連線|盤口已同步/);
+const legacyView = renderReport(clean);
+assert.match(legacyView, /分頁 1，未連線 0/); assert.doesNotMatch(legacyView, /自動同步已/);
+const manualView = renderReport(requests[0].body);
+assert.match(manualView, /自動同步已開啟/); assert.match(manualView, /Reader 視窗要求同步/);
 console.log('Automatic Reader diagnostics: redaction, rejection-to-report, no market bypass, offline/restart retry, bounded queue, receipts, idempotency and league/device isolation PASS');

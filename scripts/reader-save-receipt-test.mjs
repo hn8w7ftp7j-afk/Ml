@@ -30,7 +30,7 @@ function board(league, dates = ['2026-10-27']) {
     ] } : {}),
   })) };
 }
-function harness(payload, respond = input => readerSaveReceiptFixture(input)) {
+function harness(payload, respond = input => readerSaveReceiptFixture(input), { scanFrames = false } = {}) {
   const event = { addListener() {} }, uploads = [];
   const state = { deviceId: 'receipt-worker-fixture', readerToken: 'synthetic-receipt-token' };
   const candidate = { parsed: payload, capture: { tables: [], diagnostics: {} } };
@@ -59,7 +59,7 @@ function harness(payload, respond = input => readerSaveReceiptFixture(input)) {
     } });
   installArchiveWorkerFixture(worker);
   vm.runInContext(source, worker);
-  vm.runInContext('collectCandidates = async () => testScan', worker);
+  if (!scanFrames) vm.runInContext('collectCandidates = async () => testScan', worker);
   return { state, uploads, worker, candidate, run: reason => vm.runInContext(`performSync('${reason}')`, worker) };
 }
 function confirm(data, payload) {
@@ -133,4 +133,52 @@ await partial.run('alarm');
 assert.equal(partial.state.readerStatuses.NBA.ok, false);
 assert.deepEqual(partial.state.lastSuccessfulPayloadHashes, oldHashes, 'a failed new-price receipt preserves earlier success hashes');
 assert.deepEqual(partial.state.lastSuccessfulSyncAts, oldTimes, 'a failed receipt never refreshes success times');
+
+// Use short real deadlines around a permanently unresponsive frame or HTTP
+// body. The outer guard also fails the test on the old, unbounded worker.
+async function runSync(flow, reason) {
+  let guard;
+  try {
+    return await Promise.race([vm.runInContext(`syncNow('${reason}')`, flow.worker),
+      new Promise((_, reject) => { guard = setTimeout(() => reject(new Error('Worker sync stalled')), 2000); })]);
+  } finally { clearTimeout(guard); }
+}
+const stalledBody = harness(board('UCL'));
+stalledBody.worker.testScan.candidates.push({ parsed: board('NBA'), capture: { tables: [], diagnostics: {} } });
+const successfulFetch = stalledBody.worker.fetch;
+stalledBody.worker.setTimeout = callback => setTimeout(callback, 15);
+stalledBody.worker.fetch = async (url, options) => {
+  if (!url.endsWith('/api/nba/reader')) return successfulFetch(url, options);
+  // Headers have arrived. The body, like a real fetch body, remains pending
+  // until its request signal is aborted.
+  return { ok: true, status: 200, text: () => new Promise((_, reject) =>
+    options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })) };
+};
+assert.equal((await runSync(stalledBody, 'manual')).ok, true);
+assert.equal(stalledBody.state.readerStatuses.NBA.diagnosticCode, 'TIMEOUT');
+assert.equal(stalledBody.state.readerStatuses.UCL.dateStatuses[0].saveReceipt.status, 'CONFIRMED');
+stalledBody.worker.fetch = successfulFetch;
+await runSync(stalledBody, 'alarm');
+assert.equal(stalledBody.state.readerStatuses.NBA.dateStatuses[0].saveReceipt.status, 'CONFIRMED');
+
+const silentFrame = harness(board('UCL'), undefined, { scanFrames: true });
+silentFrame.worker.setTimeout = callback => setTimeout(callback, 15);
+const requested = [], reloads = [];
+silentFrame.worker.chrome.webNavigation = { getAllFrames: async () => [{ frameId: 0 }] };
+silentFrame.worker.chrome.tabs.query = async () => [{ id: 1 }, { id: 2 }];
+silentFrame.worker.chrome.tabs.reload = async id => reloads.push(id);
+const version = JSON.parse(readFileSync('reader/manifest.json', 'utf8')).version;
+silentFrame.worker.chrome.tabs.sendMessage = (id, message) => {
+  requested.push([id, message.type]);
+  if (id === 1) return new Promise(() => {});
+  return Promise.resolve({ ok: true, capture: { readerVersion: version, seenCaptureVersion: 'READER-SEEN-CAPTURE-v1',
+    captures: [{ league: 'UCL', observedAt: at, tables: [{ rows: [] }] }] } });
+};
+silentFrame.worker.parseTai888Capture = () => board('UCL');
+assert.equal((await runSync(silentFrame, 'manual')).ok, true);
+assert.deepEqual(reloads, [1], 'only the silent tab gets manual recovery');
+assert.ok(requested.some(([id, type]) => id === 1 && type === 'TAI888_READER_RECOVER'));
+assert.equal(silentFrame.state.readerStatuses.UCL.dateStatuses[0].saveReceipt.status, 'CONFIRMED');
+await runSync(silentFrame, 'alarm');
+assert.deepEqual(reloads, [1], 'an alarm does not repeatedly reload a silent tab');
 console.log('PASS actual Reader worker: eight-league durable receipt contracts, strict counts and identity/time binding, sanitized capture evidence, failed/missing-ack retries, legacy revalidation and isolated date/price heartbeat markers; Production NOT VERIFIED');

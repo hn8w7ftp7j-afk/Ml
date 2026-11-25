@@ -46,7 +46,17 @@ syncButton.addEventListener('click', async () => {
   try { const result = await send({ type: 'SYNC_NOW' }); await refresh(); show(result?.message || '檢查完成', result?.ok ? 'ok' : 'error'); }
   catch (error) { show(error.message, 'error'); } finally { syncButton.disabled = false; syncButton.textContent = '立即同步'; }
 });
-autoToggle.addEventListener('change', async () => { const result = await send({ type: 'SET_AUTO_ENABLED', enabled: autoToggle.checked }); show(result.enabled ? '自動同步已開啟。' : '自動同步已暫停。', result.enabled ? 'ok' : ''); });
+autoToggle.addEventListener('change', async () => {
+  autoToggle.disabled = true;
+  try {
+    const result = await send({ type: 'SET_AUTO_ENABLED', enabled: autoToggle.checked });
+    if (!result.ok) throw new Error(result.error || '無法確認自動同步設定。');
+    show(result.enabled ? '自動同步已開啟。' : '自動同步已暫停。', result.enabled ? 'ok' : '');
+  } catch (error) {
+    await refresh().catch(() => {});
+    show(error.message, 'error');
+  } finally { autoToggle.disabled = false; }
+});
 unpairButton.addEventListener('click', async () => { await chrome.storage.local.remove(['readerToken', 'pairedAt', 'readerStatuses', 'pairError', 'lastSuccessfulPayloadHashes', 'lastSuccessfulSyncAts', 'diagnosticOutbox', 'diagnosticDelivery', 'diagnosticLastSignature', 'diagnosticLastQueuedAt']); await refresh(); show('已移除裝置配對。'); });
 
 function renderSeenCaptureDelivery(delivery) {

@@ -144,6 +144,12 @@ export function sanitizeDiagnosticReport(input) {
   const created = typeof input?.createdAt === 'string' ? Date.parse(input.createdAt) : NaN;
   if (input?.schema !== DIAGNOSTIC_SCHEMA || !diagnosticIdValid(input?.reportId)
     || !version(input?.readerVersion) || !Number.isFinite(created)) throw Object.assign(new Error('診斷格式錯誤'), { status: 400 });
+  const identity = { schema: DIAGNOSTIC_SCHEMA, reportId: input.reportId, readerVersion: version(input.readerVersion),
+    extensionManifestVersion: version(input.extensionManifestVersion), createdAt: new Date(created).toISOString() };
+  if (input.syncTrigger === 'auto-setting' && typeof input.autoEnabled === 'boolean') {
+    // A preference change does not observe tabs, market data or league status.
+    return { ...identity, syncTrigger: 'auto-setting', autoEnabled: input.autoEnabled, leagues: {} };
+  }
   const leagues = {};
   for (const league of DIAGNOSTIC_LEAGUES) {
     const row = input?.leagues?.[league];
@@ -158,9 +164,11 @@ export function sanitizeDiagnosticReport(input) {
       })), ...(authority ? { authority } : {}), ...(conflictRecovery ? { conflictRecovery } : {}) };
   }
   const seenCaptureDelivery=sanitizeSeenCaptureDelivery(input.seenCaptureDelivery);
-  return { schema: DIAGNOSTIC_SCHEMA, reportId: input.reportId, readerVersion: version(input.readerVersion),
-    extensionManifestVersion: version(input.extensionManifestVersion), createdAt: new Date(created).toISOString(),
+  return { ...identity,
     silentTabCount: diagnosticCount(input.silentTabCount), tabCount: diagnosticCount(input.tabCount),
     exceptionCode: input.exceptionCode ? diagnosticCode(input.exceptionCode) : '', leagues,
-    ...(seenCaptureDelivery?{seenCaptureDelivery}:{}) };
+    ...(seenCaptureDelivery?{seenCaptureDelivery}:{}),
+    ...(typeof input.autoEnabled === 'boolean' ? { autoEnabled: input.autoEnabled } : {}),
+    ...(['alarm', 'tab-loaded', 'mutation', 'frame-ready', 'paired', 'manual'].includes(input.syncTrigger)
+      ? { syncTrigger: input.syncTrigger } : {}) };
 }
